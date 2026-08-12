@@ -62,7 +62,7 @@ function installationStateAt(root, options) {
   if (!manifestStat.isFile()) throw new Error(`Dove project installation manifest must be a regular file: ${manifestPath}.`);
   const directoryStat = lstatOrNull(fsOps, directoryPath);
   if (directoryStat === null || directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) throw new Error(`Dove installation path must be a real directory: ${directoryPath}.`);
-  const manifest = readProjectInstallationManifest(root, { ...options, allowPrevious: true, hostIds: options.hostIds ?? PROJECT_HOST_IDS });
+  const manifest = readProjectInstallationManifest(root, { ...options, hostIds: options.hostIds ?? PROJECT_HOST_IDS });
   return { state: "initialized", root, manifestPath, manifest };
 }
 

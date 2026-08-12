@@ -12,11 +12,14 @@ import { build } from "esbuild";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const CHECK_MODE = process.argv.includes("--check");
+const PACKAGE = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8"));
+const PACKAGE_DEFINES = {
+  __DOVE_PACKAGE_NAME__: JSON.stringify(PACKAGE.name),
+  __DOVE_PACKAGE_VERSION__: JSON.stringify(PACKAGE.version)
+};
 const EXPECTED_OUTPUTS = [
   { entry: "src/core/index.mjs", output: "dist/index.mjs", shebang: false },
   { entry: "bin/dove.mjs", output: "bin/dove-package.mjs", shebang: true },
-  { entry: "mcp/dove-state-server.mjs", output: "mcp/dove-state-server-package.mjs", shebang: true },
-  { entry: "scripts/doctor-mcp-probe.mjs", output: "scripts/doctor-mcp-probe-package.mjs", shebang: false },
   { entry: "scripts/dove-user-prompt-submit.mjs", output: "scripts/dove-user-prompt-submit-package.mjs", shebang: true }
 ];
 
@@ -63,6 +66,7 @@ async function buildAll(outputRoot, write) {
       format: "esm",
       packages: "bundle",
       external: ["node:*"],
+      define: PACKAGE_DEFINES,
       banner: {
         js: "import { createRequire as __doveCreateRequire } from \"node:module\"; const require = __doveCreateRequire(import.meta.url);"
       },

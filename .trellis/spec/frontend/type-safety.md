@@ -1,81 +1,94 @@
 # Type Safety
 
-> Runtime schema and public-boundary safety for Dove Research Format 1.
+> Software contracts, path safety, CLI boundaries, and research-document non-schema rules for Dove 3.0.0.
 
 ---
 
 ## Overview
 
-Dove uses Node.js ESM JavaScript rather than TypeScript. Safety comes from sealed public schemas, exact inventories, semantic identifiers, contained paths, immutable records, artifact fingerprints, current evidence checks, and narrow public projection.
+Dove uses Node.js ESM JavaScript. Runtime safety applies to software-owned boundaries such as package metadata, CLI parsing, installation manifests, managed paths, lifecycle plans, generated inventories, and export authorization.
 
-## Ownership
+Research meaning is not a runtime type system. Ordinary Markdown must not acquire a replacement schema, DTO layer, typed research errors, generated IDs, or machine authority.
 
-- `src/core/command-manifest.mjs` owns the 9 direct Skill definitions and host projections.
-- `src/mcp/tool-definitions.mjs` owns the 8 sealed MCP tool schemas.
-- `src/mcp/research-adapter.mjs` owns public-operation adaptation.
-- `src/mcp/handlers.mjs` owns dispatch, path normalization, and safe projection.
-- `src/core/schema.mjs` owns the package version, Research Format marker, and durable paths.
-- `src/core/workspace-schema.mjs` owns format classification and Workspace validation.
-- `src/core/research-stores.mjs` owns semantic entity validation and persistence.
-- Project-installation modules own `.dove/install/manifest.json` independently from the optional Research Format 1 siblings.
+## Software Contract Sources
 
-## Layer Types
+- `package.json` and package metadata define package identity and Node requirements.
+- The project installation manifest implementation defines revision `2.0` and managed-resource metadata.
+- CLI parsing defines the supported command and option inventory.
+- Project installation and file-transaction modules enforce contained software writes and conflict handling.
+- Canonical Skill and role sources define workflow inventory for adapter generation.
+- Build scripts define the library, CLI, and prompt-hook bundles.
+- Export code defines the supported legacy JSON input boundary, archival behavior, confirmation or authorization boundary, and Markdown output.
 
-Use precise vocabulary:
+No research MCP definitions or Research Format schema belong in the Dove 3 contract surface.
 
-- **Skill**: direct host workflow with optional text.
-- **MCP tool**: sealed structured research operation.
-- **Semantic entity**: validated Research Format 1 state under `.dove/`.
-- **Project artifact**: host-produced substantive file in a normal project path.
-- **Installation resource**: managed host integration recorded by `.dove/install/manifest.json`.
+## Required Software Validation
 
-Do not create implied type equality between these layers. Draft, Figure, Rebuttal, and internal synthesis are not same-named semantic entities.
+- Package name and release version are valid and explicit.
+- Node.js `>=22` remains the supported runtime.
+- CLI parsing accepts only `init`, `sync`, `upgrade`, `reinstall`, `doctor`, `export-research`, and `hook` with their declared options.
+- The CLI does not expose `mcp` or `migrate-research`.
+- Installation manifests use revision `2.0` and reject unsupported or ambiguous software state.
+- Project roots and Dove-managed paths reject traversal, escaping paths, and unsafe symlink use where Dove owns the boundary.
+- Shared configuration preserves unrelated fields.
+- Managed-resource digests detect changed installation bytes without becoming public research evidence.
+- File-set changes verify preconditions and avoid partial promotion.
+- Generated adapters match the ten-Skill and three-role canonical sources.
+- Package output contains exactly the declared library, CLI, and prompt-hook runtime bundles.
+- Real research export requires separate user authorization.
+- Export accepts supported legacy Dove JSON research records only, archives the original bytes under `.dove/archive/...`, and does not install a runtime fallback.
+- Complete Reinstall requires an explicit confirmed destructive plan whose default is No.
 
-## Required Validation
+## Research Markdown Boundary
 
-- Every public input object rejects unknown properties.
-- Nested MCP objects that form contracts are sealed.
-- Durable references use safe lowercase semantic IDs rather than positional selectors.
-- Root and child Mission creation validates parent and dependency existence, explicit branch provenance, and acyclic lineage.
-- Mission contracts, conclusions, Sources, Experiment plans/results, Claims, and Reviews are immutable once written.
-- Paths are normalized project-relative paths and cannot escape the workspace or point into Dove bookkeeping unless the core explicitly owns that path.
-- Source captures and Review scopes bind current file size and SHA-256 evidence where required.
-- Experiment results require a prior persisted plan and exact Mission binding.
-- Claims require support references and explicit cannot-say boundaries.
-- Failed or stopped experiments preserve failures or limitations.
-- Read-only calls fail closed without repair, conversion, or hidden writes.
-- Public projection removes `.dove/` paths, write diagnostics, review snapshot hashes, and fields ending in `Digest`, `Token`, or `Binding`.
-- Review import validates the prepared exchange and structured return; it cannot mint reviewer authority or independence.
+Research content under `.dove/research/` is ordinary UTF-8 Markdown. Software may enforce only genuine file-safety boundaries needed to read or write a selected project file. It must not validate research meaning through a fixed document shape.
 
-## Inventory Types
+Allowed conventions include:
 
-Validation treats these as separate exact sets:
+- recommended `RESEARCH.md` overview and navigation;
+- optional `LESSONS.md`;
+- human-named linked topic documents; and
+- optional human-chosen folders.
 
-- 9 direct Skill IDs;
-- 8 MCP tool names;
-- 45 generated adapter paths;
-- managed Claude ambient resources;
-- Planner, Builder/Author, and Reviewer responsibility definitions;
-- Research Format 1 semantic entity kinds;
-- project artifact paths; and
-- installation manifest resources.
+Do not require or synthesize:
 
-Generated adapter presence is not a host-readiness type.
+- fixed headings or section order;
+- frontmatter;
+- generated document, Mission, Source, Experiment, Claim, or Review IDs;
+- research enums or status vocabularies;
+- machine indexes or stored inventory counts;
+- research fingerprints or hashes; or
+- a mandatory Markdown template.
 
-## Current Semantic Vocabulary
+An absent overview is normal. A broken Markdown link is reported naturally and does not become a typed invalid-research-state error.
 
-Research Format 1 uses Workspace, Mission, Mission conclusion, Source, Experiment plan, Experiment result, Claim, Review, and Lessons entities. Mission lineage is the research tree view, not another entity type. Draft, Figure, Rebuttal, and internal synthesis remain project artifacts.
+## Workflow Invariants Without a Database
 
-Do not describe retired revision, execution-bookkeeping, private-protocol, positional-selection, or duplicate-tree models as current types.
+Some semantic order and responsibility boundaries still matter even though documents are untyped:
 
-## Format and Installation Boundaries
+- prospective experiment planning is written before execution;
+- actual experiment results are appended to the same document;
+- review purpose, exact path scope, limits, and prompt precede the external exchange;
+- the Reviewer remains read-only and returns Markdown;
+- the actual user-obtained return is preserved in the same Review document before author handling;
+- Auto is explicit-only and cannot rewrite the documented mainline; and
+- Status performs no writes.
 
-The package release is `0.7.0`, and the research format marker is `dove-research-v1`. Package semver and Research Format identity are separate boundaries. `.dove/install/manifest.json` has its own installation schema, integration, ownership, and runtime protocol fields; those validate managed integration and do not validate the optional sibling Research Format files under `.dove/`.
+Protect these through canonical workflow order, focused behavior tests, and semantic review. Do not enforce them by inventing an entity database.
 
-`.dove-install/manifest.json` is accepted only as legacy project-lifecycle input for Upgrade or Complete Reinstall cleanup. It is not a current installation type, secondary root, alias, or compatibility authority. Those project-level operations do not manage the user's npm installation.
+## Version and Lifecycle Boundaries
 
-A legacy numbered workspace schema may be detected only to refuse research writes clearly. It is not a current format, migration input, fallback type, or compatibility authority.
+- Package release: `3.0.0`.
+- Installation manifest revision: `2.0`.
+- Supported export source: legacy JSON research state.
+- Unsupported export source: v1 research state.
+- Runtime research source: ordinary Markdown only.
+- Runtime fallback to old JSON: none.
 
-## Language
+Sync and Upgrade preserve research documents. Complete Reinstall deletes Dove research and old archives after default-No confirmation while preserving ordinary project files.
 
-Canonical human output defaults to Chinese and may be explicitly requested in English. Machine keys, tool names, Skill IDs, semantic IDs, format markers, and status tokens remain English.
+## Machine and Human Language
+
+Final conversation policy defaults to natural Chinese unless the user requests another language or format. Source code names, CLI commands, package versions, manifest revisions, and project-relative paths remain exact where needed. Research documents use the language and structure appropriate to their human readers.
+
+Validation output must stay software-scoped and must not imply scientific correctness, completion, reproducibility, acceptance, or reviewer independence.

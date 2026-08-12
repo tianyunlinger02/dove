@@ -1,28 +1,35 @@
 ---
 name: dove-status
-description: "Read the current research projection without writes."
+description: "Read the human-maintained research overview and report current direction and progress without writes."
 ---
 
 # Dove Status
 
-Read the current research projection without writes.
+Read the human-maintained research overview and report current direction and progress without writes.
 
 ## Use when
 
-- Read the current research projection without writes.
+- Read the human-maintained research overview and report current direction and progress without writes.
 
 ## Examples
 
 - `/dove:status`
 
-## Workflow
+## Internal workflow
+
+Internal guidance only; never use this workflow as the final report outline.
 
 - **The user requests current Dove research status.**
-  1. Call `query_dove_research` (read-only). Read the smallest relevant projection and report it without changing Dove state or ordinary project files. No durable Dove write is required.
+  1. Use host tools (read-only; research-document-reading). Read `.dove/research/RESEARCH.md` once when it exists, then read only the linked documents needed to resolve material ambiguity. Report the current mainline, real progress, failures, limitations, uncertainty, and next priorities. If the overview is absent or a link is missing, say so naturally; do not infer a database state or modify files. No file write is required.
 
 ## Dove capsule
 
-- Dove MCP tools: `query_dove_research`.
-- Use only the eight public Dove MCP research tools for durable Dove state; never read or write `.dove` directly.
-- Use semantic IDs only when durable records are needed, and do not create a Workspace or Mission merely because a Skill was invoked.
-- Treat tests, host output, local review, and imported review as bounded evidence rather than completion or scientific authority.
+- Treat `.dove/research/RESEARCH.md` and its linked Markdown as ordinary researcher-owned documents, not a database or machine authority.
+- Use host file and research tools directly. Read the overview first when it exists, then only the linked documents and project artifacts relevant to the task.
+- Keep failures, adverse evidence, limitations, and uncertainty visible; tests, host output, and any review remain bounded evidence rather than scientific authority.
+
+## Response policy
+
+- Use natural, clear Chinese unless the user requests another language or format; explain internal terms only when needed.
+- Before sending, reorganize from the user's perspective into a faithful synthesis. Do not use the internal workflow or structured machine data as the response outline; remove repetition and preserve material failures, limits, uncertainty, and blockers.
+- Requested research artifacts and strict machine-readable contracts take priority; otherwise fit the response to the task, not a fixed template.

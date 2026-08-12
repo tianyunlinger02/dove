@@ -4,7 +4,8 @@ import path from "node:path";
 
 import { openAnchoredFilesystem } from "./anchored-filesystem.mjs";
 
-const MAX_CLEANUP_RESIDUES = 20;
+const MAX_CLEANUP_WARNINGS = 20;
+const ENTRY_FIELDS = new Set(["root", "relativePath", "content", "encoding", "force", "delete", "deleteEmptyDirectory", "expectedState", "label"]);
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
@@ -12,58 +13,6 @@ function errorMessage(error) {
 
 function sha256(content) {
   return crypto.createHash("sha256").update(content).digest("hex");
-}
-
-function canonicalJson(value) {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
-}
-
-function treeMetadata(stat) {
-  return {
-    device: String(stat.dev),
-    inode: String(stat.ino),
-    mode: Number(stat.mode),
-    ctimeNs: String(stat.ctimeNs),
-    mtimeNs: String(stat.mtimeNs)
-  };
-}
-
-export function inspectDirectoryTreeDigest(root, relativePath, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  const canonicalRoot = typeof fsOps.realpathSync.native === "function"
-    ? fsOps.realpathSync.native(path.resolve(root))
-    : fsOps.realpathSync(path.resolve(root));
-  const normalized = path.posix.normalize(String(relativePath).replace(/\\/gu, "/"));
-  if (normalized === "." || normalized === ".." || normalized.startsWith("../") || path.posix.isAbsolute(normalized)) {
-    throw new Error(`Directory tree digest path must stay inside its root: ${relativePath}.`);
-  }
-  const directory = path.join(canonicalRoot, normalized);
-  const rootStat = fsOps.lstatSync(directory, { bigint: true });
-  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) throw new Error(`Directory tree digest source must be a real directory: ${normalized}.`);
-  const entries = [{ path: "", kind: "directory", ...treeMetadata(rootStat) }];
-  const visit = (absoluteDirectory, prefix) => {
-    const names = fsOps.readdirSync(absoluteDirectory).map(String).sort((left, right) => left.localeCompare(right));
-    for (const name of names) {
-      const childPath = prefix ? path.posix.join(prefix, name) : name;
-      const absoluteChild = path.join(absoluteDirectory, name);
-      const stat = fsOps.lstatSync(absoluteChild, { bigint: true });
-      const metadata = { path: childPath, ...treeMetadata(stat) };
-      if (stat.isDirectory() && !stat.isSymbolicLink()) {
-        entries.push({ ...metadata, kind: "directory" });
-        visit(absoluteChild, childPath);
-      } else if (stat.isFile()) {
-        entries.push({ ...metadata, kind: "file", sizeBytes: String(stat.size), sha256: sha256(fsOps.readFileSync(absoluteChild)) });
-      } else if (stat.isSymbolicLink()) {
-        entries.push({ ...metadata, kind: "symlink", target: fsOps.readlinkSync(absoluteChild) });
-      } else {
-        throw new Error(`Unsupported filesystem entry inside ${normalized}: ${childPath}.`);
-      }
-    }
-  };
-  visit(directory, "");
-  return sha256(canonicalJson(entries));
 }
 
 function state(anchor, relativePath) {
@@ -81,24 +30,14 @@ function sameState(left, right) {
 
 function expectedState(raw, index) {
   if (raw === undefined) return null;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new Error(`Transactional write entry ${index} expectedState must be an object.`);
-  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error(`Transactional write entry ${index} expectedState must be an object.`);
   const keys = Object.keys(raw).sort();
-  if (keys.join(",") !== "exists,mode,sha256,type") {
-    throw new Error(`Transactional write entry ${index} expectedState must contain exactly exists, type, sha256, and mode.`);
-  }
-  if (typeof raw.exists !== "boolean" || !["absent", "directory", "file"].includes(raw.type)) {
-    throw new Error(`Transactional write entry ${index} expectedState is invalid.`);
-  }
+  if (keys.join(",") !== "exists,mode,sha256,type") throw new Error(`Transactional write entry ${index} expectedState must contain exactly exists, type, sha256, and mode.`);
+  if (typeof raw.exists !== "boolean" || !["absent", "directory", "file"].includes(raw.type)) throw new Error(`Transactional write entry ${index} expectedState is invalid.`);
   if (raw.exists !== (raw.type !== "absent")) throw new Error(`Transactional write entry ${index} expectedState existence is contradictory.`);
-  if (raw.exists ? !Number.isInteger(raw.mode) || raw.mode < 0 || raw.mode > 0o7777 : raw.mode !== null) {
-    throw new Error(`Transactional write entry ${index} expectedState mode is invalid.`);
-  }
+  if (raw.exists ? !Number.isInteger(raw.mode) || raw.mode < 0 || raw.mode > 0o7777 : raw.mode !== null) throw new Error(`Transactional write entry ${index} expectedState mode is invalid.`);
   if (raw.type === "file") {
-    if (typeof raw.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(raw.sha256)) {
-      throw new Error(`Transactional write entry ${index} expectedState file requires a lowercase SHA-256 digest.`);
-    }
+    if (typeof raw.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(raw.sha256)) throw new Error(`Transactional write entry ${index} expectedState file requires a lowercase SHA-256 digest.`);
   } else if (raw.sha256 !== null) {
     throw new Error(`Transactional write entry ${index} expectedState ${raw.type} must use a null digest.`);
   }
@@ -118,9 +57,7 @@ function parentDirectories(relativePath) {
 function inspectParentDirectories(anchor, relativePath) {
   for (const directoryPath of parentDirectories(relativePath)) {
     const stat = anchor.tryLstat(directoryPath);
-    if (stat && (!stat.isDirectory() || stat.isSymbolicLink())) {
-      throw new Error(`Transactional directory component must be a real directory: ${directoryPath}`);
-    }
+    if (stat && (!stat.isDirectory() || stat.isSymbolicLink())) throw new Error(`Transactional directory component must be a real directory: ${directoryPath}`);
     if (!stat) break;
   }
 }
@@ -138,35 +75,32 @@ function ensureParentDirectories(anchor, relativePath, createdDirectories) {
 }
 
 function removeNewTransactionParents(anchor, transaction) {
-  if (anchor.exists(transaction.transactionBase) && anchor.readdir(transaction.transactionBase).length === 0) {
-    anchor.rmdir(transaction.transactionBase, { force: true });
-  }
+  if (anchor.exists(transaction.transactionBase) && anchor.readdir(transaction.transactionBase).length === 0) anchor.rmdir(transaction.transactionBase, { force: true });
   for (const parent of [...transaction.transactionParents].reverse()) {
-    if (!parent.existed && anchor.exists(parent.relativePath) && anchor.readdir(parent.relativePath).length === 0) {
-      anchor.rmdir(parent.relativePath, { force: true });
-    }
+    if (!parent.existed && anchor.exists(parent.relativePath) && anchor.readdir(parent.relativePath).length === 0) anchor.rmdir(parent.relativePath, { force: true });
+  }
+}
+
+function assertNoUnexpectedChildren(entry, resolved) {
+  const scheduledChildren = new Set(resolved
+    .filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path.posix.dirname(candidate.relativePath) === entry.relativePath)
+    .map((candidate) => path.posix.basename(candidate.relativePath)));
+  const unexpected = entry.anchor.readdir(entry.relativePath)
+    .map((child) => typeof child === "string" ? child : child.name)
+    .filter((child) => !scheduledChildren.has(child));
+  if (unexpected.length > 0) {
+    throw new Error(`Transactional directory deletion found an unscheduled child: ${entry.relativePath}/${unexpected.sort().join(`, ${entry.relativePath}/`)}.`);
   }
 }
 
 function committedResult(entries, cleanupFailures) {
-  const residues = cleanupFailures.slice(0, MAX_CLEANUP_RESIDUES);
-  const mutations = entries.filter((entry) => !entry.asserting);
-  const movedPaths = mutations.filter((entry) => entry.movingDirectory).map((entry) => ({ from: entry.relativePath, to: entry.moveTo }));
+  const warnings = cleanupFailures.slice(0, MAX_CLEANUP_WARNINGS);
   return {
-    writtenPaths: mutations.filter((entry) => !entry.deleting && !entry.movingDirectory).map((entry) => entry.relativePath),
-    removedPaths: mutations.filter((entry) => entry.deleting).map((entry) => entry.relativePath),
-    movedPaths,
-    changedPaths: mutations.flatMap((entry) => entry.movingDirectory ? [entry.relativePath, entry.moveTo] : [entry.relativePath]),
-    transactionState: {
-      phase: "committed",
-      rollbackAttempted: false,
-      cleanup: {
-        status: cleanupFailures.length === 0 ? "clean" : "residue",
-        residueCount: cleanupFailures.length,
-        residues,
-        omittedResidueCount: Math.max(0, cleanupFailures.length - residues.length)
-      }
-    }
+    writtenPaths: entries.filter((entry) => !entry.deleting).map((entry) => entry.relativePath),
+    removedPaths: entries.filter((entry) => entry.deleting).map((entry) => entry.relativePath),
+    changedPaths: entries.map((entry) => entry.relativePath),
+    cleanupWarnings: warnings,
+    omittedCleanupWarningCount: Math.max(0, cleanupFailures.length - warnings.length)
   };
 }
 
@@ -180,7 +114,6 @@ export function writeFileSetTransaction(entries, options = {}) {
   const transactions = new Map();
   const promotions = [];
   const createdDirectories = new Map();
-  let phase = "preparing";
 
   const anchorFor = (root) => {
     const canonicalRoot = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path.resolve(root)) : fsOps.realpathSync(path.resolve(root));
@@ -191,81 +124,41 @@ export function writeFileSetTransaction(entries, options = {}) {
   try {
     for (const [index, entry] of entries.entries()) {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error(`Transactional write entry ${index} must be an object.`);
+      const unknownFields = Object.keys(entry).filter((field) => !ENTRY_FIELDS.has(field));
+      if (unknownFields.length > 0) throw new Error(`Transactional write entry ${index} uses unsupported fields: ${unknownFields.join(", ")}.`);
       const anchor = anchorFor(entry.root);
       const relativePath = anchor.normalize(entry.relativePath, entry.label ?? "Transactional write path");
       const key = `${anchor.root}\0${relativePath}`;
       if (targets.has(key)) throw new Error(`Transactional write set contains duplicate target ${relativePath}.`);
       targets.add(key);
+      inspectParentDirectories(anchor, relativePath);
       const previous = state(anchor, relativePath);
       const approvedState = expectedState(entry.expectedState, index);
-      if (approvedState !== null && !sameState(previous, approvedState)) {
-        throw new Error(`Transactional write approved precondition changed for ${relativePath}.`);
-      }
-      const movingDirectory = entry.moveTo !== undefined;
+      if (approvedState !== null && !sameState(previous, approvedState)) throw new Error(`Transactional write approved precondition changed for ${relativePath}.`);
       const deleting = entry.delete === true;
-      const asserting = entry.assertOnly === true;
-      if (asserting && (movingDirectory || deleting || entry.content !== undefined || entry.force === true || entry.deleteEmptyDirectory === true)) {
-        throw new Error(`Transactional assertion entry must not request a mutation: ${relativePath}.`);
-      }
-      if (asserting && approvedState === null) throw new Error(`Transactional assertion entry requires expectedState: ${relativePath}.`);
-      if (movingDirectory && deleting) throw new Error(`Transactional entry cannot both move and delete: ${relativePath}.`);
-      const deletingTree = deleting && entry.deleteTree === true;
       const deletingEmptyDirectory = deleting && entry.deleteEmptyDirectory === true;
-      if (deletingTree && deletingEmptyDirectory) throw new Error(`Transactional entry cannot request both recursive and empty-directory deletion: ${relativePath}.`);
-      let moveTo = null;
-      if (movingDirectory) {
-        moveTo = anchor.normalize(entry.moveTo, entry.label ?? "Transactional move destination");
-        const destinationKey = `${anchor.root}\0${moveTo}`;
-        if (targets.has(destinationKey)) throw new Error(`Transactional write set contains duplicate target ${moveTo}.`);
-        targets.add(destinationKey);
-        if (!previous.exists || previous.type !== "directory") throw new Error(`Transactional move source must be a real directory: ${relativePath}.`);
-        inspectParentDirectories(anchor, moveTo);
-        const destination = state(anchor, moveTo);
-        if (destination.exists) throw new Error(`Transactional move destination must be absent: ${moveTo}.`);
-        if (typeof entry.expectedTreeDigest !== "string" || !/^[a-f0-9]{64}$/u.test(entry.expectedTreeDigest)) {
-          throw new Error(`Transactional directory move requires a lowercase SHA-256 expectedTreeDigest: ${relativePath}.`);
-        }
-        const actualTreeDigest = inspectDirectoryTreeDigest(anchor.root, relativePath, { fsOps });
-        if (actualTreeDigest !== entry.expectedTreeDigest) throw new Error(`Transactional move source tree digest changed for ${relativePath}.`);
-      } else if (previous.exists && previous.type !== "file" && !((deletingEmptyDirectory || deletingTree) && previous.type === "directory")) {
-        throw new Error(`Transactional write target must be absent or a regular file${deletingTree ? " or an explicitly selected directory tree" : deletingEmptyDirectory ? " or an explicitly selected empty directory" : ""}: ${relativePath}.`);
-      }
-      if ((deletingEmptyDirectory || deletingTree) && previous.exists) {
-        if (typeof entry.expectedTreeDigest !== "string" || !/^[a-f0-9]{64}$/u.test(entry.expectedTreeDigest)) {
-          throw new Error(`Transactional directory deletion requires a lowercase SHA-256 expectedTreeDigest: ${relativePath}.`);
-        }
-        const actualTreeDigest = inspectDirectoryTreeDigest(anchor.root, relativePath, { fsOps });
-        if (actualTreeDigest !== entry.expectedTreeDigest) throw new Error(`Transactional directory deletion tree digest changed for ${relativePath}.`);
-      }
-      if (asserting) {
-        resolved.push({ ...entry, anchor, relativePath, moveTo, movingDirectory, deleting, asserting, content: null, previous });
-        continue;
+      if (previous.exists && previous.type !== "file" && !(deletingEmptyDirectory && previous.type === "directory")) {
+        throw new Error(`Transactional write target must be absent or a regular file${deletingEmptyDirectory ? " or an explicitly selected empty directory" : ""}: ${relativePath}.`);
       }
       if (deleting && !previous.exists) continue;
-      if (!movingDirectory && !deleting && previous.exists && entry.force !== true) continue;
+      if (!deleting && previous.exists && entry.force !== true) continue;
       resolved.push({
         ...entry,
         anchor,
         relativePath,
-        moveTo,
-        movingDirectory,
         deleting,
-        asserting,
-        content: deleting || movingDirectory ? null : Buffer.isBuffer(entry.content) ? Buffer.from(entry.content) : Buffer.from(String(entry.content ?? ""), entry.encoding ?? "utf8"),
-        previous
+        deletingEmptyDirectory,
+        previous,
+        content: deleting ? null : Buffer.isBuffer(entry.content) ? Buffer.from(entry.content) : Buffer.from(String(entry.content ?? ""), entry.encoding ?? "utf8")
       });
     }
     if (resolved.length === 0) return committedResult([], []);
 
-    const mutationEntries = resolved.filter((entry) => !entry.asserting);
-    if (mutationEntries.length === 0) return committedResult(resolved, []);
-
-    for (const anchor of new Set(mutationEntries.map((entry) => entry.anchor))) {
+    for (const anchor of new Set(resolved.map((entry) => entry.anchor))) {
       const transactionBase = anchor.normalize(options.transactionBase ?? ".dove/install/transactions", "Transactional staging base");
       const transactionPath = `${transactionBase}/${transactionId}`;
       if (anchor.exists(transactionPath)) throw new Error(`Transactional staging path is already occupied: ${anchor.displayPath(transactionPath)}.`);
-      const transactionParents = parentDirectories(`${transactionPath}/placeholder`)
-        .map((relativePath) => ({ relativePath, existed: anchor.exists(relativePath) }));
+      const transactionParents = parentDirectories(`${transactionPath}/placeholder`).map((relativePath) => ({ relativePath, existed: anchor.exists(relativePath) }));
       anchor.mkdir(transactionPath, { recursive: true });
       anchor.mkdir(`${transactionPath}/staged`);
       anchor.mkdir(`${transactionPath}/backups`);
@@ -274,72 +167,21 @@ export function writeFileSetTransaction(entries, options = {}) {
     }
 
     for (const [index, entry] of resolved.entries()) {
-      if (entry.asserting || entry.deleting || entry.movingDirectory) continue;
+      if (entry.deleting) continue;
       const transaction = transactions.get(entry.anchor);
       entry.stagedPath = `${transaction.stagedRoot}/file-${index}`;
       entry.anchor.writeNewFile(entry.stagedPath, entry.content);
       if (entry.previous.mode !== null) entry.anchor.chmod(entry.stagedPath, entry.previous.mode);
     }
 
-    // Reads and target preconditions are revalidated after every byte is staged and before promotion begins.
-    for (const entry of resolved) {
+    for (const [index, entry] of resolved.entries()) {
+      const transaction = transactions.get(entry.anchor);
+      const promotion = { entry, backupPath: null, promoted: false };
+      promotions.push(promotion);
+      ensureParentDirectories(entry.anchor, entry.relativePath, createdDirectories.get(entry.anchor));
       const actual = state(entry.anchor, entry.relativePath);
       if (!sameState(actual, entry.previous)) throw new Error(`Transactional write precondition changed for ${entry.relativePath}.`);
-      if (entry.movingDirectory) {
-        if (state(entry.anchor, entry.moveTo).exists) throw new Error(`Transactional move destination became occupied: ${entry.moveTo}.`);
-        const actualTreeDigest = inspectDirectoryTreeDigest(entry.anchor.root, entry.relativePath, { fsOps });
-        if (actualTreeDigest !== entry.expectedTreeDigest) throw new Error(`Transactional move source tree digest changed for ${entry.relativePath}.`);
-      }
-      if (entry.deleting && entry.previous.type === "directory") {
-        const actualTreeDigest = inspectDirectoryTreeDigest(entry.anchor.root, entry.relativePath, { fsOps });
-        if (actualTreeDigest !== entry.expectedTreeDigest) throw new Error(`Transactional directory deletion tree digest changed for ${entry.relativePath}.`);
-        if (entry.deleteTree !== true) {
-          const children = entry.anchor.readdir(entry.relativePath);
-          const scheduledChildren = new Set(resolved
-            .filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path.posix.dirname(candidate.relativePath) === entry.relativePath)
-            .map((candidate) => path.posix.basename(candidate.relativePath)));
-          if (children.some((child) => !scheduledChildren.has(typeof child === "string" ? child : child.name))) {
-            throw new Error(`Transactional directory deletion requires every child to be an exact scheduled deletion: ${entry.relativePath}.`);
-          }
-        }
-      }
-    }
-
-    phase = "promoting";
-    for (const [index, entry] of resolved.entries()) {
-      if (entry.asserting) continue;
-      const transaction = transactions.get(entry.anchor);
-      const promotion = { entry, backupPath: null, promoted: false, movedDirectory: false };
-      promotions.push(promotion);
-      if (entry.movingDirectory) {
-        ensureParentDirectories(entry.anchor, entry.moveTo, createdDirectories.get(entry.anchor));
-        if (state(entry.anchor, entry.moveTo).exists) throw new Error(`Transactional move destination became occupied: ${entry.moveTo}.`);
-        const actualTreeDigest = inspectDirectoryTreeDigest(entry.anchor.root, entry.relativePath, { fsOps });
-        if (actualTreeDigest !== entry.expectedTreeDigest) throw new Error(`Transactional move source tree digest changed for ${entry.relativePath}.`);
-        entry.anchor.rename(entry.relativePath, entry.moveTo);
-        promotion.movedDirectory = true;
-        continue;
-      }
-      ensureParentDirectories(entry.anchor, entry.relativePath, createdDirectories.get(entry.anchor));
-      if (entry.previous.type === "directory") {
-        if (entry.deleteTree === true) {
-          const actualTreeDigest = inspectDirectoryTreeDigest(entry.anchor.root, entry.relativePath, { fsOps });
-          if (actualTreeDigest !== entry.expectedTreeDigest) throw new Error(`Transactional directory deletion tree digest changed during promotion for ${entry.relativePath}.`);
-        } else {
-          const scheduledChildren = new Set(resolved
-            .filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path.posix.dirname(candidate.relativePath) === entry.relativePath)
-            .map((candidate) => path.posix.basename(candidate.relativePath)));
-          const unexpected = entry.anchor.readdir(entry.relativePath)
-            .map((child) => typeof child === "string" ? child : child.name)
-            .filter((child) => !scheduledChildren.has(child));
-          if (unexpected.length > 0) {
-            throw new Error(`Transactional directory deletion found an unscheduled child during promotion: ${entry.relativePath}/${unexpected.sort().join(`, ${entry.relativePath}/`)}.`);
-          }
-        }
-      } else {
-        const actual = state(entry.anchor, entry.relativePath);
-        if (!sameState(actual, entry.previous)) throw new Error(`Transactional write precondition changed during promotion for ${entry.relativePath}.`);
-      }
+      if (entry.deletingEmptyDirectory) assertNoUnexpectedChildren(entry, resolved);
       if (entry.previous.exists) {
         promotion.backupPath = `${transaction.backupRoot}/file-${index}`;
         entry.anchor.rename(entry.relativePath, promotion.backupPath);
@@ -350,14 +192,6 @@ export function writeFileSetTransaction(entries, options = {}) {
       }
     }
 
-    for (const entry of resolved.filter((candidate) => candidate.asserting)) {
-      const actual = state(entry.anchor, entry.relativePath);
-      if (!sameState(actual, entry.previous)) {
-        throw new Error(`Transactional assertion changed during promotion for ${entry.relativePath}.`);
-      }
-    }
-
-    phase = "committed";
     const cleanupFailures = [];
     for (const [anchor, transaction] of transactions) {
       try {
@@ -369,21 +203,17 @@ export function writeFileSetTransaction(entries, options = {}) {
     }
     return committedResult(resolved, cleanupFailures);
   } catch (error) {
-    if (phase === "committed") throw new Error(`Transactional write committed before post-commit cleanup failed: ${errorMessage(error)}`, { cause: error });
     const rollbackFailures = [];
     const attempt = (callback) => {
       try { callback(); } catch (rollbackError) { rollbackFailures.push(errorMessage(rollbackError)); }
     };
     for (const promotion of [...promotions].reverse()) {
       const { entry } = promotion;
-      if (promotion.movedDirectory && entry.anchor.exists(entry.moveTo)) attempt(() => entry.anchor.rename(entry.moveTo, entry.relativePath));
-      if (promotion.promoted) attempt(() => entry.anchor.remove(entry.relativePath, { force: true }));
+      if (promotion.promoted && entry.anchor.exists(entry.relativePath)) attempt(() => entry.anchor.remove(entry.relativePath, { force: true }));
       if (promotion.backupPath && entry.anchor.exists(promotion.backupPath)) attempt(() => entry.anchor.rename(promotion.backupPath, entry.relativePath));
     }
     for (const [anchor, directories] of createdDirectories) {
-      for (const directoryPath of [...directories].sort((left, right) => right.length - left.length)) {
-        attempt(() => anchor.rmdir(directoryPath, { force: true }));
-      }
+      for (const directoryPath of [...directories].sort((left, right) => right.length - left.length)) attempt(() => anchor.rmdir(directoryPath, { force: true }));
     }
     for (const [anchor, transaction] of transactions) {
       attempt(() => anchor.remove(transaction.transactionPath, { recursive: true, force: true }));

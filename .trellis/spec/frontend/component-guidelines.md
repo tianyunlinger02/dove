@@ -1,113 +1,109 @@
 # Component Guidelines
 
-> Direct Skill, MCP, role, CLI, and semantic-entity contracts for Dove.
+> Skill, role, adapter, document, CLI, and lifecycle responsibilities for Dove 3.0.0.
 
 ---
 
 ## Overview
 
-There are no browser components. Treat each direct Skill, generated adapter, primary responsibility, runtime CLI surface, MCP tool, research projection, and semantic entity as a small component over shared core behavior.
+There are no browser components. Treat each Skill, role, generated adapter, research-document convention, CLI command, lifecycle operation, and final user response as a small component over shared behavior.
 
-- `src/core/command-manifest.mjs` owns the 9 Skill definitions, user wording, adapter binding, and host policy.
-- `src/mcp/tool-definitions.mjs` owns the 8 sealed public MCP schemas.
-- `src/mcp/research-adapter.mjs` maps public operations to Research Format 1 core behavior.
-- `src/mcp/handlers.mjs` owns exact tool dispatch and safe public projection.
-- `scripts/generate-command-adapters.mjs` renders canonical Skill metadata into 45 adapters.
-- Project-installation modules own installation state and must not become research-operation components.
+Do not rebuild the retired structured research architecture inside Markdown. Dove 3 has no research MCP tools, Research Format runtime, entity database, public research DTOs, or typed research-error vocabulary.
+
+## Contract Sources
+
+- Canonical Skill workflow sources define the ten flat Skills and host-safety policy.
+- Role sources define Planner, Builder/Author, and Reviewer responsibilities.
+- Ambient policy defines conservative non-slash routing and keeps Auto explicit-only.
+- Final-response policy defines natural user-facing synthesis.
+- Adapter generation projects canonical workflows into host formats.
+- CLI, installation, Doctor, export, and file-transaction modules own software lifecycle behavior.
+- Public documentation and both Trellis spec trees must describe the same architecture.
 
 ## Public Layers
 
-Keep these layers distinct:
+1. A **Skill** is a user-facing host workflow.
+2. A **role** defines responsibility, not authority or identity.
+3. A **research document** is ordinary researcher-owned Markdown.
+4. A **project artifact** is substantive host-produced work such as code, data, a draft, figure, or report.
+5. An **installation resource** is software-owned project integration recorded by manifest revision `2.0`.
+6. A **Doctor issue** is bounded local software-maintenance state.
+7. An **archive** preserves original legacy JSON bytes from an explicitly authorized export.
 
-1. A **Skill** is a direct user-facing workflow invoked in the host, with optional text.
-2. An **MCP tool** is a sealed structured research operation used by one or more Skills.
-3. A **semantic entity** is validated Research Format 1 state persisted under `.dove/`.
-4. A **project artifact** is substantive host-produced work in a normal project path.
-5. An **installation resource** is Dove-managed host integration recorded by `.dove/install/manifest.json` under the single project-private root.
+These layers do not map one-to-one. A Skill may read several documents and ordinary artifacts; several Skills may contribute to one document.
 
-The mapping is intentionally many-to-many. A Skill may call several tools, Skills may share a tool, and work such as Draft, Figure, Rebuttal, or internal synthesis may produce a project artifact without a same-named semantic entity.
+## Skill Contract
 
-## Public Inventories
+- Public Skills remain flat: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, `lessons`, and `auto`.
+- Every Skill accepts optional user text and uses host file, coding, execution, and research tools directly.
+- Bounded Skills do not create a document merely because they were invoked.
+- `research` completes one bounded pass; `auto` is the explicit multi-round mode.
+- Ambient routing never selects Auto.
+- Status is read-only and treats a missing overview or broken link as a natural document fact.
+- Experiment planning is written before execution, and actual results are appended to the same Experiment document.
+- Review remains user-managed, exact-path scoped, read-only for the Reviewer, and returned as Markdown.
+- Draft, Figure, Rebuttal, and substantive analysis create or revise ordinary project artifacts.
+- Adapters are thin generated projections and contain no direct research service dependency, shell research fallback, or duplicate document schema.
 
-Dove exposes exactly 9 flat direct Skills:
+## Research Document Contract
 
-- `dove.research`
-- `dove.status`
-- `dove.source`
-- `dove.experiment`
-- `dove.draft`
-- `dove.figure`
-- `dove.review`
-- `dove.rebuttal`
-- `dove.lessons`
+- `.dove/research/RESEARCH.md` is the recommended concise overview and navigation document, not a machine index.
+- `.dove/research/LESSONS.md` is optional, complete advisory Markdown and is never evidence.
+- Other research files use human-readable names, useful prose, and ordinary links.
+- Folders such as `missions/`, `sources/`, `experiments/`, and `reviews/` are optional organization, not stores.
+- Missions may preserve bounded goals, work, failures, conclusions, limitations, and next branches in a natural structure.
+- Sources may preserve citation details, verification notes, conditions, conflicts, and limitations.
+- Claims remain appropriately scoped prose, tables, or dedicated documents when useful; there is no Claim store.
+- Do not require fixed headings, frontmatter, generated IDs, enums, hashes, an index file shape, or stored counts.
 
-Dove exposes exactly 8 canonical MCP tools:
+## Experiment Component
 
-- `query_dove_research`
-- `manage_dove_workspace`
-- `manage_dove_missions`
-- `manage_dove_sources`
-- `manage_dove_experiments`
-- `manage_dove_claims`
-- `manage_dove_reviews`
-- `manage_dove_lessons`
+Use one readable Experiment document for the whole lifecycle:
 
-The generator emits 45 adapters, 9 per host format for OpenCode, Codex, Cursor, shared agents, and Claude Code. OpenCode also has exactly three primary responsibility Skills: Planner, Builder/Author, and Reviewer.
+1. write the prospective question, competing explanations, protocol, inputs, comparisons, metrics, discriminating observations, stop conditions, expected artifacts, cost, risk, and failure value before execution;
+2. execute with normal host tools; and
+3. append actual procedure, observations, denominators, exclusions, deviations, failures, limitations, uncertainty, and implications to that same document.
 
-## Direct Skill Contract
+Preserve positive, negative, null, mixed, failed, and stopped outcomes. Never reconstruct the prospective plan after observing the result.
 
-- Every Skill runs directly and accepts optional user text.
-- Skills route work and select the smallest necessary MCP operation; they do not create a Mission merely because they were invoked.
-- Durable selection uses semantic IDs such as `missionId`, `sourceId`, `experimentId`, `claimId`, `exchangeId`, and `reviewId`.
-- `dove.research` covers Workspace and Mission research, internal synthesis, and bounded project work.
-- `dove.status` is read-only.
-- Draft, Figure, and Rebuttal produce or revise ordinary project artifacts and register research state only when needed.
-- Mission contracts remain proportional to the request.
+## Review Component
 
-Adapters are thin projections. They state purpose, examples, required MCP tools, Skill-specific notes, and canonical host policy. They do not contain durable schemas, direct state access, private control protocols, CLI or shell fallback routes, or installation mutations.
+Use one readable Review document for the whole exchange:
 
-## Domain Semantics
+1. record purpose, exact project-relative artifact paths, scope limits, rubric, and a self-contained prompt;
+2. return those declared paths and prompt to the user;
+3. let the user choose and manage the separate Reviewer;
+4. require read-only review and a Markdown return;
+5. preserve the actual user-obtained return faithfully in the same document; and
+6. record author interpretation, response, revisions, unresolved issues, and follow-up.
 
-- **Source** is captured external material registered with its relationship, conditions, conflicts, and limitations.
-- **Internal synthesis** is host work in a normal project artifact; Research Format 1 has no Note entity.
-- **Experiment** freezes a plan before host execution and later records the full result, including denominator, failures, deviations, limitations, uncertainty, and expected or unexpected observations.
-- **Claim** is a separate semantic entity bounded by support, counter-evidence, missing evidence, uncertainty, assessment, and explicit cannot-say limits.
-- **Review** is a user-managed separate exchange. Dove preflights and freezes declared artifact paths, prepares the exchange, imports a structured return obtained by the user in another reviewer session, and reports coverage. Dove never launches or impersonates the reviewer.
+The native Reviewer role helps separate responsibilities but does not prove reviewer identity or independence. Dove never launches, impersonates, silently substitutes, or certifies the Reviewer.
 
 ## Primary Responsibilities
 
-- Planner defines goals, scope, dependencies, evidence needs, and completion conditions.
-- Builder/Author performs substantive research, code, writing, experiments, figures, revisions, and author-side rebuttal.
-- Reviewer assesses only the frozen declared scope in a separate user-managed exchange and returns findings without edits.
+- Planner defines goals, scope, evidence needs, assumptions, unknowns, alternatives, and stop conditions.
+- Builder/Author performs substantive retrieval, analysis, coding, experiments, writing, figures, revisions, and author-side rebuttal.
+- Reviewer reads only the exact declared artifact scope, makes no edits, and returns Markdown to the user-managed exchange.
 
-Dove core enforces safety, evidence, ownership, and authority boundaries. Prompts stay focused on the user's task.
+Passing checks, receiving a review, or writing a conclusion does not establish scientific correctness, completion, acceptance, or independence.
 
-## Output Contract
+## Project Integration and Doctor
 
-MCP results return human text plus a structured `research` projection. The projection removes private write diagnostics, hashes, bindings, `.dove/` paths, and other integrity internals. No private execution protocol is part of the public result.
+Claude Code remains the supported project initialization path. Generated adapters for other host formats are canonical projections, not a readiness guarantee.
 
-A host return, test result, local review, imported review, Mission conclusion, or recorded result remains bounded evidence. None alone establishes completion, independence, acceptance, or scientific authority.
+Project initialization creates software integration and `.dove/install/manifest.json`; it does not create research content or register a research MCP server. Doctor machine state and readable `DOCTOR.md` remain under `.dove/install/` and must not become research telemetry or a scientific health score. Installation hashes protect managed bytes only.
 
-## Research Format 1 Model
-
-Dove persists one Workspace, root and child Mission contracts, optional Mission conclusions, Sources, Experiment plans and results, Claims, Reviews, and one canonical `.dove/LESSONS.md`. The Mission tree is lineage over Mission records, not a second store. Normal project artifacts remain outside `.dove/`.
-
-Unsupported or unknown `.dove/` formats are recognized without mutation and refused for writes. Research Format 1 has no migration, overlay upgrade, archive replacement, or fallback runtime.
-
-## Project Integration
-
-`.dove/` is the single project-private root. `.dove/install/manifest.json` owns managed installation state, while Research Format 1 siblings are optional research state. `init` establishes host integration, `sync` refreshes recorded hosts, Upgrade refreshes project integration while preserving current research bytes, Complete Reinstall deletes and recreates project-private Dove state after exact preview and default-No confirmation, and `doctor` reports installation and research health separately. Upgrade and Complete Reinstall never manage user npm. `.dove-install/` appears only as a legacy cleanup source for those two project-level lifecycle operations.
+Sync and Upgrade preserve research documents. Complete Reinstall is the confirmed destructive reset and deletes Dove research and old archives while preserving ordinary project files. `export-research` is a separately authorized one-time legacy JSON research records-to-Markdown conversion with original-byte archival and no v1 or runtime fallback.
 
 ## Review Checklist
 
-- Are Skill, MCP tool, semantic entity, project artifact, and installation resource terms used correctly?
-- Do all five host formats expose the same 9 Skills?
-- Are the 8 MCP tools sealed and reachable through canonical operations?
-- Do Skills avoid automatic Mission creation and positional selectors?
-- Are Source, internal synthesis, Experiment, Claim, and artifact boundaries clear?
-- Is Review described as a user-managed separate exchange rather than an internally launched reviewer?
-- Is ambient routing zero-write?
-- Is the runtime CLI kept separate from research operations and direct state access?
-- Is `.dove/` the single current root, with installation and optional research contracts clearly separated?
-- Is `.dove-install/` mentioned only for Upgrade or Complete Reinstall legacy cleanup?
-- Are project lifecycle operations explicitly separate from user npm management?
+- Are Skill, role, adapter, document, project artifact, installation resource, Doctor state, and archive terms used correctly?
+- Does the host perform substantive work rather than only document maintenance?
+- Is Status strictly read-only and tolerant of absent or broken navigation?
+- Is Auto explicit-only and bounded by the documented mainline?
+- Does the same Experiment document contain plan and actual result in the correct order?
+- Does the same Review document preserve preparation, actual return, and author handling?
+- Is Reviewer scope exact, read-only, user-managed, and Markdown-returning without independence claims?
+- Does research Markdown remain natural rather than becoming a disguised schema?
+- Are lifecycle, export, reinstall, and ordinary-file boundaries preserved?
+- Are the two Trellis spec trees byte-identical?

@@ -1,33 +1,39 @@
 ---
 name: dove-research
-description: "Route workspace and mission research, internal synthesis, and bounded project work."
+description: "Complete one bounded pass of research, synthesis, or project investigation."
 ---
 
 # Dove Research
 
-Route workspace and mission research, internal synthesis, and bounded project work.
+Complete one bounded pass of research, synthesis, or project investigation.
 
 ## Use when
 
-- Route workspace and mission research, internal synthesis, and bounded project work.
+- Complete one bounded pass of research, synthesis, or project investigation.
 
 ## Examples
 
 - `/dove:research`
 
-## Workflow
+## Internal workflow
 
-- **The user requests research framing, investigation, synthesis, or bounded project work.**
-  1. Call `query_dove_research` (read-only). Request the smallest zero-write projection, normally overview or a relevant view. Treat status=absent and an empty Mission inventory as normal branchable states. No durable Dove write is required.
-  2. Use host tools (read-only; project-exploration). When the Workspace is absent, there are no Missions, or no relevant Mission exists, inspect only ordinary project material outside `.dove`—such as README, docs, source, tests, configuration, results, and existing artifacts—to form a provisional research frame. No durable Dove write is required.
-  3. Use host tools (work; research-work). Continue the bounded research or project investigation with normal host tools, preserving uncertainty and recording actual evidence. Do not initialize a Workspace or create a Mission automatically. No durable Dove write is required.
-  4. Call `manage_dove_workspace` (bounded). Initialize or update the research direction only when the user explicitly requests durable Workspace maintenance and provides the required research frame. Persist only when: explicit-workspace-maintenance.
-  5. Call `manage_dove_missions` (bounded). Create, branch, or conclude a Mission only when the user explicitly needs a durable research node; otherwise leave Dove state unchanged. Persist only when: explicit-durable-mission.
+Internal guidance only; never use this workflow as the final report outline.
+
+- **The user requests one bounded pass of research framing, investigation, synthesis, or project work.**
+  1. Use host tools (read-only; research-document-reading). If `.dove/research/RESEARCH.md` exists, read it first and follow only the most relevant Markdown links. If it is absent, treat that as normal and inspect ordinary project material instead. Do not require fixed headings, frontmatter, IDs, or a machine index. No file write is required.
+  2. Use host tools (read-only; project-exploration). Inspect the relevant ordinary project materials and real external resources needed to understand the question. Form a proportional research frame from actual evidence rather than Dove bookkeeping. No file write is required.
+  3. Use host tools (work; research-work). Complete exactly one bounded research or project pass. Produce the requested analysis or artifact, preserve material failures and uncertainty, and stop after the bounded deliverable rather than turning Research into multi-round autonomy. No file write is required.
+  4. Use host tools (work; research-document-maintenance). When the work creates durable research value, update the existing topic document or create one readable Markdown document for that work. Update `RESEARCH.md` only when the mainline, important conclusion, linked work, or priority materially changes. Do not create a document merely because the Skill ran. Persist only when: research-context-worth-preserving.
   - Clarification: Explore first. Ask one brief clarification only if material ambiguity in the goal, boundary, or deliverable remains; otherwise continue within the requested boundary.
 
 ## Dove capsule
 
-- Dove MCP tools: `query_dove_research`, `manage_dove_workspace`, `manage_dove_missions`.
-- Use only the eight public Dove MCP research tools for durable Dove state; never read or write `.dove` directly.
-- Use semantic IDs only when durable records are needed, and do not create a Workspace or Mission merely because a Skill was invoked.
-- Treat tests, host output, local review, and imported review as bounded evidence rather than completion or scientific authority.
+- Treat `.dove/research/RESEARCH.md` and its linked Markdown as ordinary researcher-owned documents, not a database or machine authority.
+- Use host file and research tools directly. Read the overview first when it exists, then only the linked documents and project artifacts relevant to the task.
+- Keep failures, adverse evidence, limitations, and uncertainty visible; tests, host output, and any review remain bounded evidence rather than scientific authority.
+
+## Response policy
+
+- Use natural, clear Chinese unless the user requests another language or format; explain internal terms only when needed.
+- Before sending, reorganize from the user's perspective into a faithful synthesis. Do not use the internal workflow or structured machine data as the response outline; remove repetition and preserve material failures, limits, uncertainty, and blockers.
+- Requested research artifacts and strict machine-readable contracts take priority; otherwise fit the response to the task, not a fixed template.

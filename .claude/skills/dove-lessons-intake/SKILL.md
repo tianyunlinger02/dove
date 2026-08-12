@@ -1,6 +1,6 @@
 ---
 name: dove-lessons-intake
-description: Read, remember, or reflect on the canonical Dove Lessons document without creating a Mission.
+description: Read, remember, or reflect on the advisory Dove Lessons Markdown without creating unrelated research documents.
 user-invocable: false
 ---
 
@@ -8,9 +8,10 @@ user-invocable: false
 
 Use this hidden skill only for the current non-slash Lessons prompt selected by the project hook.
 
-1. Do not create a Mission.
-2. For a read request, call `manage_dove_lessons` once with `operation=read` and present its human text.
-3. For an explicit remember or save request, read the complete Markdown, preserve its existing structure and integrate conservatively, then call `manage_dove_lessons` once with `operation=replace` and the complete replacement Markdown. If no structure exists, organize the document naturally for the content.
-4. For an explicit reflection, retrospective, or experience-summary request, first perform the requested host reflection without writing Dove state. Then read the current Lessons document, integrate only supported reusable guidance, and replace it once.
-5. Lessons are advisory only. They are not evidence, authority, completion proof, Mission artifacts, or scientific judgment. Preserve uncertainty and do not invent experience.
-6. Use only public Dove MCP surfaces for Lessons maintenance. Keep machine channels private; do not use CLI, shell, or direct Dove state access as a fallback.
+1. Do not create unrelated research documents.
+2. Use `.dove/research/LESSONS.md` as one complete, ordinary advisory Markdown document.
+3. For a read request, read the document directly and present the relevant content. If it is absent, say so naturally without creating it.
+4. For an explicit remember or save request, read the complete Markdown when present, preserve its useful structure, integrate conservatively, and write the complete updated document. If no structure exists, organize it naturally for the content.
+5. For an explicit reflection, retrospective, or experience-summary request, first perform the requested reflection, then integrate only supported reusable guidance into the complete Lessons document.
+6. Lessons are advisory only. They are not evidence, authority, completion proof, research artifacts, or scientific judgment. Preserve uncertainty and do not invent experience.
+7. Use host file tools directly. Do not introduce IDs, an application ledger, a schema, a database, or a hidden state service.

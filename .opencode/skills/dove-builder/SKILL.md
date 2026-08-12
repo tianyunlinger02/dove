@@ -11,13 +11,14 @@ Perform the substantive work within the approved goal and scope as Builder/Autho
 
 ## Inputs
 
-- The approved goal, scope, deliverables, dependencies, and completion conditions
-- Supplied materials and public Dove context needed for the work
+- The approved goal, scope, deliverables, dependencies, and stopping conditions
+- The research overview, relevant linked documents, supplied materials, and ordinary project artifacts
 - Host tools, subagents, and visible external search when they materially advance the task
 
-## Outputs
+## Internal Responsibilities and Completion Conditions
 
-- Real user-facing research, code, writing, experiment, figure, revision, or rebuttal artifacts produced from actual resources and existing assets
-- Raw outputs, logs, failure samples, denominator accounting, and layered validation appropriate to the task, with no unnecessary fallback or hidden post-processing path
-- An explicit account of unsupported claims, citation gaps, integrity concerns, uncertainty, resource limits, or material scope changes; host return and passing tests are not independent acceptance
-- Durable results recorded through public Dove surfaces, without presenting the work as independent review
+- The requested research, code, writing, experiment, figure, revision, or rebuttal artifact is produced from actual resources and existing assets
+- Raw outputs, failure samples, denominator accounting, and appropriate validation remain available where they support interpretation, without unnecessary fallback or hidden post-processing
+- Unsupported claims, citation gaps, integrity concerns, uncertainty, resource limits, and material scope changes are handled at the proper boundary; host return and passing tests are not independent acceptance
+- When durable context is worthwhile, the relevant human-readable research document is updated without turning the work into a fixed entity, ID, or schema
+- These are internal execution conditions, not a requirement to enumerate every log or internal step in the ordinary user response

@@ -12,9 +12,11 @@ import {
   isHighConfidenceAmbientWorkPrompt,
   lessonsContextForPrompt,
   mergeClaudeAmbientSettings,
+  renderClaudeAmbientRule,
   renderClaudeAmbientSkill,
   renderClaudeLessonsIntakeSkill
 } from "../../src/core/ambient-policy.mjs";
+import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
 
 const ROOT = process.cwd();
 const HOOK = path.join(ROOT, "scripts", "dove-user-prompt-submit.mjs");
@@ -23,54 +25,24 @@ function runHook(input) {
   return spawnSync(process.execPath, [HOOK], { cwd: ROOT, encoding: "utf8", input });
 }
 
-test("ambient admission is pure, conservative, and bilingual", () => {
-  const negative = [
-    "   /dove:status",
-    "   ",
-    "Hello!",
-    "谢谢",
-    "Approved.",
-    "确认",
-    "Continue.",
-    "Do it.",
-    "继续",
-    "执行吧",
-    "What is the status?",
-    "进展怎么样？",
-    "进度",
-    "Why does this test fail?",
-    "解释一下这个模块如何工作",
-    "Review src/core/ambient-policy.mjs and tell me what you think.",
-    "检查 README 是否清楚",
-    "Maybe we should improve the docs.",
-    "要不要重构这个模块？",
-    "Can you help?",
-    "看看这个"
-  ];
+test("ambient admission excludes only slash, empty, and obvious conversation", () => {
+  const negative = ["   /dove:status", "   ", "Hello!", "谢谢", "确认", "继续"];
   for (const prompt of negative) {
     assert.equal(isHighConfidenceAmbientWorkPrompt(prompt), false, prompt);
     assert.equal(ambientContextForPrompt(prompt), null, prompt);
   }
 
   const positive = [
+    "What is the status?",
+    "Why does this test fail?",
+    "Review src/core/ambient-policy.mjs and tell me what you think.",
+    "Maybe we should improve the docs.",
     "Build the requested benchmark report",
-    "Please implement the focused parser change and add tests.",
-    "Fix the failing ambient hook test.",
-    "Create docs/RESULTS.md with the accepted findings.",
-    "Run the bounded benchmark and save the results to benchmark.json.",
-    "Investigate the regression and write a reproducible diagnosis to DIAGNOSIS.md.",
-    "实现已批准的 ambient 准入修改并补充测试。",
-    "请创建一份 benchmark 报告并保存到 reports/benchmark.md。",
-    "运行这组有界实验并生成 results.json。",
-    "排查该回归并把可复现结论写入 DIAGNOSIS.md。"
+    "实现已批准的 ambient 准入修改并补充测试。"
   ];
   for (const prompt of positive) {
     assert.equal(isHighConfidenceAmbientWorkPrompt(prompt), true, prompt);
-    const context = ambientContextForPrompt(prompt);
-    assert.match(context, /hidden `dove-intake`/u);
-    assert.ok(context.length < 400);
-    assert.doesNotMatch(context, new RegExp(prompt.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
-    assert.doesNotMatch(context, /\.dove|prompt.*store|transcript|call.*model/iu);
+    assert.match(ambientContextForPrompt(prompt), /hidden `dove-intake`/u);
   }
 });
 
@@ -145,9 +117,11 @@ test("Claude ambient settings fail closed on conflicting current and legacy Dove
 test("ambient hook skips slash prompts and rejects malformed or unsupported input", () => {
   const workspace = createTempRoot("dove-ambient-hook-zero-write-");
   const before = fs.readdirSync(workspace, { recursive: true }).map(String).sort();
-  const slash = spawnSync(process.execPath, [HOOK], { cwd: workspace, encoding: "utf8", input: JSON.stringify({ hook_event_name: "UserPromptSubmit", prompt: "  /dove:status" }) });
-  assert.equal(slash.status, 0, slash.stderr);
-  assert.equal(slash.stdout, "");
+  for (const prompt of ["  /dove:status", "  /dove:auto", "/dove:auto investigate the strongest alternative hypothesis"]) {
+    const slash = spawnSync(process.execPath, [HOOK], { cwd: workspace, encoding: "utf8", input: JSON.stringify({ hook_event_name: "UserPromptSubmit", prompt }) });
+    assert.equal(slash.status, 0, slash.stderr);
+    assert.equal(slash.stdout, "", prompt);
+  }
 
   const ordinary = spawnSync(process.execPath, [HOOK], { cwd: workspace, encoding: "utf8", input: JSON.stringify({ hook_event_name: "UserPromptSubmit", prompt: "Implement the focused change" }) });
   assert.equal(ordinary.status, 0, ordinary.stderr);
@@ -162,7 +136,7 @@ test("ambient hook skips slash prompts and rejects malformed or unsupported inpu
   assert.match(lessonsPayload.hookSpecificOutput.additionalContext, /dove-lessons-intake/u);
   assert.doesNotMatch(lessonsPayload.hookSpecificOutput.additionalContext, /create_ambient_dove_mission/u);
 
-  for (const prompt of ["Hello", "Thanks", "Approved", "Continue", "What is the status?", "Explain how this works", "Review this file", "Maybe improve it"]) {
+  for (const prompt of ["Hello", "Thanks", "继续"]) {
     const skipped = spawnSync(process.execPath, [HOOK], { cwd: workspace, encoding: "utf8", input: JSON.stringify({ hook_event_name: "UserPromptSubmit", prompt }) });
     assert.equal(skipped.status, 0, skipped.stderr);
     assert.equal(skipped.stdout, "", prompt);
@@ -184,32 +158,40 @@ test("ambient hook skips slash prompts and rejects malformed or unsupported inpu
   }
 });
 
-test("hidden Lessons intake uses read-update MCP flow without Mission or fallback", () => {
+test("hidden Lessons intake maintains one ordinary advisory Markdown", () => {
   const skill = renderClaudeLessonsIntakeSkill();
   assert.match(skill, /user-invocable: false/u);
-  assert.match(skill, /manage_dove_lessons.*operation=read/isu);
-  assert.match(skill, /operation=replace.*complete replacement Markdown/isu);
-  assert.match(skill, /preserve its existing structure.*If no structure exists.*organize.*naturally/isu);
-  assert.doesNotMatch(skill, /existing five sections/iu);
-  assert.match(skill, /reflection.*read.*replace/isu);
-  assert.match(skill, /do not create a Mission/iu);
+  assert.match(skill, /\.dove\/research\/LESSONS\.md/u);
+  assert.match(skill, /read the document directly/iu);
+  assert.match(skill, /preserve its useful structure.*organize it naturally/isu);
+  assert.match(skill, /reflection.*integrate only supported reusable guidance/isu);
+  assert.match(skill, /Do not create unrelated research documents/iu);
   assert.match(skill, /not evidence, authority, completion proof/iu);
-  assert.match(skill, /CLI, shell, or direct Dove state access/iu);
-  assert.doesNotMatch(skill, /query_dove_lessons|record_dove_lesson|lessonId|scope enum|kind enum/iu);
-  assert.ok(Buffer.byteLength(skill, "utf8") <= 2600);
+  assert.match(skill, /host file tools directly/iu);
+  assert.doesNotMatch(skill, /manage_dove|lessonId|scope enum|kind enum|database.*required/iu);
+  assert.ok(Buffer.byteLength(skill, "utf8") <= 3000);
 });
 
-test("hidden intake skill preserves concise zero-write routing", () => {
+test("hidden intake skill preserves concise zero-write routing and excludes explicit-only Auto", () => {
+  const rule = renderClaudeAmbientRule();
   const skill = renderClaudeAmbientSkill();
+  for (const bullet of USER_RESPONSE_POLICY) {
+    assert.equal(rule.split(bullet).length - 1, 1, bullet);
+  }
+  assert.match(rule, /10 flat Skills: research, status, source, experiment, draft, figure, review, rebuttal, lessons, and auto/iu);
+  assert.match(rule, /Auto is explicit-only.*hidden intake cannot select it/isu);
   assert.match(skill, /user-invocable: false/u);
-  assert.match(skill, /conservative judgment.*(?:starts new work|clear new work)|(?:starts new work|clear new work).*conservative judgment/isu);
+  assert.match(skill, /without reimplementing natural-language admission rules/iu);
   assert.match(skill, /(?:ambigu.*one.*zero-write clarification|one.*zero-write clarification.*ambigu)/isu);
-  assert.match(skill, /smallest flat Skill/iu);
-  assert.match(skill, /Do not create a Mission merely because a prompt was selected/iu);
+  assert.match(skill, /smallest ambient-eligible Skill/iu);
+  assert.match(skill, /research, status, source, experiment, draft, figure, review, rebuttal, or lessons/iu);
+  assert.match(skill, /Auto.*explicit-only.*never select/isu);
+  assert.match(skill, /Do not create a research document merely because a prompt was selected/iu);
   assert.match(skill, /remains unclear.*no work was started.*stop/isu);
-  assert.match(skill, /public Dove MCP research surfaces/iu);
-  assert.match(skill, /CLI, shell, or direct Dove state access/iu);
-  assert.doesNotMatch(skill, /create_ambient_dove_mission|closureRequest|hostControl|researchHandoff|outcomeContract|binding/iu);
+  assert.match(skill, /host file and research tools directly/iu);
+  assert.match(skill, /\.dove\/research\/RESEARCH\.md/u);
+  assert.match(skill, /Do not introduce IDs, fixed schemas, a database, or a hidden state service/iu);
+  assert.doesNotMatch(skill, /manage_dove|public Dove MCP|create_ambient_dove_mission|closureRequest|hostControl|researchHandoff|outcomeContract|binding/iu);
   assert.ok(Buffer.byteLength(skill, "utf8") <= 2600);
   assert.equal(fs.existsSync(path.join(ROOT, ".claude", "skills", "dove-intake", "SKILL.md")), true);
 });

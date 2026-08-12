@@ -4,8 +4,8 @@ const boolean = (name, options = {}) => ({ name, kind: "boolean", ...options });
 const projectOption = value("--project");
 const outputOptions = [boolean("--json"), value("--format")];
 
-function command(options = [], positional = { min: 0, max: 0 }) {
-  return { options, positional };
+function command(options = [], positional = { min: 0, max: 0 }, subcommands = null) {
+  return subcommands === null ? { options, positional } : { options, positional, subcommands };
 }
 
 export const CLI_COMMAND_SPECS = Object.freeze({
@@ -14,7 +14,7 @@ export const CLI_COMMAND_SPECS = Object.freeze({
   upgrade: command([projectOption, ...outputOptions]),
   reinstall: command([projectOption, ...outputOptions]),
   doctor: command([projectOption, ...outputOptions]),
-  mcp: command([projectOption], { min: 1, max: 1 }),
+  "export-research": command([projectOption, ...outputOptions]),
   hook: command([projectOption], { min: 1, max: 1 })
 });
 
@@ -35,8 +35,13 @@ export function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
     if (tokens.length > 0) throw new Error(`${commandName} does not accept additional arguments.`);
     return { command: commandName, positionals: [], args: [] };
   }
-  const spec = specs[commandName];
-  if (!spec) return { command: commandName, positionals: tokens, args: [] };
+  let spec = specs[commandName];
+  if (!spec) throw new Error(`Unknown or unsupported Dove command: ${commandName}.`);
+  if (spec.subcommands) {
+    const subcommandName = tokens[0];
+    const subcommandSpec = spec.subcommands[subcommandName];
+    if (subcommandSpec) spec = { ...subcommandSpec, positional: { min: 1, max: 1 } };
+  }
   const options = optionMap(spec);
   const args = [];
   const positionals = [];

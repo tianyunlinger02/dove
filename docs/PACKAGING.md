@@ -2,121 +2,100 @@
 
 ## Delivery model
 
-Dove 0.7.0 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization does not copy runtime bundles into the project.
+Dove 3.0.0 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
 
-The bare public npm package named `dove` is unrelated. Release instructions must use an exact trusted tarball, Git revision, or internal-registry package/version.
+The bare public npm package named `dove` is unrelated. Release instructions must use an exact trusted tarball, Git revision, or internal-registry package version.
 
-## Exact public inventory
+## Release inventory
 
-Every 0.7.0 release contains:
+Every Dove 3.0.0 release contains:
 
-- **9 flat Skills**: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`;
-- **8 public MCP tools**;
-- **45 generated adapters**, 9 each for OpenCode, Codex, Cursor, shared-agent hosts, and Claude Code;
-- **7 runtime CLI commands**: `init`, `sync`, `upgrade`, `reinstall`, `doctor`, `mcp`, and `hook`;
-- **3 OpenCode responsibility Skills**: Planner, Builder/Author, and Reviewer;
-- dedicated Claude and OpenCode `dove-reviewer` definitions; and
-- **3 generated Claude ambient resources**: one rule and two hidden Skills.
+- **10 flat Skills**: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, `lessons`, and explicit-only `auto`;
+- **3 roles**: Planner, Builder/Author, and Reviewer;
+- generated adapters for the declared host formats;
+- the project lifecycle CLI and prompt hook;
+- public documentation; and
+- **3 standalone Node.js bundles**.
 
-### Public MCP tools
+There is no research MCP server bundle, research tool inventory, MCP registration command, or Research Format runtime.
 
-1. `query_dove_research`
-2. `manage_dove_workspace`
-3. `manage_dove_missions`
-4. `manage_dove_sources`
-5. `manage_dove_experiments`
-6. `manage_dove_claims`
-7. `manage_dove_reviews`
-8. `manage_dove_lessons`
-
-A Skill is a host workflow. An MCP tool is a structured operation. A Research Format 1 entity is durable research context. An ordinary project artifact is the substantive file produced by the host. These inventories intentionally do not map one-to-one.
-
-## Research Format 1 inventory
-
-Every initialized project records managed integration in `.dove/install/manifest.json`. Research Format 1 is optional, is identified by `dove-research-v1` in `.dove/format.json`, and uses these sibling paths:
-
-- `.dove/workspace.json`;
-- `.dove/missions/*.json` and optional immutable Mission conclusion records;
-- `.dove/sources/*.json`;
-- `.dove/experiments/*.plan.json` and `*.result.json`;
-- `.dove/claims/*.json`;
-- `.dove/reviews/*.json`; and
-- `.dove/LESSONS.md`.
-
-The nine public query views are `overview`, `diagnosis`, `related-work`, `hypotheses`, `experiment-options`, `result-synthesis`, `claim-story`, `branch-synthesis`, and `reviews`.
-
-Research Format 1 has no separate decision, work-return, transition, receipt, task ledger, artifact mirror, or gate database. Drafts, notes, figures, datasets, logs, code, papers, and rebuttals remain normal project files.
+A Skill is a host workflow. A role defines responsibility. An adapter is a generated projection for a host format. A research document is ordinary researcher-owned Markdown. These concepts intentionally do not map one-to-one.
 
 ## Generated host surfaces
 
-Canonical generated adapter outputs are:
+Canonical adapter outputs include:
 
-- `.opencode/commands/dove.*.md` — 9;
-- `.codex/skills/dove-*/SKILL.md` — 9;
-- `.cursor/commands/dove-*.md` — 9;
-- `.agents/skills/dove-*/SKILL.md` — 9;
-- `.claude/commands/dove/*.md` — 9.
+- `.opencode/commands/dove.*.md`;
+- `.codex/skills/dove-*/SKILL.md`;
+- `.cursor/commands/dove-*.md`;
+- `.agents/skills/dove-*/SKILL.md`; and
+- `.claude/commands/dove/*.md`.
 
-Additional generated role and ambient resources include:
+Role and ambient resources include the Planner, Builder/Author, and Reviewer projections where supported, the Claude Reviewer definition, the Claude ambient rule and hidden intake resources, and the managed prompt hook.
 
-- `.opencode/skills/dove-{planner,builder,reviewer}/SKILL.md`;
-- `.claude/agents/dove-reviewer.md`;
-- `.opencode/agents/dove-reviewer.md`;
-- `.claude/rules/dove.md`;
-- `.claude/skills/dove-intake/SKILL.md`; and
-- `.claude/skills/dove-lessons-intake/SKILL.md`.
+Adapters are generated from canonical Dove workflow sources. Do not edit generated projections independently. Adapter presence does not establish installation, registration, tool availability, project readiness, reviewer identity, or reviewer independence.
 
-Adapters are thin projections of the canonical command manifest. Adapter presence is not host registration, MCP connectivity, readiness, reviewer independence, or scientific authority.
+Claude Code remains the supported project initialization path. Other host projections may be packaged without a complete initialization path in this release.
 
-## Runtime bundles
+## Three runtime bundles
 
-The package contains five standalone Node.js 22 ESM bundles:
+The package contains three standalone Node.js 22 ESM bundles:
 
-| Bundle | Source entrypoint |
+| Bundle | Purpose |
 |---|---|
-| `dist/index.mjs` | `src/core/index.mjs` |
-| `bin/dove-package.mjs` | `bin/dove.mjs` |
-| `mcp/dove-state-server-package.mjs` | `mcp/dove-state-server.mjs` |
-| `scripts/doctor-mcp-probe-package.mjs` | `scripts/doctor-mcp-probe.mjs` |
-| `scripts/dove-user-prompt-submit-package.mjs` | `scripts/dove-user-prompt-submit.mjs` |
+| `dist/index.mjs` | Public library bundle. |
+| `bin/dove-package.mjs` | Packaged `dove` CLI. |
+| `scripts/dove-user-prompt-submit-package.mjs` | Prompt-hook bundle. |
 
-`scripts/build-package.mjs` is the canonical builder and reproducibility checker. Generated adapters and standalone bundles are checked release artifacts; consumer installation does not regenerate them.
+The package contains no MCP server bundle. The canonical build checks generated adapters and these three bundles for drift. Consumer installation does not regenerate them.
 
-## Project integration boundary
+## Project integration
 
-In 0.7.0, Claude Code is the only project-initializable host. `dove init --host claude` may install:
+For the supported path, `dove init --host claude` installs the Claude command adapters, role and ambient resources, prompt hook, and `.dove/install/manifest.json`.
 
-- 9 Claude command adapters;
-- one Claude Reviewer definition;
-- three Claude ambient resources;
-- project-local MCP registration and approval fragments;
-- one managed prompt-hook fragment; and
-- `.dove/install/manifest.json`.
+It does not add a project `.mcp.json`, register a user MCP server, create research documents, or copy the runtime bundles into the project.
 
-`dove sync` updates manifest-selected integration. The interactive lifecycle also exposes project-level Upgrade and Complete Reinstall. Neither operation installs, upgrades, uninstalls, or otherwise manages the user's npm installation.
+The project installation manifest uses revision `2.0`. Optional Doctor machine state and readable `DOCTOR.md` also belong under `.dove/install/`. Managed-file hashes are internal software safety data and are not exposed as research evidence.
 
-Upgrade refreshes project integration while preserving current Research Format 1 bytes. It may consume and remove a valid legacy `.dove-install/manifest.json` and move a legacy `.dove-archive/` into `.dove/archive/`. Confirmed Complete Reinstall removes project integration, optional Research Format 1 state, both legacy roots, and recognized copied-runtime remnants, then recreates `.dove/install/manifest.json` and managed host integration. Routine initialization and synchronization do not create Research Format 1. No operation writes global host configuration or copies runtime bundles into the consumer project.
+Project paths and managed-resource parents must remain contained and unambiguous. Existing matching resources may be recognized without rewriting them. Conflicting or user-modified managed content blocks automatic replacement. Shared configuration keeps unrelated fields and entries.
+
+## Research documents are not package state
+
+Research context, when maintained, is ordinary Markdown under `.dove/research/`:
+
+- `RESEARCH.md` is the recommended overview and navigation document;
+- `LESSONS.md` is optional; and
+- other files are human-named linked topic documents.
+
+The package does not define fixed headings, frontmatter, IDs, enums, machine indexes, stored counts, research hashes, or a mandatory Markdown template. Mission, Source, Experiment, Review, and occasional Claim documents are conventions chosen for readability, not entity stores.
+
+The same Experiment document holds the prospective plan and later actual results. The same Review document holds preparation, the actual user-obtained Markdown return, and author handling.
+
+## CLI inventory and lifecycle
+
+The packaged CLI exposes:
+
+```text
+init, sync, upgrade, reinstall, doctor, export-research, hook
+```
+
+- `init` creates supported project integration.
+- `sync` and `upgrade` refresh recognized integration without changing research documents.
+- `export-research` performs an explicit one-time conversion from supported legacy Dove JSON research records state to Markdown and archives the original bytes under `.dove/archive/...`. It does not convert v1 and does not install a runtime fallback. A real export requires separate user authorization.
+- `reinstall` displays the deletion scope and defaults to No. After confirmation it removes Dove research and old archives while preserving ordinary project files, then recreates integration as applicable.
+- `doctor` maintains software-facing diagnostics under `.dove/install/` and does not judge science.
+- `hook user-prompt-submit` provides the packaged prompt-hook entry.
+
+There is no `mcp` command and no `migrate-research` command.
 
 ## Research and review boundaries
 
-- The host performs actual search, capture, analysis, experiments, code execution, writing, and figure production.
-- Dove records and projects research context; it does not execute an experiment or determine scientific meaning.
-- Experiment records preserve positive, negative, null, mixed, failed, and stopped results with denominators and uncertainty.
-- Claims require exact support and explicit cannot-say boundaries.
-- Review uses a user-managed separate exchange. Dove prepares fingerprints, imports a return, and verifies current byte coverage; it never launches or impersonates a reviewer.
-- Passing software checks does not prove scientific correctness or independent review.
-
-## Version boundaries
-
-The release validates independent boundaries:
-
-1. **Package release** — `0.7.0`.
-2. **Research state format** — `dove-research-v1`.
-3. **Project integration** — `.dove/install/manifest.json` with manifest Schema `1`, integration version `2`, ownership version `2`, and runtime protocol `2`.
-4. **MCP transport protocol** — negotiated independently with the host.
-5. **Record contracts** — exact sealed fields for each Research Format 1 entity and operation.
-
-No packaged layer migrates unsupported state or falls back to an older reader, alias root, copied runtime, shell path, or direct `.dove/` access.
+- The host performs real retrieval, analysis, experiments, coding, writing, and figure production.
+- `status` is read-only; a missing overview is normal, and broken links are reported naturally.
+- `auto` is explicit-only and treats the documented mainline as a read-only boundary.
+- A reviewer is selected and managed by the user, reads only exact declared paths, makes no edits, and returns Markdown.
+- A native Reviewer role does not establish independence.
+- Tests and packaged artifacts do not certify research claims.
 
 ## Build and release validation
 
@@ -124,17 +103,10 @@ From a source checkout:
 
 ```bash
 npm ci
-npm run build:check
-npm run commands:check
-npm run commands:validate
-npm run research-constitution:validate
-npm run mcp:validate
-npm run workflow-goals:validate
-npm run governance:audit
-npm test
-npm run check
 npm run release:check
 npm run pack:dry-run
 ```
 
-Release checks verify software contracts, exact 9/8/45/7 inventories, generated drift, package contents, integration ownership, tool schemas, and bundle reproducibility. They do not certify research claims or establish an independent review process.
+`npm run check` is the regular software gate. Release validation should protect the ten-Skill and three-role inventory, generated adapter drift, absence of the retired MCP runtime, the three bundle entrypoints, CLI inventory, project lifecycle safety, and package archive contents.
+
+These checks validate the software release only. They do not prove scientific correctness, research completion, reproducibility, acceptance, or independent review.

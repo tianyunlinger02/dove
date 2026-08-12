@@ -12,7 +12,8 @@ const INTERNAL_FIELD_NAMES = new Set([
   "writtenPaths",
   "removedPaths",
   "changedPaths",
-  "transactionState",
+  "cleanupWarnings",
+  "omittedCleanupWarningCount",
   "manifest"
 ]);
 
@@ -53,15 +54,15 @@ function setupLines(command, status) {
   }
   if (command === "init") {
     return [
-      "✓ 9 个 Dove 工作入口已安装",
-      "✓ 项目 MCP 服务已注册并仅为 Dove 批准",
+      "✓ 10 个 Dove 工作入口已安装",
+      "✓ Prompt Hook 与 Skills 已启用",
       "✓ 自然语言任务入口已启用",
       "✓ 安全的项目集成记录已建立"
     ];
   }
   return status === "unchanged"
-    ? ["✓ 工作入口、Dove-only MCP 批准和自然语言任务入口均已是最新"]
-    : ["✓ 工作入口、Dove-only MCP 批准和自然语言任务入口已安全刷新"];
+    ? ["✓ 工作入口、Prompt Hook 与自然语言任务入口均已是最新"]
+    : ["✓ 工作入口、Prompt Hook 与自然语言任务入口已安全刷新"];
 }
 
 export function renderProjectIntegrationResult(command, result, options = {}) {
@@ -94,8 +95,8 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
     lines.push("如需刷新项目集成，请运行 dove sync。科研记录未被修改。");
   } else {
     lines.push(command === "init"
-      ? "Research Workspace 尚未建立也不影响普通项目工作。进入 Claude Code 后可直接处理项目，或按需运行 /dove:research。"
-      : "科研记录未被修改。重新进入 Claude Code 后可直接使用更新后的 Dove。"
+      ? "Markdown 研究文档尚未建立也不影响普通项目工作。进入 Claude Code 后可直接处理项目，或按需运行 /dove:research。"
+      : "研究文档未被修改。重新进入 Claude Code 后可直接使用更新后的 Dove。"
     );
   }
   lines.push("");

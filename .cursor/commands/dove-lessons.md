@@ -1,32 +1,35 @@
 ---
-description: "Read or explicitly replace the complete advisory Lessons document."
+description: "Read or maintain the complete advisory Lessons Markdown document."
 ---
 
 # dove-lessons
 
-Read or explicitly replace the complete advisory Lessons document.
+Read or maintain the complete advisory Lessons Markdown document.
 
 ## Use when
 
-- Read or explicitly replace the complete advisory Lessons document.
+- Read or maintain the complete advisory Lessons Markdown document.
 
 ## Examples
 
 - `/dove:lessons`
 
-## Workflow
+## Internal workflow
+
+Internal guidance only; never use this workflow as the final report outline.
 
 - **The user requests Lessons reading, remembering, or reflection.**
-  1. Call `manage_dove_lessons` (bounded). For reading, use operation=read. For an explicit remember or reflection request, read the complete Markdown, preserve its current structure, integrate only supported reusable guidance, and use operation=replace with the full replacement document. Persist only when: explicit-replace-request.
+  1. Use host tools (work; lesson-maintenance). Use `.dove/research/LESSONS.md` as one complete, ordinary advisory Markdown document. Read it directly for a read request. For explicit remembering or reflection, preserve its useful structure and update it only with supported reusable guidance. If it does not exist and the request needs durable Lessons, create it naturally. Do not create lesson IDs, an application ledger, or treat Lessons as evidence. Persist only when: explicit-lessons-request.
   - Clarification: Explore first. Ask one brief clarification only if material ambiguity in the goal, boundary, or deliverable remains; otherwise continue within the requested boundary.
 
 ## Dove capsule
 
-- Dove MCP tools: `manage_dove_lessons`.
-- Unless the user requests another language or format, respond in natural, clear Chinese.
-- Use internal terms, paths, and machine identifiers only when they materially improve precision, and explain them plainly.
-- Adapt the response structure to the task instead of forcing a fixed report template; explicit user instructions and local machine-readable contracts take priority.
-- Access durable Dove state only through public MCP tools. Use normal host tools to read, create, edit, and validate ordinary project materials and artifacts outside `.dove`.
-- Use only the eight public Dove MCP research tools for durable Dove state; never read or write `.dove` directly.
-- Use semantic IDs only when durable records are needed, and do not create a Workspace or Mission merely because a Skill was invoked.
-- Treat tests, host output, local review, and imported review as bounded evidence rather than completion or scientific authority.
+- Treat `.dove/research/RESEARCH.md` and its linked Markdown as ordinary researcher-owned documents, not a database or machine authority.
+- Use host file and research tools directly. Read the overview first when it exists, then only the linked documents and project artifacts relevant to the task.
+- Keep failures, adverse evidence, limitations, and uncertainty visible; tests, host output, and any review remain bounded evidence rather than scientific authority.
+
+## Response policy
+
+- Use natural, clear Chinese unless the user requests another language or format; explain internal terms only when needed.
+- Before sending, reorganize from the user's perspective into a faithful synthesis. Do not use the internal workflow or structured machine data as the response outline; remove repetition and preserve material failures, limits, uncertainty, and blockers.
+- Requested research artifacts and strict machine-readable contracts take priority; otherwise fit the response to the task, not a fixed template.

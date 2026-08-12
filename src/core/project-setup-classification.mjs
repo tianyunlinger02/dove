@@ -1,6 +1,5 @@
 const ACTIONS = Object.freeze({
   init: Object.freeze(["init", "exit"]),
-  upgrade: Object.freeze(["upgrade", "reinstall", "exit"]),
   reinstall: Object.freeze(["reinstall", "exit"]),
   blocked: Object.freeze(["exit"])
 });
@@ -19,13 +18,13 @@ export function classifyProjectSetup(result) {
   if (migration.state === "conflicting-manifests") {
     return reinstallReady ? setup("reinstall", "conflicting-manifests") : setup("blocked", "conflicting-manifests");
   }
-  if (migration.state === "valid-legacy") return setup("upgrade", "valid-legacy");
+  if (migration.state === "valid-legacy") return setup("blocked", "valid-legacy");
   if (migration.state === "invalid-legacy") {
     return reinstallReady ? setup("reinstall", "invalid-legacy") : setup("blocked", "invalid-legacy");
   }
   if (["invalid", "drifted"].includes(integration.state)) return setup("blocked", integration.state);
   if (copiedRuntime) return setup("blocked", "legacy-copied-runtime");
-  if (["current", "needs-sync"].includes(integration.state)) return setup("upgrade", integration.state);
+  if (["current", "needs-sync"].includes(integration.state)) return setup("reinstall", integration.state);
   if (workspace.mode !== "absent") {
     return reinstallReady ? setup("reinstall", "unsupported-workspace") : setup("blocked", "unsupported-workspace");
   }

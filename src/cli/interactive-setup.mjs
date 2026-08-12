@@ -17,14 +17,14 @@ function safeProjectName(target) {
 
 function setupCompleteLines(result, color) {
   const workspaceAbsent = result.workspaceState?.mode === "absent";
-  const researchLine = workspaceAbsent ? "✓ Workspace 仍保持未建立" : "✓ 现有科研状态未被修改";
+  const researchLine = workspaceAbsent ? "✓ Markdown 研究文档仍保持未建立" : "✓ 现有研究文档未被修改";
   return [
     "",
     terminalStyle("项目配置完成", "bold", { color }),
     "",
     "✓ Dove 项目集成已是当前版本",
-    "✓ Dove MCP 已注册并仅在当前项目为你批准",
     "✓ Claude Code 自然语言入口已配置",
+    "✓ Prompt Hook 与 Skills 已安装",
     researchLine,
     "",
     `${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code`,
@@ -44,18 +44,6 @@ function lifecycleTarget(result, fallback) {
   return result?.target ?? fallback;
 }
 
-async function runUpgrade({ target, upgrade, stream, env }) {
-  if (typeof upgrade !== "function") {
-    throw new Error("Dove 项目配置升级核心尚未接入。");
-  }
-  const result = await upgrade(target);
-  stream.write(`\n${renderDoveLifecycleResult("upgrade", {
-    ...result,
-    target: lifecycleTarget(result, target)
-  }, { stream, env })}\n`);
-  return { status: "upgraded", action: "upgrade", result };
-}
-
 async function runCompleteReinstall({ target, completeReinstall, promptConfirm, stream, env, color }) {
   stream.write(`\n${renderCompleteReinstallInventory(target, { color })}\n\n`);
   const approved = await promptConfirm({
@@ -69,7 +57,7 @@ async function runCompleteReinstall({ target, completeReinstall, promptConfirm, 
   if (typeof completeReinstall !== "function") {
     throw new Error("Dove 项目配置完全重装核心尚未接入。");
   }
-  const result = await completeReinstall(target);
+  const result = await completeReinstall(target, { confirmed: true });
   stream.write(`\n${renderDoveLifecycleResult("reinstall", {
     ...result,
     target: lifecycleTarget(result, target)
@@ -81,8 +69,10 @@ export async function runInteractiveDoveSetup(options) {
   const {
     inspect,
     initialize,
-    upgrade,
     completeReinstall,
+    readDoctorState,
+    readDoctorDocument,
+    setDoctorEnabled,
     target = process.cwd(),
     promptConfirm = confirm,
     promptSelect = select,
@@ -103,9 +93,9 @@ export async function runInteractiveDoveSetup(options) {
     ["invalid", "drifted"].includes(initial.projectIntegration?.state) || initial.legacyCopiedRuntime?.detected
       ? { mode: "blocked", reason: initial.projectIntegration?.state ?? "legacy-copied-runtime", allowedActions: ["exit"] }
       : {
-        mode: initial.projectIntegration?.state === "uninitialized" ? "init" : "upgrade",
+        mode: initial.projectIntegration?.state === "uninitialized" ? "init" : "reinstall",
         reason: initial.projectIntegration?.state ?? "unknown",
-        allowedActions: initial.projectIntegration?.state === "uninitialized" ? ["init", "exit"] : ["upgrade", "reinstall", "exit"]
+        allowedActions: initial.projectIntegration?.state === "uninitialized" ? ["init", "exit"] : ["reinstall", "exit"]
       }
   );
   if (setup.mode === "blocked") {
@@ -117,7 +107,7 @@ export async function runInteractiveDoveSetup(options) {
     const action = await promptSelect({
       message: "当前项目尚未配置 Dove。请选择：",
       choices: [
-        { name: "初始化项目配置", value: "init" },
+        { name: "安装", value: "init" },
         { name: "退出", value: "exit" }
       ]
     });
@@ -131,20 +121,32 @@ export async function runInteractiveDoveSetup(options) {
     return { status: "initialized", action: "init", result: current };
   }
 
-  const legacy = setup.reason === "valid-legacy";
+  const doctorState = typeof readDoctorState === "function" ? await readDoctorState(setupTarget) : { enabled: true, issues: [] };
   const action = await promptSelect({
-    message: setup.allowedActions.includes("upgrade")
-      ? legacy ? "检测到旧版 Dove 项目配置。请选择：" : "当前项目已配置 Dove。请选择："
-      : "当前项目中的 Dove 状态需要完全重新安装。请选择：",
+    message: "当前项目已配置 Dove。请选择：",
     choices: [
-      ...(setup.allowedActions.includes("upgrade") ? [{ name: "升级项目配置", value: "upgrade" }] : []),
-      ...(setup.allowedActions.includes("reinstall") ? [{ name: "完全重新安装项目配置", value: "reinstall" }] : []),
+      { name: `Doctor：${doctorState.enabled ? "开启（默认）" : "关闭"}`, value: "toggle-doctor" },
+      { name: `查看 Dove 问题（DOCTOR.md）${doctorState.issues.some((issue) => issue.state === "open") ? `（${doctorState.issues.filter((issue) => issue.state === "open").length}）` : ""}`, value: "doctor-issues" },
+      ...(setup.allowedActions.includes("reinstall") ? [{ name: "重新安装", value: "reinstall" }] : []),
       { name: "退出", value: "exit" }
     ]
   });
 
-  if (action === "upgrade") {
-    return runUpgrade({ target: setupTarget, upgrade, stream, env });
+  if (action === "toggle-doctor") {
+    if (typeof setDoctorEnabled !== "function") throw new Error("Dove Doctor 设置核心尚未接入。");
+    const next = await setDoctorEnabled(setupTarget, !doctorState.enabled);
+    stream.write(`Doctor 自动维护已${next.enabled ? "开启" : "关闭"}。手动 dove doctor 始终可用。\n`);
+    return { status: "doctor-updated", action, result: next };
+  }
+  if (action === "doctor-issues") {
+    const document = typeof readDoctorDocument === "function"
+      ? await readDoctorDocument(setupTarget)
+      : { path: ".dove/install/DOCTOR.md", exists: false, markdown: null };
+    stream.write(`Dove 问题文档：${path.join(setupTarget, document.path)}\n\n`);
+    stream.write(document.exists
+      ? document.markdown
+      : "当前尚无已记录问题；出现真实 Dove 问题时会建立这份文档。\n");
+    return { status: "doctor-viewed", action, result: document };
   }
   if (action === "reinstall") {
     return runCompleteReinstall({

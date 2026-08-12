@@ -6,7 +6,7 @@ const HOST_DEFINITIONS = [
     label: "OpenCode",
     order: 0,
     projectInitializable: false,
-    capabilities: { commandAdapters: true, projectMcpRegistration: false, projectHooks: false, sharedInstructions: false, nativeReviewer: true, reviewerFreshContext: true, reviewerReadOnly: true, reviewerSynchronous: true },
+    capabilities: { commandAdapters: true, projectHooks: false, sharedInstructions: false },
     legacySignatures: [".opencode.json", ".opencode/commands/dove.status.md", ".opencode/skills/dove-planner/SKILL.md"]
   },
   {
@@ -14,7 +14,7 @@ const HOST_DEFINITIONS = [
     label: "Codex",
     order: 1,
     projectInitializable: false,
-    capabilities: { commandAdapters: true, projectMcpRegistration: false, projectHooks: false, sharedInstructions: false },
+    capabilities: { commandAdapters: true, projectHooks: false, sharedInstructions: false },
     legacySignatures: [".codex/skills/dove-status/SKILL.md"]
   },
   {
@@ -22,7 +22,7 @@ const HOST_DEFINITIONS = [
     label: "Cursor",
     order: 2,
     projectInitializable: false,
-    capabilities: { commandAdapters: true, projectMcpRegistration: false, projectHooks: false, sharedInstructions: false },
+    capabilities: { commandAdapters: true, projectHooks: false, sharedInstructions: false },
     legacySignatures: [".cursor/commands/dove-status.md"]
   },
   {
@@ -30,7 +30,7 @@ const HOST_DEFINITIONS = [
     label: "Shared agent skills",
     order: 3,
     projectInitializable: false,
-    capabilities: { commandAdapters: true, projectMcpRegistration: false, projectHooks: false, sharedInstructions: true },
+    capabilities: { commandAdapters: true, projectHooks: false, sharedInstructions: true },
     legacySignatures: [".agents/skills/dove-status/SKILL.md", "AGENTS.md"]
   },
   {
@@ -38,7 +38,7 @@ const HOST_DEFINITIONS = [
     label: "Claude Code",
     order: 4,
     projectInitializable: true,
-    capabilities: { commandAdapters: true, projectMcpRegistration: true, projectHooks: true, sharedInstructions: false, nativeReviewer: true, reviewerFreshContext: true, reviewerReadOnly: true, reviewerSynchronous: true },
+    capabilities: { commandAdapters: true, projectHooks: true, sharedInstructions: false },
     legacySignatures: [
       "mcp/dove-claude-project.json",
       ".mcp.json",
@@ -78,17 +78,6 @@ function defaultSelection(defaultWhenEmpty) {
   return selectionValues(defaultWhenEmpty);
 }
 
-export function requireNativeReviewerHost(hostId) {
-  if (typeof hostId !== "string" || !hostId.trim() || !HOST_REGISTRY[hostId]?.capabilities.nativeReviewer) {
-    throw new Error(`Host ${String(hostId)} does not support a dedicated native Reviewer launch.`);
-  }
-  const host = HOST_REGISTRY[hostId];
-  if (!host.capabilities.reviewerFreshContext || !host.capabilities.reviewerReadOnly || !host.capabilities.reviewerSynchronous) {
-    throw new Error(`Host ${hostId} does not satisfy the dedicated Reviewer launch contract.`);
-  }
-  return host;
-}
-
 export function normalizeHostSelection(raw, options = {}) {
   const requested = selectionValues(raw);
   const source = requested.length > 0 ? requested : defaultSelection(options.defaultWhenEmpty);
@@ -106,7 +95,7 @@ export function normalizeHostSelection(raw, options = {}) {
   if (options.requireInitializable === true) {
     const unavailable = selected.filter((hostId) => !HOST_REGISTRY[hostId].projectInitializable);
     if (unavailable.length > 0) {
-      throw new Error(`Dove project initialization is not available for host(s) without complete project MCP registration: ${unavailable.join(", ")}.`);
+      throw new Error(`Dove project initialization is not available for host(s) without a complete project integration path: ${unavailable.join(", ")}.`);
     }
   }
   return Object.freeze(selected);

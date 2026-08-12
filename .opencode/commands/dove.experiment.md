@@ -1,35 +1,38 @@
 ---
-description: "Design, freeze, execute with host tools, and record experiments and supported claims."
+description: "Plan and execute a real experiment while keeping plan and result in one document."
 ---
 
 # dove.experiment
 
-Design, freeze, execute with host tools, and record experiments and supported claims.
+Plan and execute a real experiment while keeping plan and result in one document.
 
 ## Use when
 
-- Design, freeze, execute with host tools, and record experiments and supported claims.
+- Plan and execute a real experiment while keeping plan and result in one document.
 
 ## Examples
 
 - `/dove.experiment`
 
-## Workflow
+## Internal workflow
+
+Internal guidance only; never use this workflow as the final report outline.
 
 - **The user requests experiment design, execution, analysis, or recording.**
-  1. Call `query_dove_research` (read-only). Read hypotheses, experiment options, or result context when available. No durable Dove write is required.
-  2. Use host tools (work; experiment-execution). Design the smallest discriminating experiment and execute it with normal host tools. Preserve raw outputs, failures, denominator accounting, deviations, bias, and uncertainty. No durable Dove write is required.
-  3. Call `manage_dove_experiments` (bounded). Freeze a plan before execution and record the full result only when a durable experiment record is needed. Persist only when: durable-experiment-record.
-  4. Call `manage_dove_claims` (bounded). Record or revise only claims supported by the observed evidence, including counter-evidence, missing evidence, and cannot-say boundaries. Persist only when: durable-claim-update.
+  1. Use host tools (read-only; research-document-reading). If `.dove/research/RESEARCH.md` exists, read it first and follow only the most relevant Markdown links. If it is absent, treat that as normal and inspect ordinary project material instead. Do not require fixed headings, frontmatter, IDs, or a machine index. No file write is required.
+  2. Use host tools (work; experiment-design). Select or create one readable experiment Markdown document. Before execution, write why the experiment matters, hypotheses or competing explanations, protocol, inputs, comparisons, metrics, discriminating observations, stop conditions, expected artifacts, cost, risk, and failure value. Do not execute first and reconstruct the plan afterward. Persist only when: experiment-selected.
+  3. Use host tools (work; experiment-execution). Execute the written plan with normal host tools. Append actual execution, raw artifact paths, observations, positive, negative, null, mixed, failed or stopped outcomes, denominator accounting, exclusions, deviations, unexpected observations, limitations, and uncertainty to the same document. Persist only when: experiment-executed.
+  4. Use host tools (work; research-document-maintenance). Explain in that experiment document what the result supports, weakens, leaves unresolved, and cannot establish. Update `RESEARCH.md` only when the result materially changes the mainline, important conclusions, linked work, or next priority. Persist only when: research-context-worth-preserving.
   - Clarification: Explore first. Ask one brief clarification only if material ambiguity in the goal, boundary, or deliverable remains; otherwise continue within the requested boundary.
 
 ## Dove capsule
 
-- Dove MCP tools: `query_dove_research`, `manage_dove_experiments`, `manage_dove_claims`.
-- Unless the user requests another language or format, respond in natural, clear Chinese.
-- Use internal terms, paths, and machine identifiers only when they materially improve precision, and explain them plainly.
-- Adapt the response structure to the task instead of forcing a fixed report template; explicit user instructions and local machine-readable contracts take priority.
-- Access durable Dove state only through public MCP tools. Use normal host tools to read, create, edit, and validate ordinary project materials and artifacts outside `.dove`.
-- Use only the eight public Dove MCP research tools for durable Dove state; never read or write `.dove` directly.
-- Use semantic IDs only when durable records are needed, and do not create a Workspace or Mission merely because a Skill was invoked.
-- Treat tests, host output, local review, and imported review as bounded evidence rather than completion or scientific authority.
+- Treat `.dove/research/RESEARCH.md` and its linked Markdown as ordinary researcher-owned documents, not a database or machine authority.
+- Use host file and research tools directly. Read the overview first when it exists, then only the linked documents and project artifacts relevant to the task.
+- Keep failures, adverse evidence, limitations, and uncertainty visible; tests, host output, and any review remain bounded evidence rather than scientific authority.
+
+## Response policy
+
+- Use natural, clear Chinese unless the user requests another language or format; explain internal terms only when needed.
+- Before sending, reorganize from the user's perspective into a faithful synthesis. Do not use the internal workflow or structured machine data as the response outline; remove repetition and preserve material failures, limits, uncertainty, and blockers.
+- Requested research artifacts and strict machine-readable contracts take priority; otherwise fit the response to the task, not a fixed template.

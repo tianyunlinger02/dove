@@ -1,110 +1,98 @@
 # Quality Guidelines
 
-> Documentation, package, and public-contract quality standards for Dove Research Format 1.
+> Behavioral, documentation, and release validation for Dove 3.0.0.
 
 ---
 
 ## Primary Gates
 
 ```bash
-npm run build:check
-npm run commands:check
-npm run commands:validate
-npm run research-constitution:validate
-npm run mcp:validate
-npm run workflow-goals:validate
-npm run governance:audit
-npm test
 npm run check
 npm run release:check
 npm run pack:dry-run
 ```
 
-Documentation-only work may use read-only inventory, pairwise consistency, language, and diff checks when code, tests, bundles, and generated adapters are outside the approved scope.
+Use full gates for an installation or release candidate. During implementation, prefer the smallest focused checks and one real interface verification. For documentation-only work, a targeted terminology scan and byte-identity comparison may be sufficient when broader tests were not requested.
 
-## Exact Public Contracts
+Passing tests or validators proves software behavior only. It does not prove research completion, scientific correctness, reproducibility, acceptance, or reviewer independence.
 
-Validation must preserve:
+## What Validation Should Protect
 
-- 9 direct Skills;
-- 8 canonical MCP tools;
-- 45 generated adapters, 9 for each of five host formats;
-- managed Claude ambient resources;
-- three primary responsibilities;
-- optional text on every direct Skill;
-- semantic-ID selection when durable records are needed;
-- zero-write ambient routing;
-- user-managed Review exchange;
-- safe human text plus structured research projection;
-- runtime-only CLI integration; and
-- identical Trellis frontend specs and template copies.
+- the public release is Dove `3.0.0` with ten flat Skills and three roles;
+- canonical Skill workflows and generated host adapters do not drift;
+- generated adapters remain projections rather than readiness claims;
+- Claude Code remains the supported project initialization path;
+- the package contains the library, CLI, and prompt-hook bundles and no research MCP bundle;
+- the CLI exposes `init`, `sync`, `upgrade`, `reinstall`, `doctor`, `export-research`, and `hook`, with no `mcp` or `migrate-research` command;
+- Skills use normal host tools rather than a research MCP service or CLI research fallback;
+- Auto is explicit-only and ambient routing cannot select it;
+- Status is read-only and treats missing overviews and broken links naturally;
+- ordinary Markdown remains ordinary rather than becoming a fixed schema;
+- Experiment planning precedes execution and the same document receives actual results;
+- Review remains exact-scope, user-managed, read-only, Markdown-returning, and preserved in one document;
+- Missions and Sources remain natural documents and Claims do not become a store;
+- installation manifest revision `2.0`, Doctor state, and managed-file safety remain separate from research evidence;
+- Sync and Upgrade preserve research documents;
+- export accepts supported legacy JSON research records only, archives original bytes, requires separate real-data authorization, and provides no fallback;
+- Complete Reinstall defaults to No and deletes Dove research and old archives only after confirmation while preserving ordinary project files;
+- Trellis source and template pairs are byte-identical; and
+- package entrypoints build and run for the declared software surface.
 
-## Semantic Checks
+## What Not to Use as Quality Proof
 
-Documentation, prompts, and adapters must distinguish:
+Do not treat exact file, line, test, byte, document, source, claim, or experiment counts as evidence that Dove advances research. Inventory equality is useful only where it protects a sealed software release surface or generated completeness.
 
-- Skill versus MCP tool versus semantic entity versus project artifact versus installation resource;
-- Workspace and Mission direction versus evidence entities;
-- Mission parent/dependency lineage versus a second research-tree store;
-- immutable Mission contract versus optional Mission conclusion;
-- external Source capture versus internal synthesis;
-- frozen Experiment plan versus immutable Experiment result;
-- evidence-bounded Claim versus completion or scientific authority;
-- user-managed Review exchange versus an internally launched or impersonated reviewer;
-- zero-write ambient routing versus Mission creation;
-- research MCP operations versus runtime CLI integration; and
-- adapter inventory versus host registration and readiness.
+Do not validate research Markdown by requiring headings, frontmatter, IDs, enums, hashes, indexes, or counts. Do not replace a retired JSON schema with a mandatory Markdown template.
 
-Current research-state references must use Workspace, Mission, Mission conclusion, Source, Experiment plan/result, Claim, Review, and Lessons concepts. Draft, Figure, Rebuttal, and internal synthesis are project artifacts. Do not describe retired revision, execution-bookkeeping, private-protocol, positional-selection, or duplicate-tree models as current behavior.
+Avoid fixed whole-sentence prompt regexes. Check stable behavior and workflow order instead. Delete tests that merely duplicate another owner or freeze incidental prose.
 
-## Installation and Runtime Checks
+## Documentation Checks
 
-Documentation must describe one current project-private root: `.dove/install/manifest.json` for managed installation state plus optional Research Format 1 siblings under `.dove/`. It must describe:
+Public docs, Trellis specs, canonical prompts, and generated adapters must agree that:
 
-- the user-installed `dove` executable as the runtime entry, not a lifecycle mutation target;
-- `init`, manifest-driven `sync`, project Upgrade, confirmed project Complete Reinstall, read-only `doctor`, `mcp serve`, and prompt-hook forwarding;
-- Upgrade preserving current Research Format 1 bytes while cleaning a valid legacy `.dove-install/` root;
-- Complete Reinstall deleting selected-project Dove state only after exact default-No confirmation and recreating `.dove/install/manifest.json`;
-- neither Upgrade nor Complete Reinstall installing, upgrading, uninstalling, or otherwise managing user npm;
-- no copied runtime bundles in consumer projects; and
-- no CLI, shell, or direct-state fallback for Skills.
+- Dove 3 has no research MCP server, tools, registration, Research Format runtime, or database;
+- research context is ordinary Markdown under `.dove/research/`;
+- `RESEARCH.md` is recommended navigation, `LESSONS.md` is optional, and human-named topic files remain flexible;
+- missing or broken navigation is reported naturally rather than classified as invalid research state;
+- one Experiment document contains plan and result;
+- one Review document contains preparation, actual return, and author handling;
+- Reviewer separation is user-managed and does not prove independence;
+- Auto is explicit-only and cannot rewrite the documented mainline;
+- there are three bundles and the documented CLI inventory is current; and
+- validation statements remain software-scoped.
 
-`.dove-install/` may appear only as legacy Upgrade or Complete Reinstall cleanup input. Legacy or unknown research formats may be diagnosed read-only, but current documentation must not promise research-format migration, overlay upgrade, replacement, recovery, or fallback execution.
+Search specifically for retired eight-tool inventories, DTO examples, typed research errors, schemas, views, generated research IDs, research hashes, old bundle counts, `mcp`, and `migrate-research` claims. Negative statements that explicitly describe their removal are acceptable; affirmative old contracts are not.
 
-## Format Checks
+## Research Workflow Checks
 
-- Package release is `0.7.0`.
-- Current research format is Research Format 1 with marker `dove-research-v1`.
-- Package semver, research format, and installation-manifest contracts are separate boundaries.
-- Legacy numbered workspace schemas are rejection-only context, not current version boundaries or compatibility paths.
+- Substantive host work occurs before or alongside document maintenance.
+- Source notes distinguish material found from material actually inspected and used.
+- Prospective experiment details exist before execution begins.
+- Actual results preserve denominators, exclusions, deviations, failures, adverse or null evidence, limitations, and uncertainty when material.
+- Claims stay within evidence and preserve counter-evidence and cannot-say boundaries naturally.
+- `RESEARCH.md` changes only for material mainline, conclusion, navigation, or priority changes.
+- Lessons remain advisory and are never presented as evidence.
+- No workflow creates a document merely to show that it ran.
 
-## Required Patterns
+## Review Checks
 
-- Keep public prose concise and task-oriented.
-- Keep all Trellis documentation in English.
-- Keep generated adapters thin and derived from canonical Skill metadata.
-- Keep MCP schemas sealed and exact.
-- Keep reads and ambient routing zero-write.
-- Preflight every mutation before the first write.
-- Keep integrity hashes, bindings, write diagnostics, and `.dove/` paths out of human-facing output.
-- Preserve failed, blocked, negative, null, incomplete, and uncertain evidence.
-- Keep claim scope bounded by current evidence and explicit cannot-say limits.
-- Never equate host return, tests, local review, imported review, Mission conclusion, or internal audit with completion, independence, or scientific authority.
+- The Review document declares exact project-relative artifact paths and scope limits.
+- The user selects and manages the separate Reviewer.
+- Reviewer access is read-only and limited to the declared scope.
+- The return is Markdown and is preserved faithfully before author handling.
+- No output claims reviewer identity, independence, authority, sign-off, scientific validity, or acceptance.
+- A native role or separate local session is described only as responsibility separation.
 
-## Review Checklist
+## Lifecycle Checks
 
-- Do public docs agree on 9 Skills, 8 tools, and 45 adapters?
-- Are all 9 Skill names and purposes consistent?
-- Are all 8 MCP tool names and operation families accurate?
-- Is direct invocation with optional text clear?
-- Are semantic IDs used instead of positional Mission numbers?
-- Is zero-write ambient routing explicit?
-- Are Research Format 1 paths and semantic entities accurate?
-- Are Source, synthesis, Experiment, Claim, and project-artifact distinctions consistent?
-- Is Review a user-managed separate exchange with prepare, import, and coverage?
-- Is `.dove/` the only current project-private root, with `.dove/install/manifest.json` and optional Research Format 1 siblings clearly separated?
-- Is `.dove-install/` mentioned only in legacy Upgrade or Complete Reinstall cleanup context?
-- Are Upgrade and Complete Reinstall explicitly project-level and outside user npm management?
-- Is the CLI described as runtime integration rather than a research fallback?
-- Do Trellis specs exactly match their template copies?
-- Were code, tests, bundles, and generated adapters left unchanged when outside scope?
+- `.dove/install/manifest.json` remains revision `2.0`.
+- Doctor state and `DOCTOR.md` remain software-facing and do not store prompts or scientific judgments.
+- Managed-file hashes remain internal software safety data.
+- Sync and Upgrade do not modify research Markdown.
+- `export-research` is explicit, limited to the supported legacy JSON format, archival, separately authorized for real data, and one-time without runtime fallback.
+- v1 conversion remains unsupported.
+- Complete Reinstall shows the real destructive scope, defaults to No, deletes Dove research and old archives only after confirmation, and preserves ordinary project files.
+
+## Final Review
+
+After focused interface verification, perform a separate read-only semantic review. If a mechanism merely recreates a database in Markdown, offers self-certification, or makes research heavier without improving decisions, remove or simplify it rather than adding tests to preserve it.

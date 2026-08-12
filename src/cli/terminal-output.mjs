@@ -50,12 +50,12 @@ export function renderCompleteReinstallInventory(target, options = {}) {
   return [
     terminalStyle("完全重新安装项目配置将永久删除", "bold", { color }),
     "",
-    `- 当前项目中的 Dove commands、Skills、agents、MCP、Hook 与安装记录`,
+    `- 当前项目中的 Dove commands、Skills、agents、Hook 与安装记录`,
     `- ${target}/.dove/ 中的项目私有研究状态`,
     `- ${target}/.dove-archive/ 中的旧归档（如存在）`,
     `- 旧的 .dove-install/ 项目安装标记（如存在）`,
     "",
-    "用户级 Dove 安装不会被删除或修改。"
+    "用户级 Dove 安装不会被管理；旧项目内服务器配置和复制运行时仅在精确识别后清理。"
   ].join("\n");
 }
 
@@ -75,7 +75,7 @@ export function renderDoveLifecycleResult(command, result, options = {}) {
     "",
     "✓ 旧 Dove 集成和研究状态已按确认删除",
     "✓ 新项目私有状态仅从 .dove/install/ 开始",
-    "✓ 用户级 Dove 安装未被修改"
+    "✓ 用户级 Dove 安装未被管理"
   ].join("\n");
   throw new Error(`Unsupported Dove lifecycle presentation: ${command}/${result?.status ?? "unknown"}.`);
 }
@@ -89,14 +89,17 @@ export function renderDoveHome(options = {}) {
   const nextCommand = options.nextCommand ?? (
     state === "uninitialized"
       ? "dove"
-      : state === "needs-sync"
-        ? "dove sync"
-        : state === "blocked"
-          ? "dove doctor"
-          : "/dove:research"
+      : state === "upgrade"
+        ? "dove upgrade"
+        : state === "needs-sync"
+          ? "进入 Claude Code 时自动更新；dove doctor 可查看详情"
+          : state === "blocked"
+            ? "dove doctor"
+            : "/dove:research"
   );
   const stateLabel = {
     uninitialized: "尚未配置 Dove",
+    upgrade: "Dove 项目集成可从 1.0 升级",
     "needs-sync": "Dove 项目集成需要更新",
     current: "Dove 项目集成已是当前版本",
     blocked: "Dove 项目集成需要人工处理"
@@ -107,6 +110,13 @@ export function renderDoveHome(options = {}) {
   lines.push(terminalStyle("Dove", "bold", { color }));
   lines.push("围绕科研主线探索，带回证据与经验。", "");
   lines.push(`${terminalStyle("当前项目", "dim", { color })}  ${stateLabel}`);
+  const issues = Array.isArray(options.issues) ? options.issues : [];
+  if (issues.length > 0) {
+    const priority = { error: 0, warning: 1, info: 2 };
+    const top = [...issues].sort((left, right) => priority[left.severity] - priority[right.severity])[0];
+    lines.push(`${terminalStyle("Dove 问题", "dim", { color })}  ${top.summary}`);
+    lines.push(`${terminalStyle("建议", "dim", { color })}  ${top.action}`);
+  }
   lines.push("");
   lines.push(`${terminalStyle(interactive ? "选择" : "下一步", "bold", { color })}  ${nextCommand}`);
   lines.push(`${terminalStyle("帮助", "bold", { color })}  dove --help`);

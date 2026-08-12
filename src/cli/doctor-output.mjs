@@ -1,108 +1,53 @@
-import {
-  terminalColorEnabled,
-  terminalStyle
-} from "./terminal-output.mjs";
+import { terminalColorEnabled, terminalStyle } from "./terminal-output.mjs";
 
-function userCliLine(result, color) {
-  const cli = result.userCli;
-  const version = cli?.package?.version ? ` ${cli.package.version}` : "";
-  if (!cli?.healthy) {
-    return `${terminalStyle("Dove CLI 运行时", "dim", { color })}  需要修复${version}`;
-  }
-  return `${terminalStyle("Dove CLI 运行时", "dim", { color })}  Dove${version} 可用`;
+function softwareLine(result, color) {
+  const software = result.userCli;
+  const version = software?.package?.version ? ` ${software.package.version}` : "";
+  const text = software?.healthy ? `Dove${version} 可用` : `Dove${version} 需要修复`;
+  return `${terminalStyle("软件", "dim", { color })}  ${text}`;
 }
 
-function integrationLine(result, color) {
-  const migration = result.migrationInstallation;
-  if (migration?.state === "valid-legacy") {
-    const version = migration.manifest?.package?.version ? ` ${migration.manifest.package.version}` : "";
-    return `${terminalStyle("项目集成", "dim", { color })}  检测到旧版 Dove 项目配置，可升级${version}`;
-  }
-  if (migration?.state === "conflicting-manifests") {
-    return `${terminalStyle("项目集成", "dim", { color })}  当前与旧版 Dove 安装标记冲突`;
-  }
-  if (migration?.state === "invalid-legacy") {
-    return `${terminalStyle("项目集成", "dim", { color })}  旧版 Dove 项目配置无效`;
-  }
-  if (result.legacyCopiedRuntime?.detected) {
-    return `${terminalStyle("项目集成", "dim", { color })}  检测到不受支持的旧项目内运行时`;
-  }
-  const integration = result.projectIntegration;
-  const version = integration.manifest?.package?.version ? ` ${integration.manifest.package.version}` : "";
-  if (integration.state === "uninitialized") return `${terminalStyle("项目集成", "dim", { color })}  尚未配置`;
-  if (integration.state === "needs-sync") return `${terminalStyle("项目集成", "dim", { color })}  需要更新${version}`;
-  if (integration.healthy) return `${terminalStyle("项目集成", "dim", { color })}  已是当前版本${version}`;
-  return `${terminalStyle("项目集成", "dim", { color })}  需要人工处理${version}`;
+function projectLine(result, color) {
+  const migration = result.migrationInstallation?.state;
+  if (migration === "valid-legacy") return `${terminalStyle("项目集成", "dim", { color })}  可从旧版升级`;
+  if (migration === "conflicting-manifests") return `${terminalStyle("项目集成", "dim", { color })}  安装标记冲突`;
+  const state = result.projectIntegration?.state;
+  const text = state === "current" ? "当前" : state === "needs-sync" ? "需要同步" : state === "uninitialized" ? "尚未配置" : state === "drifted" ? "用户字节已漂移" : "需要人工处理";
+  return `${terminalStyle("项目集成", "dim", { color })}  ${text}`;
 }
 
-function connectionLine(result, color) {
-  if (result.mcpProbe?.state === "integration-mismatch") {
-    return `${terminalStyle("Dove MCP", "dim", { color })}  项目集成版本不匹配`;
-  }
-  if (result.runningMcpSelfComparison?.state === "restart-required") {
-    return `${terminalStyle("Dove MCP", "dim", { color })}  当前宿主仍在运行旧服务`;
-  }
-  if (result.runningMcpSelfComparison?.state === "protocol-incompatible") {
-    return `${terminalStyle("Dove MCP", "dim", { color })}  协议不兼容`;
-  }
-  if (result.projectIntegration.state === "uninitialized") return `${terminalStyle("Dove MCP", "dim", { color })}  等待项目集成`;
-  if (result.projectIntegration.state === "needs-sync") return `${terminalStyle("Dove MCP", "dim", { color })}  更新项目集成后重新检查`;
-  if (result.readiness?.ready) return `${terminalStyle("Dove MCP", "dim", { color })}  已连接`;
-  if (result.hostRegistration?.approval?.state === "disabled") return `${terminalStyle("Dove MCP", "dim", { color })}  被项目本地设置禁用`;
-  if (result.readiness?.state === "pending-approval") return `${terminalStyle("Dove MCP", "dim", { color })}  等待宿主加载项目批准`;
-  return `${terminalStyle("Dove MCP", "dim", { color })}  当前宿主会话尚未连接`;
+function researchLine(result, color) {
+  const research = result.workspaceState;
+  const text = research?.mode === "absent"
+    ? "RESEARCH.md 尚未建立"
+    : research?.mode === "previous-research-format"
+      ? "发现可显式导出的旧版 JSON 科研记录"
+      : research?.healthy
+        ? "Markdown 外层可读"
+        : "Markdown 外层无法安全读取";
+  return `${terminalStyle("研究文档", "dim", { color })}  ${text}`;
 }
 
-function workspaceLine(result, color) {
-  const workspace = result.workspaceState;
-  if (workspace?.mode === "absent") return `${terminalStyle("研究状态", "dim", { color })}  尚未建立`;
-  if (workspace?.state === "unsupported-legacy-format") {
-    const suffix = result.migrationInstallation?.state === "valid-legacy"
-      ? "旧格式；Upgrade 将保留但不会迁移"
-      : "旧版研究格式，当前版本不会读取或修改";
-    return `${terminalStyle("研究状态", "dim", { color })}  ${suffix}`;
-  }
-  if (workspace?.state === "unsupported-future-format") return `${terminalStyle("研究状态", "dim", { color })}  当前版本不支持`;
-  if (workspace?.mode === "current") return `${terminalStyle("研究状态", "dim", { color })}  ${workspace.format ?? "当前格式"} 可读`;
-  return `${terminalStyle("研究状态", "dim", { color })}  无法读取`;
+function retiredRuntimeLine(result, color) {
+  const legacy = result.legacyCopiedRuntime;
+  const text = legacy?.healthy ? "未发现旧复制运行时" : legacy?.detected ? "发现旧复制运行时" : "无法安全检查";
+  return `${terminalStyle("旧复制运行时", "dim", { color })}  ${text}`;
 }
 
 export function recommendedDoveAction(result) {
-  if (result.setup?.mode === "upgrade" && result.setup.reason === "valid-legacy") {
-    return { kind: "upgrade-legacy", command: "dove", message: "检测到可升级的旧项目配置；Upgrade 保留旧研究状态但不会迁移其格式。" };
+  const first = result.actions?.[0];
+  if (first) {
+    const messages = {
+      upgrade: "显式升级旧项目集成并保留研究文件。",
+      init: "为当前项目启用 Dove 集成。",
+      sync: "同步 Dove 管理的项目集成。",
+      reinstall: "重新安装会在明确确认后删除项目 Dove 集成与研究状态。",
+      "export-research": "审阅旧版 JSON 科研记录到 Markdown 的一次性导出预览，并在确认后保留原始归档。",
+      inspect: "查看 JSON 诊断并处理不明确状态。"
+    };
+    return { ...first, message: messages[first.kind] ?? "按提示处理当前 Dove 状态。" };
   }
-  if (result.setup?.mode === "reinstall") {
-    return { kind: "reinstall", command: "dove", message: "当前 Dove 状态只能通过默认 No 的完全重新安装安全处理。" };
-  }
-  if (result.setup?.mode === "blocked") {
-    return { kind: "blocked-setup", command: "dove doctor --json", message: "项目中的 Dove 状态不明确；Doctor 不会覆盖或删除它。" };
-  }
-  if (result.mcpProbe?.state === "integration-mismatch") {
-    return { kind: "sync-integration-version", command: "dove sync", message: "项目集成与当前 Dove 版本不一致；同步后重新进入宿主会话。" };
-  }
-  if (result.runningMcpSelfComparison?.state === "restart-required") {
-    return { kind: "restart-host", command: "claude", message: "退出并重新进入宿主会话以启动当前 Dove MCP 服务。" };
-  }
-  if (result.runningMcpSelfComparison?.state === "protocol-incompatible") {
-    return { kind: "protocol-incompatible", command: "dove doctor", message: "请使用支持当前 Dove MCP 协议的宿主或 Dove 版本。" };
-  }
-  if (result.workspaceState?.state === "unsupported-legacy-format") {
-    return { kind: "unsupported-legacy-format", command: "dove doctor --json", message: "Workspace 使用不受支持的旧格式。Doctor 只报告格式状态，不会改动任何内容。" };
-  }
-  if (result.workspaceState?.state === "unsupported-future-format") {
-    return { kind: "unsupported-future-format", command: "dove doctor --json", message: "Workspace 来自更新的 Dove 版本；请使用兼容版本读取。" };
-  }
-  if (result.legacyCopiedRuntime?.detected) {
-    return { kind: "blocked-legacy", command: "dove doctor --json", message: "旧项目内运行时阻止安全配置；Doctor 不会覆盖它。" };
-  }
-  const integration = result.projectIntegration;
-  if (integration.state === "uninitialized") return { kind: "init", command: "dove", message: "运行交互向导，为当前项目启用 Dove 集成。" };
-  if (integration.state === "needs-sync") return { kind: "sync", command: "dove sync", message: "更新 Dove 管理的项目集成，然后重新进入宿主会话。" };
-  if (!integration.healthy) return { kind: "blocked-integration", command: "dove doctor --json", message: "项目集成存在缺失或漂移；查看 JSON 诊断后人工处理。" };
-  if (!result.readiness?.ready) return { kind: "reenter-host", command: "claude", message: "从当前项目重新进入 Claude Code，使其加载 Dove MCP。" };
-  if (result.workspaceState?.mode === "absent") return { kind: "ready-no-workspace", command: "claude", message: "项目集成与 MCP 已就绪；研究工作入口由宿主中的 Dove 命令提供。" };
-  if (!result.workspaceState?.healthy) return { kind: "invalid-workspace-format", command: "dove doctor --json", message: "Workspace 格式无法读取；Doctor 不会深入验证或修改研究实体。" };
-  return { kind: "ready", command: "claude", message: "Dove 项目集成与 MCP 已可用。" };
+  return { kind: "ready", command: "claude", message: "Dove 软件、项目集成和研究文档外层检查通过。" };
 }
 
 export function renderDoveDoctor(result, options = {}) {
@@ -112,11 +57,13 @@ export function renderDoveDoctor(result, options = {}) {
   const action = recommendedDoveAction(result);
   return [
     terminalStyle("Dove 检查", "bold", { color }),
+    "检查 Dove 软件、项目集成、Markdown 研究文档外层可读性和旧复制运行时；必要时维护 Dove 问题文档，但不修改项目集成或科研文档，也不判断科研结论、完成度或评审权威。",
     "",
-    userCliLine(result, color),
-    integrationLine(result, color),
-    connectionLine(result, color),
-    workspaceLine(result, color),
+    softwareLine(result, color),
+    projectLine(result, color),
+    researchLine(result, color),
+    retiredRuntimeLine(result, color),
+    "外层可读不等于研究内容正确、完整或经过独立审查。",
     "",
     `${terminalStyle("下一步", "bold", { color })}  ${action.command}`,
     action.message

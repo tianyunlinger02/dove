@@ -1,37 +1,39 @@
 ---
 name: dove-rebuttal
-description: "Perform author-side rebuttal and revision work from current findings and evidence."
+description: "Perform author-side rebuttal and revision from actual review findings and evidence."
 ---
 
 # Dove Rebuttal
 
-Perform author-side rebuttal and revision work from current findings and evidence.
+Perform author-side rebuttal and revision from actual review findings and evidence.
 
 ## Use when
 
-- Perform author-side rebuttal and revision work from current findings and evidence.
+- Perform author-side rebuttal and revision from actual review findings and evidence.
 
 ## Examples
 
 - `/dove:rebuttal`
 
-## Workflow
+## Internal workflow
+
+Internal guidance only; never use this workflow as the final report outline.
 
 - **The user requests author-side rebuttal or revision from review findings.**
-  1. Call `query_dove_research` (read-only). Read review and claim context relevant to the requested response. No durable Dove write is required.
-  2. Call `manage_dove_reviews` (read-only). Read coverage or review records needed for the response; do not present author work as independent review. No durable Dove write is required.
-  3. Use host tools (work; rebuttal-and-revision). Analyze each finding against the actual artifact and evidence, then write the rebuttal and make requested ordinary project revisions with host-native tools. No durable Dove write is required.
-  4. Use host tools (read-only; artifact-validation). Validate that every response maps to a finding and that revisions do not overstate evidence or erase failures and uncertainty. No durable Dove write is required.
-  5. Call `manage_dove_claims` (bounded). Persist only material claim changes introduced by the author-side revision. Persist only when: material-claim-change.
+  1. Use host tools (read-only; research-document-reading). If `.dove/research/RESEARCH.md` exists, read it first and follow only the most relevant Markdown links. If it is absent, treat that as normal and inspect ordinary project material instead. Do not require fixed headings, frontmatter, IDs, or a machine index. No file write is required.
+  2. Use host tools (work; rebuttal-and-revision). Read the relevant Review document and actual artifacts. Analyze each material finding against the evidence, write the response, and make requested ordinary project revisions. This remains Builder/Author work, not independent review. No file write is required.
+  3. Use host tools (read-only; artifact-validation). Validate that each response maps to a real finding and that revisions do not overstate evidence or erase failures and uncertainty. No file write is required.
+  4. Use host tools (work; research-document-maintenance). Append the author response and resulting decisions to the same Review document or the directly affected research document when that context is worth preserving. Persist only when: research-context-worth-preserving.
   - Clarification: Explore first. Ask one brief clarification only if material ambiguity in the goal, boundary, or deliverable remains; otherwise continue within the requested boundary.
 
 ## Dove capsule
 
-- Dove MCP tools: `query_dove_research`, `manage_dove_reviews`, `manage_dove_claims`.
-- Unless the user requests another language or format, respond in natural, clear Chinese.
-- Use internal terms, paths, and machine identifiers only when they materially improve precision, and explain them plainly.
-- Adapt the response structure to the task instead of forcing a fixed report template; explicit user instructions and local machine-readable contracts take priority.
-- Access durable Dove state only through public MCP tools. Use normal host tools to read, create, edit, and validate ordinary project materials and artifacts outside `.dove`.
-- Use only the eight public Dove MCP research tools for durable Dove state; never read or write `.dove` directly.
-- Use semantic IDs only when durable records are needed, and do not create a Workspace or Mission merely because a Skill was invoked.
-- Treat tests, host output, local review, and imported review as bounded evidence rather than completion or scientific authority.
+- Treat `.dove/research/RESEARCH.md` and its linked Markdown as ordinary researcher-owned documents, not a database or machine authority.
+- Use host file and research tools directly. Read the overview first when it exists, then only the linked documents and project artifacts relevant to the task.
+- Keep failures, adverse evidence, limitations, and uncertainty visible; tests, host output, and any review remain bounded evidence rather than scientific authority.
+
+## Response policy
+
+- Use natural, clear Chinese unless the user requests another language or format; explain internal terms only when needed.
+- Before sending, reorganize from the user's perspective into a faithful synthesis. Do not use the internal workflow or structured machine data as the response outline; remove repetition and preserve material failures, limits, uncertainty, and blockers.
+- Requested research artifacts and strict machine-readable contracts take priority; otherwise fit the response to the task, not a fixed template.

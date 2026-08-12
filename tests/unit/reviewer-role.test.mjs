@@ -3,63 +3,63 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
-import { renderClaudeReviewerAgent, renderOpenCodeReviewerAgent, reviewerPrompt } from "../../src/core/role-definitions.mjs";
-import { TOOL_INPUT_SCHEMAS } from "../../src/mcp/tool-definitions.mjs";
-import { assertMcpInputSchema } from "../../src/mcp/schema-validation.mjs";
+import {
+  DOVE_PRIMARY_ROLES,
+  renderClaudeReviewerAgent,
+  renderOpenCodeReviewerAgent,
+  renderOpenCodeRoleSkill,
+  reviewerPrompt
+} from "../../src/core/role-definitions.mjs";
 
 const ROOT = process.cwd();
 
 function runPython(relativePath, input) {
-  return spawnSync("python3", [path.join(ROOT, relativePath)], {
-    cwd: ROOT,
-    input: JSON.stringify(input),
-    encoding: "utf8"
-  });
+  return spawnSync("python3", [path.join(ROOT, relativePath)], { cwd: ROOT, input: JSON.stringify(input), encoding: "utf8" });
 }
 
-test("dedicated Reviewer prompt declares only frozen content and structured return", () => {
-  const prompt = reviewerPrompt({
-    hostKind: "claude",
-    reviewedArtifacts: [{ path: "paper/result.md", sizeBytes: 42, sha256: "a".repeat(64) }]
-  });
-  assert.match(prompt, /paper\/result\.md \(42 bytes; SHA-256 [a-f0-9]{64}\)/u);
-  assert.match(prompt, /Read only those exact project-relative files/u);
-  for (const forbiddenAccess of ["parent transcript", "Trellis task", "Dove state", "undeclared file"]) assert.match(prompt, new RegExp(forbiddenAccess, "iu"));
-  for (const forbiddenAction of ["edit", "rebut", "self-fix", "launch another reviewer", "delegate"]) assert.match(prompt, new RegExp(forbiddenAction, "iu"));
-  for (const field of ["status", "verdict", "summary", "rubric", "findings", "actionItems", "report", "provenance", "limitations", "reviewedAt"]) assert.match(prompt, new RegExp(`"${field}"`, "u"));
-  assert.match(prompt, /Do not claim authority, identity, sign-off, acceptance, or independence/u);
+test("Planner and Builder use internal conditions rather than report templates", () => {
+  for (const roleId of ["planner", "builder"]) {
+    const role = DOVE_PRIMARY_ROLES[roleId];
+    assert.equal("outputs" in role, false);
+    assert.ok(role.internalCompletionConditions.length > 0);
+    const rendered = renderOpenCodeRoleSkill(roleId);
+    assert.match(rendered, /## Internal Responsibilities and Completion Conditions/u);
+    assert.doesNotMatch(rendered, /## Outputs/u);
+    assert.match(rendered, /not a required.*template|not a requirement/iu);
+  }
 });
 
-test("Reviewer prompt field set passes the strict review import schema", () => {
-  const review = {
-    status: "completed",
-    verdict: "coherent",
-    summary: "The declared artifact is internally coherent.",
-    rubric: ["Correctness and internal coherence"],
-    findings: [],
-    actionItems: [],
-    report: "# Review\n\nNo material finding in the declared scope.\n",
-    provenance: { hostKind: "claude" },
-    limitations: ["Only the declared artifact was reviewed."],
-    reviewedAt: "2026-08-09T00:00:00.000Z"
-  };
-  assert.doesNotThrow(() => assertMcpInputSchema("manage_dove_reviews", {
-    operation: "import",
-    missionId: "mission-review",
-    exchangeId: "exchange-review",
-    review
-  }, TOOL_INPUT_SCHEMAS.get("manage_dove_reviews")));
-  const prompt = reviewerPrompt({ hostKind: "claude", reviewedArtifacts: [{ path: "paper.md", sizeBytes: 1, sha256: "a".repeat(64) }] });
-  assert.deepEqual(
-    [...prompt.matchAll(/^  "([A-Za-z]+)":/gmu)].map((match) => match[1]),
-    Object.keys(review)
-  );
+test("Reviewer returns readable scope-bound Markdown rather than a machine import object", () => {
+  assert.match(DOVE_PRIMARY_ROLES.reviewer.description, /convenience definition.*not evidence of independence or authority/iu);
+  assert.match(DOVE_PRIMARY_ROLES.reviewer.responsibility, /user-managed separate exchange.*does not establish independence.*authority/isu);
+  const reviewer = renderOpenCodeRoleSkill("reviewer");
+  assert.match(reviewer, /## Outputs/u);
+  assert.match(reviewer, /readable Markdown review/u);
+  assert.doesNotMatch(reviewer, /strict JSON|machine exchange|findingId|verdict enum/iu);
+});
+
+test("dedicated Reviewer prompt declares only user-managed paths and natural review output", () => {
+  const prompt = reviewerPrompt({ artifactPaths: ["paper/result.md"] });
+  assert.match(prompt, /user-managed separate review exchange.*do not prove independence, identity, or authority/isu);
+  assert.match(prompt, /paper\/result\.md/u);
+  assert.match(prompt, /Read only those exact project-relative files/u);
+  for (const forbiddenAccess of ["parent transcript", "Trellis tasks", "Dove installation state", "undeclared file"]) assert.match(prompt, new RegExp(forbiddenAccess, "iu"));
+  for (const forbiddenAction of ["edit", "self-fix", "launch another reviewer", "delegate"]) assert.match(prompt, new RegExp(forbiddenAction, "iu"));
+  assert.match(prompt, /Return one readable Markdown review/u);
+  assert.match(prompt, /Tie every concrete finding.*declared paths/isu);
+  assert.match(prompt, /Do not use IDs, fixed verdict enums, or a strict import schema/iu);
+  assert.doesNotMatch(prompt, /"status"|"verdict"|"findingId"|SHA-256/iu);
+});
+
+test("Reviewer prompt rejects an empty scope", () => {
+  assert.throws(() => reviewerPrompt({ artifactPaths: [] }), /at least one declared artifact path/iu);
 });
 
 test("Claude and OpenCode Reviewer agents are dedicated and read-only", () => {
   const claude = renderClaudeReviewerAgent();
   assert.match(claude, /^---\nname: dove-reviewer\n[\s\S]*\ntools: Read\n---/u);
   assert.doesNotMatch(claude, /tools:.*(?:Write|Edit|Bash|Task)/u);
+  assert.match(claude, /Return one readable Markdown review/u);
   const opencode = renderOpenCodeReviewerAgent();
   assert.match(opencode, /mode: subagent/u);
   assert.match(opencode, /read: allow/u);

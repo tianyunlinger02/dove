@@ -1,9 +1,11 @@
 # Installation
 
-Dove uses a two-stage model:
+Dove 3.0.0 uses two installation scopes:
 
-1. install an exact trusted npm artifact for the current user so `dove` is available on `PATH`;
-2. initialize each project explicitly.
+1. install an exact trusted package for the current user so `dove` is available on `PATH`; and
+2. initialize each Claude Code project explicitly.
+
+There is no research MCP server, MCP registration step, or project MCP configuration in Dove 3.0.
 
 The bare public npm package named `dove` is unrelated. Do not use bare `npm install -g dove` or bare `npx dove` as trusted release instructions.
 
@@ -11,9 +13,9 @@ The bare public npm package named `dove` is unrelated. Do not use bare `npm inst
 
 - Node.js `>=22`
 - npm
-- Claude Code for the complete supported project initialization path
+- Claude Code for the supported project initialization path
 
-OpenCode, Codex, Cursor, and shared-agent adapters are packaged release artifacts, but this release does not provide or claim a complete project installation, MCP registration, and readiness path for them.
+Generated OpenCode, Codex, Cursor, and shared-agent adapters may be packaged, but their presence does not establish a supported initialization path, registration, connectivity, or readiness.
 
 ## User installation
 
@@ -21,7 +23,7 @@ OpenCode, Codex, Cursor, and shared-agent adapters are packaged release artifact
 npm install --global <exact-dove-package-specifier>
 ```
 
-Use an exact trusted tarball, Git revision, or internal-registry version. User installation places `dove` on `PATH`. It does not write projects, shell startup files, user/global host configuration, or research state.
+Use an exact trusted tarball, Git revision, or internal-registry version. User installation places `dove` on `PATH`. It does not modify a project, shell startup files, host settings, or research documents.
 
 ## Claude project initialization
 
@@ -31,49 +33,61 @@ From the target project:
 dove init --host claude
 ```
 
-Initialization may write:
+Initialization may add:
 
 - `.dove/install/manifest.json`;
-- nine project-local commands under `.claude/commands/dove/`;
-- one project-local Claude Reviewer definition;
-- one ambient rule and two hidden intake Skills;
-- the project-local `UserPromptSubmit` hook fragment; and
-- Dove MCP registration in the project's `.mcp.json`.
+- the ten Claude command adapters under `.claude/commands/dove/`;
+- the Claude Reviewer role definition;
+- the Claude ambient rule and hidden intake resources; and
+- the Dove prompt-hook fragment in `.claude/settings.json`.
 
-It preserves unrelated project configuration. It does not initialize Research Format 1, create a Workspace, create a Mission, copy runtime bundles into the project, write an absolute CLI path, edit user/global configuration, or install a fallback runtime.
+It does not create a research MCP entry, add a project `.mcp.json`, start a server, create `.dove/research/RESEARCH.md`, create a Mission, or copy runtime bundles into the project.
 
-After initialization, leave and re-enter Claude Code from the project. If the host asks for MCP approval, approve the project-local Dove server. Then continue ordinary project work or invoke `/dove:research` when research routing is useful.
+After initialization, leave and re-enter Claude Code from the project so a new host session can load the project integration.
 
-An absent Research Workspace is normal. The Research Skill can first inspect ordinary project material outside `.dove` without writes. It initializes durable research state only through an explicit `manage_dove_workspace` request; it never creates a Workspace or Mission merely because a Skill was invoked.
+## Installation metadata and Doctor state
 
-## Current integration marker
-
-Current project integration is stored at:
+Dove-owned project software metadata lives under:
 
 ```text
-.dove/install/manifest.json
+.dove/install/
+├── manifest.json
+├── doctor.json    # optional Doctor machine state
+└── DOCTOR.md      # readable current problems and recent resolutions
 ```
 
-`.dove-install/manifest.json` is accepted only as a legacy project Upgrade or Complete Reinstall input. It is not current state, a fallback root, or a compatibility authority.
+The project installation manifest uses revision `2.0`:
 
-## Runtime invocation
-
-Project configuration invokes the user-installed command by name:
-
-```text
-dove mcp serve --project <project-root>
-dove hook user-prompt-submit --project <project-root>
+```json
+{"revision":"2.0"}
 ```
 
-There is no source-checkout, copied-runtime, shell-business-command, or direct `.dove` fallback. If the user-installed CLI is unavailable, host Skills stop rather than escaping through another transport.
+The manifest records the installed package, selected host integration, managed resources, and timestamps needed for lifecycle safety. Doctor machine state tracks bounded local software and integration issues; `DOCTOR.md` presents them in readable form without internal IDs or hashes. Neither is research content.
 
-## Sync
+Dove may use hashes internally to detect conflicting or changed managed files. Those values protect installation bytes; they are not source identities, research evidence, or scientific validation.
+
+## Project and file safety
+
+Dove resolves one real project root before changing project integration. Lifecycle operations reject escaping or ambiguous managed paths and avoid following symlinks where Dove owns the boundary.
+
+Initialization and synchronization follow these rules:
+
+- ordinary project files are not touched;
+- unrelated fields and other hooks in shared configuration are preserved;
+- an existing generated Dove resource may be adopted when it already matches;
+- conflicting content blocks initialization; and
+- later user changes to managed content block automatic replacement rather than being overwritten.
+
+Project integration changes are staged and checked before promotion. Cleanup warnings after a completed change are reported separately.
+
+## Synchronization
 
 ```bash
 dove sync
+dove sync --host claude
 ```
 
-Sync refreshes only hosts recorded in the current installation manifest. A missing, malformed, contradictory, or unsafe manifest fails closed. Sync does not create or repair Research Format 1.
+Synchronization refreshes only recognized Dove-managed project integration and its manifest. It does not read, rewrite, normalize, or validate `.dove/research/` documents.
 
 ## Upgrade
 
@@ -81,7 +95,24 @@ Sync refreshes only hosts recorded in the current installation manifest. A missi
 dove upgrade
 ```
 
-Project Upgrade refreshes managed integration while preserving current Research Format 1 bytes. It may consume a valid legacy `.dove-install/manifest.json` and move a legacy `.dove-archive/` into `.dove/archive/`. It does not migrate unsupported research formats and does not manage user npm.
+Upgrade refreshes recognized project integration while preserving ordinary project files and research Markdown. It does not convert old structured research state automatically and does not rewrite human-authored research documents.
+
+## One-time research export
+
+```bash
+dove export-research
+```
+
+`export-research` is the explicit one-time conversion from supported legacy JSON research state to Dove 3 Markdown documents. It archives the original legacy JSON bytes under `.dove/archive/...` before completing the conversion.
+
+Important boundaries:
+
+- v1 research state is not converted;
+- normal Dove 3 work does not read old JSON as a fallback;
+- `init`, `sync`, `upgrade`, and Doctor never export research implicitly; and
+- running a real export against project research requires separate user authorization. Do not use real research as an installation or validation fixture.
+
+If the source cannot be converted without inventing meaning, preserve the source and stop rather than fabricating a document.
 
 ## Complete Reinstall
 
@@ -89,9 +120,13 @@ Project Upgrade refreshes managed integration while preserving current Research 
 dove reinstall
 ```
 
-Complete Reinstall displays the selected-project deletion inventory and asks once for explicit confirmation. The default is No. On approval it removes project-private Dove integration, optional research state, recognized legacy roots, and obsolete copied runtimes, then recreates only current project integration under `.dove/install/`.
+Complete Reinstall displays the selected-project deletion scope and asks for confirmation. The default is No.
 
-It does not remove or update the user's npm installation, ordinary project files, or unrelated shared configuration fields.
+After confirmation, it removes Dove-owned project state, including research under `.dove/` and Dove archives such as `.dove/archive/` or recognized older archive locations, then recreates current project integration as applicable. This deliberately deletes Dove research history and exported old-state archives.
+
+It preserves ordinary project files and unrelated shared-configuration fields. It does not update or remove the user's global npm installation.
+
+Use Complete Reinstall only when the user intends a destructive project reset. `sync` and `upgrade` are the non-destructive choices for refreshing integration.
 
 ## Doctor
 
@@ -100,43 +135,30 @@ dove doctor
 dove doctor --json
 ```
 
-Doctor is read-only and reports separately:
+Doctor reports observable software, package, project-integration, prompt-hook, and local file-readability facts. Manual Doctor does not repair or rewrite research documents. Its optional state remains under `.dove/install/` and must not become a research log, prompt history, or scientific health score.
 
-- user CLI health;
-- current or legacy project integration;
-- project MCP connection and runtime compatibility;
-- shallow research-format state;
-- Claude registration/readiness; and
-- obsolete copied-runtime evidence.
+A healthy Doctor result means the checked software boundary appears usable. It does not mean the research is correct, complete, accepted, reproducible, or independently reviewed.
 
-Human output explains the state and safe next action. Machine tokens remain in JSON diagnostics. Doctor does not initialize, repair, migrate, reset, or delete research state.
+## CLI inventory
 
-## Research formats
+Dove 3.0 exposes these top-level commands:
 
-Research Format 1 uses the exact marker `dove-research-v1`. A completely absent Research Workspace and install-only `.dove` are normal. Legacy, future, malformed, symlinked, or incomplete research formats fail closed and remain unchanged.
+```text
+init, sync, upgrade, reinstall, doctor, export-research, hook
+```
 
-Dove has no fallback reader, alias root, or automatic research migration. Only explicitly confirmed Complete Reinstall may delete unsupported selected-project state.
+The prompt hook entry is:
 
-## Public inventories
+```text
+dove hook user-prompt-submit --project <project-root>
+```
 
-- 9 Skills
-- 8 MCP tools
-- 45 generated adapters
-- 7 runtime CLI commands
-- 5 package bundles
-- 7 Research Format 1 entities
+There is no `mcp` command and no `migrate-research` command.
 
-Only Claude has a complete project initialization and registration path in 0.7.0.
+## Supported project integration
+
+Claude Code remains the supported project initialization path. Other generated adapters are canonical workflow projections for their host formats, not a registration or readiness guarantee.
 
 ## Maintainer validation
 
-```bash
-npm run commands:check
-npm run commands:validate
-npm run mcp:validate
-npm run check
-npm run release:check
-npm run pack:dry-run
-```
-
-Run lifecycle tests only against isolated synthetic scratch projects. Never run install, sync, upgrade, reinstall, or reset against real research state during validation.
+From a source checkout, use `npm run check` for the regular software gate and `npm run release:check` before packaging. Run destructive lifecycle and real export checks only in isolated synthetic projects unless the user separately authorizes work on real research data.

@@ -1,56 +1,91 @@
 # Hook Guidelines
 
-> Reusable core helpers and zero-write ambient entry.
+> Reusable helper flows and ambient entry for Dove 3.0.0.
 
 ---
 
 ## Overview
 
-There are no React hooks. Hook-like abstractions are narrow helpers for Research Format access, contained mutation, evidence validation, semantic identifiers, Mission lineage, and review-exchange workflows.
+There are no React hooks. Hook-like abstractions are narrow helpers for project discovery, ordinary Markdown reading and writing, contained paths, generated adapter projection, installation lifecycle, explicit export, and natural user-facing reporting.
 
-The sole host-hook surface is the managed project-local Claude `UserPromptSubmit` ambient entry. Direct Skills remain explicit host workflows and are not executed by this hook.
+The only host hook is the managed Claude `UserPromptSubmit` entry. It may synchronize recognized project integration before conservative routing. It does not run research through an MCP service, execute a direct Skill invisibly, or turn prompts into hidden research state.
 
-## Helper Pipeline
+## Research Read Flow
 
-A mutation helper should:
+A research-document read helper or workflow should:
 
-1. validate sealed public input;
-2. classify the current Research Format state;
-3. load the selected semantic entities by ID;
-4. resolve current project artifacts and evidence references;
-5. validate lineage, ownership, frozen protocol or exchange bindings, and overwrite eligibility;
-6. build the complete write set before mutation;
-7. apply the contained write; and
-8. return data for safe public research projection.
+1. resolve the selected real project boundary;
+2. look for `.dove/research/RESEARCH.md` only when research context is useful;
+3. treat an absent overview as normal;
+4. read only the linked topic documents relevant to the request;
+5. report missing or broken links naturally, with the affected context;
+6. inspect ordinary project artifacts and real external material when the task requires them; and
+7. return evidence-bounded findings without inventing a database diagnosis.
 
-Read-only helpers stop before mutation. They do not initialize, repair, refresh, migrate, archive, convert, or replace research state.
+Status uses this flow read-only. It does not repair links, create an overview, run validation, or infer hidden state.
+
+## Research Write Flow
+
+A document-maintenance helper or workflow should:
+
+1. write only when the work creates durable research value;
+2. prefer updating the existing relevant topic document;
+3. otherwise create one human-named Markdown document whose structure fits the work;
+4. preserve failures, adverse evidence, limitations, and uncertainty;
+5. link related documents and ordinary artifacts when the link improves recovery; and
+6. update `RESEARCH.md` only for a material mainline, conclusion, navigation, or priority change.
+
+Do not insert mandatory headings, frontmatter, generated IDs, enums, hashes, a machine index, or stored counts. Do not create a document solely because a Skill ran.
+
+## Experiment Flow
+
+For a selected experiment:
+
+1. choose or create one Experiment document;
+2. write the prospective plan before execution;
+3. execute that plan with normal host tools; and
+4. append actual work, results, failures, deviations, denominators, limitations, uncertainty, and implications to the same document.
+
+The workflow order matters. A helper must not reconstruct a prospective plan from a result.
+
+## Review Flow
+
+For a user-managed review:
+
+1. choose or create one Review document;
+2. record purpose, exact project-relative artifact paths, scope limits, rubric, and prompt;
+3. return the declared scope and prompt to the user;
+4. require the separate Reviewer to remain read-only and return Markdown;
+5. accept only the actual return supplied by the user; and
+6. preserve it faithfully in the same Review document before adding author handling.
+
+The native Reviewer role does not establish identity or independence. No hook or helper may launch, impersonate, silently replace, or certify the Reviewer.
 
 ## Ambient Entry
 
-Ambient entry applies only to selected non-slash prompts and has two hidden routes:
+Ambient entry applies only to selected non-slash prompts:
 
-- `dove-intake` makes one conservative, zero-write routing judgment across the 9 flat Skills and the Planner, Builder/Author, and Reviewer responsibilities. It may ask one zero-write clarification round for material ambiguity, but it does not create a Mission or invoke a research mutation merely because the hook selected the prompt.
-- `dove-lessons-intake` handles explicit Lessons read, remember, or reflect requests through `manage_dove_lessons` and creates no Mission. A replacement reads the complete document before one complete update.
+- `dove-intake` makes one conservative choice among the nine ambient-eligible Skills and the Planner, Builder/Author, and Reviewer responsibilities. Auto is explicit-only and cannot be selected. One clarification round is allowed only for material ambiguity.
+- `dove-lessons-intake` handles explicit Lessons read, remember, or reflect requests by reading or maintaining `.dove/research/LESSONS.md`. It creates no unrelated research document.
 
-After routing, the host continues the original task normally. It uses public MCP research tools only when durable research state is actually needed. Slash commands retain their explicit routing.
+After routing, the host continues the original task normally with host tools. Slash commands retain explicit routing. Ambient entry must not create a Mission document, emit a hidden handoff, invoke private controls, or route to Auto merely because research context exists.
 
-The hook does not invoke direct Skills on the user's behalf, inspect `.dove/`, call the CLI or shell as a fallback, emit private execution data, or perform completion bookkeeping.
+The hook may refresh recognized software integration, but Sync behavior must not alter `.dove/research/` documents.
 
-## Domain Boundaries
+## Lifecycle Helper Flow
 
-- Source discovery and capture happen with host-native retrieval before Source registration.
-- Internal synthesis remains a normal project artifact.
-- Experiment planning freezes a protocol before host execution; result recording resumes the same semantic Experiment.
-- Draft, Figure, and Rebuttal work produces ordinary project artifacts and does not automatically create another record.
-- Review uses a user-managed separate exchange: local preflight, prepare, user-mediated external reviewer session, import, and coverage. Dove does not launch the reviewer.
-- Host output, tests, local review, imported review, and recorded results remain bounded evidence rather than completion or scientific authority.
+Project lifecycle helpers should inspect selected paths, reject escaping or ambiguous managed paths, preserve ordinary files and unrelated shared configuration, stop on conflicting or changed managed content, and stage the complete software change set before promotion.
+
+- Sync and Upgrade never rewrite research Markdown.
+- `export-research` requires separate authorization for real research, accepts supported legacy JSON research records only, archives original bytes under `.dove/archive/...`, and installs no fallback reader.
+- Complete Reinstall requires a displayed default-No confirmation and deletes Dove research and old archives while preserving ordinary project files.
+- Doctor reports software-facing facts and keeps its state under `.dove/install/`.
 
 ## Naming
 
 - Core functions use verb-first camelCase.
-- Normalizers use `normalize<Name>`.
-- Validators use `validate<Name>` or `assert<Name>`.
-- MCP tools use explicit snake_case research verbs.
+- Normalizers use `normalize<Name>` where normalization is actually needed.
+- Validators use `validate<Name>`, `assert<Name>`, or precise domain verbs for software boundaries.
+- Research files use readable names and project-relative links rather than generated IDs.
 - Public Skill IDs remain flat `dove.<surface>` names.
-- Use semantic identifiers rather than positional selectors.
-- Use `research` for the safe structured public projection; do not reintroduce retired private-protocol terminology.
+- User-facing failures use natural language and preserve actionable paths without exposing irrelevant internal transaction detail.

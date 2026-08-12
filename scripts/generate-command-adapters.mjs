@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolveCanonicalContainedWrite } from "../src/core/contained-write.mjs";
 import { writeFileSetTransaction } from "../src/core/file-set-transaction.mjs";
 import {
   DOVE_CLAUDE_AMBIENT_RULE_PATH,
@@ -17,10 +16,10 @@ import {
   COMMAND_SURFACES,
   HOST_ADAPTER_POLICY,
   PROJECT_HOST_IDS,
-  PUBLIC_RESPONSE_CAPSULE,
   adapterPathForCommand,
   hostCommandSlug
 } from "../src/core/command-manifest.mjs";
+import { USER_RESPONSE_POLICY } from "../src/core/user-response-policy.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,12 +38,11 @@ function unique(values) {
 }
 
 function dailyUseBullets(command) {
-  const dailyFlow = command.ux?.dailyFlow;
-  return Array.isArray(dailyFlow) ? dailyFlow.filter(Boolean) : [];
+  return [command.summary];
 }
 
 function exampleBullets(command, hostId = null) {
-  const examples = command.ux?.examples;
+  const examples = command.examples;
   if (!Array.isArray(examples)) {
     return [];
   }
@@ -54,30 +52,27 @@ function exampleBullets(command, hostId = null) {
   }).filter(Boolean);
 }
 
-function toolBullets(command) {
-  const tools = unique(command.requiredTools ?? []);
-  return [`Dove MCP tools: ${tools.map((tool) => `\`${tool}\``).join(", ")}.`];
-}
 
 function renderBullets(bullets) {
   return bullets.map((bullet) => `- ${bullet}`).join("\n");
 }
 
 function renderWorkflow(command) {
-  const modes = command.callFlow?.modes;
+  const modes = command.workflow?.modes;
   if (!Array.isArray(modes) || modes.length === 0) return "";
-  const lines = ["## Workflow", ""];
+  const lines = [
+    "## Internal workflow",
+    "",
+    "Internal guidance only; never use this workflow as the final report outline.",
+    ""
+  ];
   for (const item of modes) {
     lines.push(`- **${item.when}**`);
     for (const [index, step] of item.steps.entries()) {
       const persistence = step.persistWhen && step.persistWhen !== "never"
         ? ` Persist only when: ${step.persistWhen}.`
-        : " No durable Dove write is required.";
-      if (step.type === "host") {
-        lines.push(`  ${index + 1}. Use host tools (${step.readOnly ? "read-only" : "work"}; ${step.capability}). ${step.instruction}${persistence}`);
-      } else {
-        lines.push(`  ${index + 1}. Call \`${step.tool}\` (${step.readOnly ? "read-only" : "bounded"}). ${step.instruction}${persistence}`);
-      }
+        : " No file write is required.";
+      lines.push(`  ${index + 1}. Use host tools (${step.readOnly ? "read-only" : "work"}; ${step.capability}). ${step.instruction}${persistence}`);
     }
     for (const clarification of item.clarification ?? []) {
       lines.push(`  - Clarification: ${clarification}`);
@@ -87,17 +82,16 @@ function renderWorkflow(command) {
 }
 
 function renderGuidance(command) {
-  const notes = Array.isArray(command.adapterNotes) ? command.adapterNotes.filter(Boolean) : [];
+  const notes = Array.isArray(command.guidance) ? command.guidance.filter(Boolean) : [];
   return notes.length > 0 ? `## Command guidance\n\n${renderBullets(notes)}` : "";
 }
 
-function renderCapsule(command, hostId = null) {
-  const responsePreference = ["claude", "agents"].includes(hostId) ? [] : PUBLIC_RESPONSE_CAPSULE;
-  return `## Dove capsule\n\n${renderBullets([
-    ...toolBullets(command),
-    ...responsePreference,
-    ...HOST_ADAPTER_POLICY.adapterBullets
-  ])}`;
+function renderCapsule() {
+  return `## Dove capsule\n\n${renderBullets(HOST_ADAPTER_POLICY.adapterBullets)}`;
+}
+
+function renderResponsePolicy() {
+  return `## Response policy\n\n${renderBullets(USER_RESPONSE_POLICY)}`;
 }
 
 function renderExamples(command, hostId = null) {
@@ -111,8 +105,9 @@ function renderBody(command, heading, hostId = null) {
   const examples = renderExamples(command, hostId);
   const workflow = renderWorkflow(command);
   const guidance = renderGuidance(command);
-  const capsule = renderCapsule(command, hostId);
-  return `# ${heading}\n\n${purpose}\n\n## Use when\n\n${dailyUse}${examples}\n\n${workflow}${guidance ? `\n\n${guidance}` : ""}\n\n${capsule}\n`;
+  const capsule = renderCapsule();
+  const responsePolicy = renderResponsePolicy();
+  return `# ${heading}\n\n${purpose}\n\n## Use when\n\n${dailyUse}${examples}\n\n${workflow}${guidance ? `\n\n${guidance}` : ""}\n\n${capsule}\n\n${responsePolicy}\n`;
 }
 
 function renderFrontmatter(command, fields = {}) {
@@ -187,11 +182,20 @@ export function checkGeneratedPrimaryRoles(root = PACKAGE_ROOT) {
   });
 }
 
+const MAX_GENERATED_CLEANUP_WARNINGS = 20;
+
 export function generatedWriteSummary(...transactions) {
-  const committed = transactions.every((transaction) => transaction?.transactionState?.phase === "committed");
+  const reportedCleanupWarnings = transactions.flatMap((transaction) => transaction?.cleanupWarnings ?? []);
+  const cleanupWarnings = reportedCleanupWarnings.slice(0, MAX_GENERATED_CLEANUP_WARNINGS);
+  const omittedCleanupWarningCount = transactions.reduce(
+    (count, transaction) => count + (transaction?.omittedCleanupWarningCount ?? 0),
+    reportedCleanupWarnings.length - cleanupWarnings.length
+  );
   return {
     written: transactions.flatMap((transaction) => transaction?.writtenPaths ?? []),
-    transactionState: committed ? "committed" : "failed"
+    ...(cleanupWarnings.length > 0 || omittedCleanupWarningCount > 0
+      ? { cleanupWarnings, omittedCleanupWarningCount }
+      : {})
   };
 }
 

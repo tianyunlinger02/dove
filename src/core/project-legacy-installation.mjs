@@ -8,7 +8,6 @@ export const LEGACY_PROJECT_BUNDLE_PROBES = Object.freeze([
   { path: "bin/dove-package.mjs", signatures: ["dove-state-server-package.mjs", "DOVE_MCP_SERVER_NAME", "create_ambient_dove_mission"] },
   { path: "dist/index.mjs", signatures: ["DOVE_WORKSPACE_SCHEMA_VERSION", "createDoveMission", "queryDoveStatus"] },
   { path: "mcp/dove-state-server-package.mjs", signatures: ["create_ambient_dove_mission", "query_dove_status", "Dove MCP"] },
-  { path: "scripts/doctor-mcp-probe-package.mjs", signatures: ["hasCreateAmbientDoveMission", "checkpointStatus", "ambientHookBundle"] },
   { path: "scripts/dove-user-prompt-submit-package.mjs", signatures: ["create_ambient_dove_mission", "UserPromptSubmit", "closureRequest"] }
 ]);
 const DOVE_HOOK_COMMAND = /(?:^|[\s"'])node(?:[\s"']+)[^"'\s]*dove-user-prompt-submit-package\.mjs\b/u;
@@ -79,6 +78,15 @@ function bundleHits(root, fsOps) {
   });
 }
 
+function affirmativeCopiedRuntimeHits(root, fsOps) {
+  return LEGACY_PROJECT_BUNDLE_PROBES.flatMap((probe) => {
+    const content = readSmallRegularFile(root, probe.path, fsOps);
+    if (content === null) return [];
+    const signatureCount = probe.signatures.filter((signature) => content.includes(signature)).length;
+    return signatureCount >= 2 ? [{ path: probe.path, signatureCount }] : [];
+  });
+}
+
 function deepFreeze(result) {
   Object.freeze(result.markerHits);
   Object.freeze(result.registrationHits);
@@ -109,5 +117,18 @@ export function inspectLegacyProjectInstallation(root, options = {}) {
     registrationHits: [...registrationHitsFound],
     bundleHits: bundles.map((entry) => ({ ...entry })),
     evidence
+  });
+}
+
+export function inspectRetiredCopiedRuntime(root, options = {}) {
+  const fsOps = options.fsOps ?? fs;
+  const canonicalRoot = path.resolve(root);
+  const copiedRuntimeHits = affirmativeCopiedRuntimeHits(canonicalRoot, fsOps);
+  const detected = copiedRuntimeHits.length > 0;
+  return Object.freeze({
+    state: detected ? "retired-copied-runtime" : "absent",
+    detected,
+    root: canonicalRoot,
+    copiedRuntimeHits: Object.freeze(copiedRuntimeHits.map((entry) => Object.freeze({ ...entry })))
   });
 }

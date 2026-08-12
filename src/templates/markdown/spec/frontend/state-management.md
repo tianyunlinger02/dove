@@ -1,75 +1,93 @@
 # State Management
 
-> Research Format 1 state and public read/write boundaries.
+> Research Markdown and project installation boundaries for Dove 3.0.0.
 
 ---
 
 ## Overview
 
-Dove is file-first. The host plans and executes work; Dove stores a small validated research model for Workspace direction, Mission contracts and lineage, evidence, claims, experiment records, review exchanges, and Lessons.
+Dove is file-first without treating research as machine-owned state. The host performs substantive work. Researchers preserve useful context in ordinary Markdown, and Dove-owned software metadata remains separate.
 
-## Layer Boundary
+There is no research MCP service, Research Format marker, entity database, hidden research state machine, or runtime fallback reader in Dove 3.
 
-- A direct **Skill** expresses user intent and accepts optional text.
-- An **MCP tool** validates and performs a structured research operation.
-- A **semantic entity** records validated Research Format 1 state under `.dove/`.
-- A **project artifact** holds substantive host-produced work in a normal project path.
-- An **installation resource** belongs to managed project integration recorded by `.dove/install/manifest.json`.
+## Boundary Model
 
-Do not infer a semantic entity from a Skill name or project file. Draft, Figure, Rebuttal, and internal synthesis are workflows or project artifacts rather than same-named stores.
+- A **Skill** expresses user intent and host workflow.
+- A **role** defines responsibility.
+- A **research document** is ordinary Markdown owned by the project and researcher.
+- A **project artifact** holds substantive work in a normal project path.
+- An **installation resource** belongs to Dove-managed project integration.
+- **Doctor state** records bounded local software issues under `.dove/install/`; `DOCTOR.md` presents current problems and limited recent resolutions for people.
+- An **export archive** preserves original legacy JSON bytes under `.dove/archive/...` after explicit conversion.
 
-## Installation and Research State
+Drafts, figures, code, data, logs, papers, review bundles, and rebuttals remain ordinary project artifacts rather than Dove stores.
 
-`.dove/` is the single project-private root. `.dove/install/manifest.json` is Dove-managed installation state and records package identity, runtime protocol, proven hosts, managed resources, and ownership. Research Format 1 is an optional sibling contract under `.dove/`, not a separate root. Routine initialization and synchronization manage installation state only. Project Upgrade preserves current research bytes; confirmed project Complete Reinstall deletes optional research state before recreating installation state. Neither lifecycle operation manages user npm.
+## Installation State
 
-`.dove-install/` is recognized only as a legacy manifest root for Upgrade or Complete Reinstall cleanup. `.dove-archive/` is likewise a legacy project root that those lifecycle operations may move or remove. Neither is a current or compatibility research root.
+`.dove/install/manifest.json` is software installation metadata at revision `2.0`. Package version, installation revision, and the content of research Markdown are separate concerns.
 
-Research Format 1 uses:
+Optional `.dove/install/doctor.json` is machine-facing maintenance state, while `.dove/install/DOCTOR.md` is its readable projection. Managed-file digests or hashes protect installation bytes and detect drift; they must never be cited as research evidence, source authority, review integrity, or scientific validation.
 
-- `.dove/format.json` with format marker `dove-research-v1`;
-- `.dove/workspace.json` for current Workspace direction and human-readable change history;
-- `.dove/missions/` for immutable Mission contracts and optional immutable conclusions;
-- `.dove/sources/` for captured Source records;
-- `.dove/experiments/` for frozen plans and immutable results;
-- `.dove/claims/` for evidence-bounded Claims;
-- `.dove/reviews/` for imported structured Reviews tied to frozen artifact snapshots; and
-- `.dove/LESSONS.md` for the canonical advisory Lessons document.
+Claude Code remains the supported project initialization path. Project initialization does not register a research MCP server and does not create research content.
 
-Mission parent and dependency links form the research tree. This lineage is derived from Mission entities and does not create a second authoritative store.
+## Research Documents
 
-## Semantic Entity Rules
+Research context, when maintained, lives under `.dove/research/`:
 
-- The Workspace is mutable through explicit initialize or mainline update operations and retains concise change history.
-- Mission contracts are immutable. A new independent goal is a root; a deliberate branch uses explicit parent provenance and may declare dependencies.
-- Mission conclusions are separate immutable synthesis records preserving failures, limitations, uncertainty, evidence IDs, and recommended branches.
-- A Source is immutable captured external material and may include a content fingerprint for a project-local capture.
-- An Experiment plan is frozen before host execution. Its result is recorded separately and preserves all declared observations, measurements, denominator data, impacts, unexpected observations, failures, deviations, limitations, and uncertainty.
-- A Claim is immutable and requires support references plus explicit cannot-say boundaries.
-- A Review is imported from a user-managed separate reviewer session and binds to frozen artifact fingerprints. It remains non-authoritative.
-- Lessons are advisory Markdown and are replaced as one complete document.
+- `RESEARCH.md` is the recommended concise overview and navigation document;
+- `LESSONS.md` is an optional complete advisory document; and
+- other files are human-named linked topic documents, optionally grouped into human-chosen folders.
 
-## Public Read/Write Boundary
+This is recommended organization, not a schema. Do not require fixed headings, frontmatter, generated IDs, enums, machine indexes, stored counts, fingerprints, or research hashes.
 
-Skills and MCP callers use semantic identifiers rather than positional numbers. They do not inspect or edit `.dove/` directly.
+### Overview and links
 
-Reads are zero-write. Mutations validate the current format, complete input, entity references, Mission lineage, canonical project paths, frozen protocol or review bindings, and overwrite eligibility before the first write.
+- Keep `RESEARCH.md` useful for recovering the current mainline, material progress, important conclusions and limits, linked work, and next priorities.
+- Update it only for material changes, not as a run log.
+- An absent overview is normal.
+- A missing or broken link is an ordinary document problem. Report the path and affected context naturally; do not invalidate the whole research area.
 
-The safe public result includes human text and structured `research` data. Private write diagnostics, hashes, bindings, `.dove/` paths, and integrity internals are removed. There is no public completion callback or machine control envelope.
+### Topic documents
 
-## Review Exchange
+- Mission documents may preserve bounded goals, assumptions, competing explanations, evidence needs, work, failures, conclusions, limitations, uncertainty, and next branches in a natural structure.
+- Source documents may preserve citations or URLs, what was actually inspected, relevant conditions, conflicts, and limitations.
+- One Experiment document contains the prospective plan before execution and the actual execution and results afterward.
+- One Review document contains purpose, exact declared path scope, limits, prompt, the actual user-obtained Markdown return, and author handling.
+- Claims remain scoped prose, tables, or dedicated human-readable documents when useful. There is no Claim store.
+- Lessons remain fallible advisory prose and are never evidence or a completion certificate.
 
-Review follows a user-mediated boundary:
+## Mutation Rules
 
-1. `local-preflight` verifies the target Mission and declared project artifact paths without creating a Review.
-2. `prepare` freezes the artifact snapshot and produces the exchange material.
-3. The user obtains a return in a separate reviewer session outside Dove's execution.
-4. `import` validates and records the structured return against the prepared exchange.
-5. `coverage` reports current review coverage and artifact validity.
+- Read only the documents needed for the task.
+- Write only when durable context improves future research recovery.
+- Prefer updating the existing relevant topic document over creating duplicates.
+- Preserve adverse, null, failed, stopped, and uncertain evidence.
+- Never synthesize a prospective experiment plan after execution.
+- Never fabricate a reviewer return or overwrite the original return with an author summary.
+- Do not normalize researcher documents into a mandatory template.
 
-Dove never launches, impersonates, or silently substitutes for the separate reviewer. Importing a Review does not establish identity, independence, sign-off, acceptance, or scientific authority.
+Status performs no mutations. Ambient routing does not create research documents merely because a prompt was routed.
 
-## Current-Only Runtime
+## Auto Boundary
 
-Current research operations read and write only Research Format 1. Missing state may be initialized only through the Workspace operation. Legacy, unknown, malformed, or incomplete `.dove/` state is classified without repair and refused for mutation. There is no state migration, overlay upgrade, archive replacement, compatibility root, or fallback reader.
+Auto is explicit-only and operates in the foreground. It requires an adequately documented current mainline in `RESEARCH.md`. That mainline is read-only for Auto: aligned work and linked documents may advance, but the research direction must not be silently redefined.
 
-The CLI is runtime-only: it handles installation lifecycle, diagnosis, MCP serving, and prompt-hook forwarding. Research Skills use MCP and must not fall back to CLI, shell, or direct state access.
+If the overview is absent, materially incomplete, or evidence requires a mainline change, Auto records or returns a recommendation, reports the block, and stops. Auto does not create a hidden session store, daemon, scheduler, or research service.
+
+## Review Boundary
+
+The user chooses and manages the separate Reviewer. The exact project-relative artifact paths are declared in the Review document. The Reviewer reads only that scope, makes no edits, and returns Markdown. The actual return is preserved in the same document before author handling is added.
+
+A native Reviewer role, separate local session, or provenance statement does not prove identity or independence.
+
+## Lifecycle Behavior
+
+- `init` creates supported software integration only.
+- `sync` and `upgrade` refresh recognized integration without modifying `.dove/research/` documents.
+- `doctor` reports software and local readability facts without repairing research content.
+- `export-research` is a one-time supported legacy JSON research records-to-Markdown conversion. It archives the original legacy JSON bytes under `.dove/archive/...`, does not convert v1, and installs no runtime fallback. Real export requires separate user authorization.
+- `reinstall` displays the destructive scope and defaults to No. After confirmation it deletes Dove research and old archives, then recreates integration as applicable while preserving ordinary project files.
+
+## Project File Safety
+
+Project roots and Dove-managed paths must remain contained and unambiguous. Lifecycle operations reject unsafe traversal or symlink use where Dove owns the boundary, preserve ordinary files and unrelated shared-configuration fields, and stop on conflicting or changed managed content. Software changes should be staged and checked before promotion.

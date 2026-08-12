@@ -1,34 +1,37 @@
 ---
-description: "Discover external material and manage captured source candidates."
+description: "Discover, read, verify, and document real sources that materially inform the research."
 ---
 
 # dove.source
 
-Discover external material and manage captured source candidates.
+Discover, read, verify, and document real sources that materially inform the research.
 
 ## Use when
 
-- Discover external material and manage captured source candidates.
+- Discover, read, verify, and document real sources that materially inform the research.
 
 ## Examples
 
 - `/dove.source`
 
-## Workflow
+## Internal workflow
+
+Internal guidance only; never use this workflow as the final report outline.
 
 - **The user requests source discovery, reading, comparison, or verification.**
-  1. Call `query_dove_research` (read-only). Read related-work or claim context only when durable context is relevant. No durable Dove write is required.
-  2. Use host tools (read-only; source-research). Discover, retrieve, read, and verify the real material with host-native project or external research tools. Distinguish what was inspected from what was actually used. No durable Dove write is required.
-  3. Call `manage_dove_sources` (bounded). Record only a Source that was actually used and needs a durable citation or evidence relationship; preserve conditions, conflicts, and limitations. Persist only when: actual-source-used.
+  1. Use host tools (read-only; research-document-reading). If `.dove/research/RESEARCH.md` exists, read it first and follow only the most relevant Markdown links. If it is absent, treat that as normal and inspect ordinary project material instead. Do not require fixed headings, frontmatter, IDs, or a machine index. No file write is required.
+  2. Use host tools (read-only; source-research). Discover, retrieve, read, and verify real material with host-native project or external research tools. Distinguish material merely found from material actually inspected and used; preserve conflicts, conditions, and limitations. No file write is required.
+  3. Use host tools (work; research-document-maintenance). When a used source deserves durable context, create or update one readable source-note Markdown with citation or URL, what was learned, conditions, conflicts, limitations, and links to related work. Do not generate a Source ID, fingerprint, or byte hash. Persist only when: research-context-worth-preserving.
   - Clarification: Explore first. Ask one brief clarification only if material ambiguity in the goal, boundary, or deliverable remains; otherwise continue within the requested boundary.
 
 ## Dove capsule
 
-- Dove MCP tools: `query_dove_research`, `manage_dove_sources`.
-- Unless the user requests another language or format, respond in natural, clear Chinese.
-- Use internal terms, paths, and machine identifiers only when they materially improve precision, and explain them plainly.
-- Adapt the response structure to the task instead of forcing a fixed report template; explicit user instructions and local machine-readable contracts take priority.
-- Access durable Dove state only through public MCP tools. Use normal host tools to read, create, edit, and validate ordinary project materials and artifacts outside `.dove`.
-- Use only the eight public Dove MCP research tools for durable Dove state; never read or write `.dove` directly.
-- Use semantic IDs only when durable records are needed, and do not create a Workspace or Mission merely because a Skill was invoked.
-- Treat tests, host output, local review, and imported review as bounded evidence rather than completion or scientific authority.
+- Treat `.dove/research/RESEARCH.md` and its linked Markdown as ordinary researcher-owned documents, not a database or machine authority.
+- Use host file and research tools directly. Read the overview first when it exists, then only the linked documents and project artifacts relevant to the task.
+- Keep failures, adverse evidence, limitations, and uncertainty visible; tests, host output, and any review remain bounded evidence rather than scientific authority.
+
+## Response policy
+
+- Use natural, clear Chinese unless the user requests another language or format; explain internal terms only when needed.
+- Before sending, reorganize from the user's perspective into a faithful synthesis. Do not use the internal workflow or structured machine data as the response outline; remove repetition and preserve material failures, limits, uncertainty, and blockers.
+- Requested research artifacts and strict machine-readable contracts take priority; otherwise fit the response to the task, not a fixed template.

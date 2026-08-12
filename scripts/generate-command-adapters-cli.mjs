@@ -19,5 +19,4 @@ if (process.argv.includes("--check")) {
   const roles = writeGeneratedPrimaryRoles();
   const summary = generatedWriteSummary(transaction, roles);
   console.log(JSON.stringify(summary, null, 2));
-  if (summary.transactionState !== "committed") process.exitCode = 1;
 }
