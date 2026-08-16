@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { openAnchoredFilesystem } from "./anchored-filesystem.mjs";
+import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 
 const MAX_CLEANUP_WARNINGS = 20;
 const ENTRY_FIELDS = new Set(["root", "relativePath", "content", "encoding", "force", "delete", "deleteEmptyDirectory", "expectedState", "label"]);
@@ -117,7 +117,7 @@ export function writeFileSetTransaction(entries, options = {}) {
 
   const anchorFor = (root) => {
     const canonicalRoot = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path.resolve(root)) : fsOps.realpathSync(path.resolve(root));
-    if (!anchors.has(canonicalRoot)) anchors.set(canonicalRoot, openAnchoredFilesystem(canonicalRoot, { fsOps, platform: options.platform, procFdRoot: options.procFdRoot }));
+    if (!anchors.has(canonicalRoot)) anchors.set(canonicalRoot, openRootedFilesystem(canonicalRoot, { fsOps }));
     return anchors.get(canonicalRoot);
   };
 
@@ -160,16 +160,17 @@ export function writeFileSetTransaction(entries, options = {}) {
       if (anchor.exists(transactionPath)) throw new Error(`Transactional staging path is already occupied: ${anchor.displayPath(transactionPath)}.`);
       const transactionParents = parentDirectories(`${transactionPath}/placeholder`).map((relativePath) => ({ relativePath, existed: anchor.exists(relativePath) }));
       anchor.mkdir(transactionPath, { recursive: true });
-      anchor.mkdir(`${transactionPath}/staged`);
       anchor.mkdir(`${transactionPath}/backups`);
-      transactions.set(anchor, { transactionBase, transactionPath, transactionParents, stagedRoot: `${transactionPath}/staged`, backupRoot: `${transactionPath}/backups` });
+      transactions.set(anchor, { transactionBase, transactionPath, transactionParents, backupRoot: `${transactionPath}/backups` });
       createdDirectories.set(anchor, []);
     }
 
     for (const [index, entry] of resolved.entries()) {
       if (entry.deleting) continue;
-      const transaction = transactions.get(entry.anchor);
-      entry.stagedPath = `${transaction.stagedRoot}/file-${index}`;
+      const parent = path.posix.dirname(entry.relativePath);
+      const temporaryName = `.${path.posix.basename(entry.relativePath)}.${transactionId}.${index}.tmp`;
+      entry.stagedPath = parent === "." ? temporaryName : `${parent}/${temporaryName}`;
+      ensureParentDirectories(entry.anchor, entry.relativePath, createdDirectories.get(entry.anchor));
       entry.anchor.writeNewFile(entry.stagedPath, entry.content);
       if (entry.previous.mode !== null) entry.anchor.chmod(entry.stagedPath, entry.previous.mode);
     }
@@ -209,19 +210,27 @@ export function writeFileSetTransaction(entries, options = {}) {
     };
     for (const promotion of [...promotions].reverse()) {
       const { entry } = promotion;
-      if (promotion.promoted && entry.anchor.exists(entry.relativePath)) attempt(() => entry.anchor.remove(entry.relativePath, { force: true }));
-      if (promotion.backupPath && entry.anchor.exists(promotion.backupPath)) attempt(() => entry.anchor.rename(promotion.backupPath, entry.relativePath));
+      if (promotion.promoted && entry.anchor.exists(entry.relativePath)) {
+        attempt(() => entry.anchor.remove(entry.relativePath, { force: true }));
+      }
+      if (promotion.backupPath && entry.anchor.exists(promotion.backupPath)) attempt(() => {
+        if (entry.anchor.exists(entry.relativePath)) throw new Error(`Transactional rollback target is occupied: ${entry.relativePath}.`);
+        entry.anchor.rename(promotion.backupPath, entry.relativePath);
+      });
     }
     for (const [anchor, directories] of createdDirectories) {
       for (const directoryPath of [...directories].sort((left, right) => right.length - left.length)) attempt(() => anchor.rmdir(directoryPath, { force: true }));
+    }
+    for (const entry of resolved) {
+      if (entry.stagedPath && entry.anchor.exists(entry.stagedPath)) attempt(() => entry.anchor.remove(entry.stagedPath, { force: true }));
     }
     for (const [anchor, transaction] of transactions) {
       attempt(() => anchor.remove(transaction.transactionPath, { recursive: true, force: true }));
       attempt(() => removeNewTransactionParents(anchor, transaction));
     }
-    if (rollbackFailures.length > 0) throw new Error(`Transactional write failed and rollback also failed: ${errorMessage(error)}; rollback: ${rollbackFailures.join("; ")}`, { cause: error });
+    if (rollbackFailures.length > 0) {
+      throw new Error(`Transactional write failed and rollback also failed: ${errorMessage(error)}; rollback: ${rollbackFailures.join("; ")}`, { cause: error });
+    }
     throw new Error(`Transactional write failed and all staged changes were rolled back: ${errorMessage(error)}`, { cause: error });
-  } finally {
-    for (const anchor of anchors.values()) anchor.close();
   }
 }

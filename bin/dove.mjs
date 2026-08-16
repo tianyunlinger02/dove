@@ -18,14 +18,13 @@ import {
   terminalColorEnabled
 } from "../src/cli/terminal-output.mjs";
 import { userPromptSubmitOutput } from "../src/core/ambient-hook.mjs";
-import { completeReinstallDoveLifecycle, upgradeDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
-import { doctorIssuesFromInspection } from "../src/core/doctor-issues.mjs";
-import { readDoctorDocument, readDoctorState, reconcileDoctorIssues, reconcileDoctorIssuesBestEffort, setDoctorEnabled } from "../src/core/doctor-store.mjs";
+import { stopHookOutput } from "../src/core/stop-hook.mjs";
+import { completeReinstallDoveLifecycle, updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
 import { exportResearch, previewResearchExport } from "../src/core/research-export.mjs";
 import { PROJECT_HOST_IDS } from "../src/core/host-registry.mjs";
 import { classifyPackageCompatibility, PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
-import { initializeProjectIntegration, inspectProjectIntegration, previewProjectCompleteReinstall, syncProjectIntegration } from "../src/core/project-installation.mjs";
+import { initializeProjectIntegration, inspectProjectIntegration, previewProjectCompleteReinstall } from "../src/core/project-installation.mjs";
 import { readProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
 import { resolveInstalledProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
 
@@ -33,7 +32,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
-const KNOWN_COMMANDS = new Set(["init", "sync", "upgrade", "reinstall", "doctor", "export-research", "hook"]);
+const KNOWN_COMMANDS = new Set(["init", "update", "reinstall", "doctor", "export-research", "hook"]);
 
 function usage() {
   console.log(`dove
@@ -42,14 +41,14 @@ Usage:
   dove --help
   dove --version
   dove init [--project <dir>] [--host <host>...] [--json|--format json]
-  dove sync [--project <dir>] [--host <host>...] [--json|--format json]
-  dove upgrade [--project <dir>] [--json|--format json]
+  dove update [--project <dir>] [--host <host>...] [--json|--format json]
   dove reinstall [--project <dir>] [--json|--format json]
   dove doctor [--project <dir>] [--json|--format json]
   dove export-research [--project <dir>] [--json|--format json]
   dove hook user-prompt-submit --project <dir>
+  dove hook stop --project <dir>
 
-The runtime CLI manages project integration, diagnostics, one-time legacy JSON research export, and the Claude prompt hook. Research work uses the ten host Skills with ordinary Markdown research documents. Project setup never creates research work by default.
+The runtime CLI manages project integration, diagnostics, one-time legacy JSON research export, and the Claude prompt and stop hooks. Research work uses the ten host Skills with ordinary Markdown research documents. Project initialization creates the ordinary default research tree, but it does not create research progress, a Mission, or a scientific conclusion.
 `);
 }
 
@@ -115,30 +114,23 @@ function inspect(target, options = {}) {
   });
 }
 
-function assertRecognizedAutomaticSyncManifest(manifest) {
+function assertRecognizedHookManifest(manifest) {
   const compatibility = classifyPackageCompatibility(manifest.package, { name: PACKAGE_NAME, version: PACKAGE_VERSION });
   if (compatibility === "identity-mismatch") {
-    throw new Error("Dove automatic project synchronization requires matching package identity. Run dove doctor --json before making changes.");
+    throw new Error("Dove hook execution requires matching package identity. Run dove doctor --json before making changes.");
   }
   if (["newer", "invalid-version"].includes(compatibility)) {
-    throw new Error("Dove automatic project synchronization refuses project integration from a newer or invalid package version. Run dove doctor --json before making changes.");
+    throw new Error("Dove hook execution refuses project integration from a newer or invalid package version. Run dove doctor --json before making changes.");
   }
   if (!manifest.hosts.includes("claude")) {
-    throw new Error("Dove project runtime requires Claude host integration. Use explicit dove sync --host claude for this project.");
+    throw new Error("Dove project hooks require Claude host integration. Run dove update --host claude for this project.");
   }
 }
 
-function prepareAutomaticProjectSync(project) {
+function prepareHookProject(project) {
   const target = resolveInstalledProjectRoot(project);
   const manifest = readProjectInstallationManifest(target, { hostIds: PROJECT_HOST_IDS });
-  assertRecognizedAutomaticSyncManifest(manifest);
-  inspectProjectIntegration(target, PACKAGE_OPTIONS);
-  return target;
-}
-
-function ensureCurrentProjectIntegration(project) {
-  const target = prepareAutomaticProjectSync(project);
-  syncProjectIntegration(target, PACKAGE_OPTIONS);
+  assertRecognizedHookManifest(manifest);
   return target;
 }
 
@@ -158,17 +150,10 @@ try {
 }
 
 function inspectHome(target) {
-  const result = inspect(target);
-  if (result.target) reconcileDoctorIssuesBestEffort(
-    result.target,
-    doctorIssuesFromInspection(result, { detectedBy: "diagnostics" }),
-    { detectedBy: "diagnostics" }
-  );
-  return result;
+  return inspect(target);
 }
 
 function homeState(inspection) {
-  if (inspection.migrationInstallation?.state === "valid-legacy") return "upgrade";
   if (inspection.setup?.mode === "init") return "uninitialized";
   if (inspection.projectIntegration?.state === "current") return "current";
   if (inspection.projectIntegration?.state === "needs-sync") return "needs-sync";
@@ -184,22 +169,18 @@ if (!command) {
         target: process.cwd(),
         inspect: inspectHome,
         initialize: (target) => initializeProjectIntegration(target, PACKAGE_OPTIONS),
-        completeReinstall: (target) => completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true }),
-        readDoctorState,
-        readDoctorDocument,
-        setDoctorEnabled,
+        update: (target) => updateDoveLifecycle(target, { ...PACKAGE_OPTIONS, inspect }),
+        previewCompleteReinstall: (target) => previewProjectCompleteReinstall(target, PACKAGE_OPTIONS),
+        completeReinstall: (target, lifecycleOptions) => completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
         stream: process.stdout,
         env: process.env
       });
     } else {
       const inspection = inspectHome(process.cwd());
-      let openIssues = [];
-      try { openIssues = inspection.target ? readDoctorState(inspection.target).issues.filter((issue) => issue.state === "open") : []; } catch {}
       console.log(renderDoveHome({
         stream: process.stdout,
         env: process.env,
-        state: homeState(inspection),
-        issues: openIssues
+        state: homeState(inspection)
       }));
     }
     process.exit(0);
@@ -233,7 +214,7 @@ try {
       const manifest = readProjectInstallationManifest(target, { hostIds: PROJECT_HOST_IDS });
       const requestedHosts = selectedHosts(args);
       if (requestedHosts !== undefined && JSON.stringify([...requestedHosts].sort()) !== JSON.stringify([...manifest.hosts].sort())) {
-        throw new Error("Dove is already initialized with a different host selection. Use dove sync --host <host> to change it.");
+        throw new Error("Dove is already initialized with a different host selection. Use dove update --host <host> to change it.");
       }
       inspectProjectIntegration(target, PACKAGE_OPTIONS);
       writeIntegrationResult("init", {
@@ -251,18 +232,14 @@ try {
     process.exit(0);
   }
 
-  if (command === "sync") {
+  if (command === "update") {
     const target = projectFlag(args) ?? process.cwd();
-    const options = { ...PACKAGE_OPTIONS, hosts: selectedHosts(args) };
-    inspectProjectIntegration(target, options);
-    const result = syncProjectIntegration(target, options);
-    writeIntegrationResult("sync", integrationResult(result), args);
-    process.exit(0);
-  }
-
-  if (command === "upgrade") {
-    const result = upgradeDoveLifecycle(projectFlag(args) ?? process.cwd(), PACKAGE_OPTIONS);
-    writeLifecycleResult("upgrade", result, args);
+    const result = updateDoveLifecycle(target, {
+      ...PACKAGE_OPTIONS,
+      hosts: selectedHosts(args),
+      inspect
+    });
+    writeIntegrationResult("update", integrationResult(result), args);
     process.exit(0);
   }
 
@@ -275,7 +252,8 @@ try {
       process.exit(0);
     }
     const color = terminalColorEnabled(process.stdout, process.env);
-    process.stdout.write(`${renderCompleteReinstallInventory(target, { color })}\n\n`);
+    const preview = previewProjectCompleteReinstall(target, PACKAGE_OPTIONS);
+    process.stdout.write(`${renderCompleteReinstallInventory(preview, { color })}\n\n`);
     const approved = await confirm({
       message: "警告：这会永久删除当前项目中的全部 Dove 配置、研究状态和旧归档。确认完全重新安装项目配置？",
       default: false
@@ -284,20 +262,13 @@ try {
       console.log("未修改任何文件。");
       process.exit(0);
     }
-    const result = completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true });
+    const result = completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true, preview });
     writeLifecycleResult("reinstall", result, args);
     process.exit(0);
   }
 
   if (command === "doctor") {
     const result = inspect(projectFlag(args) ?? process.cwd());
-    if (result.target && result.projectIntegration?.state !== "uninitialized") {
-      reconcileDoctorIssues(
-        result.target,
-        doctorIssuesFromInspection(result, { detectedBy: "diagnostics" }),
-        { detectedBy: "diagnostics", manual: true }
-      );
-    }
     if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
     else console.log(renderDoveDoctor(result, { stream: process.stdout, env: process.env }));
     process.exit(result.ready ? 0 : 1);
@@ -317,16 +288,7 @@ try {
       default: false
     });
     if (!approved) {
-      const cancelled = {
-        status: "cancelled",
-        action: preview.action,
-        from: preview.from,
-        to: preview.to,
-        researchDirectory: preview.researchDirectory,
-        archiveDirectory: preview.archiveDirectory
-      };
-      if (wantsJson(args)) console.log(JSON.stringify(cancelled, null, 2));
-      else console.log("未修改任何文件。");
+      console.log("未修改任何文件。");
       process.exit(0);
     }
     const result = exportResearch(target, { confirmed: true, now });
@@ -335,10 +297,12 @@ try {
   }
 
   if (command === "hook") {
-    if (parsed.positionals[0] !== "user-prompt-submit") throw new Error("dove hook accepts only user-prompt-submit.");
-    if (projectFlag(args) === undefined) throw new Error("dove hook user-prompt-submit requires --project <dir>.");
-    ensureCurrentProjectIntegration(projectFlag(args));
-    const output = userPromptSubmitOutput(await readStdin());
+    if (!["user-prompt-submit", "stop"].includes(parsed.positionals[0])) throw new Error("dove hook accepts only user-prompt-submit or stop.");
+    if (projectFlag(args) === undefined) throw new Error(`dove hook ${parsed.positionals[0]} requires --project <dir>.`);
+    prepareHookProject(projectFlag(args));
+    const output = parsed.positionals[0] === "stop"
+      ? stopHookOutput(await readStdin())
+      : userPromptSubmitOutput(await readStdin());
     if (output !== null) process.stdout.write(JSON.stringify(output));
     process.exit(0);
   }

@@ -17,7 +17,7 @@ Research meaning is not a runtime type system. Ordinary Markdown must not acquir
 - CLI parsing defines the supported command and option inventory.
 - Project installation and file-transaction modules enforce contained software writes and conflict handling.
 - Canonical Skill and role sources define workflow inventory for adapter generation.
-- Build scripts define the library, CLI, and prompt-hook bundles.
+- Build scripts define the library, CLI, and hook bundles.
 - Export code defines the supported legacy JSON input boundary, archival behavior, confirmation or authorization boundary, and Markdown output.
 
 No research MCP definitions or Research Format schema belong in the Dove 3 contract surface.
@@ -26,7 +26,7 @@ No research MCP definitions or Research Format schema belong in the Dove 3 contr
 
 - Package name and release version are valid and explicit.
 - Node.js `>=22` remains the supported runtime.
-- CLI parsing accepts only `init`, `sync`, `upgrade`, `reinstall`, `doctor`, `export-research`, and `hook` with their declared options.
+- CLI parsing accepts only `init`, `update`, `reinstall`, `doctor`, `export-research`, and `hook` with their declared options.
 - The CLI does not expose `mcp` or `migrate-research`.
 - Installation manifests use revision `2.0` and reject unsupported or ambiguous software state.
 - Project roots and Dove-managed paths reject traversal, escaping paths, and unsafe symlink use where Dove owns the boundary.
@@ -34,7 +34,8 @@ No research MCP definitions or Research Format schema belong in the Dove 3 contr
 - Managed-resource digests detect changed installation bytes without becoming public research evidence.
 - File-set changes verify preconditions and avoid partial promotion.
 - Generated adapters match the ten-Skill and three-role canonical sources.
-- Package output contains exactly the declared library, CLI, and prompt-hook runtime bundles.
+- Package output contains exactly the declared library, CLI, and hook runtime bundles.
+- Hook parsing distinguishes `UserPromptSubmit` and `Stop`; the Stop continuation guard prevents repeated summaries.
 - Real research export requires separate user authorization.
 - Export accepts supported legacy Dove JSON research records only, archives the original bytes under `.dove/archive/...`, and does not install a runtime fallback.
 - Complete Reinstall requires an explicit confirmed destructive plan whose default is No.
@@ -45,10 +46,10 @@ Research content under `.dove/research/` is ordinary UTF-8 Markdown. Software ma
 
 Allowed conventions include:
 
-- recommended `RESEARCH.md` overview and navigation;
-- optional `LESSONS.md`;
-- human-named linked topic documents; and
-- optional human-chosen folders.
+- root `RESEARCH.md` overview and navigation;
+- one human-maintained summary in each default research directory;
+- six general Lessons theme files under `lessons/`; and
+- human-named linked topic documents.
 
 Do not require or synthesize:
 
@@ -70,11 +71,11 @@ Some semantic order and responsibility boundaries still matter even though docum
 - actual experiment results are appended to the same document;
 - review purpose, exact path scope, limits, and prompt precede the external exchange;
 - the Reviewer remains read-only and returns Markdown;
-- the actual user-obtained return is preserved in the same Review document before author handling;
+- the actual user-obtained return is preserved in the corresponding Review document, and author handling is added only when requested;
 - Auto is explicit-only and cannot rewrite the documented mainline; and
 - Status performs no writes.
 
-Protect these through canonical workflow order, focused behavior tests, and semantic review. Do not enforce them by inventing an entity database.
+Protect these through canonical workflow order, generated-resource validation, real interface checks, and semantic review. Do not enforce them by inventing an entity database.
 
 ## Version and Lifecycle Boundaries
 
@@ -85,10 +86,18 @@ Protect these through canonical workflow order, focused behavior tests, and sema
 - Runtime research source: ordinary Markdown only.
 - Runtime fallback to old JSON: none.
 
-Sync and Upgrade preserve research documents. Complete Reinstall deletes Dove research and old archives after default-No confirmation while preserving ordinary project files.
+Project update creates each missing default file from complete package content. Existing defaults preserve their research-byte prefix and receive only exact missing canonical paragraphs or navigation lines, while ordinary topic documents remain untouched. This literal mechanism provides no semantic deduplication. Complete Reinstall previews deletions and replacements, then after default-No confirmation deletes custom Dove research and old archives, replaces existing default research files, rebuilds the complete default tree, and preserves ordinary project files.
 
 ## Machine and Human Language
 
 Final conversation policy defaults to natural Chinese unless the user requests another language or format. Source code names, CLI commands, package versions, manifest revisions, and project-relative paths remain exact where needed. Research documents use the language and structure appropriate to their human readers.
 
 Validation output must stay software-scoped and must not imply scientific correctness, completion, reproducibility, acceptance, or reviewer independence.
+
+## Stable Markdown and project file boundaries
+
+- Research Markdown has no format or schema version. Future organization changes use ordinary host file operations to rename, move, relink, or consolidate documents while preserving substantive content, failures, limitations, and uncertainty; they do not create a migration framework or runtime fallback.
+- Requested artifacts such as drafts, figures, experiment documents, and revisions are created or modified when the task requires them. Additional Dove research Markdown is maintained only when the workflow requires it or the work creates durable research value.
+- Dove project file operations use cross-platform Node path containment, ordinary-file and symbolic-link checks, same-directory temporary writes, expected-state rechecks, and transactional rollback; they do not require Linux `/proc` features.
+- Complete Reinstall displays the current deletion and replacement paths, defaults to No, and after confirmation rereads the project and executes the current plan.
+- `DOCTOR.md` is ordinary host-maintained feedback rather than typed Doctor state; it has no fixed schema, IDs, statuses, or counters.

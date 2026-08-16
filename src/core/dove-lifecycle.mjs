@@ -1,17 +1,36 @@
 import {
   completeReinstallProjectIntegration,
-  previewProjectCompleteReinstall,
-  previewProjectUpgrade,
+  updateProjectIntegration,
   upgradeProjectIntegration
 } from "./project-installation.mjs";
 
+function publicUpdateResult(result) {
+  return {
+    ...result,
+    status: result.status === "unchanged" ? "unchanged" : "updated"
+  };
+}
+
 export function upgradeDoveLifecycle(start, options = {}) {
-  const preview = previewProjectUpgrade(start, options);
-  return upgradeProjectIntegration(start, { ...options, preview });
+  return upgradeProjectIntegration(start, options);
+}
+
+export function updateDoveLifecycle(start, options = {}) {
+  try {
+    return publicUpdateResult(updateProjectIntegration(start, options));
+  } catch (currentError) {
+    try {
+      return publicUpdateResult(upgradeDoveLifecycle(start, options));
+    } catch (migrationError) {
+      throw new Error(
+        `Dove update requires a current installation manifest or an explicit 1.0 manifest: ${migrationError instanceof Error ? migrationError.message : String(migrationError)}`,
+        { cause: currentError }
+      );
+    }
+  }
 }
 
 export function completeReinstallDoveLifecycle(start, options = {}) {
   if (options.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true.");
-  const preview = previewProjectCompleteReinstall(start, options);
-  return completeReinstallProjectIntegration(start, { ...options, preview });
+  return completeReinstallProjectIntegration(start, options);
 }

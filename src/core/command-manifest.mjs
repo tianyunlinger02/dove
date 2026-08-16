@@ -1,15 +1,23 @@
 export const PACKAGE_DOCUMENTATION_PATHS = ["README.md", "docs/README.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"];
 export const PACKAGE_RUNTIME_PATHS = ["dist/index.mjs", "bin/dove-package.mjs", "scripts/dove-user-prompt-submit-package.mjs"];
-export const RETIRED_PACKAGE_RUNTIME_PATHS = ["mcp/dove-state-server-package.mjs"];
+export const RETIRED_PACKAGE_RUNTIME_PATHS = [
+  "mcp/dove-state-server-package.mjs",
+  "scripts/doctor-mcp-probe-package.mjs"
+];
 export const DEFAULT_HOST_ADAPTERS = ["opencode"];
 export const PROJECT_HOST_IDS = ["opencode", "codex", "cursor", "agents", "claude"];
 export const HOST_IDS = [...PROJECT_HOST_IDS];
-export const DOVE_CLAUDE_AMBIENT_PROJECT_PATHS = Object.freeze([".claude/rules/dove.md", ".claude/skills/dove-intake/SKILL.md", ".claude/skills/dove-lessons-intake/SKILL.md", ".claude/settings.json"]);
+export const DOVE_CLAUDE_AMBIENT_PROJECT_PATHS = Object.freeze([
+  ".claude/rules/dove.md",
+  ".claude/skills/dove-intake/SKILL.md",
+  ".claude/skills/dove-paper-search/SKILL.md",
+  ".claude/settings.json"
+]);
 export const PACKAGE_GENERATED_SUPPORT_PATHS = Object.freeze([
   ".claude/agents/dove-reviewer.md",
   ".claude/rules/dove.md",
   ".claude/skills/dove-intake/SKILL.md",
-  ".claude/skills/dove-lessons-intake/SKILL.md",
+  ".claude/skills/dove-paper-search/SKILL.md",
   ".opencode/agents/dove-reviewer.md"
 ]);
 export const HOST_DEFINITIONS = {
@@ -25,9 +33,8 @@ export const HOST_ADAPTER_POLICY = Object.freeze({
   toolAccess: Object.freeze({ transport: "host-files", unavailable: "report", cliFallback: false, shellFallback: false }),
   privacy: Object.freeze({ exposePrivateProtocol: false }),
   adapterBullets: Object.freeze([
-    "Treat `.dove/research/RESEARCH.md` and its linked Markdown as ordinary researcher-owned documents, not a database or machine authority.",
-    "Use host file and research tools directly. Read the overview first when it exists, then only the linked documents and project artifacts relevant to the task.",
-    "Keep failures, adverse evidence, limitations, and uncertainty visible; tests, host output, and any review remain bounded evidence rather than scientific authority."
+    "Use host file and research tools directly. Research Markdown is ordinary researcher-owned context, not a database.",
+    "Keep material failures, limitations, and uncertainty visible; model output, tests, and review are bounded evidence rather than scientific authority."
   ])
 });
 
@@ -39,110 +46,155 @@ const host = (instruction, options = {}) => ({
   instruction
 });
 
-const commonClarification = ["Explore first. Ask one brief clarification only if material ambiguity in the goal, boundary, or deliverable remains; otherwise continue within the requested boundary."];
-const readResearchDocuments = (instruction = "If `.dove/research/RESEARCH.md` exists, read it first and follow only the most relevant Markdown links. If it is absent, treat that as normal and inspect ordinary project material instead. Do not require fixed headings, frontmatter, IDs, or a machine index.") => host(instruction, { capability: "research-document-reading", readOnly: true });
-const updateResearchDocuments = (instruction) => host(instruction, { capability: "research-document-maintenance", persistWhen: "research-context-worth-preserving" });
+const commonClarification = ["Ask only when a material ambiguity blocks the work; otherwise continue with a reasonable interpretation."];
+const readResearchDocuments = (instruction) => host(instruction, { capability: "research-document-reading", readOnly: true });
+const updateResearchDocuments = (instruction) => host(instruction, { capability: "research-document-maintenance", persistWhen: "the work creates durable research value" });
+const relevantLessons = host(
+  "When reusable guidance may help the current task, read `.dove/research/lessons/LESSONS.md`, then only the naturally linked theme documents directly relevant to the work. Do not read unrelated themes or give any one Lesson special treatment. Treat Lessons as fallible advice, never as evidence or authority.",
+  { capability: "lesson-reading", readOnly: true }
+);
+
+const AREA = Object.freeze({
+  missions: Object.freeze({ directory: "missions", summary: "MISSIONS.md" }),
+  experiments: Object.freeze({ directory: "experiments", summary: "EXPERIMENTS.md" }),
+  sources: Object.freeze({ directory: "sources", summary: "SOURCES.md" }),
+  reviews: Object.freeze({ directory: "reviews", summary: "REVIEWS.md" }),
+  claims: Object.freeze({ directory: "claims", summary: "CLAIMS.md" }),
+  lessons: Object.freeze({ directory: "lessons", summary: "LESSONS.md" })
+});
+
+function areaPath(area) {
+  const value = AREA[area];
+  return `.dove/research/${value.directory}/${value.summary}`;
+}
+
+function readArea(area, purpose) {
+  return readResearchDocuments(
+    `When existing Dove research context would materially help ${purpose}, read \`.dove/research/RESEARCH.md\`, then \`${areaPath(area)}\`, then only directly relevant linked details. Otherwise work directly from the user's request and specified project materials. Do not recursively scan the research tree. If a needed entry or link is absent, say so naturally rather than inferring a database state.`
+  );
+}
+
+function maintainArea(area, instruction) {
+  return updateResearchDocuments(
+    `${instruction} Keep the readable links and synthesis in \`${areaPath(area)}\` current when a detail document is created or materially changed. Update \`.dove/research/RESEARCH.md\` only for a material mainline, important conclusion, navigation, or priority change.`
+  );
+}
 
 function workflow(slug) {
   if (slug === "research") return {
     status: "single-bounded-pass",
     modes: [{ id: "default", when: "The user requests one bounded pass of research framing, investigation, synthesis, or project work.", steps: [
-      readResearchDocuments(),
-      host("Inspect the relevant ordinary project materials and real external resources needed to understand the question. Form a proportional research frame from actual evidence rather than Dove bookkeeping.", { capability: "project-exploration", readOnly: true }),
+      readArea("missions", "the bounded research goal"),
+      relevantLessons,
+      host("Inspect the relevant ordinary project materials and real external resources needed to understand the question. Form a proportional research frame from actual evidence rather than Dove bookkeeping. When the problem or route remains open, explore materially different explanations and approaches, then compare the serious candidates rather than committing to the first plausible or easiest option.", { capability: "project-exploration", readOnly: true }),
       host("Complete exactly one bounded research or project pass. Produce the requested analysis or artifact, preserve material failures and uncertainty, and stop after the bounded deliverable rather than turning Research into multi-round autonomy.", { capability: "research-work" }),
-      updateResearchDocuments("When the work creates durable research value, update the existing topic document or create one readable Markdown document for that work. Update `RESEARCH.md` only when the mainline, important conclusion, linked work, or priority materially changes. Do not create a document merely because the Skill ran.")
+      maintainArea("missions", "When the work creates durable research value, update the existing Mission document or create one naturally named Mission document for the bounded goal, work, failures, evidence-bounded conclusion, limitations, and useful next branches. When an important claim needs its own document, place it under `claims/` and update `claims/CLAIMS.md` without creating a Claim store.")
     ], clarification: commonClarification }]
   };
   if (slug === "auto") return {
     status: "explicit-multi-round-autonomy",
     modes: [{ id: "default", when: "The user explicitly invokes high-autonomy multi-round research.", steps: [
-      readResearchDocuments("Require an existing `.dove/research/RESEARCH.md`, read its current mainline and linked work, and reground from the actual project. If the overview is absent, materially incomplete, or evidence says the mainline must change, write a recommendation as an ordinary project artifact, report the block, and stop."),
-      host("Read `.dove/research/LESSONS.md` when present and treat it as fallible guidance, never as evidence or authority.", { capability: "lesson-reading", readOnly: true }),
+      readResearchDocuments("Require an existing `.dove/research/RESEARCH.md`, read its current mainline, then read the summary for the current work type and only directly relevant linked details. Do not recursively scan all research files. If the overview is absent, materially incomplete, or evidence says the mainline must change, report that boundary and stop before autonomous work."),
+      host("When that boundary blocks Auto, create a concise ordinary project recommendation only if the user requested a saved artifact; otherwise return the recommendation directly without changing the research mainline.", { capability: "mainline-boundary-recommendation" }),
+      relevantLessons,
       host("Deeply explore relevant code, data, results, drafts, figures, constraints, and external sources. Build an evidence-aware frame covering competing explanations, counterfactuals, baselines, discriminating actions, and current claim boundaries.", { capability: "project-exploration", readOnly: true }),
-      host("Let Planner and Builder/Author coordinate autonomously, using subagents when useful. Repeatedly choose and perform the feasible action with the highest expected research value, including retrieval, analysis, code, writing, figures, validation, and experiments.", { capability: "autonomous-research-work" }),
-      host("For every selected experiment, write or extend one experiment Markdown document with the prospective plan before execution. Then execute with host tools and append actual procedure, results, failures, denominator accounting, deviations, limitations, uncertainty, and implications to that same document.", { capability: "experiment-work", persistWhen: "selected-experiment" }),
-      host("When independent review is a true dependency, prepare one readable Review document and return the declared artifacts and prompt to the user for a separate reviewer they manage. Do not launch, impersonate, or fabricate the reviewer; stop if the unavailable return blocks progress.", { capability: "review-handoff", persistWhen: "review-needed" }),
-      updateResearchDocuments("After each material round, update the relevant topic document. Keep `RESEARCH.md` concise and update it only for material mainline, conclusion, document-link, or priority changes. Preserve adverse evidence instead of overwriting history with a success narrative."),
+      host("Let Planner and Builder/Author coordinate autonomously, using subagents when useful. Repeatedly choose and perform the feasible action with the highest expected research value, including retrieval, analysis, code, writing, figures, validation, and experiments. When theory and evidence conflict, reconsider the theory, the experiment, and the route itself; choose the next action that best clarifies the disagreement instead of assuming more experiments are needed.", { capability: "autonomous-research-work" }),
+      host("For a selected experiment, write or extend one naturally named document under `experiments/` with the prospective plan before execution. Then execute with host tools, append the actual procedure, result, material failures or deviations, and interpretation to that same document, and update `experiments/EXPERIMENTS.md`.", { capability: "experiment-work" }),
+      host("When user-managed separate review is a true dependency, prepare one readable document under `reviews/`, update `reviews/REVIEWS.md`, and return the declared artifacts and prompt to the user for a separate reviewer they manage. Do not launch, impersonate, or fabricate the reviewer; stop if the unavailable return blocks progress.", { capability: "review-handoff" }),
+      updateResearchDocuments("When a round produces durable new evidence, a useful conclusion, a material failure, a decision, or a direction change, update the relevant naturally named topic document and its directory summary. Do not interrupt ordinary exploration merely to log a round. Keep `RESEARCH.md` concise and update it only for material mainline, conclusion, document-link, or priority changes. Preserve adverse evidence instead of overwriting history with a success narrative."),
       host("Continue without a default round count until the goal is achieved, the user budget ends, no feasible action has positive expected research value, a safety or mainline boundary is reached, or a required Review return is unavailable. Report the evidence-bounded result without claiming scientific authority.", { capability: "research-synthesis", readOnly: true })
     ], clarification: commonClarification }]
   };
   if (slug === "status") return {
     status: "read-only",
     modes: [{ id: "default", when: "The user requests current Dove research status.", steps: [
-      readResearchDocuments("Read `.dove/research/RESEARCH.md` once when it exists, then read only the linked documents needed to resolve material ambiguity. Report the current mainline, real progress, failures, limitations, uncertainty, and next priorities. If the overview is absent or a link is missing, say so naturally; do not infer a database state or modify files.")
+      readResearchDocuments("Read `.dove/research/RESEARCH.md` once when it exists, then read the one or more directory summaries needed for the question, then only directly linked details needed to resolve material ambiguity. Do not recursively scan the research tree. Report the current mainline, real progress, failures, limitations, uncertainty, and next priorities. If an overview, summary, or link is absent, say so naturally; do not infer a database state or modify files."),
+      relevantLessons
     ], clarification: [] }]
   };
   if (slug === "source") return {
     status: "bounded-source-work",
     modes: [{ id: "default", when: "The user requests source discovery, reading, comparison, or verification.", steps: [
-      readResearchDocuments(),
-      host("Discover, retrieve, read, and verify real material with host-native project or external research tools. Distinguish material merely found from material actually inspected and used; preserve conflicts, conditions, and limitations.", { capability: "source-research", readOnly: true }),
-      updateResearchDocuments("When a used source deserves durable context, create or update one readable source-note Markdown with citation or URL, what was learned, conditions, conflicts, limitations, and links to related work. Do not generate a Source ID, fingerprint, or byte hash.")
+      readArea("sources", "the source question"),
+      relevantLessons,
+      host("Discover, retrieve, save when useful, read, and verify real material with host-native project or external research tools. Distinguish material merely found from material actually retrieved, inspected, and used; preserve saved paths, failures, conflicts, conditions, and limitations.", { capability: "source-research" }),
+      maintainArea("sources", "When a used source deserves durable context, create or update one naturally named source note under `sources/` with the citation or URL, what was actually inspected and learned, conditions, conflicts, limitations, and useful related links. A source explanation is useful when available but is not mandatory. Do not generate a Source ID, fingerprint, or byte hash.")
     ], clarification: commonClarification }]
   };
   if (slug === "experiment") return {
     status: "planned-experiment-work",
     modes: [{ id: "default", when: "The user requests experiment design, execution, analysis, or recording.", steps: [
-      readResearchDocuments(),
-      host("Select or create one readable experiment Markdown document. Before execution, write why the experiment matters, hypotheses or competing explanations, protocol, inputs, comparisons, metrics, discriminating observations, stop conditions, expected artifacts, cost, risk, and failure value. Do not execute first and reconstruct the plan afterward.", { capability: "experiment-design", persistWhen: "experiment-selected" }),
-      host("Execute the written plan with normal host tools. Append actual execution, raw artifact paths, observations, positive, negative, null, mixed, failed or stopped outcomes, denominator accounting, exclusions, deviations, unexpected observations, limitations, and uncertainty to the same document.", { capability: "experiment-execution", persistWhen: "experiment-executed" }),
-      updateResearchDocuments("Explain in that experiment document what the result supports, weakens, leaves unresolved, and cannot establish. Update `RESEARCH.md` only when the result materially changes the mainline, important conclusions, linked work, or next priority.")
+      readArea("experiments", "the experiment"),
+      relevantLessons,
+      host("Follow the user's actual experiment request. For a new experiment that will be executed, first choose or create one naturally named Experiment document under `experiments/` and write what it tests and how the result will be judged. For design-only work, produce an executable plan and stop before execution. For analysis of existing results, inspect and analyze those results directly. For retrospective recording, label it honestly as retrospective rather than presenting it as a prospective plan.", { capability: "experiment-design" }),
+      host("Execute only when the request calls for execution. Use normal host tools and append the actual procedure and result, material failures or deviations, denominator accounting, and interpretation evidence to the same Experiment document used for the prospective plan. For analysis-only or retrospective work, preserve the actual provenance and do not invent an execution step.", { capability: "experiment-execution" }),
+      maintainArea("experiments", "Record what the design, execution, analysis, or retrospective evidence supports and cannot establish in the relevant Experiment document when that context is worth preserving. Preserve failures, limitations, and uncertainty rather than normalizing the document into a fixed template.")
     ], clarification: commonClarification }]
   };
   if (slug === "draft") return {
     status: "artifact-work",
     modes: [{ id: "default", when: "The user requests drafting or revision of an ordinary project artifact.", steps: [
-      readResearchDocuments(),
+      readArea("claims", "the draft and its material claims"),
+      relevantLessons,
       host("Read the target and relevant project evidence, then create or revise the ordinary draft artifact with host editing tools. Keep every claim within the available evidence and retain material counter-evidence and uncertainty.", { capability: "artifact-editing" }),
       host("Run appropriate host-native validation and report remaining unsupported claims, citation gaps, and uncertainty.", { capability: "artifact-validation", readOnly: true }),
-      updateResearchDocuments("Update a linked research document only when the drafting work materially changes a research conclusion, limitation, or next priority; do not build a separate Claim database.")
+      maintainArea("claims", "Create or revise a naturally named Claim document under `claims/` only when a material claim and its support, counter-evidence, missing evidence, or cannot-say boundary deserves durable treatment. Do not build a Claim database.")
     ], clarification: commonClarification }]
   };
   if (slug === "figure") return {
     status: "artifact-work",
     modes: [{ id: "default", when: "The user requests a figure, diagram, plot, or caption.", steps: [
-      readResearchDocuments(),
+      readResearchDocuments("When existing Dove research context would materially help the requested figure, read `.dove/research/RESEARCH.md`, then the directly relevant Mission or Experiment summary, then only needed linked details. Otherwise work directly from the user's requested materials and data. Do not recursively scan the research tree."),
+      relevantLessons,
       host("Gather actual project materials and data, then create or revise the ordinary figure and caption with host-native plotting, image, or editing tools.", { capability: "figure-creation" }),
       host("Validate labels, denominators, provenance, legibility, and agreement between the figure, caption, and underlying evidence.", { capability: "figure-validation", readOnly: true }),
-      updateResearchDocuments("Link the figure from the relevant experiment, mission, or overview document only when that link improves future research recovery.")
+      updateResearchDocuments("Link the figure from the relevant Mission or Experiment detail document when that improves recovery, and naturally update that directory summary. Update `RESEARCH.md` only if the figure materially changes the mainline, conclusion, navigation, or priority.")
     ], clarification: commonClarification }]
   };
   if (slug === "review") return {
     status: "user-managed-review-document",
-    modes: [{ id: "default", when: "The user requests independent review preparation, import, or review-context inspection.", steps: [
-      readResearchDocuments(),
-      host("Select or create one readable Review Markdown. Record the review purpose, declared artifact paths, scope limits, rubric, and a self-contained prompt for a separate reviewer chosen and managed by the user. If exact version freezing matters, use an ordinary Git commit, versioned copy, or review bundle and link it; do not generate a Dove exchange ID or scientific hash.", { capability: "review-preparation", persistWhen: "review-prepared" }),
-      host("Return the declared files and prompt to the user. Never launch, impersonate, silently substitute, or certify the reviewer.", { capability: "review-handoff", readOnly: true }),
-      updateResearchDocuments("When the user supplies the actual return, append it faithfully to the same Review document together with limitations, author interpretation, and follow-up actions. Preserve the original reviewer content; do not require verdict, severity, finding IDs, or a strict import schema.")
+    modes: [{ id: "default", when: "The user requests user-managed separate review preparation, import, or review-context inspection.", steps: [
+      readArea("reviews", "the review exchange"),
+      relevantLessons,
+      host("Follow the user's actual Review request. To prepare a new review, select or create one naturally named Review Markdown under `reviews/` and record the purpose, relevant project-relative artifact paths, scope limits, useful rubric, and a self-contained prompt for a separate reviewer chosen and managed by the user. If exact version freezing matters, use an ordinary Git commit, versioned copy, or review bundle and link it. To import a returned review, locate the corresponding Review document and preserve the supplied return faithfully without reconstructing preparation. To inspect existing review context, read and report it without creating a new Review document.", { capability: "review-preparation" }),
+      host("Only when preparing a new review, return the relevant files and self-contained prompt to the user. Do not launch or substitute for the separate reviewer. When importing or inspecting, do not create a new handoff.", { capability: "review-handoff", readOnly: true }),
+      maintainArea("reviews", "When the user supplies an actual reviewer return, append it faithfully to the corresponding Review document with a clear boundary from existing text. Do not rewrite, summarize over, or normalize the original return, and do not require verdict, severity, finding IDs, or a strict schema. Add author interpretation only when the user asks for it; use Rebuttal for substantive response, revision, and follow-up work.")
     ], clarification: commonClarification }]
   };
   if (slug === "rebuttal") return {
     status: "author-side-work",
     modes: [{ id: "default", when: "The user requests author-side rebuttal or revision from review findings.", steps: [
-      readResearchDocuments(),
-      host("Read the relevant Review document and actual artifacts. Analyze each material finding against the evidence, write the response, and make requested ordinary project revisions. This remains Builder/Author work, not independent review.", { capability: "rebuttal-and-revision" }),
+      readArea("reviews", "the relevant returned review"),
+      relevantLessons,
+      host("Read the relevant Review document and actual artifacts. Analyze each material finding against the evidence, write the response, and make requested ordinary project revisions. This remains Builder/Author work rather than a separate review return.", { capability: "rebuttal-and-revision" }),
       host("Validate that each response maps to a real finding and that revisions do not overstate evidence or erase failures and uncertainty.", { capability: "artifact-validation", readOnly: true }),
-      updateResearchDocuments("Append the author response and resulting decisions to the same Review document or the directly affected research document when that context is worth preserving.")
+      maintainArea("reviews", "Append the author response, revisions, resulting decisions, unresolved issues, and follow-up to the same Review document or the directly affected research document when that context is worth preserving.")
     ], clarification: commonClarification }]
   };
   return {
     status: "advisory-markdown",
-    modes: [{ id: "default", when: "The user requests Lessons reading, remembering, or reflection.", steps: [
-      host("Use `.dove/research/LESSONS.md` as one complete, ordinary advisory Markdown document. Read it directly for a read request. For explicit remembering or reflection, preserve its useful structure and update it only with supported reusable guidance. If it does not exist and the request needs durable Lessons, create it naturally. Do not create lesson IDs, an application ledger, or treat Lessons as evidence.", { capability: "lesson-maintenance", persistWhen: "explicit-lessons-request" })
-    ], clarification: commonClarification }]
+    modes: [
+      { id: "read", when: "The user requests reading or explaining current Lessons.", steps: [
+        readResearchDocuments("Read `.dove/research/RESEARCH.md` first only when project context is needed, then read `.dove/research/lessons/LESSONS.md`, then only the linked theme documents relevant to the request. Report supported reusable guidance as fallible advice. Do not create or modify files and do not treat Lessons as evidence.")
+      ], clarification: [] },
+      { id: "maintain", when: "The user explicitly requests remembering, reflection, or durable Lessons maintenance.", steps: [
+        readResearchDocuments("Read `.dove/research/RESEARCH.md` first only when project context is needed, then `.dove/research/lessons/LESSONS.md`, then only relevant linked themes. Do not recursively scan all research files."),
+        updateResearchDocuments("Preserve useful existing structure and maintain supported reusable guidance in the relevant theme under `lessons/`, or create a naturally named Markdown file when a new theme is genuinely useful. Update `lessons/LESSONS.md` with a natural link when needed. Source explanation is optional. Do not create lesson IDs, frontmatter, an application ledger, or treat Lessons as evidence.")
+      ], clarification: commonClarification }
+    ]
   };
 }
 
 const SURFACES = [
   ["research", "Complete one bounded pass of research, synthesis, or project investigation."],
-  ["status", "Read the human-maintained research overview and report current direction and progress without writes."],
-  ["source", "Discover, read, verify, and document real sources that materially inform the research."],
-  ["experiment", "Plan and execute a real experiment while keeping plan and result in one document."],
+  ["status", "Read the human-maintained research overview and summaries without writes."],
+  ["source", "Discover, retrieve, read, verify, and document real sources that materially inform the research."],
+  ["experiment", "Design, execute, analyze, or honestly record an experiment from real evidence."],
   ["draft", "Write or revise ordinary project drafts from the available evidence."],
   ["figure", "Gather real materials and create or revise figures and captions."],
-  ["review", "Prepare and preserve a user-managed independent review in one readable document."],
+  ["review", "Prepare, import, or inspect a user-managed review in one readable document."],
   ["rebuttal", "Perform author-side rebuttal and revision from actual review findings and evidence."],
-  ["lessons", "Read or maintain the complete advisory Lessons Markdown document."],
+  ["lessons", "Read or maintain advisory Lessons themes and their summary."],
   ["auto", "Conduct explicit high-autonomy multi-round research within the documented current mainline."]
 ];
 

@@ -8,7 +8,7 @@
 
 There are no browser components. Treat each Skill, role, generated adapter, research-document convention, CLI command, lifecycle operation, and final user response as a small component over shared behavior.
 
-Do not rebuild the retired structured research architecture inside Markdown. Dove 3 has no research MCP tools, Research Format runtime, entity database, public research DTOs, or typed research-error vocabulary.
+Do not rebuild the retired structured research architecture inside Markdown. Dove 3 has no Dove-owned research-state MCP tools, Research Format runtime, entity database, public research DTOs, or typed research-error vocabulary. The external paper-acquisition MCP is optional host tooling, not research state.
 
 ## Contract Sources
 
@@ -27,7 +27,7 @@ Do not rebuild the retired structured research architecture inside Markdown. Dov
 3. A **research document** is ordinary researcher-owned Markdown.
 4. A **project artifact** is substantive host-produced work such as code, data, a draft, figure, or report.
 5. An **installation resource** is software-owned project integration recorded by manifest revision `2.0`.
-6. A **Doctor issue** is bounded local software-maintenance state.
+6. **Dove feedback** is ordinary host-maintained Markdown about explicit user feedback and actual Dove failures.
 7. An **archive** preserves original legacy JSON bytes from an explicitly authorized export.
 
 These layers do not map one-to-one. A Skill may read several documents and ordinary artifacts; several Skills may contribute to one document.
@@ -40,17 +40,17 @@ These layers do not map one-to-one. A Skill may read several documents and ordin
 - `research` completes one bounded pass; `auto` is the explicit multi-round mode.
 - Ambient routing never selects Auto.
 - Status is read-only and treats a missing overview or broken link as a natural document fact.
-- Experiment planning is written before execution, and actual results are appended to the same Experiment document.
-- Review remains user-managed, exact-path scoped, read-only for the Reviewer, and returned as Markdown.
+- Experiment follows the actual request: design-only work stops before execution, existing results are analyzed directly, retrospective records are labeled honestly, and newly executed work writes a prospective plan before appending actual results to the same Experiment document.
+- Review follows the requested preparation, faithful return import, or context inspection; the separate Reviewer remains user-managed, scoped to declared artifacts, read-only, and Markdown-returning.
 - Draft, Figure, Rebuttal, and substantive analysis create or revise ordinary project artifacts.
 - Adapters are thin generated projections and contain no direct research service dependency, shell research fallback, or duplicate document schema.
 
 ## Research Document Contract
 
-- `.dove/research/RESEARCH.md` is the recommended concise overview and navigation document, not a machine index.
-- `.dove/research/LESSONS.md` is optional, complete advisory Markdown and is never evidence.
-- Other research files use human-readable names, useful prose, and ordinary links.
-- Folders such as `missions/`, `sources/`, `experiments/`, and `reviews/` are optional organization, not stores.
+- `.dove/research/RESEARCH.md` is the concise overview and navigation document, not a machine index.
+- Each research directory owns one human-maintained summary: `MISSIONS.md`, `EXPERIMENTS.md`, `SOURCES.md`, `REVIEWS.md`, `CLAIMS.md`, or `lessons/LESSONS.md`.
+- Six package-default Lessons themes live under `lessons/`; they are fallible advisory Markdown and never evidence.
+- Other research files use human-readable names, useful prose, and ordinary links inside the corresponding directories.
 - Missions may preserve bounded goals, work, failures, conclusions, limitations, and next branches in a natural structure.
 - Sources may preserve citation details, verification notes, conditions, conflicts, and limitations.
 - Claims remain appropriately scoped prose, tables, or dedicated documents when useful; there is no Claim store.
@@ -58,31 +58,29 @@ These layers do not map one-to-one. A Skill may read several documents and ordin
 
 ## Experiment Component
 
-Use one readable Experiment document for the whole lifecycle:
+Follow the actual experiment request:
 
-1. write the prospective question, competing explanations, protocol, inputs, comparisons, metrics, discriminating observations, stop conditions, expected artifacts, cost, risk, and failure value before execution;
-2. execute with normal host tools; and
-3. append actual procedure, observations, denominators, exclusions, deviations, failures, limitations, uncertainty, and implications to that same document.
+1. for design-only work, produce an executable plan and stop before execution;
+2. for a new experiment that will be executed, write what it tests and how the result will be judged, execute with normal host tools, and append the actual result, material failures or deviations, and interpretation evidence to that same document;
+3. for analysis of existing results, work directly from their actual provenance; and
+4. for retrospective recording, label the record honestly rather than reconstructing a prospective plan.
 
-Preserve positive, negative, null, mixed, failed, and stopped outcomes. Never reconstruct the prospective plan after observing the result.
+State what the evidence supports and cannot establish.
 
 ## Review Component
 
-Use one readable Review document for the whole exchange:
+Follow the requested Review operation:
 
-1. record purpose, exact project-relative artifact paths, scope limits, rubric, and a self-contained prompt;
-2. return those declared paths and prompt to the user;
-3. let the user choose and manage the separate Reviewer;
-4. require read-only review and a Markdown return;
-5. preserve the actual user-obtained return faithfully in the same document; and
-6. record author interpretation, response, revisions, unresolved issues, and follow-up.
+1. for preparation, record purpose, relevant project-relative artifact paths, scope limits, rubric, and a self-contained prompt, then return those materials for a separate Reviewer chosen and managed by the user;
+2. for import, locate the corresponding Review document and preserve the actual user-obtained Markdown faithfully with a clear boundary from existing text; and
+3. for inspection, read and report existing Review context without creating a new document or handoff.
 
-The native Reviewer role helps separate responsibilities but does not prove reviewer identity or independence. Dove never launches, impersonates, silently substitutes, or certifies the Reviewer.
+Do not automatically mix author response or revision into import. Add author interpretation only when requested; substantive response and changes remain Rebuttal work. The native Reviewer role separates responsibility but does not prove reviewer identity or independence. Dove never launches or substitutes for the separate Reviewer.
 
 ## Primary Responsibilities
 
-- Planner defines goals, scope, evidence needs, assumptions, unknowns, alternatives, and stop conditions.
-- Builder/Author performs substantive retrieval, analysis, coding, experiments, writing, figures, revisions, and author-side rebuttal.
+- Planner clarifies the goal and evidence needed when planning is useful.
+- Builder/Author performs the substantive research, coding, experiments, writing, figures, revisions, and author-side rebuttal.
 - Reviewer reads only the exact declared artifact scope, makes no edits, and returns Markdown to the user-managed exchange.
 
 Passing checks, receiving a review, or writing a conclusion does not establish scientific correctness, completion, acceptance, or independence.
@@ -91,19 +89,27 @@ Passing checks, receiving a review, or writing a conclusion does not establish s
 
 Claude Code remains the supported project initialization path. Generated adapters for other host formats are canonical projections, not a readiness guarantee.
 
-Project initialization creates software integration and `.dove/install/manifest.json`; it does not create research content or register a research MCP server. Doctor machine state and readable `DOCTOR.md` remain under `.dove/install/` and must not become research telemetry or a scientific health score. Installation hashes protect managed bytes only.
+Project initialization creates software integration, `.dove/install/manifest.json`, and the complete default research Markdown tree in one transaction; research paths are not manifest-managed resources. Claude integration also declares only `.mcp.json#/mcpServers/dove-paper-search` and a hidden support Skill for pinned external paper acquisition. Dove does not install its runtime, write credentials, or approve project trust. Optional ordinary `DOCTOR.md` feedback about Dove itself remains under `.dove/install/`; there is no Doctor JSON state, issue lifecycle, research telemetry, or scientific health score. Installation hashes protect managed bytes only.
 
-Sync and Upgrade preserve research documents. Complete Reinstall is the confirmed destructive reset and deletes Dove research and old archives while preserving ordinary project files. `export-research` is a separately authorized one-time legacy JSON research records-to-Markdown conversion with original-byte archival and no v1 or runtime fallback.
+Project update creates each missing default file from complete package content; existing defaults preserve user bytes and receive only exact missing canonical paragraphs or navigation lines, while ordinary topic documents remain untouched. Complete Reinstall is the confirmed destructive reset: its preview shows deletions and existing files that will be replaced, then it deletes custom Dove research and old archives and rebuilds the default tree while preserving ordinary project files. `export-research` is a separately authorized one-time legacy JSON research records-to-Markdown conversion with original-byte archival, additive output into an existing default tree, and no v1 or runtime fallback.
 
 ## Review Checklist
 
-- Are Skill, role, adapter, document, project artifact, installation resource, Doctor state, and archive terms used correctly?
+- Are Skill, role, adapter, document, project artifact, installation resource, Dove feedback, and archive terms used correctly?
 - Does the host perform substantive work rather than only document maintenance?
 - Is Status strictly read-only and tolerant of absent or broken navigation?
 - Is Auto explicit-only and bounded by the documented mainline?
 - Does the same Experiment document contain plan and actual result in the correct order?
-- Does the same Review document preserve preparation, actual return, and author handling?
+- Does the corresponding Review document preserve preparation and the actual return, with author handling added only when requested?
 - Is Reviewer scope exact, read-only, user-managed, and Markdown-returning without independence claims?
 - Does research Markdown remain natural rather than becoming a disguised schema?
 - Are lifecycle, export, reinstall, and ordinary-file boundaries preserved?
 - Are the two Trellis spec trees byte-identical?
+
+## Stable Markdown and project file boundaries
+
+- Research Markdown has no format or schema version. Future organization changes use ordinary host file operations to rename, move, relink, or consolidate documents while preserving substantive content, failures, limitations, and uncertainty; they do not create a migration framework or runtime fallback.
+- Requested artifacts such as drafts, figures, experiment documents, and revisions are created or modified when the task requires them. Additional Dove research Markdown is maintained only when the workflow requires it or the work creates durable research value.
+- Dove project file operations use cross-platform Node path containment, ordinary-file and symbolic-link checks, same-directory temporary writes, expected-state rechecks, and transactional rollback; they do not require Linux `/proc` features.
+- Complete Reinstall displays the current deletion and replacement paths, defaults to No, and after confirmation rereads the project and executes the current plan.
+- `DOCTOR.md` is ordinary host-maintained Dove feedback, without JSON projection, issue lifecycle, or CLI ownership.

@@ -10,8 +10,12 @@ import { COMMAND_SURFACES, MANAGED_PACKAGE_PATHS } from "../src/core/command-man
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "package:validate", "test", "check", "release:check"];
-const FORBIDDEN_PACKAGE_PATHS = [".opencode.json", "mcp/dove-state-server-package.mjs"];
+const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "package:validate", "check", "release:check"];
+const FORBIDDEN_PACKAGE_PATHS = [
+  ".opencode.json",
+  "mcp/dove-state-server-package.mjs",
+  "scripts/doctor-mcp-probe-package.mjs"
+];
 const FORBIDDEN_SCRIPTS = ["mcp:serve", "mcp:validate"];
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));

@@ -1,13 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { PACKAGE_RUNTIME_PATHS } from "./command-manifest.mjs";
 import { PROJECT_HOST_IDS } from "./host-registry.mjs";
 import { classifyPackageCompatibility } from "./package-metadata.mjs";
-import { inspectRetiredCopiedRuntime } from "./project-legacy-installation.mjs";
-import { inspectProjectIntegration, previewProjectCompleteReinstall, previewProjectUpgrade } from "./project-installation.mjs";
+import { inspectProjectIntegration } from "./project-installation.mjs";
 import { INSTALLATION_MANIFEST_PATH, LEGACY_INSTALLATION_MANIFEST_PATH, readProjectInstallationManifest, readProjectInstallationManifestForMigration } from "./project-installation-manifest.mjs";
 import { inspectResearchDocuments } from "./research-documents.mjs";
 import { inspectProjectRoot, resolveProjectRootForSetup } from "./project-root.mjs";
@@ -38,13 +36,6 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 
-function defaultInspectPathExecutable() {
-  const result = spawnSync("which", ["dove"], { encoding: "utf8", shell: false, timeout: 5000, maxBuffer: 64 * 1024 });
-  if (result.error?.code === "ENOENT" || result.status !== 0) return { found: false, path: null, usable: false, state: "unavailable" };
-  const executablePath = String(result.stdout ?? "").split(/\r?\n/u).map((item) => item.trim()).find(Boolean) ?? null;
-  return { found: executablePath !== null, path: executablePath, usable: executablePath !== null, state: executablePath ? "found" : "unavailable" };
-}
-
 function inspectUserCli(options) {
   const fsOps = options.fsOps ?? fs;
   const packageRoot = path.resolve(options.packageRoot ?? DEFAULT_PACKAGE_ROOT);
@@ -58,25 +49,15 @@ function inspectUserCli(options) {
   const executablePath = path.resolve(options.executablePath ?? path.join(packageRoot, "bin/dove-package.mjs"));
   const executableRelative = path.relative(packageRoot, executablePath);
   const executableContained = executableRelative === "" || (!executableRelative.startsWith("..") && !path.isAbsolute(executableRelative));
-  let pathExecutable;
-  try {
-    const inspected = options.inspectPathExecutable ? options.inspectPathExecutable({ command: "dove", packageRoot, executablePath }) : defaultInspectPathExecutable();
-    pathExecutable = plainObject(inspected)
-      ? { found: inspected.found === true || typeof inspected.path === "string", path: inspected.path ?? null, usable: inspected.usable === true || inspected.found === true, state: inspected.state ?? "unknown" }
-      : { found: false, path: null, usable: false, state: "invalid-result" };
-  } catch (error) {
-    pathExecutable = { found: false, path: null, usable: false, state: "failed", message: messageFor(error) };
-  }
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
-  const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy && pathExecutable.usable;
+  const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
   return {
     healthy,
     state: healthy ? "healthy" : "unhealthy",
     package: { name: options.packageName ?? null, version: options.packageVersion ?? null, root: packageRoot },
     runtimePaths,
     executable,
-    pathExecutable,
     missing: runtimePaths.filter((entry) => !entry.healthy).map((entry) => entry.path)
   };
 }
@@ -139,7 +120,7 @@ function inspectMigration(root, options) {
   const current = lstatOrNull(fsOps, path.join(root, INSTALLATION_MANIFEST_PATH));
   const legacy = lstatOrNull(fsOps, path.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
   const migrationPath = legacy ? LEGACY_INSTALLATION_MANIFEST_PATH : current ? INSTALLATION_MANIFEST_PATH : null;
-  const result = (state, fields = {}) => ({ state, root, markerPath: migrationPath, upgrade: { ready: false, error: null, preview: null }, reinstall: { ready: false, error: null, preview: null }, ...fields });
+  const result = (state, fields = {}) => ({ state, root, markerPath: migrationPath, ...fields });
   if (current && legacy) return result("conflicting-manifests", { error: "Dove found both current and 1.0 installation manifests." });
   if (!legacy && !current) {
     const legacyDirectory = lstatOrNull(fsOps, path.join(root, ".dove-install"));
@@ -155,13 +136,7 @@ function inspectMigration(root, options) {
   }
   try {
     const manifest = readProjectInstallationManifestForMigration(root, { fsOps, hostIds: PROJECT_HOST_IDS, manifestPath: migrationPath });
-    const upgrade = (() => {
-      try { return { ready: true, error: null, preview: previewProjectUpgrade(root, options) }; } catch (error) { return { ready: false, error: messageFor(error), preview: null }; }
-    })();
-    const reinstall = (() => {
-      try { return { ready: true, error: null, preview: previewProjectCompleteReinstall(root, options) }; } catch (error) { return { ready: false, error: messageFor(error), preview: null }; }
-    })();
-    return result(upgrade.ready ? "valid-legacy" : "invalid-legacy", { error: upgrade.error, manifest: { path: migrationPath, revision: manifest.revision, package: manifest.package, runtime: manifest.runtime, hosts: [...manifest.hosts] }, upgrade, reinstall });
+    return result("valid-legacy", { error: null, manifest: { path: migrationPath, revision: manifest.revision, package: manifest.package, runtime: manifest.runtime, hosts: [...manifest.hosts] } });
   } catch (error) {
     return result("invalid-legacy", { error: messageFor(error) });
   }
@@ -185,24 +160,14 @@ function researchState(root, options) {
   }
 }
 
-function inspectLegacy(root, options) {
-  if (!root) return { state: "unavailable", detected: false, healthy: true, root: null, copiedRuntimeHits: [] };
-  try {
-    const result = inspectRetiredCopiedRuntime(root, { fsOps: options.fsOps });
-    return { ...result, healthy: !result.detected };
-  } catch (error) {
-    return { state: "invalid", detected: false, healthy: false, root, copiedRuntimeHits: [], error: messageFor(error) };
-  }
-}
-
 function actionsFor(result) {
   const actions = [];
   const upgradeReady = result.migrationInstallation.state === "valid-legacy";
-  if (upgradeReady) actions.push({ kind: "upgrade", command: "dove upgrade" });
+  if (upgradeReady) actions.push({ kind: "update", command: "dove update" });
   if (!upgradeReady && result.workspaceState.state === "previous-research-format") actions.push({ kind: "export-research", command: "dove export-research" });
   else if (!upgradeReady && result.setup.mode === "init") actions.push({ kind: "init", command: "dove init" });
-  else if (!upgradeReady && result.projectIntegration.state === "needs-sync") actions.push({ kind: "sync", command: "dove sync" });
-  else if (!upgradeReady && result.setup.mode === "reinstall") actions.push({ kind: "reinstall", command: "dove reinstall" });
+  else if (!upgradeReady && result.projectIntegration.state === "needs-sync") actions.push({ kind: "update", command: "dove update" });
+  else if (!upgradeReady && result.setup.mode === "reinstall" && result.projectIntegration.state !== "current") actions.push({ kind: "reinstall", command: "dove reinstall" });
   else if (!upgradeReady && result.setup.mode === "blocked") actions.push({ kind: "inspect", command: "dove doctor --json" });
   return actions;
 }
@@ -213,14 +178,12 @@ export function inspectProjectDoctor(start, options = {}) {
   try { setupRoot = resolveProjectRootForSetup(start, { fsOps: options.fsOps }); } catch { setupRoot = typeof start === "string" ? path.resolve(start) : null; }
   const projectIntegration = inspectIntegration(start, options);
   const safeRoot = projectIntegration.root ?? setupRoot;
-  const migrationInstallation = safeRoot ? inspectMigration(safeRoot, options) : { state: "absent", root: null, upgrade: { ready: false }, reinstall: { ready: false }, error: "Project root is unavailable." };
+  const migrationInstallation = safeRoot ? inspectMigration(safeRoot, options) : { state: "absent", root: null, error: "Project root is unavailable." };
   const workspaceState = researchState(safeRoot, options);
-  const legacyCopiedRuntime = inspectLegacy(safeRoot, options);
-  const setup = classifyProjectSetup({ projectIntegration, migrationInstallation, workspaceState, legacyCopiedRuntime });
+  const setup = classifyProjectSetup({ projectIntegration, migrationInstallation, workspaceState });
   const ready = userCli.healthy
     && projectIntegration.healthy
-    && workspaceState.healthy
-    && legacyCopiedRuntime.healthy;
+    && workspaceState.healthy;
   const result = {
     ready,
     state: ready ? "ready" : "attention",
@@ -229,7 +192,6 @@ export function inspectProjectDoctor(start, options = {}) {
     projectIntegration,
     migrationInstallation,
     workspaceState,
-    legacyCopiedRuntime,
     setup
   };
   result.actions = actionsFor(result);

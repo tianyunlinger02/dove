@@ -1,4 +1,4 @@
-import { ambientContextForPrompt, lessonsContextForPrompt } from "./ambient-policy.mjs";
+import { ambientContextForPrompt } from "./ambient-policy.mjs";
 
 function parseHookPayload(input) {
   let payload;
@@ -18,7 +18,7 @@ function parseHookPayload(input) {
 
 export function userPromptSubmitOutput(input) {
   const payload = parseHookPayload(input);
-  const additionalContext = lessonsContextForPrompt(payload.prompt) ?? ambientContextForPrompt(payload.prompt);
+  const additionalContext = ambientContextForPrompt(payload.prompt);
   if (additionalContext === null) return null;
   return {
     hookSpecificOutput: {

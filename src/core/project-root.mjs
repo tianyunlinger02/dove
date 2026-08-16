@@ -102,7 +102,7 @@ function setupEvidenceAt(root, fsOps, options = {}) {
 
 function legacyInitError(candidate, root, evidence) {
   if (evidence.relativePath === LEGACY_INSTALLATION_MANIFEST_PATH) {
-    return new Error(`Dove found a legacy project installation at ${root}. Run 'dove upgrade' to preserve its research state, or 'dove reinstall' to delete and recreate Dove state.`);
+    return new Error(`Dove found a legacy project installation at ${root}. Run 'dove update' to preserve its research state, or 'dove reinstall' to delete and recreate Dove state.`);
   }
   if (evidence.relativePath === ".dove/manifest.json") {
     return new Error(`Dove found an unsupported legacy research workspace at ${root}. Run 'dove reinstall' to delete and recreate Dove state, or 'dove doctor --json' for diagnosis.`);
@@ -142,20 +142,14 @@ export function resolveProjectRootForInit(project, options = {}) {
     const installation = installationStateAt(directory, options);
     if (index === 0) assertSafeInitCandidate(candidate, installation);
     if (installation.state === "initialized") {
-      if (index === 0) throw new Error(`Dove project integration is already initialized at ${directory}. Use dove sync instead.`);
+      if (index === 0) throw new Error(`Dove project integration is already initialized at ${directory}. Use dove update instead.`);
       throw new Error(`Refusing nested Dove project initialization at ${candidate}; an initialized project already exists at ${directory}.`);
     }
     const evidence = setupEvidenceAt(directory, fsOps, { includeResearch: index === 0 });
     if (evidence.state !== "absent") throw legacyInitError(candidate, directory, evidence);
   }
 
-  if (!explicitProject) {
-    const gitRoot = gitRootFrom(candidate, fsOps);
-    if (gitRoot !== null && gitRoot !== candidate) {
-      throw new Error(`Refusing to initialize Dove from Git project subdirectory ${candidate}. Run dove init from the Git root ${gitRoot}, or pass an explicit --project directory.`);
-    }
-  }
-  return candidate;
+  return !explicitProject && gitRoot !== null ? gitRoot : candidate;
 }
 
 function packageProjectBoundary(directory, fsOps) {

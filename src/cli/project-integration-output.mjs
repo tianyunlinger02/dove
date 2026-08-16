@@ -43,8 +43,8 @@ function hostLabels(hosts) {
 function headingFor(command, status) {
   if (command === "init" && status === "initialized") return "Dove 已在此项目启用";
   if (command === "init" && status === "already-initialized") return "Dove 已经在此项目启用";
-  if (command === "sync" && status === "unchanged") return "Dove 项目集成已是最新";
-  if (command === "sync" && status === "synchronized") return "Dove 项目集成已刷新";
+  if (command === "update" && status === "unchanged") return "Dove 项目集成与研究默认文档已是最新";
+  if (command === "update" && ["synchronized", "updated", "upgraded"].includes(status)) return "Dove 项目集成与研究默认文档已刷新";
   throw new Error(`Unsupported Dove integration presentation: ${command}/${status}.`);
 }
 
@@ -54,20 +54,21 @@ function setupLines(command, status) {
   }
   if (command === "init") {
     return [
-      "✓ 10 个 Dove 工作入口已安装",
-      "✓ Prompt Hook 与 Skills 已启用",
-      "✓ 自然语言任务入口已启用",
-      "✓ 安全的项目集成记录已建立"
+      "✓ 10 个 Dove Skill 工作入口已安装",
+      "✓ Claude 提示与停止钩子已配置",
+      "✓ 按需论文搜索、下载与阅读 MCP 已声明",
+      "✓ 完整默认研究目录与通用 Lessons 已建立",
+      "✓ 项目集成记录已建立"
     ];
   }
   return status === "unchanged"
-    ? ["✓ 工作入口、Prompt Hook 与自然语言任务入口均已是最新"]
-    : ["✓ 工作入口、Prompt Hook 与自然语言任务入口已安全刷新"];
+    ? ["✓ 工作入口、宿主接入和研究默认文档均已是最新"]
+    : ["✓ 工作入口、宿主接入和缺失的研究默认内容已刷新"];
 }
 
 export function renderProjectIntegrationResult(command, result, options = {}) {
   assertIntegrationResult(result);
-  if (!new Set(["init", "sync"]).has(command)) throw new Error(`Unsupported Dove integration command: ${command}.`);
+  if (!new Set(["init", "update"]).has(command)) throw new Error(`Unsupported Dove integration command: ${command}.`);
   for (const field of INTERNAL_FIELD_NAMES) {
     if (Object.hasOwn(options, field)) throw new Error(`Dove integration renderer does not accept internal field option: ${field}.`);
   }
@@ -92,14 +93,18 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
   lines.push(...setupLines(command, result.status).map((line) => terminalStyle(line, "green", { color })));
   lines.push("");
   if (command === "init" && result.status === "already-initialized") {
-    lines.push("如需刷新项目集成，请运行 dove sync。科研记录未被修改。");
+    lines.push("如需刷新项目集成和研究默认文档，请运行 dove update。项目中已有的研究内容不会被重排或覆盖。");
   } else {
     lines.push(command === "init"
-      ? "Markdown 研究文档尚未建立也不影响普通项目工作。进入 Claude Code 后可直接处理项目，或按需运行 /dove:research。"
-      : "研究文档未被修改。重新进入 Claude Code 后可直接使用更新后的 Dove。"
+      ? "默认研究目录与通用 Lessons 已建立；它们是可维护的 Markdown 入口，不代表科研主线、结论或任务已经完成。"
+      : "更新只创建缺失文件或精确追加缺失的默认段落和导航；项目中已有的研究内容与普通研究文档保持不变。"
     );
   }
   lines.push("");
-  lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code，直接继续项目工作；需要研究路由时可运行 /dove:research。`);
+  if (result.hosts.includes("claude")) {
+    lines.push("论文工具需要本机已有 uvx；Claude Code 首次使用 project MCP 时会请求你批准。Dove 未安装依赖、写入凭据或替你批准。");
+    lines.push("");
+  }
+  lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code，然后按需要运行 /dove:research 或其他 Dove Skill。`);
   return lines.join("\n");
 }

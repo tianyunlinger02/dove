@@ -2,7 +2,6 @@
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -92,7 +91,9 @@ async function buildAll(outputRoot, write) {
 }
 
 async function checkBuild() {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dove-package-build-"));
+  const tempBase = path.join(PACKAGE_ROOT, ".claude", "tmp", "package-build-checks");
+  fs.mkdirSync(tempBase, { recursive: true });
+  const tempRoot = fs.mkdtempSync(path.join(tempBase, "dove-package-build-"));
   try {
     const outputFiles = await buildAll(tempRoot, false);
     for (const item of EXPECTED_OUTPUTS) {

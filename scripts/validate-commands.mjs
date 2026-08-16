@@ -17,6 +17,11 @@ import {
 } from "../src/core/command-manifest.mjs";
 import { USER_RESPONSE_POLICY } from "../src/core/user-response-policy.mjs";
 import {
+  PAPER_SEARCH_MCP_FRAGMENT,
+  PAPER_SEARCH_PACKAGE_SPECIFIER,
+  PAPER_SEARCH_SUPPORT_SKILL_PATH
+} from "../src/core/paper-search-integration.mjs";
+import {
   generatedAdapterEntries,
   generatedClaudeAmbientProjectEntries,
   renderCommandAdapter
@@ -28,7 +33,7 @@ const EXPECTED_SKILL_IDS = ["dove.research", "dove.status", "dove.source", "dove
 const EXPECTED_AMBIENT_PATHS = [
   ".claude/rules/dove.md",
   ".claude/skills/dove-intake/SKILL.md",
-  ".claude/skills/dove-lessons-intake/SKILL.md"
+  PAPER_SEARCH_SUPPORT_SKILL_PATH
 ];
 
 function assertUnique(values, label) {
@@ -49,7 +54,7 @@ function assertSkillManifest() {
     assert.match(label, /^dove\.[a-z]+$/u, `${label} must remain a flat Skill id`);
     assert.equal(COMMAND_SURFACE_BY_ID[label], command, `${label} lookup must reference the canonical entry`);
     assert.equal(typeof command.summary, "string", `${label} needs a summary`);
-    assert.deepEqual(command.requiredTools, [], `${label} must not depend on a database or MCP tool`);
+    assert.deepEqual(command.requiredTools, [], `${label} must not require a database or external tool`);
     assert.ok(Array.isArray(command.guidance) && command.guidance.length <= 1, `${label} guidance must stay thin`);
     const modes = command.workflow?.modes;
     assert.ok(Array.isArray(modes) && modes.length > 0, `${label} needs workflow guidance`);
@@ -63,6 +68,8 @@ function assertSkillManifest() {
         assert.equal(typeof step.instruction, "string", `${label}/${mode.id} needs an instruction`);
         assert.equal(typeof step.readOnly, "boolean", `${label}/${mode.id} must classify read-only behavior`);
         assert.equal(typeof step.persistWhen, "string", `${label}/${mode.id} must classify persistence`);
+        if (step.readOnly) assert.equal(step.persistWhen, "never", `${label}/${mode.id} read-only steps cannot maintain research Markdown`);
+        if (step.persistWhen !== "never") assert.equal(step.capability, "research-document-maintenance", `${label}/${mode.id} persistence is only for optional research Markdown maintenance`);
         assert.equal(step.tool, undefined, `${label}/${mode.id} must not impersonate an MCP call`);
       }
     }
@@ -77,27 +84,49 @@ function assertSkillManifest() {
   assert.equal(research.workflow.status, "single-bounded-pass");
   assert.match(text(research), /Complete exactly one bounded research or project pass/iu);
   assert.match(text(research), /rather than turning Research into multi-round autonomy/iu);
+  assert.match(text(research), /When existing Dove research context would materially help/iu);
+  assert.match(text(research), /Otherwise work directly from the user's request and specified project materials/iu);
+
+  const source = COMMAND_SURFACE_BY_ID["dove.source"];
+  const sourceWork = source.workflow.modes[0].steps.find((step) => step.capability === "source-research");
+  assert.ok(sourceWork && !sourceWork.readOnly, "Source retrieval must be allowed to save useful material");
+  assert.match(sourceWork.instruction, /retrieve, save when useful, read, and verify/iu);
+  assert.match(sourceWork.instruction, /saved paths, failures/iu);
 
   const status = COMMAND_SURFACE_BY_ID["dove.status"];
   assert.ok(status.workflow.modes[0].steps.every((step) => step.readOnly), "Status must remain read-only");
-  assert.match(text(status), /If the overview is absent.*say so naturally/isu);
+  assert.match(text(status), /If an overview, summary, or link is absent.*say so naturally/isu);
 
   const experimentSteps = COMMAND_SURFACE_BY_ID["dove.experiment"].workflow.modes[0].steps;
-  const planIndex = experimentSteps.findIndex((step) => /Before execution.*write/isu.test(step.instruction));
+  const planIndex = experimentSteps.findIndex((step) => step.capability === "experiment-design");
   const runIndex = experimentSteps.findIndex((step) => step.capability === "experiment-execution");
-  assert.ok(planIndex >= 0 && runIndex > planIndex, "Experiment planning must precede execution");
-  assert.match(text(COMMAND_SURFACE_BY_ID["dove.experiment"]), /positive, negative, null, mixed, failed or stopped.*denominator/isu);
+  assert.ok(planIndex >= 0 && runIndex > planIndex, "Experiment planning must precede requested execution");
+  assert.match(COMMAND_SURFACE_BY_ID["dove.experiment"].summary, /Design, execute, analyze, or honestly record/iu);
+  assert.match(text(COMMAND_SURFACE_BY_ID["dove.experiment"]), /design-only.*stop before execution/isu);
+  assert.match(text(COMMAND_SURFACE_BY_ID["dove.experiment"]), /analysis of existing results.*directly/isu);
+  assert.match(text(COMMAND_SURFACE_BY_ID["dove.experiment"]), /retrospective.*rather than.*prospective/isu);
+  assert.match(text(COMMAND_SURFACE_BY_ID["dove.experiment"]), /Execute only when the request calls for execution/iu);
+  assert.match(text(COMMAND_SURFACE_BY_ID["dove.experiment"]), /actual procedure and result.*failures or deviations.*interpretation evidence/isu);
+  assert.match(text(COMMAND_SURFACE_BY_ID["dove.experiment"]), /supports and cannot establish/isu);
 
   const review = COMMAND_SURFACE_BY_ID["dove.review"];
+  const reviewText = text(review);
   assert.equal(review.workflow.status, "user-managed-review-document");
-  assert.match(text(review), /separate reviewer chosen and managed by the user/iu);
-  assert.match(text(review), /same Review document/iu);
-  assert.doesNotMatch(text(review), /ReviewExchange|reviewId|findingId|verdictEnum|strictImportSchema/u);
+  assert.match(reviewText, /separate reviewer chosen and managed by the user/iu);
+  assert.match(reviewText, /To prepare a new review/iu);
+  assert.match(reviewText, /To import a returned review.*corresponding Review document.*without reconstructing preparation/isu);
+  assert.match(reviewText, /To inspect existing review context.*without creating a new Review document/isu);
+  assert.match(reviewText, /When importing or inspecting, do not create a new handoff/iu);
+  assert.match(reviewText, /Add author interpretation only when the user asks for it.*use Rebuttal for substantive response, revision, and follow-up work/isu);
+  assert.doesNotMatch(reviewText, /ReviewExchange|reviewId|findingId|verdictEnum|strictImportSchema/u);
 
   const auto = COMMAND_SURFACE_BY_ID["dove.auto"];
   assert.equal(auto.workflow.status, "explicit-multi-round-autonomy");
   assert.match(text(auto), /Require an existing.*RESEARCH\.md/isu);
-  assert.match(text(auto), /recommendation.*report the block.*stop/isu);
+  assert.match(text(auto), /report that boundary and stop before autonomous work/isu);
+  assert.match(text(auto), /create a concise ordinary project recommendation only if the user requested a saved artifact/isu);
+  assert.match(text(auto), /Do not interrupt ordinary exploration merely to log a round/iu);
+  assert.doesNotMatch(text(auto), /After each material round/iu);
   assert.match(text(auto), /without a default round count/iu);
   assert.doesNotMatch(text(auto), /task database|execution ledger.*create/iu);
 }
@@ -111,15 +140,14 @@ function assertHostPolicy() {
   });
   assert.deepEqual(HOST_ADAPTER_POLICY.privacy, { exposePrivateProtocol: false });
   const policy = HOST_ADAPTER_POLICY.adapterBullets.join("\n");
-  assert.match(policy, /researcher-owned documents.*not a database/isu);
   assert.match(policy, /host file and research tools directly/iu);
+  assert.match(policy, /researcher-owned context, not a database/iu);
   assert.match(policy, /failures.*limitations.*uncertainty.*scientific authority/isu);
 
-  assert.ok(Array.isArray(USER_RESPONSE_POLICY) && USER_RESPONSE_POLICY.length > 0 && USER_RESPONSE_POLICY.length <= 3);
+  assert.ok(Array.isArray(USER_RESPONSE_POLICY) && USER_RESPONSE_POLICY.length > 0 && USER_RESPONSE_POLICY.length <= 2);
   const responseText = USER_RESPONSE_POLICY.join("\n");
-  assert.match(responseText, /natural, clear Chinese.*user requests another language or format/isu);
-  assert.match(responseText, /user's perspective.*faithful synthesis/isu);
-  assert.match(responseText, /internal workflow.*structured machine data.*response outline/isu);
+  assert.match(responseText, /user's requested language and format/iu);
+  assert.match(responseText, /failures.*limitations.*uncertainty.*scientific proof/isu);
 }
 
 function assertGeneratedAdapters() {
@@ -132,8 +160,15 @@ function assertGeneratedAdapters() {
     assert.match(entry.content, /^---\n/um);
     assert.match(entry.content, /## Internal workflow\n\nInternal guidance only; never use this workflow as the final report outline\./u);
     assert.doesNotMatch(entry.content, /Dove MCP tools|Call `(?:query|manage)_dove|semantic ID/iu);
+    assert.doesNotMatch(entry.content, /No file write is required|Persist only when:/u);
+    if (entry.command.id === "dove.status") assert.match(entry.content, /This step is read-only; do not create or modify files\./u);
+    if (["dove.draft", "dove.figure"].includes(entry.command.id)) {
+      const artifactLine = entry.content.split("\n").find((line) => /artifact-editing|figure-creation/u.test(line));
+      assert.ok(artifactLine);
+      assert.doesNotMatch(artifactLine, /read-only|do not create or modify files/iu);
+    }
     for (const bullet of HOST_ADAPTER_POLICY.adapterBullets) assert.ok(entry.content.includes(bullet));
-    for (const bullet of USER_RESPONSE_POLICY) assert.equal(entry.content.split(bullet).length - 1, 1);
+    assert.doesNotMatch(entry.content, /## Response policy/u);
   }
 }
 
@@ -143,17 +178,28 @@ function assertAmbientRouting() {
   const byPath = new Map(entries.map((entry) => [entry.relativePath, entry.content]));
   const rule = byPath.get(".claude/rules/dove.md");
   const intake = byPath.get(".claude/skills/dove-intake/SKILL.md");
-  const lessons = byPath.get(".claude/skills/dove-lessons-intake/SKILL.md");
+  const paperSearch = byPath.get(PAPER_SEARCH_SUPPORT_SKILL_PATH);
   const ordinary = `${rule}\n${intake}`;
   assert.match(ordinary, /zero-write/iu);
-  assert.match(ordinary, /smallest ambient-eligible Skill/iu);
-  assert.match(ordinary, /Auto is explicit-only.*(?:cannot select|never select)/isu);
-  assert.match(ordinary, /Do not create a research document merely because/iu);
-  assert.match(ordinary, /host file and research tools directly/iu);
-  assert.match(ordinary, /\.dove\/research\/RESEARCH\.md/u);
-  assert.doesNotMatch(`${ordinary}\n${lessons}`, /manage_dove|public Dove MCP|semantic ID/iu);
-  assert.match(lessons, /\.dove\/research\/LESSONS\.md/u);
-  assert.match(lessons, /Do not introduce IDs.*schema.*database/isu);
+  assert.match(ordinary, /smallest suitable Dove Skill/iu);
+  assert.match(ordinary, /Never select Auto/iu);
+  assert.match(rule, /feedback, criticism, correction, or an improvement request about Dove itself/iu);
+  assert.match(rule, /append a concise natural-language note to `\.dove\/install\/DOCTOR\.md`/iu);
+  assert.match(rule, /Do not create IDs, statuses, severity fields, counters, frontmatter, or a fixed template/iu);
+  assert.match(rule, /Do not record ordinary research uncertainty, project bugs, external tool failures, or general conversation/iu);
+  assert.match(rule, /Do not ask the user to run `dove doctor`/iu);
+  assert.match(intake, /research, status, source, experiment, draft, figure, review, rebuttal, or lessons/iu);
+  assert.doesNotMatch(ordinary, /dove-lessons-intake|manage_dove|public Dove MCP|semantic ID/iu);
+  assert.match(paperSearch, /user-invocable: false/u);
+  assert.match(paperSearch, /use_scihub: false/u);
+  assert.match(paperSearch, /do not install dependencies or use a CLI or shell fallback/iu);
+  assert.doesNotMatch(paperSearch, /uv tool install|pip install|download_scihub/iu);
+  assert.deepEqual(PAPER_SEARCH_MCP_FRAGMENT, {
+    type: "stdio",
+    command: "uvx",
+    args: ["--from", PAPER_SEARCH_PACKAGE_SPECIFIER, "paper-search-mcp"]
+  });
+  assert.equal(Object.hasOwn(PAPER_SEARCH_MCP_FRAGMENT, "env"), false);
 }
 
 function assertPackagedAgentPolicy() {

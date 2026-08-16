@@ -1,15 +1,11 @@
 ---
 name: dove-status
-description: "Read the human-maintained research overview and report current direction and progress without writes."
+description: "Read the human-maintained research overview and summaries without writes."
 ---
 
 # Dove Status
 
-Read the human-maintained research overview and report current direction and progress without writes.
-
-## Use when
-
-- Read the human-maintained research overview and report current direction and progress without writes.
+Read the human-maintained research overview and summaries without writes.
 
 ## Examples
 
@@ -20,16 +16,10 @@ Read the human-maintained research overview and report current direction and pro
 Internal guidance only; never use this workflow as the final report outline.
 
 - **The user requests current Dove research status.**
-  1. Use host tools (read-only; research-document-reading). Read `.dove/research/RESEARCH.md` once when it exists, then read only the linked documents needed to resolve material ambiguity. Report the current mainline, real progress, failures, limitations, uncertainty, and next priorities. If the overview is absent or a link is missing, say so naturally; do not infer a database state or modify files. No file write is required.
+  1. Use host tools (read-only; research-document-reading). Read `.dove/research/RESEARCH.md` once when it exists, then read the one or more directory summaries needed for the question, then only directly linked details needed to resolve material ambiguity. Do not recursively scan the research tree. Report the current mainline, real progress, failures, limitations, uncertainty, and next priorities. If an overview, summary, or link is absent, say so naturally; do not infer a database state or modify files. This step is read-only; do not create or modify files.
+  2. Use host tools (read-only; lesson-reading). When reusable guidance may help the current task, read `.dove/research/lessons/LESSONS.md`, then only the naturally linked theme documents directly relevant to the work. Do not read unrelated themes or give any one Lesson special treatment. Treat Lessons as fallible advice, never as evidence or authority. This step is read-only; do not create or modify files.
 
 ## Dove capsule
 
-- Treat `.dove/research/RESEARCH.md` and its linked Markdown as ordinary researcher-owned documents, not a database or machine authority.
-- Use host file and research tools directly. Read the overview first when it exists, then only the linked documents and project artifacts relevant to the task.
-- Keep failures, adverse evidence, limitations, and uncertainty visible; tests, host output, and any review remain bounded evidence rather than scientific authority.
-
-## Response policy
-
-- Use natural, clear Chinese unless the user requests another language or format; explain internal terms only when needed.
-- Before sending, reorganize from the user's perspective into a faithful synthesis. Do not use the internal workflow or structured machine data as the response outline; remove repetition and preserve material failures, limits, uncertainty, and blockers.
-- Requested research artifacts and strict machine-readable contracts take priority; otherwise fit the response to the task, not a fixed template.
+- Use host file and research tools directly. Research Markdown is ordinary researcher-owned context, not a database.
+- Keep material failures, limitations, and uncertainty visible; model output, tests, and review are bounded evidence rather than scientific authority.

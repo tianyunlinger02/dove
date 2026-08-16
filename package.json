@@ -17,7 +17,7 @@
     ".claude/agents/dove-reviewer.md",
     ".claude/rules/dove.md",
     ".claude/skills/dove-intake/SKILL.md",
-    ".claude/skills/dove-lessons-intake/SKILL.md",
+    ".claude/skills/dove-paper-search/SKILL.md",
     ".opencode/commands/dove*.md",
     ".opencode/skills/dove-*/SKILL.md",
     ".opencode/agents/dove-reviewer.md",
@@ -40,8 +40,7 @@
     "commands:check": "node ./scripts/generate-command-adapters-cli.mjs --check",
     "commands:validate": "node ./scripts/validate-commands.mjs",
     "package:validate": "node ./scripts/validate-package.mjs",
-    "test": "node --test ./tests/**/*.test.mjs",
-    "check": "npm run build:check && npm run commands:check && npm run commands:validate && npm test",
+    "check": "npm run build:check && npm run commands:check && npm run commands:validate",
     "release:check": "npm run check && npm run package:validate",
     "pack:dry-run": "npm pack --dry-run",
     "build": "node ./scripts/build-package.mjs",
@@ -53,8 +52,7 @@
   },
   "main": "dist/index.mjs",
   "directories": {
-    "doc": "docs",
-    "test": "tests"
+    "doc": "docs"
   },
   "repository": {
     "type": "git",

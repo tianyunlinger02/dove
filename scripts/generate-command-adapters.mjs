@@ -6,12 +6,14 @@ import { writeFileSetTransaction } from "../src/core/file-set-transaction.mjs";
 import {
   DOVE_CLAUDE_AMBIENT_RULE_PATH,
   DOVE_CLAUDE_AMBIENT_SKILL_PATH,
-  DOVE_CLAUDE_LESSONS_SKILL_PATH,
   renderClaudeAmbientRule,
-  renderClaudeAmbientSkill,
-  renderClaudeLessonsIntakeSkill
+  renderClaudeAmbientSkill
 } from "../src/core/ambient-policy.mjs";
 import { generatedRoleDefinitionEntries } from "../src/core/role-definitions.mjs";
+import {
+  PAPER_SEARCH_SUPPORT_SKILL_PATH,
+  renderPaperSearchSupportSkill
+} from "../src/core/paper-search-integration.mjs";
 import {
   COMMAND_SURFACES,
   HOST_ADAPTER_POLICY,
@@ -19,7 +21,6 @@ import {
   adapterPathForCommand,
   hostCommandSlug
 } from "../src/core/command-manifest.mjs";
-import { USER_RESPONSE_POLICY } from "../src/core/user-response-policy.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,10 +36,6 @@ function yamlString(value) {
 
 function unique(values) {
   return Array.from(new Set(values.filter(Boolean)));
-}
-
-function dailyUseBullets(command) {
-  return [command.summary];
 }
 
 function exampleBullets(command, hostId = null) {
@@ -69,10 +66,12 @@ function renderWorkflow(command) {
   for (const item of modes) {
     lines.push(`- **${item.when}**`);
     for (const [index, step] of item.steps.entries()) {
-      const persistence = step.persistWhen && step.persistWhen !== "never"
-        ? ` Persist only when: ${step.persistWhen}.`
-        : " No file write is required.";
-      lines.push(`  ${index + 1}. Use host tools (${step.readOnly ? "read-only" : "work"}; ${step.capability}). ${step.instruction}${persistence}`);
+      const writeBoundary = step.readOnly
+        ? " This step is read-only; do not create or modify files."
+        : step.persistWhen && step.persistWhen !== "never"
+          ? ` Maintain Dove research Markdown only when ${step.persistWhen}.`
+          : "";
+      lines.push(`  ${index + 1}. Use host tools (${step.readOnly ? "read-only" : "work"}; ${step.capability}). ${step.instruction}${writeBoundary}`);
     }
     for (const clarification of item.clarification ?? []) {
       lines.push(`  - Clarification: ${clarification}`);
@@ -90,10 +89,6 @@ function renderCapsule() {
   return `## Dove capsule\n\n${renderBullets(HOST_ADAPTER_POLICY.adapterBullets)}`;
 }
 
-function renderResponsePolicy() {
-  return `## Response policy\n\n${renderBullets(USER_RESPONSE_POLICY)}`;
-}
-
 function renderExamples(command, hostId = null) {
   const examples = exampleBullets(command, hostId);
   return examples.length > 0 ? `\n\n## Examples\n\n${examples.map((example) => `- \`${example}\``).join("\n")}` : "";
@@ -101,13 +96,11 @@ function renderExamples(command, hostId = null) {
 
 function renderBody(command, heading, hostId = null) {
   const purpose = command.summary;
-  const dailyUse = renderBullets(dailyUseBullets(command));
   const examples = renderExamples(command, hostId);
   const workflow = renderWorkflow(command);
   const guidance = renderGuidance(command);
   const capsule = renderCapsule();
-  const responsePolicy = renderResponsePolicy();
-  return `# ${heading}\n\n${purpose}\n\n## Use when\n\n${dailyUse}${examples}\n\n${workflow}${guidance ? `\n\n${guidance}` : ""}\n\n${capsule}\n\n${responsePolicy}\n`;
+  return `# ${heading}\n\n${purpose}${examples}\n\n${workflow}${guidance ? `\n\n${guidance}` : ""}\n\n${capsule}\n`;
 }
 
 function renderFrontmatter(command, fields = {}) {
@@ -153,7 +146,7 @@ export function generatedClaudeAmbientProjectEntries() {
   return [
     { relativePath: DOVE_CLAUDE_AMBIENT_RULE_PATH, content: renderClaudeAmbientRule() },
     { relativePath: DOVE_CLAUDE_AMBIENT_SKILL_PATH, content: renderClaudeAmbientSkill() },
-    { relativePath: DOVE_CLAUDE_LESSONS_SKILL_PATH, content: renderClaudeLessonsIntakeSkill() }
+    { relativePath: PAPER_SEARCH_SUPPORT_SKILL_PATH, content: renderPaperSearchSupportSkill() }
   ];
 }
 
@@ -229,7 +222,7 @@ function existingGeneratedAdapterPaths(root) {
     ...listFiles(root, ".agents/skills", (relativePath) => /^\.agents\/skills\/dove-[^/]+\/SKILL\.md$/.test(relativePath)),
     ...listFiles(root, ".claude/rules", (relativePath) => relativePath === ".claude/rules/dove.md"),
     ...listFiles(root, ".claude/skills/dove-intake", (relativePath) => relativePath === ".claude/skills/dove-intake/SKILL.md"),
-    ...listFiles(root, ".claude/skills/dove-lessons-intake", (relativePath) => relativePath === ".claude/skills/dove-lessons-intake/SKILL.md")
+    ...listFiles(root, ".claude/skills/dove-paper-search", (relativePath) => relativePath === PAPER_SEARCH_SUPPORT_SKILL_PATH)
   ]).sort();
 }
 

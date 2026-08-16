@@ -2,8 +2,17 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { openAnchoredFilesystem } from "./anchored-filesystem.mjs";
+import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
+import {
+  IMPORTED_LESSONS_LINK,
+  RESEARCH_DEFAULT_FILE_PATHS,
+  RESEARCH_DEFAULT_PATHS,
+  appendExactMarkdownBlocks,
+  appendExactMarkdownBytes,
+  appendExactMarkdownLines,
+  prepareResearchDefaults
+} from "./research-defaults.mjs";
 import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 
 const V2_FORMAT = "dove-research-v2";
@@ -59,6 +68,14 @@ function fileState(anchor, relativePath) {
   if (stat.isDirectory()) return { exists: true, type: "directory", sha256: null, mode: stat.mode & 0o7777 };
   if (!stat.isFile()) throw new Error(`${relativePath} must be a regular file or directory.`);
   return { exists: true, type: "file", sha256: crypto.createHash("sha256").update(anchor.readFile(relativePath)).digest("hex"), mode: stat.mode & 0o7777 };
+}
+
+function expectedTransactionState(state) {
+  if (state.exists) {
+    if (state.type !== "file") throw new Error("Research Markdown export targets must be absent or regular files.");
+    return { exists: true, type: "file", sha256: state.sha256, mode: state.mode };
+  }
+  return { exists: false, type: "absent", sha256: null, mode: null };
 }
 
 function readRequired(anchor, relativePath) {
@@ -375,10 +392,10 @@ function validateV2Records(workspace, raw) {
 }
 
 function directoryDeleteEntries(anchor) {
-  return [...RECORD_DIRECTORY_PATHS].reverse().flatMap((relativePath) => {
-    const state = fileState(anchor, relativePath);
-    return state.exists ? [{ relativePath, state }] : [];
-  });
+  return [...RECORD_DIRECTORY_PATHS].reverse().map((relativePath) => ({
+    relativePath,
+    state: fileState(anchor, relativePath)
+  }));
 }
 
 function valueText(value) {
@@ -476,82 +493,200 @@ function relativeLink(from, to) {
 export function previewResearchExport(start, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const root = canonicalRoot(start, fsOps);
-  const anchor = openAnchoredFilesystem(root, { ...options, fsOps });
+  const anchor = openRootedFilesystem(root, { ...options, fsOps });
+  const required = new Map(REQUIRED_FILES.map((relativePath) => [relativePath, readRequired(anchor, relativePath)]));
+  const marker = strictJson(required.get(".dove/format.json"));
+  if (!marker || marker.format !== V2_FORMAT || Object.keys(marker).length !== 1) throw new Error(`Research export accepts only an exact ${V2_FORMAT} marker.`);
+  const workspace = strictJson(required.get(".dove/workspace.json"));
+  const lessonsBytes = required.get(".dove/LESSONS.md").bytes;
+  let lessonsText;
   try {
-    const required = new Map(REQUIRED_FILES.map((relativePath) => [relativePath, readRequired(anchor, relativePath)]));
-    const marker = strictJson(required.get(".dove/format.json"));
-    if (!marker || marker.format !== V2_FORMAT || Object.keys(marker).length !== 1) throw new Error(`Research export accepts only an exact ${V2_FORMAT} marker.`);
-    const workspace = strictJson(required.get(".dove/workspace.json"));
-    const lessonsBytes = required.get(".dove/LESSONS.md").bytes;
-    new TextDecoder("utf-8", { fatal: true }).decode(lessonsBytes);
-
-    const raw = Object.fromEntries(RECORD_DIRECTORIES.map(([directory, key]) => [key, listJson(anchor, `.dove/${directory}`).map((file) => ({ file, value: strictJson(file) }))]));
-    validateV2Records(workspace, raw);
-    const archiveStamp = timestamp(options.now);
-    const archiveDirectory = `${ARCHIVE_ROOT}/research-format-v2-${archiveStamp}`;
-    if (fileState(anchor, archiveDirectory).exists) throw new Error(`Research export archive already exists: ${archiveDirectory}.`);
-    if (fileState(anchor, NEW_ROOT).exists) throw new Error(`${NEW_ROOT} already exists; review or move it before exporting legacy JSON research state.`);
-
-    const used = new Set();
-    const documents = [];
-    const links = [];
-    const directions = [];
-    const add = (directory, value, fallback, content, collection = links) => {
-      const target = uniquePath(`${NEW_ROOT}/${directory}`, readableName(value, fallback), used);
-      documents.push({ relativePath: target, content });
-      collection.push({ label: readableName(value, fallback), link: relativeLink(`${NEW_ROOT}/RESEARCH.md`, target) });
-      return target;
-    };
-
-    const conclusionByMission = new Map(raw.missions.filter((entry) => entry.file.relativePath.endsWith(".conclusion.json")).map((entry) => [entry.value?.missionId, entry.value]));
-    for (const entry of raw.missions.filter((item) => !item.file.relativePath.endsWith(".conclusion.json"))) add("missions", entry.value, "Mission", renderMission(entry.value, conclusionByMission.get(entry.value?.missionId)));
-    const resultByExperiment = new Map(raw.experiments.filter((entry) => entry.file.relativePath.endsWith(".result.json")).map((entry) => [entry.value?.experimentId, entry.value]));
-    for (const entry of raw.experiments.filter((item) => item.file.relativePath.endsWith(".plan.json"))) add("experiments", entry.value, "Experiment", renderExperiment(entry.value, resultByExperiment.get(entry.value?.experimentId)));
-    for (const entry of raw.sources) add("sources", entry.value, "Source", renderSource(entry.value));
-    for (const entry of raw.claims) add("claims", entry.value, "Claim", renderClaim(entry.value));
-    for (const entry of raw.directionDecisions) add("missions", entry.value, "Direction-change", renderDirection(entry.value), directions);
-    const reviewByExchange = new Map(raw.reviews.map((entry) => [entry.value?.exchangeId ?? entry.value?.reviewId, entry.value]));
-    const exchangeIds = new Set();
-    for (const entry of raw.reviewExchanges) { exchangeIds.add(entry.value?.exchangeId); add("reviews", entry.value, "Review", renderReview(entry.value, reviewByExchange.get(entry.value?.exchangeId))); }
-    for (const entry of raw.reviews.filter((item) => !exchangeIds.has(item.value?.exchangeId ?? item.value?.reviewId))) add("reviews", entry.value, "Review", renderReview(null, entry.value));
-
-    documents.unshift({ relativePath: `${NEW_ROOT}/LESSONS.md`, content: lessonsBytes });
-    documents.unshift({ relativePath: `${NEW_ROOT}/RESEARCH.md`, content: overview(workspace, links, directions) });
-
-    const oldFiles = [...required.values(), ...Object.values(raw).flat().map((entry) => entry.file)];
-    const oldDirectories = directoryDeleteEntries(anchor);
-    const archiveFiles = oldFiles.map((file) => ({ relativePath: `${archiveDirectory}/${file.relativePath.slice(`${OLD_ROOT}/`.length)}`, content: file.bytes }));
-    return {
-      status: "ready",
-      action: "export-research",
-      target: root,
-      from: V2_FORMAT,
-      to: "markdown",
-      researchDirectory: NEW_ROOT,
-      archiveDirectory,
-      writtenPaths: [...documents.map((entry) => entry.relativePath), ...archiveFiles.map((entry) => entry.relativePath)],
-      archivedPaths: archiveFiles.map((entry) => entry.relativePath),
-      plan: {
-        documents,
-        archiveFiles,
-        sourceFiles: oldFiles.map((file) => ({ relativePath: file.relativePath, state: file.state })),
-        sourceDirectories: oldDirectories
-      }
-    };
-  } finally {
-    anchor.close();
+    lessonsText = new TextDecoder("utf-8", { fatal: true }).decode(lessonsBytes);
+  } catch (error) {
+    throw new Error(".dove/LESSONS.md must contain valid UTF-8 Markdown.", { cause: error });
   }
-}
+  if (lessonsText.includes("\0")) throw new Error(".dove/LESSONS.md contains null bytes.");
 
+  const raw = Object.fromEntries(RECORD_DIRECTORIES.map(([directory, key]) => [key, listJson(anchor, `.dove/${directory}`).map((file) => ({ file, value: strictJson(file) }))]));
+  validateV2Records(workspace, raw);
+  const archiveStamp = timestamp(options.now);
+  const archiveDirectory = `${ARCHIVE_ROOT}/research-format-v2-${archiveStamp}`;
+  if (fileState(anchor, archiveDirectory).exists) throw new Error(`Research export archive already exists: ${archiveDirectory}.`);
+  const researchRootState = fileState(anchor, NEW_ROOT);
+  if (researchRootState.exists && researchRootState.type !== "directory") throw new Error(`${NEW_ROOT} must be a real directory when legacy research is exported additively.`);
+
+  const defaults = prepareResearchDefaults(root, {
+    ...options,
+    fsOps,
+    label: "Dove research export defaults",
+    additionalLessonTexts: [lessonsText]
+  });
+  const used = new Set(RESEARCH_DEFAULT_FILE_PATHS);
+  if (researchRootState.exists) {
+    const targetDirectories = new Set(RECORD_DIRECTORIES.map(([directory]) => (
+      directory === "review-exchanges" ? "reviews" : directory === "direction-decisions" ? "missions" : directory
+    )));
+    for (const targetDirectory of targetDirectories) {
+      const relativeDirectory = `${NEW_ROOT}/${targetDirectory}`;
+      const directoryState = fileState(anchor, relativeDirectory);
+      if (!directoryState.exists) continue;
+      if (directoryState.type !== "directory") throw new Error(`${relativeDirectory} must be a real directory when legacy research is exported additively.`);
+      for (const entry of anchor.readdir(relativeDirectory, { withFileTypes: true })) {
+        const relativePath = `${relativeDirectory}/${entry.name}`;
+        if (entry.isSymbolicLink()) throw new Error(`${relativePath} must not be a symbolic link.`);
+        if (entry.isFile() || entry.isDirectory()) used.add(relativePath);
+        else throw new Error(`${relativePath} has an unsupported file type.`);
+      }
+    }
+  }
+  const documents = [];
+  const links = [];
+  const directions = [];
+  const add = (directory, value, fallback, content, collection = links) => {
+    const target = uniquePath(`${NEW_ROOT}/${directory}`, readableName(value, fallback), used);
+    documents.push({ relativePath: target, content });
+    collection.push({
+      label: readableName(value, fallback),
+      target,
+      link: relativeLink(`${NEW_ROOT}/RESEARCH.md`, target)
+    });
+    return target;
+  };
+
+  const conclusionByMission = new Map(raw.missions.filter((entry) => entry.file.relativePath.endsWith(".conclusion.json")).map((entry) => [entry.value?.missionId, entry.value]));
+  for (const entry of raw.missions.filter((item) => !item.file.relativePath.endsWith(".conclusion.json"))) add("missions", entry.value, "Mission", renderMission(entry.value, conclusionByMission.get(entry.value?.missionId)));
+  const resultByExperiment = new Map(raw.experiments.filter((entry) => entry.file.relativePath.endsWith(".result.json")).map((entry) => [entry.value?.experimentId, entry.value]));
+  for (const entry of raw.experiments.filter((item) => item.file.relativePath.endsWith(".plan.json"))) add("experiments", entry.value, "Experiment", renderExperiment(entry.value, resultByExperiment.get(entry.value?.experimentId)));
+  for (const entry of raw.sources) add("sources", entry.value, "Source", renderSource(entry.value));
+  for (const entry of raw.claims) add("claims", entry.value, "Claim", renderClaim(entry.value));
+  for (const entry of raw.directionDecisions) add("missions", entry.value, "Direction-change", renderDirection(entry.value), directions);
+  const reviewByExchange = new Map(raw.reviews.map((entry) => [entry.value?.exchangeId ?? entry.value?.reviewId, entry.value]));
+  const exchangeIds = new Set();
+  for (const entry of raw.reviewExchanges) { exchangeIds.add(entry.value?.exchangeId); add("reviews", entry.value, "Review", renderReview(entry.value, reviewByExchange.get(entry.value?.exchangeId))); }
+  for (const entry of raw.reviews.filter((item) => !exchangeIds.has(item.value?.exchangeId ?? item.value?.reviewId))) add("reviews", entry.value, "Review", renderReview(null, entry.value));
+
+  const desiredWrites = new Map(defaults.plan.writes);
+  const desiredDeletes = new Set(defaults.plan.deletes);
+  const stateFor = (relativePath) => defaults.snapshot.states.get(relativePath) ?? {
+    exists: false,
+    type: "absent",
+    bytes: null,
+    text: null,
+    sha256: null,
+    mode: null
+  };
+  const currentText = (relativePath) => desiredWrites.has(relativePath)
+    ? new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(desiredWrites.get(relativePath))
+    : stateFor(relativePath).text;
+  const setDesired = (relativePath, content) => {
+    const bytes = Buffer.isBuffer(content) ? Buffer.from(content) : Buffer.from(String(content), "utf8");
+    const state = stateFor(relativePath);
+    if (state.exists && state.bytes.equals(bytes)) desiredWrites.delete(relativePath);
+    else desiredWrites.set(relativePath, bytes);
+  };
+
+  const overviewPath = RESEARCH_DEFAULT_PATHS.overview;
+  const exportedOverview = overview(workspace, links, directions);
+  setDesired(
+    overviewPath,
+    appendExactMarkdownBlocks(currentText(overviewPath) ?? "", [exportedOverview])
+  );
+
+  const summaryLinks = new Map([
+    ["missions", []],
+    ["experiments", []],
+    ["sources", []],
+    ["reviews", []],
+    ["claims", []]
+  ]);
+  for (const link of [...links, ...directions]) {
+    const directory = path.posix.basename(path.posix.dirname(link.target));
+    summaryLinks.get(directory)?.push(`- [${link.label}](${relativeLink(RESEARCH_DEFAULT_PATHS[`${directory}Summary`], link.target)})`);
+  }
+  for (const [directory, lines] of summaryLinks) {
+    if (lines.length === 0) continue;
+    const summaryPath = RESEARCH_DEFAULT_PATHS[`${directory}Summary`];
+    setDesired(
+      summaryPath,
+      appendExactMarkdownLines(currentText(summaryPath) ?? "", "## Imported legacy documents", lines)
+    );
+  }
+
+  const importedLessonsPath = RESEARCH_DEFAULT_PATHS.importedLessons;
+  const importedState = stateFor(importedLessonsPath);
+  if (!importedState.exists) setDesired(importedLessonsPath, lessonsBytes);
+  else setDesired(importedLessonsPath, appendExactMarkdownBytes(importedState.bytes, lessonsBytes));
+  const lessonsSummaryPath = RESEARCH_DEFAULT_PATHS.lessonsSummary;
+  setDesired(
+    lessonsSummaryPath,
+    appendExactMarkdownLines(currentText(lessonsSummaryPath) ?? "", "## Imported guidance", [IMPORTED_LESSONS_LINK])
+  );
+
+  documents.unshift(...[...desiredWrites.entries()].map(([relativePath, content]) => ({
+    relativePath,
+    content,
+    expectedState: stateFor(relativePath)
+  })));
+
+  const oldFiles = [...required.values(), ...Object.values(raw).flat().map((entry) => entry.file)];
+  const oldDirectories = directoryDeleteEntries(anchor);
+  const archiveFiles = oldFiles.map((file) => ({ relativePath: `${archiveDirectory}/${file.relativePath.slice(`${OLD_ROOT}/`.length)}`, content: file.bytes }));
+  return {
+    status: "ready",
+    action: "export-research",
+    target: root,
+    from: V2_FORMAT,
+    to: "markdown",
+    researchDirectory: NEW_ROOT,
+    archiveDirectory,
+    writtenPaths: [...documents.map((entry) => entry.relativePath), ...archiveFiles.map((entry) => entry.relativePath)],
+    archivedPaths: archiveFiles.map((entry) => entry.relativePath),
+    plan: {
+      documents,
+      researchDeletes: [...desiredDeletes].map((relativePath) => ({
+        relativePath,
+        state: stateFor(relativePath)
+      })),
+      archiveFiles,
+      sourceFiles: oldFiles.map((file) => ({ relativePath: file.relativePath, state: file.state })),
+      sourceDirectories: oldDirectories
+    }
+  };
+}
 export function exportResearch(start, options = {}) {
   if (options.confirmed !== true) throw new Error("Research export requires confirmed: true after preview.");
   const preview = previewResearchExport(start, options);
   const entries = [
-    ...preview.plan.documents.map((entry) => ({ root: preview.target, relativePath: entry.relativePath, content: entry.content, force: false, expectedState: { exists: false, type: "absent", sha256: null, mode: null }, label: "Research Markdown export" })),
+    ...preview.plan.documents.map((entry) => ({
+      root: preview.target,
+      relativePath: entry.relativePath,
+      content: entry.content,
+      force: entry.expectedState?.exists === true,
+      expectedState: expectedTransactionState(entry.expectedState ?? { exists: false }),
+      label: "Research Markdown export"
+    })),
+    ...preview.plan.researchDeletes.map((entry) => ({
+      root: preview.target,
+      relativePath: entry.relativePath,
+      delete: true,
+      force: true,
+      expectedState: expectedTransactionState(entry.state),
+      label: "Retired top-level research Lessons"
+    })),
     ...preview.plan.archiveFiles.map((entry) => ({ root: preview.target, relativePath: entry.relativePath, content: entry.content, force: false, expectedState: { exists: false, type: "absent", sha256: null, mode: null }, label: "Legacy JSON research archive" })),
     ...preview.plan.sourceFiles.map((entry) => ({ root: preview.target, relativePath: entry.relativePath, delete: true, expectedState: entry.state, label: "Retired Dove legacy JSON research state" })),
-    ...preview.plan.sourceDirectories.map((entry) => ({ root: preview.target, relativePath: entry.relativePath, delete: true, deleteEmptyDirectory: true, expectedState: entry.state, label: "Retired legacy JSON research directory" }))
+    ...preview.plan.sourceDirectories.map((entry) => ({
+      root: preview.target,
+      relativePath: entry.relativePath,
+      delete: true,
+      deleteEmptyDirectory: entry.state.exists,
+      expectedState: entry.state,
+      label: "Retired legacy JSON research directory"
+    }))
   ];
-  const result = writeFileSetTransaction(entries, { ...options, transactionBase: ".dove/install/transactions" });
+  const result = writeFileSetTransaction(entries, {
+    ...options,
+    transactionBase: ".dove/install/transactions"
+  });
   return { status: "exported", action: preview.action, target: preview.target, from: preview.from, to: preview.to, researchDirectory: preview.researchDirectory, archiveDirectory: preview.archiveDirectory, ...result };
 }

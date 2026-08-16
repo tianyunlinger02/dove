@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const DEFAULT_TEMP_BASE = path.join(process.cwd(), ".tmp", "dove-workspaces");
+const DEFAULT_TEMP_BASE = path.join(process.cwd(), ".claude", "tmp", "dove-workspaces");
 
 export function resolveTempWorkspaceBase() {
   return path.resolve(process.env.DOVE_TEMP_ROOT || process.env.DOVE_TEST_TMPDIR || DEFAULT_TEMP_BASE);

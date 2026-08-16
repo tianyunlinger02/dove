@@ -45,39 +45,52 @@ export function renderDovePixelArt(options = {}) {
   return DOVE_PIXEL_ART.map((line) => terminalStyle(line, "cyan", { color })).join("\n");
 }
 
-export function renderCompleteReinstallInventory(target, options = {}) {
+function terminalSafeText(value) {
+  return String(value).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
+}
+
+export function renderCompleteReinstallInventory(preview, options = {}) {
+  if (!preview || preview.action !== "reinstall" || typeof preview.target !== "string" || !Array.isArray(preview.removedPaths) || !Array.isArray(preview.replacedPaths)) {
+    throw new Error("Complete Reinstall inventory is invalid.");
+  }
   const color = options.color === true;
+  const removed = preview.removedPaths.length > 0
+    ? preview.removedPaths.map((relativePath) => `- ${terminalSafeText(relativePath)}`)
+    : ["- 无"];
+  const replaced = preview.replacedPaths.length > 0
+    ? preview.replacedPaths.map((relativePath) => `- ${terminalSafeText(relativePath)}`)
+    : ["- 无"];
   return [
-    terminalStyle("完全重新安装项目配置将永久删除", "bold", { color }),
+    terminalStyle("完全重新安装将永久重置以下 Dove 项目内容", "bold", { color }),
     "",
-    `- 当前项目中的 Dove commands、Skills、agents、Hook 与安装记录`,
-    `- ${target}/.dove/ 中的项目私有研究状态`,
-    `- ${target}/.dove-archive/ 中的旧归档（如存在）`,
-    `- 旧的 .dove-install/ 项目安装标记（如存在）`,
+    `项目：${terminalSafeText(preview.target)}`,
     "",
-    "用户级 Dove 安装不会被管理；旧项目内服务器配置和复制运行时仅在精确识别后清理。"
+    terminalStyle("将删除", "bold", { color }),
+    ...removed,
+    "",
+    terminalStyle("将以当前默认内容替换", "bold", { color }),
+    ...replaced,
+    "",
+    "确认后会重建当前项目集成和完整默认研究树。普通项目文件与用户级 Dove 安装不受管理。"
   ].join("\n");
 }
 
 export function renderDoveLifecycleResult(command, result, options = {}) {
+  if (command !== "reinstall" || result?.status !== "reinstalled") {
+    throw new Error(`Unsupported Dove lifecycle presentation: ${command}/${result?.status ?? "unknown"}.`);
+  }
   const stream = options.stream ?? process.stdout;
   const env = options.env ?? process.env;
   const color = terminalColorEnabled(stream, env);
-  if (command === "upgrade") return [
-    terminalStyle("Dove 项目配置升级完成", "bold", { color }),
-    "",
-    "✓ 项目集成已刷新到当前版本",
-    "✓ 研究状态已保留",
-    "✓ Upgrade 仅修改当前项目，不管理用户级 npm 安装"
-  ].join("\n");
-  if (command === "reinstall") return [
+  return [
     terminalStyle("Dove 项目配置完全重新安装完成", "bold", { color }),
     "",
-    "✓ 旧 Dove 集成和研究状态已按确认删除",
-    "✓ 新项目私有状态仅从 .dove/install/ 开始",
-    "✓ 用户级 Dove 安装未被管理"
+    "✓ 已按确认时重新读取的当前范围删除旧 Dove 项目内容",
+    "✓ 当前项目集成和完整默认研究树已重建",
+    "✓ 普通项目文件与用户级 Dove 安装未被管理",
+    "",
+    "默认研究文档只是可维护入口，不代表科研工作、结论或验证已经完成。"
   ].join("\n");
-  throw new Error(`Unsupported Dove lifecycle presentation: ${command}/${result?.status ?? "unknown"}.`);
 }
 
 export function renderDoveHome(options = {}) {
@@ -89,17 +102,14 @@ export function renderDoveHome(options = {}) {
   const nextCommand = options.nextCommand ?? (
     state === "uninitialized"
       ? "dove"
-      : state === "upgrade"
-        ? "dove upgrade"
-        : state === "needs-sync"
-          ? "进入 Claude Code 时自动更新；dove doctor 可查看详情"
-          : state === "blocked"
-            ? "dove doctor"
-            : "/dove:research"
+      : state === "needs-sync"
+        ? "dove update"
+        : state === "blocked"
+          ? "dove doctor"
+          : "/dove:research"
   );
   const stateLabel = {
     uninitialized: "尚未配置 Dove",
-    upgrade: "Dove 项目集成可从 1.0 升级",
     "needs-sync": "Dove 项目集成需要更新",
     current: "Dove 项目集成已是当前版本",
     blocked: "Dove 项目集成需要人工处理"
@@ -110,13 +120,6 @@ export function renderDoveHome(options = {}) {
   lines.push(terminalStyle("Dove", "bold", { color }));
   lines.push("围绕科研主线探索，带回证据与经验。", "");
   lines.push(`${terminalStyle("当前项目", "dim", { color })}  ${stateLabel}`);
-  const issues = Array.isArray(options.issues) ? options.issues : [];
-  if (issues.length > 0) {
-    const priority = { error: 0, warning: 1, info: 2 };
-    const top = [...issues].sort((left, right) => priority[left.severity] - priority[right.severity])[0];
-    lines.push(`${terminalStyle("Dove 问题", "dim", { color })}  ${top.summary}`);
-    lines.push(`${terminalStyle("建议", "dim", { color })}  ${top.action}`);
-  }
   lines.push("");
   lines.push(`${terminalStyle(interactive ? "选择" : "下一步", "bold", { color })}  ${nextCommand}`);
   lines.push(`${terminalStyle("帮助", "bold", { color })}  dove --help`);

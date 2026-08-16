@@ -10,8 +10,7 @@ function command(options = [], positional = { min: 0, max: 0 }, subcommands = nu
 
 export const CLI_COMMAND_SPECS = Object.freeze({
   init: command([projectOption, value("--host", { repeatable: true }), ...outputOptions]),
-  sync: command([projectOption, value("--host", { repeatable: true }), ...outputOptions]),
-  upgrade: command([projectOption, ...outputOptions]),
+  update: command([projectOption, value("--host", { repeatable: true }), ...outputOptions]),
   reinstall: command([projectOption, ...outputOptions]),
   doctor: command([projectOption, ...outputOptions]),
   "export-research": command([projectOption, ...outputOptions]),

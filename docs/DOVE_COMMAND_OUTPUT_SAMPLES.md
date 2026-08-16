@@ -1,59 +1,63 @@
 # Dove command and response samples
 
-Dove responses should fit the task rather than a fixed template. The examples below illustrate Dove 3.0.0 boundaries: natural conversation, ordinary Markdown research documents, user-managed review, and software-only CLI diagnostics.
+Dove 回复应适合真实任务，而不是套固定模板。以下样例说明 Dove 3.0.0 的十个 Skills、普通 Markdown、用户管理的单独 Review 和六命令 CLI 边界。
 
 ## Bounded research completion
 
 ```text
-已完成这轮对照检查，并把真正影响后续判断的结果写入现有研究文档。
+已完成这轮对照检查，并把影响后续判断的结果写入现有 Mission 文档。
 
-关键结论：实现已经切到 Markdown 文档主线，但安装说明里仍残留旧的服务注册步骤。这个残留会误导新项目，应该先修正文档，再验证初始化输出。
+关键结论：当前实现已经切到 Markdown 研究树，但安装说明仍残留旧命令，会直接误导项目初始化。先修正文档比继续增加局部检查更有价值。
 
-限制：本轮只检查了声明范围内的文档与入口，没有据此判断整个研究目标已经完成。
+限制：本轮只检查声明范围，没有据此判断整个研究目标已经完成。
+```
+
+## Research route exploration
+
+```text
+当前存在三条可行路线。我先比较了它们对核心假设的解释力、关键反例、实现成本和最能区分路线的观察，而没有直接投入最容易实现的第一条。
+
+目前第二条理论上更完整，但现有证据仍可能由实验设置偏差解释。下一步应先澄清这个分歧，不默认增加一批相似实验。
 ```
 
 ## Status with no overview
 
-A missing overview is normal:
-
 ```text
-当前没有 `.dove/research/RESEARCH.md`。这表示项目尚未维护 Dove 研究概览，或研究上下文只存在于普通项目文件中；不是“研究状态损坏”。
+当前没有 `.dove/research/RESEARCH.md`。这表示项目还没有维护研究概览，或上下文只存在于普通项目文件中；不是“研究数据库损坏”。
 
-本次 Status 是只读的，因此没有创建或修改文件。
+本次 Status 是只读的，没有创建或修改文件。
 ```
 
 ## Status with a broken link
 
 ```text
-研究概览仍可读取，但其中指向 `experiments/noise-benchmark.md` 的链接已失效，所以我无法从该文档核对实验结果。
+研究概览可以读取，但其中指向 `experiments/noise-benchmark.md` 的链接已失效，因此无法核对该实验的细节。
 
-目前可以确认主线和其余进展；与该实验有关的结论应暂时视为未核对。建议修复链接或提供新路径。
+目前可以确认其余主线和进展；依赖该实验的结论暂时视为未核对。建议修复链接或提供新路径。
 ```
 
-The missing link is reported as an ordinary document problem. Status does not repair it or label the whole research area invalid.
-
-## Source work blocked by access
+## Source blocked by access
 
 ```text
-目前还不能可靠补上这条引用。找到的二手材料都指向同一篇原始论文，但公开入口只提供摘要，无法核对方法和适用条件；我没有把二手转述当作已验证来源。
+找到了原始论文条目和摘要，但公开入口没有可读取全文，因此还不能核对方法与适用条件。我没有把搜索结果或二手转述写成“已阅读原文”。
 
-你可以提供全文让我继续核验，或者让我把正文收窄到摘要真正支持的范围。
+你可以提供合法全文入口，或者让我把当前表述收窄到摘要真正支持的范围。
 ```
 
 ## Experiment plan before execution
 
 ```text
-已先把实验计划写入 `.dove/research/experiments/noisy-data-benchmark.md`，包括比较对象、主要指标、停止条件、预期产物、失败价值和资源边界。
+已先把实验计划写入 `.dove/research/experiments/noisy-data-benchmark.md`，说明它测试什么、主要比较和如何判断结果。
 
-实验尚未执行。确认当前计划后，我再按同一文档运行并把实际过程与结果追加进去。
+实验尚未执行。执行后会把实际过程、结果、重要失败或偏差和解释追加到同一文档。
 ```
 
-After execution, the response may say:
+执行后：
 
 ```text
-实验已按书面计划执行，实际过程和结果已追加到同一个文档。
+实验已执行，实际过程与结果已追加到同一份 Experiment 文档。
 
-这轮结果没有支持原假设：主要指标落在预先声明的无实质差异区间内；有效样本为 48/52，4 个排除项均因采集失败。当前只能说“未观察到预期增益”，不能据此断言两种方法等价。
+结果没有支持原假设：主要指标落在预先声明的无实质差异区间。当前只能说“未观察到预期增益”，不能断言两种方法等价。
 ```
 
 ## Review preparation
@@ -65,28 +69,45 @@ After execution, the response may say:
 - `paper/results.md`
 - `figures/figure-2.png`
 
-Reviewer 只应读取上述路径，不应修改项目文件，并应返回 Markdown。请把 Review 文档中的自包含提示和声明文件交给你选择并管理的独立会话或评审者。Dove 不会代替你启动或认证 Reviewer。
+请把 Review 文档中的自包含 prompt 和上述材料交给你选择并管理的单独 reviewer session 或人员。Reviewer 应保持只读并返回 Markdown。Dove 不会代替你启动、冒充或认证 Reviewer。
 ```
 
-## User-obtained review return
+## Imported review return
 
 ```text
-已把你取得的 Reviewer Markdown 原样保存在同一份 Review 文档中，并在其后记录作者处理：主结论已收窄，补充了未完成复现实验的限制，仍有一个高噪声条件问题待解决。
+已把你取得的 Reviewer Markdown 忠实追加到对应 Review 文档，没有重写或用摘要覆盖原返回。
 
-这份返回是评审证据，但 Reviewer 角色名称和本地会话分离本身不能证明独立性。
+尚未添加作者解释或修改，因为你这次只要求导入 Review。需要回应和修订时再使用 Rebuttal。
 ```
 
-## Auto blocked by the mainline boundary
+## Auto blocked by mainline boundary
 
 ```text
-Auto 未继续执行。当前没有足够明确的 `RESEARCH.md` 主线，而这个主线是 Auto 的只读边界；我不会在自治过程中替你重定义研究方向。
+Auto 未继续执行。当前 `RESEARCH.md` 没有足够明确的主线，而主线是 Auto 的只读方向边界；我不会在自治过程中替你重定义研究方向。
 
-我已给出一份普通项目建议，列出可选主线、关键分歧和需要你确认的范围。确认并记录主线后，可以再次显式调用 `/dove:auto`。
+已返回一份简短建议，列出候选主线和关键分歧。确认并记录主线后，可以再次显式调用 `/dove:auto`。
 ```
+
+## CLI help
+
+```text
+dove
+
+Usage:
+  dove --help
+  dove --version
+  dove init [--project <dir>] [--host <host>...] [--json|--format json]
+  dove update [--project <dir>] [--host <host>...] [--json|--format json]
+  dove reinstall [--project <dir>] [--json|--format json]
+  dove doctor [--project <dir>] [--json|--format json]
+  dove export-research [--project <dir>] [--json|--format json]
+  dove hook user-prompt-submit --project <dir>
+  dove hook stop --project <dir>
+```
+
+没有 `sync`、`upgrade`、`mcp serve`、Workspace 或研究数据库命令。
 
 ## CLI initialization
-
-Illustrative human output:
 
 ```text
 Dove 已在此项目启用
@@ -94,70 +115,80 @@ Dove 已在此项目启用
 项目  example-project
 宿主  Claude Code
 
-✓ Dove Skill 入口已安装
-✓ Planner、Builder/Author 与 Reviewer 资源已安装
-✓ 提示词钩子已配置
-✓ `.dove/install/manifest.json` 已建立（revision 2.0）
+✓ 10 个 Dove Skill 工作入口已安装
+✓ Claude 提示与停止钩子已配置
+✓ 按需论文搜索、下载与阅读 MCP 已声明
+✓ 完整默认研究目录与通用 Lessons 已建立
+✓ 项目集成记录已建立
 
-未创建研究数据库或研究 MCP 服务，也未自动创建 `.dove/research/RESEARCH.md`。
-下一步  从当前项目重新进入 Claude Code。
+默认研究目录与通用 Lessons 已建立；它们是可维护的 Markdown 入口，不代表科研主线、结论或任务已经完成。
 ```
 
-Generated resources show what Dove projected into the project. They do not prove that every host feature is available in the current session.
+首次使用论文 project MCP 时由用户批准。Dove 不安装依赖、不写凭据、不批准 trust。
+
+## Bare Dove home
+
+当前项目需要更新时：
+
+```text
+Dove
+围绕科研主线探索，带回证据与经验。
+
+当前项目  Dove 项目集成需要更新
+
+下一步  dove update
+帮助  dove --help
+```
+
+首页是只读提示，不执行 update。
 
 ## Doctor
 
 ```text
 Dove 检查
+面向 Dove 开发排查，检查软件、项目接入和 Markdown 研究文档外层可读性；保持只读，不判断科研结论、完成度或评审权威。用户通常无需运行此命令。
 
-软件包      当前
-项目集成    当前
-提示词钩子  当前
-研究概览    未找到（正常）
-
-Doctor 只报告软件、集成和本地文件可读性，不判断科研结论是否正确、工作是否完成或评审是否独立。
+软件      Dove 3.0.0 可用
+项目接入  当前
+研究文档  Markdown 外层可读
+外层可读不等于研究内容正确、完整或经过独立审查。
 ```
 
-Doctor machine state and readable `DOCTOR.md` belong under `.dove/install/`, not in the research documents.
+用户对 Dove 的明确反馈和 Dove 实际故障由宿主直接追加到普通 `.dove/install/DOCTOR.md`，不需要运行 Doctor，也没有 JSON issue lifecycle。
 
 ## Explicit research export
 
 ```text
-检测到可导出的 legacy Dove JSON research records 研究状态。
+检测到可导出的 legacy Dove JSON research records。
 
-`dove export-research` 会执行一次性 Markdown 转换，并把原始旧版 JSON 字节归档到 `.dove/archive/...`。它不支持 v1，也不会安装旧 JSON 的运行时回退。
+`dove export-research` 会显示一次性 Markdown 导出预览，并在确认后把原始 JSON bytes 归档到 `.dove/archive/...`。它不支持 v1，也不会安装旧 JSON fallback。
 
 尚未执行：真实研究数据导出需要单独授权。
 ```
 
-Export is not part of `init`, `sync`, `upgrade`, Doctor, or routine release validation.
-
 ## Complete Reinstall confirmation
 
 ```text
-Complete Reinstall 将删除当前项目的 Dove 研究文档和旧归档，然后重建项目集成。
-普通项目文件不会删除。
+完全重新安装将永久重置以下 Dove 项目内容
 
-继续？ (y/N)
+项目：/path/to/project
+
+将删除
+- .dove/research/custom-topic.md
+- .dove/archive/old-export
+
+将以当前默认内容替换
+- .dove/research/RESEARCH.md
+
+确认后会重建当前项目集成和完整默认研究树。普通项目文件与用户级 Dove 安装不受管理。
 ```
 
-The default is No. `sync` or `upgrade` should be used when the goal is only to refresh integration.
-
-## CLI help inventory
-
-```text
-Top level: init, sync, upgrade, reinstall, doctor, export-research, hook
-Hook: user-prompt-submit
-```
-
-There is no `mcp` command and no `migrate-research` command. Research work uses the ten host Skills with normal host file and research tools.
+随后确认默认值为 No。只需要刷新接入或补齐默认内容时使用 `dove update`。
 
 ## Validation boundary
 
-A maintainer result should stay software-scoped:
-
 ```text
-文档与生成资源检查通过；三个发布 bundle 与声明清单一致。
+生成资源、三个发布 bundles 和 package inventory 检查通过。
 
-这些结果只说明软件发布边界通过了本地验证，不证明研究结论、复现性、论文完成度或 Reviewer 独立性。
+这些结果只说明软件发布边界通过本地验证，不证明研究结论、复现性、论文完成度或 Reviewer 独立性。
 ```
