@@ -107,7 +107,7 @@ init, update, reinstall, doctor, export-research, hook
 - `init`：建立 Claude 项目接入和完整默认研究树。
 - `update`：刷新已识别的项目接入，并以精确追加方式补齐缺失的默认 Markdown；项目中已有的不同内容不覆盖。
 - `reinstall`：先展示删除和替换范围，默认 No；确认后重建 Dove 项目内容，保留普通项目文件。
-- `doctor`：只读的开发排查命令，不判断科研质量。用户对 Dove 的明确反馈和 Dove 实际故障由宿主自然追加到 `.dove/install/DOCTOR.md`。
+- `doctor`：只读的开发排查命令，不判断科研质量。用户明确点名 Dove 的反馈和 Dove 自身实际故障写入 `.dove/install/DOCTOR.md`；未点名 Dove 的普通科研或协作反馈中，可复用的经验进入 Lessons。
 - `export-research`：显式、一次性把支持的旧 JSON research records 导出为 Markdown，并归档原始字节；真实科研数据需要单独授权。
 - `hook`：提供 Claude prompt 与 stop hooks。
 

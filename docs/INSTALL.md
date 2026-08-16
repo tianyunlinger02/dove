@@ -77,7 +77,7 @@ Dove 只管理一个共享配置 fragment：
 └── DOCTOR.md     # 可选，宿主自然维护
 ```
 
-Manifest 记录 package、选定 hosts、managed resources 和 lifecycle 所需 timestamps。`DOCTOR.md` 记录用户对 Dove 的明确反馈，以及 Dove 自身 Skill、hook、项目接入、路由、文档行为或 guidance 的实际故障。
+Manifest 记录 package、选定 hosts、managed resources 和 lifecycle 所需 timestamps。`DOCTOR.md` 记录用户明确点名 Dove 时提出的反馈，以及 Dove 自身 Skill、hook、项目接入、路由、文档行为或 guidance 的实际故障。未点名 Dove 的普通科研或协作反馈中，可复用的经验进入 Lessons。
 
 `DOCTOR.md` 是普通自然语言 Markdown，没有 JSON state、issue ID、status、severity、counter、frontmatter 或固定模板。它不是研究日志或科学 health score，用户不需要为了反馈运行 `dove doctor`。
 

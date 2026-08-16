@@ -183,8 +183,10 @@ function assertAmbientRouting() {
   assert.match(ordinary, /zero-write/iu);
   assert.match(ordinary, /smallest suitable Dove Skill/iu);
   assert.match(ordinary, /Never select Auto/iu);
-  assert.match(rule, /feedback, criticism, correction, or an improvement request about Dove itself/iu);
+  assert.match(rule, /user explicitly names Dove while giving feedback, criticism, correction, or an improvement request about it/iu);
   assert.match(rule, /append a concise natural-language note to `\.dove\/install\/DOCTOR\.md`/iu);
+  assert.match(rule, /reusable feedback about ordinary research or collaboration without explicitly naming Dove/iu);
+  assert.match(rule, /relevant Lessons Markdown instead/iu);
   assert.match(rule, /Do not create IDs, statuses, severity fields, counters, frontmatter, or a fixed template/iu);
   assert.match(rule, /Do not record ordinary research uncertainty, project bugs, external tool failures, or general conversation/iu);
   assert.match(rule, /Do not ask the user to run `dove doctor`/iu);

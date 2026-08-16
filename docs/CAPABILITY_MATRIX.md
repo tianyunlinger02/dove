@@ -79,7 +79,7 @@
 | Claude project initialization | Implemented | Installs generated Claude resources, prompt and stop hooks, and current installation metadata. |
 | Project paper MCP declaration | Implemented for Claude | Init/update safely own only `.mcp.json#/mcpServers/dove-paper-search`, preserve unrelated servers, and never write approval, trust, or credentials. |
 | Manifest revision | Implemented | `.dove/install/manifest.json` uses revision `2.0`. |
-| Dove feedback document | Host-maintained Markdown | `.dove/install/DOCTOR.md` naturally records explicit user feedback about Dove and actual Dove failures. It has no JSON state, issue lifecycle, fixed template, or scientific authority. |
+| Dove feedback document | Host-maintained Markdown | `.dove/install/DOCTOR.md` records user feedback when Dove is explicitly named, plus actual Dove failures. Reusable feedback about ordinary research or collaboration without an explicit Dove reference belongs in Lessons. It has no JSON state, issue lifecycle, fixed template, or scientific authority. |
 | Installation/file safety hashes | Internal | Protect managed software bytes; never used as research evidence or authority. |
 | Integration update | Implemented | Refreshes recognized integration, creates each missing default file from complete package content, and exactly appends missing canonical content only to existing defaults while preserving their byte prefix and ordinary topic documents. Missing defaults make status `needs-sync`. |
 | legacy JSON research records export | Explicit | `dove export-research` writes the new summaries and topic directories, preserves legacy `.dove/LESSONS.md` as `lessons/imported-lessons.md`, supports an existing default tree, and archives original JSON bytes under `.dove/archive/...`. |
