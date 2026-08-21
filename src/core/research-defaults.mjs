@@ -2,6 +2,12 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import {
+  DOVE_AGENT_CURIOSITY,
+  DOVE_AGENT_HUNCH,
+  DOVE_AGENT_LAYERING,
+  DOVE_AGENT_PROPORTIONALITY
+} from "./dove-agent-persona.mjs";
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 
@@ -28,9 +34,12 @@ export const RESEARCH_DEFAULT_PATHS = Object.freeze({
   engineeringAndValidation: `${RESEARCH_ROOT}/lessons/engineering-and-validation.md`,
   writingAndReview: `${RESEARCH_ROOT}/lessons/writing-and-review.md`,
   collaborationAndEnvironment: `${RESEARCH_ROOT}/lessons/collaboration-and-environment.md`,
+  importedLessons: `${RESEARCH_ROOT}/lessons/imported-lessons.md`
+});
+
+const RETIRED_RESEARCH_PATHS = Object.freeze({
   additionalLessons: `${RESEARCH_ROOT}/lessons/additional-lessons.md`,
-  importedLessons: `${RESEARCH_ROOT}/lessons/imported-lessons.md`,
-  retiredTopLevelLessons: `${RESEARCH_ROOT}/LESSONS.md`
+  topLevelLessons: `${RESEARCH_ROOT}/LESSONS.md`
 });
 
 const OVERVIEW_LINKS = Object.freeze([
@@ -51,8 +60,9 @@ const LESSON_LINKS = Object.freeze([
   "- [Collaboration and environment](collaboration-and-environment.md)"
 ]);
 
-export const ADDITIONAL_LESSONS_LINK = "- [Additional migrated Lessons](additional-lessons.md)";
 export const IMPORTED_LESSONS_LINK = "- [Imported legacy Lessons](imported-lessons.md)";
+
+const BUILT_IN_LESSON_NOTICE = "This is a Dove built-in Lesson. `dove update` replaces this file. Put project-specific guidance in a separate naturally named Lessons file and link it from `LESSONS.md`.";
 
 const SUMMARY_DOCUMENTS = Object.freeze([
   Object.freeze({
@@ -68,7 +78,7 @@ const SUMMARY_DOCUMENTS = Object.freeze([
     path: RESEARCH_DEFAULT_PATHS.missionsSummary,
     title: "# Missions",
     blocks: Object.freeze([
-      "Use this summary to connect bounded research goals, their material work and failures, evidence-bounded conclusions, limitations, and useful next branches. Add or revise natural links when Mission documents change."
+      "Use this summary to connect bounded research goals, substantive work, current conclusions, decisions, and useful next branches. Add or revise natural links when Mission documents change."
     ]),
     navigationHeading: null,
     navigationLines: Object.freeze([])
@@ -77,7 +87,7 @@ const SUMMARY_DOCUMENTS = Object.freeze([
     path: RESEARCH_DEFAULT_PATHS.experimentsSummary,
     title: "# Experiments",
     blocks: Object.freeze([
-      "Use this summary to connect experiments that matter to the research argument. Keep each prospective plan and its later execution, results, failures, deviations, limitations, and uncertainty in the same naturally named document."
+      "Use this summary to connect experiments that matter to a research decision. Keep each prospective plan and its later execution and results in the same naturally named document."
     ]),
     navigationHeading: null,
     navigationLines: Object.freeze([])
@@ -86,7 +96,7 @@ const SUMMARY_DOCUMENTS = Object.freeze([
     path: RESEARCH_DEFAULT_PATHS.sourcesSummary,
     title: "# Sources",
     blocks: Object.freeze([
-      "Use this summary to connect source notes that materially inform the work, including what was actually inspected, relevant conditions, conflicts, and limitations. A source explanation is useful when available but is not mandatory."
+      "Use this summary to connect sources that materially inform the work and record what was actually inspected and learned when durable context is useful."
     ]),
     navigationHeading: null,
     navigationLines: Object.freeze([])
@@ -95,7 +105,7 @@ const SUMMARY_DOCUMENTS = Object.freeze([
     path: RESEARCH_DEFAULT_PATHS.reviewsSummary,
     title: "# Reviews",
     blocks: Object.freeze([
-      "Use this summary to connect user-managed Review documents. Keep the declared artifact scope, prompt, actual returned Markdown, limitations, author handling, and follow-up together in the relevant Review document."
+      "Use this summary to connect user-managed Review documents. Keep the declared artifact scope, prompt, actual returned Markdown, author handling, and follow-up together in the relevant Review document."
     ]),
     navigationHeading: null,
     navigationLines: Object.freeze([])
@@ -104,7 +114,7 @@ const SUMMARY_DOCUMENTS = Object.freeze([
     path: RESEARCH_DEFAULT_PATHS.claimsSummary,
     title: "# Claims",
     blocks: Object.freeze([
-      "Use this summary to organize important claims and their evidence boundaries when that improves the research. Preserve support, counter-evidence, missing evidence, uncertainty, and what the current work cannot establish."
+      "Use this summary to organize important research claims when that improves the work. Keep the claim, its current basis, and the decision or next action it affects clear."
     ]),
     navigationHeading: null,
     navigationLines: Object.freeze([])
@@ -126,33 +136,35 @@ export const RESEARCH_LESSON_TOPICS = Object.freeze([
     title: "# Decision making",
     intro: "Use these principles to choose and stop work according to real value rather than presentation or sunk cost.",
     paragraphs: Object.freeze([
-      "Prefer work that advances the real research goal or resolves an important uncertainty. Navigation, record keeping, local metrics, demonstrations, and surface progress are useful only when they improve the next decision or substantive result.",
-      "Choose routes by expected research value rather than sunk cost. Use suitable existing code, data, models, tools, compute, and prior results to accelerate the chosen question, but do not let available resources redefine that question or justify weaker evidence.",
-      "Stop or change a route when reasoning or evidence shows it cannot support the needed conclusion. Preserve failures, missing work, and uncertainty instead of adding patches or rewriting the success criterion around them.",
-      "Judge completion on the real path from representative input to a usable final result under the actual standard. Software checks, logs, model output, and internal review are bounded evidence, not proof of scientific correctness or research completion."
+      "Prefer work that advances the real research goal or resolves an important uncertainty. Navigation, record keeping, local metrics, demonstrations, and surface progress matter only when they improve the next decision or substantive result.",
+      DOVE_AGENT_LAYERING,
+      "Choose the feasible action most likely to change the research decision. Use suitable existing code, data, models, tools, compute, prior results, and user preferences to accelerate the chosen question, but do not let available resources or preferences redefine it without saying why.",
+      "After a meaningful result, commit to the strongest route, switch when another explanation or approach becomes better, or stop when further feasible work is unlikely to resolve the important uncertainty.",
+      "Judge progress by the real path from representative input to a useful result, not by the amount of analysis, validation, or documentation produced."
     ])
   }),
   Object.freeze({
     path: RESEARCH_DEFAULT_PATHS.researchMethod,
     title: "# Research method",
-    intro: "Use these principles to keep the problem, hypothesis, mechanism, and claimed scope scientifically meaningful.",
+    intro: "Use these principles to keep the problem, hypothesis, mechanism, and route scientifically meaningful.",
     paragraphs: Object.freeze([
-      "Start from an important real problem and a defensible knowledge gap. Define the intended input, output, use conditions, and evaluation target, then inspect relevant external work, strong nearby methods, and counterexamples before judging novelty or value.",
-      "State a falsifiable hypothesis before committing to an implementation: what relationship or mechanism is expected, what observable result should change, what would weaken the hypothesis, which alternatives remain, and what evidence can distinguish them.",
-      "Prefer one clear core insight and a coherent mechanism over accumulations of routing rules, repair steps, and fallback layers. A simpler diagnostic prototype is useful when it tests the key uncertainty rather than quietly shrinking the research question.",
-      "Information used by the method must be available under the real use conditions and free of target leakage or shortcuts.",
-      "Explore broadly before committing to a research route, then compare and pressure-test the serious alternatives rather than pursuing the first plausible option. When theory and evidence conflict, reconsider the theory, the experiment, and the route itself; choose the next action that best clarifies the disagreement instead of assuming more experiments are needed."
+      "Start from the real research question and the conditions in which the answer must matter. Inspect the actual project and relevant external work before letting available methods, metrics, or publication pressure redefine the problem.",
+      DOVE_AGENT_HUNCH,
+      DOVE_AGENT_CURIOSITY,
+      "When the route is open, generate materially different explanations or approaches. Use theory to derive different expectations, compare the serious candidates under the actual use conditions, and do not commit to the first plausible or easiest one.",
+      "Choose work that can distinguish the serious candidates or expose the key mechanism. A small diagnostic, source investigation, analysis, prototype, or experiment is valuable when its possible outcomes would lead to different research decisions; do not treat missing evidence as a reason to stop before seeking the evidence that matters.",
+      "When theory and results disagree, revisit the theory, test, and route rather than defending the current story or automatically adding experiments. Use the result to commit, switch, or stop."
     ])
   }),
   Object.freeze({
     path: RESEARCH_DEFAULT_PATHS.experimentsAndEvidence,
     title: "# Experiments and evidence",
-    intro: "Use these principles to make experiments discriminating, fair, and honest about what they establish.",
+    intro: "Use experiments when they are the best way to change a research decision.",
     paragraphs: Object.freeze([
-      "Use experiments to resolve a real research decision: test a core hypothesis, distinguish an important alternative, decide whether a route should continue, or bound a meaningful failure mode. For new execution, state what is being tested and how the result will be judged before running it.",
-      "Use strong, nearby, and fair baselines. Align the information, data split, supervision, model and compute budget, attempts, post-processing, evaluation protocol, and failed-sample accounting where possible, and disclose material differences that remain.",
-      "Prefer evidence from the real end-to-end task, supported by discriminating controls, counterfactuals, and diagnostics. A non-crashing output, small qualitative example, code check, or log can establish a local fact but cannot substitute for the capability being claimed.",
-      "Keep complete denominators and preserve positive, negative, null, mixed, failed, stopped, invalid, and timed-out outcomes. Record material deviations and enough actual procedure and artifacts to interpret what the result supports and cannot establish."
+      "Before treating an experiment as central, establish the real problem, key uncertainty, or route decision it should resolve. If that basis is not yet established, stop experiment design and identify the actual project material, relevant sources, or smaller diagnostic needed to investigate the problem; do not invent a substitute experiment or stop at merely admitting the basis is missing.",
+      "For new execution, state what is being tested and how the result will be judged before running it. Use comparisons or diagnostics that can distinguish the serious candidates under the conditions that matter.",
+      "Experiments, validation, audits, and documents are means. When they cannot change or protect the mainline decision, more of them becomes fake rigor or fake progress rather than better research.",
+      "Prefer the real task over convenient proxies when the real task is feasible. Record the actual result and any deviation or failure that changes its interpretation, then use it to continue, change, or stop the route."
     ])
   }),
   Object.freeze({
@@ -160,21 +172,22 @@ export const RESEARCH_LESSON_TOPICS = Object.freeze([
     title: "# Engineering and validation",
     intro: "Use these principles to turn implementation checks into trustworthy end-to-end software results without overstating them.",
     paragraphs: Object.freeze([
-      "Implement the smallest complete path that serves the real task. Keep concepts and data authority clear across input, execution, output, and interpretation, and remove obsolete paths rather than accumulating fallback, shadow state, duplicate rules, and switches.",
-      "Diagnose the shared cause of failures and make the actual repair; do not let investigation, bookkeeping, or local checks replace the requested result. Preserve visible failures and do not manufacture a valid-looking output through unrelated defaults, truncation, swallowed errors, skipped steps, or removed problem cases.",
-      "Validate in proportion to the consequence and uncertainty of the change, using the real interface or artifact when that matters. Report exactly what was implemented and observed; software checks and local execution do not by themselves establish scientific correctness, reproducibility, production readiness, or research completion.",
+      "Implement the smallest complete path that serves the real task. Keep concepts and data authority clear across input, execution, output, and interpretation, and remove obsolete paths rather than accumulating fallback, shadow state, duplicate rules, and switches. When a gap blocks progress, name the smallest concrete probe or repair that could unblock the mainline rather than ending at the gap itself.",
+      "Diagnose the shared cause of failures and make the actual repair; do not let investigation, bookkeeping, or local checks replace the requested result, and do not manufacture a valid-looking output through unrelated defaults, swallowed errors, or skipped problem cases.",
+      "Validate in proportion to the consequence of the change, using the real interface or artifact when that matters. Stop when the real path works well enough for the requested purpose rather than accumulating redundant checks.",
+      DOVE_AGENT_PROPORTIONALITY,
       "Do not cause real harm or lose user content. Preserve unrelated project changes, protect credentials and sensitive data, and obtain explicit confirmation before destructive or outward-facing actions."
     ])
   }),
   Object.freeze({
     path: RESEARCH_DEFAULT_PATHS.writingAndReview,
     title: "# Writing and review",
-    intro: "Use these principles to make papers and reviews follow a clear, evidence-bounded argument.",
+    intro: "Use these principles to make papers and reviews follow a clear research argument.",
     paragraphs: Object.freeze([
       "Build the paper or report around a clear argument: an important problem, a specific gap, a falsifiable hypothesis or mechanism, fair evidence, and an explicit capability boundary. Organize the account around that argument rather than the chronology of development and patches.",
-      "Explain what is genuinely new by identifying the prior obstacle that is removed and separating the contribution from inherited models, public data, tools, simulators, and external services. Compare the nearest work on the actual task, information, supervision, use conditions, protocol, and mechanism rather than merely listing sources.",
-      "Describe enough of the method and experiment conditions for the reader to understand how and why the result was produced. Organize important results around the research or contribution promise they test, state what each result supports, weakens, or cannot establish, and connect figures, tables, and claims to the underlying evidence.",
-      "Keep every claim within the evaluated conditions. Preserve counter-evidence, failures, limitations, external dependencies, citation gaps, and uncertainty, and do not let the title, abstract, figure, or conclusion claim more than the body supports."
+      "Explain what is genuinely new by identifying the prior obstacle that is removed and separating the contribution from inherited models, public data, tools, simulators, and external services. Compare the nearest work on the actual task, information, supervision, use conditions, protocol, mechanism, real user need, and supporting evidence rather than merely listing sources or iterating an internal novelty story.",
+      "Describe enough of the method and experiment conditions for the reader to understand how and why the result was produced. Organize important results around the research or contribution promise they test and explain how they change the argument.",
+      "Keep the paper focused on the strongest supported contribution. Revise or remove claims when a result changes the argument rather than surrounding them with defensive qualification."
     ])
   }),
   Object.freeze({
@@ -182,7 +195,8 @@ export const RESEARCH_LESSON_TOPICS = Object.freeze([
     title: "# Collaboration and environment",
     intro: "Use these principles to communicate decisions clearly and execute safely in the environment that actually exists.",
     paragraphs: Object.freeze([
-      "Use the user's requested language and format. State the result or judgment clearly, explain difficult ideas in ordinary language before specialized terms, and keep material failures, limitations, uncertainty, and blockers visible without burying the answer under internal workflow detail.",
+      "Use the user's requested language and format. State the result or judgment clearly, explain difficult ideas in ordinary language before specialized terms, and do not bury the answer under internal workflow detail.",
+      "Treat user preferences as collaboration and risk signals that matter, but weigh them against current evidence, task risk, and the research mainline when they conflict.",
       "Complete the current bounded request when the available context permits it, and ask only when a material ambiguity changes the work. Parallelize only genuinely independent tasks, preserve unrelated user changes, and do not commit, push, publish, or perform destructive cleanup without the required user direction or confirmation.",
       "Before using platform-specific commands, confirm the actual operating system, shell, path conventions, and available toolchain, then use that environment's native commands instead of trying Windows, Linux, and macOS commands by guesswork.",
       "For compute-intensive work, inspect the actual hardware and deployment constraints. Use suitable available GPUs and sufficiently capable models when the task benefits from them; do not default without evidence to CPU, small memory, weak models, or overly frugal settings, and do not retain an unrequested CPU fallback when the real deployment does not need one."
@@ -197,7 +211,7 @@ function renderDocument({ title, blocks = [], navigationHeading = null, navigati
 }
 
 function topicDocument(topic) {
-  return renderDocument({ title: topic.title, blocks: [topic.intro, ...topic.paragraphs] });
+  return renderDocument({ title: topic.title, blocks: [BUILT_IN_LESSON_NOTICE, topic.intro, ...topic.paragraphs] });
 }
 
 export const RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
@@ -335,24 +349,17 @@ export function readResearchDefaultsSnapshot(root, options = {}) {
   const states = new Map();
   const selectedPaths = new Set([
     ...RESEARCH_DEFAULT_FILE_PATHS,
-    RESEARCH_DEFAULT_PATHS.additionalLessons,
+    RETIRED_RESEARCH_PATHS.additionalLessons,
     RESEARCH_DEFAULT_PATHS.importedLessons,
-    RESEARCH_DEFAULT_PATHS.retiredTopLevelLessons
+    RETIRED_RESEARCH_PATHS.topLevelLessons
   ]);
-  for (const relativePath of selectedPaths) states.set(relativePath, readFileState(anchor, relativePath, { decode: !replace }));
-
-  const lessonMarkdownStates = new Map();
-  if (!replace && anchor.tryLstat(RESEARCH_DEFAULT_PATHS.lessonsDirectory)) {
-    for (const entry of anchor.readdir(RESEARCH_DEFAULT_PATHS.lessonsDirectory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
-      if (!entry.name.endsWith(".md")) continue;
-      const relativePath = `${RESEARCH_DEFAULT_PATHS.lessonsDirectory}/${entry.name}`;
-      if (entry.isSymbolicLink() || !entry.isFile()) throw new Error(`${relativePath} must be a regular Markdown file without symbolic links.`);
-      const state = states.get(relativePath) ?? readFileState(anchor, relativePath);
-      states.set(relativePath, state);
-      lessonMarkdownStates.set(relativePath, state);
-    }
+  for (const relativePath of selectedPaths) {
+    const opaque = relativePath === RETIRED_RESEARCH_PATHS.additionalLessons
+      || relativePath === RESEARCH_DEFAULT_PATHS.importedLessons
+      || relativePath === RETIRED_RESEARCH_PATHS.topLevelLessons;
+    states.set(relativePath, readFileState(anchor, relativePath, { decode: !replace && !opaque }));
   }
-  return { states, lessonMarkdownStates };
+  return { states };
 }
 
 function stateFor(snapshot, relativePath) {
@@ -375,36 +382,27 @@ function currentText(snapshot, writes, relativePath) {
   return state.exists ? state.text : null;
 }
 
-function planSummaryDocument(snapshot, writes, document, extraLines = []) {
+function removeExactMarkdownLine(original, line) {
+  const escaped = line.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return original.replace(new RegExp(`^${escaped}(?:\\r?\\n|$)`, "gmu"), "");
+}
+
+function planSummaryDocument(snapshot, writes, document) {
   const state = stateFor(snapshot, document.path);
   if (!state.exists) {
-    const content = renderDocument({
-      ...document,
-      navigationLines: [...document.navigationLines, ...extraLines]
-    });
-    setWrite(writes, snapshot, document.path, content);
+    setWrite(writes, snapshot, document.path, renderDocument(document));
     return;
   }
   let content = currentText(snapshot, writes, document.path);
-  content = appendExactMarkdownBlocks(content, document.blocks);
-  content = appendExactMarkdownLines(content, document.navigationHeading, [...document.navigationLines, ...extraLines]);
+  if (document.path === RESEARCH_DEFAULT_PATHS.lessonsSummary) {
+    content = removeExactMarkdownLine(content, "- [Additional migrated Lessons](additional-lessons.md)");
+  }
+  content = appendExactMarkdownLines(content, document.navigationHeading, document.navigationLines);
   setWrite(writes, snapshot, document.path, content);
 }
 
-function exactContentPresent(bytes, content) {
-  return bytes.indexOf(content) !== -1;
-}
-
-function additionalLessonTexts(options) {
-  const texts = options.additionalLessonTexts ?? [];
-  if (!Array.isArray(texts) || texts.some((text) => typeof text !== "string")) {
-    throw new Error("Research defaults additional Lessons corpus must be an array of Markdown strings.");
-  }
-  return texts;
-}
-
 export function planResearchDefaults(snapshot, options = {}) {
-  if (!snapshot || !(snapshot.states instanceof Map) || !(snapshot.lessonMarkdownStates instanceof Map)) {
+  if (!snapshot || !(snapshot.states instanceof Map)) {
     throw new Error("Research defaults planning requires a research Markdown snapshot.");
   }
   const mode = options.mode ?? "sync";
@@ -417,50 +415,12 @@ export function planResearchDefaults(snapshot, options = {}) {
     return { writes, deletes };
   }
 
-  const retired = stateFor(snapshot, RESEARCH_DEFAULT_PATHS.retiredTopLevelLessons);
-  const additional = stateFor(snapshot, RESEARCH_DEFAULT_PATHS.additionalLessons);
-  let additionalWillExist = additional.exists;
-  if (options.migrateRetiredLessons !== false && retired.exists) {
-    if (!additional.exists) {
-      setWrite(writes, snapshot, RESEARCH_DEFAULT_PATHS.additionalLessons, retired.bytes);
-    } else if (!exactContentPresent(additional.bytes, retired.bytes)) {
-      setWrite(
-        writes,
-        snapshot,
-        RESEARCH_DEFAULT_PATHS.additionalLessons,
-        appendExactMarkdownBytes(additional.bytes, retired.bytes)
-      );
-    }
-    deletes.add(RESEARCH_DEFAULT_PATHS.retiredTopLevelLessons);
-    additionalWillExist = true;
+  for (const deprecatedPath of [RETIRED_RESEARCH_PATHS.topLevelLessons, RETIRED_RESEARCH_PATHS.additionalLessons]) {
+    if (stateFor(snapshot, deprecatedPath).exists) deletes.add(deprecatedPath);
   }
 
-  for (const document of SUMMARY_DOCUMENTS) {
-    const extraLines = document.path === RESEARCH_DEFAULT_PATHS.lessonsSummary && additionalWillExist
-      ? [ADDITIONAL_LESSONS_LINK]
-      : [];
-    planSummaryDocument(snapshot, writes, document, extraLines);
-  }
-
-  const lessonCorpus = [
-    ...snapshot.lessonMarkdownStates.values(),
-    ...(retired.exists ? [retired] : [])
-  ].map((state) => state.text);
-  if (writes.has(RESEARCH_DEFAULT_PATHS.additionalLessons)) {
-    lessonCorpus.push(currentText(snapshot, writes, RESEARCH_DEFAULT_PATHS.additionalLessons));
-  }
-  lessonCorpus.push(...additionalLessonTexts(options));
-
-  for (const topic of RESEARCH_LESSON_TOPICS) {
-    const state = stateFor(snapshot, topic.path);
-    if (!state.exists) {
-      setWrite(writes, snapshot, topic.path, topicDocument(topic));
-      continue;
-    }
-    const missingParagraphs = topic.paragraphs.filter((paragraph) => !lessonCorpus.some((text) => exactMarkdownBlockPresent(text, paragraph)));
-    const content = appendExactMarkdownBlocks(state.text, missingParagraphs);
-    setWrite(writes, snapshot, topic.path, content);
-  }
+  for (const document of SUMMARY_DOCUMENTS) planSummaryDocument(snapshot, writes, document);
+  for (const topic of RESEARCH_LESSON_TOPICS) setWrite(writes, snapshot, topic.path, topicDocument(topic));
 
   return { writes, deletes };
 }
@@ -492,11 +452,7 @@ export function prepareResearchDefaults(root, options = {}) {
   const canonical = canonicalRoot(root, fsOps);
   const mode = options.mode ?? "sync";
   const snapshot = readResearchDefaultsSnapshot(canonical, { ...options, fsOps, mode });
-  const plan = planResearchDefaults(snapshot, {
-    mode,
-    migrateRetiredLessons: options.migrateRetiredLessons,
-    additionalLessonTexts: options.additionalLessonTexts
-  });
+  const plan = planResearchDefaults(snapshot, { mode });
   const entries = researchDefaultTransactionEntries(canonical, snapshot, plan, { label: options.label });
   return {
     root: canonical,

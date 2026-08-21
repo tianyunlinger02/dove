@@ -6,7 +6,7 @@
 
 ## Overview
 
-This project has no browser frontend. The Trellis `frontend` layer documents the approved Dove 3.0.0 Markdown document architecture: ten flat Skills, three roles, generated host projections, project lifecycle, Claude prompt and stop hooks, installation metadata, and software validation.
+This project has no browser frontend. The Trellis `frontend` layer documents the approved Dove 3.0.0 Markdown document architecture: one Dove research agent, ten flat Skills, generated host projections, project lifecycle, Claude prompt and stop hooks, installation metadata, and software validation.
 
 Dove 3 has no Dove-owned research-state MCP server, public research tool registry, Research Format runtime, or research database. Substantive work uses host file, coding, execution, and research tools directly; Claude project initialization may declare one pinned external paper-acquisition MCP and hidden support Skill.
 
@@ -15,7 +15,7 @@ Dove 3 has no Dove-owned research-state MCP server, public research tool registr
 | Guide | Description | Status |
 |---|---|---|
 | [Directory Structure](./directory-structure.md) | Package surfaces, bundles, and project document layout | Filled |
-| [Component Guidelines](./component-guidelines.md) | Skill, role, adapter, document, and lifecycle responsibilities | Filled |
+| [Component Guidelines](./component-guidelines.md) | Dove agent, Skill, adapter, document, and lifecycle responsibilities | Filled |
 | [Hook Guidelines](./hook-guidelines.md) | Reusable helper flows and ambient entry | Filled |
 | [State Management](./state-management.md) | Markdown research context and installation boundaries | Filled |
 | [Quality Guidelines](./quality-guidelines.md) | Behavioral, documentation, and release validation | Filled |
@@ -24,10 +24,10 @@ Dove 3 has no Dove-owned research-state MCP server, public research tool registr
 ## Pre-Development Checklist
 
 - Read Directory Structure, State Management, Type Safety, and Quality Guidelines.
-- For Skills, roles, adapters, CLI, or public documentation, also read Component Guidelines.
+- For the Dove agent, Skills, adapters, CLI, or public documentation, also read Component Guidelines.
 - For helper flows or ambient entry, also read Hook Guidelines.
 - For cross-layer work, read `../guides/cross-layer-thinking-guide.md`.
-- Search canonical sources, public docs, generated outputs, and templates before changing a Skill ID, role, CLI command, bundle, manifest revision, managed path, or lifecycle boundary.
+- Search canonical sources, public docs, generated outputs, and templates before changing the Dove persona, a Skill ID, CLI command, bundle, manifest revision, managed path, or lifecycle boundary.
 - Keep each file in this directory byte-identical to its matching `src/templates/markdown/spec/frontend/` copy. Write both copies with the same content.
 
 ## Project Reality
@@ -35,11 +35,11 @@ Dove 3 has no Dove-owned research-state MCP server, public research tool registr
 - Runtime: Node.js ESM (`.mjs`), Node.js `>=22`.
 - Package release: Dove `3.0.0`.
 - Public Skills: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, `lessons`, and explicit-only `auto`.
-- Primary roles: Planner, Builder/Author, and Reviewer.
+- Dove research agent: one complete persona with research drive; planning, authoring, and reviewing are not user-switchable Dove roles.
 - Runtime bundles: `dist/index.mjs`, `bin/dove-package.mjs`, and `scripts/dove-user-prompt-submit-package.mjs`.
 - Generated adapters are canonical projections, not registration, readiness, or reviewer-independence proof.
 - Claude Code remains the supported project initialization path. It safely owns only `.mcp.json#/mcpServers/dove-paper-search` for pinned external paper acquisition, while approval, `uvx`, Python, and credentials remain user-provided.
-- Current initialization creates ordinary Markdown under `.dove/research/`: root `RESEARCH.md`, six directory summaries, and six general Lessons themes under `lessons/`. Summaries are human-maintained entrances, not generated indexes; other documents remain naturally named and linked.
+- Current initialization creates ordinary Markdown under `.dove/research/`: root `RESEARCH.md`, six directory summaries, and six built-in Lessons themes under `lessons/`. The overview and summaries are researcher-owned entrances; the built-in themes are package-managed, and other documents remain naturally named and linked.
 - Research Markdown has no fixed headings, frontmatter, generated IDs, enums, machine index, stored counts, or research hashes.
 - A newly executed experiment uses one document for the prospective plan and actual results; design-only, existing-result analysis, and retrospective recording remain honest about what work occurred.
 - The corresponding Review document preserves purpose, exact path scope, prompt, and the actual user-obtained Markdown return; author handling is added only when requested.
@@ -50,8 +50,8 @@ Dove 3 has no Dove-owned research-state MCP server, public research tool registr
 - Installation and file-safety hashes are internal software metadata, never research evidence.
 - CLI commands are `init`, `update`, `reinstall`, `doctor`, `export-research`, and `hook`; there is no `mcp` or `migrate-research` command.
 - `export-research` is an explicitly authorized, one-time legacy Dove JSON research records-to-Markdown conversion that archives original bytes under `.dove/archive/...`; v1 conversion and runtime fallback are unsupported.
-- Project update synchronizes package defaults additively: it creates each missing default file from complete package content, while existing defaults preserve their byte prefix and receive only exact missing canonical paragraphs or navigation lines. Confirmed Complete Reinstall deletes custom Dove research and old archives, then rebuilds the complete default tree while preserving ordinary project files.
-- Validation claims remain software-only and never establish scientific correctness, completion, acceptance, or reviewer independence.
+- Project update creates missing summaries, completes current standard navigation only in `RESEARCH.md` and `lessons/LESSONS.md`, and replaces each package-managed built-in Lessons theme with current package content. Other research documents remain researcher-owned. Confirmed Complete Reinstall deletes custom Dove research and old archives, then rebuilds the complete default tree while preserving ordinary project files.
+- Validation claims remain software-only and never establish scientific correctness, completion, acceptance, reviewer independence, or Dove research quality.
 
 ---
 

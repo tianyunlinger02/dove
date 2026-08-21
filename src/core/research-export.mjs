@@ -518,8 +518,7 @@ export function previewResearchExport(start, options = {}) {
   const defaults = prepareResearchDefaults(root, {
     ...options,
     fsOps,
-    label: "Dove research export defaults",
-    additionalLessonTexts: [lessonsText]
+    label: "Dove research export defaults"
   });
   const used = new Set(RESEARCH_DEFAULT_FILE_PATHS);
   if (researchRootState.exists) {

@@ -106,7 +106,7 @@ export function renderDoveHome(options = {}) {
         ? "dove update"
         : state === "blocked"
           ? "dove doctor"
-          : "/dove:research"
+          : "进入 Claude Code 后切换 Dove agent 或使用 /dove:*"
   );
   const stateLabel = {
     uninitialized: "尚未配置 Dove",
@@ -118,7 +118,7 @@ export function renderDoveHome(options = {}) {
 
   if (interactive) lines.push(renderDovePixelArt({ color }), "");
   lines.push(terminalStyle("Dove", "bold", { color }));
-  lines.push("围绕科研主线探索，带回证据与经验。", "");
+  lines.push("完整科研 agent，围绕主线判断推进真实工作。", "");
   lines.push(`${terminalStyle("当前项目", "dim", { color })}  ${stateLabel}`);
   lines.push("");
   lines.push(`${terminalStyle(interactive ? "选择" : "下一步", "bold", { color })}  ${nextCommand}`);

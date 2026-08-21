@@ -7,7 +7,7 @@ const HOST_DEFINITIONS = [
     order: 0,
     projectInitializable: false,
     capabilities: { commandAdapters: true, projectHooks: false, sharedInstructions: false },
-    legacySignatures: [".opencode.json", ".opencode/commands/dove.status.md", ".opencode/skills/dove-planner/SKILL.md"]
+    legacySignatures: [".opencode.json", ".opencode/commands/dove.status.md", ".opencode/agents/dove.md", ".opencode/skills/dove-planner/SKILL.md"]
   },
   {
     id: "codex",
@@ -44,6 +44,7 @@ const HOST_DEFINITIONS = [
       ".mcp.json",
       ".claude/settings.json",
       ".claude/rules/dove.md",
+      ".claude/agents/dove.md",
       ".claude/skills/dove-intake/SKILL.md"
     ]
   }

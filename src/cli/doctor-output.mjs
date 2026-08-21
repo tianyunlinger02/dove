@@ -32,7 +32,7 @@ export function recommendedDoveAction(result) {
   const first = result.actions?.[0];
   if (first) {
     const messages = {
-      update: "更新 Dove 管理的项目接入，并以精确追加方式补齐研究默认文档；已有研究字节保持不变。",
+      update: "更新 Dove 管理的项目接入，补齐研究汇总导航，并以当前 package 内容刷新六个内置 Lessons 主题。",
       init: "为当前项目启用 Dove 接入。",
       reinstall: "重新安装会在明确确认后删除自定义 Dove 研究内容，并重建当前完整默认研究树。",
       "export-research": "审阅旧版 JSON 科研记录到 Markdown 的一次性导出预览，并在确认后保留原始归档。",
@@ -40,7 +40,7 @@ export function recommendedDoveAction(result) {
     };
     return { ...first, message: messages[first.kind] ?? "按提示处理当前 Dove 状态。" };
   }
-  return { kind: "ready", command: "claude", message: "Dove 软件、项目接入和研究文档外层检查通过。" };
+  return { kind: "ready", command: "claude", message: "Dove 软件、agent surface、项目接入和研究文档外层检查通过。" };
 }
 
 export function renderDoveDoctor(result, options = {}) {

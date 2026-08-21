@@ -54,7 +54,8 @@ function setupLines(command, status) {
   }
   if (command === "init") {
     return [
-      "✓ 10 个 Dove Skill 工作入口已安装",
+      "✓ Dove agent 已安装",
+      "✓ 10 个 Dove 能力入口已安装",
       "✓ Claude 提示与停止钩子已配置",
       "✓ 按需论文搜索、下载与阅读 MCP 已声明",
       "✓ 完整默认研究目录与通用 Lessons 已建立",
@@ -62,8 +63,8 @@ function setupLines(command, status) {
     ];
   }
   return status === "unchanged"
-    ? ["✓ 工作入口、宿主接入和研究默认文档均已是最新"]
-    : ["✓ 工作入口、宿主接入和缺失的研究默认内容已刷新"];
+    ? ["✓ Dove agent、能力入口、宿主接入和研究默认文档均已是最新"]
+    : ["✓ Dove agent、能力入口、宿主接入、汇总导航和内置 Lessons 已刷新"];
 }
 
 export function renderProjectIntegrationResult(command, result, options = {}) {
@@ -93,11 +94,11 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
   lines.push(...setupLines(command, result.status).map((line) => terminalStyle(line, "green", { color })));
   lines.push("");
   if (command === "init" && result.status === "already-initialized") {
-    lines.push("如需刷新项目集成和研究默认文档，请运行 dove update。项目中已有的研究内容不会被重排或覆盖。");
+    lines.push("如需刷新项目集成、研究汇总导航和内置 Lessons，请运行 dove update。六个内置 Lessons 主题会以当前 package 内容整体替换，其他研究文档保持不变。");
   } else {
     lines.push(command === "init"
-      ? "默认研究目录与通用 Lessons 已建立；它们是可维护的 Markdown 入口，不代表科研主线、结论或任务已经完成。"
-      : "更新只创建缺失文件或精确追加缺失的默认段落和导航；项目中已有的研究内容与普通研究文档保持不变。"
+      ? "默认研究目录已建立；研究 overview 与汇总由研究者维护，六个内置 Lessons 主题由 package 管理。它们不代表科研主线、结论或任务已经完成。"
+      : "更新会创建缺失汇总、补齐 RESEARCH.md 与 lessons/LESSONS.md 的当前标准导航，并以当前 package 内容整体替换六个内置 Lessons 主题；其他研究文档保持不变。"
     );
   }
   lines.push("");
@@ -105,6 +106,6 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
     lines.push("论文工具需要本机已有 uvx；Claude Code 首次使用 project MCP 时会请求你批准。Dove 未安装依赖、写入凭据或替你批准。");
     lines.push("");
   }
-  lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code，然后按需要运行 /dove:research 或其他 Dove Skill。`);
+  lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code，按需要切换到 Dove agent 或使用 /dove:* 能力入口。`);
   return lines.join("\n");
 }

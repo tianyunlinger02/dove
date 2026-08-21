@@ -12,7 +12,12 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs"
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "package:validate", "check", "release:check"];
 const FORBIDDEN_PACKAGE_PATHS = [
+  ".claude/agents/dove-reviewer.md",
   ".opencode.json",
+  ".opencode/agents/dove-reviewer.md",
+  ".opencode/skills/dove-planner/SKILL.md",
+  ".opencode/skills/dove-builder/SKILL.md",
+  ".opencode/skills/dove-reviewer/SKILL.md",
   "mcp/dove-state-server-package.mjs",
   "scripts/doctor-mcp-probe-package.mjs"
 ];
@@ -52,5 +57,9 @@ assert.equal(pack.version, packageJson.version);
 assert.equal(pack.filename, `${packageJson.name}-${packageJson.version}.tgz`);
 assert.deepEqual(pack.files.map((file) => file.path).sort(), [...MANAGED_PACKAGE_PATHS, "package.json"].sort());
 for (const relativePath of FORBIDDEN_PACKAGE_PATHS) assert.equal(pack.files.some((file) => file.path === relativePath), false, `retired path packed: ${relativePath}`);
+for (const packedFile of pack.files) {
+  assert.doesNotMatch(packedFile.path, /^\.opencode\/skills\/dove-(?:planner|builder|reviewer)\/SKILL\.md$/u, `retired role skill packed: ${packedFile.path}`);
+  assert.doesNotMatch(packedFile.path, /^\.(?:claude|opencode)\/agents\/dove-reviewer\.md$/u, `retired reviewer agent packed: ${packedFile.path}`);
+}
 
 console.log(JSON.stringify({ status: "passed" }, null, 2));

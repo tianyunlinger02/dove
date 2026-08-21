@@ -37,12 +37,27 @@ export {
 } from "./paper-search-integration.mjs";
 
 export {
-  DOVE_PRIMARY_ROLES,
-  generatedRoleDefinitionEntries,
-  renderClaudeReviewerAgent,
-  renderOpenCodeReviewerAgent,
-  renderOpenCodeRoleSkill
-} from "./role-definitions.mjs";
+  DOVE_AGENT_DEFINITION,
+  DOVE_AGENT_SURFACES,
+  generatedDoveAgentEntries,
+  renderClaudeDoveAgent,
+  renderOpenCodeDoveAgent
+} from "./dove-agent-definition.mjs";
+export {
+  DOVE_AGENT_CAPSULE_BULLETS,
+  DOVE_AGENT_CURIOSITY,
+  DOVE_AGENT_DESCRIPTION,
+  DOVE_AGENT_DIRECT_JUDGMENT,
+  DOVE_AGENT_FRAME,
+  DOVE_AGENT_HUNCH,
+  DOVE_AGENT_LAYERING,
+  DOVE_AGENT_NAME,
+  DOVE_AGENT_PERSONA_BULLETS,
+  DOVE_AGENT_PROPORTIONALITY,
+  DOVE_AGENT_STOPPING,
+  renderDoveAgentInstructions,
+  renderDoveAgentPersonaSection
+} from "./dove-agent-persona.mjs";
 export {
   COMMAND_SURFACES,
   COMMAND_SURFACE_BY_ID,

@@ -1,129 +1,137 @@
 # Dove
 
-Dove 3.0.0 是一个本地优先的科研辅助推进系统。宿主模型使用正常的文件、编程、执行和研究工具完成真实工作；Dove 提供精简的 Skills、角色边界、项目接入，以及用普通 Markdown 保存研究上下文的方式。
+Dove is a local-first research agent for papers, experiments, figures, reviews, revisions, and engineering work. It installs one complete Dove persona for the host to use directly, plus ten flat capability commands for explicit entry points.
 
-Dove 区分三种责任：
+Dove's job is to advance the user's real research decisions, not to replace research with workflow ceremony. It starts from the current research mainline and the decision that matters, treats hunches and user preferences as hypotheses or tradeoff signals, compares serious candidates with theory and real use conditions, and chooses the feasible action most likely to change or protect the decision.
 
-- **Planner**：梳理目标、范围、关键未知、证据需要和停止条件。
-- **Builder/Author**：负责研究、编码、实验、写作、图表、修订与 rebuttal。
-- **Reviewer**：在用户管理的单独评审中，只读检查明确声明的材料范围并返回 Markdown。
+Dove should bring research drive, not just cautious limitation reporting. It turns gaps into sharp hypotheses, discriminating evidence to seek, or concrete next moves that advance the mainline, while keeping exploration aimed rather than diffuse.
 
-宿主输出、测试、本地检查和 Review 返回都只是有限证据，不能单独证明科学正确、研究完成、论文可接受或 Reviewer 独立。
+Dove treats rigor, novelty, experiments, validation, engineering, writing, review, documents, and preferences as layered means rather than equal goals. More Markdown, more checks, more experiments, more review, or more internal iteration is not progress unless it clarifies the real question, external context, evidence, or decision.
 
-## 当前架构
+## First 10 minutes
 
-Dove 3.0.0 包含：
+Requirements:
 
-- **10 个扁平 Skills**：`research`、`status`、`source`、`experiment`、`draft`、`figure`、`review`、`rebuttal`、`lessons`，以及只能显式调用的 `auto`；
-- **3 个角色**：Planner、Builder/Author、Reviewer；
-- Claude、OpenCode、Codex、Cursor 和共享 agent 格式的生成适配器；
-- 项目生命周期 CLI、Claude prompt hook 与 stop hook；
-- **3 个独立 Node.js bundles**：library、CLI、prompt hook。
+- Node.js `>=22`
+- npm
+- Claude Code for the supported project initialization path
 
-Dove 3 没有研究状态 MCP server、研究数据库、工具注册表或隐藏的机器研究状态。Claude 项目可以按需使用固定版本的外部 `paper-search-mcp==0.1.4` 获取论文，但它不是 Dove 的研究数据库。
-
-## 安装与项目初始化
-
-要求：Node.js `>=22`、npm；当前完整支持的项目初始化路径是 Claude Code。
-
-公共 npm 上名为 `dove` 的包与本项目无关。请安装可信的精确 tarball、Git revision 或内部 registry 版本：
+Install Dove once for the current user from a release channel that supplies an exact artifact and source revision, then initialize the target project explicitly. The formal npm identity is not frozen, and the bare public npm name `dove` belongs to an unrelated package. Use a packed tarball, exact Git/tag/commit specifier, or exact internal-registry specifier; never treat bare `npm install -g dove` or bare `npx dove` as trusted Dove entry points.
 
 ```bash
 npm install --global <exact-dove-package-specifier>
+
 cd <target-project>
+dove
+```
+
+The user-level npm install only places `dove` on the current user's `PATH`; it does not write projects, shell RC files, or user/global host configuration. Project initialization writes `.dove/install/manifest.json`, the Claude project integration, the Dove agent surface, hidden intake support, and the default research Markdown tree.
+
+Running bare `dove` in an interactive terminal opens a project-aware guided setup with Dove's pixel-art bird. It initializes an unconfigured Claude project, offers a safe update when the managed integration is older than the current user CLI, or shows connection diagnostics when integration is current. `NO_COLOR=1` removes styling while keeping the art readable. Piped output stays plain and compact; explicit `--json` or `--format json` modes remain machine-readable.
+
+## Agent and command surface
+
+Claude projects receive `.claude/agents/dove.md`, a direct Dove research-agent surface. Dove also exposes ten flat Skills:
+
+| Skill | Purpose |
+|---|---|
+| `dove.research` | Complete one bounded pass of research, synthesis, or project investigation. |
+| `dove.status` | Read the human-maintained research overview and summaries without writes. |
+| `dove.source` | Discover, retrieve, read, verify, and document real sources that materially inform the research. |
+| `dove.experiment` | Design, execute, analyze, or record an experiment that advances a research decision. |
+| `dove.draft` | Write or revise ordinary project drafts from the available evidence. |
+| `dove.figure` | Gather real materials and create or revise figures and captions. |
+| `dove.review` | Prepare, import, or inspect a user-managed review in one readable document. |
+| `dove.rebuttal` | Perform author-side rebuttal and revision from actual review findings and evidence. |
+| `dove.lessons` | Read or maintain advisory Lessons themes and their summary. |
+| `dove.auto` | Conduct explicit high-autonomy multi-round research within the documented current mainline. |
+
+Claude Code exposes these as `/dove:*` commands. The OpenCode Dove agent, OpenCode commands, Codex, Cursor, and shared agent-skill files are generated package projections, not proof that those hosts are registered, initialized, or ready.
+
+The commands are capability entrances, not separate personalities. Planning, authoring, and reviewing are not user-switchable Dove personas. Review separation remains user-managed: Dove can prepare or import a review document, but it does not prove reviewer identity, independence, authority, scientific validity, or acceptance.
+
+## Ambient routing
+
+The Claude prompt hook selects hidden `dove-intake` only when the original user prompt is a clear Dove research work request. Intake routing is zero-write, may choose no Dove Skill for contextual follow-ups or judgment-only prompts, and never selects Auto. Slash commands keep their explicit routing.
+
+For prompts such as “现在怎么办”, “要不要继续”, or “should we continue”, Dove should answer directly from the research-agent persona: weigh current evidence, task risk, user preference, and the mainline; state useful hunches as hypotheses; give the judgment and stop unless the user explicitly asks to execute or record.
+
+## Research Markdown
+
+Research context is ordinary Markdown under `.dove/research/`, not a runtime database. The default tree contains:
+
+- root `RESEARCH.md`;
+- `missions/MISSIONS.md`, `experiments/EXPERIMENTS.md`, `sources/SOURCES.md`, `reviews/REVIEWS.md`, `claims/CLAIMS.md`, and `lessons/LESSONS.md`;
+- six package-managed built-in Lessons themes under `lessons/`.
+
+The overview and summaries are researcher-owned entrances and synthesis documents. The six built-in Lessons themes are replaced by `dove update` and carry a notice directing project-specific guidance to separate naturally named Lessons linked from `lessons/LESSONS.md`. Other topic documents remain naturally named, linked, and researcher-owned.
+
+Dove does not require fixed headings, frontmatter, IDs, enums, hashes, indexes, stored counts, or a mandatory Markdown template. Additional research Markdown is maintained only when the user explicitly asks to record, update, or save it, or when results clearly change the research mainline, conclusion, decision, or priority.
+
+## Source, experiment, figure, and review boundaries
+
+- Search results are candidates until material is retrieved, inspected, and used.
+- Figure generation runs on the host side; Dove gathers real materials, creates or revises the ordinary figure and caption, and records context only when useful.
+- A central experiment must serve a real problem, key uncertainty, or route decision. If that basis is missing, Dove should investigate the problem or sources rather than inventing a substitute experiment.
+- When newly executed central experiment work needs recording, one Experiment document contains the prospective plan and later actual results.
+- Review preparation declares project-relative artifact paths and scope. The user manages the separate reviewer or review session. Import preserves the actual returned Markdown faithfully; substantive response and revision remain author-side Dove work.
+
+## Host integration
+
+Generated adapter artifacts exist for OpenCode, Codex, Cursor, shared agent-skill hosts, and Claude Code, but generation is not project readiness. This release supports and accepts Claude project initialization through:
+
+```bash
 dove init --host claude
 ```
 
-初始化会安装 Claude Skills、Reviewer 与 ambient 资源、prompt/stop hooks、论文获取 MCP 声明、`.dove/install/manifest.json`，并建立默认 Markdown 研究树。它不会安装 Python、写入凭据、批准 MCP trust，也不会制造研究进度、Mission 或科学结论。
+Initialization:
 
-重新进入 Claude Code 后即可使用 Dove。
+- records the initialized host in `.dove/install/manifest.json`;
+- registers the project `UserPromptSubmit` and `Stop` hooks;
+- installs the project ambient rule, hidden intake skill, Dove agent, hidden paper-search support Skill, and generated project-local commands;
+- declares the pinned external `dove-paper-search` MCP server in `.mcp.json` without approval, trust, credentials, or bundled Python source;
+- minimally merges only Dove's hook entries into project `.claude/settings.json`;
+- preserves unrelated project settings and hooks; and
+- never reads or writes user/global host configuration or shell startup files.
 
-## 十个 Skills
+Projects do not receive copied Dove runtime files under `bin/`, `dist/`, `mcp/`, or `scripts/`, and project config contains neither an absolute CLI path nor a fallback. Generated business adapters use host tools and stop if needed support is unavailable.
 
-| Skill | 用途 |
-|---|---|
-| `research` | 完成一次有边界的研究、综合或项目调查。 |
-| `status` | 只读查看当前研究概览和相关文档。 |
-| `source` | 搜索、获取、阅读、核对并记录真实来源。 |
-| `experiment` | 设计、执行、分析或诚实记录实验。 |
-| `draft` | 基于现有证据创建或修改普通项目文稿。 |
-| `figure` | 收集真实材料，制作或修改图表与 caption。 |
-| `review` | 准备、导入或查看用户管理的单独 Review。 |
-| `rebuttal` | 根据真实 Review findings 完成作者侧回应与修订。 |
-| `lessons` | 按需读取或维护通用 Lessons。 |
-| `auto` | 在已记录主线内进行显式、多轮、高自主研究。 |
+`dove update` refreshes only a project that already has a valid `.dove/install/manifest.json`, using the hosts recorded there. A missing or invalid manifest fails closed; update does not infer hosts from files or adapters. It also creates missing summaries, completes current standard navigation only in `RESEARCH.md` and `lessons/LESSONS.md`, replaces all six built-in Lessons themes, and leaves other researcher-owned documents unchanged.
 
-例如：
+`dove doctor` is read-only and distinguishes user CLI health, project integration, workspace state, host registration/readiness, and legacy copied runtime. An absent `.dove/research/` after project init is abnormal because the default tree is installed, but status and doctor still report missing content naturally rather than repairing it implicitly.
 
-```text
-/dove:research 比较当前实现和文档设计，找出最重要的未解决问题。
-```
+## Packaging and validation
 
-普通清晰工作请求可以由隐藏 intake 路由到最小合适 Skill；路由本身零写入，而且永远不会选择 Auto。
-
-## 普通 Markdown 研究树
-
-初始化建立：
-
-```text
-.dove/research/
-├── RESEARCH.md
-├── missions/MISSIONS.md
-├── experiments/EXPERIMENTS.md
-├── sources/SOURCES.md
-├── reviews/REVIEWS.md
-├── claims/CLAIMS.md
-└── lessons/
-    ├── LESSONS.md
-    └── 六个通用主题文档
-```
-
-这些是研究者维护的普通 Markdown 入口，不是数据库、生成索引或科研完成证明。其他文件使用自然名称，并在有帮助时从汇总文档链接。
-
-Dove 不要求固定 headings、frontmatter、ID、enum、hash、机器索引、条目计数或统一模板。
-
-- `RESEARCH.md` 保持当前主线、重要进展、结论边界、链接和优先级简洁可恢复。
-- Mission、Source、Experiment、Review 和必要时的 Claim 都是自然文档，不是 entity store。
-- 新执行的实验先写计划，再把实际过程、结果、失败或偏差和解释追加到同一份 Experiment 文档。
-- Review 的声明范围、prompt 和用户取得的实际返回保存在同一份 Review 文档；作者处理只在用户要求时添加，实质回应和修订属于 Rebuttal。
-- Lessons 是可质疑的建议，不是证据或权限。
-
-## 理论与证据
-
-当问题或路线尚未明确时，先发散探索不同解释和方案，再比较重要候选，不直接投入第一个看似可行或最容易的方案。理论与证据冲突时，重新审视理论、实验和路线本身，选择最能澄清分歧的下一步，而不是默认继续增加实验。
-
-## Status、Review 与 Auto
-
-- `status` 只读。缺少 overview 或链接失效时，它自然说明事实，不创建文件，也不推断数据库状态。
-- Review 是用户管理的单独交换。Dove 不启动、冒充或认证 Reviewer；内置 Reviewer 角色只提供责任分离，不能证明独立性。
-- `auto` 只能显式调用。它把已记录主线作为只读方向边界；如果主线缺失、明显不完整或需要改变，Auto 返回建议并停止，不会暗中重定义研究方向。
-
-## CLI
+The packaged CLI exposes:
 
 ```text
 init, update, reinstall, doctor, export-research, hook
 ```
 
-- `init`：建立 Claude 项目接入和完整默认研究树。
-- `update`：刷新已识别的项目接入，并以精确追加方式补齐缺失的默认 Markdown；项目中已有的不同内容不覆盖。
-- `reinstall`：先展示删除和替换范围，默认 No；确认后重建 Dove 项目内容，保留普通项目文件。
-- `doctor`：只读的开发排查命令，不判断科研质量。用户明确点名 Dove 的反馈和 Dove 自身实际故障写入 `.dove/install/DOCTOR.md`；未点名 Dove 的普通科研或协作反馈中，可复用的经验进入 Lessons。
-- `export-research`：显式、一次性把支持的旧 JSON research records 导出为 Markdown，并归档原始字节；真实科研数据需要单独授权。
-- `hook`：提供 Claude prompt 与 stop hooks。
+The package contains three standalone Node.js 22 ESM bundles:
 
-没有 `dove sync`、`dove mcp`、Workspace 命令或 research database CLI。
+- `dist/index.mjs`
+- `bin/dove-package.mjs`
+- `scripts/dove-user-prompt-submit-package.mjs`
 
-## 论文获取
+It contains no Dove research MCP server bundle, research tool registry, MCP CLI command, or Research Format runtime. The optional paper-acquisition support is the pinned external `paper-search-mcp==0.1.4` project fragment for Claude.
 
-Claude 项目初始化只管理 `.mcp.json#/mcpServers/dove-paper-search`，固定到 `paper-search-mcp==0.1.4`，通过用户已有的 `uvx` 运行。Dove 不自动安装依赖、不写 API key/email/token、不批准 workspace trust，也不提供 shell fallback。首次使用 project MCP 时由用户在 Claude Code 中批准。
+From a source checkout:
 
-## 文档与验证
+```bash
+npm run commands:check
+npm run commands:validate
+npm run check
+npm run release:check
+npm run pack:dry-run
+```
 
-- [Documentation index](docs/README.md)
+Validation protects software boundaries, generated surface drift, package contents, and lifecycle safety. It does not prove scientific correctness, research completion, reproducibility, acceptance, independent review, or Dove's research quality. Dove's research quality must be judged from code logic, generated natural-language behavior, installed project surfaces, and real interactions with the research mainline rather than prompt counts, validator counts, document counts, checklist completion, or scores.
+
+## Documentation
+
 - [Installation](docs/INSTALL.md)
 - [Usage](docs/USAGE.md)
 - [Packaging](docs/PACKAGING.md)
 - [Capability matrix](docs/CAPABILITY_MATRIX.md)
-- [Output samples](docs/DOVE_COMMAND_OUTPUT_SAMPLES.md)
-
-源码仓库使用 `npm run check` 做常规软件检查，`npm run release:check` 做发布检查，`npm run pack:dry-run` 查看发布归档。这些检查只说明软件边界，不证明科研结论、完成度、复现性或 Reviewer 独立性。
+- [Safe command output samples](docs/DOVE_COMMAND_OUTPUT_SAMPLES.md)

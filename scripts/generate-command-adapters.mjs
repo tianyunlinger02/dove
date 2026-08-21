@@ -9,7 +9,7 @@ import {
   renderClaudeAmbientRule,
   renderClaudeAmbientSkill
 } from "../src/core/ambient-policy.mjs";
-import { generatedRoleDefinitionEntries } from "../src/core/role-definitions.mjs";
+import { generatedDoveAgentEntries } from "../src/core/dove-agent-definition.mjs";
 import {
   PAPER_SEARCH_SUPPORT_SKILL_PATH,
   renderPaperSearchSupportSkill
@@ -150,29 +150,55 @@ export function generatedClaudeAmbientProjectEntries() {
   ];
 }
 
-export function generatedPrimaryRoleEntries() {
-  return generatedRoleDefinitionEntries();
+export function generatedDoveAgentSurfaceEntries() {
+  return generatedDoveAgentEntries();
 }
 
-export function writeGeneratedPrimaryRoles(root = PACKAGE_ROOT, options = {}) {
-  return writeFileSetTransaction(generatedPrimaryRoleEntries().map((entry) => ({
-    root,
-    relativePath: entry.relativePath,
-    content: `${entry.content.trimEnd()}\n`,
-    encoding: "utf8",
-    force: true,
-    label: "Generated Dove primary role path"
-  })), { fsOps: options.fsOps });
+function existingGeneratedDoveAgentPaths(root) {
+  return [
+    ".claude/agents/dove.md",
+    ".claude/agents/dove-reviewer.md",
+    ".opencode/agents/dove.md",
+    ".opencode/agents/dove-reviewer.md",
+    ".opencode/skills/dove-planner/SKILL.md",
+    ".opencode/skills/dove-builder/SKILL.md",
+    ".opencode/skills/dove-reviewer/SKILL.md"
+  ].filter((relativePath) => fs.existsSync(path.join(root, relativePath))).sort();
 }
 
-export function checkGeneratedPrimaryRoles(root = PACKAGE_ROOT) {
-  return generatedPrimaryRoleEntries().flatMap((entry) => {
+export function writeGeneratedDoveAgentSurfaces(root = PACKAGE_ROOT, options = {}) {
+  const entries = generatedDoveAgentSurfaceEntries();
+  const expectedPaths = new Set(entries.map((entry) => entry.relativePath));
+  const staleEntries = existingGeneratedDoveAgentPaths(root)
+    .filter((relativePath) => !expectedPaths.has(relativePath))
+    .map((relativePath) => ({ root, relativePath, delete: true, force: true, label: "Stale generated Dove agent surface path" }));
+  return writeFileSetTransaction([
+    ...entries.map((entry) => ({
+      root,
+      relativePath: entry.relativePath,
+      content: `${entry.content.trimEnd()}\n`,
+      encoding: "utf8",
+      force: true,
+      label: "Generated Dove agent surface path"
+    })),
+    ...staleEntries
+  ], { fsOps: options.fsOps });
+}
+
+export function checkGeneratedDoveAgentSurfaces(root = PACKAGE_ROOT) {
+  const entries = generatedDoveAgentSurfaceEntries();
+  const expectedPaths = new Set(entries.map((entry) => entry.relativePath));
+  const drift = entries.flatMap((entry) => {
     const absolutePath = path.join(root, entry.relativePath);
     if (!fs.existsSync(absolutePath)) return [{ relativePath: entry.relativePath, reason: "missing" }];
     return fs.readFileSync(absolutePath, "utf8") === `${entry.content.trimEnd()}\n`
       ? []
       : [{ relativePath: entry.relativePath, reason: "content differs" }];
   });
+  for (const relativePath of existingGeneratedDoveAgentPaths(root)) {
+    if (!expectedPaths.has(relativePath)) drift.push({ relativePath, reason: "stale" });
+  }
+  return drift;
 }
 
 const MAX_GENERATED_CLEANUP_WARNINGS = 20;

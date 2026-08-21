@@ -22,6 +22,8 @@ function setupCompleteLines(_result, color) {
     terminalStyle("项目配置完成", "bold", { color }),
     "",
     "✓ Dove 项目集成已是当前版本",
+    "✓ Dove agent 已安装",
+    "✓ 10 个 Dove 能力入口已安装",
     "✓ Claude Code 自然语言入口已配置",
     "✓ Prompt Hook 与 Skills 已安装",
     "✓ 按需论文搜索、下载与阅读 MCP 已声明",
@@ -31,7 +33,7 @@ function setupCompleteLines(_result, color) {
     "默认研究文档是可维护的 Markdown 入口，不代表科研主线、结论或任务已经完成。",
     "",
     `${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code`,
-    "进入后直接使用 Dove 项目入口。"
+    "进入后按需要切换到 Dove agent 或使用 /dove:* 能力入口。"
   ].join("\n");
 }
 
@@ -90,7 +92,7 @@ export async function runInteractiveDoveSetup(options) {
 
   stream.write(`${renderDovePixelArt({ color })}\n\n`);
   stream.write(`${terminalStyle("Dove", "bold", { color })}\n`);
-  stream.write("围绕科研主线探索，带回证据与经验。\n\n");
+  stream.write("完整科研 agent，围绕主线判断推进真实工作。\n\n");
   stream.write(`${terminalStyle("项目", "dim", { color })}  ${projectName}\n\n`);
 
   const setup = initial.setup ?? (

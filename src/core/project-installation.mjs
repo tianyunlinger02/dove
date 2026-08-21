@@ -34,7 +34,7 @@ import {
 } from "./research-defaults.mjs";
 import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 import { generatedAdapterEntries, generatedClaudeAmbientProjectEntries } from "../../scripts/generate-command-adapters.mjs";
-import { generatedRoleDefinitionEntries } from "./role-definitions.mjs";
+import { generatedDoveAgentEntries } from "./dove-agent-definition.mjs";
 
 const MCP_PATH = PAPER_SEARCH_MCP_PATH;
 const SETTINGS_SELECTOR = "/hooks/UserPromptSubmit[dove-user-prompt-submit]";
@@ -114,11 +114,11 @@ function assertManagedResourcePath(relativePath) {
 }
 
 function claudeResources() {
-  const roleEntries = generatedRoleDefinitionEntries().filter((entry) => entry.relativePath.startsWith(".claude/agents/"));
+  const agentEntries = generatedDoveAgentEntries().filter((entry) => entry.relativePath.startsWith(".claude/agents/"));
   const files = [
     ...generatedAdapterEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
     ...generatedClaudeAmbientProjectEntries(),
-    ...roleEntries
+    ...agentEntries
   ].map((entry) => {
     assertManagedResourcePath(entry.relativePath);
     const content = normalizedGeneratedContent(entry.content);
@@ -471,7 +471,6 @@ function appendResearchDefaults(root, entries, options = {}) {
   const prepared = prepareResearchDefaults(root, {
     fsOps: options.fsOps,
     mode: options.mode ?? "sync",
-    migrateRetiredLessons: options.migrateRetiredLessons,
     label: options.label
   });
   const existingTargets = new Set(entries.map((entry) => entry.relativePath));
@@ -631,7 +630,6 @@ function prepareLifecycleIntegration(root, options, { hosts, source = null, rein
     researchDefaults = appendResearchDefaults(root, entries, {
       fsOps,
       mode: "replace",
-      migrateRetiredLessons: false,
       label: "Dove Complete Reinstall research bootstrap"
     });
   } else if (source?.sourcePath === LEGACY_INSTALLATION_MANIFEST_PATH) {

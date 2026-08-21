@@ -48,7 +48,7 @@ Usage:
   dove hook user-prompt-submit --project <dir>
   dove hook stop --project <dir>
 
-The runtime CLI manages project integration, diagnostics, one-time legacy JSON research export, and the Claude prompt and stop hooks. Research work uses the ten host Skills with ordinary Markdown research documents. Project initialization creates the ordinary default research tree, but it does not create research progress, a Mission, or a scientific conclusion.
+The runtime CLI manages project integration, diagnostics, one-time legacy JSON research export, and the Claude prompt and stop hooks. Research work uses the Dove agent and ten host Skills with ordinary Markdown research documents. Project initialization creates the ordinary default research tree, but it does not create research progress, a Mission, or a scientific conclusion.
 `);
 }
 

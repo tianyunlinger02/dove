@@ -1,181 +1,163 @@
 # Installation
 
-Dove 3.0.0 使用两层安装：
+Dove uses a two-stage installation model:
 
-1. 为当前用户安装一个可信的精确 Dove artifact，使 `dove` 位于 `PATH`；
-2. 在每个 Claude Code 项目中显式初始化。
+1. install the Dove npm artifact once for the current user so `dove` is available on that user's `PATH`; and
+2. initialize each project explicitly with the host integration Dove should manage.
 
-公共 npm 上名为 `dove` 的包与本项目无关。不要把 bare `npm install -g dove`、bare `npx dove` 或源码入口当作消费者安装方法。
+The matching Dove release is not currently available under the bare public npm name `dove`, which is occupied by an unrelated package. Use only an exact package specifier supplied by a trusted Dove release channel, such as a packed tarball, Git commit/tag specifier, or internal-registry specifier tied to the exact source revision.
+
+Do not use bare `npm install -g dove` or bare `npx dove` as a trusted Dove entry point.
 
 ## Requirements
 
 - Node.js `>=22`
 - npm
-- Claude Code（当前完整支持的项目初始化路径）
-- `uvx`（仅在项目需要论文搜索、公开下载或全文阅读时使用；Dove 不自动安装）
+- Claude Code for the currently supported and accepted project initialization path
 
-OpenCode、Codex、Cursor 和共享 agent adapters 可以随包发布，但其存在不代表注册、连接或完整初始化已经可用。
+Generated adapters may exist for other hosts, but their presence in the package or repository does not mean that project initialization, registration, connection, or readiness for those hosts has been completed or accepted.
 
-## 用户级安装
+## 1. One-time user installation
+
+Install the exact Dove artifact for the current user according to the npm prefix policy used on that machine:
 
 ```bash
 npm install --global <exact-dove-package-specifier>
 ```
 
-使用可信的精确 tarball、Git revision 或内部 registry version。用户级安装只把 `dove` 放到 `PATH`，不会修改项目、shell startup、host trust、凭据或研究文档。
+The user-level npm installation installs the `dove` executable into the current user's npm binary path. It must not:
 
-## Claude 项目初始化
+- write any project;
+- edit shell startup or shell RC files;
+- write user/global Claude, MCP, or other host configuration; or
+- create or modify project research state.
 
-在目标项目运行：
+If the npm binary directory is not already on `PATH`, configure the environment through the user's normal system administration process. Dove does not edit shell configuration on the user's behalf.
+
+## 2. Claude project initialization
+
+From the target project root, run:
 
 ```bash
 dove init --host claude
 ```
 
-初始化会建立：
+This is the currently supported and accepted project-initialization path. `dove init` installs project integration and the default ordinary Markdown research tree. It may write:
 
-- `.dove/install/manifest.json`（revision `2.0`）；
-- `.claude/commands/dove/` 下的十个 Skill adapters；
-- Claude Reviewer、ambient rule、隐藏 intake 和隐藏 paper-search support Skill；
-- `.claude/settings.json` 中 Dove 的 prompt 与 stop hook fragments；
-- `.mcp.json#/mcpServers/dove-paper-search`；
-- `.dove/research/` 下完整默认 Markdown 研究树和六个通用 Lessons 主题。
+- `.dove/install/manifest.json`;
+- project-local Claude commands under `.claude/commands/dove/`;
+- the project-local Dove agent at `.claude/agents/dove.md`;
+- the project-local ambient rule and hidden intake skill;
+- the project-local `UserPromptSubmit` and `Stop` hook registrations;
+- the hidden `dove-paper-search` support skill and its pinned external MCP declaration in `.mcp.json`; and
+- default Markdown research files under `.dove/research/`.
 
-初始化不会：
+It must preserve unrelated project configuration and preflight the complete managed write set before changing files.
 
-- 安装 `uv`、Python 或第三方 Python package；
-- 写 API key、email、token 或其他凭据；
-- 自动批准 project MCP、workspace trust 或 host 权限；
-- 创建研究进度、Mission、Claim、实验结果或科学结论；
-- 把 runtime bundles 复制进项目。
+Bare `dove` shows a concise project-aware home; in an interactive terminal it includes Dove's pixel-art bird and points to `dove` for setup, `dove update` when the project needs synchronization, `dove doctor` when attention is needed, or entering Claude Code to switch to the Dove agent or use `/dove:*` when the project is current. It is concise, not narrow: the point is to keep the mainline visible while still nudging toward the next productive move. `NO_COLOR=1` disables ANSI styling, redirected or piped output is clean text without the mascot, and `--json` or `--format json` emits only the direct machine-readable integration result.
 
-初始化后离开并重新进入 Claude Code，让新会话加载项目资源。第一次使用 project MCP 时，由用户在 Claude Code 中批准。
+`dove init` must not:
 
-## 论文获取 MCP
+- copy the Dove runtime into project `bin/`, `dist/`, `mcp/`, or `scripts/` directories;
+- write an absolute path to the installed CLI;
+- write user/global host configuration or shell files;
+- approve MCP trust or write credentials;
+- use or install a fallback runtime; or
+- silently import, migrate, repair, or delete legacy state.
 
-Dove 只管理一个共享配置 fragment：
+There is no `dove install` command and no `--platform` option.
 
-```text
-.mcp.json#/mcpServers/dove-paper-search
-```
+## Dove agent and ambient entry
 
-它固定使用外部 `paper-search-mcp==0.1.4`，通过本机已有 `uvx` 启动。Dove 不包含该 Python package，不注册用户级 server，也不批准 trust。
+The initialized Claude project contains one directly usable Dove agent plus flat capability commands:
 
-对不公开来源，获取能力仍取决于合法访问条件。`download_with_fallback` 若被使用，必须显式传入：
+- `.claude/agents/dove.md` is the complete Dove research-agent persona;
+- `.claude/commands/dove/*.md` are the ten flat capability entrances;
+- `.claude/rules/dove.md` and `.claude/skills/dove-intake/SKILL.md` provide conservative ambient routing.
 
-```json
-{"use_scihub": false}
-```
+Dove's flat Skills are `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, `lessons`, and explicit-only `auto`. They are capability entrances, not separate personalities.
 
-没有 shell/CLI fallback。
+The prompt hook selects hidden intake only when the original prompt is a clear Dove research work request. Intake routing is zero-write, may choose no Skill for contextual or judgment-only prompts, and never selects Auto. Judgment-only prompts should receive a direct Dove-style judgment and stop unless the user explicitly asks to execute or record.
 
-## 安装 metadata 与反馈
+## Project runtime invocation
 
-```text
-.dove/install/
-├── manifest.json
-└── DOCTOR.md     # 可选，宿主自然维护
-```
+Project configuration invokes the user-installed `dove` command by name. It does not point to a copied bundle or an absolute installation path.
 
-Manifest 记录 package、选定 hosts、managed resources 和 lifecycle 所需 timestamps。`DOCTOR.md` 记录用户明确点名 Dove 时提出的反馈，以及 Dove 自身 Skill、hook、项目接入、路由、文档行为或 guidance 的实际故障。未点名 Dove 的普通科研或协作反馈中，可复用的经验进入 Lessons。
-
-`DOCTOR.md` 是普通自然语言 Markdown，没有 JSON state、issue ID、status、severity、counter、frontmatter 或固定模板。它不是研究日志或科学 health score，用户不需要为了反馈运行 `dove doctor`。
-
-Managed-file hashes 只保护安装字节，不能作为来源 identity、研究证据或科学验证。
-
-## 项目与文件边界
-
-Dove 在修改项目前解析一个真实 project root，并拒绝越界、symlink 或不明确的 managed paths。
-
-初始化和更新遵守：
-
-- 普通项目文件不修改；
-- shared JSON 中其他 fields、hooks 和 MCP servers 保留；
-- 现有内容与期望完全相同时可以直接认领；
-- 缺失的 managed file、hook 或 paper-search selector 会重建；
-- 项目中已有的不同内容会阻止自动覆盖；
-- 每个目标写入前检查当前状态，失败时执行普通 rollback。
-
-这些是项目内容保护，不是科研严谨性或科学证明。
-
-## Update
-
-```bash
-dove update
-dove update --host claude
-```
-
-`update` 同时刷新已识别的项目接入和研究默认文档：
-
-- 缺失默认文件从 package 的完整内容创建；
-- 现有默认文件保留原有 bytes，并精确追加缺失的 canonical paragraphs 或 navigation lines；
-- 普通 topic documents 和项目中已有的不同内容不重排、不归一化、不覆盖；
-- 支持显式 revision `1.0` installation manifest 的一次更新；不通过历史文件猜测安装状态。
-
-没有单独 `sync` 或 `upgrade` 命令，也没有长期兼容 fallback。
-
-## One-time research export
-
-```bash
-dove export-research
-```
-
-`export-research` 只用于支持的 legacy Dove JSON research records 到普通 Markdown 的一次性转换。它先显示预览；确认后写入 `.dove/research/`，并把原始 JSON bytes 归档到 `.dove/archive/...`。
-
-边界：
-
-- 不转换 v1 research state；
-- 正常 Dove 3 工作不读取旧 JSON fallback；
-- `init`、`update`、Doctor 和 hooks 不会隐式 export；
-- 对真实研究数据执行 export 需要单独用户授权，不能当作普通测试 fixture；
-- 无法在不臆造含义的情况下转换时，应保留源文件并停止。
-
-## Complete Reinstall
-
-```bash
-dove reinstall
-```
-
-Complete Reinstall 会当场读取并展示当前项目中的删除与替换范围，确认默认值为 No。
-
-确认后它重新读取当前项目并执行当前计划：删除自定义 Dove 研究内容和旧归档，重建当前项目接入与完整默认研究树。普通项目文件和 shared JSON 中与 Dove 无关的内容保留；用户级 npm 安装不受管理。
-
-这是破坏性项目重置。只需要刷新接入或补齐默认文档时使用 `dove update`。
-
-## Doctor
-
-```bash
-dove doctor
-dove doctor --json
-```
-
-Doctor 是面向开发排查的只读命令，检查当前软件 bundle、项目接入和 Markdown 外层可读性。它不修复文件，不拥有 `DOCTOR.md`，也不判断研究结论、完成度、复现性或 Reviewer 独立性。用户通常无需运行。
-
-## CLI inventory
-
-```text
-init, update, reinstall, doctor, export-research, hook
-```
-
-Hooks：
+The Claude `UserPromptSubmit` hook uses the equivalent of:
 
 ```text
 dove hook user-prompt-submit --project <project-root>
+```
+
+The Claude `Stop` hook uses the equivalent of:
+
+```text
 dove hook stop --project <project-root>
 ```
 
-没有 `mcp`、`sync`、`upgrade`、Workspace、Mission database 或 `migrate-research` 命令。
+The optional paper-acquisition MCP declaration launches pinned `paper-search-mcp==0.1.4` through user-provided `uvx`. Dove does not install that package, approve project trust, write credentials, or provide a CLI/shell fallback if it is unavailable.
 
-## Maintainer validation
+## Integration manifest
 
-从源码仓库运行：
+`.dove/install/` is Dove-managed project-integration state. Its manifest records the hosts initialized for that project and the integration contract needed by `update` and `doctor`.
+
+The manifest is not research evidence and must not contain substantive research artifacts. Users should not hand-edit managed integration files.
+
+## Update
+
+Run from an already initialized project:
 
 ```bash
+dove update
+```
+
+`dove update` reads `.dove/install/manifest.json` and refreshes only the hosts already recorded there. It does not select new hosts, bootstrap a project, or infer configuration from generated adapters.
+
+If the manifest is absent, malformed, contradictory, or unsafe, `dove update` fails closed and instructs the user to run an explicit project initialization. It must not reconstruct a manifest from surrounding files.
+
+Update creates missing summaries, completes current standard navigation only in `RESEARCH.md` and `lessons/LESSONS.md`, and replaces the six package-managed built-in Lessons themes with current package content. Other research documents remain researcher-owned.
+
+## Doctor
+
+Run from the project root:
+
+```bash
+dove doctor
+```
+
+Doctor is read-only and reports separate dimensions rather than collapsing them into one package check:
+
+- **user CLI** — whether the current user's `dove` executable is the expected installed artifact;
+- **project integration** — whether `.dove/install/manifest.json` and managed project files are valid;
+- **research state** — whether ordinary `.dove/research/` Markdown is present, missing, malformed, or legacy;
+- **host registration** — whether the manifest-declared host is registered as expected;
+- **host readiness** — whether the host can actually use the integration; and
+- **legacy copied runtime** — whether obsolete project-local runtime copies are present.
+
+For Claude, readiness depends on the host's actual ability to use the integration. Pending approval, failed connection, unavailable Claude CLI, timeout, or unknown status is not ready and produces a concrete next step.
+
+Legacy runtime copied into project `bin/`, `dist/`, `mcp/`, or `scripts/` locations is not migrated or deleted automatically. Doctor reports it and fails closed so the user can make an explicit cleanup or migration decision.
+
+## Managed versus user-owned files
+
+The ownership boundary is strict:
+
+- `.dove/install/` and declared project host integration files are Dove-managed integration state.
+- `.dove/research/` is ordinary researcher-owned Markdown context.
+- the project's `README.md`, `docs/*`, unrelated host settings, and unrelated hooks remain user-owned.
+
+Init and update never copy, read, overwrite, or delete the consumer project's public documentation.
+
+## Source-checkout validation
+
+The following commands are maintainer-only and run from a Dove source checkout, not as consumer installation or daily-use paths:
+
+```bash
+npm run commands:check
+npm run commands:validate
 npm run check
 npm run release:check
 npm run pack:dry-run
 ```
 
-生命周期行为应通过 repository-local `.claude/tmp/` 下的隔离 synthetic project 走真实 CLI 验证。除非另有授权，不对真实研究项目执行 install、update、reinstall 或 export。
-
-这些检查只验证软件发布边界，不证明科学正确、研究完成、复现性、论文接受或独立评审。
+Do not use `npx dove` or `node ./bin/dove-package.mjs` as a consumer path. Do not regenerate adapters or other generated artifacts during ordinary installation or documentation validation.

@@ -2,10 +2,10 @@
 
 import process from "node:process";
 
-import { checkGeneratedAdapters, checkGeneratedPrimaryRoles, generatedWriteSummary, writeGeneratedAdapters, writeGeneratedPrimaryRoles } from "./generate-command-adapters.mjs";
+import { checkGeneratedAdapters, checkGeneratedDoveAgentSurfaces, generatedWriteSummary, writeGeneratedAdapters, writeGeneratedDoveAgentSurfaces } from "./generate-command-adapters.mjs";
 
 if (process.argv.includes("--check")) {
-  const drift = [...checkGeneratedAdapters(), ...checkGeneratedPrimaryRoles()];
+  const drift = [...checkGeneratedAdapters(), ...checkGeneratedDoveAgentSurfaces()];
   if (drift.length > 0) {
     for (const item of drift) {
       console.error(`${item.relativePath}: ${item.reason}`);
@@ -16,7 +16,7 @@ if (process.argv.includes("--check")) {
   }
 } else {
   const transaction = writeGeneratedAdapters();
-  const roles = writeGeneratedPrimaryRoles();
-  const summary = generatedWriteSummary(transaction, roles);
+  const agents = writeGeneratedDoveAgentSurfaces();
+  const summary = generatedWriteSummary(transaction, agents);
   console.log(JSON.stringify(summary, null, 2));
 }
