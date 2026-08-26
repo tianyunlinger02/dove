@@ -19,7 +19,8 @@ import {
   HOST_ADAPTER_POLICY,
   PROJECT_HOST_IDS,
   adapterPathForCommand,
-  hostCommandSlug
+  hostCommandSlug,
+  packageResourcePath
 } from "../src/core/command-manifest.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,9 +69,11 @@ function renderWorkflow(command) {
     for (const [index, step] of item.steps.entries()) {
       const writeBoundary = step.readOnly
         ? " This step is read-only; do not create or modify files."
-        : step.persistWhen && step.persistWhen !== "never"
+        : step.persistencePolicy === "standard-research"
           ? ` Maintain Dove research Markdown only when ${step.persistWhen}.`
-          : "";
+          : step.persistencePolicy === "explicit-lessons"
+            ? ` Maintain Lessons only when ${step.persistWhen}.`
+            : "";
       lines.push(`  ${index + 1}. Use host tools (${step.readOnly ? "read-only" : "work"}; ${step.capability}). ${step.instruction}${writeBoundary}`);
     }
     for (const clarification of item.clarification ?? []) {
@@ -124,11 +127,8 @@ function renderSkill(command, hostId = null) {
 
 export function renderCommandAdapter(hostId, command) {
   switch (hostId) {
-    case "opencode":
     case "claude": return renderMarkdownCommand(command, command.id, hostId);
-    case "cursor": return renderMarkdownCommand(command, `dove-${hostCommandSlug(command.id)}`, hostId);
-    case "codex":
-    case "agents": return renderSkill(command, hostId);
+    case "dsh": return renderSkill(command, hostId);
     default: throw new Error(`Unknown host adapter: ${hostId}`);
   }
 }
@@ -137,32 +137,32 @@ export function generatedAdapterEntries() {
   return PROJECT_HOST_IDS.flatMap((hostId) => COMMAND_SURFACES.map((command) => ({
     hostId,
     command,
-    relativePath: adapterPathForCommand(hostId, command),
+    destinationPath: adapterPathForCommand(hostId, command),
+    relativePath: packageResourcePath(hostId, adapterPathForCommand(hostId, command)),
     content: renderCommandAdapter(hostId, command)
   })));
 }
 
 export function generatedClaudeAmbientProjectEntries() {
   return [
-    { relativePath: DOVE_CLAUDE_AMBIENT_RULE_PATH, content: renderClaudeAmbientRule() },
-    { relativePath: DOVE_CLAUDE_AMBIENT_SKILL_PATH, content: renderClaudeAmbientSkill() },
-    { relativePath: PAPER_SEARCH_SUPPORT_SKILL_PATH, content: renderPaperSearchSupportSkill() }
+    { destinationPath: DOVE_CLAUDE_AMBIENT_RULE_PATH, relativePath: packageResourcePath("claude", DOVE_CLAUDE_AMBIENT_RULE_PATH), content: renderClaudeAmbientRule() },
+    { destinationPath: DOVE_CLAUDE_AMBIENT_SKILL_PATH, relativePath: packageResourcePath("claude", DOVE_CLAUDE_AMBIENT_SKILL_PATH), content: renderClaudeAmbientSkill() },
+    { destinationPath: PAPER_SEARCH_SUPPORT_SKILL_PATH, relativePath: packageResourcePath("claude", PAPER_SEARCH_SUPPORT_SKILL_PATH), content: renderPaperSearchSupportSkill() }
   ];
 }
 
 export function generatedDoveAgentSurfaceEntries() {
-  return generatedDoveAgentEntries();
+  return generatedDoveAgentEntries().map((entry) => ({
+    ...entry,
+    destinationPath: entry.relativePath,
+    relativePath: packageResourcePath("claude", entry.relativePath)
+  }));
 }
 
 function existingGeneratedDoveAgentPaths(root) {
   return [
-    ".claude/agents/dove.md",
-    ".claude/agents/dove-reviewer.md",
-    ".opencode/agents/dove.md",
-    ".opencode/agents/dove-reviewer.md",
-    ".opencode/skills/dove-planner/SKILL.md",
-    ".opencode/skills/dove-builder/SKILL.md",
-    ".opencode/skills/dove-reviewer/SKILL.md"
+    packageResourcePath("claude", ".claude/agents/dove.md"),
+    packageResourcePath("claude", ".claude/agents/dove-reviewer.md")
   ].filter((relativePath) => fs.existsSync(path.join(root, relativePath))).sort();
 }
 
@@ -241,14 +241,11 @@ function listFiles(root, relativeDir, acceptPath) {
 
 function existingGeneratedAdapterPaths(root) {
   return unique([
-    ...listFiles(root, ".opencode/commands", (relativePath) => /^\.opencode\/commands\/dove.*\.md$/.test(relativePath)),
-    ...listFiles(root, ".claude/commands/dove", (relativePath) => /^\.claude\/commands\/dove\/.*\.md$/.test(relativePath)),
-    ...listFiles(root, ".cursor/commands", (relativePath) => /^\.cursor\/commands\/dove-.*\.md$/.test(relativePath)),
-    ...listFiles(root, ".codex/skills", (relativePath) => /^\.codex\/skills\/dove-[^/]+\/SKILL\.md$/.test(relativePath)),
-    ...listFiles(root, ".agents/skills", (relativePath) => /^\.agents\/skills\/dove-[^/]+\/SKILL\.md$/.test(relativePath)),
-    ...listFiles(root, ".claude/rules", (relativePath) => relativePath === ".claude/rules/dove.md"),
-    ...listFiles(root, ".claude/skills/dove-intake", (relativePath) => relativePath === ".claude/skills/dove-intake/SKILL.md"),
-    ...listFiles(root, ".claude/skills/dove-paper-search", (relativePath) => relativePath === PAPER_SEARCH_SUPPORT_SKILL_PATH)
+    ...listFiles(root, "package-resources/hosts/claude/.claude/commands/dove", (relativePath) => /\/dove\/.*\.md$/.test(relativePath)),
+    ...listFiles(root, "package-resources/hosts/dsh/.dsh/skills", (relativePath) => /\/dove-[^/]+\/SKILL\.md$/.test(relativePath)),
+    ...listFiles(root, "package-resources/hosts/claude/.claude/rules", (relativePath) => relativePath.endsWith("/.claude/rules/dove.md")),
+    ...listFiles(root, "package-resources/hosts/claude/.claude/skills/dove-intake", (relativePath) => relativePath.endsWith("/dove-intake/SKILL.md")),
+    ...listFiles(root, "package-resources/hosts/claude/.claude/skills/dove-paper-search", (relativePath) => relativePath.endsWith("/dove-paper-search/SKILL.md"))
   ]).sort();
 }
 

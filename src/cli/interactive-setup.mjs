@@ -8,6 +8,7 @@ import {
   renderCompleteReinstallInventory,
   renderDoveLifecycleResult,
   renderDovePixelArt,
+  renderUninstallInventory,
   terminalColorEnabled,
   terminalStyle
 } from "./terminal-output.mjs";
@@ -49,6 +50,23 @@ function lifecycleTarget(result, fallback) {
   return result?.target ?? fallback;
 }
 
+async function runUninstall({ target, previewUninstall, uninstall, promptConfirm, stream, env, color }) {
+  if (typeof previewUninstall !== "function" || typeof uninstall !== "function") throw new Error("Dove 项目卸载核心尚未接入。");
+  const preview = await previewUninstall(target);
+  stream.write(`\n${renderUninstallInventory(preview, { color })}\n\n`);
+  const approved = await promptConfirm({
+    message: "确认从当前项目卸载 Dove？研究 Markdown 与 DOCTOR.md 会保留。",
+    default: false
+  });
+  if (!approved) {
+    stream.write("未修改任何文件。\n");
+    return { status: "cancelled", action: "uninstall", result: null };
+  }
+  const result = await uninstall(target, { confirmed: true, preview });
+  stream.write(`\n${renderDoveLifecycleResult("uninstall", result, { stream, env })}\n`);
+  return { status: "uninstalled", action: "uninstall", result };
+}
+
 async function runCompleteReinstall({ target, previewCompleteReinstall, completeReinstall, promptConfirm, stream, env, color }) {
   if (typeof previewCompleteReinstall !== "function") throw new Error("Dove 项目配置重装预览核心尚未接入。");
   const preview = await previewCompleteReinstall(target);
@@ -79,6 +97,8 @@ export async function runInteractiveDoveSetup(options) {
     update,
     previewCompleteReinstall,
     completeReinstall,
+    previewUninstall,
+    uninstall,
     target = process.cwd(),
     promptConfirm = confirm,
     promptSelect = select,
@@ -99,9 +119,9 @@ export async function runInteractiveDoveSetup(options) {
     ["invalid", "drifted"].includes(initial.projectIntegration?.state)
       ? { mode: "blocked", reason: initial.projectIntegration?.state, allowedActions: ["exit"] }
       : {
-        mode: initial.projectIntegration?.state === "uninitialized" ? "init" : "reinstall",
-        reason: initial.projectIntegration?.state ?? "unknown",
-        allowedActions: initial.projectIntegration?.state === "uninitialized" ? ["init", "exit"] : ["reinstall", "exit"]
+        mode: initial.projectIntegration?.state === "uninitialized" ? "init" : initial.adoption?.state === "adoptable" ? "update" : "reinstall",
+        reason: initial.projectIntegration?.state ?? initial.adoption?.state ?? "unknown",
+        allowedActions: initial.projectIntegration?.state === "uninitialized" ? ["init", "exit"] : initial.adoption?.state === "adoptable" ? ["update", "exit"] : ["reinstall", "exit"]
       }
   );
   if (setup.mode === "blocked") {
@@ -115,6 +135,7 @@ export async function runInteractiveDoveSetup(options) {
       choices: [
         { name: "更新项目接入", value: "update" },
         ...(setup.allowedActions.includes("reinstall") ? [{ name: "重新安装", value: "reinstall" }] : []),
+        ...(initial.projectIntegration?.state === "needs-sync" ? [{ name: "卸载 Dove", value: "uninstall" }] : []),
         { name: "退出", value: "exit" }
       ]
     });
@@ -164,6 +185,7 @@ export async function runInteractiveDoveSetup(options) {
     message: "当前项目已配置 Dove。请选择：",
     choices: [
       ...(setup.allowedActions.includes("reinstall") ? [{ name: "重新安装", value: "reinstall" }] : []),
+      ...(initial.projectIntegration?.state === "current" || initial.projectIntegration?.state === "needs-sync" ? [{ name: "卸载 Dove", value: "uninstall" }] : []),
       { name: "退出", value: "exit" }
     ]
   });
@@ -173,6 +195,17 @@ export async function runInteractiveDoveSetup(options) {
       target: setupTarget,
       previewCompleteReinstall,
       completeReinstall,
+      promptConfirm,
+      stream,
+      env,
+      color
+    });
+  }
+  if (action === "uninstall") {
+    return runUninstall({
+      target: setupTarget,
+      previewUninstall,
+      uninstall,
       promptConfirm,
       stream,
       env,

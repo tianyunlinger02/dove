@@ -15,24 +15,26 @@ import {
   renderCompleteReinstallInventory,
   renderDoveHome,
   renderDoveLifecycleResult,
+  renderUninstallInventory,
   terminalColorEnabled
 } from "../src/cli/terminal-output.mjs";
-import { userPromptSubmitOutput } from "../src/core/ambient-hook.mjs";
+import { parseUserPromptSubmitPayload, userPromptSubmitOutput } from "../src/core/ambient-hook.mjs";
+import { parseSessionStartPayload, sessionStartOutput } from "../src/core/session-start-hook.mjs";
 import { stopHookOutput } from "../src/core/stop-hook.mjs";
-import { completeReinstallDoveLifecycle, updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
+import { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
 import { exportResearch, previewResearchExport } from "../src/core/research-export.mjs";
 import { PROJECT_HOST_IDS } from "../src/core/host-registry.mjs";
 import { classifyPackageCompatibility, PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
-import { initializeProjectIntegration, inspectProjectIntegration, previewProjectCompleteReinstall } from "../src/core/project-installation.mjs";
+import { initializeProjectIntegration, inspectProjectIntegration, previewProjectCompleteReinstall, synchronizeProjectIntegrationOnly } from "../src/core/project-installation.mjs";
 import { readProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
-import { resolveInstalledProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
+import { resolveExactInstalledProjectRoot, resolveInstalledProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
-const KNOWN_COMMANDS = new Set(["init", "update", "reinstall", "doctor", "export-research", "hook"]);
+const KNOWN_COMMANDS = new Set(["init", "update", "reinstall", "uninstall", "doctor", "export-research", "hook"]);
 
 function usage() {
   console.log(`dove
@@ -43,12 +45,14 @@ Usage:
   dove init [--project <dir>] [--host <host>...] [--json|--format json]
   dove update [--project <dir>] [--host <host>...] [--json|--format json]
   dove reinstall [--project <dir>] [--json|--format json]
+  dove uninstall [--project <dir>] [--json|--format json]
   dove doctor [--project <dir>] [--json|--format json]
   dove export-research [--project <dir>] [--json|--format json]
+  dove hook session-start --project <dir>
   dove hook user-prompt-submit --project <dir>
   dove hook stop --project <dir>
 
-The runtime CLI manages project integration, diagnostics, one-time legacy JSON research export, and the Claude prompt and stop hooks. Research work uses the Dove agent and ten host Skills with ordinary Markdown research documents. Project initialization creates the ordinary default research tree, but it does not create research progress, a Mission, or a scientific conclusion.
+The runtime CLI manages project integration, diagnostics, one-time legacy JSON research export, and Claude lifecycle hooks. Research work uses the Dove agent and ten host Skills with ordinary Markdown research documents. Project initialization creates the ordinary default research tree, but it does not create research progress, a Mission, or a scientific conclusion.
 `);
 }
 
@@ -128,10 +132,17 @@ function assertRecognizedHookManifest(manifest) {
 }
 
 function prepareHookProject(project) {
-  const target = resolveInstalledProjectRoot(project);
+  const target = resolveExactInstalledProjectRoot(project, { hostIds: PROJECT_HOST_IDS });
   const manifest = readProjectInstallationManifest(target, { hostIds: PROJECT_HOST_IDS });
   assertRecognizedHookManifest(manifest);
   return target;
+}
+
+function assertHookPayloadProject(payload, target) {
+  if (payload?.cwd === undefined) return;
+  if (typeof payload.cwd !== "string" || !payload.cwd.trim()) throw new Error("Dove hook cwd must name a directory in the initialized project.");
+  const cwdRoot = resolveInstalledProjectRoot(payload.cwd, { hostIds: PROJECT_HOST_IDS });
+  if (cwdRoot !== target) throw new Error("Dove hook cwd does not belong to the declared initialized project.");
 }
 
 async function readStdin() {
@@ -155,6 +166,7 @@ function inspectHome(target) {
 
 function homeState(inspection) {
   if (inspection.setup?.mode === "init") return "uninitialized";
+  if (inspection.setup?.mode === "update") return "needs-sync";
   if (inspection.projectIntegration?.state === "current") return "current";
   if (inspection.projectIntegration?.state === "needs-sync") return "needs-sync";
   return "blocked";
@@ -172,6 +184,8 @@ if (!command) {
         update: (target) => updateDoveLifecycle(target, { ...PACKAGE_OPTIONS, inspect }),
         previewCompleteReinstall: (target) => previewProjectCompleteReinstall(target, PACKAGE_OPTIONS),
         completeReinstall: (target, lifecycleOptions) => completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
+        previewUninstall: (target) => previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS),
+        uninstall: (target, lifecycleOptions) => uninstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
         stream: process.stdout,
         env: process.env
       });
@@ -267,6 +281,28 @@ try {
     process.exit(0);
   }
 
+  if (command === "uninstall") {
+    const target = path.resolve(projectFlag(args) ?? process.cwd());
+    const preview = previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS);
+    if (wantsJson(args)) {
+      console.log(JSON.stringify(preview, null, 2));
+      process.exit(0);
+    }
+    const color = terminalColorEnabled(process.stdout, process.env);
+    process.stdout.write(`${renderUninstallInventory(preview, { color })}\n\n`);
+    const approved = await confirm({
+      message: "确认从当前项目卸载 Dove？研究 Markdown 与 DOCTOR.md 会保留。",
+      default: false
+    });
+    if (!approved) {
+      console.log("未修改任何文件。");
+      process.exit(0);
+    }
+    const result = uninstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true, preview });
+    writeLifecycleResult("uninstall", result, args);
+    process.exit(0);
+  }
+
   if (command === "doctor") {
     const result = inspect(projectFlag(args) ?? process.cwd());
     if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
@@ -297,12 +333,25 @@ try {
   }
 
   if (command === "hook") {
-    if (!["user-prompt-submit", "stop"].includes(parsed.positionals[0])) throw new Error("dove hook accepts only user-prompt-submit or stop.");
-    if (projectFlag(args) === undefined) throw new Error(`dove hook ${parsed.positionals[0]} requires --project <dir>.`);
-    prepareHookProject(projectFlag(args));
-    const output = parsed.positionals[0] === "stop"
-      ? stopHookOutput(await readStdin())
-      : userPromptSubmitOutput(await readStdin());
+    const hookName = parsed.positionals[0];
+    if (!["session-start", "user-prompt-submit", "stop"].includes(hookName)) throw new Error("dove hook accepts only session-start, user-prompt-submit, or stop.");
+    if (projectFlag(args) === undefined) throw new Error(`dove hook ${hookName} requires --project <dir>.`);
+    const input = await readStdin();
+    const target = prepareHookProject(projectFlag(args));
+    if (hookName === "stop") {
+      const output = stopHookOutput(input);
+      if (output !== null) process.stdout.write(JSON.stringify(output));
+      process.exit(0);
+    }
+    const payload = hookName === "session-start" ? parseSessionStartPayload(input) : parseUserPromptSubmitPayload(input);
+    assertHookPayloadProject(payload, target);
+    if (hookName === "session-start") {
+      sessionStartOutput(input);
+      synchronizeProjectIntegrationOnly(target, PACKAGE_OPTIONS);
+      process.exit(0);
+    }
+    synchronizeProjectIntegrationOnly(target, PACKAGE_OPTIONS);
+    const output = userPromptSubmitOutput(input);
     if (output !== null) process.stdout.write(JSON.stringify(output));
     process.exit(0);
   }

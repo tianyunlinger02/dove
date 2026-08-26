@@ -14,13 +14,16 @@ export function classifyProjectSetup(result) {
   const integration = result?.projectIntegration ?? {};
   const migration = result?.migrationInstallation ?? { state: "absent" };
   const workspace = result?.workspaceState ?? { mode: "unavailable", healthy: false };
+  const adoption = result?.adoption ?? { state: "absent" };
 
-  if (migration.state === "conflicting-manifests") return setup("reinstall", "conflicting-manifests");
-  if (migration.state === "valid-legacy") return setup("update", "valid-legacy", "updateOrReinstall");
-  if (migration.state === "invalid-legacy") return setup("reinstall", "invalid-legacy");
+  if (migration.state === "conflicting-manifests") return setup("blocked", "conflicting-manifests");
+  if (migration.state === "valid-legacy") return setup("blocked", "unsupported-legacy-installation");
+  if (migration.state === "invalid-legacy") return setup("blocked", "invalid-legacy");
+  if (adoption.state === "adoptable") return setup("update", "adoptable", "update");
   if (["invalid", "drifted"].includes(integration.state)) return setup("blocked", integration.state);
   if (integration.state === "needs-sync") return setup("update", "needs-sync", "updateOrReinstall");
   if (integration.state === "current") return setup("reinstall", "current");
+  if (workspace.mode === "current" && workspace.healthy === true) return setup("init", "preserved-research");
   if (workspace.mode !== "absent") return setup("reinstall", "unsupported-workspace");
   return setup("init", "clean-uninitialized");
 }

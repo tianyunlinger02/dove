@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { PACKAGE_RUNTIME_PATHS } from "./command-manifest.mjs";
 import { PROJECT_HOST_IDS } from "./host-registry.mjs";
 import { classifyPackageCompatibility } from "./package-metadata.mjs";
-import { inspectProjectIntegration } from "./project-installation.mjs";
+import { inspectProjectIntegration, previewProjectAdoption } from "./project-installation.mjs";
 import { INSTALLATION_MANIFEST_PATH, LEGACY_INSTALLATION_MANIFEST_PATH, readProjectInstallationManifest, readProjectInstallationManifestForMigration } from "./project-installation-manifest.mjs";
 import { inspectResearchDocuments } from "./research-documents.mjs";
 import { inspectProjectRoot, resolveProjectRootForSetup } from "./project-root.mjs";
@@ -160,15 +160,29 @@ function researchState(root, options) {
   }
 }
 
+function adoptionState(root, options) {
+  if (!root) return { state: "absent", ready: false, preview: null, error: "Project root is unavailable." };
+  try {
+    const preview = (options.previewProjectAdoption ?? previewProjectAdoption)(root, {
+      fsOps: options.fsOps,
+      packageName: options.packageName,
+      packageVersion: options.packageVersion
+    });
+    return { state: "adoptable", ready: true, preview, error: null };
+  } catch (error) {
+    return { state: "absent", ready: false, preview: null, error: messageFor(error) };
+  }
+}
+
 function actionsFor(result) {
   const actions = [];
-  const upgradeReady = result.migrationInstallation.state === "valid-legacy";
-  if (upgradeReady) actions.push({ kind: "update", command: "dove update" });
-  if (!upgradeReady && result.workspaceState.state === "previous-research-format") actions.push({ kind: "export-research", command: "dove export-research" });
-  else if (!upgradeReady && result.setup.mode === "init") actions.push({ kind: "init", command: "dove init" });
-  else if (!upgradeReady && result.projectIntegration.state === "needs-sync") actions.push({ kind: "update", command: "dove update" });
-  else if (!upgradeReady && result.setup.mode === "reinstall" && result.projectIntegration.state !== "current") actions.push({ kind: "reinstall", command: "dove reinstall" });
-  else if (!upgradeReady && result.setup.mode === "blocked") actions.push({ kind: "inspect", command: "dove doctor --json" });
+  const adoptReady = result.adoption.state === "adoptable";
+  if (adoptReady) actions.push({ kind: "update", command: "dove update" });
+  if (!adoptReady && result.workspaceState.state === "previous-research-format") actions.push({ kind: "export-research", command: "dove export-research" });
+  else if (!adoptReady && result.setup.mode === "init") actions.push({ kind: "init", command: "dove init" });
+  else if (!adoptReady && result.projectIntegration.state === "needs-sync") actions.push({ kind: "update", command: "dove update" });
+  else if (!adoptReady && result.setup.mode === "reinstall" && result.projectIntegration.state !== "current") actions.push({ kind: "reinstall", command: "dove reinstall" });
+  else if (!adoptReady && result.setup.mode === "blocked") actions.push({ kind: "inspect", command: "dove doctor --json" });
   return actions;
 }
 
@@ -180,7 +194,8 @@ export function inspectProjectDoctor(start, options = {}) {
   const safeRoot = projectIntegration.root ?? setupRoot;
   const migrationInstallation = safeRoot ? inspectMigration(safeRoot, options) : { state: "absent", root: null, error: "Project root is unavailable." };
   const workspaceState = researchState(safeRoot, options);
-  const setup = classifyProjectSetup({ projectIntegration, migrationInstallation, workspaceState });
+  const adoption = safeRoot ? adoptionState(safeRoot, options) : { state: "absent", ready: false, preview: null, error: "Project root is unavailable." };
+  const setup = classifyProjectSetup({ projectIntegration, migrationInstallation, workspaceState, adoption });
   const ready = userCli.healthy
     && projectIntegration.healthy
     && workspaceState.healthy;
@@ -192,6 +207,7 @@ export function inspectProjectDoctor(start, options = {}) {
     projectIntegration,
     migrationInstallation,
     workspaceState,
+    adoption,
     setup
   };
   result.actions = actionsFor(result);

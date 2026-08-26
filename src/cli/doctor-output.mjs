@@ -9,8 +9,9 @@ function softwareLine(result, color) {
 
 function projectLine(result, color) {
   const migration = result.migrationInstallation?.state;
-  if (migration === "valid-legacy") return `${terminalStyle("项目接入", "dim", { color })}  旧版接入可以安全更新`;
+  if (migration === "valid-legacy") return `${terminalStyle("项目接入", "dim", { color })}  旧版安装标记不在当前采用范围`;
   if (migration === "conflicting-manifests") return `${terminalStyle("项目接入", "dim", { color })}  安装标记冲突`;
+  if (result.adoption?.state === "adoptable") return `${terminalStyle("项目接入", "dim", { color })}  现有 Markdown 研究树可以通过 update 采用`;
   const state = result.projectIntegration?.state;
   const text = state === "current" ? "当前" : state === "needs-sync" ? "需要更新" : state === "uninitialized" ? "尚未配置" : state === "drifted" ? "用户字节已漂移" : "需要人工处理";
   return `${terminalStyle("项目接入", "dim", { color })}  ${text}`;

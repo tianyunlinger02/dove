@@ -44,6 +44,7 @@ function headingFor(command, status) {
   if (command === "init" && status === "initialized") return "Dove 已在此项目启用";
   if (command === "init" && status === "already-initialized") return "Dove 已经在此项目启用";
   if (command === "update" && status === "unchanged") return "Dove 项目集成与研究默认文档已是最新";
+  if (command === "update" && status === "adopted") return "Dove 已采用现有 Markdown 研究树并建立当前项目接入";
   if (command === "update" && ["synchronized", "updated", "upgraded"].includes(status)) return "Dove 项目集成与研究默认文档已刷新";
   throw new Error(`Unsupported Dove integration presentation: ${command}/${status}.`);
 }
@@ -62,9 +63,15 @@ function setupLines(command, status) {
       "✓ 项目集成记录已建立"
     ];
   }
-  return status === "unchanged"
-    ? ["✓ Dove agent、能力入口、宿主接入和研究默认文档均已是最新"]
-    : ["✓ Dove agent、能力入口、宿主接入、汇总导航和内置 Lessons 已刷新"];
+  if (status === "unchanged") return ["✓ Dove agent、能力入口、宿主接入和研究默认文档均已是最新"];
+  if (status === "adopted") {
+    return [
+      "✓ 现有 Markdown 研究树保持不变",
+      "✓ Dove agent、能力入口、Claude 钩子和 MCP 声明已采用当前 package 接入",
+      "✓ 项目集成记录已建立为 revision 2.0"
+    ];
+  }
+  return ["✓ Dove agent、能力入口、宿主接入、汇总导航和内置 Lessons 已刷新"];
 }
 
 export function renderProjectIntegrationResult(command, result, options = {}) {
@@ -95,6 +102,8 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
   lines.push("");
   if (command === "init" && result.status === "already-initialized") {
     lines.push("如需刷新项目集成、研究汇总导航和内置 Lessons，请运行 dove update。六个内置 Lessons 主题会以当前 package 内容整体替换，其他研究文档保持不变。");
+  } else if (command === "update" && result.status === "adopted") {
+    lines.push("本次采用只建立 revision 2.0 项目接入记录并安装缺失或完全当前的 package-managed Claude 集成；不会重写 .dove/research/、DOCTOR、archive 或旧工作区 marker。未知漂移会阻止采用。");
   } else {
     lines.push(command === "init"
       ? "默认研究目录已建立；研究 overview 与汇总由研究者维护，六个内置 Lessons 主题由 package 管理。它们不代表科研主线、结论或任务已经完成。"

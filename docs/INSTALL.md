@@ -13,9 +13,9 @@ Do not use bare `npm install -g dove` or bare `npx dove` as a trusted Dove entry
 
 - Node.js `>=22`
 - npm
-- Claude Code for the currently supported and accepted project initialization path
+- Claude Code or DeepSeek Harness (`dsh`)
 
-Generated adapters may exist for other hosts, but their presence in the package or repository does not mean that project initialization, registration, connection, or readiness for those hosts has been completed or accepted.
+Dove supports only these two hosts. Claude Code receives the complete project integration. DSH receives ten project-local filesystem Skills under `.dsh/skills/dove-*/SKILL.md`; Dove does not claim DSH slash commands, hooks, MCP, or a static agent surface without a future Cordis plugin.
 
 ## 1. One-time user installation
 
@@ -34,21 +34,22 @@ The user-level npm installation installs the `dove` executable into the current 
 
 If the npm binary directory is not already on `PATH`, configure the environment through the user's normal system administration process. Dove does not edit shell configuration on the user's behalf.
 
-## 2. Claude project initialization
+## 2. Project initialization
 
-From the target project root, run:
+From the target project root, choose one supported host:
 
 ```bash
 dove init --host claude
+dove init --host dsh
 ```
 
-This is the currently supported and accepted project-initialization path. `dove init` installs project integration and the default ordinary Markdown research tree. It may write:
+Claude Code receives the complete integration described below. DSH receives the ten Dove filesystem Skills. `dove init` installs project integration and the default ordinary Markdown research tree. It may write:
 
 - `.dove/install/manifest.json`;
 - project-local Claude commands under `.claude/commands/dove/`;
 - the project-local Dove agent at `.claude/agents/dove.md`;
 - the project-local ambient rule and hidden intake skill;
-- the project-local `UserPromptSubmit` and `Stop` hook registrations;
+- the project-local `SessionStart`, `UserPromptSubmit`, and `Stop` hook registrations;
 - the hidden `dove-paper-search` support skill and its pinned external MCP declaration in `.mcp.json`; and
 - default Markdown research files under `.dove/research/`.
 
@@ -77,11 +78,17 @@ The initialized Claude project contains one directly usable Dove agent plus flat
 
 Dove's flat Skills are `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, `lessons`, and explicit-only `auto`. They are capability entrances, not separate personalities.
 
-The prompt hook selects hidden intake only when the original prompt is a clear Dove research work request. Intake routing is zero-write, may choose no Skill for contextual or judgment-only prompts, and never selects Auto. Judgment-only prompts should receive a direct Dove-style judgment and stop unless the user explicitly asks to execute or record.
+The prompt hook selects hidden intake only when the original prompt is a clear Dove work request involving research, papers, sources, experiments, drafts, figures, reviews, rebuttals, lessons, or research-adjacent project work. Intake routing is zero-write, may choose no Skill for contextual or pure judgment-only prompts, and never selects Auto. A separate pre-routing lifecycle bridge may transactionally refresh package-managed project integration from the user-installed CLI; it never touches `.dove/research/`. Pure judgment prompts should receive a direct Dove-style judgment and useful next move, then stop before side effects unless the user explicitly asks to execute or record; prompts that ask Dove to judge and then perform bounded work may route normally.
 
 ## Project runtime invocation
 
 Project configuration invokes the user-installed `dove` command by name. It does not point to a copied bundle or an absolute installation path.
+
+The Claude `SessionStart` hook uses the equivalent of:
+
+```text
+dove hook session-start --project <project-root>
+```
 
 The Claude `UserPromptSubmit` hook uses the equivalent of:
 
@@ -89,13 +96,15 @@ The Claude `UserPromptSubmit` hook uses the equivalent of:
 dove hook user-prompt-submit --project <project-root>
 ```
 
+Both lifecycle entry points use the current user-installed `dove` command on `PATH` to hot-sync recognized package-managed integration. `UserPromptSubmit` also bridges revision-2.0 projects initialized before SessionStart was installed. Hot sync never reads, creates, replaces, or deletes `.dove/research/**`; it does not migrate legacy manifests or perform Complete Reinstall. It guarantees current managed files on disk, not same-session Claude reload.
+
 The Claude `Stop` hook uses the equivalent of:
 
 ```text
 dove hook stop --project <project-root>
 ```
 
-The optional paper-acquisition MCP declaration launches pinned `paper-search-mcp==0.1.4` through user-provided `uvx`. Dove does not install that package, approve project trust, write credentials, or provide a CLI/shell fallback if it is unavailable.
+The optional paper-acquisition MCP declaration launches pinned `paper-search-mcp==0.1.4` through user-provided `uvx`. Dove does not install that package, approve project trust, write credentials, or provide a CLI/shell fallback for that MCP if it is unavailable; other already-approved host web/search tools, local PDFs, URLs, or user-provided material may still support source work.
 
 ## Integration manifest
 
@@ -111,11 +120,15 @@ Run from an already initialized project:
 dove update
 ```
 
-`dove update` reads `.dove/install/manifest.json` and refreshes only the hosts already recorded there. It does not select new hosts, bootstrap a project, or infer configuration from generated adapters.
+`dove update` reads `.dove/install/manifest.json` and refreshes only the hosts already recorded there. The one absent-manifest adoption path is explicit `dove update` on a project that already has a readable current `.dove/research/` Markdown tree plus the old `.dove/manifest.json` workspace marker; it creates the revision-2.0 installation manifest, safely claims only current package-managed Claude integration, and leaves research bytes, DOCTOR notes, archives, old markers, private state, unrelated hooks, and unrelated MCP servers unchanged.
 
-If the manifest is absent, malformed, contradictory, or unsafe, `dove update` fails closed and instructs the user to run an explicit project initialization. It must not reconstruct a manifest from surrounding files.
+If the manifest is absent without that adoption state, malformed, contradictory, unsafe, or contains unknown managed-file or fragment drift, `dove update` fails closed. It must not reconstruct a manifest from generated adapters, hooks, MCP declarations, or copied runtime.
 
-Update creates missing summaries, completes current standard navigation only in `RESEARCH.md` and `lessons/LESSONS.md`, and replaces the six package-managed built-in Lessons themes with current package content. Other research documents remain researcher-owned.
+For an already initialized project, update creates missing summaries, completes current standard navigation only in `RESEARCH.md` and `lessons/LESSONS.md`, and replaces the six package-managed built-in Lessons themes with current package content. Other research documents remain researcher-owned.
+
+## Uninstall
+
+Run `dove uninstall` from an initialized project. Dove first shows the exact removal scope and defaults to No. After confirmation it removes manifest-owned host files, Dove hook and MCP fragments, `.dove/install/manifest.json`, and a recognized retired `.dove/manifest.json` adoption marker when present. It preserves `.dove/research/**`, `.dove/install/DOCTOR.md`, unrecognized files at the legacy marker path, unrelated host settings, unrelated hooks, unrelated MCP servers, and ordinary project files. A project retaining current research Markdown is then classified as unconfigured rather than offered an update. Drift, symlinks, or changed transaction preconditions stop the uninstall and roll back staged changes.
 
 ## Doctor
 

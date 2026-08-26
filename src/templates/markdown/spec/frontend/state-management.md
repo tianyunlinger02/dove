@@ -28,7 +28,7 @@ Drafts, figures, code, data, logs, papers, review bundles, and rebuttals remain 
 
 Optional `.dove/install/DOCTOR.md` is ordinary natural-language feedback, not a generated projection. It records explicit user feedback, corrections, complaints, improvement ideas, and actual failures of Dove Skills, hooks, routing, integration, document behavior, or guidance. It has no JSON state, IDs, severity, counters, statuses, or fixed template. Ordinary research uncertainty, project bugs, and external-tool failures stay out. Managed-file digests or hashes protect installation bytes and detect drift; they must never be cited as research evidence, source authority, review integrity, or scientific validation.
 
-Claude Code remains the supported project initialization path. Project initialization installs the Dove agent surface, prompt and stop hooks, the complete default research Markdown tree, and one pinned external paper-acquisition MCP fragment plus hidden support Skill. Dove does not register a research-state service, install the external runtime, approve project trust, write credentials, or claim that default documents are substantive research content.
+Claude Code remains the supported project initialization path. Project initialization installs the Dove agent surface, SessionStart/prompt/stop hooks, the complete default research Markdown tree, and one pinned external paper-acquisition MCP fragment plus hidden support Skill. Dove does not register a research-state service, install the external runtime, approve project trust, write credentials, or claim that default documents are substantive research content.
 
 ## Research Documents
 
@@ -52,15 +52,15 @@ This is recommended organization, not a schema. Do not require fixed headings, f
 
 - Mission documents may preserve bounded goals, competing explanations, substantive work, current conclusions, decisions, and next branches in a natural structure.
 - Source documents may preserve citations or URLs and what was actually inspected and learned.
-- A central experiment serves a real problem, key uncertainty, or route decision. When newly executed central work needs recording, one Experiment document holds the prospective plan and later actual execution and results; design-only work stops before execution, existing results are analyzed directly, and retrospective records remain retrospective.
-- A prepared Review document contains purpose, relevant declared artifact paths, limits, and prompt; an actual user-obtained Markdown return is preserved faithfully in the corresponding document, while author handling is added only when requested.
+- A central experiment serves a real problem, key uncertainty, or route decision. When that basis is missing, Dove pauses central design and inspects actual project material, relevant sources, or a smallest low-risk diagnostic instead of inventing a substitute experiment or stopping at the gap. When newly executed central work needs recording, one Experiment document holds the prospective plan and later actual execution and results; design-only work stops before execution, existing results are analyzed directly, and retrospective records remain retrospective.
+- A Review document may preserve direct reviewer-perspective critique, separate handoff purpose, relevant declared artifact paths, limits, prompt, and actual user-obtained Markdown returns; author handling is added only when requested.
 - Claims remain scoped prose, tables, or dedicated human-readable documents when useful. There is no Claim store.
 - Lessons remain fallible advisory prose and are never evidence or a completion certificate.
 
 ## Mutation Rules
 
 - Read only the documents needed for the task.
-- Write only when the user explicitly asks to record, update, or save Dove research context, or when results clearly change the research mainline, conclusion, decision, or priority.
+- Write only when the user explicitly asks to record, update, or save Dove research context, when results clearly change the research mainline, conclusion, decision, or priority, or when durable recovery and evidence value make the work worth preserving.
 - Prefer updating the existing relevant topic document over creating duplicates.
 - Use new results to continue, change, or stop the research route.
 - Never synthesize a prospective experiment plan after execution.
@@ -71,21 +71,23 @@ Status performs no mutations. Ambient routing does not create research documents
 
 ## Auto Boundary
 
-Auto is explicit-only and operates in the foreground. It requires an adequately documented current mainline in `RESEARCH.md`. That mainline is read-only for Auto: aligned work and linked documents may advance, but the research direction must not be silently redefined.
+Auto is explicit-only foreground multi-round autonomy. It recovers the current mainline from substantive research context, the current conversation, and actual project artifacts. A short `/dove:auto` is sufficient when these sources show one high-confidence direction; an absent or default overview does not force the user to restate a long goal.
 
-If the overview is absent, materially incomplete, or evidence requires a mainline change, Auto returns a recommendation directly unless the user requested a saved artifact, reports the block, and stops. Auto does not create a hidden session store, daemon, scheduler, or research service.
+Auto uses a mainline-evidence-action-outcome continuation cycle. It judges what was found, accessed, inspected, used, executed, verified, contradicted, or remains missing; then uses Explore, Execute, and Express as orthogonal action lenses rather than stages, roles, Skills, or a fixed order. Dove chooses the capability or help that best advances the current decision, performs the action, and compares the result with the mainline or immediate goal. A checkpoint is internal, not a default stopping point.
+
+Auto asks only when materially competing directions or a real boundary would change the work. It does not promote a recent audit, provenance task, validation result, or document update into the mainline merely because it is visible. For manuscript work, it identifies the authoritative source, required build path, and venue-facing submission artifact; a working Markdown manuscript may be only an editing source. It judges whole-manuscript readiness against the target venue and continues while another feasible action can matter. Evidence work, provenance, validation, engineering, supplementary material, and research Markdown remain subordinate support unless they materially change the scientific judgment or deliverable. Auto does not create a hidden session store, daemon, scheduler, or research service.
 
 ## Review Boundary
 
-The user chooses and manages any separate reviewer. Relevant project-relative artifact paths and scope limits are declared when preparing the review. The reviewer reads only that scope, makes no edits, and returns Markdown. The actual return is preserved faithfully in the corresponding document; author handling is separate unless requested.
+Review can be direct reviewer-perspective critique or a separate user-managed exchange. Direct critique tests the contribution, novelty, claims, evidence, method, experiment conditions, limitations, writing clarity, and likely reader confusion without claiming independent external review.
 
-A host label, separate local session, or provenance statement does not prove identity or independence.
+For a separate exchange, the user chooses and manages the reviewer. Relevant project-relative artifact paths and scope limits are declared when preparing the review. The reviewer reads only that scope, makes no edits, and returns Markdown. The actual return is preserved faithfully in the corresponding document; author handling is separate unless requested. A host label, separate local session, or provenance statement does not prove identity or independence.
 
 ## Lifecycle Behavior
 
 - `init` creates supported software integration, the Dove agent surface, and the complete default research Markdown tree in one transaction.
 - `update` refreshes recognized integration, creates missing summaries, completes current standard navigation only in `RESEARCH.md` and `lessons/LESSONS.md`, and replaces each of the six package-managed built-in Lessons themes with current package content. Each built-in theme carries a plain Markdown notice directing project-specific guidance to a separately named Lesson linked from `lessons/LESSONS.md`. Other research documents remain researcher-owned.
-- Deprecated `.dove/research/LESSONS.md` and `lessons/additional-lessons.md` are directly deleted without migration or fallback, and the Additional migrated Lessons link is removed.
+- Recognized deprecated package-managed Lessons artifacts `.dove/research/LESSONS.md` and `lessons/additional-lessons.md` are deleted without migration or fallback, and the Additional migrated Lessons link is removed.
 - `doctor` reports software and local readability facts without repairing research content; missing summaries are synchronizable defaults rather than corruption.
 - `export-research` is a one-time supported legacy JSON research records-to-Markdown conversion. It archives the original legacy JSON bytes under `.dove/archive/...`, writes into the new directory structure even when the default tree exists, preserves legacy `.dove/LESSONS.md` as `lessons/imported-lessons.md`, does not convert v1, and installs no runtime fallback. Real export requires separate user authorization.
 - `reinstall` displays the deletion and replacement scope and defaults to No. After confirmation it deletes custom Dove research and old archives, replaces existing default research files, then recreates integration and the current complete default tree while preserving ordinary project files.
@@ -97,7 +99,7 @@ Project roots and Dove-managed paths must remain contained and unambiguous. Life
 ## Stable Markdown and project file boundaries
 
 - Research Markdown has no format or schema version. Future organization changes use ordinary host file operations to rename, move, relink, or consolidate substantive content; they do not create a migration framework or runtime fallback.
-- Requested artifacts such as drafts, figures, experiment documents, and revisions are created or modified when the task requires them. Additional Dove research Markdown is maintained only when the user explicitly asks to record, update, or save it, or when results clearly change the research mainline, conclusion, decision, or priority.
+- Requested artifacts such as drafts, figures, experiment documents, and revisions are created or modified when the task requires them. Additional Dove research Markdown is maintained only when the user explicitly asks to record, update, or save it, when results clearly change the research mainline, conclusion, decision, or priority, or when durable recovery and evidence value make the work worth preserving.
 - Dove project file operations use cross-platform Node path containment, ordinary-file and symbolic-link checks, same-directory temporary writes, expected-state rechecks, and transactional rollback; they do not require Linux `/proc` features.
 - Complete Reinstall displays the current deletion and replacement paths, defaults to No, and after confirmation rereads the project and executes the current plan.
 - `DOCTOR.md` is ordinary host-maintained Dove feedback, without JSON projection, issue lifecycle, or CLI ownership.

@@ -75,7 +75,39 @@ export function renderCompleteReinstallInventory(preview, options = {}) {
   ].join("\n");
 }
 
+export function renderUninstallInventory(preview, options = {}) {
+  if (!preview || preview.action !== "uninstall" || typeof preview.target !== "string" || !Array.isArray(preview.removedPaths)) {
+    throw new Error("Dove uninstall inventory is invalid.");
+  }
+  const color = options.color === true;
+  const removed = preview.removedPaths.length > 0 ? preview.removedPaths.map((item) => `- ${terminalSafeText(item)}`) : ["- 无"];
+  return [
+    terminalStyle("卸载 Dove 项目接入", "bold", { color }),
+    "",
+    `项目：${terminalSafeText(preview.target)}`,
+    "",
+    terminalStyle("将删除或移除", "bold", { color }),
+    ...removed,
+    "",
+    terminalStyle("将保留", "bold", { color }),
+    "- .dove/research/**",
+    "- .dove/install/DOCTOR.md",
+    "- 其他未由 Dove 管理的项目文件、设置、Hooks 与 MCP",
+    "",
+    "确认后才会执行；取消不会修改任何文件。"
+  ].join("\n");
+}
+
 export function renderDoveLifecycleResult(command, result, options = {}) {
+  if (command === "uninstall" && result?.status === "uninstalled") {
+    return [
+      terminalStyle("Dove 已从当前项目卸载", "bold", { color: options.color === true }),
+      "",
+      "✓ Dove 项目接入、命令、agent、Hooks、MCP 声明和安装记录已移除",
+      "✓ .dove/research/** 与 .dove/install/DOCTOR.md 已保留",
+      "✓ 未管理的项目文件未被修改"
+    ].join("\n");
+  }
   if (command !== "reinstall" || result?.status !== "reinstalled") {
     throw new Error(`Unsupported Dove lifecycle presentation: ${command}/${result?.status ?? "unknown"}.`);
   }

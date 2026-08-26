@@ -10,14 +10,20 @@ import { COMMAND_SURFACES, MANAGED_PACKAGE_PATHS } from "../src/core/command-man
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "package:validate", "check", "release:check"];
+const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "hot-sync:validate", "package:validate", "check", "release:check"];
 const FORBIDDEN_PACKAGE_PATHS = [
   ".claude/agents/dove-reviewer.md",
+  ".claude/agents/dove-reader.md",
+  ".claude/agents/dove-referee.md",
   ".opencode.json",
   ".opencode/agents/dove-reviewer.md",
+  ".opencode/agents/dove-reader.md",
+  ".opencode/agents/dove-referee.md",
   ".opencode/skills/dove-planner/SKILL.md",
   ".opencode/skills/dove-builder/SKILL.md",
   ".opencode/skills/dove-reviewer/SKILL.md",
+  ".opencode/skills/dove-reader/SKILL.md",
+  ".opencode/skills/dove-referee/SKILL.md",
   "mcp/dove-state-server-package.mjs",
   "scripts/doctor-mcp-probe-package.mjs"
 ];
@@ -58,8 +64,8 @@ assert.equal(pack.filename, `${packageJson.name}-${packageJson.version}.tgz`);
 assert.deepEqual(pack.files.map((file) => file.path).sort(), [...MANAGED_PACKAGE_PATHS, "package.json"].sort());
 for (const relativePath of FORBIDDEN_PACKAGE_PATHS) assert.equal(pack.files.some((file) => file.path === relativePath), false, `retired path packed: ${relativePath}`);
 for (const packedFile of pack.files) {
-  assert.doesNotMatch(packedFile.path, /^\.opencode\/skills\/dove-(?:planner|builder|reviewer)\/SKILL\.md$/u, `retired role skill packed: ${packedFile.path}`);
-  assert.doesNotMatch(packedFile.path, /^\.(?:claude|opencode)\/agents\/dove-reviewer\.md$/u, `retired reviewer agent packed: ${packedFile.path}`);
+  assert.doesNotMatch(packedFile.path, /^\.opencode\/skills\/dove-(?:planner|builder|reviewer|reader|referee)\/SKILL\.md$/u, `retired role skill packed: ${packedFile.path}`);
+  assert.doesNotMatch(packedFile.path, /^\.(?:claude|opencode)\/agents\/dove-(?:reviewer|reader|referee)\.md$/u, `retired review-role agent packed: ${packedFile.path}`);
 }
 
 console.log(JSON.stringify({ status: "passed" }, null, 2));

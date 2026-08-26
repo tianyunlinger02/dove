@@ -1,42 +1,10 @@
-export const PROJECT_HOST_IDS = Object.freeze(["opencode", "codex", "cursor", "agents", "claude"]);
+export const PROJECT_HOST_IDS = Object.freeze(["claude", "dsh"]);
 
 const HOST_DEFINITIONS = [
   {
-    id: "opencode",
-    label: "OpenCode",
-    order: 0,
-    projectInitializable: false,
-    capabilities: { commandAdapters: true, projectHooks: false, sharedInstructions: false },
-    legacySignatures: [".opencode.json", ".opencode/commands/dove.status.md", ".opencode/agents/dove.md", ".opencode/skills/dove-planner/SKILL.md"]
-  },
-  {
-    id: "codex",
-    label: "Codex",
-    order: 1,
-    projectInitializable: false,
-    capabilities: { commandAdapters: true, projectHooks: false, sharedInstructions: false },
-    legacySignatures: [".codex/skills/dove-status/SKILL.md"]
-  },
-  {
-    id: "cursor",
-    label: "Cursor",
-    order: 2,
-    projectInitializable: false,
-    capabilities: { commandAdapters: true, projectHooks: false, sharedInstructions: false },
-    legacySignatures: [".cursor/commands/dove-status.md"]
-  },
-  {
-    id: "agents",
-    label: "Shared agent skills",
-    order: 3,
-    projectInitializable: false,
-    capabilities: { commandAdapters: true, projectHooks: false, sharedInstructions: true },
-    legacySignatures: [".agents/skills/dove-status/SKILL.md", "AGENTS.md"]
-  },
-  {
     id: "claude",
     label: "Claude Code",
-    order: 4,
+    order: 0,
     projectInitializable: true,
     capabilities: { commandAdapters: true, projectHooks: true, sharedInstructions: false },
     legacySignatures: [
@@ -47,6 +15,14 @@ const HOST_DEFINITIONS = [
       ".claude/agents/dove.md",
       ".claude/skills/dove-intake/SKILL.md"
     ]
+  },
+  {
+    id: "dsh",
+    label: "DeepSeek Harness (dsh)",
+    order: 1,
+    projectInitializable: true,
+    capabilities: { commandAdapters: true, projectHooks: false, sharedInstructions: false },
+    legacySignatures: [".dsh/skills/dove-status/SKILL.md"]
   }
 ];
 
@@ -62,9 +38,7 @@ export const HOST_REGISTRY = Object.freeze(Object.fromEntries(
   HOST_DEFINITIONS.map((definition) => [definition.id, freezeHostDefinition(definition)])
 ));
 
-export const DEFAULT_INITIALIZABLE_HOSTS = Object.freeze(
-  PROJECT_HOST_IDS.filter((hostId) => HOST_REGISTRY[hostId].projectInitializable)
-);
+export const DEFAULT_INITIALIZABLE_HOSTS = Object.freeze(["claude"]);
 
 function selectionValues(raw) {
   if (raw === undefined || raw === null) return [];
@@ -86,17 +60,17 @@ export function normalizeHostSelection(raw, options = {}) {
     if (typeof hostId !== "string" || !hostId || hostId !== hostId.trim()) {
       throw new Error(`Invalid Dove project host id: ${String(hostId)}.`);
     }
+    if (hostId === "all") throw new Error("Dove host selection accepts only claude or dsh; 'all' is not supported.");
   }
 
-  const expanded = source.includes("all") ? PROJECT_HOST_IDS : source;
-  const unknown = [...new Set(expanded.filter((hostId) => !PROJECT_HOST_IDS.includes(hostId)))];
+  const unknown = [...new Set(source.filter((hostId) => !PROJECT_HOST_IDS.includes(hostId)))];
   if (unknown.length > 0) throw new Error(`Unknown Dove project host(s): ${unknown.join(", ")}.`);
 
-  const selected = PROJECT_HOST_IDS.filter((hostId) => expanded.includes(hostId));
+  const selected = PROJECT_HOST_IDS.filter((hostId) => source.includes(hostId));
   if (options.requireInitializable === true) {
     const unavailable = selected.filter((hostId) => !HOST_REGISTRY[hostId].projectInitializable);
     if (unavailable.length > 0) {
-      throw new Error(`Dove project initialization is not available for host(s) without a complete project integration path: ${unavailable.join(", ")}.`);
+      throw new Error(`Dove project initialization is not available for host(s): ${unavailable.join(", ")}.`);
     }
   }
   return Object.freeze(selected);

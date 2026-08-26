@@ -6,7 +6,7 @@
 
 ## Overview
 
-This project has no browser frontend. The Trellis `frontend` layer documents the approved Dove 3.0.0 Markdown document architecture: one Dove research agent, ten flat Skills, generated host projections, project lifecycle, Claude prompt and stop hooks, installation metadata, and software validation.
+This project has no browser frontend. The Trellis `frontend` layer documents the approved Dove 3.0.0 Markdown document architecture: one Dove research agent, ten flat Skills, generated host projections, project lifecycle, Claude SessionStart/prompt/stop hooks, installation metadata, and software validation.
 
 Dove 3 has no Dove-owned research-state MCP server, public research tool registry, Research Format runtime, or research database. Substantive work uses host file, coding, execution, and research tools directly; Claude project initialization may declare one pinned external paper-acquisition MCP and hidden support Skill.
 
@@ -45,7 +45,7 @@ Dove 3 has no Dove-owned research-state MCP server, public research tool registr
 - The corresponding Review document preserves purpose, exact path scope, prompt, and the actual user-obtained Markdown return; author handling is added only when requested.
 - Missions and Sources are natural documents. Claims remain prose or documents when useful, not a store.
 - Status is read-only. A missing overview is normal, and broken links are reported as ordinary documentation problems.
-- Auto is explicit-only and treats the documented current mainline as a read-only boundary.
+- Auto is explicit-only foreground multi-round research; it recovers the current mainline from research context, conversation, and project artifacts, then continues while material actions can advance the research decision.
 - `.dove/install/manifest.json` uses revision `2.0`; optional ordinary `DOCTOR.md` feedback about Dove itself also belongs under `.dove/install/`, without machine issue state.
 - Installation and file-safety hashes are internal software metadata, never research evidence.
 - CLI commands are `init`, `update`, `reinstall`, `doctor`, `export-research`, and `hook`; there is no `mcp` or `migrate-research` command.

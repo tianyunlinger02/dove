@@ -48,6 +48,15 @@ function lstatOrNull(fsOps, targetPath) {
   }
 }
 
+function preservedDoctorOnly(directoryPath, directoryStat, fsOps) {
+  if (directoryStat === null) return false;
+  if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) return false;
+  const children = fsOps.readdirSync(directoryPath).map(String).sort();
+  if (children.length !== 1 || children[0] !== "DOCTOR.md") return false;
+  const doctorStat = lstatOrNull(fsOps, path.join(directoryPath, "DOCTOR.md"));
+  return doctorStat?.isFile() === true && !doctorStat.isSymbolicLink();
+}
+
 function installationStateAt(root, options) {
   const fsOps = options.fsOps ?? fs;
   const directoryPath = path.join(root, INSTALLATION_DIRECTORY);
@@ -55,7 +64,7 @@ function installationStateAt(root, options) {
   const manifestStat = lstatOrNull(fsOps, manifestPath);
   if (manifestStat === null) {
     const directoryStat = lstatOrNull(fsOps, directoryPath);
-    if (directoryStat === null) return { state: "absent", root, manifestPath };
+    if (directoryStat === null || preservedDoctorOnly(directoryPath, directoryStat, fsOps)) return { state: "absent", root, manifestPath };
     return { state: "residue", root, manifestPath, directoryPath, directoryStat };
   }
   if (manifestStat.isSymbolicLink()) throw new Error(`Dove project installation manifest must not be a symbolic link: ${manifestPath}.`);
@@ -95,6 +104,7 @@ function setupEvidenceAt(root, fsOps, options = {}) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) {
       throw new Error(`Dove setup path must be a real directory: ${target}.`);
     }
+    if (relativePath === INSTALLATION_DIRECTORY && preservedDoctorOnly(target, stat, fsOps)) continue;
     return { state: "residue", relativePath };
   }
   return { state: "absent", relativePath: null };
@@ -102,10 +112,10 @@ function setupEvidenceAt(root, fsOps, options = {}) {
 
 function legacyInitError(candidate, root, evidence) {
   if (evidence.relativePath === LEGACY_INSTALLATION_MANIFEST_PATH) {
-    return new Error(`Dove found a legacy project installation at ${root}. Run 'dove update' to preserve its research state, or 'dove reinstall' to delete and recreate Dove state.`);
+    return new Error(`Dove found a legacy project installation at ${root}. Current adoption accepts only a readable Markdown research tree with the old .dove/manifest.json marker. Run 'dove doctor --json' before choosing explicit reinstall or manual recovery.`);
   }
   if (evidence.relativePath === ".dove/manifest.json") {
-    return new Error(`Dove found an unsupported legacy research workspace at ${root}. Run 'dove reinstall' to delete and recreate Dove state, or 'dove doctor --json' for diagnosis.`);
+    return new Error(`Dove found existing Dove research workspace state at ${root}. Run 'dove update' to adopt it when the Markdown research tree is current, or 'dove doctor --json' for diagnosis.`);
   }
   return new Error(`Dove found incomplete legacy Dove state at ${root}. Run 'dove doctor --json' before initializing another project.`);
 }
@@ -184,6 +194,18 @@ export function resolveInstalledProjectRoot(start, options = {}) {
     if (installation.state === "initialized") return directory;
   }
   throw initRequiredError(startingDirectory);
+}
+
+export function resolveExactInstalledProjectRoot(start, options = {}) {
+  const fsOps = options.fsOps ?? fs;
+  if (typeof start !== "string" || !start.trim() || start.includes("\0")) throw new Error("Dove hook project must name an initialized project root.");
+  const resolved = path.resolve(start);
+  const stat = lstatOrNull(fsOps, resolved);
+  if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove hook project must be a real directory: ${resolved}.`);
+  const root = realpathNative(fsOps, resolved);
+  const installation = installationStateAt(root, options);
+  if (installation.state !== "initialized") throw initRequiredError(root);
+  return root;
 }
 
 export function inspectProjectRoot(start, options = {}) {

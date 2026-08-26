@@ -6,7 +6,7 @@
 
 ## Overview
 
-This repository has no browser frontend. It contains the canonical Dove agent persona, canonical Skill workflows, generated host adapters, a lifecycle CLI, Claude prompt and stop hooks, three runtime bundles, public documentation, project installation logic, and software validation.
+This repository has no browser frontend. It contains the canonical Dove agent persona, canonical Skill workflows, generated host adapters, a lifecycle CLI, Claude SessionStart/prompt/stop hooks, three runtime bundles, public documentation, project installation logic, and software validation.
 
 There is no Dove research-state MCP server or Research Format runtime in the Dove 3 architecture. Claude project integration may declare one pinned external paper-acquisition MCP without bundling its runtime.
 
@@ -94,4 +94,4 @@ Drafts, code, datasets, logs, figures, papers, source captures, review bundles, 
 
 The installed `dove` executable handles project initialization, project integration update, Complete Reinstall, Doctor, explicit legacy JSON research export, and prompt/stop-hook forwarding. It has no `mcp` or `migrate-research` command. Research work remains in the Dove agent, Skills, and normal host tools.
 
-Project roots and Dove-managed paths must be contained and unambiguous. Ordinary files and unrelated shared-configuration fields are preserved. Conflicting or modified managed content blocks automatic replacement. Research defaults are outside the installation manifest; update creates missing summaries, completes current standard overview and Lessons-summary navigation, replaces the six built-in Lessons themes, and directly deletes deprecated `.dove/research/LESSONS.md` and `lessons/additional-lessons.md` without migration or fallback.
+Project roots and Dove-managed paths must be contained and unambiguous. Ordinary files and unrelated shared-configuration fields are preserved. Conflicting or modified managed content blocks automatic replacement. Research defaults are outside the installation manifest; update creates missing summaries, completes current standard overview and Lessons-summary navigation, replaces the six built-in Lessons themes, and deletes only the recognized deprecated package-managed Lessons artifacts `.dove/research/LESSONS.md` and `lessons/additional-lessons.md` without migration or fallback.

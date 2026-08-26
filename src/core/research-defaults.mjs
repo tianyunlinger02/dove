@@ -3,11 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
-  DOVE_AGENT_CURIOSITY,
-  DOVE_AGENT_HUNCH,
-  DOVE_AGENT_LAYERING,
-  DOVE_AGENT_PROPORTIONALITY
-} from "./dove-agent-persona.mjs";
+  DOVE_RESEARCH_CURIOSITY,
+  DOVE_RESEARCH_HUNCH,
+  DOVE_RESEARCH_LAYERING,
+  DOVE_RESEARCH_PROPORTIONALITY
+} from "./dove-research-contract.mjs";
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 
@@ -105,7 +105,7 @@ const SUMMARY_DOCUMENTS = Object.freeze([
     path: RESEARCH_DEFAULT_PATHS.reviewsSummary,
     title: "# Reviews",
     blocks: Object.freeze([
-      "Use this summary to connect user-managed Review documents. Keep the declared artifact scope, prompt, actual returned Markdown, author handling, and follow-up together in the relevant Review document."
+      "Use this summary to connect Review documents for direct reviewer-perspective critiques, separate review handoffs, actual returned Markdown, author handling, and follow-up. Keep scopes, prompts, returns, and author-side work clearly separated in the relevant Review document."
     ]),
     navigationHeading: null,
     navigationLines: Object.freeze([])
@@ -123,7 +123,7 @@ const SUMMARY_DOCUMENTS = Object.freeze([
     path: RESEARCH_DEFAULT_PATHS.lessonsSummary,
     title: "# Lessons",
     blocks: Object.freeze([
-      "Lessons are fallible, reviewable guidance for future work. They are not research evidence, scientific validation, permission, or a completion certificate; maintain the existing relevant theme or create a naturally named Markdown file when durable guidance warrants it."
+      "Lessons are fallible, reviewable guidance for future work. They are not research evidence, scientific validation, permission, or a completion certificate. Treat the six built-in themes as package-managed references; when durable project-specific guidance warrants maintenance, update or create a researcher-owned Lessons file and link it here."
     ]),
     navigationHeading: "## Themes",
     navigationLines: LESSON_LINKS
@@ -137,7 +137,7 @@ export const RESEARCH_LESSON_TOPICS = Object.freeze([
     intro: "Use these principles to choose and stop work according to real value rather than presentation or sunk cost.",
     paragraphs: Object.freeze([
       "Prefer work that advances the real research goal or resolves an important uncertainty. Navigation, record keeping, local metrics, demonstrations, and surface progress matter only when they improve the next decision or substantive result.",
-      DOVE_AGENT_LAYERING,
+      DOVE_RESEARCH_LAYERING,
       "Choose the feasible action most likely to change the research decision. Use suitable existing code, data, models, tools, compute, prior results, and user preferences to accelerate the chosen question, but do not let available resources or preferences redefine it without saying why.",
       "After a meaningful result, commit to the strongest route, switch when another explanation or approach becomes better, or stop when further feasible work is unlikely to resolve the important uncertainty.",
       "Judge progress by the real path from representative input to a useful result, not by the amount of analysis, validation, or documentation produced."
@@ -149,8 +149,8 @@ export const RESEARCH_LESSON_TOPICS = Object.freeze([
     intro: "Use these principles to keep the problem, hypothesis, mechanism, and route scientifically meaningful.",
     paragraphs: Object.freeze([
       "Start from the real research question and the conditions in which the answer must matter. Inspect the actual project and relevant external work before letting available methods, metrics, or publication pressure redefine the problem.",
-      DOVE_AGENT_HUNCH,
-      DOVE_AGENT_CURIOSITY,
+      DOVE_RESEARCH_HUNCH,
+      DOVE_RESEARCH_CURIOSITY,
       "When the route is open, generate materially different explanations or approaches. Use theory to derive different expectations, compare the serious candidates under the actual use conditions, and do not commit to the first plausible or easiest one.",
       "Choose work that can distinguish the serious candidates or expose the key mechanism. A small diagnostic, source investigation, analysis, prototype, or experiment is valuable when its possible outcomes would lead to different research decisions; do not treat missing evidence as a reason to stop before seeking the evidence that matters.",
       "When theory and results disagree, revisit the theory, test, and route rather than defending the current story or automatically adding experiments. Use the result to commit, switch, or stop."
@@ -161,10 +161,10 @@ export const RESEARCH_LESSON_TOPICS = Object.freeze([
     title: "# Experiments and evidence",
     intro: "Use experiments when they are the best way to change a research decision.",
     paragraphs: Object.freeze([
-      "Before treating an experiment as central, establish the real problem, key uncertainty, or route decision it should resolve. If that basis is not yet established, stop experiment design and identify the actual project material, relevant sources, or smaller diagnostic needed to investigate the problem; do not invent a substitute experiment or stop at merely admitting the basis is missing.",
+      "Before treating an experiment as central, establish the real problem, key uncertainty, or route decision it should resolve. If that basis is not yet established, pause central experiment design and inspect the actual project material, relevant sources, or smaller low-risk diagnostic needed to investigate the problem; do not invent a substitute experiment or stop at merely admitting the basis is missing.",
       "For new execution, state what is being tested and how the result will be judged before running it. Use comparisons or diagnostics that can distinguish the serious candidates under the conditions that matter.",
       "Experiments, validation, audits, and documents are means. When they cannot change or protect the mainline decision, more of them becomes fake rigor or fake progress rather than better research.",
-      "Prefer the real task over convenient proxies when the real task is feasible. Record the actual result and any deviation or failure that changes its interpretation, then use it to continue, change, or stop the route."
+      "Prefer the real task over convenient proxies when the real task is feasible. Record the actual result and any deviation or failure that changes its interpretation when it has durable recovery or evidence value, then use it to continue, change, or stop the route."
     ])
   }),
   Object.freeze({
@@ -175,7 +175,7 @@ export const RESEARCH_LESSON_TOPICS = Object.freeze([
       "Implement the smallest complete path that serves the real task. Keep concepts and data authority clear across input, execution, output, and interpretation, and remove obsolete paths rather than accumulating fallback, shadow state, duplicate rules, and switches. When a gap blocks progress, name the smallest concrete probe or repair that could unblock the mainline rather than ending at the gap itself.",
       "Diagnose the shared cause of failures and make the actual repair; do not let investigation, bookkeeping, or local checks replace the requested result, and do not manufacture a valid-looking output through unrelated defaults, swallowed errors, or skipped problem cases.",
       "Validate in proportion to the consequence of the change, using the real interface or artifact when that matters. Stop when the real path works well enough for the requested purpose rather than accumulating redundant checks.",
-      DOVE_AGENT_PROPORTIONALITY,
+      DOVE_RESEARCH_PROPORTIONALITY,
       "Do not cause real harm or lose user content. Preserve unrelated project changes, protect credentials and sensitive data, and obtain explicit confirmation before destructive or outward-facing actions."
     ])
   }),
@@ -184,9 +184,9 @@ export const RESEARCH_LESSON_TOPICS = Object.freeze([
     title: "# Writing and review",
     intro: "Use these principles to make papers and reviews follow a clear research argument.",
     paragraphs: Object.freeze([
-      "Build the paper or report around a clear argument: an important problem, a specific gap, a falsifiable hypothesis or mechanism, fair evidence, and an explicit capability boundary. Organize the account around that argument rather than the chronology of development and patches.",
+      "Build the paper or report around a clear argument: an important problem, a specific gap, a falsifiable hypothesis or mechanism, fair evidence, and an explicit capability boundary. Organize the account around that argument rather than the chronology of development and patches. When you read as a reviewer, test the claim, evidence, method, novelty, limitations, and likely reader confusion before deciding what to ask or revise.",
       "Explain what is genuinely new by identifying the prior obstacle that is removed and separating the contribution from inherited models, public data, tools, simulators, and external services. Compare the nearest work on the actual task, information, supervision, use conditions, protocol, mechanism, real user need, and supporting evidence rather than merely listing sources or iterating an internal novelty story.",
-      "Describe enough of the method and experiment conditions for the reader to understand how and why the result was produced. Organize important results around the research or contribution promise they test and explain how they change the argument.",
+      "Describe enough of the method, evidence conditions, adverse evidence, provenance, and experiment conditions for the reader to understand how and why the result was produced. Organize important results around the research or contribution promise they test and explain how they change the argument.",
       "Keep the paper focused on the strongest supported contribution. Revise or remove claims when a result changes the argument rather than surrounding them with defensive qualification."
     ])
   }),

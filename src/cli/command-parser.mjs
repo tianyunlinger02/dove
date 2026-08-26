@@ -12,6 +12,7 @@ export const CLI_COMMAND_SPECS = Object.freeze({
   init: command([projectOption, value("--host", { repeatable: true }), ...outputOptions]),
   update: command([projectOption, value("--host", { repeatable: true }), ...outputOptions]),
   reinstall: command([projectOption, ...outputOptions]),
+  uninstall: command([projectOption, ...outputOptions]),
   doctor: command([projectOption, ...outputOptions]),
   "export-research": command([projectOption, ...outputOptions]),
   hook: command([projectOption], { min: 1, max: 1 })

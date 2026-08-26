@@ -35,7 +35,7 @@ No research MCP definitions or Research Format schema belong in the Dove 3 contr
 - File-set changes verify preconditions and avoid partial promotion.
 - Generated adapters match the ten-Skill and Dove-agent canonical sources.
 - Package output contains exactly the declared library, CLI, and hook runtime bundles.
-- Hook parsing distinguishes `UserPromptSubmit` and `Stop`; the Stop continuation guard prevents repeated summaries.
+- Hook parsing distinguishes `SessionStart`, `UserPromptSubmit`, and `Stop`; lifecycle sync validates the exact initialized project before writes, and the Stop continuation guard prevents repeated summaries.
 - Real research export requires separate user authorization.
 - Export accepts supported legacy Dove JSON research records only, archives the original bytes under `.dove/archive/...`, and does not install a runtime fallback.
 - Complete Reinstall requires an explicit confirmed destructive plan whose default is No.
@@ -69,10 +69,11 @@ Some semantic order and responsibility boundaries still matter even though docum
 
 - prospective experiment planning is written before execution;
 - actual experiment results are appended to the same document;
-- review purpose, exact path scope, limits, and prompt precede the external exchange;
+- direct reviewer-perspective critique stays scoped and does not claim independent external review;
+- review purpose, exact path scope, limits, and prompt precede any separate external exchange;
 - any separate reviewer remains user-managed, read-only, and Markdown-returning;
 - the actual user-obtained return is preserved in the corresponding Review document, and author handling is added only when requested;
-- Auto is explicit-only and cannot rewrite the documented mainline; and
+- Auto is explicit-only multi-round research, recovers the current mainline from substantive context, and asks only when a competing direction or real boundary changes the work; and
 - Status performs no writes.
 
 Protect these through canonical workflow order, generated-resource validation, real interface checks, and semantic review. Do not enforce them by inventing an entity database.
@@ -86,7 +87,7 @@ Protect these through canonical workflow order, generated-resource validation, r
 - Runtime research source: ordinary Markdown only.
 - Runtime fallback to old JSON: none.
 
-Project update creates missing summaries, completes current standard navigation only in `RESEARCH.md` and `lessons/LESSONS.md`, and replaces each package-managed built-in Lessons theme with current package content. It directly deletes deprecated `.dove/research/LESSONS.md` and `lessons/additional-lessons.md` without migration or fallback and removes the Additional migrated Lessons link. Other research documents, including explicit-export `lessons/imported-lessons.md`, remain researcher-owned. Complete Reinstall previews deletions and replacements, then after default-No confirmation deletes custom Dove research and old archives, replaces existing default research files, rebuilds the complete default tree, and preserves ordinary project files.
+Project update creates missing summaries, completes current standard navigation only in `RESEARCH.md` and `lessons/LESSONS.md`, replaces each package-managed built-in Lessons theme with current package content, and deletes only the recognized deprecated package-managed Lessons artifacts `.dove/research/LESSONS.md` and `lessons/additional-lessons.md` without migration or fallback. It removes the Additional migrated Lessons link. Other research documents, including explicit-export `lessons/imported-lessons.md`, remain researcher-owned. Complete Reinstall previews deletions and replacements, then after default-No confirmation deletes custom Dove research and old archives, replaces existing default research files, rebuilds the complete default tree, and preserves ordinary project files.
 
 ## Machine and Human Language
 
@@ -97,7 +98,7 @@ Validation output must stay software-scoped and must not imply scientific correc
 ## Stable Markdown and project file boundaries
 
 - Research Markdown has no format or schema version. Future organization changes use ordinary host file operations to rename, move, relink, or consolidate substantive content; they do not create a migration framework or runtime fallback.
-- Requested artifacts such as drafts, figures, experiment documents, and revisions are created or modified when the task requires them. Additional Dove research Markdown is maintained only when the user explicitly asks to record, update, or save it, or when results clearly change the research mainline, conclusion, decision, or priority.
+- Requested artifacts such as drafts, figures, experiment documents, and revisions are created or modified when the task requires them. Additional Dove research Markdown is maintained only when the user explicitly asks to record, update, or save it, when results clearly change the research mainline, conclusion, decision, or priority, or when durable recovery and evidence value make the work worth preserving.
 - Dove project file operations use cross-platform Node path containment, ordinary-file and symbolic-link checks, same-directory temporary writes, expected-state rechecks, and transactional rollback; they do not require Linux `/proc` features.
 - Complete Reinstall displays the current deletion and replacement paths, defaults to No, and after confirmation rereads the project and executes the current plan.
 - `DOCTOR.md` is ordinary host-maintained feedback rather than typed Doctor state; it has no fixed schema, IDs, statuses, or counters.

@@ -1,9 +1,11 @@
 export { PACKAGE_NAME } from "./package-metadata.mjs";
 export { ARTIFACT_PATHS, PACKAGE_VERSION } from "./schema.mjs";
 
-export { userPromptSubmitOutput } from "./ambient-hook.mjs";
+export { parseUserPromptSubmitPayload, userPromptSubmitOutput } from "./ambient-hook.mjs";
+export { parseSessionStartPayload, sessionStartOutput } from "./session-start-hook.mjs";
 export { stopHookOutput } from "./stop-hook.mjs";
 export {
+  DOVE_CLAUDE_SESSION_START_HOOK_COMMAND,
   DOVE_CLAUDE_STOP_HOOK_COMMAND,
   ambientContextForPrompt,
   isHighConfidenceAmbientWorkPrompt,
@@ -36,12 +38,13 @@ export {
   renderPaperSearchSupportSkill
 } from "./paper-search-integration.mjs";
 
+export * from "./dove-research-contract.mjs";
+
 export {
   DOVE_AGENT_DEFINITION,
   DOVE_AGENT_SURFACES,
   generatedDoveAgentEntries,
-  renderClaudeDoveAgent,
-  renderOpenCodeDoveAgent
+  renderClaudeDoveAgent
 } from "./dove-agent-definition.mjs";
 export {
   DOVE_AGENT_CAPSULE_BULLETS,
@@ -72,7 +75,10 @@ export {
   initializeProjectIntegration,
   inspectProjectIntegration,
   previewProjectCompleteReinstall,
+  previewProjectUninstall,
+  synchronizeProjectIntegrationOnly,
+  uninstallProjectIntegration,
   updateProjectIntegration
 } from "./project-installation.mjs";
-export { completeReinstallDoveLifecycle, updateDoveLifecycle } from "./dove-lifecycle.mjs";
+export { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "./dove-lifecycle.mjs";
 export { inspectProjectDoctor } from "./project-doctor.mjs";

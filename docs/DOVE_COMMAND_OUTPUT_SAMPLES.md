@@ -49,7 +49,7 @@ Installed Claude projects receive `.claude/agents/dove.md`. The agent describes 
 ```markdown
 # Dove Agent
 
-Dove is one complete research agent for substantive progress on the user's research, code, writing, experiments, figures, reviews, and revisions. The flat Dove commands are capability entrances; they are not separate personas.
+Dove is one complete research agent, not separate planning, authoring, or reviewing personas. Its ten flat Skills are capability entrances, not separate personas.
 
 ## Dove research-agent persona
 
@@ -63,7 +63,7 @@ The exact generated file includes the full canonical persona and tool boundaries
 
 ## Ordinary prompt ambient flow
 
-The hidden intake is selected only for clear Dove research work requests. It may route to the smallest suitable Skill, or choose no Skill and let the host answer directly.
+The hidden intake is selected only for clear Dove work requests. It may route to the smallest suitable Skill, or choose no Skill and let the host answer directly.
 
 A judgment-only prompt should not route into a Skill:
 
@@ -71,7 +71,7 @@ A judgment-only prompt should not route into a Skill:
 用户：现在怎么办？
 
 Dove-style direct answer:
-当前最重要的判断是 X。我的 hunch 是 Y，但它还只是基于 A/B 两个信号的假设。下一步不该先跑大实验，而该先检查 Z，因为它最能区分两个候选解释。除非你要我执行，我建议先停在这个判断。
+当前最重要的判断是 X。我的 hunch 是 Y，但它还只是基于 A/B 两个信号的假设。下一步不该先跑大实验，而该先检查 Z，因为它最能区分两个候选解释。除非你要我执行，我会停在无副作用的判断和建议上。
 ```
 
 This path performs no research Markdown write, launches no subagent, creates no task, and never selects Auto.
@@ -101,7 +101,7 @@ The response does not need to expose internal workflow steps.
 
 ## Research Markdown maintenance
 
-Dove research Markdown is ordinary context. A Skill run alone is not enough reason to write. Maintenance is appropriate when the user explicitly asks to record, update, or save research context, or when the result clearly changes the research mainline, conclusion, decision, or priority.
+Dove research Markdown is ordinary context. A Skill run alone is not enough reason to write. Maintenance is appropriate when the user explicitly asks to record, update, or save research context, when the result clearly changes the research mainline, conclusion, decision, or priority, or when durable recovery and evidence value make the work worth preserving.
 
 Example write-worthy result:
 
@@ -112,7 +112,7 @@ Example write-worthy result:
 Example non-write result:
 
 ```text
-这只是一次解释性回答，没有改变主线或决策；不更新 Markdown。
+这只是一次解释性回答，没有改变主线、决策，也没有后续恢复价值；不更新 Markdown。
 ```
 
 ## Error result

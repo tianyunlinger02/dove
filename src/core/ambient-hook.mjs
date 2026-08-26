@@ -1,6 +1,6 @@
 import { ambientContextForPrompt } from "./ambient-policy.mjs";
 
-function parseHookPayload(input) {
+export function parseUserPromptSubmitPayload(input) {
   let payload;
   try {
     payload = JSON.parse(input);
@@ -17,7 +17,7 @@ function parseHookPayload(input) {
 }
 
 export function userPromptSubmitOutput(input) {
-  const payload = parseHookPayload(input);
+  const payload = parseUserPromptSubmitPayload(input);
   const additionalContext = ambientContextForPrompt(payload.prompt);
   if (additionalContext === null) return null;
   return {
