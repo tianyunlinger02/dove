@@ -67,7 +67,8 @@ function emptyResult(state, fields = {}) {
       claims: null,
       lessons: null
     },
-    missingSummaries: SUMMARY_ENTRIES.map(([, , summaryPath]) => summaryPath),
+    missingSummaries: [],
+    optionalSummaries: SUMMARY_ENTRIES.map(([, , summaryPath]) => summaryPath),
     ...fields
   };
 }
@@ -100,12 +101,10 @@ export function inspectResearchDocuments(root, options = {}) {
 
     const overview = readMarkdown(anchor, RESEARCH_DOCUMENT_PATHS.overview);
     const summaries = {};
-    const missingSummaries = [];
     for (const [name, directoryPath, summaryPath] of SUMMARY_ENTRIES) {
       const directoryExists = inspectDirectory(anchor, directoryPath);
       const markdown = directoryExists ? readMarkdown(anchor, summaryPath) : null;
       summaries[name] = markdown === null ? null : { path: summaryPath };
-      if (markdown === null) missingSummaries.push(summaryPath);
     }
     return {
       healthy: true,
@@ -113,7 +112,8 @@ export function inspectResearchDocuments(root, options = {}) {
       root: RESEARCH_DOCUMENT_PATHS.root,
       overview: overview === null ? null : { path: RESEARCH_DOCUMENT_PATHS.overview },
       summaries,
-      missingSummaries
+      missingSummaries: [],
+      optionalSummaries: SUMMARY_ENTRIES.map(([, , summaryPath]) => summaryPath)
     };
   } catch (error) {
     return {

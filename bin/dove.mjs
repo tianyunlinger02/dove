@@ -20,7 +20,6 @@ import {
 } from "../src/cli/terminal-output.mjs";
 import { parseUserPromptSubmitPayload, userPromptSubmitOutput } from "../src/core/ambient-hook.mjs";
 import { parseSessionStartPayload, sessionStartOutput } from "../src/core/session-start-hook.mjs";
-import { stopHookOutput } from "../src/core/stop-hook.mjs";
 import { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
 import { exportResearch, previewResearchExport } from "../src/core/research-export.mjs";
 import { PROJECT_HOST_IDS } from "../src/core/host-registry.mjs";
@@ -50,9 +49,9 @@ Usage:
   dove export-research [--project <dir>] [--json|--format json]
   dove hook session-start --project <dir>
   dove hook user-prompt-submit --project <dir>
-  dove hook stop --project <dir>
+  dove hook statusline --project <dir>
 
-The runtime CLI manages project integration, diagnostics, one-time legacy JSON research export, and Claude lifecycle hooks. Research work uses the Dove agent and ten host Skills with ordinary Markdown research documents. Project initialization creates the ordinary default research tree, but it does not create research progress, a Mission, or a scientific conclusion.
+The runtime CLI manages project integration, diagnostics, one-time legacy JSON research export, and Claude lifecycle hooks. Research work uses the Dove agent and ten host Skills with ordinary Markdown research documents. Project initialization creates the minimal researcher-owned \`.dove/research/RESEARCH.md\` entry, but it does not create research progress, a Mission, or a scientific conclusion. Dove does not install or expose a Stop hook.
 `);
 }
 
@@ -269,7 +268,7 @@ try {
     const preview = previewProjectCompleteReinstall(target, PACKAGE_OPTIONS);
     process.stdout.write(`${renderCompleteReinstallInventory(preview, { color })}\n\n`);
     const approved = await confirm({
-      message: "警告：这会永久删除当前项目中的全部 Dove 配置、研究状态和旧归档。确认完全重新安装项目配置？",
+      message: "警告：这会重新安装 Dove 管理的项目接入；研究 Markdown 与 DOCTOR.md 会保留。确认重新安装项目配置？",
       default: false
     });
     if (!approved) {
@@ -334,13 +333,12 @@ try {
 
   if (command === "hook") {
     const hookName = parsed.positionals[0];
-    if (!["session-start", "user-prompt-submit", "stop"].includes(hookName)) throw new Error("dove hook accepts only session-start, user-prompt-submit, or stop.");
+    if (!["session-start", "user-prompt-submit", "statusline"].includes(hookName)) throw new Error("dove hook accepts only session-start, user-prompt-submit, or statusline.");
     if (projectFlag(args) === undefined) throw new Error(`dove hook ${hookName} requires --project <dir>.`);
     const input = await readStdin();
     const target = prepareHookProject(projectFlag(args));
-    if (hookName === "stop") {
-      const output = stopHookOutput(input);
-      if (output !== null) process.stdout.write(JSON.stringify(output));
+    if (hookName === "statusline") {
+      process.stdout.write(`${target}\n`);
       process.exit(0);
     }
     const payload = hookName === "session-start" ? parseSessionStartPayload(input) : parseUserPromptSubmitPayload(input);

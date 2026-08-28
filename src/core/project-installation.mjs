@@ -7,7 +7,7 @@ import {
   DOVE_CLAUDE_AMBIENT_HOOK_ENTRY,
   DOVE_CLAUDE_SESSION_START_HOOK_ENTRY,
   DOVE_CLAUDE_SETTINGS_PATH,
-  DOVE_CLAUDE_STOP_HOOK_ENTRY,
+  DOVE_CLAUDE_STATUS_LINE,
   mergeClaudeAmbientSettings
 } from "./ambient-policy.mjs";
 import {
@@ -29,12 +29,7 @@ import {
   serializeProjectInstallationManifest
 } from "./project-installation-manifest.mjs";
 import { resolveExactInstalledProjectRoot, resolveInstalledProjectRoot, resolveProjectRootForInit, resolveProjectRootForSetup } from "./project-root.mjs";
-import {
-  RESEARCH_DEFAULT_DIRECTORY_PATHS,
-  RESEARCH_DEFAULT_FILE_PATHS,
-  RESEARCH_DEFAULT_PATHS,
-  prepareResearchDefaults
-} from "./research-defaults.mjs";
+import { prepareResearchDefaults } from "./research-defaults.mjs";
 import { inspectResearchDocuments } from "./research-documents.mjs";
 import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 import { generatedAdapterEntries, generatedClaudeAmbientProjectEntries } from "../../scripts/generate-command-adapters.mjs";
@@ -42,6 +37,7 @@ import { generatedDoveAgentEntries } from "./dove-agent-definition.mjs";
 
 const MCP_PATH = PAPER_SEARCH_MCP_PATH;
 const SETTINGS_SELECTOR = "/hooks/UserPromptSubmit[dove-user-prompt-submit]";
+const STATUS_LINE_SELECTOR = "/statusLine[dove-project-directory]";
 const CLAUDE_HOST = "claude";
 const FORBIDDEN_RESOURCE_PREFIXES = [".dove/", "bin/", "dist/", "mcp/", "scripts/"];
 
@@ -138,8 +134,7 @@ function claudeResources() {
   });
   const hooks = {
     SessionStart: DOVE_CLAUDE_SESSION_START_HOOK_ENTRY,
-    UserPromptSubmit: DOVE_CLAUDE_AMBIENT_HOOK_ENTRY,
-    Stop: DOVE_CLAUDE_STOP_HOOK_ENTRY
+    UserPromptSubmit: DOVE_CLAUDE_AMBIENT_HOOK_ENTRY
   };
   const hook = {
     hostId: CLAUDE_HOST,
@@ -149,6 +144,14 @@ function claudeResources() {
     fragment: hooks,
     digest: semanticDigest(hooks)
   };
+  const statusLine = {
+    hostId: CLAUDE_HOST,
+    path: DOVE_CLAUDE_SETTINGS_PATH,
+    kind: "json-fragment",
+    selector: STATUS_LINE_SELECTOR,
+    fragment: DOVE_CLAUDE_STATUS_LINE,
+    digest: semanticDigest(DOVE_CLAUDE_STATUS_LINE)
+  };
   const paperSearch = {
     hostId: CLAUDE_HOST,
     path: PAPER_SEARCH_MCP_PATH,
@@ -157,7 +160,7 @@ function claudeResources() {
     fragment: PAPER_SEARCH_MCP_FRAGMENT,
     digest: semanticDigest(PAPER_SEARCH_MCP_FRAGMENT)
   };
-  const resources = [...files, hook, paperSearch];
+  const resources = [...files, hook, statusLine, paperSearch];
   if (new Set(resources.map(managedKey)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }
@@ -247,14 +250,27 @@ function serializeSharedJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
+function sameKeys(value, keys) {
+  return plainObject(value) && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+}
+
+function exactLegacyDoveStopHook(entry) {
+  if (!sameKeys(entry, ["hooks"]) || !Array.isArray(entry.hooks) || entry.hooks.length !== 1) return false;
+  const hook = entry.hooks[0];
+  return sameKeys(hook, ["command", "timeout", "type"])
+    && hook.type === "command"
+    && hook.command === 'dove hook stop --project "$CLAUDE_PROJECT_DIR"'
+    && hook.timeout === 10;
+}
+
 function hookCommandMarkers(eventName) {
   if (eventName === "SessionStart") return ["dove hook session-start"];
   if (eventName === "UserPromptSubmit") return ["dove hook user-prompt-submit", "dove-user-prompt-submit-package.mjs"];
-  if (eventName === "Stop") return ["dove hook stop"];
   throw new Error(`Unsupported Dove Claude hook event: ${eventName}.`);
 }
 
 function referencesDoveHook(entry, eventName) {
+  if (eventName === "Stop") return exactLegacyDoveStopHook(entry);
   if (!plainObject(entry) || !Array.isArray(entry.hooks)) return false;
   const markers = hookCommandMarkers(eventName);
   return entry.hooks.some((hook) => plainObject(hook)
@@ -265,11 +281,31 @@ function referencesDoveHook(entry, eventName) {
 function hookFragmentState(settings, eventName) {
   if (settings.hooks !== undefined && !plainObject(settings.hooks)) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks must be a JSON object.`);
   const entries = settings.hooks?.[eventName];
-  if (entries !== undefined && !Array.isArray(entries)) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks.${eventName} must be an array.`);
+  if (entries !== undefined && !Array.isArray(entries)) {
+    if (eventName === "Stop") return { exists: false, digest: null, index: -1, fragment: null };
+    throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks.${eventName} must be an array.`);
+  }
   const candidates = (entries ?? []).map((entry, index) => ({ entry, index })).filter(({ entry }) => referencesDoveHook(entry, eventName));
   if (candidates.length > 1) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} defines multiple Dove ${eventName} hooks.`);
   if (candidates.length === 0) return { exists: false, digest: null, index: -1, fragment: null };
   return { exists: true, digest: semanticDigest(candidates[0].entry), index: candidates[0].index, fragment: candidates[0].entry };
+}
+
+function removeExactLegacyDoveStopHook(settings) {
+  if (settings.hooks?.Stop === undefined) return { settings, changed: false };
+  if (!plainObject(settings.hooks) || !Array.isArray(settings.hooks.Stop)) return { settings, changed: false };
+  const entries = settings.hooks.Stop.filter((entry) => !exactLegacyDoveStopHook(entry));
+  if (entries.length === settings.hooks.Stop.length) return { settings, changed: false };
+  return {
+    settings: {
+      ...settings,
+      hooks: {
+        ...settings.hooks,
+        Stop: entries
+      }
+    },
+    changed: true
+  };
 }
 
 function namedMcpFragmentState(config, serverName) {
@@ -283,18 +319,24 @@ function paperSearchMcpFragmentState(config) {
   return namedMcpFragmentState(config, PAPER_SEARCH_MCP_SERVER_NAME);
 }
 
+function settingsHookFragmentState(value, options = {}) {
+  const prompt = hookFragmentState(value, "UserPromptSubmit");
+  const sessionStart = hookFragmentState(value, "SessionStart");
+  const stop = options.includeRetiredStop === true ? hookFragmentState(value, "Stop") : { exists: false };
+  if (!prompt.exists) return { exists: false, digest: null, index: -1, fragment: null };
+  const fragment = {
+    UserPromptSubmit: prompt.fragment,
+    ...(sessionStart.exists ? { SessionStart: sessionStart.fragment } : {}),
+    ...(stop.exists ? { Stop: stop.fragment } : {})
+  };
+  return { exists: true, digest: semanticDigest(fragment), index: -1, fragment };
+}
+
 function fragmentState(resource, value) {
-  if (resource.selector === SETTINGS_SELECTOR) {
-    const prompt = hookFragmentState(value, "UserPromptSubmit");
-    const sessionStart = hookFragmentState(value, "SessionStart");
-    const stop = hookFragmentState(value, "Stop");
-    if (!prompt.exists) return { exists: false, digest: null, index: -1, fragment: null };
-    const fragment = {
-      UserPromptSubmit: prompt.fragment,
-      ...(sessionStart.exists ? { SessionStart: sessionStart.fragment } : {}),
-      ...(stop.exists ? { Stop: stop.fragment } : {})
-    };
-    return { exists: true, digest: semanticDigest(fragment), index: -1, fragment };
+  if (resource.selector === SETTINGS_SELECTOR) return settingsHookFragmentState(value);
+  if (resource.selector === STATUS_LINE_SELECTOR) {
+    if (value.statusLine === undefined) return { exists: false, digest: null, index: -1, fragment: null };
+    return { exists: true, digest: semanticDigest(value.statusLine), index: -1, fragment: value.statusLine };
   }
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) return paperSearchMcpFragmentState(value);
   throw new Error(`Unsupported Dove project integration selector: ${resource.selector}.`);
@@ -303,11 +345,16 @@ function fragmentState(resource, value) {
 function removeFragment(resource, value, current) {
   if (resource.selector === SETTINGS_SELECTOR) {
     let next = value;
-    for (const eventName of ["UserPromptSubmit", "SessionStart", "Stop"]) {
+    for (const eventName of ["UserPromptSubmit", "SessionStart"]) {
       const state = hookFragmentState(next, eventName);
       if (!state.exists) continue;
       next = { ...next, hooks: { ...next.hooks, [eventName]: next.hooks[eventName].filter((_, index) => index !== state.index) } };
     }
+    return next;
+  }
+  if (resource.selector === STATUS_LINE_SELECTOR) {
+    const next = { ...value };
+    if (JSON.stringify(next.statusLine) === JSON.stringify(DOVE_CLAUDE_STATUS_LINE)) delete next.statusLine;
     return next;
   }
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) {
@@ -354,6 +401,10 @@ function planExclusive(root, desired, oldEntry, fsOps) {
 
 function addFragment(resource, value) {
   if (resource.selector === SETTINGS_SELECTOR) return mergeClaudeAmbientSettings(value).settings;
+  if (resource.selector === STATUS_LINE_SELECTOR) {
+    if (value.statusLine !== undefined && JSON.stringify(value.statusLine) !== JSON.stringify(DOVE_CLAUDE_STATUS_LINE)) throw conflictError(resource);
+    return { ...value, statusLine: DOVE_CLAUDE_STATUS_LINE };
+  }
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) {
     return {
       ...value,
@@ -373,6 +424,16 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
   const oldByKey = new Map(oldEntries.map((entry) => [managedKey(entry), entry]));
   let next = original;
   let changed = false;
+  const managesSettingsHook = relativePath === DOVE_CLAUDE_SETTINGS_PATH
+    && [...oldEntries, ...desiredEntries].some((entry) => entry.selector === SETTINGS_SELECTOR);
+  const originalSettingsHookWithRetiredStop = managesSettingsHook
+    ? settingsHookFragmentState(original, { includeRetiredStop: true })
+    : { exists: false, digest: null };
+  if (managesSettingsHook) {
+    const cleaned = removeExactLegacyDoveStopHook(next);
+    next = cleaned.settings;
+    changed = cleaned.changed;
+  }
 
   for (const key of [...new Set([...oldByKey.keys(), ...desiredByKey.keys()])].sort()) {
     const desired = desiredByKey.get(key) ?? null;
@@ -385,7 +446,7 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
         && relativePath === DOVE_CLAUDE_SETTINGS_PATH
         && resource.selector === SETTINGS_SELECTOR;
       if (adoptableClaudeHookFragment) {
-        for (const eventName of ["UserPromptSubmit", "SessionStart", "Stop"]) {
+        for (const eventName of ["UserPromptSubmit", "SessionStart"]) {
           const eventState = hookFragmentState(next, eventName);
           if (eventState.exists && eventState.digest !== semanticDigest(desired.fragment[eventName])) throw conflictError(desired);
         }
@@ -402,7 +463,11 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
         changed = true;
         continue;
       }
-      if (current.digest !== oldEntry.digest && current.digest !== desired.digest) throw driftError(resource, current.digest);
+      const oldEntryMatchesRetiredStop = managesSettingsHook
+        && resource.selector === SETTINGS_SELECTOR
+        && originalSettingsHookWithRetiredStop.exists
+        && originalSettingsHookWithRetiredStop.digest === oldEntry.digest;
+      if (current.digest !== oldEntry.digest && current.digest !== desired.digest && !oldEntryMatchesRetiredStop) throw driftError(resource, current.digest);
       if (current.digest === desired.digest) {
         if (oldEntry.digest !== desired.digest) changed = true;
         continue;
@@ -415,7 +480,11 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
       changed = true;
       continue;
     }
-    if (current.digest !== oldEntry.digest) throw driftError(resource, current.digest);
+    const oldEntryMatchesRetiredStop = managesSettingsHook
+      && resource.selector === SETTINGS_SELECTOR
+      && originalSettingsHookWithRetiredStop.exists
+      && originalSettingsHookWithRetiredStop.digest === oldEntry.digest;
+    if (current.digest !== oldEntry.digest && !oldEntryMatchesRetiredStop) throw driftError(resource, current.digest);
     next = removeFragment(resource, next, current);
     changed = true;
   }
@@ -507,9 +576,16 @@ function resultFromTransaction(status, target, hosts, manifest, transaction) {
   };
 }
 
-function appendResearchDefaults(root, entries, options = {}) {
+function appendResearchBootstrap(root, entries, options = {}) {
+  const fsOps = options.fsOps ?? fs;
+  const researchRoot = path.join(root, ".dove", "research");
+  const researchStat = lstatOrNull(fsOps, researchRoot);
+  if (researchStat !== null) {
+    if (researchStat.isSymbolicLink() || !researchStat.isDirectory()) throw new Error("Dove research root must be a real directory when project integration is initialized.");
+    return null;
+  }
   const prepared = prepareResearchDefaults(root, {
-    fsOps: options.fsOps,
+    fsOps,
     mode: options.mode ?? "sync",
     label: options.label
   });
@@ -531,7 +607,7 @@ export function initializeProjectIntegration(rootOrProject, options = {}) {
   const now = exactTimestamp(options.now);
   const root = resolveProjectRootForInit(rootOrProject, { fsOps, hostIds: PROJECT_HOST_IDS });
   const plan = preparePlan({ root, hosts, packageName: options.packageName, packageVersion: options.packageVersion, now, fsOps });
-  const researchDefaults = appendResearchDefaults(root, plan.entries, { fsOps, label: "Dove research bootstrap" });
+  appendResearchBootstrap(root, plan.entries, { fsOps, label: "Dove research bootstrap" });
   return resultFromTransaction(
     "initialized",
     root,
@@ -554,9 +630,7 @@ function prepareInstalledIntegrationPlan(start, options = {}) {
 }
 
 function prepareInstalledPlan(start, options = {}) {
-  const prepared = prepareInstalledIntegrationPlan(start, options);
-  const researchDefaults = appendResearchDefaults(prepared.root, prepared.entries, { fsOps: prepared.fsOps, label: "Dove research defaults sync" });
-  return { ...prepared, researchDefaults };
+  return prepareInstalledIntegrationPlan(start, options);
 }
 
 function synchronizeProjectIntegration(start, options = {}) {
@@ -707,35 +781,21 @@ function prepareLifecycleIntegration(root, options, { hosts, source = null, rein
     existingPaths.add(entry.relativePath);
     entries.push(entry);
   }
-  let researchDefaults = null;
   if (reinstall) {
-    const preservedResearchPaths = new Set([
-      ...RESEARCH_DEFAULT_DIRECTORY_PATHS,
-      ...RESEARCH_DEFAULT_FILE_PATHS
-    ]);
     const doveRoot = path.join(root, ".dove");
     const doveStat = lstatOrNull(fsOps, doveRoot);
     if (doveStat !== null) {
       if (doveStat.isSymbolicLink() || !doveStat.isDirectory()) throw new Error("Complete Reinstall requires .dove to be a real directory.");
-      for (const child of fsOps.readdirSync(doveRoot).map(String).sort()) {
-        if (child !== "install") walkDeletion(root, `.dove/${child}`, fsOps, entries, scope, preservedResearchPaths);
-      }
       const installRoot = path.join(doveRoot, "install");
       const installStat = lstatOrNull(fsOps, installRoot);
       if (installStat !== null) {
         if (installStat.isSymbolicLink() || !installStat.isDirectory()) throw new Error("Complete Reinstall requires .dove/install to be a real directory.");
         for (const child of fsOps.readdirSync(installRoot).map(String).sort()) {
-          if (child !== "manifest.json") walkDeletion(root, `.dove/install/${child}`, fsOps, entries, scope);
+          if (child !== "manifest.json" && child !== "DOCTOR.md") walkDeletion(root, `.dove/install/${child}`, fsOps, entries, scope);
         }
       }
     }
-    walkDeletion(root, ".dove-archive", fsOps, entries, scope);
     walkDeletion(root, ".dove-install", fsOps, entries, scope);
-    researchDefaults = appendResearchDefaults(root, entries, {
-      fsOps,
-      mode: "replace",
-      label: "Dove Complete Reinstall research bootstrap"
-    });
   } else if (source?.sourcePath === LEGACY_INSTALLATION_MANIFEST_PATH) {
     const legacyDirectory = lstatOrNull(fsOps, path.join(root, ".dove-install"));
     if (legacyDirectory?.isSymbolicLink() || (legacyDirectory !== null && !legacyDirectory.isDirectory())) {
@@ -756,23 +816,14 @@ function prepareLifecycleIntegration(root, options, { hosts, source = null, rein
       });
     }
   }
-  if (!reinstall && !adopt) {
-    researchDefaults = appendResearchDefaults(root, entries, {
-      fsOps,
-      label: "Dove research defaults update"
-    });
-  }
-  return { entries, manifest: planned.manifest, scope, researchDefaults };
+  return { entries, manifest: planned.manifest, scope };
 }
 
 function previewShape(kind, root, hosts, prepared, confirmationRequired) {
   const writtenEntries = prepared.entries.filter((entry) => entry.delete !== true);
   const writtenPaths = writtenEntries.map((entry) => entry.relativePath);
   const removedPaths = prepared.entries.filter((entry) => entry.delete === true).map((entry) => entry.relativePath);
-  const defaultResearchPaths = new Set(RESEARCH_DEFAULT_FILE_PATHS);
-  const replacedPaths = writtenEntries
-    .filter((entry) => entry.expectedState?.exists === true && defaultResearchPaths.has(entry.relativePath))
-    .map((entry) => entry.relativePath);
+  const replacedPaths = kind === "reinstall" ? writtenPaths : [];
   return {
     status: "ready",
     action: kind,
@@ -810,7 +861,7 @@ export function upgradeProjectIntegration(start, options = {}) {
     root,
     hosts,
     prepared.manifest,
-    writeFileSetTransaction(prepared.entries, transactionOptions(fsOps, prepared.researchDefaults))
+    writeFileSetTransaction(prepared.entries, transactionOptions(fsOps))
   );
 }
 

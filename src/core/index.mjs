@@ -3,10 +3,10 @@ export { ARTIFACT_PATHS, PACKAGE_VERSION } from "./schema.mjs";
 
 export { parseUserPromptSubmitPayload, userPromptSubmitOutput } from "./ambient-hook.mjs";
 export { parseSessionStartPayload, sessionStartOutput } from "./session-start-hook.mjs";
-export { stopHookOutput } from "./stop-hook.mjs";
 export {
   DOVE_CLAUDE_SESSION_START_HOOK_COMMAND,
-  DOVE_CLAUDE_STOP_HOOK_COMMAND,
+  DOVE_CLAUDE_STATUS_LINE,
+  DOVE_CLAUDE_STATUS_LINE_COMMAND,
   ambientContextForPrompt,
   isHighConfidenceAmbientWorkPrompt,
   renderClaudeAmbientRule,

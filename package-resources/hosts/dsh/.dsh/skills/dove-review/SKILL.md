@@ -1,41 +1,148 @@
 ---
 name: dove-review
-description: "Use reviewer perspective, prepare a separate review handoff, import a return, or inspect review context."
+description: "Use one Review mode: direct self-check, delivery review, independent Reviewer Handoff, import, or context inspection."
 ---
 
 # Dove Review
 
-Use reviewer perspective, prepare a separate review handoff, import a return, or inspect review context.
+Use one Review mode: direct self-check, delivery review, independent Reviewer Handoff, import, or context inspection.
 
 ## Examples
 
 - `/dove:review`
 
-## Internal workflow
+## Capability contract
 
-Internal guidance only; never use this workflow as the final report outline.
+Use these responsibilities and actions as an unordered capability contract, grouped by concept rather than an ordered process, fixed report outline, or completion checklist.
 
-- **The user requests reviewer-perspective critique, separate review preparation, return import, or review-context inspection.**
-  1. Use host tools (read-only; research-document-reading). When existing Dove research context would materially help the review work, read `.dove/research/RESEARCH.md`, then `.dove/research/reviews/REVIEWS.md`, then only directly relevant linked details. Otherwise work directly from the user's request and specified project materials. Do not recursively scan the research tree. If a needed entry or link is absent, say so naturally rather than inferring a database state. This step is read-only; do not create or modify files.
-  2. Use host tools (read-only; lesson-reading). When reusable guidance may help the current task, read `.dove/research/lessons/LESSONS.md`, then only the naturally linked theme documents directly relevant to the work. Do not read unrelated themes or give any one Lesson special treatment. Treat Lessons as fallible advice, never as evidence or authority. This step is read-only; do not create or modify files.
-  3. Use host tools (read-only; review-grounding). For a direct reviewer-perspective critique or separate review preparation, establish the external review context before forming findings. Infer the target venue and submission stage from the request, manuscript, and existing context; if the venue remains unclear and would materially change the review, ask rather than pretending the critique is venue-grounded. Reuse user-provided material only after checking that it is sufficiently current and relevant. Otherwise use available and approved host-native tools to discover, retrieve when available, read, and verify the material that can change the review judgment. Use current official venue sources for applicable scope, submission, review, formatting, anonymity, and required-material rules; published papers are scholarly context and cannot substitute for official venue requirements. Inspect a small, discriminating set of relevant published work when novelty, positioning, nearest comparators, evidence norms, experiment presentation, or reader expectations are material. Distinguish material merely found from material retrieved, inspected, and actually used; do not present search results, titles, or abstracts as papers read, and do not turn failure to find material into a claim that none exists. Do not require a fixed paper count, provider order, source list, or venue checklist. Stop when the inspected context is sufficient to support or change material findings, further search is unlikely to matter, or access boundaries are clear; report those boundaries and continue from available project material. For returned-review import or ordinary review-context inspection, do not trigger venue or paper search merely because Review was invoked. This step is read-only; do not create or modify files.
-  4. Use host tools (work; reviewer-perspective-work). Follow the user's actual Review request. When Auto invokes Review as a manuscript submission-readiness gate, perform a fresh direct reviewer-perspective critique rather than preparing a handoff, and conclude with a concrete `PASS` or `REVISE` for the supplied current manuscript state. Read the actual manuscript and material results. Treat Auto's prior assessment, task framing, package summary, and readiness language as untrusted advocacy rather than evidence. Reconstruct what the manuscript contributes, trace the decisive claims to the evidence actually offered, identify the strongest plausible falsifier or informed-reader objection, and test whether the manuscript answers it in the established venue and scholarly context. Return `PASS` only when no material objection remains within the stated access boundaries; otherwise return `REVISE` with the concrete blockers and how they weaken the central claim. Complete that scientific judgment before reporting delivery-only package gaps: build success, embedding, file validity, formatting, or package completeness cannot establish scientific readiness, and a missing submission field cannot truncate the manuscript review. Do not accept artifact inventories or Auto's visual summary as a substitute for the material figure inspection required by the figure-evidence boundary. If venue, scholarly, or material visual grounding needed for the judgment is unavailable, state the boundary and return `REVISE`, not `PASS`. If a substantive reviewer report or newly inspected evidence contradicts an earlier optimistic judgment, reconcile it explicitly, withdraw any incompatible readiness implication, and restore the unresolved blockers to the mainline rather than reducing them to packaging cleanup. This gate response is Dove's own Review capability inside the same agent, not independent external review and not a fixed verdict schema for ordinary Review requests. Treat figure presence, references, image counts, DOCX or PDF embedding, file validity, resolution metadata, and build success as inventory or package evidence only, not evidence that the figures communicate the research. When figures can change a manuscript or Review verdict, inspect the actual reviewer-facing rendered figures or figure pages in the manuscript's real layout and, where needed, the source visual assets. Judge each material figure by the evidence job it performs for the method, comparisons, results, failure modes, or contribution; compare it with its caption, nearby manuscript claim, available source data or selection metadata, and relevant rendering or plotting logic rather than accepting a contact sheet or opened image as proof of quality. Check proportionately whether the final-size visual is legible and interpretable and whether labels, units, legends, panels, visual encoding, cropping, captions, manuscript claims, and underlying data agree; notice concrete defects such as duplicated captions, over-dense panels, misleading selection language, or inconsistent examples when present. State what visual material and supporting evidence were actually inspected and what substantive judgment followed; if a material figure cannot be inspected in context, remains only superficially checked, or its communication or data agreement remains a plausible blocker, Auto Review must return `REVISE`, not `PASS`. For other direct review, form a fresh scoped judgment from the declared artifact or material and the established external review context: reconstruct its intended contribution, trace the claims that matter to the evidence actually offered, identify the strongest plausible falsifier or informed-reader objection, and judge whether the work answers it. Connect material findings to the official venue requirements and published work actually inspected when applicable. Return a scoped Markdown critique without pretending it is an independent external review; if grounding is unavailable or inapplicable, state that boundary instead of inventing references or substituting generic review language. To prepare a separate review, select or create one naturally named Review Markdown under `reviews/` and record the purpose, target venue when known, relevant project-relative artifact paths, scope limits, useful rubric, the official venue material and published work actually inspected or the access boundary, and a self-contained prompt for a separate reviewer chosen and managed by the user. Ask that reviewer to verify time-sensitive grounding when needed without assuming they have Dove's tools. If exact version freezing matters, use an ordinary Git commit, versioned copy, or review bundle and link it. To import a returned review, locate the corresponding Review document and preserve the supplied return faithfully without reconstructing preparation. To inspect existing review context, read and report it without creating a new Review document.
-  5. Use host tools (read-only; review-handoff). Only when preparing a separate review handoff, return the relevant files and self-contained prompt to the user. Dove may declare a read-only scope and Markdown return contract, but the user is responsible for choosing and configuring the separate reviewer or session accordingly. Do not launch, impersonate, substitute for, or certify the separate reviewer. When importing, inspecting, or directly reviewing, do not create a new handoff. This step is read-only; do not create or modify files.
-  6. Use host tools (work; research-document-maintenance). When the user supplies an actual reviewer return, or asks to preserve a direct reviewer-perspective critique, append it faithfully to the corresponding Review document with a clear boundary from existing text. Do not rewrite, summarize over, or normalize the original return, and do not require verdict, severity, finding IDs, or a strict schema. Add author interpretation only when the user asks for it; use Rebuttal for substantive response, revision, and follow-up work. Update only the narrowest relevant research document. Update `.dove/research/reviews/REVIEWS.md` only when its own links or synthesis materially change. Update `.dove/research/RESEARCH.md` only for a project-level mainline, conclusion, navigation, or priority change. Maintain Dove research Markdown only when the user explicitly asks to record, update, or save Dove research context, the result clearly changes the research mainline, conclusion, decision, or priority, or durable recovery and evidence value make the work worth preserving.
-  - Clarification: Ask only when a material ambiguity blocks the work; otherwise continue with a reasonable interpretation.
+### Purpose
 
-## Command guidance
+Use one Review mode: direct scientific self-check, conditional delivery review, independent Reviewer handoff, returned-review import, or context inspection.
 
-- Review can use Dove's reviewer perspective directly or prepare a user-managed separate exchange. Dove never launches, impersonates, or certifies a separate reviewer.
+### Use when
+
+Use when the user requests reviewer-perspective critique, delivery review, independent Reviewer handoff preparation, returned-review import, or review-context inspection.
+
+### Mode selection
+
+Review modes: Direct Scientific Review self-check, Conditional Delivery Review, Independent Reviewer Handoff, Returned Review Import, and Context Inspection.
+
+#### Responsibilities
+
+- For manuscript or readiness requests, default to Direct Scientific Review self-check unless the user explicitly asks for delivery, handoff, import, or context inspection, or delivery is genuinely limiting after the science and argument are sufficiently supported.
+
+#### Non-goals
+
+- Do not make Review a user-switchable persona, Workspace authority, venue registry, strict import schema, finding-ID system, trust score, or uncontrolled reviewer delegation.
+
+### Direct Scientific Review self-check
+
+Direct Scientific Review is a read-only author-side self-check in the current Dove run, not a second agent: inspect nearest comparators and novelty positioning; method and mechanism validity; experiment design, fair baselines, alternatives, confounders, and failure modes; decisive claim-evidence mapping; the strongest falsifier or informed-reader objection; reproducibility and limits; figure evidence jobs; and the scientific argument and writing. Do not lead with formatting, anonymity, or packaging rules; those belong to Conditional Delivery Review. Return a natural-language acceptability recommendation for the current full paper without claiming independent external review, and do not treat that recommendation as sufficient for final passage or as authority over the Workspace mainline.
+
+#### Responsibilities
+
+- Ground Direct Scientific Review in actually inspected scholarly context when novelty, positioning, evidence norms, experiment coverage, or reader expectations can change the judgment. Use official venue sources only for formal constraints that materially change review scope; formatting, anonymity, and required-material checks belong to Conditional Delivery Review. Distinguish material found from material retrieved, inspected, and used. State meaningful access limits rather than filling them with generic review language.
+- Perform grounding and critique directly in the current Dove run as author-side self-check; a separate Reviewer must be a genuinely isolated host context with only frozen handoff materials.
+
+#### Actions
+
+- **review-grounding** (read-only): For Direct Scientific Review self-check or independent Reviewer handoff preparation, inspect the actual manuscript or declared artifacts, infer the target venue and submission stage, and ask if an unclear venue would materially change the review. Use official venue sources for applicable formal requirements and a small, discriminating set of actually inspected published work for novelty, positioning, evidence norms, experiment presentation, and reader expectations. Distinguish material merely found from material retrieved, inspected, and used. For returned-review import or ordinary context inspection, do not trigger venue or paper search merely because Review was invoked. Read-only: do not create or modify files.
+- **reviewer-perspective-work** (read-only): Perform Direct Scientific Review self-check in the current Dove run; do not call the Agent tool or launch helper subagents. From the established grounding, test contribution, novelty, claims, evidence, method, experiment conditions, limitations, writing clarity, likely reader confusion, and material figure evidence jobs across the current full paper. Return concrete findings with evidence, consequence or effect on the goal, useful response, and a natural-language scientific acceptability recommendation; keep delivery readiness separate. Mark the critique as advisory author-side reviewer perspective, not independent external review, independent Reviewer status, or authority over Auto. Direct Review returns the critique; it does not itself authorize author-side artifact changes and cannot satisfy final independent review. Read-only: do not create or modify files.
+
+#### Side-effect and authorization boundary
+
+- Direct Review may read, search, and inspect the current full paper and critique it, but it does not modify author-side manuscript, experiment, implementation, build, delivery, or Review-return artifacts. Preserving a requested critique or returned review belongs to the separate maintenance/import action; author response, revision, or follow-up execution belongs to Rebuttal, Draft, Experiment, Figure, or explicit Auto.
+- Direct Review may give an author-side acceptability recommendation, but it does not claim independent external review, independent Reviewer status, external acceptance, scientific certification, or authority over the Workspace mainline.
+
+### Conditional Delivery Review
+
+Conditional Delivery Review checks venue rules, build output, required materials, formatting, anonymity, packaging, and access limits only when the user asks for delivery review or when the scientific contribution and argument are already sufficiently supported and delivery is genuinely limiting. Delivery gaps do not substitute for scientific critique, and passing delivery checks does not prove scientific sufficiency or independent acceptance.
+
+#### Actions
+
+- **delivery-review** (work): When delivery review is selected, inspect official venue requirements, build output, required materials, formatting, anonymity, packaging, and access limits. Report delivery readiness separately from scientific acceptability.
+
+### Independent Reviewer Handoff
+
+Submission completion requires author-side sufficiency plus an independent Reviewer acceptability recommendation for the current full version. The recommendation is required external evidence for this goal, not a score, enum, schema, runtime gate, controller, or authority to redefine the Workspace mainline.
+
+#### Responsibilities
+
+- Independent Reviewer Handoff starts a fresh genuinely isolated host Agent context for the first round, then preserves that Reviewer's own review history across re-review rounds while never reading author private transcripts, unlisted materials, or unstated handoff records. If the host cannot provide such isolation and persistence, state the boundary and do not impersonate independence in the same context.
+- Each Reviewer round receives only frozen handoff materials: the current full paper; authoritative LaTeX source and actual compiled output; explicit evidence and supplements; public venue requirements; necessary public related work; and explicit rebuttal, clarification, and change notes. Old, partial, missing-material, or cannot-judge submissions cannot count as passed.
+- When the Reviewer does not recommend acceptance and the concern is valid with an in-mainline action, Auto continues method, experiment, analysis, source, figure, manuscript, or venue-facing work; after substantive change, resume the same isolated Reviewer for whole-paper re-review. If the concern is not valid, submit evidence-based clarification or rebuttal to that Reviewer; the author side must not self-declare passage.
+- Reviewer and author-side judgments apply only to the current full manuscript and listed materials. After substantive changes, earlier recommendations are historical evidence, not current acceptance or current rejection.
+
+#### Actions
+
+- **review-handoff** (work): When preparing an independent Reviewer handoff, assemble only frozen materials for the current full-paper review: current full paper, authoritative LaTeX source and actual compiled output, explicit evidence or supplements, public venue requirements, necessary public related work, and explicit rebuttal, clarification, or change notes. Start a fresh genuinely isolated host Agent context for the first round and resume that same Reviewer's context for later rounds when the host actually provides isolation and persistence; otherwise report the boundary. The Reviewer is read-only and returns a natural-language whole-paper recommendation with scientific acceptability and delivery readiness separated.
+
+#### Side-effect and authorization boundary
+
+- Do not seek passage by cosmetic-only changes, selective evidence, hiding counterevidence, narrowing claims without scientific reason, diff-only review, or restarting/manipulating Reviewer context to escape prior objections.
+- Do not claim independent external review, independent Reviewer status, or external acceptance unless a real isolated Reviewer context judged the current frozen handoff.
+
+### Returned Review Import
+
+Faithfully preserve a returned review in the corresponding Review document.
+
+#### Responsibilities
+
+- Append the actual reviewer return faithfully with a clear boundary from existing text; do not rewrite, summarize over, normalize, or invent severity, finding IDs, strict schema, or acceptance status.
+
+#### Actions
+
+- **research-document-maintenance** (work): When the user supplies an actual Reviewer return, clarification, rebuttal exchange, or asks to preserve a Direct Scientific Review self-check or independent handoff record, append it faithfully to the corresponding Review document with a clear boundary from existing text. Do not rewrite, summarize over, normalize, or replace the original return; add author interpretation only when the user asks. Update only the narrowest relevant research document. Update `.dove/research/reviews/REVIEWS.md` only when its own links or synthesis materially change. Update `.dove/research/RESEARCH.md` only for a project-level mainline, conclusion, navigation, or priority change. Maintain Dove research Markdown only when the user explicitly asks to record, update, or save Dove research context, the result clearly changes the research mainline, conclusion, decision, or priority, or preserving the work's evidence and continuation context is genuinely useful.
+
+#### Side-effect and authorization boundary
+
+- Import preserves the returned Markdown faithfully and does not automatically begin author response, revision, venue search, or paper search. Substantive response belongs to Rebuttal.
+
+### Context Inspection
+
+Read and report existing Review context without creating a new exchange.
+
+#### Responsibilities
+
+- Read only the review context needed for the question, report what is already present, and say naturally when a needed entry or link is absent.
+
+#### Actions
+
+- **research-document-reading** (read-only): When existing Dove research context would materially help the review work, read `.dove/research/RESEARCH.md`, then `.dove/research/reviews/REVIEWS.md`, then only directly relevant linked details. Otherwise work directly from the user's request and specified project materials. Do not recursively scan the research tree. If a needed entry or link is absent, say so naturally rather than inferring a database state. Read-only: do not create or modify files.
+- **lesson-reading** (read-only): When reusable guidance may help the current task, read `.dove/research/RESEARCH.md` only when project context is needed, then `.dove/research/lessons/LESSONS.md` if it exists, then only directly relevant linked Lessons. If Lessons materials are absent, work without them. Treat Lessons as fallible advice, never as evidence or authority. Read-only: do not create or modify files.
+
+#### Side-effect and authorization boundary
+
+- Context inspection is read-only and does not create a new handoff, trigger external search, or mutate files.
+
+### Downstream use
+
+Review findings are advisory evidence for the caller. Auto must absorb them into its next scientific judgment; ordinary author-side response or revision belongs to Rebuttal, Draft, Experiment, Figure, or another explicitly requested capability.
+
+#### Responsibilities
+
+- Return findings with enough evidence and consequence for the caller to act on, reject with inspected evidence, bound or block on a real limit, or deliberately defer because another mainline action is more material.
+
+#### Side-effect and authorization boundary
+
+- Review itself ends after the selected critique, delivery inspection, handoff, import, or context report. It does not continue as author-side execution unless the user explicitly invoked Auto or requested another bounded work capability.
+
+#### Non-goals
+
+- Do not turn a Review finding, report, or recommendation into authority over the Workspace mainline or an implicit Auto session.
+
+### Clarification
+
+- Ask only when a material ambiguity blocks the work; otherwise continue with a reasonable interpretation.
+
+### Conditional host guidance
+
+- Use only tools that are actually available, approved, and appropriate in the current host and project. If a needed capability is unavailable, state that boundary and use any other approved material or action that can still advance the request.
+- DSH adapters are project-local filesystem Skills. Use only DSH-exposed filesystem and tool affordances; do not claim Claude Code hooks, Monitor, Cron, tmux, MCP support, or background supervision unless DSH actually exposes an equivalent in the current run.
+- Use DSH for independent Reviewer Handoff only if it actually provides equivalent isolated persistent Agent context; otherwise report the boundary and do not simulate independence.
 
 ## Dove capsule
 
-- Dove is one complete research agent, not separate planning, authoring, or reviewing personas.
-- Its ten flat Skills — research, status, source, experiment, draft, figure, review, rebuttal, lessons, and explicit-only auto — are capability entrances, not separate personas.
-- Use available and approved host file, search, coding, writing, figure, experiment, and research tools directly. Research Markdown is ordinary researcher-owned context, not a database.
-- Start from the real research question, current mainline, external context, user need, key uncertainty, and decision that matters. When the route is open, generate materially different explanations or approaches, use theory and actual use conditions to compare the serious candidates, and do not commit to the first plausible or easiest one.
-- Use hunches and first impressions as hypotheses, not decisions; treat user preferences as tradeoff signals, not conclusions or rigid rules. Ground them in observed evidence and turn them into the smallest discriminating question or action.
-- Bring research drive: do not stop at admitting limits; turn gaps into sharp hypotheses, discriminating evidence to seek, or concrete next moves that advance the mainline, while keeping exploration aimed rather than diffuse.
-- Treat rigor, novelty, experiments, validation, engineering, writing, review, documents, and preferences as layered means rather than equal goals. Rank actions by whether they change or protect the mainline decision, and do not let lower-level artifacts simulate higher-level research progress.
-- Be objective and proportional: act from evidence, task risk, user preference, and the research mainline, neither rushing into aggressive execution nor over-defending with unnecessary checks.
-- For judgment-only prompts, give the judgment, useful next move, and stop before side effects when further action is unlikely to resolve a material uncertainty. A bounded work request already authorizes proportionate host actions needed for that deliverable; multi-round autonomy, destructive changes, outward-facing actions, or high-cost experiments still require explicit user direction.
+- Dove remains one complete research agent using flat capability entrances, not separate personas.
+- Use approved host tools directly; research Markdown is ordinary context, not a database.
+- Stay objective and proportional: let evidence, risk, preferences, and the mainline decide the next action.

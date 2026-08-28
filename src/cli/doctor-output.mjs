@@ -24,7 +24,7 @@ function researchLine(result, color) {
     : research?.mode === "previous-research-format"
       ? "发现可显式导出的旧版 JSON 科研记录"
       : research?.healthy
-        ? (research?.missingSummaries?.length > 0 ? "Markdown 可读，默认汇总可同步" : "Markdown 外层可读")
+        ? "Markdown 外层可读"
         : "Markdown 外层无法安全读取";
   return `${terminalStyle("研究文档", "dim", { color })}  ${text}`;
 }
@@ -33,9 +33,9 @@ export function recommendedDoveAction(result) {
   const first = result.actions?.[0];
   if (first) {
     const messages = {
-      update: "更新 Dove 管理的项目接入，补齐研究汇总导航，并以当前 package 内容刷新六个内置 Lessons 主题。",
+      update: "更新 Dove 管理的项目接入；不会重写、补齐或规范化 .dove/research/**。",
       init: "为当前项目启用 Dove 接入。",
-      reinstall: "重新安装会在明确确认后删除自定义 Dove 研究内容，并重建当前完整默认研究树。",
+      reinstall: "重新安装会在明确确认后仅刷新项目接入，不会重写或删改 .dove/research/** 与 DOCTOR.md。",
       "export-research": "审阅旧版 JSON 科研记录到 Markdown 的一次性导出预览，并在确认后保留原始归档。",
       inspect: "查看 JSON 诊断并处理不明确状态。"
     };

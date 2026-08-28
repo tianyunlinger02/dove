@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +28,15 @@ function digest(file) {
 
 reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude", "dsh"] });
+const initializedSettings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
+assert.deepEqual(initializedSettings.statusLine, { type: "command", command: 'dove hook statusline --project "$CLAUDE_PROJECT_DIR"' });
+const statusline = spawnSync(process.execPath, [path.join(root, "bin", "dove.mjs"), "hook", "statusline", "--project", fixture], {
+  cwd: fixture,
+  input: JSON.stringify({ workspace: { project_dir: fixture } }),
+  encoding: "utf8"
+});
+assert.equal(statusline.status, 0, statusline.stderr || statusline.stdout);
+assert.equal(statusline.stdout.trim(), fs.realpathSync.native(fixture));
 const doctor = path.join(fixture, ".dove", "install", "DOCTOR.md");
 fs.writeFileSync(doctor, "preserve this feedback\n");
 const research = path.join(fixture, ".dove", "research", "RESEARCH.md");
@@ -53,6 +63,7 @@ assert.equal(fs.existsSync(path.join(fixture, ".claude", "agents", "dove.md")), 
 assert.equal(fs.existsSync(path.join(fixture, ".dsh", "skills", "dove-auto", "SKILL.md")), false);
 assert.deepEqual({ doctor: digest(doctor), research: digest(research) }, before);
 const settings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
+assert.equal(settings.statusLine, undefined);
 assert.equal(settings.enabledPlugins.demo, true);
 assert.equal(settings.hooks.SessionStart.length, 1);
 assert.equal(settings.hooks.SessionStart[0].hooks[0].command, "project hook");
@@ -65,6 +76,29 @@ assert.equal(postUninstallDoctor.setup.mode, "init");
 assert.equal(postUninstallDoctor.setup.reason, "preserved-research");
 assert.deepEqual(postUninstallDoctor.actions, [{ kind: "init", command: "dove init" }]);
 assert.equal(resolveProjectRootForInit(fixture), fixture);
+
+reset();
+initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
+const stopSettingsPath = path.join(fixture, ".claude", "settings.json");
+const stopSettings = JSON.parse(fs.readFileSync(stopSettingsPath, "utf8"));
+stopSettings.hooks.Stop = [
+  { hooks: [{ type: "command", command: "user-owned-stop", timeout: 5 }] },
+  { hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] }
+];
+fs.writeFileSync(stopSettingsPath, `${JSON.stringify(stopSettings, null, 2)}\n`);
+uninstallProjectIntegration(fixture, { confirmed: true });
+const stopCleanedSettings = JSON.parse(fs.readFileSync(stopSettingsPath, "utf8"));
+assert.deepEqual(stopCleanedSettings.hooks.Stop, [{ hooks: [{ type: "command", command: "user-owned-stop", timeout: 5 }] }]);
+
+reset();
+initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
+const nonArrayStopSettingsPath = path.join(fixture, ".claude", "settings.json");
+const nonArrayStopSettings = JSON.parse(fs.readFileSync(nonArrayStopSettingsPath, "utf8"));
+nonArrayStopSettings.hooks.Stop = "user-owned-stop";
+fs.writeFileSync(nonArrayStopSettingsPath, `${JSON.stringify(nonArrayStopSettings, null, 2)}\n`);
+uninstallProjectIntegration(fixture, { confirmed: true });
+const nonArrayStopCleanedSettings = JSON.parse(fs.readFileSync(nonArrayStopSettingsPath, "utf8"));
+assert.equal(nonArrayStopCleanedSettings.hooks.Stop, "user-owned-stop");
 
 reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });

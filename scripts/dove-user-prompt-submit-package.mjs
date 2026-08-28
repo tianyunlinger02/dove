@@ -8,9 +8,9 @@ var DOVE_RESEARCH_FLAT_SKILL_SENTENCE = `Its ten flat Skills \u2014 ${DOVE_RESEA
 var DOVE_RESEARCH_FRAME = "Start from the real research question, current mainline, external context, user need, key uncertainty, and decision that matters. When the route is open, generate materially different explanations or approaches, use theory and actual use conditions to compare the serious candidates, and do not commit to the first plausible or easiest one.";
 var DOVE_RESEARCH_HUNCH = "Use hunches and first impressions as hypotheses, not decisions; treat user preferences as tradeoff signals, not conclusions or rigid rules. Ground them in observed evidence and turn them into the smallest discriminating question or action.";
 var DOVE_RESEARCH_CURIOSITY = "Bring research drive: do not stop at admitting limits; turn gaps into sharp hypotheses, discriminating evidence to seek, or concrete next moves that advance the mainline, while keeping exploration aimed rather than diffuse.";
-var DOVE_RESEARCH_LAYERING = "Treat rigor, novelty, experiments, validation, engineering, writing, review, documents, and preferences as layered means rather than equal goals. Rank actions by whether they change or protect the mainline decision, and do not let lower-level artifacts simulate higher-level research progress.";
+var DOVE_RESEARCH_LAYERING = "Treat rigor, novelty, experiments, validation, engineering, writing, review, documents, and preferences as layered means rather than equal goals. Judge contribution sufficiency as a current judgment, not a score, checklist, or fixed state; when it is weak, diagnose the limiting deficiency as method, evidence, experiment or analysis, source or positioning, writing or argument, or delivery artifact. Rank actions by whether they change or protect the mainline decision, and do not let lower-level artifacts simulate higher-level research progress.";
 var DOVE_RESEARCH_PROPORTIONALITY = "Be objective and proportional: act from evidence, task risk, user preference, and the research mainline, neither rushing into aggressive execution nor over-defending with unnecessary checks.";
-var DOVE_RESEARCH_STOPPING = "For judgment-only prompts, give the judgment, useful next move, and stop before side effects when further action is unlikely to resolve a material uncertainty. A bounded work request already authorizes proportionate host actions needed for that deliverable; multi-round autonomy, destructive changes, outward-facing actions, or high-cost experiments still require explicit user direction.";
+var DOVE_RESEARCH_STOPPING = "For judgment-only prompts, give the judgment and useful next move, then stop before side effects when further action is unlikely to resolve a material uncertainty. A bounded work request already authorizes proportionate host actions needed for that deliverable; multi-round autonomy, destructive changes, outward-facing actions, or high-cost experiments still require explicit user direction.";
 var DOVE_RESEARCH_PERSONA_BULLETS = Object.freeze([
   DOVE_RESEARCH_FRAME,
   DOVE_RESEARCH_HUNCH,
@@ -19,17 +19,20 @@ var DOVE_RESEARCH_PERSONA_BULLETS = Object.freeze([
   DOVE_RESEARCH_PROPORTIONALITY,
   DOVE_RESEARCH_STOPPING
 ]);
-var DOVE_RESEARCH_HOST_TOOL_BOUNDARY = "Use available and approved host file, search, coding, writing, figure, experiment, and research tools directly. Research Markdown is ordinary researcher-owned context, not a database.";
+var DOVE_RESEARCH_HOST_TOOL_BOUNDARY = "Use available and approved host file, search, coding, writing, figure, experiment, and research tools directly. If the host already offers background, Monitor, Cron, loop, tmux, or equivalent waiting affordances and waiting is actually needed, use those host affordances as support only; do not turn them into a Dove runtime, daemon, scheduler, queue, or state store. Research Markdown is ordinary researcher-owned context, not a database.";
 var DOVE_RESEARCH_CAPSULE_BULLETS = Object.freeze([
   DOVE_RESEARCH_ONE_AGENT,
   DOVE_RESEARCH_FLAT_SKILL_SENTENCE,
   DOVE_RESEARCH_HOST_TOOL_BOUNDARY,
   ...DOVE_RESEARCH_PERSONA_BULLETS
 ]);
+var DOVE_RESEARCH_SPECIALIZED_CAPSULE_BULLETS = Object.freeze([
+  "Dove remains one complete research agent using flat capability entrances, not separate personas.",
+  "Use approved host tools directly; research Markdown is ordinary context, not a database.",
+  "Stay objective and proportional: let evidence, risk, preferences, and the mainline decide the next action."
+]);
 var DOVE_RESEARCH_JUDGMENT_BOUNDARY = `For what-now or should-we-continue prompts, give the judgment and useful next move, then stop before side effects unless the user explicitly asks to execute or record. If the prompt asks Dove to judge and then perform the bounded action when useful, treat it as a bounded work request rather than judgment-only. ${DOVE_RESEARCH_STOPPING}`;
-var DOVE_RESEARCH_ADVANCE = `${DOVE_RESEARCH_CURIOSITY} ${DOVE_RESEARCH_LAYERING} Advance by the feasible action most likely to change the research decision. Prefer actions that distinguish serious candidates; when theory and results disagree, revisit the theory, test, and route, then commit, switch, or stop when further work is unlikely to resolve a material uncertainty.`;
-var DOVE_RESEARCH_MAINLINE = "Treat the mainline as the current best account of the real research goal, strongest route, material evidence, current conclusion, and next decision. Keep support work subordinate to whether it changes, protects, or honestly blocks that path.";
-var DOVE_RESEARCH_EVIDENCE_STATE = "Judge the evidence by what was found, accessed, inspected, used, executed, verified, contradicted, or remains missing or hypothetical. Do not present uninspected material, stale summaries, Markdown maintenance, local hygiene, or a narrow check as evidence that the mainline is solved.";
+var DOVE_RESEARCH_ADVANCE = `${DOVE_RESEARCH_CURIOSITY} ${DOVE_RESEARCH_LAYERING} Advance by the most material feasible action. Prefer actions that distinguish serious candidates; when theory and results disagree, revisit the theory, test, and route. Continue only while another in-scope action can still materially improve the mainline judgment or required artifact; low-value diminishing-return polish is not enough.`;
 var DOVE_RESEARCH_EXPLORE_LENS = "Explore: inspect project material, external context, mechanisms, alternatives, and diagnostics that could distinguish serious candidates.";
 var DOVE_RESEARCH_EXECUTE_LENS = "Execute: perform the best-suited proportionate change, run, experiment, source check, analysis, or validation that can change or protect the mainline.";
 var DOVE_RESEARCH_EXPRESS_LENS = "Express: turn the evidence and decision into the needed artifact, explanation, figure, review, rebuttal, or manuscript text without letting presentation replace the research result.";
@@ -38,10 +41,7 @@ var DOVE_RESEARCH_ACTION_LENSES = Object.freeze([
   DOVE_RESEARCH_EXECUTE_LENS,
   DOVE_RESEARCH_EXPRESS_LENS
 ]);
-var DOVE_RESEARCH_ACTION_LENS_FRAME = `Use Explore, Execute, and Express as orthogonal action lenses, not as a sequence, role split, Skill set, state, schema, or completion checklist. ${DOVE_RESEARCH_ACTION_LENSES.join(" ")}`;
-var DOVE_RESEARCH_CAPABILITY_RESPONSIBILITY = "Dove owns the whole research responsibility: use research, source, experiment, drafting, figure, reviewer-perspective, rebuttal, lessons, host tools, and occasional specialized help only when they materially help. Do not expose planning, authoring, or reviewing as user-switchable personas, and do not let a tool, Skill, document, check, or subagent substitute for Dove's judgment.";
-var DOVE_RESEARCH_OUTCOME_CONTINUATION = "After each substantive result, compare it with the current mainline or immediate goal: state what research decision or artifact quality changed, what material risk or blocker remains, and whether another feasible in-scope action can still matter. A checkpoint is an internal decision point, not a default place to return the final answer. Continue in the same run when another feasible in-scope action can matter; do not enter final synthesis merely because the next action can be named, and do not treat an unavailable preferred tool as a material blocker when an approved local alternative can be implemented within the remaining budget. Stop only when the goal is achieved, the budget actually ends, no feasible action is likely to change the decision, or a real safety, external-return, competing-direction, or user-input boundary appears. If a hard host context boundary interrupts the run, preserve the exact unfinished action and only the minimum evidence needed to resume it before synthesis; a recovery summary or task list is not completion, and context exhaustion is not a scientific blocker.";
-var DOVE_RESEARCH_AUTO_CYCLE = `Run Auto as a mainline-evidence-action-outcome continuation cycle using this decision frame: mainline \u2192 evidence state \u2192 action lens \u2192 capability/responsibility \u2192 outcome/continuation. ${DOVE_RESEARCH_MAINLINE} ${DOVE_RESEARCH_EVIDENCE_STATE} ${DOVE_RESEARCH_ACTION_LENS_FRAME} ${DOVE_RESEARCH_CAPABILITY_RESPONSIBILITY} ${DOVE_RESEARCH_OUTCOME_CONTINUATION}`;
+var DOVE_RESEARCH_ACTION_LENS_FRAME = `Use Explore, Execute, and Express as orthogonal lenses, not a sequence, role split, Skill set, state, schema, or fixed workflow rubric. ${DOVE_RESEARCH_ACTION_LENSES.join(" ")}`;
 
 // src/core/user-response-policy.mjs
 var USER_RESPONSE_POLICY = Object.freeze([
@@ -69,7 +69,11 @@ function isHighConfidenceAmbientWorkPrompt(prompt) {
 }
 var DOVE_CLAUDE_AMBIENT_HOOK_COMMAND = 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"';
 var DOVE_CLAUDE_SESSION_START_HOOK_COMMAND = 'dove hook session-start --project "$CLAUDE_PROJECT_DIR"';
-var DOVE_CLAUDE_STOP_HOOK_COMMAND = 'dove hook stop --project "$CLAUDE_PROJECT_DIR"';
+var DOVE_CLAUDE_STATUS_LINE_COMMAND = 'dove hook statusline --project "$CLAUDE_PROJECT_DIR"';
+var DOVE_CLAUDE_STATUS_LINE = Object.freeze({
+  type: "command",
+  command: DOVE_CLAUDE_STATUS_LINE_COMMAND
+});
 var DOVE_CLAUDE_AMBIENT_HOOK_ENTRY = Object.freeze({
   hooks: Object.freeze([
     Object.freeze({
@@ -84,15 +88,6 @@ var DOVE_CLAUDE_SESSION_START_HOOK_ENTRY = Object.freeze({
     Object.freeze({
       type: "command",
       command: DOVE_CLAUDE_SESSION_START_HOOK_COMMAND,
-      timeout: 10
-    })
-  ])
-});
-var DOVE_CLAUDE_STOP_HOOK_ENTRY = Object.freeze({
-  hooks: Object.freeze([
-    Object.freeze({
-      type: "command",
-      command: DOVE_CLAUDE_STOP_HOOK_COMMAND,
       timeout: 10
     })
   ])

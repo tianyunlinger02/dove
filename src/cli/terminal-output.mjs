@@ -68,10 +68,10 @@ export function renderCompleteReinstallInventory(preview, options = {}) {
     terminalStyle("将删除", "bold", { color }),
     ...removed,
     "",
-    terminalStyle("将以当前默认内容替换", "bold", { color }),
+    terminalStyle("将以当前 package 接入重建", "bold", { color }),
     ...replaced,
     "",
-    "确认后会重建当前项目集成和完整默认研究树。普通项目文件与用户级 Dove 安装不受管理。"
+    "确认后会重建当前项目集成；.dove/research/**、DOCTOR.md、普通项目文件与用户级 Dove 安装不受管理。"
   ].join("\n");
 }
 
@@ -118,10 +118,11 @@ export function renderDoveLifecycleResult(command, result, options = {}) {
     terminalStyle("Dove 项目配置完全重新安装完成", "bold", { color }),
     "",
     "✓ 已按确认时重新读取的当前范围删除旧 Dove 项目内容",
-    "✓ 当前项目集成和完整默认研究树已重建",
+    "✓ 当前项目集成已重建",
+    "✓ .dove/research/** 与 .dove/install/DOCTOR.md 已保留",
     "✓ 普通项目文件与用户级 Dove 安装未被管理",
     "",
-    "默认研究文档只是可维护入口，不代表科研工作、结论或验证已经完成。"
+    "研究文档只是研究者维护的普通入口，不代表科研工作、结论或验证已经完成。"
   ].join("\n");
 }
 

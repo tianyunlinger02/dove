@@ -28,7 +28,7 @@ function setupCompleteLines(_result, color) {
     "✓ Claude Code 自然语言入口已配置",
     "✓ Prompt Hook 与 Skills 已安装",
     "✓ 按需论文搜索、下载与阅读 MCP 已声明",
-    "✓ 完整默认研究目录与通用 Lessons 已建立",
+    "✓ 最小研究入口 RESEARCH.md 已建立",
     "",
     "论文工具需要本机已有 uvx，并在 Claude Code 首次使用时由你批准；Dove 未安装依赖、写入凭据或替你批准。",
     "默认研究文档是可维护的 Markdown 入口，不代表科研主线、结论或任务已经完成。",
@@ -72,7 +72,7 @@ async function runCompleteReinstall({ target, previewCompleteReinstall, complete
   const preview = await previewCompleteReinstall(target);
   stream.write(`\n${renderCompleteReinstallInventory(preview, { color })}\n\n`);
   const approved = await promptConfirm({
-    message: "警告：这会永久删除当前项目中的全部 Dove 配置、研究状态和旧归档。确认完全重新安装项目配置？",
+    message: "警告：这会重新安装 Dove 管理的项目接入；研究 Markdown 与 DOCTOR.md 会保留。确认重新安装项目配置？",
     default: false
   });
   if (!approved) {

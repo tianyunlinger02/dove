@@ -33,7 +33,11 @@ export const DOVE_CLAUDE_AMBIENT_RULE_PATH = ".claude/rules/dove.md";
 export const DOVE_CLAUDE_AMBIENT_SKILL_PATH = ".claude/skills/dove-intake/SKILL.md";
 export const DOVE_CLAUDE_AMBIENT_HOOK_COMMAND = 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"';
 export const DOVE_CLAUDE_SESSION_START_HOOK_COMMAND = 'dove hook session-start --project "$CLAUDE_PROJECT_DIR"';
-export const DOVE_CLAUDE_STOP_HOOK_COMMAND = 'dove hook stop --project "$CLAUDE_PROJECT_DIR"';
+export const DOVE_CLAUDE_STATUS_LINE_COMMAND = 'dove hook statusline --project "$CLAUDE_PROJECT_DIR"';
+export const DOVE_CLAUDE_STATUS_LINE = Object.freeze({
+  type: "command",
+  command: DOVE_CLAUDE_STATUS_LINE_COMMAND
+});
 export const LEGACY_DOVE_CLAUDE_AMBIENT_HOOK_COMMAND = 'node "$CLAUDE_PROJECT_DIR/scripts/dove-user-prompt-submit-package.mjs"';
 export const DOVE_CLAUDE_AMBIENT_HOOK_ENTRY = Object.freeze({
   hooks: Object.freeze([
@@ -53,16 +57,6 @@ export const DOVE_CLAUDE_SESSION_START_HOOK_ENTRY = Object.freeze({
     })
   ])
 });
-export const DOVE_CLAUDE_STOP_HOOK_ENTRY = Object.freeze({
-  hooks: Object.freeze([
-    Object.freeze({
-      type: "command",
-      command: DOVE_CLAUDE_STOP_HOOK_COMMAND,
-      timeout: 10
-    })
-  ])
-});
-
 function plainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -83,7 +77,6 @@ function exactManagedHook(value, command) {
 function hookCommandMarkers(eventName) {
   if (eventName === "SessionStart") return ["dove hook session-start"];
   if (eventName === "UserPromptSubmit") return ["dove hook user-prompt-submit", "dove-user-prompt-submit-package.mjs"];
-  if (eventName === "Stop") return ["dove hook stop"];
   throw new Error(`Unsupported Dove Claude hook event: ${eventName}.`);
 }
 
@@ -110,15 +103,12 @@ export function mergeClaudeAmbientSettings(settings) {
   const hooks = settings.hooks ?? {};
   const promptHooks = hooks.UserPromptSubmit;
   const sessionStartHooks = hooks.SessionStart;
-  const stopHooks = hooks.Stop;
   if (promptHooks !== undefined && !Array.isArray(promptHooks)) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks.UserPromptSubmit must be an array.`);
   if (sessionStartHooks !== undefined && !Array.isArray(sessionStartHooks)) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks.SessionStart must be an array.`);
-  if (stopHooks !== undefined && !Array.isArray(stopHooks)) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks.Stop must be an array.`);
 
   const prompt = mergeManagedHook(promptHooks ?? [], "UserPromptSubmit", DOVE_CLAUDE_AMBIENT_HOOK_COMMAND, DOVE_CLAUDE_AMBIENT_HOOK_ENTRY);
   const sessionStart = mergeManagedHook(sessionStartHooks ?? [], "SessionStart", DOVE_CLAUDE_SESSION_START_HOOK_COMMAND, DOVE_CLAUDE_SESSION_START_HOOK_ENTRY);
-  const stop = mergeManagedHook(stopHooks ?? [], "Stop", DOVE_CLAUDE_STOP_HOOK_COMMAND, DOVE_CLAUDE_STOP_HOOK_ENTRY);
-  if (!prompt.changed && !sessionStart.changed && !stop.changed) return { settings, changed: false };
+  if (!prompt.changed && !sessionStart.changed) return { settings, changed: false };
 
   return {
     settings: {
@@ -126,8 +116,7 @@ export function mergeClaudeAmbientSettings(settings) {
       hooks: {
         ...hooks,
         UserPromptSubmit: prompt.entries,
-        SessionStart: sessionStart.entries,
-        Stop: stop.entries
+        SessionStart: sessionStart.entries
       }
     },
     changed: true
@@ -145,9 +134,9 @@ ${USER_RESPONSE_POLICY.join("\n")}
 
 ${DOVE_RESEARCH_ONE_AGENT} ${DOVE_RESEARCH_FLAT_SKILL_SENTENCE}
 
-The prompt hook selects hidden intake only when the original user prompt is a clear Dove work request involving research, papers, sources, experiments, drafts, figures, reviews, rebuttals, lessons, or research-adjacent project work. Intake routing is zero-write, may choose no Dove Skill for contextual follow-ups or judgment-only prompts, and never selects Auto. Before routing, the PATH-installed Dove CLI may transactionally hot-sync package-managed project integration only; it never touches \`.dove/research/\`, and Stop never performs this sync. Slash commands keep their explicit routing. ${DOVE_RESEARCH_DIRECT_JUDGMENT}
+The prompt hook selects hidden intake only when the original user prompt is a clear Dove work request involving research, papers, sources, experiments, drafts, figures, reviews, rebuttals, lessons, or research-adjacent project work. Intake routing is zero-write, may choose no Dove Skill for contextual follow-ups or judgment-only prompts, and never selects Auto. Before routing, the PATH-installed Dove CLI may transactionally hot-sync package-managed project integration only; it never touches \`.dove/research/\`. Dove does not install or rely on a Stop hook; Stop does not drive research continuity, routing, tools, writes, scheduling, or plain-language second turns. Slash commands keep their explicit routing. ${DOVE_RESEARCH_DIRECT_JUDGMENT}
 
-When the user explicitly names Dove while giving feedback, criticism, correction, or an improvement request about it, or when Dove's own Skill, hook, project integration, routing, document behavior, or guidance actually fails during use, append a concise natural-language note to \`.dove/install/DOCTOR.md\`. When the user gives reusable feedback about ordinary research or collaboration without explicitly naming Dove, preserve it in the relevant Lessons Markdown instead. A Stop-hook continuation is response rendering only: rewrite the current answer in plain language and do not call tools, create tasks, continue research, or write DOCTOR, Lessons, research Markdown, project artifacts, or any other file. Preserve what happened, its user impact, and useful context. Do not create IDs, statuses, severity fields, counters, frontmatter, or a fixed template. Do not record ordinary research uncertainty, project bugs, external tool failures, or general conversation merely because Dove is active. Do not ask the user to run \`dove doctor\` for this feedback channel.
+When the user explicitly names Dove while giving feedback, criticism, correction, or an improvement request about it, or when Dove's own Skill, hook, project integration, routing, document behavior, or guidance actually fails during use, append a concise natural-language note to \`.dove/install/DOCTOR.md\`. When the user gives reusable feedback about ordinary research or collaboration without explicitly naming Dove, preserve it in the relevant Lessons Markdown instead. Preserve what happened, its user impact, and useful context. Do not create IDs, statuses, severity fields, counters, frontmatter, or a fixed template. Do not record ordinary research uncertainty, project bugs, external tool failures, or general conversation merely because Dove is active. Do not ask the user to run \`dove doctor\` for this feedback channel.
 `;
 }
 

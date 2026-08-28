@@ -43,15 +43,15 @@ dove init --host claude
 dove init --host dsh
 ```
 
-Claude Code receives the complete integration described below. DSH receives the ten Dove filesystem Skills. `dove init` installs project integration and the default ordinary Markdown research tree. It may write:
+Claude Code receives the complete integration described below. DSH receives the ten Dove filesystem Skills. `dove init` installs project integration and the minimal researcher-owned research entry. It may write:
 
 - `.dove/install/manifest.json`;
 - project-local Claude commands under `.claude/commands/dove/`;
 - the project-local Dove agent at `.claude/agents/dove.md`;
 - the project-local ambient rule and hidden intake skill;
-- the project-local `SessionStart`, `UserPromptSubmit`, and `Stop` hook registrations;
+- the project-local `SessionStart` and `UserPromptSubmit` hook registrations;
 - the hidden `dove-paper-search` support skill and its pinned external MCP declaration in `.mcp.json`; and
-- default Markdown research files under `.dove/research/`.
+- the minimal `.dove/research/RESEARCH.md` Markdown entry when no research tree exists.
 
 It must preserve unrelated project configuration and preflight the complete managed write set before changing files.
 
@@ -98,11 +98,7 @@ dove hook user-prompt-submit --project <project-root>
 
 Both lifecycle entry points use the current user-installed `dove` command on `PATH` to hot-sync recognized package-managed integration. `UserPromptSubmit` also bridges revision-2.0 projects initialized before SessionStart was installed. Hot sync never reads, creates, replaces, or deletes `.dove/research/**`; it does not migrate legacy manifests or perform Complete Reinstall. It guarantees current managed files on disk, not same-session Claude reload.
 
-The Claude `Stop` hook uses the equivalent of:
-
-```text
-dove hook stop --project <project-root>
-```
+Dove does not install or expose a Claude `Stop` hook. Retired Dove-owned Stop hook fragments are removed only when they exactly match the old managed entry; user-owned or non-array Stop settings are preserved.
 
 The optional paper-acquisition MCP declaration launches pinned `paper-search-mcp==0.1.4` through user-provided `uvx`. Dove does not install that package, approve project trust, write credentials, or provide a CLI/shell fallback for that MCP if it is unavailable; other already-approved host web/search tools, local PDFs, URLs, or user-provided material may still support source work.
 
@@ -124,7 +120,7 @@ dove update
 
 If the manifest is absent without that adoption state, malformed, contradictory, unsafe, or contains unknown managed-file or fragment drift, `dove update` fails closed. It must not reconstruct a manifest from generated adapters, hooks, MCP declarations, or copied runtime.
 
-For an already initialized project, update creates missing summaries, completes current standard navigation only in `RESEARCH.md` and `lessons/LESSONS.md`, and replaces the six package-managed built-in Lessons themes with current package content. Other research documents remain researcher-owned.
+For an already initialized project, update refreshes only package-managed integration. It does not create missing summaries, complete navigation, replace Lessons materials, or rewrite `.dove/research/**`; existing research documents remain researcher-owned.
 
 ## Uninstall
 

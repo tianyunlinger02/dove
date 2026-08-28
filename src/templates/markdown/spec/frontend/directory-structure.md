@@ -6,7 +6,7 @@
 
 ## Overview
 
-This repository has no browser frontend. It contains the canonical Dove agent persona, canonical Skill workflows, generated host adapters, a lifecycle CLI, Claude SessionStart/prompt/stop hooks, three runtime bundles, public documentation, project installation logic, and software validation.
+This repository has no browser frontend. It contains the canonical Dove agent persona, canonical Skill workflows, generated host adapters, a lifecycle CLI, Claude SessionStart/prompt hooks, project status line, three runtime bundles, public documentation, project installation logic, and software validation.
 
 There is no Dove research-state MCP server or Research Format runtime in the Dove 3 architecture. Claude project integration may declare one pinned external paper-acquisition MCP without bundling its runtime.
 
@@ -50,24 +50,17 @@ Dove separates software-owned metadata, research Markdown with explicit ownershi
 │   ├── manifest.json         # installation manifest revision 2.0
 │   └── DOCTOR.md             # optional natural-language feedback about Dove itself
 ├── research/
-│   ├── RESEARCH.md
-│   ├── missions/MISSIONS.md
-│   ├── experiments/EXPERIMENTS.md
-│   ├── sources/SOURCES.md
-│   ├── reviews/REVIEWS.md
-│   ├── claims/CLAIMS.md
-│   └── lessons/
-│       ├── LESSONS.md
-│       ├── decision-making.md
-│       ├── research-method.md
-│       ├── experiments-and-evidence.md
-│       ├── engineering-and-validation.md
-│       ├── writing-and-review.md
-│       └── collaboration-and-environment.md
+│   ├── RESEARCH.md           # minimal researcher-owned bootstrap on fresh init
+│   ├── missions/             # optional researcher-owned Mission materials
+│   ├── experiments/          # optional researcher-owned Experiment materials
+│   ├── sources/              # optional researcher-owned Source materials
+│   ├── reviews/              # optional researcher-owned Review materials
+│   ├── claims/               # optional researcher-owned Claim materials
+│   └── lessons/              # optional researcher-owned Lessons materials
 └── archive/                  # original bytes from explicit legacy JSON export
 ```
 
-Current initialization creates this default tree. `RESEARCH.md` and the six summaries are researcher-owned entrances and syntheses, not generated indexes or entity stores. The six built-in Lessons themes are package-managed and each carries a plain Markdown notice directing project-specific guidance to separately named Lessons linked from `lessons/LESSONS.md`. Missing summaries are synchronizable defaults rather than research corruption, and an absent overview is still reported naturally if encountered.
+Current initialization creates only the minimal `RESEARCH.md` bootstrap when no research tree exists. Optional summaries, topic documents, and Lessons remain researcher-owned Markdown and are created naturally when useful. Missing summaries are not corruption and are not package-managed defaults.
 
 Specific Mission, Experiment, Source, Review, Claim, and additional Lessons documents remain naturally named, split, and linked. Explicit-export `lessons/imported-lessons.md` is researcher-owned. Do not require fixed headings, frontmatter, IDs, enums, hashes, a generated index, or stored counts.
 
@@ -90,8 +83,8 @@ Drafts, code, datasets, logs, figures, papers, source captures, review bundles, 
 - Source functions use clear verb-first camelCase names.
 - Research files use human-readable names and ordinary Markdown links rather than generated semantic IDs.
 - Dove agent, Skills, adapters, research documents, project artifacts, installation metadata, ordinary Dove feedback, archives, and bundles are distinct concepts.
-- Generated files do not establish host registration, project readiness, scientific correctness, or reviewer independence.
+- Generated files do not establish host registration, project readiness, scientific correctness, or independent Reviewer status.
 
-The installed `dove` executable handles project initialization, project integration update, Complete Reinstall, Doctor, explicit legacy JSON research export, and prompt/stop-hook forwarding. It has no `mcp` or `migrate-research` command. Research work remains in the Dove agent, Skills, and normal host tools.
+The installed `dove` executable handles project initialization, project integration update, Complete Reinstall, Doctor, explicit legacy JSON research export, and managed SessionStart/UserPromptSubmit/statusline hook entry points. It has no `mcp`, `migrate-research`, or Stop hook command. Research work remains in the Dove agent, Skills, and normal host tools.
 
-Project roots and Dove-managed paths must be contained and unambiguous. Ordinary files and unrelated shared-configuration fields are preserved. Conflicting or modified managed content blocks automatic replacement. Research defaults are outside the installation manifest; update creates missing summaries, completes current standard overview and Lessons-summary navigation, replaces the six built-in Lessons themes, and deletes only the recognized deprecated package-managed Lessons artifacts `.dove/research/LESSONS.md` and `lessons/additional-lessons.md` without migration or fallback.
+Project roots and Dove-managed paths must be contained and unambiguous. Ordinary files and unrelated shared-configuration fields are preserved. Conflicting or modified managed content blocks automatic replacement. Research bootstrap files are outside the installation manifest; update, hot sync, reinstall, and uninstall preserve existing `.dove/research/**` bytes and do not complete navigation, replace Lessons, or delete retired researcher-visible materials.

@@ -55,32 +55,81 @@ function renderBullets(bullets) {
   return bullets.map((bullet) => `- ${bullet}`).join("\n");
 }
 
-function renderWorkflow(command) {
-  const modes = command.workflow?.modes;
-  if (!Array.isArray(modes) || modes.length === 0) return "";
-  const lines = [
-    "## Internal workflow",
-    "",
-    "Internal guidance only; never use this workflow as the final report outline.",
-    ""
-  ];
-  for (const item of modes) {
-    lines.push(`- **${item.when}**`);
-    for (const [index, step] of item.steps.entries()) {
-      const writeBoundary = step.readOnly
-        ? " This step is read-only; do not create or modify files."
-        : step.persistencePolicy === "standard-research"
-          ? ` Maintain Dove research Markdown only when ${step.persistWhen}.`
-          : step.persistencePolicy === "explicit-lessons"
-            ? ` Maintain Lessons only when ${step.persistWhen}.`
-            : "";
-      lines.push(`  ${index + 1}. Use host tools (${step.readOnly ? "read-only" : "work"}; ${step.capability}). ${step.instruction}${writeBoundary}`);
-    }
-    for (const clarification of item.clarification ?? []) {
-      lines.push(`  - Clarification: ${clarification}`);
-    }
+function renderAction(item) {
+  const mode = item.readOnly ? "read-only" : "work";
+  const writeBoundary = item.readOnly
+    ? " Read-only: do not create or modify files."
+    : item.persistencePolicy === "standard-research"
+      ? ` Maintain Dove research Markdown only when ${item.persistWhen}.`
+      : item.persistencePolicy === "explicit-lessons"
+        ? ` Maintain Lessons only when ${item.persistWhen}.`
+        : "";
+  return `- **${item.capability}** (${mode}): ${item.instruction}${writeBoundary}`;
+}
+
+function renderListSection(title, items) {
+  const values = Array.isArray(items) ? items.filter(Boolean) : [];
+  return values.length > 0 ? `### ${title}\n\n${renderBullets(values)}` : "";
+}
+
+function renderHostGuidance(contract, hostId) {
+  const hostGuidance = contract.hostGuidance ?? {};
+  const values = unique([
+    ...(hostGuidance.common ?? []),
+    ...(hostId ? hostGuidance[hostId] ?? [] : [])
+  ]);
+  return renderListSection("Conditional host guidance", values);
+}
+
+function renderSemanticItems(title, items, renderer = renderBullets) {
+  const values = Array.isArray(items) ? items.filter(Boolean) : [];
+  return values.length > 0 ? `#### ${title}\n\n${renderer(values)}` : "";
+}
+
+function renderSemanticSection(section) {
+  const blocks = [
+    `### ${section.title}`,
+    section.purpose ? String(section.purpose) : "",
+    section.description ? String(section.description) : "",
+    renderSemanticItems("Responsibilities", section.responsibilities),
+    renderSemanticItems("Actions", section.actions, (items) => items.map(renderAction).join("\n")),
+    renderSemanticItems("Side-effect and authorization boundary", section.boundaries),
+    renderSemanticItems("Non-goals", section.nonGoals)
+  ].filter(Boolean);
+  return blocks.join("\n\n");
+}
+
+function renderSemanticCapabilityContract(command, hostId = null) {
+  const contract = command.contract;
+  const sections = [
+    "## Capability contract\n\nUse these responsibilities and actions as an unordered capability contract, grouped by concept rather than an ordered process, fixed report outline, or completion checklist.",
+    `### Purpose\n\n${contract.purpose}`,
+    `### Use when\n\n${contract.when}`,
+    ...contract.semanticSections.map(renderSemanticSection),
+    renderListSection("Clarification", contract.clarification),
+    renderHostGuidance(contract, hostId)
+  ].filter(Boolean);
+  return sections.join("\n\n");
+}
+
+function renderCapabilityContract(command, hostId = null) {
+  const contract = command.contract;
+  if (!contract) return "";
+  if (Array.isArray(contract.semanticSections) && contract.semanticSections.length > 0) {
+    return renderSemanticCapabilityContract(command, hostId);
   }
-  return lines.join("\n");
+  const sections = [
+    "## Capability contract\n\nUse these responsibilities and actions as an unordered capability contract, not an ordered process, fixed report outline, or completion checklist.",
+    `### Purpose\n\n${contract.purpose}`,
+    `### Use when\n\n${contract.when}`,
+    renderListSection("Dove responsibilities", contract.responsibilities),
+    Array.isArray(contract.actions) && contract.actions.length > 0 ? `### Possible actions\n\n${contract.actions.map(renderAction).join("\n")}` : "",
+    renderListSection("Side-effect and authorization boundary", contract.boundaries),
+    renderListSection("Non-goals", contract.nonGoals),
+    renderListSection("Clarification", contract.clarification),
+    renderHostGuidance(contract, hostId)
+  ].filter(Boolean);
+  return sections.join("\n\n");
 }
 
 function renderGuidance(command) {
@@ -88,8 +137,9 @@ function renderGuidance(command) {
   return notes.length > 0 ? `## Command guidance\n\n${renderBullets(notes)}` : "";
 }
 
-function renderCapsule() {
-  return `## Dove capsule\n\n${renderBullets(HOST_ADAPTER_POLICY.adapterBullets)}`;
+function renderCapsule(command) {
+  const bullets = command.adapterCapsuleBullets ?? HOST_ADAPTER_POLICY.adapterBullets;
+  return `## Dove capsule\n\n${renderBullets(bullets)}`;
 }
 
 function renderExamples(command, hostId = null) {
@@ -100,10 +150,10 @@ function renderExamples(command, hostId = null) {
 function renderBody(command, heading, hostId = null) {
   const purpose = command.summary;
   const examples = renderExamples(command, hostId);
-  const workflow = renderWorkflow(command);
+  const contract = renderCapabilityContract(command, hostId);
   const guidance = renderGuidance(command);
-  const capsule = renderCapsule();
-  return `# ${heading}\n\n${purpose}${examples}\n\n${workflow}${guidance ? `\n\n${guidance}` : ""}\n\n${capsule}\n`;
+  const capsule = renderCapsule(command);
+  return `# ${heading}\n\n${purpose}${examples}\n\n${contract}${guidance ? `\n\n${guidance}` : ""}\n\n${capsule}\n`;
 }
 
 function renderFrontmatter(command, fields = {}) {

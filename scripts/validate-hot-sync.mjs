@@ -9,8 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   DOVE_CLAUDE_AMBIENT_HOOK_COMMAND,
-  DOVE_CLAUDE_SESSION_START_HOOK_COMMAND,
-  DOVE_CLAUDE_STOP_HOOK_COMMAND
+  DOVE_CLAUDE_SESSION_START_HOOK_COMMAND
 } from "../src/core/ambient-policy.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { PAPER_SEARCH_MCP_FRAGMENT, PAPER_SEARCH_MCP_SERVER_NAME } from "../src/core/paper-search-integration.mjs";
@@ -109,9 +108,10 @@ try {
   const retiredResearchPath = path.join(bridgeRoot, ".dove", "research", "LESSONS.md");
 
   const initializedSettings = readJson(settingsPath);
-  assert.deepEqual(Object.keys(initializedSettings.hooks), ["UserPromptSubmit", "SessionStart", "Stop"]);
+  assert.deepEqual(Object.keys(initializedSettings.hooks), ["UserPromptSubmit", "SessionStart"]);
 
   fs.writeFileSync(researchPath, "# Researcher-owned mainline\n\nDo not rewrite.\n");
+  fs.mkdirSync(path.dirname(customResearchPath), { recursive: true });
   fs.writeFileSync(customResearchPath, "custom evidence\n");
   fs.writeFileSync(retiredResearchPath, "retired but researcher-visible\n");
   const researchBefore = [researchPath, customResearchPath, retiredResearchPath].map((target) => fs.readFileSync(target));
@@ -122,8 +122,7 @@ try {
   oldSettings.hooks.SessionStart = [{ hooks: [{ type: "command", command: "user-owned-session-start", timeout: 5 }] }];
   writeJson(settingsPath, oldSettings);
   const oldFragment = {
-    UserPromptSubmit: oldSettings.hooks.UserPromptSubmit.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook user-prompt-submit"))),
-    Stop: oldSettings.hooks.Stop.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook stop")))
+    UserPromptSubmit: oldSettings.hooks.UserPromptSubmit.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook user-prompt-submit")))
   };
   const oldManifest = readJson(manifestPath);
   oldManifest.package.version = "2.9.0";
@@ -189,16 +188,54 @@ try {
 
   const stopRoot = makeProject();
   roots.push(stopRoot);
-  const stopManifestBefore = fs.readFileSync(path.join(stopRoot, INSTALLATION_MANIFEST_PATH));
-  const stop = cliHook(stopRoot, "stop", {
+  const stopSettingsPath = path.join(stopRoot, ".claude", "settings.json");
+  const oldStopSettings = readJson(stopSettingsPath);
+  oldStopSettings.hooks.Stop = [
+    { hooks: [{ type: "command", command: "user-owned-stop", timeout: 5 }] },
+    { hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] }
+  ];
+  writeJson(stopSettingsPath, oldStopSettings);
+  const stopManifest = readJson(path.join(stopRoot, INSTALLATION_MANIFEST_PATH));
+  stopManifest.package.version = "2.9.0";
+  stopManifest.managed.find((entry) => entry.path === ".claude/settings.json").digest = semanticDigest({
+    UserPromptSubmit: oldStopSettings.hooks.UserPromptSubmit.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook user-prompt-submit"))),
+    SessionStart: oldStopSettings.hooks.SessionStart.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook session-start"))),
+    Stop: oldStopSettings.hooks.Stop.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook stop")))
+  });
+  writeJson(path.join(stopRoot, INSTALLATION_MANIFEST_PATH), stopManifest);
+  synchronizeProjectIntegrationOnly(stopRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  const cleanedStopSettings = readJson(stopSettingsPath);
+  assert.equal(cleanedStopSettings.hooks.Stop.length, 1);
+  assert.equal(cleanedStopSettings.hooks.Stop[0].hooks[0].command, "user-owned-stop");
+
+  const nonArrayStopRoot = makeProject();
+  roots.push(nonArrayStopRoot);
+  const nonArrayStopSettingsPath = path.join(nonArrayStopRoot, ".claude", "settings.json");
+  const nonArrayStopSettings = readJson(nonArrayStopSettingsPath);
+  nonArrayStopSettings.hooks.Stop = "user-owned-stop";
+  writeJson(nonArrayStopSettingsPath, nonArrayStopSettings);
+  const nonArrayBefore = fs.readFileSync(nonArrayStopSettingsPath);
+  synchronizeProjectIntegrationOnly(nonArrayStopRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  assert.deepEqual(fs.readFileSync(nonArrayStopSettingsPath), nonArrayBefore);
+
+  const userStopRoot = makeProject();
+  roots.push(userStopRoot);
+  const userStopSettingsPath = path.join(userStopRoot, ".claude", "settings.json");
+  const userStopSettings = readJson(userStopSettingsPath);
+  userStopSettings.hooks.Stop = [{ hooks: [{ type: "command", command: "user-owned-stop", timeout: 10 }] }];
+  writeJson(userStopSettingsPath, userStopSettings);
+  const userStopBefore = fs.readFileSync(userStopSettingsPath);
+  synchronizeProjectIntegrationOnly(userStopRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  assert.deepEqual(fs.readFileSync(userStopSettingsPath), userStopBefore);
+
+  const stopCli = cliHook(userStopRoot, "stop", {
     hook_event_name: "Stop",
-    cwd: stopRoot,
+    cwd: userStopRoot,
     stop_hook_active: false,
     last_assistant_message: "internal phrasing"
   });
-  assert.equal(stop.status, 0, stop.stderr || stop.stdout);
-  assert.deepEqual(JSON.parse(stop.stdout), { decision: "block", reason: "说人话" });
-  assert.deepEqual(fs.readFileSync(path.join(stopRoot, INSTALLATION_MANIFEST_PATH)), stopManifestBefore);
+  assert.notEqual(stopCli.status, 0);
+  assert.match(stopCli.stderr, /accepts only session-start, user-prompt-submit, or statusline/iu);
 
   const adoptionRoot = makeAdoptableProject();
   roots.push(adoptionRoot);
@@ -240,7 +277,7 @@ try {
   assert.equal(adoptedSettings.hooks.OtherEvent.some((entry) => entry.hooks?.some((hook) => hook.command === "user-owned-other")), true);
   assert.equal(adoptedSettings.hooks.UserPromptSubmit.some((entry) => entry.hooks?.some((hook) => hook.command === DOVE_CLAUDE_AMBIENT_HOOK_COMMAND)), true);
   assert.equal(adoptedSettings.hooks.SessionStart.some((entry) => entry.hooks?.some((hook) => hook.command === DOVE_CLAUDE_SESSION_START_HOOK_COMMAND)), true);
-  assert.equal(adoptedSettings.hooks.Stop.some((entry) => entry.hooks?.some((hook) => hook.command === DOVE_CLAUDE_STOP_HOOK_COMMAND)), true);
+  assert.equal(Object.hasOwn(adoptedSettings.hooks, "Stop"), false);
   const adoptedMcp = readJson(path.join(adoptionRoot, ".mcp.json"));
   assert.equal(adoptedMcp.mcpServers.userServer.command, "user-server");
   assert.deepEqual(adoptedMcp.mcpServers[PAPER_SEARCH_MCP_SERVER_NAME], PAPER_SEARCH_MCP_FRAGMENT);
