@@ -1,5 +1,6 @@
 import {
-  DOVE_RESEARCH_AUTO_EXPLICIT_ONLY,
+  DOVE_RESEARCH_CLARIFICATION,
+  DOVE_RESEARCH_DEFAULT_AUTONOMY,
   DOVE_RESEARCH_DIRECT_JUDGMENT,
   DOVE_RESEARCH_FLAT_SKILL_SENTENCE,
   DOVE_RESEARCH_ONE_AGENT,
@@ -134,7 +135,9 @@ ${USER_RESPONSE_POLICY.join("\n")}
 
 ${DOVE_RESEARCH_ONE_AGENT} ${DOVE_RESEARCH_FLAT_SKILL_SENTENCE}
 
-The prompt hook selects hidden intake only when the original user prompt is a clear Dove work request involving research, papers, sources, experiments, drafts, figures, reviews, rebuttals, lessons, or research-adjacent project work. Intake routing is zero-write, may choose no Dove Skill for contextual follow-ups or judgment-only prompts, and never selects Auto. Before routing, the PATH-installed Dove CLI may transactionally hot-sync package-managed project integration only; it never touches \`.dove/research/\`. Dove does not install or rely on a Stop hook; Stop does not drive research continuity, routing, tools, writes, scheduling, or plain-language second turns. Slash commands keep their explicit routing. ${DOVE_RESEARCH_DIRECT_JUDGMENT}
+The prompt hook selects hidden intake only when the original user prompt is a clear Dove work request involving research, papers, sources, experiments, drafts, figures, reviews, rebuttals, lessons, or research-adjacent project work. Intake routing is zero-write, may choose no Dove Skill for contextual follow-ups or judgment-only prompts, and leaves the agent to choose its internal method. Before routing, the PATH-installed Dove CLI may transactionally hot-sync package-managed project integration only; it never touches \`.dove/research/\`. Dove does not install or rely on a Stop hook; Stop does not drive research continuity, routing, tools, writes, scheduling, or plain-language second turns. Slash commands keep their explicit routing. ${DOVE_RESEARCH_DIRECT_JUDGMENT}
+
+For web access in initialized Claude projects, keep built-in \`WebSearch\` for search discovery. Do not use built-in \`WebFetch\`; project permissions deny it so ordinary webpage bodies, documentation pages, venue pages, and known URLs use the approved \`exa\` hosted MCP. Scholarly paper discovery, download, and full-text reading stay on the pinned \`dove-paper-search\` MCP. If either MCP is unavailable or unapproved, state that boundary; do not substitute CLI, shell, \`curl\`, or ad hoc fetch scripts.
 
 When the user explicitly names Dove while giving feedback, criticism, correction, or an improvement request about it, or when Dove's own Skill, hook, project integration, routing, document behavior, or guidance actually fails during use, append a concise natural-language note to \`.dove/install/DOCTOR.md\`. When the user gives reusable feedback about ordinary research or collaboration without explicitly naming Dove, preserve it in the relevant Lessons Markdown instead. Preserve what happened, its user impact, and useful context. Do not create IDs, statuses, severity fields, counters, frontmatter, or a fixed template. Do not record ordinary research uncertainty, project bugs, external tool failures, or general conversation merely because Dove is active. Do not ask the user to run \`dove doctor\` for this feedback channel.
 `;
@@ -143,12 +146,12 @@ When the user explicitly names Dove while giving feedback, criticism, correction
 export function renderClaudeAmbientSkill() {
   return `---
 name: dove-intake
-description: Route a clear work request to the smallest suitable Dove Skill.
+description: Route a clear Dove work request to the most suitable optional specialist method.
 user-invocable: false
 ---
 
 # Dove intake
 
-Select the smallest suitable Dove Skill only for a clear Dove work request involving research, papers, sources, experiments, drafts, figures, reviews, rebuttals, lessons, or research-adjacent project work: ${DOVE_RESEARCH_ROUTABLE_SKILL_INVENTORY_TEXT}. For contextual follow-ups, explanations, confirmations, or pure judgment-only prompts, choose no Dove Skill and answer directly; do not expand a short follow-up into a new research or experiment task. If the prompt asks Dove to judge and then perform the bounded action when useful, route the bounded work instead of treating it as pure judgment. ${DOVE_RESEARCH_DIRECT_JUDGMENT} ${DOVE_RESEARCH_AUTO_EXPLICIT_ONLY} Routing itself is zero-write. Ask only when a material ambiguity blocks the work.
+For a clear goal-shaped Dove work request involving research, papers, sources, experiments, drafts, figures, reviews, rebuttals, lessons, or research-adjacent project work, select the specialist method that best supports Dove's next action: ${DOVE_RESEARCH_ROUTABLE_SKILL_INVENTORY_TEXT}. This routing does not limit Dove to one round or make the user coordinate Skills; ${DOVE_RESEARCH_DEFAULT_AUTONOMY} For contextual explanations, confirmations, unscoped short follow-ups, or pure judgment-only prompts, choose no Skill and answer directly; do not invent a new research or experiment task from missing context. If the prompt asks Dove to judge and then perform useful work, route the work instead of treating it as pure judgment. ${DOVE_RESEARCH_DIRECT_JUDGMENT} Routing itself is zero-write. ${DOVE_RESEARCH_CLARIFICATION}
 `;
 }

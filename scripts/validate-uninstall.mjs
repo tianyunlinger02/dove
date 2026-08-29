@@ -5,10 +5,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { initializeProjectIntegration, previewProjectUninstall, uninstallProjectIntegration } from "../src/core/project-installation.mjs";
+import { initializeProjectIntegration, previewProjectUninstall, uninstallProjectIntegration, adoptProjectIntegration } from "../src/core/project-installation.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { inspectProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
+import {
+  EXA_MCP_FRAGMENT,
+  EXA_MCP_SERVER_NAME,
+  WEB_FETCH_DENY_PERMISSION,
+  WEB_FETCH_DENY_SELECTOR
+} from "../src/core/web-access-integration.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fixture = path.join(path.dirname(root), ".dove-dev", "tmp", "uninstall-fixture");
@@ -26,10 +32,26 @@ function digest(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
+function makeAdoptableProject() {
+  reset();
+  fs.mkdirSync(path.join(fixture, ".dove", "research"), { recursive: true });
+  fs.writeFileSync(path.join(fixture, ".dove", "research", "RESEARCH.md"), "# Research\n\nResearcher-owned.\n");
+  fs.writeFileSync(path.join(fixture, ".dove", "manifest.json"), `${JSON.stringify({
+    schemaVersion: 9,
+    manifestVersion: 1,
+    workspaceId: "workspace-uninstall-adoption-validation",
+    createdAt: "2026-07-17T10:56:07.603Z",
+    packageVersion: "0.4.0"
+  }, null, 2)}\n`);
+}
+
 reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude", "dsh"] });
 const initializedSettings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.deepEqual(initializedSettings.statusLine, { type: "command", command: 'dove hook statusline --project "$CLAUDE_PROJECT_DIR"' });
+assert.equal(initializedSettings.permissions.deny.includes(WEB_FETCH_DENY_PERMISSION), true);
+const initializedMcp = JSON.parse(fs.readFileSync(path.join(fixture, ".mcp.json"), "utf8"));
+assert.deepEqual(initializedMcp.mcpServers[EXA_MCP_SERVER_NAME], EXA_MCP_FRAGMENT);
 const statusline = spawnSync(process.execPath, [path.join(root, "bin", "dove.mjs"), "hook", "statusline", "--project", fixture], {
   cwd: fixture,
   input: JSON.stringify({ workspace: { project_dir: fixture } }),
@@ -54,16 +76,17 @@ assert.equal(preview.action, "uninstall");
 assert(preview.removedPaths.includes(".dove/install/manifest.json"));
 assert(preview.removedPaths.includes(".dove/manifest.json"));
 assert(preview.removedPaths.includes(".claude/agents/dove.md"));
-assert(preview.removedPaths.includes(".dsh/skills/dove-auto/SKILL.md"));
+assert(preview.removedPaths.includes(".dsh/skills/dove-research/SKILL.md"));
 const result = uninstallProjectIntegration(fixture, { confirmed: true });
 assert.equal(result.status, "uninstalled");
 assert.equal(fs.existsSync(path.join(fixture, ".dove", "install", "manifest.json")), false);
 assert.equal(fs.existsSync(legacyMarker), false);
 assert.equal(fs.existsSync(path.join(fixture, ".claude", "agents", "dove.md")), false);
-assert.equal(fs.existsSync(path.join(fixture, ".dsh", "skills", "dove-auto", "SKILL.md")), false);
+assert.equal(fs.existsSync(path.join(fixture, ".dsh", "skills", "dove-research", "SKILL.md")), false);
 assert.deepEqual({ doctor: digest(doctor), research: digest(research) }, before);
 const settings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.equal(settings.statusLine, undefined);
+assert.equal(settings.permissions, undefined);
 assert.equal(settings.enabledPlugins.demo, true);
 assert.equal(settings.hooks.SessionStart.length, 1);
 assert.equal(settings.hooks.SessionStart[0].hooks[0].command, "project hook");
@@ -114,5 +137,16 @@ const unrecognizedPreview = previewProjectUninstall(fixture);
 assert.equal(unrecognizedPreview.removedPaths.includes(".dove/manifest.json"), false);
 uninstallProjectIntegration(fixture, { confirmed: true });
 assert.equal(fs.existsSync(unrecognizedMarker), true);
+
+makeAdoptableProject();
+fs.writeFileSync(path.join(fixture, ".claude", "settings.json"), `${JSON.stringify({
+  permissions: { deny: [WEB_FETCH_DENY_PERMISSION] }
+}, null, 2)}\n`);
+adoptProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
+const adoptedManifest = JSON.parse(fs.readFileSync(path.join(fixture, ".dove", "install", "manifest.json"), "utf8"));
+assert.equal(adoptedManifest.managed.some((entry) => entry.selector === WEB_FETCH_DENY_SELECTOR), false);
+uninstallProjectIntegration(fixture, { confirmed: true });
+const adoptedSettingsAfterUninstall = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
+assert.deepEqual(adoptedSettingsAfterUninstall.permissions.deny, [WEB_FETCH_DENY_PERMISSION]);
 
 console.log(JSON.stringify({ status: "passed" }));

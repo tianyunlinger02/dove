@@ -16,6 +16,12 @@ import { PAPER_SEARCH_MCP_FRAGMENT, PAPER_SEARCH_MCP_SERVER_NAME } from "../src/
 import { adoptProjectIntegration, initializeProjectIntegration, previewProjectAdoption, synchronizeProjectIntegrationOnly } from "../src/core/project-installation.mjs";
 import { INSTALLATION_MANIFEST_PATH } from "../src/core/project-installation-manifest.mjs";
 import { RESEARCH_DEFAULT_DIRECTORY_PATHS, RESEARCH_DEFAULT_DOCUMENTS } from "../src/core/research-defaults.mjs";
+import {
+  EXA_MCP_FRAGMENT,
+  EXA_MCP_SERVER_NAME,
+  WEB_FETCH_DENY_PERMISSION,
+  WEB_FETCH_DENY_SELECTOR
+} from "../src/core/web-access-integration.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCRATCH_ROOT = path.join(path.dirname(ROOT), ".dove-dev", "tmp");
@@ -103,12 +109,16 @@ try {
   roots.push(bridgeRoot);
   const settingsPath = path.join(bridgeRoot, ".claude", "settings.json");
   const manifestPath = path.join(bridgeRoot, INSTALLATION_MANIFEST_PATH);
+  const initializedMcp = readJson(path.join(bridgeRoot, ".mcp.json"));
+  assert.deepEqual(initializedMcp.mcpServers[PAPER_SEARCH_MCP_SERVER_NAME], PAPER_SEARCH_MCP_FRAGMENT);
+  assert.deepEqual(initializedMcp.mcpServers[EXA_MCP_SERVER_NAME], EXA_MCP_FRAGMENT);
   const researchPath = path.join(bridgeRoot, ".dove", "research", "RESEARCH.md");
   const customResearchPath = path.join(bridgeRoot, ".dove", "research", "claims", "custom.md");
   const retiredResearchPath = path.join(bridgeRoot, ".dove", "research", "LESSONS.md");
 
   const initializedSettings = readJson(settingsPath);
   assert.deepEqual(Object.keys(initializedSettings.hooks), ["UserPromptSubmit", "SessionStart"]);
+  assert.equal(initializedSettings.permissions.deny.includes(WEB_FETCH_DENY_PERMISSION), true);
 
   fs.writeFileSync(researchPath, "# Researcher-owned mainline\n\nDo not rewrite.\n");
   fs.mkdirSync(path.dirname(customResearchPath), { recursive: true });
@@ -149,6 +159,13 @@ try {
   assert.equal(session.stdout, "");
   assert.deepEqual(fs.readFileSync(manifestPath), unchangedManifest);
 
+  const dshRoot = fs.mkdtempSync(path.join(SCRATCH_ROOT, "dove-dsh-"));
+  roots.push(dshRoot);
+  fs.mkdirSync(path.join(dshRoot, ".git"));
+  initializeProjectIntegration(dshRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["dsh"] });
+  assert.equal(fs.existsSync(path.join(dshRoot, ".claude", "settings.json")), false);
+  assert.equal(fs.existsSync(path.join(dshRoot, ".mcp.json")), false);
+
   const absentResearchRoot = makeProject();
   roots.push(absentResearchRoot);
   fs.rmSync(path.join(absentResearchRoot, ".dove", "research"), { recursive: true });
@@ -157,8 +174,8 @@ try {
 
   const driftRoot = makeProject();
   roots.push(driftRoot);
-  const driftAuto = path.join(driftRoot, ".claude", "commands", "dove", "auto.md");
-  fs.appendFileSync(driftAuto, "drift\n");
+  const driftResearch = path.join(driftRoot, ".claude", "commands", "dove", "research.md");
+  fs.appendFileSync(driftResearch, "drift\n");
   assert.throws(
     () => synchronizeProjectIntegrationOnly(driftRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }),
     /ownership drift/iu
@@ -244,14 +261,15 @@ try {
   writeFile(adoptionRoot, ".dove-archive/old.md", "archived legacy state\n");
   writeFile(adoptionRoot, ".dove/research/RESEARCH.md", "# Researcher mainline\n\nPreserve exactly.\n");
   writeFile(adoptionRoot, ".dove/research/lessons/project-owned.md", "project-owned lesson\n");
-  writeJson(path.join(adoptionRoot, ".claude", "settings.json"), {
-    hooks: {
-      OtherEvent: [{ hooks: [{ type: "command", command: "user-owned-other", timeout: 5 }] }]
-    }
-  });
   writeJson(path.join(adoptionRoot, ".mcp.json"), {
     mcpServers: {
       userServer: { type: "stdio", command: "user-server" }
+    }
+  });
+  writeJson(path.join(adoptionRoot, ".claude", "settings.json"), {
+    permissions: { deny: [WEB_FETCH_DENY_PERMISSION] },
+    hooks: {
+      OtherEvent: [{ hooks: [{ type: "command", command: "user-owned-other", timeout: 5 }] }]
     }
   });
   const adoptionBefore = researchSnapshot(adoptionRoot);
@@ -273,14 +291,17 @@ try {
   assert.equal(adoptionManifest.package.name, PACKAGE_NAME);
   assert.equal(adoptionManifest.package.version, PACKAGE_VERSION);
   assert.deepEqual(adoptionManifest.hosts, ["claude"]);
+  assert.equal(adoptionManifest.managed.some((entry) => entry.selector === WEB_FETCH_DENY_SELECTOR), false);
   const adoptedSettings = readJson(path.join(adoptionRoot, ".claude", "settings.json"));
   assert.equal(adoptedSettings.hooks.OtherEvent.some((entry) => entry.hooks?.some((hook) => hook.command === "user-owned-other")), true);
   assert.equal(adoptedSettings.hooks.UserPromptSubmit.some((entry) => entry.hooks?.some((hook) => hook.command === DOVE_CLAUDE_AMBIENT_HOOK_COMMAND)), true);
   assert.equal(adoptedSettings.hooks.SessionStart.some((entry) => entry.hooks?.some((hook) => hook.command === DOVE_CLAUDE_SESSION_START_HOOK_COMMAND)), true);
+  assert.equal(adoptedSettings.permissions.deny.includes(WEB_FETCH_DENY_PERMISSION), true);
   assert.equal(Object.hasOwn(adoptedSettings.hooks, "Stop"), false);
   const adoptedMcp = readJson(path.join(adoptionRoot, ".mcp.json"));
   assert.equal(adoptedMcp.mcpServers.userServer.command, "user-server");
   assert.deepEqual(adoptedMcp.mcpServers[PAPER_SEARCH_MCP_SERVER_NAME], PAPER_SEARCH_MCP_FRAGMENT);
+  assert.deepEqual(adoptedMcp.mcpServers[EXA_MCP_SERVER_NAME], EXA_MCP_FRAGMENT);
   const unchangedAdoption = synchronizeProjectIntegrationOnly(adoptionRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
   assert.equal(unchangedAdoption.status, "unchanged");
 
@@ -309,7 +330,7 @@ try {
 
   const exclusiveDriftAdoptionRoot = makeAdoptableProject();
   roots.push(exclusiveDriftAdoptionRoot);
-  writeFile(exclusiveDriftAdoptionRoot, ".claude/commands/dove/auto.md", "user-owned auto command\n");
+  writeFile(exclusiveDriftAdoptionRoot, ".claude/commands/dove/research.md", "user-owned research command\n");
   assert.throws(
     () => adoptProjectIntegration(exclusiveDriftAdoptionRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }),
     /cannot claim conflicting content/iu
@@ -341,6 +362,19 @@ try {
     /cannot claim conflicting content/iu
   );
   assert.equal(fs.existsSync(path.join(mcpDriftAdoptionRoot, INSTALLATION_MANIFEST_PATH)), false);
+
+  const exaDriftAdoptionRoot = makeAdoptableProject();
+  roots.push(exaDriftAdoptionRoot);
+  writeJson(path.join(exaDriftAdoptionRoot, ".mcp.json"), {
+    mcpServers: {
+      [EXA_MCP_SERVER_NAME]: { type: "stdio", command: "not-exa" }
+    }
+  });
+  assert.throws(
+    () => previewProjectAdoption(exaDriftAdoptionRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }),
+    /cannot claim conflicting content/iu
+  );
+  assert.equal(fs.existsSync(path.join(exaDriftAdoptionRoot, INSTALLATION_MANIFEST_PATH)), false);
 
   const otherRoot = makeProject();
   roots.push(otherRoot);

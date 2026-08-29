@@ -24,7 +24,7 @@ function setupCompleteLines(_result, color) {
     "",
     "✓ Dove 项目集成已是当前版本",
     "✓ Dove agent 已安装",
-    "✓ 10 个 Dove 能力入口已安装",
+    "✓ Dove 默认科研 agent 与 9 个可选专项入口已安装",
     "✓ Claude Code 自然语言入口已配置",
     "✓ Prompt Hook 与 Skills 已安装",
     "✓ 按需论文搜索、下载与阅读 MCP 已声明",
@@ -34,7 +34,7 @@ function setupCompleteLines(_result, color) {
     "默认研究文档是可维护的 Markdown 入口，不代表科研主线、结论或任务已经完成。",
     "",
     `${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code`,
-    "进入后按需要切换到 Dove agent 或使用 /dove:* 能力入口。"
+    "进入后直接告诉 Dove 你的科研目标；/dove:* 只是可选专项快捷入口。"
   ].join("\n");
 }
 

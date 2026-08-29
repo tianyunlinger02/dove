@@ -56,9 +56,9 @@ function setupLines(command, status) {
   if (command === "init") {
     return [
       "✓ Dove agent 已安装",
-      "✓ 10 个 Dove 能力入口已安装",
-      "✓ Claude 提示钩子与项目绝对路径状态栏已配置",
-      "✓ 按需论文搜索、下载与阅读 MCP 已声明",
+      "✓ Dove 默认科研 agent 与 9 个可选专项入口已安装",
+      "✓ Claude 提示钩子、WebFetch 禁用与项目绝对路径状态栏已配置",
+      "✓ 按需论文检索 MCP 与普通网页 Exa MCP 已声明",
       "✓ 最小研究入口 RESEARCH.md 已建立",
       "✓ 项目集成记录已建立"
     ];
@@ -67,7 +67,7 @@ function setupLines(command, status) {
   if (status === "adopted") {
     return [
       "✓ 现有研究 Markdown 保持不变",
-      "✓ Dove agent、能力入口、Claude 钩子、项目绝对路径状态栏和 MCP 声明已采用当前 package 接入",
+      "✓ Dove agent、能力入口、Claude 钩子、WebFetch 禁用、项目绝对路径状态栏和 MCP 声明已采用当前 package 接入",
       "✓ 项目集成记录已建立为 revision 2.0"
     ];
   }
@@ -112,9 +112,9 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
   }
   lines.push("");
   if (result.hosts.includes("claude")) {
-    lines.push("论文工具需要本机已有 uvx；Claude Code 首次使用 project MCP 时会请求你批准。Dove 未安装依赖、写入凭据或替你批准。");
+    lines.push("论文检索需要本机已有 uvx；Claude Code 首次使用 `dove-paper-search` 或 `exa` project MCP 时会请求你批准。Dove 未安装依赖、写入凭据或替你批准。WebSearch 保留用于搜索发现，WebFetch 由项目权限禁用。");
     lines.push("");
   }
-  lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code，按需要切换到 Dove agent 或使用 /dove:* 能力入口。`);
+  lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code，直接告诉 Dove 你的科研目标；/dove:* 只是可选专项快捷入口。`);
   return lines.join("\n");
 }

@@ -5,25 +5,27 @@
 | Capability | Status | Boundary |
 |---|---|---|
 | Package release | Implemented | Dove `3.0.0`, Node.js `>=22`. |
-| Dove research agent | Implemented for generated agent surfaces | `.claude/agents/dove.md` defines one complete Dove persona; planning, authoring, and reviewing are not user-switchable Dove agents. |
-| Flat Skills | Implemented | `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, `lessons`, and explicit-only `auto` are capability entrances. |
-| Generated adapters | Implemented | Canonical host-format projections; files on disk do not prove registration, readiness, or independent Reviewer status. |
+| Dove research agent | Implemented for generated agent surfaces | `.claude/agents/dove.md` defines one complete Dove agent; planning, authoring, and reviewing are not user-switchable Dove agents. |
+| Flat Skills | Implemented | `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons` are capability entrances. |
+| Generated adapters | Implemented | Canonical host-format projections; files on disk do not prove registration, readiness, or `dove-review` independence. |
 | Runtime CLI | Implemented | `init`, `update`, `reinstall`, `uninstall`, `doctor`, `export-research`, and `hook`. |
 | Runtime bundles | Implemented | Three bundles: public library, packaged CLI, and prompt hook. |
 | Dove research-state MCP server and tools | Not part of Dove 3 | Dove does not own a research service, tool registry, or hidden research state. |
 | External paper acquisition | Claude project support | A hidden support Skill can use project server `dove-paper-search`, pinned to `paper-search-mcp==0.1.4`, for on-demand scholarly search, open download, and full-text reading. |
+| Ordinary webpage access | Claude project support | A hidden support Skill can use the hosted Exa MCP for ordinary webpages, documentation pages, venue pages, and known URLs. |
 | Research Format runtime or database | Not part of Dove 3 | Research context is ordinary Markdown rather than machine-owned state. |
 | Supported project initialization | Claude Code and DeepSeek Harness | Claude Code receives the complete integration; DSH receives project-local filesystem Skills only. |
 
-## Dove persona
+## Dove agent behavior
 
-Dove should act as one complete research agent:
+Dove should act as the same Dove agent across direct use and all optional Skills:
 
 - start from the real research question, current mainline, external context, user need, key uncertainty, and decision that matters;
 - use hunches and first impressions as hypotheses, not decisions, and treat user preferences as tradeoff signals rather than rigid rules;
 - compare serious candidates with theory and actual use conditions instead of committing to the first plausible route;
 - turn limits and gaps into sharp hypotheses, discriminating evidence to seek, or concrete next moves instead of stopping at cautious admission;
-- treat rigor, novelty, experiments, validation, engineering, writing, review, documents, and preferences as layered means rather than equal goals;
+- across the nine capabilities, anchor on the user-confirmed Workspace mainline, identify the highest-level active limit, keep candidate explanations explicit, choose a discriminating action, and count progress only when the result materially changes or protects the decision;
+- treat contribution, mechanism, novelty, and positioning above method, evidence, experiment analysis, baselines, and failure analysis; those above argument, writing, and figures; delivery last;
 - act from evidence, task risk, user preference, and the research mainline without rushing into aggressive execution or over-defending with unnecessary checks; and
 - give judgment with a useful next move, then stop before side effects when further action is unlikely to resolve a material uncertainty.
 
@@ -31,16 +33,15 @@ Dove should act as one complete research agent:
 
 | Skill | Status | Boundary |
 |---|---|---|
-| `dove.research` | Implemented | Completes one bounded research or project pass; pure judgment follow-ups answer directly without side effects, and Markdown is maintained for explicit record/update/save requests, clear mainline/conclusion/decision/priority changes, or genuinely useful evidence and continuation context. |
+| `dove.research` | Implemented | Advances a confirmed research goal through Dove's default multi-round progression; pure judgment follow-ups answer directly without side effects, and Markdown is maintained for explicit record/update/save requests, clear mainline/conclusion/decision/priority changes, or genuinely useful evidence and continuation context. |
 | `dove.status` | Implemented | Reads the overview, relevant summaries, and necessary linked context without writes; absence and broken links are reported naturally. |
 | `dove.source` | Implemented | The host may discover, retrieve when available, save when useful, read, and verify material with available approved tools; useful source context is recorded in natural Markdown. |
 | `dove.experiment` | Implemented | Handles design, requested execution, existing-result analysis, retrospective records, and smallest low-risk diagnostics needed to establish experiment basis; experiment Markdown is maintained when explicitly requested, when results change a research decision, or when preserving evidence and continuation context is genuinely useful. |
 | `dove.draft` | Implemented | Drafts, assesses, creates, or revises ordinary project text and artifacts from available evidence when the deliverable requires it. |
 | `dove.figure` | Implemented | Owns actual drawing, redrawing, figure revision, generation, captioning, and material figure validation. It establishes each visual's evidence job, checks the real manuscript layout against captions, claims, source data or selection metadata, and rendering logic, and does not treat standalone images or contact sheets as proof of quality. It uses reproducible plotting for quantitative results, an available specialized figure-generation model for method/concept visuals when best suited, image/SVG tools for repair, and repository-local `.claude/tmp/` for scratch renders. |
-| `dove.review` | Implemented | Grounds Direct Scientific Review self-check and independent Reviewer Handoff preparation in current official venue requirements and actually inspected relevant published work when they can change the judgment; faithfully imports returns or inspects existing context without unnecessary search or exchange. |
+| `dove.review` | Implemented | Grounds author-side scientific self-check and `dove-review` handoff preparation in current official venue requirements and actually inspected relevant published work when they can change the judgment; faithfully imports returns or inspects existing context without unnecessary search or exchange. |
 | `dove.rebuttal` | Implemented | Keeps response and requested evidence-backed revision on the author side. |
 | `dove.lessons` | Implemented | Reads `lessons/LESSONS.md` and relevant linked themes only if they exist, or naturally maintains researcher-owned Lessons when explicitly asked. Lessons are optional advisory materials, not mandatory package-owned defaults, and source explanation is optional. |
-| `dove.auto` | Implemented as a generated instruction contract | Explicit foreground multi-round work that advances the user-confirmed Workspace mainline within user limits; never ambient-selected and never promotes subordinate support work into the research direction. |
 
 ## Research documents
 
@@ -64,26 +65,26 @@ Dove should act as one complete research agent:
 
 | Capability | Status | Boundary |
 |---|---|---|
-| Review grounding | Implemented | Before direct critique or handoff preparation, Dove uses current official venue sources for applicable formal requirements and a small set of actually inspected published work for novelty, positioning, evidence norms, experiment presentation, and reader expectations. Published practice does not replace official rules, and no fixed paper count or checklist is required. |
-| Direct Scientific Review self-check | Implemented | `/dove:review` forms a fresh author-side, read-only judgment from the actual full manuscript and established grounding without inheriting Auto's verdict or package summary. It identifies the intended contribution, traces decisive claims to the evidence offered, tests the strongest plausible falsifier or informed-reader objection, and explains the material findings, evidence, consequence, useful response, and natural-language acceptability recommendation. Delivery-only package checks remain subordinate and cannot establish or truncate scientific acceptability. For material figures it inspects reviewer-facing visuals in the real manuscript layout and at realistic final size, comparing captions, nearby claims, source data or selection metadata, and rendering logic; image counts, embedding, file validity, contact sheets, and merely opening images are inventory or superficial evidence only. Direct self-check remains advisory, is not independent external review, and does not control the Workspace mainline or Auto completion. |
-| Independent Reviewer Handoff | Host-provided when available | When independent review is requested or Auto reaches author-side submission readiness, Dove prepares a frozen handoff for a genuinely isolated persistent host Agent context. Each round lists only the current full paper, authoritative LaTeX source and compiled output, explicit evidence or supplements, public venue requirements, necessary public related work, and explicit rebuttal, clarification, or change notes. |
-| Reviewer session continuity | Host-provided when available | The Reviewer is read-only, persists its own review history across re-review rounds, and never reads author private transcript, unlisted materials, or unstated handoff records. If the host cannot provide equivalent isolation, Dove reports the boundary rather than simulating it. |
-| Review preservation | Implemented | The corresponding Review document preserves direct critiques or returned Markdown faithfully; author handling is added only when requested and substantive response remains Rebuttal work. |
+| Review grounding | Implemented | Before direct critique or `dove-review` preparation, Dove uses current official venue sources for applicable formal requirements and a small set of actually inspected published work for novelty, positioning, evidence norms, experiment presentation, and reader expectations. Published practice does not replace official rules, and no fixed paper count or checklist is required. |
+| author-side scientific self-check | Implemented | `/dove:review` forms a fresh author-side, read-only judgment from the actual full manuscript and established grounding without inheriting a separate progression verdict or package summary. It identifies the intended contribution, traces decisive claims to the evidence offered, tests the strongest plausible falsifier or informed-reader objection, and explains the material findings, evidence, consequence, useful response, and natural-language acceptability recommendation. Delivery-only package checks remain subordinate and cannot establish or truncate scientific acceptability. For material figures it inspects reviewer-facing visuals in the real manuscript layout and at realistic final size, comparing captions, nearby claims, source data or selection metadata, and rendering logic; image counts, embedding, file validity, contact sheets, and merely opening images are inventory or superficial evidence only. Author-side self-check remains advisory, is not independent external review, and does not control the Workspace mainline or default progression completion. |
+| `dove-review` | Host-provided when available | When independent review is requested or author-side submission readiness is reached, Dove prepares a frozen near-submission handoff for a genuinely isolated persistent host Agent context. Each round lists only the current full paper, authoritative LaTeX source and compiled output, actual submission appendices or supplements, and other venue-facing files that would accompany submission; the handoff identifies the target venue, while old Reviews, historical returns, author private transcript, and unlisted materials are not visible by default. |
+| `dove-review` session continuity | Host-provided when available | The reviewer is read-only, persists its own review history across re-review rounds, and never reads author private transcript, unlisted materials, or unstated handoff records. If the host cannot provide equivalent isolation, Dove reports the boundary rather than simulating it. |
+| Review preservation | Implemented | The corresponding Review document preserves direct critiques or returned Markdown faithfully; author handling is added only when requested and substantive response remains Rebuttal work. Findings are evidence to analyze rather than direct rewrite or claim-narrowing triggers; feasible high-level actions come first, and narrowing happens only when evidence or a real boundary requires it. |
 | Native reviewing agent | Removed from Dove | Dove does not package a separate user-switchable reviewing agent. |
-| Independent review completion | Natural-language only | Submission completion requires author-side sufficiency plus an independent Reviewer acceptability recommendation for the current full version. Scientific acceptability and delivery readiness remain separate, and this is not a score, enum, schema, runtime gate, or controller. |
+| `dove-review` completion | Natural-language only | Submission completion requires author-side sufficiency plus a `dove-review` scientific-acceptability recommendation for the same current full version and real delivery requirements. Scientific acceptability and delivery readiness remain separate, and this is not a score, enum, schema, runtime gate, or controller. |
 
-## Status and Auto
+## Status and default progression
 
 | Capability | Status | Boundary |
 |---|---|---|
 | Missing overview | Natural warning | Status reports it plainly and does not create or repair research content. |
 | Broken document link | Natural warning | Report the missing path and affected context; do not classify a database state. |
 | Status writes | Unavailable | Status is read-only. |
-| Ambient Auto | Unavailable | Auto is explicit-only. |
-| Auto mainline changes | Judgment boundary | Auto reads the user-confirmed Workspace mainline from substantive research context, conversation, and project artifacts, keeps it stable, and uses an explicit suffix only for an immediate in-scope goal. It asks when a material direction or real boundary would change the work; ordinary support work does not silently redefine the direction. |
-| Auto submission readiness | Whole-manuscript plus independent review | Auto uses LaTeX as the authoritative manuscript source and primary working format by default, verifies the actual compiled output, and uses another format only when the target venue officially does not provide or accept LaTeX. It judges the latest actual manuscript, evidence, material figures, required materials, and venue context together. Direct Scientific Review self-check and Figure are used when they materially improve the next action. Final submission completion also requires an independent Reviewer acceptability recommendation for the current full version; no score, enum, schema, runtime gate, or earlier recommendation replaces Auto's judgment against the confirmed mainline. |
-| Auto completion | Mainline boundary | Auto compares each substantive result with the confirmed mainline and continues while another feasible in-scope action can advance or protect it. It stops only when the mainline or immediate goal is achieved, a material blocker cannot be resolved within it, or a user decision or explicit external boundary is required. A Review recommendation, review document, summary, validation result, Markdown update, generated file, or delivery-only pass does not decide completion. |
-| Hidden autonomous service | Unavailable | Auto is foreground host work, not a daemon, scheduler, MCP server, or hidden session store. |
+| Default multi-round progression | Implemented | Foreground work continues while a feasible in-scope action can advance or protect the confirmed mainline; there is no separate Auto Skill or command. |
+| Default progression mainline changes | Judgment boundary | Default progression reads the user-confirmed Workspace mainline from substantive research context, conversation, and project artifacts, keeps it stable, and interprets an immediate user goal within that mainline. It asks when a material direction or real boundary would change the work; ordinary support work does not silently redefine the direction. Bounded tasks may finish without pretending to advance the mainline. |
+| Submission readiness | Whole-manuscript plus `dove-review` | Default progression uses LaTeX as the authoritative manuscript source and primary working format by default, verifies the actual compiled output, and uses another format only when the target venue officially does not provide or accept LaTeX. It judges the latest actual manuscript, evidence, material figures, required materials, and venue context together. author-side scientific self-check and Figure are used when they materially improve the next action. Final submission completion also requires a `dove-review` acceptability recommendation for the current full version; no score, enum, schema, runtime gate, or earlier recommendation replaces Dove's judgment against the confirmed mainline. |
+| Completion | Mainline boundary | Default progression compares each substantive result with the confirmed mainline and continues while another feasible in-scope action can advance or protect it. It stops only when the mainline or immediate goal is achieved, a material blocker cannot be resolved within it, or a user decision or explicit external boundary is required. A `dove-review` recommendation, review document, summary, validation result, Markdown update, generated file, or delivery-only pass does not decide completion. |
+| Hidden autonomous service | Unavailable | Default progression is foreground host work, not a daemon, scheduler, MCP server, or hidden session store. |
 
 ## Installation and lifecycle
 
@@ -92,6 +93,8 @@ Dove should act as one complete research agent:
 | Exact user installation | Implemented | Installs `dove` on `PATH` from a trusted exact artifact. |
 | Claude project initialization | Implemented | Installs generated Claude resources, the Dove agent, SessionStart and prompt hooks, a project status line, current installation metadata, and the minimal researcher-owned `RESEARCH.md` bootstrap. |
 | Project paper MCP declaration | Implemented for Claude | Init/update safely own only `.mcp.json#/mcpServers/dove-paper-search`, preserve unrelated servers, and never write approval, trust, or credentials. |
+| Project webpage MCP declaration | Implemented for Claude | Init/update safely own only `.mcp.json#/mcpServers/exa` for the hosted Exa remote MCP and preserve unrelated servers. |
+| WebFetch denial | Implemented for Claude | Init/update add a project-scoped `permissions.deny` entry for built-in `WebFetch` while preserving `WebSearch`; adoption and uninstall do not remove a user-owned deny that already existed. |
 | Manifest revision | Implemented | `.dove/install/manifest.json` uses revision `2.0`. |
 | Dove feedback document | Host-maintained Markdown | `.dove/install/DOCTOR.md` records user feedback when Dove is explicitly named, plus actual Dove failures. Reusable feedback about ordinary research or collaboration without an explicit Dove reference belongs in Lessons. It has no JSON state, issue lifecycle, fixed template, or scientific authority. |
 | Installation/file safety hashes | Internal | Protect managed software bytes; never used as research evidence or authority. |

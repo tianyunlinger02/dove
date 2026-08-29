@@ -16,7 +16,7 @@ Research meaning is not a runtime type system. Ordinary Markdown must not acquir
 - The project installation manifest implementation defines revision `2.0` and managed-resource metadata.
 - CLI parsing defines the supported command and option inventory.
 - Project installation and file-transaction modules enforce contained software writes and conflict handling.
-- The canonical Dove agent persona and Skill workflow sources define workflow inventory for adapter generation.
+- The canonical Dove agent definition and Skill workflow sources define workflow inventory for adapter generation.
 - Build scripts define the library, CLI, and hook bundles.
 - Export code defines the supported legacy JSON input boundary, archival behavior, confirmation or authorization boundary, and Markdown output.
 
@@ -33,7 +33,7 @@ No research MCP definitions or Research Format schema belong in the Dove 3 contr
 - Shared configuration preserves unrelated fields.
 - Managed-resource digests detect changed installation bytes without becoming public research evidence.
 - File-set changes verify preconditions and avoid partial promotion.
-- Generated adapters match the ten-Skill and Dove-agent canonical sources.
+- Generated adapters match the nine-Skill and Dove-agent canonical sources.
 - Package output contains exactly the declared library, CLI, and hook runtime bundles.
 - Hook parsing distinguishes `SessionStart` and `UserPromptSubmit`; lifecycle sync validates the exact initialized project before writes, and retired exact Dove-owned Stop fragments are removed without rewriting user-owned Stop settings.
 - Real research export requires separate user authorization.
@@ -69,11 +69,11 @@ Some semantic order and responsibility boundaries still matter even though docum
 
 - prospective experiment planning is written before execution;
 - actual experiment results are appended to the same document;
-- Direct Scientific Review self-check stays scoped and does not claim independent external review;
-- review purpose, exact frozen path scope, limits, and prompt precede any independent Reviewer exchange;
-- an independent Reviewer remains a genuinely isolated persistent host-provided context, read-only, and Markdown-returning;
+- author-side scientific self-check stays scoped and does not claim independent external review;
+- review purpose, exact frozen path scope, limits, and prompt precede any `dove-review` exchange;
+- a `dove-review` context remains a genuinely isolated persistent host-provided context, read-only, and Markdown-returning;
 - the actual user-obtained return is preserved in the corresponding Review document, and author handling is added only when requested;
-- Auto is explicit-only multi-round work, reads and preserves the user-confirmed Workspace mainline, continues while feasible in-scope actions can advance or protect it, and asks only when a material direction or real boundary changes the work; and
+- Default multi-round progression reads and preserves the user-confirmed Workspace mainline, continues while feasible in-scope actions can advance or protect it, and asks only when a material direction or real boundary changes the work; and
 - Status performs no writes.
 
 Protect these through canonical workflow order, generated-resource validation, real interface checks, and semantic review. Do not enforce them by inventing an entity database.

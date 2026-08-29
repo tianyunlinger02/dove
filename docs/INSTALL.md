@@ -15,7 +15,7 @@ Do not use bare `npm install -g dove` or bare `npx dove` as a trusted Dove entry
 - npm
 - Claude Code or DeepSeek Harness (`dsh`)
 
-Dove supports only these two hosts. Claude Code receives the complete project integration. DSH receives ten project-local filesystem Skills under `.dsh/skills/dove-*/SKILL.md`; Dove does not claim DSH slash commands, hooks, MCP, or a static agent surface without a future Cordis plugin.
+Dove supports only these two hosts. Claude Code receives the complete project integration. DSH receives nine project-local filesystem Skills under `.dsh/skills/dove-*/SKILL.md`; Dove does not claim DSH slash commands, hooks, MCP, or a static agent surface without a future Cordis plugin.
 
 ## 1. One-time user installation
 
@@ -43,19 +43,21 @@ dove init --host claude
 dove init --host dsh
 ```
 
-Claude Code receives the complete integration described below. DSH receives the ten Dove filesystem Skills. `dove init` installs project integration and the minimal researcher-owned research entry. It may write:
+Claude Code receives the complete integration described below. DSH receives the nine Dove filesystem Skills and no Claude permissions or MCP projection. `dove init` installs project integration and the minimal researcher-owned research entry. It may write:
 
 - `.dove/install/manifest.json`;
 - project-local Claude commands under `.claude/commands/dove/`;
 - the project-local Dove agent at `.claude/agents/dove.md`;
 - the project-local ambient rule and hidden intake skill;
 - the project-local `SessionStart` and `UserPromptSubmit` hook registrations;
-- the hidden `dove-paper-search` support skill and its pinned external MCP declaration in `.mcp.json`; and
+- the hidden `dove-paper-search` support skill plus pinned external MCP declaration for scholarly papers;
+- the hidden web-reader support skill plus Exa hosted MCP declaration for ordinary webpages and known URLs;
+- the project-scoped `permissions.deny` entry for built-in `WebFetch`, while leaving `WebSearch` available; and
 - the minimal `.dove/research/RESEARCH.md` Markdown entry when no research tree exists.
 
 It must preserve unrelated project configuration and preflight the complete managed write set before changing files.
 
-Bare `dove` shows a concise project-aware home; in an interactive terminal it includes Dove's pixel-art bird and points to `dove` for setup, `dove update` when the project needs synchronization, `dove doctor` when attention is needed, or entering Claude Code to switch to the Dove agent or use `/dove:*` when the project is current. It is concise, not narrow: the point is to keep the mainline visible while still nudging toward the next productive move. `NO_COLOR=1` disables ANSI styling, redirected or piped output is clean text without the mascot, and `--json` or `--format json` emits only the direct machine-readable integration result.
+Bare `dove` shows a concise project-aware home; in an interactive terminal it includes Dove's pixel-art bird and points to `dove` for setup, `dove update` when the project needs synchronization, `dove doctor` when attention is needed, or entering Claude Code to tell Dove the research goal directly; `/dove:*` remains optional when the project is current. It is concise, not narrow: the point is to keep the mainline visible while still nudging toward the next productive move. `NO_COLOR=1` disables ANSI styling, redirected or piped output is clean text without the mascot, and `--json` or `--format json` emits only the direct machine-readable integration result.
 
 `dove init` must not:
 
@@ -70,15 +72,15 @@ There is no `dove install` command and no `--platform` option.
 
 ## Dove agent and ambient entry
 
-The initialized Claude project contains one directly usable Dove agent plus flat capability commands:
+The initialized Claude project contains one directly usable Dove agent plus nine optional specialist Skill shortcuts:
 
-- `.claude/agents/dove.md` is the complete Dove research-agent persona;
-- `.claude/commands/dove/*.md` are the ten flat capability entrances;
+- `.claude/agents/dove.md` is the complete Dove research-agent behavior;
+- `.claude/commands/dove/*.md` are the nine optional specialist Skill shortcuts;
 - `.claude/rules/dove.md` and `.claude/skills/dove-intake/SKILL.md` provide conservative ambient routing.
 
-Dove's flat Skills are `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, `lessons`, and explicit-only `auto`. They are capability entrances, not separate personalities.
+Dove's flat Skills are `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`. They are optional specialist shortcuts, not separate personalities, stages, or an autonomy switch. Users can tell Dove the goal directly; default multi-round research progression does not require an Auto command.
 
-The prompt hook selects hidden intake only when the original prompt is a clear Dove work request involving research, papers, sources, experiments, drafts, figures, reviews, rebuttals, lessons, or research-adjacent project work. Intake routing is zero-write, may choose no Skill for contextual or pure judgment-only prompts, and never selects Auto. A separate pre-routing lifecycle bridge may transactionally refresh package-managed project integration from the user-installed CLI; it never touches `.dove/research/`. Pure judgment prompts should receive a direct Dove-style judgment and useful next move, then stop before side effects unless the user explicitly asks to execute or record; prompts that ask Dove to judge and then perform bounded work may route normally.
+The prompt hook selects hidden intake only when the original prompt is a clear Dove work request involving research, papers, sources, experiments, drafts, figures, reviews, rebuttals, lessons, or research-adjacent project work. Intake routing is zero-write, may choose no Skill for contextual or pure judgment-only prompts, and leaves the Dove agent to choose its internal method. A separate pre-routing lifecycle bridge may transactionally refresh package-managed project integration from the user-installed CLI; it never touches `.dove/research/`. Pure judgment prompts should receive a direct Dove-style judgment and useful next move, then stop before side effects unless the user asks to execute or record; confirmed goal-shaped requests invoke Dove's default research progression.
 
 ## Project runtime invocation
 
@@ -100,7 +102,7 @@ Both lifecycle entry points use the current user-installed `dove` command on `PA
 
 Dove does not install or expose a Claude `Stop` hook. Retired Dove-owned Stop hook fragments are removed only when they exactly match the old managed entry; user-owned or non-array Stop settings are preserved.
 
-The optional paper-acquisition MCP declaration launches pinned `paper-search-mcp==0.1.4` through user-provided `uvx`. Dove does not install that package, approve project trust, write credentials, or provide a CLI/shell fallback for that MCP if it is unavailable; other already-approved host web/search tools, local PDFs, URLs, or user-provided material may still support source work.
+The paper-acquisition MCP declaration launches pinned `paper-search-mcp==0.1.4` through user-provided `uvx`. The ordinary webpage declaration uses the Exa hosted remote MCP server at `https://mcp.exa.ai/mcp` with `.mcp.json` server shape `{ "url": "https://mcp.exa.ai/mcp", "type": "http" }`. Built-in `WebSearch` remains available for discovery; built-in `WebFetch` is denied in project-scoped Claude permissions so webpage body retrieval and known URLs go through Exa. Dove does not install packages, approve project trust, write credentials, or provide CLI, shell, `curl`, or ad hoc fetch-script fallbacks for either MCP if unavailable.
 
 ## Integration manifest
 
@@ -116,7 +118,7 @@ Run from an already initialized project:
 dove update
 ```
 
-`dove update` reads `.dove/install/manifest.json` and refreshes only the hosts already recorded there. The one absent-manifest adoption path is explicit `dove update` on a project that already has a readable current `.dove/research/` Markdown tree plus the old `.dove/manifest.json` workspace marker; it creates the revision-2.0 installation manifest, safely claims only current package-managed Claude integration, and leaves research bytes, DOCTOR notes, archives, old markers, private state, unrelated hooks, and unrelated MCP servers unchanged.
+`dove update` reads `.dove/install/manifest.json` and refreshes only the hosts already recorded there. The one absent-manifest adoption path is explicit `dove update` on a project that already has a readable current `.dove/research/` Markdown tree plus the old `.dove/manifest.json` workspace marker; it creates the revision-2.0 installation manifest, safely claims only current package-managed Claude integration, and leaves research bytes, DOCTOR notes, archives, old markers, private state, unrelated hooks, unrelated MCP servers, and any pre-existing user-owned `permissions.deny` entries unchanged.
 
 If the manifest is absent without that adoption state, malformed, contradictory, unsafe, or contains unknown managed-file or fragment drift, `dove update` fails closed. It must not reconstruct a manifest from generated adapters, hooks, MCP declarations, or copied runtime.
 
@@ -124,7 +126,7 @@ For an already initialized project, update refreshes only package-managed integr
 
 ## Uninstall
 
-Run `dove uninstall` from an initialized project. Dove first shows the exact removal scope and defaults to No. After confirmation it removes manifest-owned host files, Dove hook and MCP fragments, `.dove/install/manifest.json`, and a recognized retired `.dove/manifest.json` adoption marker when present. It preserves `.dove/research/**`, `.dove/install/DOCTOR.md`, unrecognized files at the legacy marker path, unrelated host settings, unrelated hooks, unrelated MCP servers, and ordinary project files. A project retaining current research Markdown is then classified as unconfigured rather than offered an update. Drift, symlinks, or changed transaction preconditions stop the uninstall and roll back staged changes.
+Run `dove uninstall` from an initialized project. Dove first shows the exact removal scope and defaults to No. After confirmation it removes manifest-owned host files, Dove hook, permission, and MCP fragments, `.dove/install/manifest.json`, and a recognized retired `.dove/manifest.json` adoption marker when present. It preserves `.dove/research/**`, `.dove/install/DOCTOR.md`, unrecognized files at the legacy marker path, unrelated host settings, unrelated hooks, unrelated MCP servers, any pre-existing user-owned `permissions.deny` entry for `WebFetch`, and ordinary project files. A project retaining current research Markdown is then classified as unconfigured rather than offered an update. Drift, symlinks, or changed transaction preconditions stop the uninstall and roll back staged changes.
 
 ## Doctor
 

@@ -15,6 +15,10 @@ import {
   renderPaperSearchSupportSkill
 } from "../src/core/paper-search-integration.mjs";
 import {
+  EXA_WEB_SUPPORT_SKILL_PATH,
+  renderExaWebSupportSkill
+} from "../src/core/web-access-integration.mjs";
+import {
   COMMAND_SURFACES,
   HOST_ADAPTER_POLICY,
   PROJECT_HOST_IDS,
@@ -56,14 +60,14 @@ function renderBullets(bullets) {
 }
 
 function renderAction(item) {
-  const mode = item.readOnly ? "read-only" : "work";
+  const mode = item.readOnly ? "read-only" : "work-capable; not standalone authorization";
   const writeBoundary = item.readOnly
     ? " Read-only: do not create or modify files."
     : item.persistencePolicy === "standard-research"
-      ? ` Maintain Dove research Markdown only when ${item.persistWhen}.`
+      ? ` Maintain Dove research Markdown only when ${item.persistWhen}. Other file changes still require authorization from the user's request and this capability's side-effect boundary.`
       : item.persistencePolicy === "explicit-lessons"
-        ? ` Maintain Lessons only when ${item.persistWhen}.`
-        : "";
+        ? ` Maintain Lessons only when ${item.persistWhen}. Other file changes still require authorization from the user's request and this capability's side-effect boundary.`
+        : " File changes require authorization from the user's request and this capability's side-effect boundary; tool availability or this action listing is not permission by itself.";
   return `- **${item.capability}** (${mode}): ${item.instruction}${writeBoundary}`;
 }
 
@@ -92,8 +96,8 @@ function renderSemanticSection(section) {
     section.purpose ? String(section.purpose) : "",
     section.description ? String(section.description) : "",
     renderSemanticItems("Responsibilities", section.responsibilities),
-    renderSemanticItems("Actions", section.actions, (items) => items.map(renderAction).join("\n")),
     renderSemanticItems("Side-effect and authorization boundary", section.boundaries),
+    renderSemanticItems("Actions (capability options, not standalone authorization)", section.actions, (items) => items.map(renderAction).join("\n")),
     renderSemanticItems("Non-goals", section.nonGoals)
   ].filter(Boolean);
   return blocks.join("\n\n");
@@ -123,8 +127,8 @@ function renderCapabilityContract(command, hostId = null) {
     `### Purpose\n\n${contract.purpose}`,
     `### Use when\n\n${contract.when}`,
     renderListSection("Dove responsibilities", contract.responsibilities),
-    Array.isArray(contract.actions) && contract.actions.length > 0 ? `### Possible actions\n\n${contract.actions.map(renderAction).join("\n")}` : "",
     renderListSection("Side-effect and authorization boundary", contract.boundaries),
+    Array.isArray(contract.actions) && contract.actions.length > 0 ? `### Possible actions — capability options, not standalone authorization\n\n${contract.actions.map(renderAction).join("\n")}` : "",
     renderListSection("Non-goals", contract.nonGoals),
     renderListSection("Clarification", contract.clarification),
     renderHostGuidance(contract, hostId)
@@ -197,7 +201,8 @@ export function generatedClaudeAmbientProjectEntries() {
   return [
     { destinationPath: DOVE_CLAUDE_AMBIENT_RULE_PATH, relativePath: packageResourcePath("claude", DOVE_CLAUDE_AMBIENT_RULE_PATH), content: renderClaudeAmbientRule() },
     { destinationPath: DOVE_CLAUDE_AMBIENT_SKILL_PATH, relativePath: packageResourcePath("claude", DOVE_CLAUDE_AMBIENT_SKILL_PATH), content: renderClaudeAmbientSkill() },
-    { destinationPath: PAPER_SEARCH_SUPPORT_SKILL_PATH, relativePath: packageResourcePath("claude", PAPER_SEARCH_SUPPORT_SKILL_PATH), content: renderPaperSearchSupportSkill() }
+    { destinationPath: PAPER_SEARCH_SUPPORT_SKILL_PATH, relativePath: packageResourcePath("claude", PAPER_SEARCH_SUPPORT_SKILL_PATH), content: renderPaperSearchSupportSkill() },
+    { destinationPath: EXA_WEB_SUPPORT_SKILL_PATH, relativePath: packageResourcePath("claude", EXA_WEB_SUPPORT_SKILL_PATH), content: renderExaWebSupportSkill() }
   ];
 }
 
@@ -295,7 +300,8 @@ function existingGeneratedAdapterPaths(root) {
     ...listFiles(root, "package-resources/hosts/dsh/.dsh/skills", (relativePath) => /\/dove-[^/]+\/SKILL\.md$/.test(relativePath)),
     ...listFiles(root, "package-resources/hosts/claude/.claude/rules", (relativePath) => relativePath.endsWith("/.claude/rules/dove.md")),
     ...listFiles(root, "package-resources/hosts/claude/.claude/skills/dove-intake", (relativePath) => relativePath.endsWith("/dove-intake/SKILL.md")),
-    ...listFiles(root, "package-resources/hosts/claude/.claude/skills/dove-paper-search", (relativePath) => relativePath.endsWith("/dove-paper-search/SKILL.md"))
+    ...listFiles(root, "package-resources/hosts/claude/.claude/skills/dove-paper-search", (relativePath) => relativePath.endsWith("/dove-paper-search/SKILL.md")),
+    ...listFiles(root, "package-resources/hosts/claude/.claude/skills/dove-web-reader", (relativePath) => relativePath.endsWith("/dove-web-reader/SKILL.md"))
   ]).sort();
 }
 

@@ -1,12 +1,12 @@
 # Dove Command Output Samples
 
-These samples show the human-facing shape of Dove integration and command output without imposing response templates. They describe the current Dove 3.0.0 model: one Dove research agent, ten flat capability Skills, three runtime bundles, no Dove research-state MCP server, and no Research Format database.
+These samples show the human-facing shape of Dove integration and command output without imposing response templates. They describe the current Dove 3.0.0 model: one Dove research agent, default multi-round progression for confirmed goals, nine optional specialist Skills, three runtime bundles, no Auto command, no Dove research-state MCP server, and no Research Format database.
 
 Generated adapter inventory is not project readiness. Claude Code is the supported and accepted project initialization path in this release.
 
 ## Project integration output
 
-Bare `dove` is a short project-aware home. In an interactive terminal it shows Dove's pixel-art bird, the research-agent tagline, and points to `dove` for setup, `dove update` when synchronization is needed, `dove doctor` when attention is needed, or entering Claude Code to switch to the Dove agent or use `/dove:*` when the project is current.
+Bare `dove` is a short project-aware home. In an interactive terminal it shows Dove's pixel-art bird, the research-agent tagline, and points to `dove` for setup, `dove update` when synchronization is needed, `dove doctor` when attention is needed, or entering Claude Code to tell Dove the research goal directly; `/dove:*` remains optional when the project is current.
 
 A successful interactive `dove init --host claude` begins with Dove's bird and then shows the project, host, installed surface, and next step:
 
@@ -33,30 +33,30 @@ Dove 已在此项目启用
 宿主  Claude Code
 
 ✓ Dove agent 已安装
-✓ 10 个 Dove 能力入口已安装
+✓ 9 个 Dove 能力入口已安装
 ✓ 自然语言任务入口已启用
 ✓ 安全的项目集成记录已建立
 
-下一步  从当前项目进入或重新进入 Claude Code，按需要切换到 Dove agent 或使用 /dove:* 能力入口。
+下一步  从当前项目进入或重新进入 Claude Code，直接告诉 Dove 你的科研目标；/dove:* 只是可选专项快捷入口。
 ```
 
 Piped or redirected default output omits the mascot and ANSI styling but keeps the same human summary. `dove init --json` and `dove init --format json` emit one direct machine-readable integration result without presentation prefix, suffix, or ANSI bytes.
 
 ## Dove agent surface
 
-Installed Claude projects receive `.claude/agents/dove.md`. The agent describes Dove as one complete research persona rather than separate planning, authoring, and reviewing personas:
+Installed Claude projects receive `.claude/agents/dove.md`. The agent describes Dove as one complete research agent rather than separate planning, authoring, and reviewing personas:
 
 ```markdown
 # Dove Agent
 
-Dove is one complete research agent, not separate planning, authoring, or reviewing personas. Its ten flat Skills are capability entrances, not separate personas.
+Dove is one complete research agent, not separate planning, authoring, or reviewing personas. Its nine Skills are optional specialist methods and shortcuts, not separate personas, fixed stages, or a workflow the user must coordinate.
 
-## Dove research-agent persona
+## Dove research-agent behavior
 
 - Start from the real research question, current mainline, external context, user need, key uncertainty, and decision that matters.
 - Use hunches and first impressions as hypotheses, not decisions; treat user preferences as tradeoff signals, not conclusions or rigid rules.
 - Bring research drive: do not stop at admitting limits; turn gaps into sharp hypotheses, discriminating evidence to seek, or concrete next moves that advance the mainline.
-- Treat rigor, novelty, experiments, validation, engineering, writing, review, documents, and preferences as layered means rather than equal goals.
+- Treat rigor, novelty, experiments, validation, engineering, writing, review, documents, and preferences as layered means rather than equal goals. For a confirmed goal, continue Dove's default progression while an effective in-scope action remains.
 ```
 
 The exact generated file includes the full canonical persona and tool boundaries.
@@ -74,7 +74,7 @@ Dove-style direct answer:
 当前最重要的判断是 X。我的 hunch 是 Y，但它还只是基于 A/B 两个信号的假设。下一步不该先跑大实验，而该先检查 Z，因为它最能区分两个候选解释。除非你要我执行，我会停在无副作用的判断和建议上。
 ```
 
-This path performs no research Markdown write, launches no subagent, creates no task, and never selects Auto.
+This path performs no research Markdown write, launches no subagent, creates no task, and does not require a separate Auto command.
 
 ## Skill output shape
 
@@ -129,4 +129,4 @@ Errors do not expose durable IDs, hashes, replay data, private paths, or control
 
 ## Removed surfaces
 
-Dove 3.0.0 does not expose retired packet, board, runtime, navigation, operator, onboarding, public-status publishing, audio-review, review-loop, or Research Format database surfaces. It does not package a Dove research MCP server or separate user-switchable planning, authoring, or reviewing agents.
+Dove 3.0.0 does not expose an Auto Skill or command, retired packet, board, runtime, navigation, operator, onboarding, public-status publishing, audio-review, review-loop, or Research Format database surfaces. It does not package a Dove research MCP server or separate user-switchable planning, authoring, or reviewing agents.

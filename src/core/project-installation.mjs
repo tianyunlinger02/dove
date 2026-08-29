@@ -16,6 +16,16 @@ import {
   PAPER_SEARCH_MCP_SELECTOR,
   PAPER_SEARCH_MCP_SERVER_NAME
 } from "./paper-search-integration.mjs";
+import {
+  EXA_MCP_FRAGMENT,
+  EXA_MCP_SELECTOR,
+  EXA_MCP_SERVER_NAME,
+  WEB_FETCH_DENY_PERMISSION,
+  WEB_FETCH_DENY_SELECTOR,
+  mergeWebFetchDenyPermission,
+  removeWebFetchDenyPermission,
+  webFetchDenyFragmentState as inspectWebFetchDenyFragmentState
+} from "./web-access-integration.mjs";
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
 import { PROJECT_HOST_IDS, normalizeHostSelection } from "./host-registry.mjs";
 import { LEGACY_WORKSPACE_MARKER_PATH, readLegacyWorkspaceMarker } from "./legacy-workspace-marker.mjs";
@@ -152,6 +162,14 @@ function claudeResources() {
     fragment: DOVE_CLAUDE_STATUS_LINE,
     digest: semanticDigest(DOVE_CLAUDE_STATUS_LINE)
   };
+  const webFetchDeny = {
+    hostId: CLAUDE_HOST,
+    path: DOVE_CLAUDE_SETTINGS_PATH,
+    kind: "json-fragment",
+    selector: WEB_FETCH_DENY_SELECTOR,
+    fragment: WEB_FETCH_DENY_PERMISSION,
+    digest: semanticDigest(WEB_FETCH_DENY_PERMISSION)
+  };
   const paperSearch = {
     hostId: CLAUDE_HOST,
     path: PAPER_SEARCH_MCP_PATH,
@@ -160,7 +178,15 @@ function claudeResources() {
     fragment: PAPER_SEARCH_MCP_FRAGMENT,
     digest: semanticDigest(PAPER_SEARCH_MCP_FRAGMENT)
   };
-  const resources = [...files, hook, statusLine, paperSearch];
+  const exa = {
+    hostId: CLAUDE_HOST,
+    path: PAPER_SEARCH_MCP_PATH,
+    kind: "json-fragment",
+    selector: EXA_MCP_SELECTOR,
+    fragment: EXA_MCP_FRAGMENT,
+    digest: semanticDigest(EXA_MCP_FRAGMENT)
+  };
+  const resources = [...files, hook, statusLine, webFetchDeny, paperSearch, exa];
   if (new Set(resources.map(managedKey)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }
@@ -319,6 +345,15 @@ function paperSearchMcpFragmentState(config) {
   return namedMcpFragmentState(config, PAPER_SEARCH_MCP_SERVER_NAME);
 }
 
+function exaMcpFragmentState(config) {
+  return namedMcpFragmentState(config, EXA_MCP_SERVER_NAME);
+}
+
+function webFetchDenyFragmentState(settings) {
+  const state = inspectWebFetchDenyFragmentState(settings);
+  return state.exists ? { ...state, digest: semanticDigest(state.fragment) } : state;
+}
+
 function settingsHookFragmentState(value, options = {}) {
   const prompt = hookFragmentState(value, "UserPromptSubmit");
   const sessionStart = hookFragmentState(value, "SessionStart");
@@ -338,7 +373,9 @@ function fragmentState(resource, value) {
     if (value.statusLine === undefined) return { exists: false, digest: null, index: -1, fragment: null };
     return { exists: true, digest: semanticDigest(value.statusLine), index: -1, fragment: value.statusLine };
   }
+  if (resource.selector === WEB_FETCH_DENY_SELECTOR) return webFetchDenyFragmentState(value);
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) return paperSearchMcpFragmentState(value);
+  if (resource.selector === EXA_MCP_SELECTOR) return exaMcpFragmentState(value);
   throw new Error(`Unsupported Dove project integration selector: ${resource.selector}.`);
 }
 
@@ -357,16 +394,24 @@ function removeFragment(resource, value, current) {
     if (JSON.stringify(next.statusLine) === JSON.stringify(DOVE_CLAUDE_STATUS_LINE)) delete next.statusLine;
     return next;
   }
+  if (resource.selector === WEB_FETCH_DENY_SELECTOR) {
+    return removeWebFetchDenyPermission(value).settings;
+  }
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) {
     const servers = { ...value.mcpServers };
     delete servers[PAPER_SEARCH_MCP_SERVER_NAME];
+    return { ...value, mcpServers: servers };
+  }
+  if (resource.selector === EXA_MCP_SELECTOR) {
+    const servers = { ...value.mcpServers };
+    delete servers[EXA_MCP_SERVER_NAME];
     return { ...value, mcpServers: servers };
   }
   throw new Error(`Unsupported Dove project integration selector: ${resource.selector}.`);
 }
 
 function emptySharedJsonShell(resource, value) {
-  if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) {
+  if (resource.selector === PAPER_SEARCH_MCP_SELECTOR || resource.selector === EXA_MCP_SELECTOR) {
     return Object.keys(value).length === 1 && plainObject(value.mcpServers) && Object.keys(value.mcpServers).length === 0;
   }
   return false;
@@ -405,12 +450,22 @@ function addFragment(resource, value) {
     if (value.statusLine !== undefined && JSON.stringify(value.statusLine) !== JSON.stringify(DOVE_CLAUDE_STATUS_LINE)) throw conflictError(resource);
     return { ...value, statusLine: DOVE_CLAUDE_STATUS_LINE };
   }
+  if (resource.selector === WEB_FETCH_DENY_SELECTOR) return mergeWebFetchDenyPermission(value).settings;
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) {
     return {
       ...value,
       mcpServers: {
         ...(value.mcpServers ?? {}),
         [PAPER_SEARCH_MCP_SERVER_NAME]: resource.fragment
+      }
+    };
+  }
+  if (resource.selector === EXA_MCP_SELECTOR) {
+    return {
+      ...value,
+      mcpServers: {
+        ...(value.mcpServers ?? {}),
+        [EXA_MCP_SERVER_NAME]: resource.fragment
       }
     };
   }
@@ -510,14 +565,21 @@ function desiredManaged(resources) {
 }
 
 function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps, manifest = null, adopt = false }) {
-  const desiredResources = resourcesForHosts(hosts);
-  const desiredByKey = new Map(desiredResources.map((entry) => [managedKey(entry), entry]));
   const oldByKey = new Map((manifest?.managed ?? []).map((entry) => [managedKey(entry), entry]));
+  const desiredResources = resourcesForHosts(hosts).filter((entry) => {
+    if (entry.selector !== WEB_FETCH_DENY_SELECTOR || oldByKey.has(managedKey(entry))) return true;
+    const observed = inspectRegularProjectFile(root, entry.path, fsOps);
+    if (!observed.exists) return true;
+    return !inspectWebFetchDenyFragmentState(parseSharedJson(observed, entry.path)).exists;
+  });
+  const desiredByKey = new Map(desiredResources.map((entry) => [managedKey(entry), entry]));
   const entries = [];
   let resourcesChanged = false;
   const sharedPaths = [...new Set([
     ...desiredResources.filter((entry) => entry.kind === "json-fragment").map((entry) => entry.path),
-    ...(manifest?.managed ?? []).filter((entry) => entry.kind === "json-fragment").map((entry) => entry.path)
+    ...(manifest?.managed ?? []).filter((entry) => entry.kind === "json-fragment").map((entry) => entry.path),
+    ...(desiredResources.some((entry) => entry.selector === WEB_FETCH_DENY_SELECTOR) || (manifest?.managed ?? []).some((entry) => entry.selector === WEB_FETCH_DENY_SELECTOR) ? [DOVE_CLAUDE_SETTINGS_PATH] : []),
+    ...(desiredResources.some((entry) => entry.selector === EXA_MCP_SELECTOR) || (manifest?.managed ?? []).some((entry) => entry.selector === EXA_MCP_SELECTOR) ? [PAPER_SEARCH_MCP_PATH] : [])
   ])].sort();
   for (const relativePath of sharedPaths) {
     const planned = planJsonFragments(

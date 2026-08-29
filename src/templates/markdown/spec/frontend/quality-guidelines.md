@@ -18,18 +18,20 @@ Validators and real interface checks establish bounded software evidence only. T
 
 ## What Validation Should Protect
 
-- the public release is Dove `3.0.0` with one Dove research agent and ten flat Skills;
-- canonical Dove persona, Skill workflows, and generated host adapters do not drift, including research drive that turns gaps into hypotheses, discriminating evidence, or concrete next moves;
+- the public release is Dove `3.0.0` with one Dove research agent and nine flat Skills;
+- canonical Dove behavior, Skill workflows, and generated host adapters do not drift, including the nine-capability shared mainline anchor, highest-level active limit, explicit candidate explanations, discriminating action choice, material-progress judgment, and research drive that turns gaps into hypotheses, discriminating evidence, or concrete next moves;
 - generated adapters remain projections rather than readiness claims;
 - Claude Code remains the supported project initialization path;
-- the package contains the library, CLI, hook bundles, Dove agent surface, hidden Claude paper-search support Skill, and no Dove research MCP or third-party Python bundle;
+- the package contains the library, CLI, hook bundles, Dove agent surface, hidden Claude paper-search and web-reader support Skills, and no Dove research MCP or third-party Python bundle;
 - the CLI exposes `init`, `update`, `reinstall`, `doctor`, `export-research`, and `hook`, with no `mcp` or `migrate-research` command;
 - public Skills use normal host tools; the optional external paper MCP remains bounded, pinned, user-approved, and has no CLI/shell fallback;
-- Auto is explicit-only multi-round work, ambient routing cannot select it, and it reads the user-confirmed Workspace mainline, preserving it while feasible in-scope actions can advance or protect the mainline;
+- Claude project integration preserves built-in `WebSearch`, denies built-in `WebFetch` through project-scoped `permissions.deny`, uses pinned `dove-paper-search` for papers, uses hosted Exa MCP for ordinary webpage bodies and known URLs, has no CLI/shell/`curl`/fetch fallback, and DSH does not receive Claude permissions or MCP projection;
+- Default multi-round progression is foreground work, ambient routing cannot select a separate Auto Skill or command, and it reads the user-confirmed Workspace mainline, preserving it while feasible in-scope actions can advance or protect the mainline;
 - Status is read-only and treats missing overviews and broken links naturally;
 - ordinary Markdown remains ordinary rather than becoming a fixed schema;
 - Experiment follows the requested design, execution, analysis, or retrospective work; when a central basis is missing, Dove pauses central design and inspects actual project material, relevant sources, or a smallest low-risk diagnostic; newly executed central work that needs recording plans prospectively and appends actual results to the same document when the maintenance trigger is met;
-- Direct Scientific Review self-check, independent Reviewer handoff, returned-review import, and context inspection remain distinct; the independent Reviewer is host-provided, isolated, persistent, read-only, and Markdown-returning;
+- author-side scientific self-check, `dove-review` handoff, returned-review import, and context inspection remain distinct; each `dove-review` round reads only that round's explicit frozen list, and the reviewer is host-provided, isolated, persistent, read-only, and Markdown-returning;
+- Review findings are evidence to analyze rather than direct rewrite or claim-narrowing triggers; feasible high-level author-side action comes first, narrowing requires evidence or a real boundary, and changes to the confirmed mainline, contribution, or completion meaning go to the user;
 - Missions and Sources remain natural documents and Claims do not become a store;
 - installation manifest revision `2.0`, ordinary Dove feedback, and managed-file safety remain separate from research evidence;
 - project update refreshes package-managed integration and preserves existing `.dove/research/**` without creating summaries, completing navigation, or replacing Lessons;
@@ -53,17 +55,17 @@ Review Dove through code logic, generated natural-language behavior, installed p
 
 Public docs, Trellis specs, canonical prompts, and generated adapters must agree that:
 
-- Dove 3 has one complete Dove research agent plus ten flat capability Skills; it does not expose planning, authoring, or reviewing as user-switchable Dove personas;
+- Dove 3 has one complete Dove research agent plus nine flat capability Skills; it does not expose planning, authoring, or reviewing as user-switchable Dove agent behaviors;
 - Dove 3 has no Dove-owned research-state MCP server, tool registry, Research Format runtime, or database; Claude projects may declare only the documented pinned external paper-acquisition server without automatic approval, credentials, or bundled runtime;
 - research context is ordinary Markdown under `.dove/research/`;
 - fresh initialization creates only researcher-owned `RESEARCH.md`; optional directory summaries, Lessons, and human-named topic files remain ordinary flexible Markdown rather than entity stores;
 - missing or broken navigation is reported naturally rather than classified as invalid research state;
 - one Experiment document contains plan and result when central execution needs recording;
-- Direct Scientific Review self-check and independent Reviewer handoff preparation first establish applicable review grounding from current official venue requirements and actually inspected relevant published work, without fixed paper counts or substituting published practice for official rules;
-- Direct Scientific Review self-check stays scoped and does not claim independent external review;
+- author-side scientific self-check and `dove-review` handoff preparation first establish applicable review grounding from current official venue requirements and actually inspected relevant published work, without fixed paper counts or substituting published practice for official rules;
+- author-side scientific self-check stays scoped and does not claim independent external review;
 - a Review import faithfully preserves the actual return without requiring author handling or creating a new exchange;
-- independent Reviewer separation is host-provided and does not by itself prove independence;
-- Auto reads the user-confirmed Workspace mainline from substantive research context, conversation, and project artifacts; an explicit suffix supplies an immediate in-scope goal within that mainline, while suffix-free Auto pursues its completion condition; it asks only when a material direction or real boundary would change the work, keeps support work subordinate, and does not treat a recommendation, summary, validation result, Markdown update, or Lessons update as completion by itself; for submission readiness it uses LaTeX as the authoritative manuscript source and primary working format by default, verifies its compiled output, uses another format only when the target venue officially does not provide or accept LaTeX, identifies the required venue-facing materials, distinguishes a promising scientific core from an actually submit-ready manuscript, makes a holistic venue-grounded judgment across the paper and required materials, and revises earlier optimistic judgments when broader evidence or grounded Review contradicts them;
+- `dove-review` separation is host-provided and does not by itself prove independence;
+- Default progression reads the user-confirmed Workspace mainline from substantive research context, conversation, and project artifacts; a confirmed goal-shaped request continues within that mainline, while a material direction or real boundary change must be surfaced to the user. It asks only when such a change would alter the work, keeps support work subordinate, and does not treat a recommendation, summary, validation result, Markdown update, or Lessons update as completion by itself; bounded tasks may finish without pretending to advance the mainline; for submission readiness it uses LaTeX as the authoritative manuscript source and primary working format by default, verifies its compiled output, uses another format only when the target venue officially does not provide or accept LaTeX, identifies the required venue-facing materials, distinguishes a promising scientific core from an actually submit-ready manuscript, makes a holistic venue-grounded judgment across the paper and required materials, and revises earlier optimistic judgments when broader evidence or grounded `dove-review` contradicts them;
 - there are three bundles and the documented CLI inventory is current; and
 - validation statements remain software-scoped.
 
@@ -73,6 +75,7 @@ Search specifically for retired eight-tool inventories, DTO examples, typed rese
 
 - Dove works as one complete research agent rather than separate planning, authoring, or reviewing personas.
 - Work starts from the real research question, current mainline, external context, user need, key uncertainty, and decision that matters.
+- Across the nine capabilities, work shares the user-confirmed Workspace mainline anchor, highest-level active limit, explicit candidate explanations, discriminating action choice, and material-progress judgment.
 - Work stays objective and proportional: act from evidence, task risk, user preference, and the research mainline without rushing into aggressive execution or over-defending with unnecessary caution.
 - In research-facing work, hunches and first impressions are hypotheses, not decisions; ground useful hunches in observed signals and turn them into discriminating questions or actions.
 - Do not stop at admitting limits; turn gaps into sharp hypotheses, discriminating evidence to seek, or concrete next moves that advance the mainline while keeping exploration aimed rather than diffuse.
@@ -87,19 +90,20 @@ Search specifically for retired eight-tool inventories, DTO examples, typed rese
 - Actual results and interpretation-changing deviations inform whether the route continues, changes, or stops.
 - Important claims change when results change the research argument.
 - `RESEARCH.md` changes only for material mainline, conclusion, navigation, or priority changes.
-- Lessons remain advisory and are never presented as evidence or as the default completion record for Auto.
+- Lessons remain advisory and are never presented as evidence or as a default completion record.
 - No workflow creates a document merely to show that it ran.
 
 ## Review Checks
 
-- Direct Scientific Review self-check and independent Reviewer handoff preparation use current official venue sources for applicable formal requirements and a small, discriminating set of actually inspected published work for novelty, positioning, evidence norms, experiment presentation, and reader expectations.
+- author-side scientific self-check and `dove-review` handoff preparation use current official venue sources for applicable formal requirements and a small, discriminating set of actually inspected published work for novelty, positioning, evidence norms, experiment presentation, and reader expectations.
 - Review distinguishes material merely found from material retrieved, inspected, and actually used; published practice does not replace official venue rules, and no fixed paper count or checklist is required.
-- Direct Scientific Review self-check tests claims, evidence, method, novelty, limitations, writing clarity, and likely reader confusion against that grounding without claiming independent external review.
-- Independent Reviewer handoff declares frozen project-relative artifact paths, whole-paper scope, grounding, and access boundaries.
-- Auto or Review supplies the frozen materials and invokes an isolated persistent host Reviewer context when available; the user may still mediate the exchange, but is not required to start each review round manually.
+- author-side scientific self-check tests claims, evidence, method, novelty, limitations, writing clarity, and likely reader confusion against that grounding without claiming independent external review.
+- `dove-review` handoff declares frozen project-relative artifact paths, whole-paper scope, grounding, and access boundaries.
+- Dove or Review supplies the frozen materials and invokes a genuinely isolated persistent `dove-review` context when available; each round sees only its explicit frozen list, and the user may still mediate the exchange but is not required to start each review round manually.
 - Reviewer access is read-only and limited to the frozen handoff materials.
 - Import preserves the returned Markdown faithfully and does not automatically begin author response, revision, venue search, or paper search; ordinary context inspection likewise avoids unnecessary external search.
-- No output claims Reviewer identity, independence, authority, sign-off, scientific validity, external acceptance, or independent status without a real isolated Reviewer context judging the current frozen handoff.
+- Review findings are evidence to analyze rather than direct rewrite or claim-narrowing triggers; feasible high-level author-side action comes first, narrowing requires evidence or a real boundary, and changes to the confirmed mainline, contribution, or completion meaning go to the user.
+- No output claims `dove-review` identity, independence, authority, sign-off, scientific validity, external acceptance, or independent status without a real isolated `dove-review` context judging the current frozen handoff.
 - A separate local session is described only as responsibility separation; it does not by itself prove independence.
 
 ## Lifecycle Checks

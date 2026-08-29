@@ -29,6 +29,13 @@ import {
   renderDoveAgentInstructions
 } from "../src/core/dove-agent-persona.mjs";
 import {
+  DOVE_RESEARCH_EVIDENCE_DRIVEN_CLAIM_BOUNDARY,
+  DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW,
+  DOVE_RESEARCH_JUDGMENT_ACTION_DISTINCTION,
+  DOVE_RESEARCH_REVIEW_FINDING_TRIAGE,
+  DOVE_RESEARCH_SHARED_CONTRACT_BULLETS
+} from "../src/core/dove-research-contract.mjs";
+import {
   DOVE_AGENT_DEFINITION,
   DOVE_AGENT_SURFACES,
   generatedDoveAgentEntries,
@@ -49,6 +56,11 @@ import {
   PAPER_SEARCH_SUPPORT_SKILL_PATH
 } from "../src/core/paper-search-integration.mjs";
 import {
+  EXA_MCP_FRAGMENT,
+  EXA_WEB_SUPPORT_SKILL_PATH,
+  WEB_FETCH_DENY_PERMISSION
+} from "../src/core/web-access-integration.mjs";
+import {
   generatedAdapterEntries,
   generatedClaudeAmbientProjectEntries,
   renderCommandAdapter
@@ -56,12 +68,30 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EXPECTED_HOST_IDS = ["claude", "dsh"];
-const EXPECTED_SKILL_IDS = ["dove.research", "dove.status", "dove.source", "dove.experiment", "dove.draft", "dove.figure", "dove.review", "dove.rebuttal", "dove.lessons", "dove.auto"];
+const EXPECTED_SKILL_IDS = ["dove.research", "dove.status", "dove.source", "dove.experiment", "dove.draft", "dove.figure", "dove.review", "dove.rebuttal", "dove.lessons"];
 const EXPECTED_AMBIENT_PATHS = [
   ".claude/rules/dove.md",
   ".claude/skills/dove-intake/SKILL.md",
-  PAPER_SEARCH_SUPPORT_SKILL_PATH
+  PAPER_SEARCH_SUPPORT_SKILL_PATH,
+  EXA_WEB_SUPPORT_SKILL_PATH
 ];
+const REVIEW_HANDOFF_DEFAULT_INVISIBILITY = "it excludes code, raw experiment outputs, unprocessed figure materials, internal notes, `.dove/research/**`, author evidence packages, private transcripts, old Reviews, historical returns, prior handoffs, and other unlisted project materials";
+const RETIRED_RESEARCH_MODEL_PHRASES = Object.freeze([
+  "layer enum",
+  "contribution score",
+  "state machine",
+  "fixed pipeline",
+  "runtime controller",
+  "runtime daemon",
+  "runtime scheduler",
+  "runtime queue",
+  "finding schema",
+  "same-context independent",
+  "same context independent",
+  "same-context pseudo-independence",
+  "fallback",
+  "backcompat"
+]);
 
 function assertUnique(values, label) {
   assert.equal(new Set(values).size, values.length, `${label} must not contain duplicates`);
@@ -119,6 +149,27 @@ function semanticSectionText(section) {
 function semanticContractText(command) {
   const contract = skillContract(command);
   return structuredText([contract.purpose, contract.when, contract.semanticSections ?? [], contract.hostGuidance]);
+}
+
+function assertIncludesAll(value, label, needles) {
+  for (const needle of needles) assert.ok(value.includes(needle), `${label} must include canonical text: ${needle}`);
+}
+
+function assertExcludesPhrases(value, label, phrases) {
+  const normalized = value.toLowerCase();
+  for (const phrase of phrases) assert.ok(!normalized.includes(phrase.toLowerCase()), `${label} must not contain retired or unsafe phrase: ${phrase}`);
+}
+
+function assertNoUnsafeSameContext(value, label) {
+  const normalized = value.toLowerCase()
+    .split("do not substitute same-context review").join("")
+    .split("do not impersonate independence in the same context").join("")
+    .split("same context for later rounds").join("")
+    .split("resume that same context").join("")
+    .split("resume the same context").join("")
+    .split("same reviewer context").join("");
+  assert.ok(!normalized.includes("same-context"), `${label} must not contain same-context pseudo-independence language outside explicit negative boundaries`);
+  assert.ok(!normalized.includes("same context"), `${label} must not contain same context pseudo-independence language outside explicit negative boundaries`);
 }
 
 function assertMatchesAll(value, label, patterns) {
@@ -184,9 +235,17 @@ function assertRenderedSemanticSectionOrder(entry) {
   if (!Array.isArray(sections) || sections.length === 0) return;
   let previousIndex = -1;
   for (const section of sections) {
-    const index = entry.content.indexOf(section.title);
+    const index = entry.content.indexOf(`### ${section.title}`);
     assert.ok(index > previousIndex, `${entry.command.id} generated adapter must render semantic section ${section.title} in contract order`);
     previousIndex = index;
+  }
+}
+
+function assertSharedResearchContractProjection(command) {
+  assertIncludesAll(contractText(command), `${command.id} contract`, DOVE_RESEARCH_SHARED_CONTRACT_BULLETS);
+  if (Array.isArray(command.contract?.semanticSections)) assertSemanticSections(command);
+  for (const hostId of PROJECT_HOST_IDS) {
+    assertIncludesAll(renderCommandAdapter(hostId, command), `${command.id} ${hostId} generated adapter`, DOVE_RESEARCH_SHARED_CONTRACT_BULLETS);
   }
 }
 
@@ -205,6 +264,7 @@ function assertDoveAgentPersona() {
   assert.deepEqual(PACKAGE_GENERATED_SUPPORT_PATHS.filter((pathName) => pathName.includes("/agents/dove.md")), [
     "package-resources/hosts/claude/.claude/agents/dove.md"
   ]);
+  assert.equal(PACKAGE_GENERATED_SUPPORT_PATHS.includes(`package-resources/hosts/claude/${EXA_WEB_SUPPORT_SKILL_PATH}`), true);
 
   const persona = DOVE_AGENT_PERSONA_BULLETS.join("\n");
   assert.ok(persona.includes(DOVE_AGENT_FRAME));
@@ -212,26 +272,27 @@ function assertDoveAgentPersona() {
   assert.ok(persona.includes(DOVE_AGENT_STOPPING));
   assert.ok(DOVE_AGENT_PERSONA_BULLETS.length >= 5, "Dove persona must remain substantive without becoming a workflow checklist");
   assert.match(DOVE_AGENT_DIRECT_JUDGMENT, /weigh current evidence, task risk, user preference, and the research mainline/iu);
-  assert.match(DOVE_AGENT_DIRECT_JUDGMENT, /useful next move.*stop before executing, recording, launching subagents, or creating tasks unless the user explicitly asks/iu);
+  assert.match(DOVE_AGENT_DIRECT_JUDGMENT, /useful next move.*stop before unrequested execution or recording/iu);
 
   for (const textValue of [renderDoveAgentInstructions(), renderClaudeDoveAgent()]) {
     for (const bullet of DOVE_AGENT_PERSONA_BULLETS) assert.ok(textValue.includes(bullet), "Dove agent surface must include every canonical persona bullet");
+    assertIncludesAll(textValue, "Dove agent surface", DOVE_RESEARCH_SHARED_CONTRACT_BULLETS);
     assert.match(textValue, /one complete research agent/iu);
-    assert.match(textValue, /ten flat Skills.*capability entrances/isu);
+    assert.match(textValue, /nine Skills.*(?:optional specialist methods|capability entrances)/isu);
     assert.match(textValue, /Maintain Dove research Markdown when the user explicitly asks to record, update, or save/iu);
     assert.match(textValue, /preserving the work's evidence and continuation context is genuinely useful/iu);
-    assert.match(textValue, /Auto.*explicit|explicit.*Auto/isu);
-    assert.match(textValue, /foreground.*multi-round|multi-round.*foreground|inner rounds?|outer session/isu);
+    assert.match(textValue, /default.*(?:foreground )?multi-round|autonomous research progression/isu);
+    assert.match(textValue, /foreground.*host session|scientific round|default research progression/isu);
     assert.match(textValue, /user-confirmed Workspace mainline|confirmed mainline/iu);
     assert.match(textValue, /(?:cycle|rounds?).*(?:evidence|action|result|reassess)|(?:evidence|action|result).*(?:cycle|rounds?|reassess)/isu);
-    assert.match(textValue, /Review findings are evidence inside Auto|Treat Review findings as evidence/iu);
-    assert.match(textValue, /not authority over Dove's current judgment|not.*authority over the Workspace mainline/isu);
+    assert.match(textValue, /Review findings.*evidence|Treat Review findings as evidence/iu);
+    assert.match(textValue, /not.*authority over.*Workspace mainline|not.*authority over Dove's author-side progression/isu);
     assert.match(textValue, /mainline.*achieved|material blocker|user decision|explicit.*boundary/isu);
-    assert.match(textValue, /current Dove run|current Dove judgment/iu);
-    assert.match(textValue, /Direct Scientific Review.*self-check|author-side self-check/isu);
-    assert.match(textValue, /isolated host Agent context|isolated Reviewer/isu);
-    assert.match(textValue, /frozen handoff/iu);
-    assert.match(textValue, /author-side sufficiency.*independent Reviewer acceptability recommendation|independent Reviewer acceptability recommendation.*author-side sufficiency/isu);
+    assert.match(textValue, /current Dove|current full paper|current mainline/iu);
+    assert.match(textValue, /author-side scientific self-check|author-side self-check/isu);
+    assert.match(textValue, /genuinely isolated.*(?:external|persistent)|dove-review.*isolated/isu);
+    assert.match(textValue, /frozen near-submission handoff|frozen.*handoff/iu);
+    assert.match(textValue, /author-side scientific sufficiency|dove-review.*scientific acceptability|scientific acceptability.*dove-review/isu);
     assert.doesNotMatch(textValue, /actual Skill call to `dove:review`|latest material state receives a current Review `PASS`|Review gate/iu);
     assert.doesNotMatch(textValue, /planner.*builder.*reviewer.*three roles|user-switchable.*planner|Planner.*Builder\/Author.*Reviewer/isu);
   }
@@ -258,6 +319,7 @@ function assertSkillManifest() {
     assert.equal(command.steps, undefined, `${label} must not expose top-level steps`);
 
     const contract = skillContract(command);
+    assertSharedResearchContractProjection(command);
     assert.ok(contract.responsibilities.length > 0, `${label} needs Dove responsibilities`);
     assert.ok(contract.actions.length > 0, `${label} needs possible actions`);
     assert.ok(contract.boundaries.length > 0, `${label} needs side-effect boundaries`);
@@ -275,7 +337,7 @@ function assertSkillManifest() {
       assert.equal(typeof item.instruction, "string", `${label} action needs an instruction`);
       assert.equal(typeof item.readOnly, "boolean", `${label} action must classify read-only behavior`);
       assert.equal(typeof item.persistWhen, "string", `${label} action must classify persistence`);
-      assert.ok(["never", "standard-research", "explicit-lessons", "auto-subordinate"].includes(item.persistencePolicy), `${label} has an unknown persistence policy`);
+      assert.ok(["never", "standard-research", "explicit-lessons"].includes(item.persistencePolicy), `${label} has an unknown persistence policy`);
       if (item.readOnly) {
         assert.equal(item.persistWhen, "never", `${label} read-only actions cannot maintain research Markdown`);
         assert.equal(item.persistencePolicy, "never", `${label} read-only actions cannot classify persistence`);
@@ -284,13 +346,15 @@ function assertSkillManifest() {
       if (item.persistencePolicy === "never") assert.equal(item.persistWhen, "never", `${label} must not hide an unrendered persistence trigger`);
       if (item.persistencePolicy !== "never") assert.notEqual(item.persistWhen, "never", `${label} needs a persistence trigger`);
       if (label === "dove.lessons" && item.capability === "research-document-maintenance") assert.equal(item.persistencePolicy, "explicit-lessons", "Lessons maintenance must remain explicit-only");
-      if (label === "dove.auto" && item.capability === "research-document-maintenance") assert.equal(item.persistencePolicy, "auto-subordinate", "Auto maintenance must remain subordinate");
+
       assert.equal(item.tool, undefined, `${label} must not impersonate an MCP call`);
     }
   }
 
   const serialized = text(COMMAND_SURFACES);
   assert.match(serialized, /\.dove\/research\/RESEARCH\.md/u, "Skills must share the human-maintained overview entry");
+  assertExcludesPhrases(serialized, "Dove Skills", RETIRED_RESEARCH_MODEL_PHRASES);
+  assertNoUnsafeSameContext(serialized, "Dove Skills");
   assert.doesNotMatch(serialized, /workflow"|"modes"|"steps"|Internal workflow|research-synthesis/iu, "Skills must not retain the retired sequential workflow rendering model");
   assert.doesNotMatch(serialized, /query_dove|manage_dove|MCP tool|semantic ID|Workspace record|Mission ID/iu, "Skills must not retain the research database contract");
   assert.doesNotMatch(serialized, /SQLite|vector database|hidden state service|hidden runtime/iu, "Skills must not prescribe a replacement database or hidden runtime");
@@ -303,18 +367,24 @@ function assertSkillManifest() {
     "research-document-reading",
     "lesson-reading",
     "project-exploration",
-    "research-work",
+    "research-progression",
     "research-document-maintenance"
   ]);
-  assert.match(research.contract.purpose, /bounded pass/iu);
+  assert.match(research.contract.purpose, /overall-best.*(?:investigation|experiment|analysis)/isu);
   assert.match(researchText, /real research question/iu);
   assert.match(researchText, /different explanations or approaches/iu);
+  assertIncludesAll(researchText, "dove.research goal/task theory review", [DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW]);
   assert.match(researchText, /lower-level artifacts simulate higher-level research progress/iu);
-  assert.match(researchText, /advance a real judgment or eliminate a serious candidate/iu);
+  assert.match(researchText, /default.*research loop|default.*progression/isu);
 
   const source = COMMAND_SURFACE_BY_ID["dove.source"];
+  const sourceText = contractText(source);
   const sourceWork = contractAction(source, "source-research");
   assert.ok(sourceWork && !sourceWork.readOnly, "Source retrieval must be allowed to save useful material");
+  assertIncludesAll(sourceText, "dove.source goal/task theory review", [DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW]);
+  assert.match(source.contract.when, /proposing or materially changing a research goal, key task, route, hypothesis, or evaluation target/iu);
+  assert.match(sourceText, /theory and related work.*significance, mechanism, novelty, positioning, method choice, or evaluation design/isu);
+  assert.match(sourceText, /rather than a bibliography dump/iu);
   assert.match(sourceWork.instruction, /retrieve when available, save when useful, read, and verify/iu);
   assert.match(sourceWork.instruction, /merely found.*actually retrieved, inspected, and used/iu);
   assert.doesNotMatch(sourceWork.instruction, /failures, conflicts, conditions, and limitations/iu);
@@ -349,9 +419,11 @@ function assertSkillManifest() {
 
   const draft = COMMAND_SURFACE_BY_ID["dove.draft"];
   const draftText = contractText(draft);
+  assertIncludesAll(draftText, "dove.draft", [DOVE_RESEARCH_EVIDENCE_DRIVEN_CLAIM_BOUNDARY]);
   assert.match(draft.contract.when, /expression, argument, or an authoritative delivery artifact is the limiting deficiency/iu);
   assert.match(draftText, /science is sufficiently supported|clearer wording cannot support the intended contribution/iu);
   assert.match(draftText, /edit the authoritative source and propagate through the real build or export path/iu);
+  assertIncludesAll(draftText, "dove.draft", ["feasible in-mainline", "higher-level action before narrowing", "weakening prose"]);
 
   const figure = COMMAND_SURFACE_BY_ID["dove.figure"];
   const figureText = contractText(figure);
@@ -375,19 +447,21 @@ function assertSkillManifest() {
   const reviewSections = assertSemanticSections(review, { min: 3 });
   const reviewGrounding = contractAction(review, "review-grounding");
   const reviewerWork = contractAction(review, "reviewer-perspective-work");
-  const reviewHandoff = contractAction(review, "review-handoff");
+  const reviewHandoff = contractAction(review, "dove-review-handoff");
   assertCapabilitySet(review, [
     "research-document-reading",
     "lesson-reading",
     "review-grounding",
     "reviewer-perspective-work",
     "delivery-review",
-    "review-handoff",
+    "dove-review-handoff",
     "research-document-maintenance"
   ]);
   assert.ok(reviewGrounding, "Review needs a grounding action");
   assert.equal(reviewGrounding.readOnly, true, "Review grounding must not create research records by default");
   assert.ok(reviewerWork?.readOnly, "Direct Review must return critique without author-side writes");
+  assertIncludesAll(reviewText, "dove.review", [DOVE_RESEARCH_REVIEW_FINDING_TRIAGE, REVIEW_HANDOFF_DEFAULT_INVISIBILITY]);
+  assertMatchesAll(reviewHandoff.instruction, "dove.review handoff material boundary", [/Do not include code, raw experiment outputs, unprocessed figure materials, internal notes, `.dove\/research\/\*\*`, author evidence packages, private transcripts, or other unsubmitted project materials/iu]);
   assertSemanticSectionOrder(review, [
     {
       label: "direct scientific review before delivery boundary",
@@ -399,13 +473,13 @@ function assertSkillManifest() {
     },
     {
       label: "independent reviewer handoff after delivery review",
-      matchers: [/(?:independent reviewer|isolated reviewer|isolated host agent)/iu, /(?:frozen handoff|frozen materials|whole-paper|acceptability recommendation)/iu]
+      matchers: [/(?:dove-review|isolated reviewer|isolated host agent)/iu, /(?:frozen handoff|frozen materials|whole-paper|acceptability recommendation)/iu]
     }
   ]);
   for (const mode of [
-    { label: "Direct Scientific Review self-check", matchers: [/direct/iu, /scientific/iu, /review/iu, /self-check|author-side/iu] },
+    { label: "Author-side scientific self-check", matchers: [/scientific/iu, /self-check|author-side/iu] },
     { label: "Conditional Delivery Review", matchers: [/(?:conditional|only when|sufficiently supported|genuinely limiting)/iu, /(?:delivery|venue|format|packag|required material|submission)/iu] },
-    { label: "Independent Reviewer Handoff", matchers: [/independent Reviewer|isolated.*Reviewer|isolated host Agent/iu, /handoff|frozen materials|frozen handoff/iu] },
+    { label: "dove-review external handoff", matchers: [/dove-review|isolated.*reviewer|isolated host Agent/iu, /handoff|frozen materials|frozen handoff/iu] },
     { label: "Returned Review Import", matchers: [/(?:returned[- ]review|reviewer return|actual reviewer return|return)/iu, /import|preserve|faithfully/iu] },
     { label: "Context Inspection", matchers: [/(?:context inspection|review-context inspection|inspect(?: existing)? review context|inspect context)/iu] }
   ]) assertSemanticModeAvailable(review, reviewSections, mode);
@@ -414,68 +488,74 @@ function assertSkillManifest() {
     /findings?/iu,
     /evidence/iu,
     /useful response|response/iu,
-    /downstream use|caller|Auto must absorb/iu,
-    /current Dove run/iu,
-    /Direct Scientific Review.*self-check|author-side self-check/isu,
-    /independent Reviewer|isolated.*Reviewer|isolated host Agent/isu,
-    /frozen handoff|frozen materials/iu,
+    /downstream use|caller|Dove must absorb/iu,
+    /current Dove|current full paper|current mainline/iu,
+    /author-side scientific self-check|author-side self-check/isu,
+    /dove-review|isolated.*reviewer|isolated host Agent/isu,
+    /frozen near-submission handoff|frozen.*materials|freeze and list/iu,
     /scientific acceptability.*delivery readiness|delivery readiness.*scientific acceptability/isu,
     /whole-paper|current full paper|current full version/iu,
-    /author-side sufficiency.*independent Reviewer acceptability recommendation|independent Reviewer acceptability recommendation.*author-side sufficiency/isu,
+    /author-side scientific sufficiency|dove-review.*scientific acceptability|scientific acceptability.*dove-review/isu,
     /cosmetic-only/iu,
     /selective evidence/iu,
     /hiding counterevidence/iu,
-    /narrowing claims without scientific reason/iu,
+    /scientifically unjustified narrowing|narrowing claims without scientific reason/iu,
     /diff-only/iu,
-    /restarting\/manipulating Reviewer context/iu
+    /restarting or manipulating `dove-review` context|restarting\/manipulating Reviewer context/iu
   ]);
   assertMatchesAll(reviewHandoff.instruction, "dove.review handoff", [
+    /highly complete.*near-real submission|near-real submission.*highly complete/isu,
     /fresh.*isolated|isolated.*fresh/isu,
-    /resume.*same.*Reviewer|same.*Reviewer.*re-review/isu,
-    /frozen materials|frozen handoff/iu,
-    /whole-paper.*recommendation|recommendation.*whole-paper/isu
+    /resume the same reviewer context/iu,
+    /unless the user explicitly asks to change reviewer/iu,
+    /Freeze and list only the current complete paper/iu,
+    /submission appendices or supplementary material/iu,
+    /Do not include code, raw experiment outputs, unprocessed figure materials, internal notes/iu,
+    /official venue requirements, reviewer criteria, and representative literature/iu,
+    /whole current submission rather than only a diff/iu,
+    /scientific acceptability separately from delivery readiness/iu
   ]);
   assertMatchesAll(reviewGrounding.instruction, "dove.review grounding", [
-    /venue|submission stage|official .*requirements/isu,
-    /published work|scholarly context|nearest comparators|novelty/iu,
-    /found.*retrieved.*inspected.*used|retrieved.*inspected.*used/isu,
-    /current full-paper review|frozen handoff|author-side self-check|independent Reviewer/iu,
-    /returned[- ]review import|review-context inspection/iu
+    /identified target venue/iu,
+    /official submission requirements, reviewer criteria/iu,
+    /representative set.*retrieved and inspected.*papers and related work/isu,
+    /material merely found.*retrieved, inspected, and used/isu,
+    /author-side scientific self-check/iu,
+    /Returned-review import.*context inspection.*do not trigger/isu
   ]);
   assertMatchesAll(reviewerWork.instruction, "dove.review work", [
-    /current Dove run/iu,
-    /do not call.*Agent tool|do not.*helper subagents/isu,
-    /contribution|novelty|claims|evidence|method|experiment conditions|limitations|writing clarity|reader confusion/isu,
-    /current full paper|whole-paper/iu,
-    /findings?.*evidence.*(?:consequence|effect).*response|evidence.*(?:consequence|effect).*response/isu,
-    /acceptability recommendation/iu,
-    /scientific acceptability|delivery readiness/iu,
-    /advisory (?:author-side )?reviewer perspective.*not independent external review.*authority over Auto/isu,
-    /does not itself authorize author-side artifact changes/iu,
-    /cannot satisfy final independent review/iu
+    /current Dove author context/iu,
+    /do not call the Agent tool|do not.*helper subagents/isu,
+    /contribution, novelty, claims, evidence, method, experiment conditions, limitations, writing clarity, likely reader confusion/iu,
+    /current full paper/iu,
+    /findings with evidence, consequence, useful response/iu,
+    /author-side self-check, not independent `dove-review`/iu,
+    /not.*authority over the Workspace mainline/isu
   ]);
   assertMatchesAll(reviewText, "dove.review authority boundary", [
-    /not independent external review|does not claim independent external review/iu,
+    /without claiming independent external review/iu,
     /not.*authority over|does not.*authority over/isu,
-    /does not modify author-side manuscript.*experiment.*implementation.*build.*delivery(?:.*Review-return)? artifacts/isu,
-    /does not continue as author-side execution.*explicitly invoked Auto|explicitly invoked Auto.*does not continue/isu,
-    /does not satisfy final independent review|cannot satisfy final independent review/iu,
-    /reviewer status|external acceptance|independent Reviewer status/iu
+    /review action itself is read-only/iu,
+    /author context.*default research progression/isu,
+    /dove-review.*external and read-only/isu,
+    /external acceptance|scientific certification/iu
   ]);
   assertMatchesNone(reviewText, "dove.review", [
     /ReviewExchange|reviewId|findingId|verdictEnum|strictImportSchema|fixed paper pipeline|helper reviewer Agents?/iu,
     /submission-readiness gate|Review gate|Auto-gate|actual Skill call|return `PASS`|return `REVISE`/iu,
     /same-context independent|pseudo-independent|local separation proves independence|host label proves independence/iu,
-    /claim acceptance[^.]*as proof|Reviewer controls Auto/iu
+    /claim acceptance[^.]*as proof|reviewer controls Dove/iu
   ]);
 
   const rebuttal = COMMAND_SURFACE_BY_ID["dove.rebuttal"];
   const rebuttalText = contractText(rebuttal);
+  assertIncludesAll(rebuttalText, "dove.rebuttal", [DOVE_RESEARCH_EVIDENCE_DRIVEN_CLAIM_BOUNDARY]);
   assert.match(rebuttalText, /author-side Dove work/iu);
   assert.match(rebuttalText, /make requested ordinary project revisions/iu);
   assert.match(rebuttalText, /supplements, highlights, or venue-facing files/iu);
   assert.match(rebuttalText, /Do not let the Reviewer control the Workspace mainline/iu);
-  assert.doesNotMatch(rebuttalText, /claim acceptance[^.]*as proof|Reviewer controls Auto/iu);
+  assertIncludesAll(rebuttalText, "dove.rebuttal", ["feasible in-mainline", "higher-level action before narrowing", "weakening the claim"]);
+  assert.doesNotMatch(rebuttalText, /claim acceptance[^.]*as proof|reviewer controls Dove/iu);
 
   const lessons = COMMAND_SURFACE_BY_ID["dove.lessons"];
   const lessonsText = contractText(lessons);
@@ -488,115 +568,6 @@ function assertSkillManifest() {
   assert.equal(lessonsMaintenance.persistencePolicy, "explicit-lessons");
   assert.match(lessonsMaintenance.persistWhen, /explicitly asks to remember, reflect, or preserve durable Lessons guidance/iu);
   assert.doesNotMatch(lessonsMaintenance.persistWhen, /research mainline|durable recovery and evidence value/iu);
-
-  const auto = COMMAND_SURFACE_BY_ID["dove.auto"];
-  const autoText = semanticContractText(auto);
-  const autoSections = assertSemanticSections(auto, { min: 3 });
-  const autoRead = contractAction(auto, "research-document-reading");
-  const autoAutonomous = contractAction(auto, "autonomous-research-work");
-  const autoIndependentReviewer = contractAction(auto, "independent-reviewer-handoff");
-  const autoMaintenance = contractAction(auto, "research-document-maintenance");
-  assertCapabilitySet(auto, [
-    "research-document-reading",
-    "autonomous-research-work",
-    "independent-reviewer-handoff",
-    "research-document-maintenance"
-  ]);
-  assert.ok(autoRead?.readOnly, "Auto must begin from read-only mainline/context reading");
-  assert.ok(autoAutonomous && !autoAutonomous.readOnly, "Auto needs an autonomous host-work action");
-  assert.ok(autoIndependentReviewer && !autoIndependentReviewer.readOnly, "Auto needs an independent Reviewer handoff action when host isolation is available");
-  assert.equal(autoMaintenance.persistencePolicy, "auto-subordinate");
-  assertSemanticSectionOrder(auto, [
-    {
-      label: "outer session",
-      matchers: [/(?:outer session|explicit foreground session|foreground)/iu, /(?:mainline|suffix)/iu, /(?:ambient|background|runtime|queue|daemon)/iu]
-    },
-    {
-      label: "inner scientific rounds",
-      matchers: [/(?:inner scientific rounds?|scientific round|next scientific round)/iu, /(?:material action|host tools|actual result|reassess)/iu, /(?:next round|begin the next round|by default begins the next round)/iu]
-    },
-    {
-      label: "research priority and scientific writing",
-      matchers: [/(?:research hierarchy|research priority|contribution|method|evidence|experiment|source|writing|delivery)/iu, /(?:readiness basis|scientific writing|manuscript|authoritative source|build path)/iu]
-    },
-    {
-      label: "review absorption",
-      matchers: [/(?:Review findings|reviewer-perspective|adversarial judgment)/iu, /(?:absorb|reject|convert|defer|bound|block)/iu]
-    },
-    {
-      label: "independent reviewer handoff",
-      matchers: [/(?:independent Reviewer|isolated Reviewer|isolated host Agent)/iu, /(?:frozen handoff|whole-paper|acceptability recommendation)/iu]
-    },
-    {
-      label: "outer stop",
-      matchers: [/(?:stop Auto|outer stop|material blocker|explicit user|permission|safety|resource|time|external boundary)/iu, /(?:next scientific round|Otherwise begin the next scientific round)/iu]
-    }
-  ]);
-  for (const section of autoSections) {
-    const sectionText = semanticSectionText(section);
-    assert.doesNotMatch(sectionText, /^\s*\d+\./mu, "Auto semantic sections must not become numbered steps");
-  }
-  assertMatchesAll(autoText, "dove.auto", [
-    /explicit(?:-only)?|explicitly invokes|explicitly requests/iu,
-    /foreground/iu,
-    /multi-round|repeated|recurrent/iu,
-    /user-confirmed|confirmed.*mainline|mainline.*confirmed/iu,
-    /immediate in-scope|suffix/iu,
-    /contribution/iu,
-    /evidence/iu,
-    /authoritative artifact|authoritative manuscript|LaTeX/iu,
-    /material deficiency|limiting deficiency|research hierarchy/iu,
-    /Review findings?|reviewer-perspective|acceptability recommendation/iu,
-    /absorb|reject|convert|act on|defer|bound/iu,
-    /stop|blocker|user decision|boundary/iu,
-    /operational interruption/iu,
-    /independent Reviewer handoff|frozen handoff/iu
-  ]);
-  assertMatchesAll(autoRead.instruction, "dove.auto reading", [
-    /current conversation|actual project artifacts/iu,
-    /user-confirmed|confirmed.*mainline|mainline.*confirmed/iu,
-    /do not.*(?:reconstruct|replace|broaden)|not confirmed.*ask/isu,
-    /suffix|without a suffix|completion condition/isu,
-    /LaTeX|authoritative manuscript source|build path/iu,
-    /Reviewer returns|clarifications|private Reviewer transcripts/iu
-  ]);
-  assertMatchesAll(autoAutonomous.instruction, "dove.auto autonomous work", [
-    /materially help|materially improve|next useful mainline action/iu,
-    /Review|Figure|Source|Experiment|Draft|Rebuttal/iu,
-    /do not treat.*(?:capability|recommendation|checklist|validation|generated file|Markdown update|Mission completion).*objective/isu,
-    /LaTeX|authoritative .*source|compiled output/iu,
-    /Review|figure inspection/iu,
-    /absorb|reject|convert/iu,
-    /independent Reviewer handoff|frozen handoff/iu
-  ]);
-  assertMatchesAll(autoMaintenance.instruction, "dove.auto maintenance", [
-    /narrowest document|narrowest .*document/iu,
-    /mainline|conclusion|decision|priority|recovery/iu,
-    /never.*endpoint|required endpoint/iu
-  ]);
-  assertMatchesAll(auto.contract.hostGuidance.claude.join("\n"), "dove.auto Claude host guidance", [
-    /actually exposes|session exposes/iu,
-    /background|monitor|cron|loop|tmux|waiting/iu,
-    /success|failure|crash|timeout|OOM|cancellation|missing output/iu,
-    /isolated Reviewer|independent review/iu
-  ]);
-  assertMatchesAll(auto.contract.hostGuidance.dsh.join("\n"), "dove.auto DSH host guidance", [
-    /lacks.*waiting|monitoring affordance/iu,
-    /preserve.*continuation|say so honestly/iu,
-    /isolated persistent Reviewer context|independent review/iu
-  ]);
-  assertMatchesAll(autoText, "dove.auto runtime boundary", [
-    /not.*(?:ambient routing|background queue|runtime)|must not become.*(?:daemon|scheduler|queue|runtime)/isu,
-    /independent Reviewer handoff.*frozen handoff/isu
-  ]);
-  assertMatchesNone(autoText, "dove.auto", [
-    /task database|execution ledger.*create|scientific authority|current claim boundaries|adverse evidence|hidden session store|fallback|backcompat|fixed paper pipeline|ambient Auto/iu,
-    /Review gate|Auto-gate|latest current `PASS`|actual Skill call to `dove:review`|return `PASS`|return `REVISE`/iu,
-    /same-context independent/iu
-  ]);
-  assertMatchesNone(auto.contract.hostGuidance.dsh.join("\n"), "dove.auto DSH host guidance", [
-    /Claude Code hooks.*available|Monitor.*available|Cron.*available|tmux.*available/iu
-  ]);
 }
 
 function assertHostPolicy() {
@@ -630,6 +601,7 @@ function assertGeneratedAdapters() {
     assert.match(entry.content, /one complete research agent/iu);
     assert.match(entry.content, /## Dove research-agent persona/u);
     for (const bullet of DOVE_AGENT_PERSONA_BULLETS) assert.ok(entry.content.includes(bullet));
+    assertIncludesAll(entry.content, "Generated Dove agent", DOVE_RESEARCH_SHARED_CONTRACT_BULLETS);
     assert.doesNotMatch(entry.relativePath, /dove-(?:planner|builder|reviewer|reader|referee)|dove-(?:reviewer|reader|referee)/u);
     assert.doesNotMatch(entry.content, /three primary roles|Planner.*Builder\/Author.*Reviewer|user-switchable.*(?:reader|referee)/isu);
   }
@@ -644,17 +616,17 @@ function assertGeneratedAdapters() {
     if (Array.isArray(entry.command.contract?.semanticSections)) {
       assertRenderedSemanticSectionOrder(entry);
       assert.match(entry.content, /#### Responsibilities\n\n/u);
-      assert.match(entry.content, /#### Actions\n\n/u);
+      assert.match(entry.content, /#### Actions \(capability options, not standalone authorization\)\n\n/u);
       assert.match(entry.content, /#### Side-effect and authorization boundary\n\n/u);
       assert.match(entry.content, /#### Non-goals\n\n/u);
     } else {
       assert.match(entry.content, /### Dove responsibilities\n\n/u);
-      assert.match(entry.content, /### Possible actions\n\n/u);
+      assert.match(entry.content, /### Possible actions — capability options, not standalone authorization\n\n/u);
       assert.match(entry.content, /### Side-effect and authorization boundary\n\n/u);
       assert.match(entry.content, /### Non-goals\n\n/u);
     }
     assert.match(entry.content, /### Conditional host guidance\n\n/u);
-    if (["dove.auto", "dove.review"].includes(entry.command.id)) {
+    if (entry.command.id === "dove.review") {
       for (const bullet of entry.command.adapterCapsuleBullets) assert.ok(entry.content.includes(bullet));
       assert.doesNotMatch(entry.content, /## Dove capsule[\s\S]*Bring research drive/iu);
       assert.doesNotMatch(entry.content, /## Dove capsule[\s\S]*When the route is open/iu);
@@ -669,10 +641,6 @@ function assertGeneratedAdapters() {
       if (entry.command.id === "dove.lessons") {
         assert.match(entry.content, /Maintain Lessons only when the user explicitly asks to remember, reflect, or preserve durable Lessons guidance/iu);
         assert.doesNotMatch(entry.content, /Maintain Lessons only when.*research mainline/iu);
-      } else if (entry.command.id === "dove.auto") {
-        assert.match(entry.content, /Maintain only the narrowest document when the result changes the mainline/iu);
-        assert.doesNotMatch(entry.content, /Auto completion or a Stop continuation/iu);
-        assertRenderedSemanticSectionOrder(entry);
       } else {
         assert.match(entry.content, /user explicitly asks to record, update, or save Dove research context/iu);
         assert.match(entry.content, /research mainline, conclusion, decision, or priority/iu);
@@ -733,16 +701,17 @@ function assertAmbientRouting() {
   const rule = byPath.get(".claude/rules/dove.md");
   const intake = byPath.get(".claude/skills/dove-intake/SKILL.md");
   const paperSearch = byPath.get(PAPER_SEARCH_SUPPORT_SKILL_PATH);
+  const webReader = byPath.get(EXA_WEB_SUPPORT_SKILL_PATH);
   const ordinary = `${rule}\n${intake}`;
   assert.match(ordinary, /zero-write/iu);
   assert.match(ordinary, /one complete research agent/iu);
-  assert.match(ordinary, /capability entrances, not separate personas/iu);
+  assert.match(ordinary, /optional specialist methods and shortcuts, not separate personas/iu);
   assert.doesNotMatch(ordinary, /Planner.*Builder\/Author.*Reviewer/isu);
-  assert.match(ordinary, /smallest suitable Dove Skill/iu);
-  assert.match(ordinary, /never selects Auto/iu);
+  assert.match(ordinary, /clear Dove work request/iu);
+  assert.match(ordinary, /leaves the agent to choose its internal method/iu);
   assert.match(ordinary, /judgment-only prompts/iu);
   assert.match(ordinary, /weigh current evidence, task risk, user preference, and the research mainline/iu);
-  assert.match(ordinary, /useful next move.*stop before executing, recording, launching subagents, or creating tasks unless the user explicitly asks/iu);
+  assert.match(ordinary, /useful next move.*stop before unrequested execution or recording/iu);
   assert.match(rule, /user explicitly names Dove while giving feedback, criticism, correction, or an improvement request about it/iu);
   assert.match(rule, /append a concise natural-language note to `\.dove\/install\/DOCTOR\.md`/iu);
   assert.match(rule, /reusable feedback about ordinary research or collaboration without explicitly naming Dove/iu);
@@ -753,20 +722,41 @@ function assertAmbientRouting() {
   assert.match(rule, /Do not create IDs, statuses, severity fields, counters, frontmatter, or a fixed template/iu);
   assert.match(rule, /Do not record ordinary research uncertainty, project bugs, external tool failures, or general conversation/iu);
   assert.match(rule, /Do not ask the user to run `dove doctor`/iu);
+  assert.match(rule, /keep built-in `WebSearch` for search discovery/iu);
+  assert.match(rule, /Do not use built-in `WebFetch`/iu);
+  assert.match(rule, /`exa` hosted MCP/iu);
+  assert.match(rule, /pinned `dove-paper-search` MCP/iu);
+  assert.match(rule, /do not substitute CLI, shell, `curl`, or ad hoc fetch scripts/iu);
   assert.match(intake, /research, status, source, experiment, draft, figure, review, rebuttal, or lessons/iu);
-  assert.match(intake, /choose no Dove Skill and answer directly/iu);
-  assert.match(intake, /do not expand a short follow-up into a new research or experiment task/iu);
+  assert.match(intake, /choose no Skill and answer directly/iu);
+  assert.match(intake, /do not invent a new research or experiment task from missing context/iu);
   assert.doesNotMatch(ordinary, /dove-lessons-intake|manage_dove|public Dove MCP|semantic ID/iu);
   assert.match(paperSearch, /user-invocable: false/u);
   assert.match(paperSearch, /use_scihub: false/u);
-  assert.match(paperSearch, /do not install dependencies or use a CLI or shell fallback/iu);
-  assert.doesNotMatch(paperSearch, /uv tool install|pip install|download_scihub/iu);
+  assert.match(paperSearch, /do not install dependencies or substitute a CLI, shell/iu);
+  assert.match(paperSearch, /built-in `WebSearch`/iu);
+  assert.match(paperSearch, /project `exa` MCP/iu);
+  assert.doesNotMatch(paperSearch, /WebFetch/iu);
+  assert.match(paperSearch, /curl/iu);
+  assert.doesNotMatch(paperSearch, /exa hosted project MCP/iu);
+  assert.doesNotMatch(paperSearch, /built-in `WebFetch`/iu);
+  assert.match(webReader, /user-invocable: false/u);
+  assert.match(webReader, /built-in `WebSearch`/iu);
+  assert.match(webReader, /built-in `WebFetch`/iu);
+  assert.match(webReader, /`exa` hosted project MCP/iu);
+  assert.match(webReader, /ordinary webpages, documentation pages, venue pages, and known URLs/iu);
+  assert.match(webReader, /do not use CLI, shell, `curl`, Node\/Python fetch scripts, or built-in `WebFetch` instead/iu);
   assert.deepEqual(PAPER_SEARCH_MCP_FRAGMENT, {
     type: "stdio",
     command: "uvx",
     args: ["--from", PAPER_SEARCH_PACKAGE_SPECIFIER, "paper-search-mcp"]
   });
   assert.equal(Object.hasOwn(PAPER_SEARCH_MCP_FRAGMENT, "env"), false);
+  assert.deepEqual(EXA_MCP_FRAGMENT, {
+    url: "https://mcp.exa.ai/mcp",
+    type: "http"
+  });
+  assert.equal(WEB_FETCH_DENY_PERMISSION, "WebFetch");
 }
 
 function assertPackagedAgentPolicy() {
@@ -776,12 +766,12 @@ function assertPackagedAgentPolicy() {
   assert.match(agentText, /hunches and first impressions as hypotheses.*user preferences as tradeoff signals/isu);
   assert.match(agentText, /Bring research drive/iu);
   assert.match(agentText, /layered means rather than equal goals/iu);
-  assert.match(agentText, /Review and independent Reviewer loop/iu);
+  assert.match(agentText, /Author-side review and dove-review/iu);
   assert.match(agentText, /Review findings and recommendations are evidence to act on, rebut, bound, or defer|Review findings?.*(?:input|advice|absorb|reject|convert|act on)/isu);
   assert.match(agentText, /Figure capability/iu);
   assert.doesNotMatch(agentText, /actual Skill call to `dove:review`|latest material state receives a current Review `PASS`|Review gate/iu);
-  assert.match(agentText, /Auto.*explicit|explicit.*Auto/isu);
-  assert.match(agentText, /foreground.*multi-round|multi-round.*foreground|inner rounds?|outer session/isu);
+  assert.match(agentText, /default behavior.*not a separate Auto Skill|not a separate Auto Skill.*default behavior/isu);
+  assert.match(agentText, /foreground.*multi-round|multi-round.*foreground|scientific round|default progression/isu);
   assert.doesNotMatch(agentText, /Keep three primary roles distinct|Planner frames|Builder\/Author performs|Reviewer returns/iu);
 }
 
@@ -804,15 +794,15 @@ function assertPublicDocumentationBoundaries() {
   }
   assert.match(packaging, /generated adapters/iu);
   assert.match(packaging, /release validation/iu);
-  assert.match(packaging, /cannot prove that Auto chose or performed the right research action/iu);
-  assert.doesNotMatch(packaging, /Auto's Review gate|actual `dove:review` actually ran|runtime Skill call for Auto's Review gate/iu);
+  assert.match(packaging, /cannot prove that Dove chose or performed the right research action/iu);
+  assert.doesNotMatch(packaging, /Review gate|actual `dove-review` actually ran|runtime Skill call/iu);
 }
 
 function assertUserFacingCliOutput() {
   const homeCurrent = renderDoveHome({ state: "current" });
   const homeNeedsSync = renderDoveHome({ state: "needs-sync" });
   assert.match(homeCurrent, /完整科研 agent/iu);
-  assert.match(homeCurrent, /进入 Claude Code 后切换 Dove agent 或使用 \/dove:\*/u);
+  assert.match(homeCurrent, /进入 Claude Code 后直接告诉 Dove 科研目标/u);
   assert.match(homeNeedsSync, /Dove 项目集成需要更新/u);
   assert.match(homeNeedsSync, /dove update/u);
   assert.doesNotMatch(`${homeCurrent}\n${homeNeedsSync}`, /dove sync|\/dove:workspace/u);
@@ -826,8 +816,11 @@ function assertUserFacingCliOutput() {
     changedPaths: []
   });
   assert.match(initOutput, /Dove agent 已安装/u);
-  assert.match(initOutput, /10 个 Dove 能力入口已安装/u);
-  assert.match(initOutput, /切换到 Dove agent 或使用 \/dove:\* 能力入口/u);
+  assert.match(initOutput, /9 个可选专项入口已安装/u);
+  assert.match(initOutput, /直接告诉 Dove 你的科研目标/u);
+  assert.match(initOutput, /WebFetch 禁用/u);
+  assert.match(initOutput, /普通网页 Exa MCP/u);
+  assert.match(initOutput, /WebSearch 保留用于搜索发现，WebFetch 由项目权限禁用/u);
   assert.doesNotMatch(initOutput, /12 个 Dove 工作入口|Dove-only MCP 批准|\/dove:workspace/u);
 
   const updateOutput = renderProjectIntegrationResult("update", {

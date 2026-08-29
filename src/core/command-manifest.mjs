@@ -2,21 +2,14 @@ import {
   DOVE_RESEARCH_ACTION_LENS_FRAME,
   DOVE_RESEARCH_ADVANCE,
   DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY,
-  DOVE_RESEARCH_AUTO_CYCLE,
-  DOVE_RESEARCH_AUTO_GOAL_CONTEXT,
-  DOVE_RESEARCH_AUTO_INNER_ROUNDS,
-  DOVE_RESEARCH_AUTO_NOT_MECHANICAL_SKILLS,
-  DOVE_RESEARCH_AUTO_OUTER_SESSION,
-  DOVE_RESEARCH_AUTO_OUTER_STOP,
-  DOVE_RESEARCH_AUTO_REPORTING_BOUNDARY,
-  DOVE_RESEARCH_AUTO_RESEARCH_PRIORITY,
-  DOVE_RESEARCH_AUTO_REVIEW_FINDING_ABSORPTION,
   DOVE_RESEARCH_CAPABILITY_RESPONSIBILITY,
   DOVE_RESEARCH_CAPSULE_BULLETS,
+  DOVE_RESEARCH_EVIDENCE_DRIVEN_CLAIM_BOUNDARY,
   DOVE_RESEARCH_EVIDENCE_STATE,
   DOVE_RESEARCH_FIGURE_CAPABILITY_BOUNDARY,
   DOVE_RESEARCH_FIGURE_EVIDENCE_BOUNDARY,
   DOVE_RESEARCH_FRAME,
+  DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW,
   DOVE_RESEARCH_HUNCH,
   DOVE_RESEARCH_JUDGMENT_BOUNDARY,
   DOVE_RESEARCH_MAINLINE,
@@ -37,10 +30,18 @@ import {
   DOVE_RESEARCH_REVIEW_ANTI_GAMING,
   DOVE_RESEARCH_REVIEW_NO_INDEPENDENT_STATUS_CLAIM,
   DOVE_RESEARCH_REVIEW_VERSION_CURRENCY,
+  DOVE_RESEARCH_SHARED_CONTRACT,
+  DOVE_RESEARCH_DEFAULT_AUTONOMY,
+  DOVE_RESEARCH_CLARIFICATION,
+  DOVE_RESEARCH_CROSS_DOMAIN_INTUITION,
+  DOVE_RESEARCH_OVERALL_BEST_ACTION,
+  DOVE_RESEARCH_REAL_BLOCKER,
+  DOVE_RESEARCH_REPORTING_DISTINCTION,
   DOVE_RESEARCH_SKILL_INVENTORY_TEXT,
   DOVE_RESEARCH_SPECIALIZED_CAPSULE_BULLETS,
   DOVE_RESEARCH_SUPPORT_SUBORDINATION_BOUNDARY
 } from "./dove-research-contract.mjs";
+import { EXA_WEB_SUPPORT_SKILL_PATH } from "./web-access-integration.mjs";
 
 export const PACKAGE_DOCUMENTATION_PATHS = ["README.md", "docs/README.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"];
 export const PACKAGE_RUNTIME_PATHS = ["dist/index.mjs", "bin/dove-package.mjs", "scripts/dove-user-prompt-submit-package.mjs"];
@@ -55,6 +56,7 @@ export const DOVE_CLAUDE_AMBIENT_PROJECT_PATHS = Object.freeze([
   ".claude/rules/dove.md",
   ".claude/skills/dove-intake/SKILL.md",
   ".claude/skills/dove-paper-search/SKILL.md",
+  ".claude/skills/dove-web-reader/SKILL.md",
   ".claude/settings.json"
 ]);
 export const PACKAGE_RESOURCE_ROOT = "package-resources/hosts";
@@ -62,7 +64,8 @@ export const PACKAGE_GENERATED_SUPPORT_PATHS = Object.freeze([
   `${PACKAGE_RESOURCE_ROOT}/claude/.claude/agents/dove.md`,
   `${PACKAGE_RESOURCE_ROOT}/claude/.claude/rules/dove.md`,
   `${PACKAGE_RESOURCE_ROOT}/claude/.claude/skills/dove-intake/SKILL.md`,
-  `${PACKAGE_RESOURCE_ROOT}/claude/.claude/skills/dove-paper-search/SKILL.md`
+  `${PACKAGE_RESOURCE_ROOT}/claude/.claude/skills/dove-paper-search/SKILL.md`,
+  `${PACKAGE_RESOURCE_ROOT}/claude/${EXA_WEB_SUPPORT_SKILL_PATH}`
 ]);
 export const HOST_DEFINITIONS = {
   claude: { label: "Claude Code", scope: "project", jsonChecks: [] },
@@ -82,7 +85,7 @@ const RESEARCH_HUNCH = DOVE_RESEARCH_HUNCH;
 const JUDGMENT_BOUNDARY = DOVE_RESEARCH_JUDGMENT_BOUNDARY;
 const RESEARCH_MAINTENANCE_TRIGGER = DOVE_RESEARCH_MAINTENANCE_TRIGGER;
 
-const commonClarification = ["Ask only when a material ambiguity blocks the work; otherwise continue with a reasonable interpretation."];
+const commonClarification = [DOVE_RESEARCH_CLARIFICATION];
 
 const DEFAULT_HOST_GUIDANCE = Object.freeze({
   common: Object.freeze([
@@ -155,153 +158,80 @@ function sectionItems(sections, field) {
   return sections.flatMap((section) => Array.isArray(section[field]) ? section[field] : []);
 }
 
+const SHARED_RESEARCH_JUDGMENT_TITLE = "Shared research judgment";
+const SHARED_RESEARCH_JUDGMENT_RESPONSIBILITIES = Object.freeze([
+  DOVE_RESEARCH_SHARED_CONTRACT,
+  "When route, cause, or response is uncertain, compare different explanations or approaches by mechanism, inspected evidence, actual use conditions, and whether a feasible action can distinguish them.",
+  DOVE_RESEARCH_EVIDENCE_STATE
+]);
+const SHARED_RESEARCH_JUDGMENT_BOUNDARIES = Object.freeze([
+  "Shared research judgment is natural-language responsibility only; it does not expand this capability's read, write, execution, handoff, submission, or autonomy authorization.",
+  "Support facts boundary: keep operational status, file presence, document maintenance, validation or build results, delivery facts, Review provenance, and other support facts separate from inspected evidence, material decisions, substantive progress, and current mainline sufficiency."
+]);
+const REVIEW_HANDOFF_LISTED_MATERIALS_BOUNDARY = "`dove-review` visibility boundary: only the frozen near-submission materials listed for the current round are visible. This normally means the complete paper, actual submission appendices or supplements, authoritative LaTeX source and compiled output, and venue-facing files; it excludes code, raw experiment outputs, unprocessed figure materials, internal notes, `.dove/research/**`, author evidence packages, private transcripts, old Reviews, historical returns, prior handoffs, and other unlisted project materials.";
+
+function sharedResearchJudgmentSection() {
+  return {
+    title: SHARED_RESEARCH_JUDGMENT_TITLE,
+    responsibilities: [...SHARED_RESEARCH_JUDGMENT_RESPONSIBILITIES],
+    boundaries: [...SHARED_RESEARCH_JUDGMENT_BOUNDARIES]
+  };
+}
+
 function capabilityContract(options) {
+  const semanticSections = Array.isArray(options.semanticSections) && options.semanticSections.length > 0
+    ? [sharedResearchJudgmentSection(), ...options.semanticSections]
+    : null;
   const contract = {
     purpose: options.purpose,
     when: options.when,
-    responsibilities: options.responsibilities ?? [],
-    actions: options.actions ?? [],
-    boundaries: options.boundaries ?? [],
-    nonGoals: options.nonGoals ?? [],
+    responsibilities: semanticSections ? sectionItems(semanticSections, "responsibilities") : [...SHARED_RESEARCH_JUDGMENT_RESPONSIBILITIES, ...(options.responsibilities ?? [])],
+    actions: semanticSections ? sectionItems(semanticSections, "actions") : options.actions ?? [],
+    boundaries: semanticSections ? sectionItems(semanticSections, "boundaries") : [...SHARED_RESEARCH_JUDGMENT_BOUNDARIES, ...(options.boundaries ?? [])],
+    nonGoals: semanticSections ? sectionItems(semanticSections, "nonGoals") : options.nonGoals ?? [],
     clarification: options.clarification ?? commonClarification,
     hostGuidance: options.hostGuidance ?? hostGuidance()
   };
-  if (options.semanticSections) contract.semanticSections = options.semanticSections;
+  if (semanticSections) contract.semanticSections = semanticSections;
   return contract;
 }
 
 function contract(slug) {
   if (slug === "research") return capabilityContract({
-    purpose: "Complete one bounded pass of research framing, investigation, synthesis, or project work that advances a real judgment or requested artifact without becoming Auto.",
-    when: "Use when the user requests one bounded pass rather than explicit multi-round autonomy.",
+    purpose: "Advance a confirmed research goal through the overall-best sequence of investigation, experiment, analysis, writing, figure, review, and delivery actions.",
+    when: "Use for a clear research goal or project request. Dove continues across substantive rounds by default; no separate Auto mode is required.",
     responsibilities: [
+      DOVE_RESEARCH_DEFAULT_AUTONOMY,
       `${RESEARCH_FRAME} ${RESEARCH_HUNCH}`,
-      "Use existing Dove research context only when it materially helps the bounded goal; otherwise work from the user's request and real project materials.",
-      `Produce the requested analysis or artifact, advance a real judgment or eliminate a serious candidate, and stop at the bounded deliverable. ${JUDGMENT_BOUNDARY}`
+      DOVE_RESEARCH_CROSS_DOMAIN_INTUITION,
+      DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW,
+      DOVE_RESEARCH_OVERALL_BEST_ACTION,
+      DOVE_RESEARCH_REAL_BLOCKER,
+      "After each substantive result, absorb the changed evidence and authoritative artifact state, identify the highest material unresolved deficiency, compare serious candidate explanations, and choose the next overall-best feasible action. Use specialist capabilities only when they materially help that action.",
+      `${DOVE_RESEARCH_OUTCOME_CONTINUATION} ${DOVE_RESEARCH_REPORTING_DISTINCTION}`
     ],
     actions: [
-      readArea("missions", "the bounded research goal"),
+      readArea("missions", "the research goal"),
       relevantLessons,
-      action("project-exploration", `Inspect the ordinary project materials and real external resources needed to understand the question. ${RESEARCH_FRAME} ${RESEARCH_HUNCH}`, { readOnly: true }),
-      action("research-work", `Complete the bounded research or project work. ${RESEARCH_ADVANCE}`),
-      maintainArea("missions", "When the maintenance trigger is met, update an existing Mission document or create one naturally named Mission document for the bounded goal, substantive work, current conclusion, and useful next branches.")
+      action("project-exploration", `Inspect the ordinary project materials and real external resources needed to understand the question. ${RESEARCH_FRAME} ${DOVE_RESEARCH_CROSS_DOMAIN_INTUITION}`, { readOnly: true }),
+      action("research-progression", `Run the default Dove research loop: ${DOVE_RESEARCH_DEFAULT_AUTONOMY} ${DOVE_RESEARCH_ADVANCE}`),
+      maintainArea("missions", "When the maintenance trigger is met, update an existing Mission document or create one naturally named Mission document for the substantive work, evidence, decisions, failures, and continuation context.")
     ],
     boundaries: [
-      "Research may read, write, edit, run, or validate ordinary project artifacts only to the proportionate extent needed for the bounded deliverable.",
+      "Research may read, write, edit, run, or validate ordinary project artifacts to the extent authorized by the user's goal and needed for the overall-best mainline action.",
       `Maintain Dove research Markdown only when ${RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
-      "Do not turn a bounded Research pass into Auto or an internal stage pipeline.",
-      "Do not create a Mission document merely to prove the Skill ran."
-    ]
+      "Do not expose Auto as a Skill, mode, stage, or user coordination requirement.",
+      "Do not stop after one search, experiment, review, edit, validation, or report while an effective in-scope mainline action remains.",
+      "Do not create a Mission document merely to prove the capability ran."
+    ],
+    hostGuidance: hostGuidance({
+      common: ["Host waiting or interruption support is operational only; preserve the continuation point and return to the Dove mainline judgment rather than creating a Dove runtime."],
+      claude: ["Use Claude Code background, Monitor, Cron, loop, tmux, or equivalent only for a real long-running host action or wait, then reassess all terminal outcomes."],
+      dsh: ["Use only DSH-exposed filesystem and tool affordances; do not claim background continuity or isolated review capabilities DSH does not provide."]
+    })
   });
-  if (slug === "auto") {
-    const mainlineReadAction = readResearchDocuments("Read only the context needed to confirm the Workspace mainline and current uncertainty: `.dove/research/RESEARCH.md` when present, directly relevant linked notes, the current conversation, and actual project artifacts. For submission work, identify the authoritative manuscript source and build path before editing. When independent review context is relevant, read only explicit handoff records, Reviewer returns, clarifications, rebuttals, and change notes, not private Reviewer transcripts. Treat a `/dove:auto` suffix as the immediate in-scope goal; without a suffix, use the confirmed mainline's completion condition. If the mainline is not confirmed or a material boundary would change, ask.");
-    const scientificWorkAction = action("autonomous-research-work", "Choose and perform the next useful author-side mainline action with approved host tools, then reassess contribution sufficiency, evidence, and authoritative artifact state. Use Direct Scientific Review self-check, Figure, Source, Experiment, Draft, Rebuttal, independent Reviewer handoff, or other capabilities only when they materially improve that action; absorb, reject with evidence, clarify, or convert Review and figure findings into direct Dove action. For submission work, edit through the authoritative LaTeX source and compiled output by default; use another format only after verifying that the venue does not provide or accept LaTeX. Do not treat a capability, recommendation, checklist, validation, generated file, Markdown update, or Mission completion as the objective.");
-    const independentReviewerAction = action("independent-reviewer-handoff", "When author-side Dove judges the current full submission ready for independent review, prepare a frozen handoff and call a genuinely isolated host Agent context if the host provides one. Start a fresh Reviewer context for the first round, resume the same Reviewer context for later rounds, give it only the listed materials, and ask for a read-only whole-paper scientific acceptability recommendation with delivery readiness reported separately. If the host lacks true isolation, state that boundary and do not substitute same-context review.");
-    const supportMaintenanceAction = updateResearchDocuments("Maintain only the narrowest document when the result changes the mainline, conclusion, decision, priority, or durable recovery context. This supports choosing and performing the next action; it is never Auto's required endpoint.", { persistencePolicy: "auto-subordinate" });
-    const semanticSections = [
-      {
-        title: "Outer session",
-        purpose: DOVE_RESEARCH_AUTO_OUTER_SESSION,
-        responsibilities: [
-          DOVE_RESEARCH_AUTO_GOAL_CONTEXT,
-          DOVE_RESEARCH_MAINLINE
-        ],
-        actions: [mainlineReadAction],
-        boundaries: [
-          "Host waiting support may assist a real wait, but must not become a Dove daemon, scheduler, queue, package-owned runtime, state store, or background Auto."
-        ]
-      },
-      {
-        title: "Inner scientific rounds",
-        purpose: DOVE_RESEARCH_AUTO_INNER_ROUNDS,
-        responsibilities: [
-          DOVE_RESEARCH_AUTO_CYCLE,
-          DOVE_RESEARCH_EVIDENCE_STATE,
-          DOVE_RESEARCH_ACTION_LENS_FRAME
-        ],
-        actions: [scientificWorkAction],
-        boundaries: [
-          DOVE_RESEARCH_AUTO_REPORTING_BOUNDARY,
-          "Review, testing, validation, checkpointing, generated files, Markdown maintenance, and a single Mission completion are evidence only; none is an Auto stop fact by itself."
-        ]
-      },
-      {
-        title: "Research priority and scientific writing",
-        purpose: DOVE_RESEARCH_AUTO_RESEARCH_PRIORITY,
-        responsibilities: [
-          DOVE_RESEARCH_MANUSCRIPT_READINESS_BASIS,
-          "When contribution is weak, diagnose the limiting deficiency as method, evidence, experiment or analysis, source or positioning, writing or argument, or delivery artifact. Treat scientific writing as part of the argument: revise claims, paper structure, explanations, tables, captions, and manuscript text when that is the material way to make supported science legible."
-        ],
-        boundaries: [
-          DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY
-        ]
-      },
-      {
-        title: "Review absorption",
-        purpose: DOVE_RESEARCH_AUTO_REVIEW_FINDING_ABSORPTION,
-        responsibilities: [
-          DOVE_RESEARCH_MANUSCRIPT_REVIEW_CAPABILITY,
-          DOVE_RESEARCH_MANUSCRIPT_REVIEW_LOOP,
-          "Use Direct Scientific Review self-check when a fresh author-side adversarial judgment can change the next action; use Conditional Delivery Review only when delivery is explicitly requested or truly limiting after the science and argument are sufficiently supported."
-        ]
-      },
-      {
-        title: "Independent Reviewer Handoff",
-        purpose: DOVE_RESEARCH_REVIEW_DUAL_COMPLETION,
-        responsibilities: [
-          DOVE_RESEARCH_REVIEW_ISOLATED_PERSISTENT,
-          DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF,
-          DOVE_RESEARCH_REVIEW_NEGATIVE_CONTINUITY,
-          DOVE_RESEARCH_REVIEW_VERSION_CURRENCY
-        ],
-        actions: [independentReviewerAction],
-        boundaries: [
-          DOVE_RESEARCH_REVIEW_ANTI_GAMING,
-          DOVE_RESEARCH_REVIEW_NO_INDEPENDENT_STATUS_CLAIM
-        ]
-      },
-      {
-        title: "Support and host boundaries",
-        purpose: DOVE_RESEARCH_SUPPORT_SUBORDINATION_BOUNDARY,
-        responsibilities: [
-          DOVE_RESEARCH_CAPABILITY_RESPONSIBILITY,
-          DOVE_RESEARCH_AUTO_NOT_MECHANICAL_SKILLS
-        ],
-        actions: [supportMaintenanceAction],
-        boundaries: [
-          "For real long-running host work, preserve terminal success, failure, crash, timeout, OOM, cancellation, or missing-output facts and return to mainline judgment."
-        ]
-      },
-      {
-        title: "Outer stop",
-        purpose: DOVE_RESEARCH_AUTO_OUTER_STOP,
-        responsibilities: [
-          DOVE_RESEARCH_OUTCOME_CONTINUATION
-        ],
-        nonGoals: [
-          "Do not traverse Skills mechanically, force a mandatory action order, reduce contribution judgment to numbers, or end because a familiar surface artifact exists.",
-          "Do not delegate author-side self-check or research judgment to helper subagents. Independent review is a distinct frozen handoff to a genuinely isolated host Reviewer context, not another author-side Dove role.",
-          "Do not let research-document maintenance, generated exports, or validation reports replace direct work on evidence, methods, experiments, analysis, authoritative manuscript source, figures, captions, tables, supplements, highlights, or venue-facing artifacts."
-        ]
-      }
-    ];
-    return capabilityContract({
-      purpose: "Conduct explicit foreground multi-round work that advances the user-confirmed Workspace mainline within the user's limits.",
-      when: "Use only when the user explicitly invokes `/dove:auto` or otherwise explicitly requests multi-round autonomous work on the confirmed Workspace mainline or an immediate in-scope goal.",
-      responsibilities: sectionItems(semanticSections, "responsibilities"),
-      actions: sectionItems(semanticSections, "actions"),
-      boundaries: sectionItems(semanticSections, "boundaries"),
-      nonGoals: sectionItems(semanticSections, "nonGoals"),
-      semanticSections,
-      hostGuidance: hostGuidance({
-        common: ["If host or context interruption prevents finishing the current action, preserve the last reliable evidence, unfinished action, and next concrete action in natural language; treat that as operational interruption, not completion or a material blocker."],
-        claude: ["When Claude Code exposes background or monitoring support for a real long-running command, compilation, experiment, or external wait, use it conditionally and reassess after success, failure, crash, timeout, OOM, cancellation, or missing output.", "When independent review is needed and Claude Code exposes a truly independent Agent context, start or resume that isolated Reviewer with only the frozen handoff materials; otherwise report that independent review is unavailable rather than using the author context."],
-        dsh: ["If DSH lacks a real waiting or monitoring affordance for a long action, say so honestly and preserve the continuation point rather than promising Monitor, Cron, tmux, or a background Dove run.", "Use an isolated persistent Reviewer context in DSH only if DSH actually provides an equivalent capability; otherwise report the boundary and do not simulate independence."]
-      })
-    });
-  }
   if (slug === "status") return capabilityContract({
     purpose: "Report the current Dove research status from the overview, relevant summaries, and directly needed linked context without writes.",
     when: "Use when the user asks where the research stands, what is active, or what should be considered next.",
@@ -325,9 +255,11 @@ function contract(slug) {
   });
   if (slug === "source") return capabilityContract({
     purpose: "Discover, retrieve when available, read, verify, and document useful sources that materially inform the research.",
-    when: "Use when the user requests source discovery, reading, comparison, verification, or source-backed positioning.",
+    when: "Use when the user requests source discovery, reading, comparison, verification, or source-backed positioning, or when Dove is proposing or materially changing a research goal, key task, route, hypothesis, or evaluation target whose basis depends on external theory or related work.",
     responsibilities: [
       "Ground source work in the user's source question and current project need, not in a fixed provider order or paper count.",
+      DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW,
+      "For goal, task, route, hypothesis, or evaluation proposals, inspect the theory and related work that can change significance, mechanism, novelty, positioning, method choice, or evaluation design; return the competing interpretations and what the inspected sources actually support, rather than a bibliography dump.",
       "Distinguish material merely found from material actually retrieved, inspected, and used.",
       "When one source path is unavailable, report the boundary and continue with other approved local, web, or user-provided material that can still inform the question."
     ],
@@ -343,8 +275,13 @@ function contract(slug) {
     ],
     nonGoals: [
       "Do not treat search results, titles, abstracts, provider hits, or missing results as papers read.",
-      "Do not create source IDs, source databases, trust scores, or research hashes."
-    ]
+      "Do not create source IDs, source databases, trust scores, or research hashes.",
+      "Do not substitute CLI, shell, curl, or ad hoc fetch scripts when web or MCP retrieval is unavailable."
+    ],
+    hostGuidance: hostGuidance({
+      claude: ["For web access, keep built-in WebSearch available for discovery. Do not use built-in WebFetch; project permissions deny it. Use the pinned dove-paper-search MCP for scholarly paper acquisition and full-text reading, and the exa hosted MCP for ordinary webpage bodies, documentation pages, venue pages, and known URLs. If either MCP is unavailable or unapproved, state the boundary rather than substituting CLI, shell, curl, or ad hoc fetch scripts."],
+      dsh: ["DSH receives only filesystem Skills from Dove. Do not claim Claude project permissions, Claude MCP servers, built-in WebFetch denial, or Exa availability unless DSH itself exposes equivalent approved tools in the current run."]
+    })
   });
   if (slug === "experiment") return capabilityContract({
     purpose: "Design, analyze, record, or explicitly execute experiments and diagnostics that can change a research decision.",
@@ -376,6 +313,7 @@ function contract(slug) {
     responsibilities: [
       "Read the target artifact and the project evidence needed to support its material claims.",
       "Prioritize writing or packaging when the science is sufficiently supported for the requested claim, or when expression, argument, source propagation, or delivery artifact quality is itself limiting the mainline.",
+      `${DOVE_RESEARCH_EVIDENCE_DRIVEN_CLAIM_BOUNDARY} In Draft, when a feasible in-mainline method, experiment, analysis, source, figure, artifact-propagation, or argument action can still support the intended contribution, do that higher-level action before narrowing the claim or merely weakening prose.`,
       "If clearer wording cannot support the intended contribution, identify the method, evidence, experiment, source, or artifact deficiency rather than only weakening prose."
     ],
     actions: [
@@ -420,11 +358,11 @@ function contract(slug) {
   });
   if (slug === "review") {
     const reviewContextReadAction = readArea("reviews", "the review work");
-    const reviewGroundingAction = action("review-grounding", "For Direct Scientific Review self-check or independent Reviewer handoff preparation, inspect the actual manuscript or declared artifacts, infer the target venue and submission stage, and ask if an unclear venue would materially change the review. Use official venue sources for applicable formal requirements and a small, discriminating set of actually inspected published work for novelty, positioning, evidence norms, experiment presentation, and reader expectations. Distinguish material merely found from material retrieved, inspected, and used. For returned-review import or ordinary context inspection, do not trigger venue or paper search merely because Review was invoked.", { readOnly: true });
-    const reviewerPerspectiveAction = action("reviewer-perspective-work", "Perform Direct Scientific Review self-check in the current Dove run; do not call the Agent tool or launch helper subagents. From the established grounding, test contribution, novelty, claims, evidence, method, experiment conditions, limitations, writing clarity, likely reader confusion, and material figure evidence jobs across the current full paper. Return concrete findings with evidence, consequence or effect on the goal, useful response, and a natural-language scientific acceptability recommendation; keep delivery readiness separate. Mark the critique as advisory author-side reviewer perspective, not independent external review, independent Reviewer status, or authority over Auto. Direct Review returns the critique; it does not itself authorize author-side artifact changes and cannot satisfy final independent review.", { readOnly: true });
+    const reviewGroundingAction = action("review-grounding", "For author-side scientific self-check, inspect the actual current full paper and ask only if an unclear venue would materially change the judgment. For `dove-review`, require an identified target venue, then let the isolated reviewer context independently inspect official submission requirements, reviewer criteria, and a small representative set of actually retrieved and inspected submitted or published papers and related work needed to judge contribution, positioning, evidence norms, experiment presentation, and reader expectations. Distinguish material merely found from material retrieved, inspected, and used. Returned-review import and ordinary context inspection do not trigger venue or paper search merely because Review was invoked.", { readOnly: true });
+    const reviewerPerspectiveAction = action("reviewer-perspective-work", "Perform author-side scientific self-check in the current Dove author context; do not call the Agent tool or launch helper subagents. From the established grounding, test contribution, novelty, claims, evidence, method, experiment conditions, limitations, writing clarity, likely reader confusion, and material figure evidence jobs across the current full paper. Return concrete findings with evidence, consequence, useful response, and a natural-language assessment; keep delivery readiness separate. Mark it as author-side self-check, not independent `dove-review`, external acceptance, or authority over the Workspace mainline.", { readOnly: true });
     const deliveryReviewAction = action("delivery-review", "When delivery review is selected, inspect official venue requirements, build output, required materials, formatting, anonymity, packaging, and access limits. Report delivery readiness separately from scientific acceptability.");
-    const reviewHandoffAction = action("review-handoff", "When preparing an independent Reviewer handoff, assemble only frozen materials for the current full-paper review: current full paper, authoritative LaTeX source and actual compiled output, explicit evidence or supplements, public venue requirements, necessary public related work, and explicit rebuttal, clarification, or change notes. Start a fresh genuinely isolated host Agent context for the first round and resume that same Reviewer's context for later rounds when the host actually provides isolation and persistence; otherwise report the boundary. The Reviewer is read-only and returns a natural-language whole-paper recommendation with scientific acceptability and delivery readiness separated.");
-    const reviewMaintenanceAction = maintainArea("reviews", "When the user supplies an actual Reviewer return, clarification, rebuttal exchange, or asks to preserve a Direct Scientific Review self-check or independent handoff record, append it faithfully to the corresponding Review document with a clear boundary from existing text. Do not rewrite, summarize over, normalize, or replace the original return; add author interpretation only when the user asks.");
+    const reviewHandoffAction = action("dove-review-handoff", "Start `dove-review` only when the paper is highly complete, basically format-compliant, and organized as a near-real submission. Freeze and list only the current complete paper, authoritative LaTeX source and actual compiled output, actual submission appendices or supplementary material, and other venue-facing files that would really accompany submission. Do not include code, raw experiment outputs, unprocessed figure materials, internal notes, `.dove/research/**`, author evidence packages, private transcripts, or other unsubmitted project materials. Identify the target venue. For the first round, start a fresh genuinely isolated host Agent context using the same Dove research-agent definition; for later rounds, resume the same reviewer context unless the user explicitly asks to change reviewer. The reviewer independently grounds itself in official venue requirements, reviewer criteria, and representative literature, then read-only reviews the whole current submission rather than only a diff and reports scientific acceptability separately from delivery readiness. If the host lacks genuine isolation and persistence, report that independent `dove-review` is unavailable rather than substituting the author context.");
+    const reviewMaintenanceAction = maintainArea("reviews", "When the user supplies an actual `dove-review` return, clarification, rebuttal exchange, or asks to preserve an author-side scientific self-check or external handoff record, append it faithfully to the corresponding Review document with a clear boundary from existing text. Do not rewrite, summarize over, normalize, or replace the original return; add author interpretation only when the user asks.");
     const semanticSections = [
       {
         title: "Mode selection",
@@ -437,19 +375,19 @@ function contract(slug) {
         ]
       },
       {
-        title: "Direct Scientific Review self-check",
+        title: "Author-side scientific self-check",
         purpose: DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
         responsibilities: [
           DOVE_RESEARCH_MANUSCRIPT_REVIEW_BOUNDARY,
-          "Perform grounding and critique directly in the current Dove run as author-side self-check; a separate Reviewer must be a genuinely isolated host context with only frozen handoff materials."
+          "Perform grounding and critique directly in the current Dove author context. Independent external review exists only as a real isolated persistent `dove-review` context with a near-submission handoff."
         ],
         actions: [
           reviewGroundingAction,
           reviewerPerspectiveAction
         ],
         boundaries: [
-          "Direct Review may read, search, and inspect the current full paper and critique it, but it does not modify author-side manuscript, experiment, implementation, build, delivery, or Review-return artifacts. Preserving a requested critique or returned review belongs to the separate maintenance/import action; author response, revision, or follow-up execution belongs to Rebuttal, Draft, Experiment, Figure, or explicit Auto.",
-          "Direct Review may give an author-side acceptability recommendation, but it does not claim independent external review, independent Reviewer status, external acceptance, scientific certification, or authority over the Workspace mainline."
+          "Author-side self-check may read, search, and inspect the current full paper and critique it, but the review action itself is read-only. Dove's author context absorbs findings and chooses subsequent Source, Experiment, Draft, Figure, Rebuttal, implementation, or delivery work through the default research progression.",
+          "Author-side self-check may give an advisory acceptability assessment, but it does not claim independent `dove-review`, external acceptance, scientific certification, or authority over the Workspace mainline."
         ]
       },
       {
@@ -460,7 +398,7 @@ function contract(slug) {
         ]
       },
       {
-        title: "Independent Reviewer Handoff",
+        title: "`dove-review` external handoff",
         purpose: DOVE_RESEARCH_REVIEW_DUAL_COMPLETION,
         responsibilities: [
           DOVE_RESEARCH_REVIEW_ISOLATED_PERSISTENT,
@@ -472,6 +410,7 @@ function contract(slug) {
           reviewHandoffAction
         ],
         boundaries: [
+          REVIEW_HANDOFF_LISTED_MATERIALS_BOUNDARY,
           DOVE_RESEARCH_REVIEW_ANTI_GAMING,
           DOVE_RESEARCH_REVIEW_NO_INDEPENDENT_STATUS_CLAIM
         ]
@@ -505,29 +444,29 @@ function contract(slug) {
       },
       {
         title: "Downstream use",
-        purpose: "Review findings are advisory evidence for the caller. Auto must absorb them into its next scientific judgment; ordinary author-side response or revision belongs to Rebuttal, Draft, Experiment, Figure, or another explicitly requested capability.",
+        purpose: "Review findings are evidence for Dove's author context. It validates them and absorbs valid concerns into the next scientific judgment, research action, revision, clarification, or rebuttal; `dove-review` remains external and read-only.",
         responsibilities: [
           "Return findings with enough evidence and consequence for the caller to act on, reject with inspected evidence, bound or block on a real limit, or deliberately defer because another mainline action is more material."
         ],
         boundaries: [
-          "Review itself ends after the selected critique, delivery inspection, handoff, import, or context report. It does not continue as author-side execution unless the user explicitly invoked Auto or requested another bounded work capability."
+          "The selected Review method ends after its critique, delivery inspection, handoff, import, or context report. The author context then absorbs material findings into Dove's default research progression when the confirmed goal calls for further work; `dove-review` itself remains read-only and does not perform author-side revision."
         ],
         nonGoals: [
-          "Do not turn a Review finding, report, or recommendation into authority over the Workspace mainline or an implicit Auto session."
+          "Do not turn a Review finding, report, or recommendation into authority over the Workspace mainline or into a hidden user-facing mode."
         ]
       }
     ];
     return capabilityContract({
-      purpose: "Use one Review mode: direct scientific self-check, conditional delivery review, independent Reviewer handoff, returned-review import, or context inspection.",
-      when: "Use when the user requests reviewer-perspective critique, delivery review, independent Reviewer handoff preparation, returned-review import, or review-context inspection.",
+      purpose: "Use author-side scientific self-check, conditional delivery review, `dove-review` external handoff, returned-review import, or context inspection.",
+      when: "Use when author-side scientific self-check can improve the paper, when the user requests delivery review, when a near-submission paper is ready for `dove-review`, or for returned-review import or context inspection.",
       responsibilities: sectionItems(semanticSections, "responsibilities"),
       actions: sectionItems(semanticSections, "actions"),
       boundaries: sectionItems(semanticSections, "boundaries"),
       nonGoals: sectionItems(semanticSections, "nonGoals"),
       semanticSections,
       hostGuidance: hostGuidance({
-        claude: ["For independent Reviewer Handoff, use a true isolated Claude Code Agent context only if the host actually provides it; preserve that Reviewer context across re-review rounds and give it only the frozen handoff materials. If unavailable, report the boundary rather than using the author context."],
-        dsh: ["Use DSH for independent Reviewer Handoff only if it actually provides equivalent isolated persistent Agent context; otherwise report the boundary and do not simulate independence."]
+        claude: ["For `dove-review`, use a genuinely isolated persistent Claude Code Agent context only if the host actually provides it. Start fresh for the first round, resume the same context for re-review, change it only on explicit user request, and give it only the frozen near-submission materials. If unavailable, report the boundary rather than using the author context."],
+        dsh: ["Use DSH for `dove-review` only if it actually provides equivalent isolated persistent Agent context; otherwise report the boundary and do not simulate independence."]
       })
     });
   }
@@ -536,6 +475,7 @@ function contract(slug) {
     when: "Use when the user requests author-side rebuttal, response, revision, or follow-up work from review findings.",
     responsibilities: [
       "Treat Rebuttal as current-Dove author-side work: analyze each material finding against evidence, decide whether to accept, reject, qualify, or investigate it, and revise artifacts when that is the useful response.",
+      `${DOVE_RESEARCH_EVIDENCE_DRIVEN_CLAIM_BOUNDARY} In Rebuttal, when a feasible in-mainline method, experiment, analysis, source, figure, manuscript, supplement, or venue-facing action can answer a valid concern and support the intended contribution, do that higher-level action before narrowing, splitting, or weakening the claim.`,
       "Strengthen evidence, analysis, manuscript text, figures, captions, tables, supplements, highlights, or venue-facing files when findings reveal fixable deficiencies; do not reduce rebuttal to response text when real revisions are in scope.",
       "Keep reviewer return, author interpretation, revisions, and unresolved issues clearly separated."
     ],
@@ -575,23 +515,22 @@ function contract(slug) {
       "Lessons materials are optional researcher-owned advisory documents, not package-owned defaults."
     ],
     nonGoals: [
-      "Do not turn Lessons into a database, frontmatter schema, application ledger, or Auto completion record.",
+      "Do not turn Lessons into a database, frontmatter schema, application ledger, or research-completion record.",
       "Do not treat Lessons as evidence that a current research claim or artifact is correct."
     ]
   });
 }
 
 const SURFACES = [
-  ["research", "Complete one bounded pass of research, synthesis, or project investigation."],
+  ["research", "Advance a confirmed research goal through Dove's default multi-round research progression."],
   ["status", "Read the research overview, relevant summaries, and necessary linked context without writes."],
   ["source", "Discover, retrieve when available, read, verify, and document useful sources that materially inform the research."],
   ["experiment", "Design, analyze, record, or explicitly execute an experiment that advances a research decision."],
   ["draft", "Draft, assess, or revise ordinary project text and artifacts from the available evidence."],
   ["figure", "Inspect or gather real materials, then create, revise, validate, or caption figures when requested."],
-  ["review", "Use one Review mode: direct self-check, delivery review, independent Reviewer Handoff, import, or context inspection."],
+  ["review", "Use author-side self-check, delivery review, `dove-review`, returned-review import, or context inspection."],
   ["rebuttal", "Analyze review findings, draft author-side responses, and make requested evidence-backed revisions."],
   ["lessons", "Read advisory Lessons or maintain researcher-owned project Lessons when explicitly asked."],
-  ["auto", "Explicit foreground multi-round work on the user-confirmed Workspace mainline, including author-side self-check and independent Reviewer Handoff when needed."]
 ];
 
 export const DOVE_COMMAND_SKILL_INVENTORY_TEXT = DOVE_RESEARCH_SKILL_INVENTORY_TEXT;
@@ -602,7 +541,7 @@ export const COMMAND_SURFACES = SURFACES.map(([slug, summary]) => ({
   summary,
   requiredTools: [],
   contract: contract(slug),
-  adapterCapsuleBullets: ["auto", "review"].includes(slug) ? DOVE_RESEARCH_SPECIALIZED_CAPSULE_BULLETS : undefined,
+  adapterCapsuleBullets: ["review"].includes(slug) ? DOVE_RESEARCH_SPECIALIZED_CAPSULE_BULLETS : undefined,
   examples: [`/dove:${slug}`],
   guidance: []
 }));
@@ -629,7 +568,7 @@ export const CURRENT_MANAGED_PATHS = Object.freeze({
   claude: Object.freeze([...HOST_ADAPTERS.claude.paths]),
   dsh: Object.freeze([...HOST_ADAPTERS.dsh.paths])
 });
-const RETIRED = ["workspace", "mission", "note", "experience"];
+const RETIRED = ["workspace", "mission", "note", "experience", "auto"];
 export const RETIRED_MANAGED_PATHS = Object.freeze({
   core: Object.freeze([...RETIRED_PACKAGE_RUNTIME_PATHS]),
   claude: Object.freeze([...RETIRED.map((slug) => `.claude/commands/dove/${slug}.md`), ".claude/agents/dove-reviewer.md"]),

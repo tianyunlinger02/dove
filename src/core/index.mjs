@@ -37,6 +37,17 @@ export {
   PAPER_SEARCH_SUPPORT_SKILL_PATH,
   renderPaperSearchSupportSkill
 } from "./paper-search-integration.mjs";
+export {
+  EXA_MCP_FRAGMENT,
+  EXA_MCP_PATH,
+  EXA_MCP_SELECTOR,
+  EXA_MCP_SERVER_NAME,
+  EXA_MCP_URL,
+  EXA_WEB_SUPPORT_SKILL_PATH,
+  WEB_FETCH_DENY_PERMISSION,
+  WEB_FETCH_DENY_SELECTOR,
+  renderExaWebSupportSkill
+} from "./web-access-integration.mjs";
 
 export * from "./dove-research-contract.mjs";
 

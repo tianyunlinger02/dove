@@ -6,7 +6,7 @@
 
 ## Overview
 
-This repository has no browser frontend. It contains the canonical Dove agent persona, canonical Skill workflows, generated host adapters, a lifecycle CLI, Claude SessionStart/prompt hooks, project status line, three runtime bundles, public documentation, project installation logic, and software validation.
+This repository has no browser frontend. It contains the canonical Dove agent definition, canonical Skill workflows, generated host adapters, a lifecycle CLI, Claude SessionStart/prompt hooks, project status line, three runtime bundles, public documentation, project installation logic, and software validation.
 
 There is no Dove research-state MCP server or Research Format runtime in the Dove 3 architecture. Claude project integration may declare one pinned external paper-acquisition MCP without bundling its runtime.
 
@@ -68,13 +68,13 @@ Drafts, code, datasets, logs, figures, papers, source captures, review bundles, 
 
 ## Module Responsibilities
 
-- The canonical Dove agent persona and Skill workflow sources own workflow meaning; generated host adapters remain thin projections.
-- Ambient policy owns conservative routing and keeps Auto explicit-only.
+- The canonical Dove agent definition and Skill workflow sources own workflow meaning; generated host adapters remain thin projections.
+- Ambient policy owns conservative routing and keeps default progression explicit.
 - Research-document helpers may support safe discovery and file handling, but they must not introduce a schema or database authority over Markdown.
 - CLI modules own `init`, `update`, `reinstall`, `doctor`, `export-research`, and `hook` parsing and presentation.
 - Project installation and transaction modules own manifest revision `2.0`, managed-resource safety, current-installation refresh, the supported 1.0 → 2.0 migration, and Complete Reinstall.
 - Export logic owns the separately authorized one-time legacy JSON research records-to-Markdown conversion and exact-byte archival under `.dove/archive/...`.
-- Build and generator scripts own the three bundles, generated adapter projections, and hidden Claude paper-search support Skill.
+- Build and generator scripts own the three bundles, generated adapter projections, and hidden Claude paper-search and web-reader support Skills.
 - Every file in this directory must match its `src/templates/markdown/spec/frontend/` copy byte-for-byte.
 
 ## Naming and Boundaries
@@ -83,8 +83,8 @@ Drafts, code, datasets, logs, figures, papers, source captures, review bundles, 
 - Source functions use clear verb-first camelCase names.
 - Research files use human-readable names and ordinary Markdown links rather than generated semantic IDs.
 - Dove agent, Skills, adapters, research documents, project artifacts, installation metadata, ordinary Dove feedback, archives, and bundles are distinct concepts.
-- Generated files do not establish host registration, project readiness, scientific correctness, or independent Reviewer status.
+- Generated files do not establish host registration, project readiness, scientific correctness, or `dove-review` independence.
 
-The installed `dove` executable handles project initialization, project integration update, Complete Reinstall, Doctor, explicit legacy JSON research export, and managed SessionStart/UserPromptSubmit/statusline hook entry points. It has no `mcp`, `migrate-research`, or Stop hook command. Research work remains in the Dove agent, Skills, and normal host tools.
+The installed `dove` executable handles project initialization, project integration update, Complete Reinstall, Doctor, explicit legacy JSON research export, and managed SessionStart/UserPromptSubmit/statusline hook entry points. It has no Auto Skill or command, no `mcp`, `migrate-research`, or Stop hook command. Research work remains in the Dove agent, Skills, and normal host tools.
 
 Project roots and Dove-managed paths must be contained and unambiguous. Ordinary files and unrelated shared-configuration fields are preserved. Conflicting or modified managed content blocks automatic replacement. Research bootstrap files are outside the installation manifest; update, hot sync, reinstall, and uninstall preserve existing `.dove/research/**` bytes and do not complete navigation, replace Lessons, or delete retired researcher-visible materials.

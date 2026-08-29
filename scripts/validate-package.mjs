@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { COMMAND_SURFACES, MANAGED_PACKAGE_PATHS } from "../src/core/command-manifest.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
+import { EXA_WEB_SUPPORT_SKILL_PATH } from "../src/core/web-access-integration.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "hot-sync:validate", "package:validate", "check", "release:check"];
@@ -45,8 +46,9 @@ for (const relativePath of FORBIDDEN_PACKAGE_PATHS) assert.equal(packageJson.fil
 
 assert.deepEqual(COMMAND_SURFACES.map((surface) => surface.id), [
   "dove.research", "dove.status", "dove.source", "dove.experiment", "dove.draft",
-  "dove.figure", "dove.review", "dove.rebuttal", "dove.lessons", "dove.auto"
+  "dove.figure", "dove.review", "dove.rebuttal", "dove.lessons"
 ]);
+assert.equal(MANAGED_PACKAGE_PATHS.includes(`package-resources/hosts/claude/${EXA_WEB_SUPPORT_SKILL_PATH}`), true);
 
 const packageExports = await import(new URL("../dist/index.mjs", import.meta.url));
 assert.equal(packageExports.PACKAGE_NAME, packageJson.name);
