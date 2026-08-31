@@ -51,7 +51,7 @@ Usage:
   dove hook user-prompt-submit --project <dir>
   dove hook statusline --project <dir>
 
-The runtime CLI manages project integration, diagnostics, one-time legacy JSON research export, and Claude lifecycle hooks. Research work uses the Dove agent and ten host Skills with ordinary Markdown research documents. Project initialization creates the minimal researcher-owned \`.dove/research/RESEARCH.md\` entry, but it does not create research progress, a Mission, or a scientific conclusion. Dove does not install or expose a Stop hook.
+The runtime CLI manages project integration, diagnostics, one-time legacy JSON research export, and host lifecycle hooks. Research work uses one Dove agent and nine optional capability Skills with ordinary Markdown research documents. Project initialization creates the minimal researcher-owned \`.dove/research/RESEARCH.md\` entry, but it does not create research progress, a Mission, or a scientific conclusion. Dove does not install or expose a Stop hook.
 `);
 }
 
@@ -306,7 +306,7 @@ try {
     const result = inspect(projectFlag(args) ?? process.cwd());
     if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
     else console.log(renderDoveDoctor(result, { stream: process.stdout, env: process.env }));
-    process.exit(result.ready ? 0 : 1);
+    process.exit(result.staticChecksPassed ? 0 : 1);
   }
 
   if (command === "export-research") {

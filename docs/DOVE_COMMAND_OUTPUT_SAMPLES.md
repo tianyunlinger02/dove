@@ -2,11 +2,11 @@
 
 These samples show the human-facing shape of Dove integration and command output without imposing response templates. They describe the current Dove 3.0.0 model: one Dove research agent, default multi-round progression for confirmed goals, nine optional specialist Skills, three runtime bundles, no Auto command, no Dove research-state MCP server, and no Research Format database.
 
-Generated adapter inventory is not project readiness. Claude Code is the supported and accepted project initialization path in this release.
+Generated adapter inventory is not project readiness. Claude Code and DeepSeek Harness are the supported project initialization paths in this release; DSH receives project-local filesystem Skills only.
 
 ## Project integration output
 
-Bare `dove` is a short project-aware home. In an interactive terminal it shows Dove's pixel-art bird, the research-agent tagline, and points to `dove` for setup, `dove update` when synchronization is needed, `dove doctor` when attention is needed, or entering Claude Code to tell Dove the research goal directly; `/dove:*` remains optional when the project is current.
+Bare `dove` is a short project-aware home. In an interactive terminal it shows Dove's pixel-art bird, the research-agent tagline, and points to `dove` for setup, `dove update` when synchronization is needed, `dove doctor` when attention is needed, or entering a supported host to state the research goal directly; `/dove:*` remains an optional Claude Code shortcut when the project is current.
 
 A successful interactive `dove init --host claude` begins with Dove's bird and then shows the project, host, installed surface, and next step:
 
@@ -32,12 +32,17 @@ Dove 已在此项目启用
 项目  example-project
 宿主  Claude Code
 
-✓ Dove agent 已安装
-✓ 9 个 Dove 能力入口已安装
-✓ 自然语言任务入口已启用
-✓ 安全的项目集成记录已建立
+✓ Dove agent 与 9 个可选专项入口已安装
+✓ Claude 提示钩子、WebFetch 禁用与项目绝对路径状态栏已配置
+✓ 按需论文检索 MCP 与普通网页 Exa MCP 已声明
+✓ 最小研究入口 RESEARCH.md 已建立
+✓ 项目集成记录已建立
 
-下一步  从当前项目进入或重新进入 Claude Code，直接告诉 Dove 你的科研目标；/dove:* 只是可选专项快捷入口。
+最小研究入口已建立；研究 overview 与任何后续主题文档由研究者按需维护。它们不代表科研主线、结论或任务已经完成。
+
+论文检索需要本机已有 uvx；Claude Code 首次使用 `dove-paper-search` 或 `exa` project MCP 时会请求你批准。Dove 未安装依赖、写入凭据或替你批准。WebSearch 保留用于搜索发现，WebFetch 由项目权限禁用。
+
+下一步  从当前项目进入或重新进入 Claude Code，直接提出科研请求；Dove 会按科研相关性唤醒，/dove:* 只是可选专项快捷入口。
 ```
 
 Piped or redirected default output omits the mascot and ANSI styling but keeps the same human summary. `dove init --json` and `dove init --format json` emit one direct machine-readable integration result without presentation prefix, suffix, or ANSI bytes.
@@ -63,7 +68,7 @@ The exact generated file includes the full canonical persona and tool boundaries
 
 ## Ordinary prompt ambient flow
 
-The hidden intake is selected only for clear Dove work requests. It may route to the smallest suitable Skill, or choose no Skill and let the host answer directly.
+The hidden intake is added only when a non-slash request is clearly research-related. It does not select a Skill; the host and the same Dove model decide whether to answer, clarify, or use optional capabilities.
 
 A judgment-only prompt should not route into a Skill:
 

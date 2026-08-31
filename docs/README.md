@@ -4,7 +4,7 @@ These guides describe Dove 3.0.0 as one local-first research agent with ordinary
 
 ## Guides
 
-- [Installation](INSTALL.md) explains trusted package installation, Claude project initialization, `.dove/install/`, lifecycle safety, Doctor, export, and Complete Reinstall.
+- [Installation](INSTALL.md) explains trusted package installation, Claude Code and DSH project initialization, `.dove/install/`, lifecycle safety, Doctor, export, and Complete Reinstall.
 - [Usage](USAGE.md) explains the Dove agent, default multi-round progression, nine optional Skills, ordinary Markdown research documents, experiments, Reviews, Status, and `dove-review`.
 - [Packaging](PACKAGING.md) defines the release inventory, generated adapters, three bundles, and release checks.
 - [Capability matrix](CAPABILITY_MATRIX.md) summarizes implemented behavior and explicit limits.
@@ -23,12 +23,12 @@ These guides describe Dove 3.0.0 as one local-first research agent with ordinary
 - `dove init` creates only the minimal researcher-owned `.dove/research/RESEARCH.md` entry. Mission, Experiment, Source, Review, Claim, and Lesson materials are optional researcher-owned Markdown created naturally when useful.
 - Human-named linked topic documents are preferred over machine records. Do not require fixed headings, frontmatter, IDs, enums, hashes, indexes, or counts.
 - When newly executed central experiment work needs recording, keep prospective planning and actual results in the same Experiment document.
-- Keep author-side scientific self-checks, `dove-review` handoff purpose, frozen material scope, prompt, clarifications, rebuttals, and the actual reviewer return in the corresponding Review document. Direct self-check is author-side and not independent; substantive response and revision remain author-side Dove work.
-- `dove-review` is a genuinely isolated persistent external-review context for a near-submission paper. Each round sees only the explicit frozen submission-shaped materials for that round; old Reviews, historical returns, author private transcript, and unlisted materials are not visible by default. Reviewer findings are evidence to analyze rather than direct rewrite or claim-narrowing triggers.
+- Keep author-side scientific self-checks, `dove-review` handoff purpose, target venue, exact frozen material scope, self-contained prompt, known host limits, real exposed resume provenance, clarifications, rebuttals, and the actual reviewer return in the corresponding ordinary Review document. Unverifiable pasted returns remain explicitly unverified; direct self-check is author-side and not independent.
+- `dove-review` is a genuinely isolated persistent and recoverable external-review context for a near-submission paper only when the host can restrict material visibility. Each round sees only the explicit frozen submission-shaped materials for that round; old Reviews, historical returns, author private transcript, and unlisted materials are not visible by default. Reviewer findings are evidence to analyze rather than direct rewrite or claim-narrowing triggers.
 - `status` is read-only. Missing overviews and broken links are reported naturally rather than classified as invalid research state.
 - There is no Auto Skill or command. A confirmed goal-shaped request invokes Dove's default foreground multi-round progression; Dove asks only when a material direction, scope, or real boundary would change the work.
 - `.dove/install/` contains software metadata at manifest revision `2.0` and may contain ordinary `DOCTOR.md` feedback about Dove itself. There is no Doctor JSON state or issue lifecycle. Installation safety hashes are internal and are not research evidence.
 - `update` refreshes package-managed integration and preserves existing `.dove/research/**`; it does not create missing summaries, complete navigation, or replace Lessons materials.
 - `export-research` is the explicit one-time legacy JSON research records-to-Markdown path and may add its output to an existing tree when authorized; Complete Reinstall rebuilds package-managed integration while preserving `.dove/research/**` and `DOCTOR.md`.
-- Generated adapters are canonical projections, not proof of host registration, readiness, or `dove-review` independence. Claude Code remains the supported project initialization path.
+- Generated adapters are canonical projections, not proof of host registration, readiness, or `dove-review` independence. Claude Code and DeepSeek Harness are the supported project initialization paths; DSH receives filesystem Skills only.
 - Tests and release checks establish software behavior only, not scientific correctness, completion, independent review, or Dove research quality.

@@ -44,7 +44,8 @@ var DOVE_RESEARCH_HUNCH = "Use hunches and first impressions as hypotheses, not 
 var DOVE_RESEARCH_CURIOSITY = "Bring research drive: do not stop at admitting limits; turn gaps into sharp hypotheses, discriminating evidence to seek, or concrete next moves that advance the mainline, while keeping exploration aimed rather than diffuse.";
 var DOVE_RESEARCH_LAYERING = `Treat rigor, novelty, experiments, validation, engineering, writing, review, documents, and preferences as layered means rather than equal goals. ${DOVE_RESEARCH_HIGHEST_MATERIAL_UNRESOLVED_DEFICIENCY} ${DOVE_RESEARCH_SUBSTANTIVE_PROGRESS_TEST} ${DOVE_RESEARCH_OVERALL_BEST_ACTION} Rank actions by whether they change or protect the mainline decision, and do not let lower-level artifacts simulate higher-level research progress.`;
 var DOVE_RESEARCH_PROPORTIONALITY = "Be objective and proportional: act from evidence, task risk, user preference, and the research mainline, neither rushing into aggressive execution nor over-defending with unnecessary checks.";
-var DOVE_RESEARCH_STOPPING = `For a pure judgment or explanation request, answer the question and stop before unrequested side effects. For a confirmed research or artifact goal, continue the default research loop across substantive results while an effective in-scope action remains. ${DOVE_RESEARCH_REAL_BLOCKER} Operational interruption requires an accurate continuation point, not a scientific completion claim.`;
+var DOVE_RESEARCH_TASK_BOUNDARY = "Task boundary: complete a clearly bounded request within its stated scope and report it as local completion without pretending that it completes the research mainline. Continue across substantive actions and capabilities only when the user's confirmed goal asks Dove to advance or protect the mainline, resolve a higher-level research deficiency, or complete a higher-level research artifact; mentioning or editing an artifact alone does not expand a bounded task.";
+var DOVE_RESEARCH_STOPPING = `For a pure judgment, explanation, or clearly bounded request, answer or complete that request and stop before unrequested work outside its scope. For a confirmed goal that asks Dove to advance or protect the research mainline, resolve a higher-level research deficiency, or complete a higher-level research artifact, continue the default research loop across substantive results while an effective in-scope action remains. ${DOVE_RESEARCH_TASK_BOUNDARY} ${DOVE_RESEARCH_REAL_BLOCKER} Operational interruption requires an accurate continuation point, not a scientific completion claim.`;
 var DOVE_RESEARCH_PERSONA_BULLETS = Object.freeze([
   DOVE_RESEARCH_FRAME,
   DOVE_RESEARCH_HUNCH,
@@ -61,13 +62,6 @@ var DOVE_RESEARCH_CAPSULE_BULLETS = Object.freeze([
   DOVE_RESEARCH_HOST_TOOL_BOUNDARY,
   ...DOVE_RESEARCH_PERSONA_BULLETS
 ]);
-var DOVE_RESEARCH_SPECIALIZED_CAPSULE_BULLETS = Object.freeze([
-  "Dove remains one complete research agent using optional specialist methods, not separate personas or user-managed stages.",
-  DOVE_RESEARCH_DEFAULT_AUTONOMY,
-  "Use approved host tools directly; research Markdown is ordinary context, not a database.",
-  "Stay objective and proportional: let evidence, overall path cost, preferences, and the mainline decide the next action.",
-  "Submission readiness and Review findings select the next action; they do not by themselves authorize manuscript edits or contribution/novelty narrowing. Surface evidence and options before a mainline-changing claim edit."
-]);
 var DOVE_RESEARCH_JUDGMENT_BOUNDARY = `For what-now or should-we-continue prompts that only request judgment, give the judgment and useful next move, then stop before unrequested side effects. If the prompt asks Dove to judge and perform useful work, or clearly asks Dove to continue an already active confirmed research goal, perform the work under Dove's default progression. ${DOVE_RESEARCH_STOPPING}`;
 var DOVE_RESEARCH_ADVANCE = `${DOVE_RESEARCH_CURIOSITY} ${DOVE_RESEARCH_LAYERING} Advance by the overall-best feasible action. ${DOVE_RESEARCH_DISCRIMINATING_ACTION} When theory and results disagree, revisit the theory, test, and route. Continue while another effective in-scope action can materially improve or protect the mainline judgment or required artifact; low-value diminishing-return polish is not enough. ${DOVE_RESEARCH_REAL_BLOCKER}`;
 var DOVE_RESEARCH_MAINLINE = `${DOVE_RESEARCH_MAINLINE_ANCHORING} Evidence may change the route, claims, and artifacts within it; when evidence requires a material mainline change, present the conflict and choices to the user rather than switching silently. Keep support work subordinate to whether it advances, protects, or honestly blocks the mainline.`;
@@ -81,6 +75,8 @@ var DOVE_RESEARCH_ACTION_LENSES = Object.freeze([
   DOVE_RESEARCH_EXPRESS_LENS
 ]);
 var DOVE_RESEARCH_ACTION_LENS_FRAME = `Use Explore, Execute, and Express as orthogonal lenses, not a sequence, role split, Skill set, state, schema, or fixed workflow rubric. ${DOVE_RESEARCH_ACTION_LENSES.join(" ")}`;
+var DOVE_RESEARCH_CAPABILITY_RETURN = "Each specialist capability returns its substantive result to the same Dove judgment: what evidence was actually inspected, what authoritative artifact changed, what material decision changed or remained unresolved, and the next feasible action within the confirmed task boundary. For a mainline-level goal, also identify the highest remaining deficiency and next discriminating action; for a bounded request, report its local result without using unresolved mainline work to expand scope. A capability result is not a separate verdict, gate, persona, workflow stage, or automatic stop.";
+var DOVE_RESEARCH_OUTCOME_CONTINUATION = `After each substantive result, compare changed evidence, contribution sufficiency, authoritative artifact state, and the confirmed task boundary. ${DOVE_RESEARCH_CAPABILITY_RETURN} If a mainline-level goal still has a feasible in-scope action, do it before stopping; if a bounded request is complete, stop without expanding it. If host context interrupts unfinished in-scope work, preserve the exact action as operational continuation, not product stop.`;
 var DOVE_RESEARCH_DEFAULT_PRIORITY = `Prioritize the judgment by research hierarchy: contribution, mechanism, novelty, and positioning; then method validity, evidence quality, experiment design, fair baselines, and failure analysis; then scientific argument and writing; finally delivery packaging only when science and argument are sufficiently supported and delivery is the sole material limitation. This hierarchy ranks what matters, not which file or capability to touch: a contribution, novelty, or positioning concern whose answer still depends on method, evidence, experiment, analysis, source, or figure work calls for that discriminating scientific action before wording or claim narrowing. ${DOVE_RESEARCH_HIGHEST_MATERIAL_UNRESOLVED_DEFICIENCY}`;
 var DOVE_RESEARCH_DEFAULT_REVIEW_ABSORPTION = `Treat Review findings as evidence inside Dove's current author-side judgment: ${DOVE_RESEARCH_REVIEW_FINDING_TRIAGE} A finding, report, or recommendation cannot end Dove's progression while feasible in-scope action remains.`;
 var DOVE_RESEARCH_DEFAULT_OUTER_STOP = `Stop default progression only when the confirmed goal is achieved by real evidence and authoritative artifacts, or substantive investigation establishes that no effective in-scope path remains. A required permission or external boundary may pause the uniquely necessary action, but Dove must first complete independent judgments and compare alternatives rather than treating the boundary itself as scientific blockage. A material change to the confirmed mainline requires user confirmation. Otherwise begin the next scientific round. ${DOVE_RESEARCH_REPORTING_DISTINCTION}`;
@@ -100,23 +96,14 @@ var USER_RESPONSE_POLICY = Object.freeze([
 ]);
 
 // src/core/ambient-policy.mjs
-var AMBIENT_CONTEXT = "Use hidden `dove-intake` for this request.";
-var CONTEXT_FOLLOW_UP = /^(?:说人话|解释(?:一下|下)?|说明(?:一下|下)?|这是什么意思|什么意思|再(?:简短|简单|短|说一遍)|简短(?:一点|些)?|简单(?:一点|些)?|总结(?:一下|下)?|换个说法|重说(?:一遍)?|展开(?:一下|下)?|继续|接着来|下一步|确认|好的|明白|收到|谢谢|多谢|感谢|why|what does (?:this|that) mean|explain|summari[sz]e|shorter|simplify|say that again|continue|go on|next|ok|okay|got it|thanks)(?:[!！,.，。?？\s]*)$/iu;
-var JUDGMENT_ONLY_INTENT = /(?:怎么办|接下来(?:呢|怎么办)?|下一步(?:是什么|呢|怎么办)?|继续吗|(?:要不要|该不该).*?(?:[?？]|$)|是否(?:需要|应该|要).*?(?:[?？]|$)|\bwhat now\b|\bwhat should (?:we|i) do\b|\b(?:do you think\s+)?should (?:we|i)\b|\bdo (?:we|i) need to\b)/iu;
-var JUDGMENT_WITH_WORK_INTENT = /(?:如果(?:需要|值得|有用|应该|该).*?(?:就|直接)?(?:做|跑|执行|查|检索|验证|检查|测试|修改|修订|记录|写|画|实现)|需要(?:的话|就).*?(?:做|跑|执行|查|检索|验证|检查|测试|修改|修订|记录|写|画|实现)|判断.*?(?:需要|值得|应该|该).*?(?:就|直接)?(?:做|跑|执行|查|检索|验证|检查|测试|修改|修订|记录|写|画|实现)|\b(?:if|when)\s+(?:needed|useful|worthwhile|appropriate|yes)\b.*?\b(?:do|run|execute|check|verify|test|search|retrieve|write|record|fix|revise|implement|plot|draw)\b|\b(?:judge|decide|determine)\b.*?\b(?:then|and)\b.*?\b(?:do|run|execute|check|verify|test|search|retrieve|write|record|fix|revise|implement|plot|draw)\b)/iu;
-var ENGLISH_WORK_ACTION = "(?:research|investigate|design|run|execute|benchmark|source|retrieve|read|verify|test|diagnose|audit|critique|review|evaluate|replicate|reproduce|ablate|derive|prove|model|optimi[sz]e|implement|analy[sz]e|compare|draft|write|revise|plot|draw|rebut|respond|import|prepare|record|update|save|remember|reflect|retrospect|find|search|collect)";
-var CHINESE_WORK_ACTION = "(?:\u7814\u7A76|\u8C03\u7814|\u8BBE\u8BA1|\u8FD0\u884C|\u6267\u884C|\u8DD1|\u83B7\u53D6|\u67E5\u627E|\u67E5|\u5BFB\u627E|\u627E|\u641C\u7D22|\u68C0\u7D22|\u641C\u96C6|\u6536\u96C6|\u9605\u8BFB|\u6838\u5BF9|\u9A8C\u8BC1|\u6D4B\u8BD5|\u8BCA\u65AD|\u5BA1\u67E5|\u68C0\u67E5|\u5BA1\u9605|\u6279\u5224|\u5206\u6790|\u6BD4\u8F83|\u8BC4\u4F30|\u590D\u73B0|\u91CD\u590D|\u6D88\u878D|\u63A8\u5BFC|\u8BC1\u660E|\u5EFA\u6A21|\u5B9E\u73B0|\u4F18\u5316|\u8D77\u8349|\u5199|\u4FEE\u6539|\u4FEE\u8BA2|\u7ED8\u56FE|\u753B|\u8BC4\u5BA1|\u5BA1\u7A3F|\u56DE\u590D|\u53CD\u9A73|\u5BFC\u5165|\u51C6\u5907|\u8BB0\u5F55|\u66F4\u65B0|\u4FDD\u5B58|\u8BB0\u4F4F|\u590D\u76D8|\u53CD\u601D)";
-var DOVE_WORK_ACTION = new RegExp(`(?:\\b${ENGLISH_WORK_ACTION}\\b|${CHINESE_WORK_ACTION})`, "iu");
-var DOVE_WORK_DIRECTIVE = new RegExp(`^(?:${ENGLISH_WORK_ACTION}\\b\\s+|${CHINESE_WORK_ACTION}.+)|(?:\\b(?:please|can you|could you|would you|help me|help us|let'?s|we need to|i need you to|i want you to|i'd like you to)\\b|(?:\u5E2E\u6211|\u8BF7|\u8BF7\u4F60|\u9EBB\u70E6|\u5E2E\u5FD9|\u9700\u8981\u4F60|\u6211\u4EEC\u6765|\u7ED9\u6211)|(?:\u628A|\u5C06).*(?:\u5199\u8FDB|\u5199\u5230|\u8BB0\u5F55\u5230|\u66F4\u65B0\u5230|\u4FDD\u5B58\u5230))`, "iu");
-var DOVE_DOMAIN_OBJECT = /(?:\bdove\b|\bresearch\b|\bresearch (?:question|record|note|context|mainline|decision|claim|route|problem|result)\b|\bexperiment(?:al)?(?: result| note| plan| design| record| output)?\b|\bbenchmark(?: result| plan)?\b|\b(?:literature|papers?|manuscripts?|figures?|plots?|captions?|reviewer|review handoff|review return|review finding|review document|review prompt|review exchange|rebuttal|lessons?|claims?|missions?|hypothes(?:is|es)|citations?|evidence|sources?|source note|source material|results?|methods?|protocols?|baselines?|datasets?|metrics?|algorithms?|models?|ablations?|evaluations?)\b|(?:Dove|科研|研究|研究(?:问题|记录|主线|上下文|结论|决策)|实验(?:结果|记录|计划|文档)?|基准|文献|来源|论文|稿件|草稿|图表|绘图|(?:这|那|该|本)?张图|评审|审稿|回复审稿|反驳|经验|教训|主线|结论|决策|假设|引用|证据|结果|方法|协议|数据集|指标|算法|模型|消融|评估|复现))/iu;
-function isHighConfidenceAmbientWorkPrompt(prompt) {
+var AMBIENT_CONTEXT = "Use hidden `dove-intake` as a zero-write research-context bridge for this request.";
+var NON_RESEARCH_RESEARCH_PHRASE = /(?:\bresearch\s+(?:travel|trip|hotel|flight|laptop|phone|product|price|shopping|purchase|job|career|school|program|application|email)\b|研究生(?:申请|邮件|简历|文书|项目|学校)?|研究(?:旅行|旅游|酒店|航班|电脑|手机|商品|价格|购物|求职|职业|申请))/iu;
+var RESEARCH_RELEVANCE = /(?:\bresearch (?:question|problem|goal|project|mainline|claim|route|result|record|note|context|decision)\b|\b(?:papers?|manuscripts?|experiments?|hypotheses|hypothesis|literature|citations?|peer review|reviewer|review handoff|review return|rebuttal|submission venue)\b|科研|研究(?:问题|目标|主线|主张|路线|结果|记录|上下文|决策)|论文|稿件|实验|假设|文献|引用|同行评审|审稿|审稿人|审稿交接|审稿返回|回复审稿|反驳|投稿(?:期刊|会议|要求)?)/iu;
+function isResearchRelatedWakeupPrompt(prompt) {
   if (typeof prompt !== "string") return false;
   const normalized = prompt.normalize("NFKC").trim();
-  if (!normalized || normalized.startsWith("/") || CONTEXT_FOLLOW_UP.test(normalized)) return false;
-  const hasWork = DOVE_WORK_ACTION.test(normalized) && DOVE_DOMAIN_OBJECT.test(normalized);
-  if (JUDGMENT_ONLY_INTENT.test(normalized) && !JUDGMENT_WITH_WORK_INTENT.test(normalized)) return false;
-  if (JUDGMENT_WITH_WORK_INTENT.test(normalized)) return hasWork;
-  return DOVE_WORK_DIRECTIVE.test(normalized) && hasWork;
+  if (!normalized || normalized.startsWith("/") || NON_RESEARCH_RESEARCH_PHRASE.test(normalized)) return false;
+  return RESEARCH_RELEVANCE.test(normalized);
 }
 var DOVE_CLAUDE_AMBIENT_HOOK_COMMAND = 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"';
 var DOVE_CLAUDE_SESSION_START_HOOK_COMMAND = 'dove hook session-start --project "$CLAUDE_PROJECT_DIR"';
@@ -144,7 +131,7 @@ var DOVE_CLAUDE_SESSION_START_HOOK_ENTRY = Object.freeze({
   ])
 });
 function ambientContextForPrompt(prompt) {
-  return isHighConfidenceAmbientWorkPrompt(prompt) ? AMBIENT_CONTEXT : null;
+  return isResearchRelatedWakeupPrompt(prompt) ? AMBIENT_CONTEXT : null;
 }
 
 // src/core/ambient-hook.mjs

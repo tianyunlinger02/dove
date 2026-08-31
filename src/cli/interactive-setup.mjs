@@ -17,25 +17,20 @@ function safeProjectName(target) {
   return path.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
 }
 
-function setupCompleteLines(_result, color) {
-  return [
-    "",
-    terminalStyle("项目配置完成", "bold", { color }),
-    "",
-    "✓ Dove 项目集成已是当前版本",
-    "✓ Dove agent 已安装",
-    "✓ Dove 默认科研 agent 与 9 个可选专项入口已安装",
-    "✓ Claude Code 自然语言入口已配置",
-    "✓ Prompt Hook 与 Skills 已安装",
-    "✓ 按需论文搜索、下载与阅读 MCP 已声明",
-    "✓ 最小研究入口 RESEARCH.md 已建立",
-    "",
-    "论文工具需要本机已有 uvx，并在 Claude Code 首次使用时由你批准；Dove 未安装依赖、写入凭据或替你批准。",
-    "默认研究文档是可维护的 Markdown 入口，不代表科研主线、结论或任务已经完成。",
-    "",
-    `${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code`,
-    "进入后直接告诉 Dove 你的科研目标；/dove:* 只是可选专项快捷入口。"
-  ].join("\n");
+function setupCompleteLines(result, color) {
+  const hasClaude = result.hosts?.includes("claude");
+  const lines = ["", terminalStyle("项目配置完成", "bold", { color }), "", "✓ Dove 项目集成已是当前版本"];
+  if (hasClaude) {
+    lines.push("✓ Dove agent 与 9 个可选专项入口已安装", "✓ Claude Code 自然语言入口、Prompt Hook、WebFetch 禁用和按需 MCP 已配置");
+  }
+  if (result.hosts?.includes("dsh")) lines.push("✓ DSH 项目级 filesystem Skills 已安装");
+  lines.push("✓ 最小研究入口 RESEARCH.md 已建立", "", "默认研究文档是可维护的 Markdown 入口，不代表科研主线、结论或任务已经完成。", "");
+  if (hasClaude) {
+    lines.push("论文工具需要本机已有 uvx，并在 Claude Code 首次使用时由你批准；Dove 未安装依赖、写入凭据或替你批准。", "", `${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code`, "进入后直接提出科研请求；/dove:* 只是可选专项快捷入口。");
+  } else {
+    lines.push(`${terminalStyle("下一步", "bold", { color })}  在 DSH 中使用项目级 Dove filesystem Skills；DSH 不提供 Claude slash 命令、Hooks 或 MCP 声明。`);
+  }
+  return lines.join("\n");
 }
 
 function blockedMessage(result, color, stream, env) {

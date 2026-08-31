@@ -21,9 +21,9 @@ Validators and real interface checks establish bounded software evidence only. T
 - the public release is Dove `3.0.0` with one Dove research agent and nine flat Skills;
 - canonical Dove behavior, Skill workflows, and generated host adapters do not drift, including the nine-capability shared mainline anchor, highest-level active limit, explicit candidate explanations, discriminating action choice, material-progress judgment, and research drive that turns gaps into hypotheses, discriminating evidence, or concrete next moves;
 - generated adapters remain projections rather than readiness claims;
-- Claude Code remains the supported project initialization path;
+- Claude Code and DeepSeek Harness remain the supported project initialization paths; Claude receives the complete integration, while DSH receives project-local filesystem Skills only;
 - the package contains the library, CLI, hook bundles, Dove agent surface, hidden Claude paper-search and web-reader support Skills, and no Dove research MCP or third-party Python bundle;
-- the CLI exposes `init`, `update`, `reinstall`, `doctor`, `export-research`, and `hook`, with no `mcp` or `migrate-research` command;
+- the CLI exposes `init`, `update`, `reinstall`, `uninstall`, `doctor`, `export-research`, and `hook`, with no `mcp` or `migrate-research` command;
 - public Skills use normal host tools; the optional external paper MCP remains bounded, pinned, user-approved, and has no CLI/shell fallback;
 - Claude project integration preserves built-in `WebSearch`, denies built-in `WebFetch` through project-scoped `permissions.deny`, uses pinned `dove-paper-search` for papers, uses hosted Exa MCP for ordinary webpage bodies and known URLs, has no CLI/shell/`curl`/fetch fallback, and DSH does not receive Claude permissions or MCP projection;
 - Default multi-round progression is foreground work, ambient routing cannot select a separate Auto Skill or command, and it reads the user-confirmed Workspace mainline, preserving it while feasible in-scope actions can advance or protect the mainline;
@@ -35,7 +35,7 @@ Validators and real interface checks establish bounded software evidence only. T
 - Missions and Sources remain natural documents and Claims do not become a store;
 - installation manifest revision `2.0`, ordinary Dove feedback, and managed-file safety remain separate from research evidence;
 - project update refreshes package-managed integration and preserves existing `.dove/research/**` without creating summaries, completing navigation, or replacing Lessons;
-- ambient routing uses a positive clear Dove work threshold, hidden intake may choose no Dove Skill for contextual or pure judgment-only prompts, judgment plus authorized bounded action may route as work, and Dove does not install or rely on a Stop hook; Stop does not drive continuity, routing, tools, writes, scheduling, or plain-language second turns;
+- ambient routing uses a conservative research-relatedness gate only for non-slash requests, hidden intake is a thin zero-write bridge, and the gate does not select Skills, authorize work, decide continuation or completion, or narrow claims; Dove does not install or rely on a Stop hook; Stop does not drive continuity, routing, tools, writes, scheduling, or plain-language second turns;
 - export accepts supported legacy JSON research records only, archives original bytes, requires separate real-data authorization, and provides no fallback;
 - Complete Reinstall defaults to No and rebuilds package-managed integration while preserving `.dove/research/**`, `.dove/install/DOCTOR.md`, and ordinary project files;
 - Trellis source and template pairs are byte-identical; and

@@ -196,12 +196,12 @@ export function inspectProjectDoctor(start, options = {}) {
   const workspaceState = researchState(safeRoot, options);
   const adoption = safeRoot ? adoptionState(safeRoot, options) : { state: "absent", ready: false, preview: null, error: "Project root is unavailable." };
   const setup = classifyProjectSetup({ projectIntegration, migrationInstallation, workspaceState, adoption });
-  const ready = userCli.healthy
+  const staticChecksPassed = userCli.healthy
     && projectIntegration.healthy
     && workspaceState.healthy;
   const result = {
-    ready,
-    state: ready ? "ready" : "attention",
+    staticChecksPassed,
+    state: staticChecksPassed ? "static-checks-passed" : "attention",
     target: safeRoot,
     userCli,
     projectIntegration,

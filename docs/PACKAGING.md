@@ -83,7 +83,7 @@ init, update, reinstall, uninstall, doctor, export-research, hook
 - `reinstall` displays the deletion and replacement scope and defaults to No. After confirmation it rebuilds integration while preserving `.dove/research/**`, `.dove/install/DOCTOR.md`, and ordinary project files.
 - `doctor` is a read-only developer diagnostic and does not judge science. Host-maintained `DOCTOR.md` feedback is separate and does not require this command.
 - `hook session-start` transactionally hot-syncs recognized package-managed integration from the current user-level package and emits no research context.
-- `hook user-prompt-submit` first validates the prompt event, then performs the same integration-only hot sync before conservative ambient routing. This bridges valid revision-2.0 projects created before SessionStart. Hidden intake may choose no Dove Skill for contextual follow-ups, explanations, confirmations, or pure judgment-only prompts.
+- `hook user-prompt-submit` first validates the prompt event, then performs the same integration-only hot sync before conservative ambient routing. This bridges valid revision-2.0 projects created before SessionStart. The host handles general routing; hidden intake is a thin zero-write bridge added only for clearly research-related non-slash requests and does not select a Skill or decide execution.
 - Hot sync never touches `.dove/research/**`, never migrates legacy state or invokes Complete Reinstall, and guarantees current managed files on disk rather than same-session host reload.
 - Stop is not a managed lifecycle hook and does not perform hot sync, research continuation, tool calls, or writes.
 

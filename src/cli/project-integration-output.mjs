@@ -49,29 +49,20 @@ function headingFor(command, status) {
   throw new Error(`Unsupported Dove integration presentation: ${command}/${status}.`);
 }
 
-function setupLines(command, status) {
-  if (command === "init" && status === "already-initialized") {
-    return ["✓ 现有项目集成保持不变，没有写入任何文件"];
+function setupLines(command, status, hosts) {
+  const hasClaude = hosts.includes("claude");
+  const hasDsh = hosts.includes("dsh");
+  const lines = [];
+  if (command === "init" && status === "already-initialized") return ["✓ 现有项目集成保持不变，没有写入任何文件"];
+  if (hasClaude) {
+    lines.push("✓ Dove agent 与 9 个可选专项入口已安装", "✓ Claude 提示钩子、WebFetch 禁用与项目绝对路径状态栏已配置", "✓ 按需论文检索 MCP 与普通网页 Exa MCP 已声明");
   }
-  if (command === "init") {
-    return [
-      "✓ Dove agent 已安装",
-      "✓ Dove 默认科研 agent 与 9 个可选专项入口已安装",
-      "✓ Claude 提示钩子、WebFetch 禁用与项目绝对路径状态栏已配置",
-      "✓ 按需论文检索 MCP 与普通网页 Exa MCP 已声明",
-      "✓ 最小研究入口 RESEARCH.md 已建立",
-      "✓ 项目集成记录已建立"
-    ];
-  }
-  if (status === "unchanged") return ["✓ Dove agent、能力入口和宿主接入均已是最新"];
-  if (status === "adopted") {
-    return [
-      "✓ 现有研究 Markdown 保持不变",
-      "✓ Dove agent、能力入口、Claude 钩子、WebFetch 禁用、项目绝对路径状态栏和 MCP 声明已采用当前 package 接入",
-      "✓ 项目集成记录已建立为 revision 2.0"
-    ];
-  }
-  return ["✓ Dove agent、能力入口、宿主接入和项目绝对路径状态栏已刷新"];
+  if (hasDsh) lines.push("✓ DSH 项目级 filesystem Skills 已安装");
+  if (command === "init") lines.push("✓ 最小研究入口 RESEARCH.md 已建立", "✓ 项目集成记录已建立");
+  else if (status === "unchanged") return ["✓ Dove 能力入口和已选宿主接入均已是最新"];
+  else if (status === "adopted") lines.push("✓ 现有研究 Markdown 保持不变", "✓ 项目集成记录已建立为 revision 2.0");
+  else lines.push("✓ Dove 能力入口和已选宿主接入已刷新");
+  return lines;
 }
 
 export function renderProjectIntegrationResult(command, result, options = {}) {
@@ -98,7 +89,7 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
   lines.push(`${terminalStyle("项目", "dim", { color })}  ${projectName}`);
   lines.push(`${terminalStyle("宿主", "dim", { color })}  ${hostLabels(result.hosts)}`);
   lines.push("");
-  lines.push(...setupLines(command, result.status).map((line) => terminalStyle(line, "green", { color })));
+  lines.push(...setupLines(command, result.status, result.hosts).map((line) => terminalStyle(line, "green", { color })));
   lines.push("");
   if (command === "init" && result.status === "already-initialized") {
     lines.push("如需刷新项目集成，请运行 dove update。更新不会重写、重连或规范化 .dove/research/**。");
@@ -115,6 +106,10 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
     lines.push("论文检索需要本机已有 uvx；Claude Code 首次使用 `dove-paper-search` 或 `exa` project MCP 时会请求你批准。Dove 未安装依赖、写入凭据或替你批准。WebSearch 保留用于搜索发现，WebFetch 由项目权限禁用。");
     lines.push("");
   }
-  lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code，直接告诉 Dove 你的科研目标；/dove:* 只是可选专项快捷入口。`);
+  if (result.hosts.includes("claude")) {
+    lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code，直接提出科研请求；Dove 会按科研相关性唤醒，/dove:* 只是可选专项快捷入口。`);
+  } else {
+    lines.push(`${terminalStyle("下一步", "bold", { color })}  在 DSH 中使用已安装的项目级 Dove filesystem Skills；DSH 不提供 Claude slash 命令、Hooks 或 MCP 声明。`);
+  }
   return lines.join("\n");
 }

@@ -139,7 +139,7 @@ export function renderDoveHome(options = {}) {
         ? "dove update"
         : state === "blocked"
           ? "dove doctor"
-          : "进入 Claude Code 后直接告诉 Dove 科研目标；/dove:* 为可选专项快捷入口"
+          : "进入支持的宿主后直接提出科研请求；Claude Code 中的 /dove:* 只是可选专项快捷入口"
   );
   const stateLabel = {
     uninitialized: "尚未配置 Dove",

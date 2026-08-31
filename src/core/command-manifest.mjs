@@ -3,7 +3,7 @@ import {
   DOVE_RESEARCH_ADVANCE,
   DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY,
   DOVE_RESEARCH_CAPABILITY_RESPONSIBILITY,
-  DOVE_RESEARCH_CAPSULE_BULLETS,
+  DOVE_RESEARCH_CAPABILITY_RETURN,
   DOVE_RESEARCH_EVIDENCE_DRIVEN_CLAIM_BOUNDARY,
   DOVE_RESEARCH_EVIDENCE_STATE,
   DOVE_RESEARCH_FIGURE_CAPABILITY_BOUNDARY,
@@ -29,6 +29,7 @@ import {
   DOVE_RESEARCH_REVIEW_NEGATIVE_CONTINUITY,
   DOVE_RESEARCH_REVIEW_ANTI_GAMING,
   DOVE_RESEARCH_REVIEW_NO_INDEPENDENT_STATUS_CLAIM,
+  DOVE_RESEARCH_REVIEW_RETURN_PROVENANCE,
   DOVE_RESEARCH_REVIEW_VERSION_CURRENCY,
   DOVE_RESEARCH_SHARED_CONTRACT,
   DOVE_RESEARCH_DEFAULT_AUTONOMY,
@@ -38,7 +39,6 @@ import {
   DOVE_RESEARCH_REAL_BLOCKER,
   DOVE_RESEARCH_REPORTING_DISTINCTION,
   DOVE_RESEARCH_SKILL_INVENTORY_TEXT,
-  DOVE_RESEARCH_SPECIALIZED_CAPSULE_BULLETS,
   DOVE_RESEARCH_SUPPORT_SUBORDINATION_BOUNDARY
 } from "./dove-research-contract.mjs";
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "./web-access-integration.mjs";
@@ -75,8 +75,7 @@ export const OPENCODE_ROLE_SKILL_PATHS = [];
 
 export const HOST_ADAPTER_POLICY = Object.freeze({
   toolAccess: Object.freeze({ transport: "host-files", unavailable: "report", cliFallback: false, shellFallback: false }),
-  privacy: Object.freeze({ exposePrivateProtocol: false }),
-  adapterBullets: DOVE_RESEARCH_CAPSULE_BULLETS
+  privacy: Object.freeze({ exposePrivateProtocol: false })
 });
 
 const RESEARCH_FRAME = DOVE_RESEARCH_FRAME;
@@ -161,6 +160,8 @@ function sectionItems(sections, field) {
 const SHARED_RESEARCH_JUDGMENT_TITLE = "Shared research judgment";
 const SHARED_RESEARCH_JUDGMENT_RESPONSIBILITIES = Object.freeze([
   DOVE_RESEARCH_SHARED_CONTRACT,
+  DOVE_RESEARCH_CAPABILITY_RESPONSIBILITY,
+  DOVE_RESEARCH_CAPABILITY_RETURN,
   "When route, cause, or response is uncertain, compare different explanations or approaches by mechanism, inspected evidence, actual use conditions, and whether a feasible action can distinguish them.",
   DOVE_RESEARCH_EVIDENCE_STATE
 ]);
@@ -279,7 +280,7 @@ function contract(slug) {
       "Do not substitute CLI, shell, curl, or ad hoc fetch scripts when web or MCP retrieval is unavailable."
     ],
     hostGuidance: hostGuidance({
-      claude: ["For web access, keep built-in WebSearch available for discovery. Do not use built-in WebFetch; project permissions deny it. Use the pinned dove-paper-search MCP for scholarly paper acquisition and full-text reading, and the exa hosted MCP for ordinary webpage bodies, documentation pages, venue pages, and known URLs. If either MCP is unavailable or unapproved, state the boundary rather than substituting CLI, shell, curl, or ad hoc fetch scripts."],
+      claude: ["For web access, keep built-in WebSearch available for discovery. Do not use built-in WebFetch; project permissions deny it. Use the pinned dove-paper-search MCP for scholarly paper acquisition and full-text reading, and the exa hosted MCP for ordinary webpage bodies, documentation pages, venue pages, and known URLs. If either MCP is unavailable or unapproved, state the boundary rather than substituting CLI, shell, curl, or ad hoc fetch scripts, then continue with other approved local, web, user-provided, experimental, or analytical material that can still advance the question. Distinguish discovery snippets and alternative evidence from webpage or paper full text actually retrieved and read through the unavailable MCP."],
       dsh: ["DSH receives only filesystem Skills from Dove. Do not claim Claude project permissions, Claude MCP servers, built-in WebFetch denial, or Exa availability unless DSH itself exposes equivalent approved tools in the current run."]
     })
   });
@@ -361,8 +362,8 @@ function contract(slug) {
     const reviewGroundingAction = action("review-grounding", "For author-side scientific self-check, inspect the actual current full paper and ask only if an unclear venue would materially change the judgment. For `dove-review`, require an identified target venue, then let the isolated reviewer context independently inspect official submission requirements, reviewer criteria, and a small representative set of actually retrieved and inspected submitted or published papers and related work needed to judge contribution, positioning, evidence norms, experiment presentation, and reader expectations. Distinguish material merely found from material retrieved, inspected, and used. Returned-review import and ordinary context inspection do not trigger venue or paper search merely because Review was invoked.", { readOnly: true });
     const reviewerPerspectiveAction = action("reviewer-perspective-work", "Perform author-side scientific self-check in the current Dove author context; do not call the Agent tool or launch helper subagents. From the established grounding, test contribution, novelty, claims, evidence, method, experiment conditions, limitations, writing clarity, likely reader confusion, and material figure evidence jobs across the current full paper. Return concrete findings with evidence, consequence, useful response, and a natural-language assessment; keep delivery readiness separate. Mark it as author-side self-check, not independent `dove-review`, external acceptance, or authority over the Workspace mainline.", { readOnly: true });
     const deliveryReviewAction = action("delivery-review", "When delivery review is selected, inspect official venue requirements, build output, required materials, formatting, anonymity, packaging, and access limits. Report delivery readiness separately from scientific acceptability.");
-    const reviewHandoffAction = action("dove-review-handoff", "Start `dove-review` only when the paper is highly complete, basically format-compliant, and organized as a near-real submission. Freeze and list only the current complete paper, authoritative LaTeX source and actual compiled output, actual submission appendices or supplementary material, and other venue-facing files that would really accompany submission. Do not include code, raw experiment outputs, unprocessed figure materials, internal notes, `.dove/research/**`, author evidence packages, private transcripts, or other unsubmitted project materials. Identify the target venue. For the first round, start a fresh genuinely isolated host Agent context using the same Dove research-agent definition; for later rounds, resume the same reviewer context unless the user explicitly asks to change reviewer. The reviewer independently grounds itself in official venue requirements, reviewer criteria, and representative literature, then read-only reviews the whole current submission rather than only a diff and reports scientific acceptability separately from delivery readiness. If the host lacks genuine isolation and persistence, report that independent `dove-review` is unavailable rather than substituting the author context.");
-    const reviewMaintenanceAction = maintainArea("reviews", "When the user supplies an actual `dove-review` return, clarification, rebuttal exchange, or asks to preserve an author-side scientific self-check or external handoff record, append it faithfully to the corresponding Review document with a clear boundary from existing text. Do not rewrite, summarize over, normalize, or replace the original return; add author interpretation only when the user asks.");
+    const reviewHandoffAction = action("dove-review-handoff", "Start `dove-review` only when the paper is highly complete, basically format-compliant, and organized as a near-real submission. Before invocation, create or update one naturally named Review document with the purpose, target venue, exact project-relative frozen material list, self-contained reviewer prompt, and known host limitations. Freeze and expose only the current complete paper, authoritative LaTeX source and actual compiled output, actual submission appendices or supplementary material, and other venue-facing files that would really accompany submission. Do not expose code, raw experiment outputs, unprocessed figure materials, internal notes, `.dove/research/**`, author evidence packages, private transcripts, old Reviews, historical handoffs, or other unlisted project materials. For the first round, start a fresh genuinely isolated host Agent context using the same Dove research-agent definition plus the reviewer-specific visibility overlay; record any real host context, session, resume, environment, or mount handle. For later rounds, resume that same reviewer context unless the user explicitly asks to change reviewer. Never invent a handle. The reviewer may use its own isolated scratch or environment for venue and literature grounding, but it remains read-only toward author materials. It reviews the whole current submission rather than only a diff and reports scientific acceptability separately from delivery readiness. If the host cannot enforce the material boundary or provide genuine isolation, persistence, and recovery, report that independent `dove-review` is unavailable rather than substituting the author context. That unavailable review path does not stop author-side progression: when the confirmed goal still calls for work, continue with feasible Source, Experiment, Draft, Figure, Rebuttal, implementation, author-side scientific self-check, delivery review, or other approved action without claiming that independent review occurred.");
+    const reviewMaintenanceAction = maintainArea("reviews", "When the user supplies an actual `dove-review` return, clarification, rebuttal exchange, or asks to preserve an author-side scientific self-check or external handoff record, append it faithfully to the corresponding Review document with a clear boundary from existing text. Record real host-provided context or session provenance, review round, target venue, and frozen material scope when known. Mark user-provided or pasted returns with unverifiable origin as provenance unverified rather than presenting them as the current isolated `dove-review` result. Do not rewrite, summarize over, normalize, or replace the original return; add author interpretation only when the user asks.");
     const semanticSections = [
       {
         title: "Mode selection",
@@ -404,7 +405,8 @@ function contract(slug) {
           DOVE_RESEARCH_REVIEW_ISOLATED_PERSISTENT,
           DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF,
           DOVE_RESEARCH_REVIEW_NEGATIVE_CONTINUITY,
-          DOVE_RESEARCH_REVIEW_VERSION_CURRENCY
+          DOVE_RESEARCH_REVIEW_VERSION_CURRENCY,
+          DOVE_RESEARCH_REVIEW_RETURN_PROVENANCE
         ],
         actions: [
           reviewHandoffAction
@@ -419,7 +421,7 @@ function contract(slug) {
         title: "Returned Review Import",
         purpose: "Faithfully preserve a returned review in the corresponding Review document.",
         responsibilities: [
-          "Append the actual reviewer return faithfully with a clear boundary from existing text; do not rewrite, summarize over, normalize, or invent severity, finding IDs, strict schema, or acceptance status."
+          "Append the actual reviewer return faithfully with a clear boundary from existing text. Bind verified returns to real host-provided context or session provenance, review round, target venue, and frozen material scope when exposed; label unverifiable pasted or user-provided origins as provenance unverified. Do not rewrite, summarize over, normalize, or invent severity, finding IDs, strict schema, or acceptance status."
         ],
         actions: [
           reviewMaintenanceAction
@@ -465,8 +467,8 @@ function contract(slug) {
       nonGoals: sectionItems(semanticSections, "nonGoals"),
       semanticSections,
       hostGuidance: hostGuidance({
-        claude: ["For `dove-review`, use a genuinely isolated persistent Claude Code Agent context only if the host actually provides it. Start fresh for the first round, resume the same context for re-review, change it only on explicit user request, and give it only the frozen near-submission materials. If unavailable, report the boundary rather than using the author context."],
-        dsh: ["Use DSH for `dove-review` only if it actually provides equivalent isolated persistent Agent context; otherwise report the boundary and do not simulate independence."]
+        claude: ["For `dove-review`, use a genuinely isolated persistent and recoverable Claude Code Agent context only if the host actually provides it and can restrict visibility to the frozen near-submission materials. Start fresh for the first round, record real host-provided resume provenance, resume the same context for re-review, and change it only on explicit user request. If unavailable, report the boundary rather than using the author context, then continue any feasible author-side research, revision, self-check, rebuttal, or delivery work still required by the confirmed goal without claiming independent review."],
+        dsh: ["DSH receives filesystem Skills only. Use DSH for `dove-review` only if the current DSH host independently exposes equivalent isolated, persistent, recoverable Agent context with restricted material visibility; otherwise report the boundary, do not simulate independence, and continue any feasible author-side work still required by the confirmed goal."]
       })
     });
   }
@@ -541,7 +543,6 @@ export const COMMAND_SURFACES = SURFACES.map(([slug, summary]) => ({
   summary,
   requiredTools: [],
   contract: contract(slug),
-  adapterCapsuleBullets: ["review"].includes(slug) ? DOVE_RESEARCH_SPECIALIZED_CAPSULE_BULLETS : undefined,
   examples: [`/dove:${slug}`],
   guidance: []
 }));

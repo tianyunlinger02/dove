@@ -41,7 +41,10 @@ export function recommendedDoveAction(result) {
     };
     return { ...first, message: messages[first.kind] ?? "按提示处理当前 Dove 状态。" };
   }
-  return { kind: "ready", command: "claude", message: "Dove 软件、agent surface、项目接入和研究文档外层检查通过。" };
+  if (!result.staticChecksPassed) {
+    return { kind: "inspect", command: "dove doctor --json", message: "静态检查仍有未通过项，但没有可安全自动建议的修复动作；请查看 JSON 诊断中的软件、项目接入和研究文档外层状态。" };
+  }
+  return { kind: "static-checks-passed", command: "无需处理", message: "Dove 软件、package-managed 项目接入和研究文档外层静态检查通过；这不证明当前宿主会话已加载 agent、Skills、Hooks 或 MCP，也不代表运行时或科研就绪。" };
 }
 
 export function renderDoveDoctor(result, options = {}) {
@@ -51,7 +54,7 @@ export function renderDoveDoctor(result, options = {}) {
   const action = recommendedDoveAction(result);
   return [
     terminalStyle("Dove 检查", "bold", { color }),
-    "面向 Dove 开发排查，检查软件、项目接入和 Markdown 研究文档外层可读性；保持只读，不判断科研结论、完成度或评审权威。用户通常无需运行此命令。",
+    "面向 Dove 开发排查，静态检查软件、package-managed 项目接入、已记录 host 配置和 Markdown 研究文档外层可读性；保持只读，不验证当前会话加载、MCP 批准或连接、运行时工具行为、科研结论、完成度或评审独立性。用户通常无需运行此命令。",
     "",
     softwareLine(result, color),
     projectLine(result, color),

@@ -20,7 +20,6 @@ import {
 } from "../src/core/web-access-integration.mjs";
 import {
   COMMAND_SURFACES,
-  HOST_ADAPTER_POLICY,
   PROJECT_HOST_IDS,
   adapterPathForCommand,
   hostCommandSlug,
@@ -44,14 +43,10 @@ function unique(values) {
 }
 
 function exampleBullets(command, hostId = null) {
+  if (hostId === "dsh") return [];
   const examples = command.examples;
-  if (!Array.isArray(examples)) {
-    return [];
-  }
-  return examples.map((example) => {
-    const text = String(example).trim();
-    return hostId === "opencode" ? text.replace(/^\/dove:/u, "/dove.") : text;
-  }).filter(Boolean);
+  if (!Array.isArray(examples)) return [];
+  return examples.map((example) => String(example).trim()).filter(Boolean);
 }
 
 
@@ -141,11 +136,6 @@ function renderGuidance(command) {
   return notes.length > 0 ? `## Command guidance\n\n${renderBullets(notes)}` : "";
 }
 
-function renderCapsule(command) {
-  const bullets = command.adapterCapsuleBullets ?? HOST_ADAPTER_POLICY.adapterBullets;
-  return `## Dove capsule\n\n${renderBullets(bullets)}`;
-}
-
 function renderExamples(command, hostId = null) {
   const examples = exampleBullets(command, hostId);
   return examples.length > 0 ? `\n\n## Examples\n\n${examples.map((example) => `- \`${example}\``).join("\n")}` : "";
@@ -156,8 +146,7 @@ function renderBody(command, heading, hostId = null) {
   const examples = renderExamples(command, hostId);
   const contract = renderCapabilityContract(command, hostId);
   const guidance = renderGuidance(command);
-  const capsule = renderCapsule(command);
-  return `# ${heading}\n\n${purpose}${examples}\n\n${contract}${guidance ? `\n\n${guidance}` : ""}\n\n${capsule}\n`;
+  return `# ${heading}\n\n${purpose}${examples}\n\n${contract}${guidance ? `\n\n${guidance}` : ""}\n`;
 }
 
 function renderFrontmatter(command, fields = {}) {

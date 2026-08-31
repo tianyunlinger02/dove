@@ -26,6 +26,8 @@ Dove 默认持续执行同一个科研循环：读取必要现场，识别最高
 
 上下文压缩、API 中断、超时或工具失败属于 operational interruption。它们要求留下准确续接点，不构成科学完成或自动改变主线。宿主的 background、Monitor、Cron、loop、tmux 或等价能力可用于真实等待和跨回合连续性，但不是独立的 Dove 运行时。
 
+普通请求首先由宿主完成通用路由。Claude ambient gate 只检查当前非 slash 请求是否明确具有科研相关性，并在命中时补充同一个 Dove 的研究上下文；它不读取 Workspace、选择 Skill、判断授权、执行、写入、继续、完成或主张范围。hidden `dove-intake` 是 zero-read、zero-write 的薄语义桥，不是研究阶段、完整 Agent 或 continuation controller。当前可见会话已有明确科研主线时，宿主模型自然把短 follow-up 解释为续接；可见上下文不足时做最小必要澄清。Dove 不用 Stop hook、SessionStart 研究注入或隐藏会话状态替代这一宿主上下文能力。
+
 ## Skill、工具与共同判断
 
 Source、Experiment、Draft、Figure、Review、Rebuttal、Lessons 等 Skill 是 Dove 的专项研究方法，不是角色、人格或用户必须编排的阶段。入口名和工具都不决定研究顺序；Dove 用同一个判断决定当前最有物质影响的工作。

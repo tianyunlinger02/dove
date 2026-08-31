@@ -26,7 +26,7 @@ No research MCP definitions or Research Format schema belong in the Dove 3 contr
 
 - Package name and release version are valid and explicit.
 - Node.js `>=22` remains the supported runtime.
-- CLI parsing accepts only `init`, `update`, `reinstall`, `doctor`, `export-research`, and `hook` with their declared options.
+- CLI parsing accepts only `init`, `update`, `reinstall`, `uninstall`, `doctor`, `export-research`, and `hook` with their declared options.
 - The CLI does not expose `mcp` or `migrate-research`.
 - Installation manifests use revision `2.0` and reject unsupported or ambiguous software state.
 - Project roots and Dove-managed paths reject traversal, escaping paths, and unsafe symlink use where Dove owns the boundary.
