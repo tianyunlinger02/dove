@@ -90,7 +90,7 @@ export function inspectResearchDocuments(root, options = {}) {
           V2_FORMAT_PATH
         );
         if (marker?.format === V2_FORMAT && Object.keys(marker).length === 1) {
-          return emptyResult("previous-research-format", { exportCommand: "dove export-research" });
+          return emptyResult("previous-research-format", { legacyDataPolicy: "Old legacy research data is left in place; Dove does not automatically convert or delete it." });
         }
       }
       return emptyResult("absent");

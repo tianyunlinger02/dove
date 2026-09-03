@@ -24,7 +24,7 @@ import {
 } from "../src/core/web-access-integration.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SCRATCH_ROOT = path.join(path.dirname(ROOT), ".dove-dev", "tmp");
+const SCRATCH_ROOT = path.join(ROOT, ".dove-dev", "tmp");
 fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
 
 function canonicalJson(value) {
@@ -71,20 +71,40 @@ function makeAdoptableProject() {
   return root;
 }
 
-function researchSnapshot(root) {
-  const paths = [
-    ".dove/manifest.json",
-    ".dove/install/DOCTOR.md",
-    ".dove/private/state.json",
-    ".dove-archive/old.md",
-    ".dove/research/RESEARCH.md",
-    ".dove/research/lessons/project-owned.md"
-  ];
-  return new Map(paths.filter((relativePath) => fs.existsSync(path.join(root, relativePath))).map((relativePath) => [relativePath, fs.readFileSync(path.join(root, relativePath))]));
+function fileSnapshot(root, relativeRoots = ["."]) {
+  const files = new Map();
+  const visit = (relativePath) => {
+    const absolutePath = path.join(root, relativePath);
+    if (!fs.existsSync(absolutePath)) return;
+    const stat = fs.lstatSync(absolutePath);
+    if (stat.isSymbolicLink()) {
+      files.set(relativePath, Buffer.from(`symlink:${fs.readlinkSync(absolutePath)}`, "utf8"));
+      return;
+    }
+    if (stat.isDirectory()) {
+      for (const child of fs.readdirSync(absolutePath).map(String).sort()) {
+        visit(relativePath === "." ? child : path.posix.join(relativePath, child));
+      }
+      return;
+    }
+    if (stat.isFile()) files.set(relativePath, fs.readFileSync(absolutePath));
+  };
+  for (const relativeRoot of relativeRoots) visit(relativeRoot);
+  return files;
 }
 
-function assertSnapshotUnchanged(root, before) {
-  for (const [relativePath, bytes] of before.entries()) assert.deepEqual(fs.readFileSync(path.join(root, relativePath)), bytes, `${relativePath} changed during adoption`);
+function researchSnapshot(root) {
+  return fileSnapshot(root, [".dove/research", ".dove/reviews", ".dove/runs"]);
+}
+
+function assertSnapshotUnchanged(root, before, label = "snapshot", relativeRoots = ["."]) {
+  const after = fileSnapshot(root, relativeRoots);
+  assert.deepEqual([...after.keys()].sort(), [...before.keys()].sort(), `${label} file set changed`);
+  for (const [relativePath, bytes] of before.entries()) assert.deepEqual(after.get(relativePath), bytes, `${relativePath} changed during ${label}`);
+}
+
+function assertResearchSnapshotUnchanged(root, before, label = "research/review/run snapshot") {
+  assertSnapshotUnchanged(root, before, label, [".dove/research", ".dove/reviews", ".dove/runs"]);
 }
 
 function readJson(target) {
@@ -124,7 +144,13 @@ try {
   fs.mkdirSync(path.dirname(customResearchPath), { recursive: true });
   fs.writeFileSync(customResearchPath, "custom evidence\n");
   fs.writeFileSync(retiredResearchPath, "retired but researcher-visible\n");
-  const researchBefore = [researchPath, customResearchPath, retiredResearchPath].map((target) => fs.readFileSync(target));
+  const reviewRecordPath = path.join(bridgeRoot, ".dove", "reviews", "hot-sync-preserve", "review.json");
+  fs.mkdirSync(path.dirname(reviewRecordPath), { recursive: true });
+  fs.writeFileSync(reviewRecordPath, "{\"schema\":\"preserve-review\"}\n");
+  const runReceiptPath = path.join(bridgeRoot, ".dove", "runs", "hot-sync-preserve", "run.jsonl");
+  fs.mkdirSync(path.dirname(runReceiptPath), { recursive: true });
+  fs.writeFileSync(runReceiptPath, "{\"schemaVersion\":\"dove.run.event.v1\",\"seq\":1,\"at\":\"2026-09-02T00:00:00.000Z\",\"type\":\"run.started\",\"runId\":\"hot-sync-preserve\"}\n");
+  const protectedBefore = researchSnapshot(bridgeRoot);
 
   const oldSettings = readJson(settingsPath);
   delete oldSettings.hooks.SessionStart;
@@ -138,6 +164,7 @@ try {
   oldManifest.package.version = "2.9.0";
   oldManifest.managed.find((entry) => entry.path === ".claude/settings.json").digest = semanticDigest(oldFragment);
   writeJson(manifestPath, oldManifest);
+  const driftBeforePrompt = fileSnapshot(bridgeRoot);
 
   const prompt = cliHook(bridgeRoot, "user-prompt-submit", {
     hook_event_name: "UserPromptSubmit",
@@ -146,18 +173,19 @@ try {
   });
   assert.equal(prompt.status, 0, prompt.stderr || prompt.stdout);
   assert.equal(prompt.stdout, "");
+  assertSnapshotUnchanged(bridgeRoot, driftBeforePrompt, "UserPromptSubmit zero-write");
+  assertResearchSnapshotUnchanged(bridgeRoot, protectedBefore, "UserPromptSubmit protected state");
+  assert.equal(readJson(manifestPath).package.version, "2.9.0");
+
+  const session = cliHook(bridgeRoot, "session-start", { hook_event_name: "SessionStart", cwd: bridgeRoot });
+  assert.equal(session.status, 0, session.stderr || session.stdout);
+  assert.equal(session.stdout, "");
   const bridgedSettings = readJson(settingsPath);
   assert.equal(bridgedSettings.hooks.SessionStart.some((entry) => entry.hooks?.some((hook) => hook.command === 'dove hook session-start --project "$CLAUDE_PROJECT_DIR"')), true);
   assert.equal(bridgedSettings.hooks.SessionStart.some((entry) => entry.hooks?.some((hook) => hook.command === "user-owned-session-start")), true);
   assert.equal(bridgedSettings.hooks.UserPromptSubmit.some((entry) => entry.hooks?.some((hook) => hook.command === "user-owned-prompt")), true);
   assert.equal(readJson(manifestPath).package.version, PACKAGE_VERSION);
-  [researchPath, customResearchPath, retiredResearchPath].forEach((target, index) => assert.deepEqual(fs.readFileSync(target), researchBefore[index]));
-
-  const unchangedManifest = fs.readFileSync(manifestPath);
-  const session = cliHook(bridgeRoot, "session-start", { hook_event_name: "SessionStart", cwd: bridgeRoot });
-  assert.equal(session.status, 0, session.stderr || session.stdout);
-  assert.equal(session.stdout, "");
-  assert.deepEqual(fs.readFileSync(manifestPath), unchangedManifest);
+  assertResearchSnapshotUnchanged(bridgeRoot, protectedBefore, "SessionStart protected state");
 
   const dshRoot = fs.mkdtempSync(path.join(SCRATCH_ROOT, "dove-dsh-"));
   roots.push(dshRoot);
@@ -165,6 +193,14 @@ try {
   initializeProjectIntegration(dshRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["dsh"] });
   assert.equal(fs.existsSync(path.join(dshRoot, ".claude", "settings.json")), false);
   assert.equal(fs.existsSync(path.join(dshRoot, ".mcp.json")), false);
+
+  const allHostRoot = fs.mkdtempSync(path.join(SCRATCH_ROOT, "dove-host-all-"));
+  roots.push(allHostRoot);
+  fs.mkdirSync(path.join(allHostRoot, ".git"));
+  const allHost = cliDove(["init", "--project", allHostRoot, "--host", "all", "--json"]);
+  assert.notEqual(allHost.status, 0);
+  assert.match(allHost.stderr, /'all' is not supported|host selection accepts only claude or dsh/iu);
+  assert.equal(fs.existsSync(path.join(allHostRoot, INSTALLATION_MANIFEST_PATH)), false);
 
   const absentResearchRoot = makeProject();
   roots.push(absentResearchRoot);
@@ -189,7 +225,7 @@ try {
   writeJson(newerManifestPath, newerManifest);
   assert.throws(
     () => synchronizeProjectIntegrationOnly(newerRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }),
-    /hot sync refuses/iu
+    /SessionStart sync refuses/iu
   );
 
   const mismatchRoot = makeProject();
@@ -200,7 +236,7 @@ try {
   writeJson(mismatchManifestPath, mismatchManifest);
   assert.throws(
     () => synchronizeProjectIntegrationOnly(mismatchRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }),
-    /hot sync refuses/iu
+    /SessionStart sync refuses/iu
   );
 
   const stopRoot = makeProject();
@@ -261,6 +297,8 @@ try {
   writeFile(adoptionRoot, ".dove-archive/old.md", "archived legacy state\n");
   writeFile(adoptionRoot, ".dove/research/RESEARCH.md", "# Researcher mainline\n\nPreserve exactly.\n");
   writeFile(adoptionRoot, ".dove/research/lessons/project-owned.md", "project-owned lesson\n");
+  writeFile(adoptionRoot, ".dove/reviews/review-preserve/review.json", "{\"schema\":\"preserve-review\"}\n");
+  writeFile(adoptionRoot, ".dove/runs/run-preserve/run.jsonl", "{\"schemaVersion\":\"dove.run.event.v1\",\"seq\":1,\"at\":\"2026-09-02T00:00:00.000Z\",\"type\":\"run.started\",\"runId\":\"run-preserve\"}\n");
   writeJson(path.join(adoptionRoot, ".mcp.json"), {
     mcpServers: {
       userServer: { type: "stdio", command: "user-server" }
@@ -285,7 +323,7 @@ try {
   assert.equal(adopted.status, "adopted");
   assert.equal(adopted.writtenPaths.includes(INSTALLATION_MANIFEST_PATH), true);
   assert.equal(adopted.changedPaths.some((relativePath) => relativePath.startsWith(".dove/research/")), false);
-  assertSnapshotUnchanged(adoptionRoot, adoptionBefore);
+  assertResearchSnapshotUnchanged(adoptionRoot, adoptionBefore, "adoption preservation");
   const adoptionManifest = readJson(path.join(adoptionRoot, INSTALLATION_MANIFEST_PATH));
   assert.equal(adoptionManifest.revision, "2.0");
   assert.equal(adoptionManifest.package.name, PACKAGE_NAME);

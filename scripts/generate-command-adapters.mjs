@@ -55,15 +55,7 @@ function renderBullets(bullets) {
 }
 
 function renderAction(item) {
-  const mode = item.readOnly ? "read-only" : "work-capable; not standalone authorization";
-  const writeBoundary = item.readOnly
-    ? " Read-only: do not create or modify files."
-    : item.persistencePolicy === "standard-research"
-      ? ` Maintain Dove research Markdown only when ${item.persistWhen}. Other file changes still require authorization from the user's request and this capability's side-effect boundary.`
-      : item.persistencePolicy === "explicit-lessons"
-        ? ` Maintain Lessons only when ${item.persistWhen}. Other file changes still require authorization from the user's request and this capability's side-effect boundary.`
-        : " File changes require authorization from the user's request and this capability's side-effect boundary; tool availability or this action listing is not permission by itself.";
-  return `- **${item.capability}** (${mode}): ${item.instruction}${writeBoundary}`;
+  return `- ${item.instruction}`;
 }
 
 function renderListSection(title, items) {
@@ -77,7 +69,7 @@ function renderHostGuidance(contract, hostId) {
     ...(hostGuidance.common ?? []),
     ...(hostId ? hostGuidance[hostId] ?? [] : [])
   ]);
-  return renderListSection("Conditional host guidance", values);
+  return renderListSection("Using host tools", values);
 }
 
 function renderSemanticItems(title, items, renderer = renderBullets) {
@@ -86,14 +78,17 @@ function renderSemanticItems(title, items, renderer = renderBullets) {
 }
 
 function renderSemanticSection(section) {
+  const items = [
+    ...(Array.isArray(section.responsibilities) ? section.responsibilities : []),
+    ...(Array.isArray(section.actions) ? section.actions.map((item) => item.instruction) : []),
+    ...(Array.isArray(section.boundaries) ? section.boundaries : []),
+    ...(Array.isArray(section.nonGoals) ? section.nonGoals : [])
+  ].filter(Boolean);
   const blocks = [
     `### ${section.title}`,
     section.purpose ? String(section.purpose) : "",
     section.description ? String(section.description) : "",
-    renderSemanticItems("Responsibilities", section.responsibilities),
-    renderSemanticItems("Side-effect and authorization boundary", section.boundaries),
-    renderSemanticItems("Actions (capability options, not standalone authorization)", section.actions, (items) => items.map(renderAction).join("\n")),
-    renderSemanticItems("Non-goals", section.nonGoals)
+    items.length > 0 ? renderBullets(items) : ""
   ].filter(Boolean);
   return blocks.join("\n\n");
 }
@@ -101,11 +96,12 @@ function renderSemanticSection(section) {
 function renderSemanticCapabilityContract(command, hostId = null) {
   const contract = command.contract;
   const sections = [
-    "## Capability contract\n\nUse these responsibilities and actions as an unordered capability contract, grouped by concept rather than an ordered process, fixed report outline, or completion checklist.",
-    `### Purpose\n\n${contract.purpose}`,
-    `### Use when\n\n${contract.when}`,
+    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template.",
+    `### What this is for\n\n${contract.purpose}`,
+    `### When it helps\n\n${contract.when}`,
+    renderListSection("Scope and changes", contract.boundaries),
     ...contract.semanticSections.map(renderSemanticSection),
-    renderListSection("Clarification", contract.clarification),
+    renderListSection("When Dove needs input", contract.clarification),
     renderHostGuidance(contract, hostId)
   ].filter(Boolean);
   return sections.join("\n\n");
@@ -118,14 +114,14 @@ function renderCapabilityContract(command, hostId = null) {
     return renderSemanticCapabilityContract(command, hostId);
   }
   const sections = [
-    "## Capability contract\n\nUse these responsibilities and actions as an unordered capability contract, not an ordered process, fixed report outline, or completion checklist.",
-    `### Purpose\n\n${contract.purpose}`,
-    `### Use when\n\n${contract.when}`,
-    renderListSection("Dove responsibilities", contract.responsibilities),
-    renderListSection("Side-effect and authorization boundary", contract.boundaries),
-    Array.isArray(contract.actions) && contract.actions.length > 0 ? `### Possible actions — capability options, not standalone authorization\n\n${contract.actions.map(renderAction).join("\n")}` : "",
-    renderListSection("Non-goals", contract.nonGoals),
-    renderListSection("Clarification", contract.clarification),
+    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template.",
+    `### What this is for\n\n${contract.purpose}`,
+    `### When it helps\n\n${contract.when}`,
+    renderListSection("What Dove will examine", contract.responsibilities),
+    renderListSection("Scope and changes", contract.boundaries),
+    Array.isArray(contract.actions) && contract.actions.length > 0 ? `### Ways Dove may proceed\n\n${contract.actions.map(renderAction).join("\n")}` : "",
+    renderListSection("What this should not replace", contract.nonGoals),
+    renderListSection("When Dove needs input", contract.clarification),
     renderHostGuidance(contract, hostId)
   ].filter(Boolean);
   return sections.join("\n\n");

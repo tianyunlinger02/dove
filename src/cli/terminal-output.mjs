@@ -71,7 +71,7 @@ export function renderCompleteReinstallInventory(preview, options = {}) {
     terminalStyle("将以当前 package 接入重建", "bold", { color }),
     ...replaced,
     "",
-    "确认后会重建当前项目集成；.dove/research/**、DOCTOR.md、普通项目文件与用户级 Dove 安装不受管理。"
+    "确认后会重建当前项目集成；.dove/research/**、.dove/reviews/**、.dove/runs/**、DOCTOR.md、普通项目文件与用户级 Dove 安装不受管理。"
   ].join("\n");
 }
 
@@ -91,6 +91,8 @@ export function renderUninstallInventory(preview, options = {}) {
     "",
     terminalStyle("将保留", "bold", { color }),
     "- .dove/research/**",
+    "- .dove/reviews/**",
+    "- .dove/runs/**",
     "- .dove/install/DOCTOR.md",
     "- 其他未由 Dove 管理的项目文件、设置、Hooks 与 MCP",
     "",
@@ -104,7 +106,7 @@ export function renderDoveLifecycleResult(command, result, options = {}) {
       terminalStyle("Dove 已从当前项目卸载", "bold", { color: options.color === true }),
       "",
       "✓ Dove 项目接入、命令、agent、Hooks、MCP 声明和安装记录已移除",
-      "✓ .dove/research/** 与 .dove/install/DOCTOR.md 已保留",
+      "✓ .dove/research/**、.dove/reviews/**、.dove/runs/** 与 .dove/install/DOCTOR.md 已保留",
       "✓ 未管理的项目文件未被修改"
     ].join("\n");
   }
@@ -119,7 +121,7 @@ export function renderDoveLifecycleResult(command, result, options = {}) {
     "",
     "✓ 已按确认时重新读取的当前范围删除旧 Dove 项目内容",
     "✓ 当前项目集成已重建",
-    "✓ .dove/research/** 与 .dove/install/DOCTOR.md 已保留",
+    "✓ .dove/research/**、.dove/reviews/**、.dove/runs/** 与 .dove/install/DOCTOR.md 已保留",
     "✓ 普通项目文件与用户级 Dove 安装未被管理",
     "",
     "研究文档只是研究者维护的普通入口，不代表科研工作、结论或验证已经完成。"

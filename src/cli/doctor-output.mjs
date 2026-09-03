@@ -13,7 +13,7 @@ function projectLine(result, color) {
   if (migration === "conflicting-manifests") return `${terminalStyle("项目接入", "dim", { color })}  安装标记冲突`;
   if (result.adoption?.state === "adoptable") return `${terminalStyle("项目接入", "dim", { color })}  现有 Markdown 研究树可以通过 update 采用`;
   const state = result.projectIntegration?.state;
-  const text = state === "current" ? "当前" : state === "needs-sync" ? "需要更新" : state === "uninitialized" ? "尚未配置" : state === "drifted" ? "用户字节已漂移" : "需要人工处理";
+  const text = state === "current" ? "当前" : state === "needs-sync" ? "需要更新" : state === "uninitialized" ? "尚未配置" : state === "drifted" ? "Dove 管理的配置已被修改" : "需要人工处理";
   return `${terminalStyle("项目接入", "dim", { color })}  ${text}`;
 }
 
@@ -22,7 +22,7 @@ function researchLine(result, color) {
   const text = research?.mode === "absent"
     ? "RESEARCH.md 尚未建立"
     : research?.mode === "previous-research-format"
-      ? "发现可显式导出的旧版 JSON 科研记录"
+      ? "发现旧版 JSON 科研记录；原地保留，不自动转换或删除"
       : research?.healthy
         ? "Markdown 外层可读"
         : "Markdown 外层无法安全读取";
@@ -36,8 +36,7 @@ export function recommendedDoveAction(result) {
       update: "更新 Dove 管理的项目接入；不会重写、补齐或规范化 .dove/research/**。",
       init: "为当前项目启用 Dove 接入。",
       reinstall: "重新安装会在明确确认后仅刷新项目接入，不会重写或删改 .dove/research/** 与 DOCTOR.md。",
-      "export-research": "审阅旧版 JSON 科研记录到 Markdown 的一次性导出预览，并在确认后保留原始归档。",
-      inspect: "查看 JSON 诊断并处理不明确状态。"
+      inspect: "查看 JSON 诊断并处理不明确状态；旧版研究数据会原地保留，Dove 不会自动转换或删除。"
     };
     return { ...first, message: messages[first.kind] ?? "按提示处理当前 Dove 状态。" };
   }

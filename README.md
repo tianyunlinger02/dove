@@ -1,135 +1,60 @@
 # Dove
 
-Dove is a local-first research agent for papers, experiments, figures, reviews, revisions, and engineering work. It installs one complete Dove agent for the host to use directly. Users can tell Dove the goal in natural language, and nine optional specialist Skills provide explicit shortcuts when useful.
+Dove helps you move a research project forward. Tell it what you are trying to achieve; it can read sources, inspect project material, analyze results, design or run experiments, keep local run receipts, write and revise text, make figures, review the work, and help respond to criticism.
 
-Dove's job is to advance the user's real research decisions, not to replace research with workflow ceremony. Autonomous multi-round research progression is the default for a confirmed goal: Dove anchors on the user-confirmed Workspace mainline, identifies the highest-level active limit, keeps candidate explanations explicit, chooses a discriminating action, absorbs the result, and continues while an effective in-scope action can still change or protect the decision.
+For a confirmed goal, Dove keeps taking useful steps while the work can still move forward. It asks when the next step would change the goal, require your decision, need permission, or hit a real outside limit.
 
-Dove should bring research drive, not just cautious limitation reporting. It turns gaps into sharp hypotheses, discriminating evidence to seek, or concrete next moves that advance the mainline, while keeping exploration aimed rather than diffuse.
+## Start
 
-Across those decisions, contribution, mechanism, novelty, and positioning sit above method, evidence, experiment analysis, baselines, and failure analysis; those sit above argument, writing, and figures; delivery remains last. More Markdown, more checks, more experiments, more review, or more internal iteration is not progress unless it clarifies the real question, external context, evidence, or decision. A bounded task can finish its requested artifact or pass, but that completion must not masquerade as higher-level research progress. When a feasible high-level action exists, Dove does it before local cleanup or narrowing claims; it narrows claims only when evidence or a real boundary requires it, and asks the user before changing the confirmed mainline, contribution, or completion meaning. For submission readiness, a promising core result or a narrow claim correction is not enough: Dove judges the actual manuscript and required materials against the target venue, treats major scientific or scholarly revision needs as blockers to a submit-ready verdict, and reopens earlier conclusions when broader evidence contradicts them.
-
-## First 10 minutes
-
-Requirements:
-
-- Node.js `>=22`
-- npm
-- Claude Code or DeepSeek Harness (`dsh`) for supported project integration
-
-Install Dove once for the current user from a release channel that supplies an exact artifact and source revision, then initialize the target project explicitly. The formal npm identity is not frozen, and the bare public npm name `dove` belongs to an unrelated package. Use a packed tarball, exact Git/tag/commit specifier, or exact internal-registry specifier; never treat bare `npm install -g dove` or bare `npx dove` as trusted Dove entry points.
+Install Dove from an exact trusted artifact, then initialize the target project:
 
 ```bash
 npm install --global <exact-dove-package-specifier>
-
 cd <target-project>
 dove
 ```
 
-The user-level npm install only places `dove` on the current user's `PATH`; it does not write projects, shell RC files, or user/global host configuration. Project initialization writes `.dove/install/manifest.json`, the Claude project integration, the Dove agent surface, hidden intake support, and the minimal researcher-owned `.dove/research/RESEARCH.md` entry.
+For package trust, host setup, permissions, update, reinstall, uninstall, and Doctor details, see [Installation](docs/INSTALL.md).
 
-Running bare `dove` in an interactive terminal opens a project-aware guided setup with Dove's pixel-art bird. For an unconfigured Claude project it offers explicit initialization, for an out-of-date current integration or adoptable Markdown research tree it offers safe update, and for a current integration it shows connection diagnostics. `NO_COLOR=1` removes styling while keeping the art readable. Piped output stays plain and compact; explicit `--json` or `--format json` modes remain machine-readable.
+## Nine entrances
 
-## Agent and command surface
+You can talk to Dove directly, or use `/dove:*` when you want a specific entrance.
 
-Claude projects receive `.claude/agents/dove.md`, a direct Dove research-agent surface. Users normally tell Dove the goal directly; the nine flat Skills are optional specialist shortcuts:
-
-| Skill | Purpose |
+| Skill | Use it for |
 |---|---|
-| `dove.research` | Advance a confirmed research goal through Dove's default multi-round research progression. |
-| `dove.status` | Read the research overview, relevant summaries, and necessary linked context without writes. |
-| `dove.source` | Discover, retrieve when available, read, verify, and document useful sources that materially inform the research. |
-| `dove.experiment` | Design, analyze, record, or explicitly execute an experiment that advances a research decision. |
-| `dove.draft` | Draft, assess, or revise ordinary project text and artifacts from the available evidence. |
-| `dove.figure` | Inspect or gather real materials, then create, revise, validate, or caption figures when requested. |
-| `dove.review` | Use author-side self-check, delivery review, `dove-review`, returned-review import, or review-context inspection. |
-| `dove.rebuttal` | Analyze review findings, draft author-side responses, and make requested evidence-backed revisions. |
-| `dove.lessons` | Read advisory Lessons or maintain researcher-owned project Lessons when explicitly asked. |
+| `dove.research` | Advance a research goal and let Dove choose the next useful step. |
+| `dove.status` | Read current research notes and next priorities without writing. |
+| `dove.source` | Find, read, check, and use sources that matter to the question. |
+| `dove.experiment` | Design, analyze, record, or explicitly run experiments and diagnostics. |
+| `dove.draft` | Draft, assess, or revise text and project artifacts from real evidence. |
+| `dove.figure` | Gather materials, draw or revise figures, check them in context, and caption them. |
+| `dove.review` | Run author-side self-check, delivery review, `dove-review` handoff, review import, or review inspection. |
+| `dove.rebuttal` | Analyze review findings, write responses, and make requested evidence-backed revisions. |
+| `dove.lessons` | Read or maintain reusable lessons that can improve current or future work. |
 
-Claude Code exposes these as `/dove:*` commands and a complete Dove agent. DeepSeek Harness receives the nine project-local filesystem Skills under `.dsh/skills/dove-*/SKILL.md`. Dove does not claim DSH slash commands, hooks, MCP, or a static agent surface without a future Cordis plugin. OpenCode, Codex, Cursor, and shared agent projections are no longer supported or packaged.
+Claude Code receives the full Dove agent and `/dove:*` commands. DeepSeek Harness receives the nine project-local Skills. Literature and webpage tool details are covered in [Usage](docs/USAGE.md) and [Installation](docs/INSTALL.md).
 
-The Skills are capability entrances, not separate personalities, stages, or an autonomy switch. Planning, authoring, and reviewing are not user-switchable Dove agent behaviors. `dove-review` is a genuinely isolated, persistent external-review context used after a near-submission paper is frozen into a handoff. It reviews only the current submission-shaped materials for that round, carries its own review history across re-review, and remains separate from Dove's author-side revision and rebuttal work.
+## Research notes
 
-## Ambient routing
+Dove keeps useful research context as ordinary Markdown under `.dove/research/`. Fresh initialization creates only `RESEARCH.md`; additional Mission, Source, Experiment, Review, Claim, and Lesson documents are optional and appear when they help future work.
 
-The host handles ordinary task routing. For a non-slash prompt, the Claude hook uses a conservative research-relatedness gate only to decide whether to add hidden `dove-intake` context. The gate does not select a Skill, authorize execution or writes, decide continuation or completion, or narrow claims. `dove-intake` is a thin zero-write bridge: it performs no reading, search, execution, sync, or file changes; the same Dove model uses the current conversation, project facts, authoritative artifacts, and confirmed mainline to answer directly, ask a consequential clarification, or use any optional capability. Bare follow-ups such as “继续” rely on the host's current conversation rather than a special Dove route. Before hook output, the user-installed CLI may independently hot-sync package-managed integration only; it never touches `.dove/research/`, and on-disk refresh does not imply same-session reload. Adoption remains explicit through `dove update`; slash commands keep explicit routing.
+Dove records notes when you ask, when the research direction or conclusion changes, or when saving evidence and continuation context is genuinely useful. Updates, SessionStart sync, reinstall, and uninstall preserve existing `.dove/research/**` content, `.dove/reviews/**` review records, and `.dove/runs/**` local run receipts. `UserPromptSubmit` is zero-write: it only validates the hook event and routes hidden intake when the prompt is clearly research-related.
 
-## Research Markdown
+## Review
 
-Research context is ordinary Markdown under `.dove/research/`, not a runtime database. Fresh initialization creates only the researcher-owned root `RESEARCH.md` entry. Mission, Experiment, Source, Review, Claim, and Lesson summaries or topic documents are optional materials created naturally when the work needs them.
+`/dove:review` can do author-side scientific self-check in the current Dove context. That is useful, but it is not independent external review.
 
-The overview, optional summaries, topic documents, and Lessons are researcher-owned entrances and synthesis documents. Dove update, hot sync, reinstall, and uninstall do not rewrite, complete, normalize, or delete existing `.dove/research/**` content.
+`dove-review` is separate: for a near-submission paper, Dove can run `dove review handoff` to freeze the current paper and listed submission materials for an isolated Claude Code reviewer context. Later `resume` and `rerun` reuse the same reviewer session; `import` preserves a user-provided return without claiming runtime provenance. The returned review is evidence for Dove's author side to analyze, rebut, or address.
 
-Dove does not require fixed headings, frontmatter, IDs, enums, hashes, indexes, stored counts, or a mandatory Markdown template. Additional research Markdown is maintained when the user explicitly asks to record, update, or save it, when results clearly change the research mainline, conclusion, decision, or priority, or when preserving the work's evidence and continuation context is genuinely useful.
+## Run receipts
 
-## Source, experiment, figure, and review boundaries
-
-- Search results are candidates until material is retrieved, inspected, and used.
-- Figure work runs on the host side; Dove inspects or gathers real materials, creates, revises, validates, or captions figures when requested, and records context only when useful.
-- A central experiment must serve a real problem, key uncertainty, or route decision. If that basis is missing, Dove should pause central experiment design and investigate the problem, sources, or a smallest low-risk diagnostic rather than inventing a substitute experiment.
-- When newly executed central experiment work needs recording, one Experiment document contains the prospective plan and later actual results.
-- Review work may use Dove's read-only author-side scientific self-check or `dove-review`. `dove-review` starts only from a frozen near-submission handoff, sees only the submitted materials listed for that round, and persists as the same external-review context for later whole-paper re-review. Its findings are evidence for Dove's author context to analyze and act on; rebuttal and revision remain author-side work.
-
-## Host integration
-
-Dove supports exactly two project hosts:
-
-```bash
-dove init --host claude
-dove init --host dsh
-```
-
-Claude Code receives the complete agent, commands, ambient hooks, status line, project-scoped WebFetch denial, the pinned paper-search MCP integration, and the Exa hosted MCP for ordinary webpage reading. DSH receives nine filesystem Skills only and no Claude permissions or MCP projection.
-
-Initialization:
-
-- records the initialized host in `.dove/install/manifest.json`;
-- registers the project `SessionStart` and `UserPromptSubmit` hooks;
-- installs the project ambient rule, hidden intake skill, Dove agent, hidden paper-search support Skill, hidden web-reader support Skill, and generated project-local commands;
-- declares the pinned external `dove-paper-search` MCP server and the Exa hosted MCP in `.mcp.json` without approval, trust, credentials, or bundled Python source;
-- minimally merges Dove's hook entries, a project-scoped WebFetch denial, and a project status line showing the absolute project directory into `.claude/settings.json`;
-- preserves unrelated project settings and hooks; and
-- never reads or writes user/global host configuration or shell startup files.
-
-Projects do not receive copied Dove runtime files under `bin/`, `dist/`, `mcp/`, or `scripts/`, and project config contains neither an absolute CLI path nor a fallback. Built-in `WebSearch` remains available for web discovery; built-in `WebFetch` is denied in Claude project settings so ordinary webpage bodies and known URLs go through the approved Exa MCP, while scholarly papers continue through the pinned `dove-paper-search` MCP. Generated business adapters use host tools and stop if needed support is unavailable; they do not use CLI, shell, `curl`, or ad hoc fetch-script fallbacks.
-
-After the user-level Dove package changes, `SessionStart` refreshes recognized package-managed integration from the `dove` command on `PATH`; projects initialized before this hook existed are bridged on their next `UserPromptSubmit`. This automatic hot sync is transactional, accepts only a valid same-package revision-2.0 manifest, never touches `.dove/research/`, and does not imply that Claude reloads changed commands, agents, rules, or Skills in the same running session. Stop never performs hot sync. Complete Reinstall is unrelated and always requires explicit confirmation.
-
-`dove update` remains the explicit broader lifecycle command. It refreshes only a project that already has a valid `.dove/install/manifest.json`, or a current Markdown research tree plus the legacy `.dove/manifest.json` adoption marker. The adoption path creates the revision-2.0 installation manifest and safely merges only the current package-managed Claude hooks, WebFetch denial when Dove needs to add it, status line, `dove-paper-search` MCP declaration, and Exa MCP declaration; it preserves research bytes, DOCTOR notes, `.dove-archive`, old markers, private state, unrelated hooks, unrelated servers, and any pre-existing user-owned WebFetch deny. A missing or invalid manifest fails closed; update does not infer hosts from files or adapters. Existing `.dove/research/**` content is left untouched.
-
-`dove uninstall` previews its exact removal scope, requires confirmation, removes Dove-owned host integration and the current installation manifest, and also removes a recognized retired `.dove/manifest.json` adoption marker when present. It preserves `.dove/research/**`, `.dove/install/DOCTOR.md`, unrecognized files at the legacy marker path, unrelated settings, hooks, MCP servers, and any WebFetch denial that existed before Dove adopted the project. A project retaining only current research Markdown is then reported as unconfigured rather than updateable. `dove doctor` is read-only and distinguishes user CLI health, project integration, workspace state, host registration/readiness, and legacy copied runtime. Missing research Markdown is reported naturally rather than repaired implicitly.
-
-## Packaging and validation
-
-The packaged CLI exposes:
-
-```text
-init, update, reinstall, uninstall, doctor, export-research, hook
-```
-
-The package contains three standalone Node.js 22 ESM bundles:
-
-- `dist/index.mjs`
-- `bin/dove-package.mjs`
-- `scripts/dove-user-prompt-submit-package.mjs`
-
-It contains no Dove research MCP server bundle, research tool registry, MCP CLI command, or Research Format runtime. Claude project support declares the pinned external `paper-search-mcp==0.1.4` fragment for scholarly papers and the Exa hosted remote MCP fragment for ordinary webpage bodies and known URLs.
-
-From a source checkout:
-
-```bash
-npm run commands:check
-npm run commands:validate
-npm run check
-npm run release:check
-npm run pack:dry-run
-```
-
-Validation protects software boundaries, generated surface drift, package contents, and lifecycle safety. It does not prove scientific correctness, research completion, reproducibility, acceptance, `dove-review` independence, or Dove's research quality. Dove's research quality must be judged from code logic, generated natural-language behavior, installed project surfaces, and real interactions with the research mainline rather than prompt counts, validator counts, document counts, checklist completion, or scores.
+For explicit local experiments or diagnostics, Dove can use `dove run start -- <command> [args...]` to launch a detached supervisor that writes `.dove/runs/<id>/run.jsonl`, `stdout.log`, and `stderr.log`. The command is spawned without a shell from the project root. The journal records the explicit argv and comparison basis; ordinary completion writes one `run.terminal`, and `resume` writes `run.reconciled` only for an interrupted record missing that terminal event. `dove run status` is read-only, `resume` never reruns work, `finalize` records one scalar metric after terminal completion, and `compare` ranks only compatible finalized runs. These receipts are execution evidence, not scientific conclusions by themselves.
 
 ## Documentation
 
 - [Installation](docs/INSTALL.md)
 - [Usage](docs/USAGE.md)
-- [Packaging](docs/PACKAGING.md)
 - [Capability matrix](docs/CAPABILITY_MATRIX.md)
-- [Safe command output samples](docs/DOVE_COMMAND_OUTPUT_SAMPLES.md)
+- [Output samples](docs/DOVE_COMMAND_OUTPUT_SAMPLES.md)
+- [Packaging](docs/PACKAGING.md)
+- [Development docs](docs/development/README.md)

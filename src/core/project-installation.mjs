@@ -379,7 +379,7 @@ function fragmentState(resource, value) {
   throw new Error(`Unsupported Dove project integration selector: ${resource.selector}.`);
 }
 
-function removeFragment(resource, value, current) {
+function removeFragment(resource, value, current, options = {}) {
   if (resource.selector === SETTINGS_SELECTOR) {
     let next = value;
     for (const eventName of ["UserPromptSubmit", "SessionStart"]) {
@@ -391,7 +391,7 @@ function removeFragment(resource, value, current) {
   }
   if (resource.selector === STATUS_LINE_SELECTOR) {
     const next = { ...value };
-    if (JSON.stringify(next.statusLine) === JSON.stringify(DOVE_CLAUDE_STATUS_LINE)) delete next.statusLine;
+    if (options.force === true || JSON.stringify(next.statusLine) === JSON.stringify(DOVE_CLAUDE_STATUS_LINE)) delete next.statusLine;
     return next;
   }
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) {
@@ -425,8 +425,9 @@ function conflictError(resource) {
   return new Error(`Dove project integration cannot claim conflicting content at ${resource.path}${resource.selector ? `#${resource.selector}` : ""}.`);
 }
 
-function planExclusive(root, desired, oldEntry, fsOps) {
+function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
   const resource = desired ?? oldEntry;
+  const replaceDrift = options.replacementPolicy === "confirmed-reinstall";
   const observed = inspectRegularProjectFile(root, resource.path, fsOps);
   if (!oldEntry) {
     if (!observed.exists) return { entry: transactionWrite(root, desired, desired.content, observed), changed: true };
@@ -435,12 +436,12 @@ function planExclusive(root, desired, oldEntry, fsOps) {
   }
   if (desired) {
     if (!observed.exists) return { entry: transactionWrite(root, desired, desired.content, observed), changed: true };
-    if (observed.digest !== oldEntry.digest && observed.digest !== desired.digest) throw driftError(resource, observed.digest);
+    if (!replaceDrift && observed.digest !== oldEntry.digest && observed.digest !== desired.digest) throw driftError(resource, observed.digest);
     if (observed.digest === desired.digest) return { entry: null, changed: oldEntry.digest !== desired.digest };
     return { entry: transactionWrite(root, desired, desired.content, observed), changed: true };
   }
   if (!observed.exists) return { entry: null, changed: true };
-  if (observed.digest !== oldEntry.digest) throw driftError(resource, observed.digest);
+  if (!replaceDrift && observed.digest !== oldEntry.digest) throw driftError(resource, observed.digest);
   return { entry: transactionDelete(root, resource, observed), changed: true };
 }
 
@@ -473,6 +474,7 @@ function addFragment(resource, value) {
 }
 
 function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps, options = {}) {
+  const replaceDrift = options.replacementPolicy === "confirmed-reinstall";
   const observed = inspectRegularProjectFile(root, relativePath, fsOps);
   const original = parseSharedJson(observed, relativePath);
   const desiredByKey = new Map(desiredEntries.map((entry) => [managedKey(entry), entry]));
@@ -522,12 +524,12 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
         && resource.selector === SETTINGS_SELECTOR
         && originalSettingsHookWithRetiredStop.exists
         && originalSettingsHookWithRetiredStop.digest === oldEntry.digest;
-      if (current.digest !== oldEntry.digest && current.digest !== desired.digest && !oldEntryMatchesRetiredStop) throw driftError(resource, current.digest);
+      if (!replaceDrift && current.digest !== oldEntry.digest && current.digest !== desired.digest && !oldEntryMatchesRetiredStop) throw driftError(resource, current.digest);
       if (current.digest === desired.digest) {
         if (oldEntry.digest !== desired.digest) changed = true;
         continue;
       }
-      next = addFragment(desired, removeFragment(desired, next, current));
+      next = addFragment(desired, removeFragment(desired, next, current, { force: replaceDrift }));
       changed = true;
       continue;
     }
@@ -539,8 +541,8 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
       && resource.selector === SETTINGS_SELECTOR
       && originalSettingsHookWithRetiredStop.exists
       && originalSettingsHookWithRetiredStop.digest === oldEntry.digest;
-    if (current.digest !== oldEntry.digest && !oldEntryMatchesRetiredStop) throw driftError(resource, current.digest);
-    next = removeFragment(resource, next, current);
+    if (!replaceDrift && current.digest !== oldEntry.digest && !oldEntryMatchesRetiredStop) throw driftError(resource, current.digest);
+    next = removeFragment(resource, next, current, { force: replaceDrift });
     changed = true;
   }
 
@@ -554,9 +556,9 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
   };
 }
 
-function planResource(root, desired, oldEntry, fsOps) {
+function planResource(root, desired, oldEntry, fsOps, options = {}) {
   const kind = desired?.kind ?? oldEntry.kind;
-  if (kind === "exclusive-file") return planExclusive(root, desired, oldEntry, fsOps);
+  if (kind === "exclusive-file") return planExclusive(root, desired, oldEntry, fsOps, options);
   throw new Error(`Unsupported project integration resource kind: ${kind}.`);
 }
 
@@ -564,7 +566,7 @@ function desiredManaged(resources) {
   return resources.map(({ path: relativePath, kind, selector, digest }) => ({ path: relativePath, kind, selector, digest })).sort(compareManaged);
 }
 
-function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps, manifest = null, adopt = false }) {
+function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps, manifest = null, adopt = false, replacementPolicy = "safe" }) {
   const oldByKey = new Map((manifest?.managed ?? []).map((entry) => [managedKey(entry), entry]));
   const desiredResources = resourcesForHosts(hosts).filter((entry) => {
     if (entry.selector !== WEB_FETCH_DENY_SELECTOR || oldByKey.has(managedKey(entry))) return true;
@@ -588,7 +590,7 @@ function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps, man
       desiredResources.filter((entry) => entry.kind === "json-fragment" && entry.path === relativePath),
       (manifest?.managed ?? []).filter((entry) => entry.kind === "json-fragment" && entry.path === relativePath),
       fsOps,
-      { adopt }
+      { adopt, replacementPolicy }
     );
     if (planned.entry) entries.push(planned.entry);
     if (planned.changed) resourcesChanged = true;
@@ -597,7 +599,7 @@ function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps, man
     .filter((key) => (desiredByKey.get(key) ?? oldByKey.get(key)).kind !== "json-fragment")
     .sort();
   for (const key of keys) {
-    const planned = planResource(root, desiredByKey.get(key) ?? null, oldByKey.get(key) ?? null, fsOps);
+    const planned = planResource(root, desiredByKey.get(key) ?? null, oldByKey.get(key) ?? null, fsOps, { replacementPolicy });
     if (planned.entry) entries.push(planned.entry);
     if (planned.changed) resourcesChanged = true;
   }
@@ -706,7 +708,13 @@ function synchronizeProjectIntegration(start, options = {}) {
 
 function assertIntegrationOnlyEntries(entries) {
   if (entries.some((entry) => entry.relativePath === ".dove/research" || entry.relativePath.startsWith(".dove/research/"))) {
-    throw new Error("Dove hot sync refuses to write Dove research state.");
+    throw new Error("Dove SessionStart sync refuses to write Dove research state.");
+  }
+  if (entries.some((entry) => entry.relativePath === ".dove/reviews" || entry.relativePath.startsWith(".dove/reviews/"))) {
+    throw new Error("Dove SessionStart sync refuses to write Dove review records.");
+  }
+  if (entries.some((entry) => entry.relativePath === ".dove/runs" || entry.relativePath.startsWith(".dove/runs/"))) {
+    throw new Error("Dove SessionStart sync refuses to write Dove run records.");
   }
 }
 
@@ -720,10 +728,10 @@ export function synchronizeProjectIntegrationOnly(start, options = {}) {
     version: options.packageVersion
   });
   if (["identity-mismatch", "invalid-version", "newer"].includes(compatibility)) {
-    throw new Error("Dove hot sync refuses missing, invalid, newer, or foreign project integration.");
+    throw new Error("Dove SessionStart sync refuses missing, invalid, newer, or foreign project integration.");
   }
   if (!currentManifest.hosts.includes(CLAUDE_HOST)) {
-    throw new Error("Dove hot sync requires Claude Code host integration.");
+    throw new Error("Dove SessionStart sync requires Claude Code host integration.");
   }
   const plan = preparePlan({
     root,
@@ -835,7 +843,8 @@ function prepareLifecycleIntegration(root, options, { hosts, source = null, rein
     now,
     fsOps,
     manifest: oldManifest,
-    adopt
+    adopt,
+    replacementPolicy: reinstall ? "confirmed-reinstall" : "safe"
   });
   const existingPaths = new Set(entries.map((entry) => entry.relativePath));
   for (const entry of planned.entries) {
@@ -886,7 +895,7 @@ function previewShape(kind, root, hosts, prepared, confirmationRequired) {
   const writtenPaths = writtenEntries.map((entry) => entry.relativePath);
   const removedPaths = prepared.entries.filter((entry) => entry.delete === true).map((entry) => entry.relativePath);
   const replacedPaths = kind === "reinstall" ? writtenPaths : [];
-  return {
+  const preview = {
     status: "ready",
     action: kind,
     target: root,
@@ -899,6 +908,16 @@ function previewShape(kind, root, hosts, prepared, confirmationRequired) {
     confirmation: { required: confirmationRequired, default: false },
     manifest: prepared.manifest
   };
+  if (kind === "reinstall") {
+    Object.defineProperty(preview, "approvalState", {
+      value: writtenEntries.map((entry) => ({
+        path: entry.relativePath,
+        expectedState: entry.expectedState
+      })),
+      enumerable: false
+    });
+  }
+  return preview;
 }
 
 export function previewProjectUpgrade(start, options = {}) {
@@ -966,8 +985,22 @@ export function previewProjectCompleteReinstall(start, options = {}) {
   return previewShape("reinstall", root, hosts, prepared, true);
 }
 
+function reinstallPreviewScope(preview) {
+  return JSON.stringify({
+    target: preview.target,
+    hosts: preview.hosts,
+    writtenPaths: preview.writtenPaths,
+    removedPaths: preview.removedPaths,
+    changedPaths: preview.changedPaths,
+    replacedPaths: preview.replacedPaths,
+    destructiveScope: preview.destructiveScope,
+    approvalState: preview.approvalState
+  });
+}
+
 export function completeReinstallProjectIntegration(start, options = {}) {
   if (options.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true after displaying the real destructive scope.");
+  if (!options.preview || options.preview.action !== "reinstall") throw new Error("Complete Reinstall requires the approved reinstall preview.");
   const fsOps = options.fsOps ?? fs;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
@@ -979,6 +1012,10 @@ export function completeReinstallProjectIntegration(start, options = {}) {
   }
   const hosts = options.hosts === undefined ? [...(source?.hosts ?? [CLAUDE_HOST])] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
   const prepared = prepareLifecycleIntegration(root, options, { hosts, source, reinstall: true });
+  const currentPreview = previewShape("reinstall", root, hosts, prepared, true);
+  if (reinstallPreviewScope(currentPreview) !== reinstallPreviewScope(options.preview)) {
+    throw new Error("Complete Reinstall preview is stale; review the current destructive scope and confirm again.");
+  }
   return resultFromTransaction(
     "reinstalled",
     root,
@@ -1035,7 +1072,7 @@ function uninstallPreview(prepared) {
     writtenPaths,
     removedPaths,
     changedPaths: [...new Set([...writtenPaths, ...removedPaths])],
-    preservedPaths: [".dove/research/**", ".dove/install/DOCTOR.md"],
+    preservedPaths: [".dove/research/**", ".dove/reviews/**", ".dove/runs/**", ".dove/install/DOCTOR.md"],
     confirmation: { required: true, default: false }
   };
 }
@@ -1057,7 +1094,7 @@ export function uninstallProjectIntegration(start, options = {}) {
     changedPaths: [...transaction.changedPaths],
     cleanupWarnings: [...transaction.cleanupWarnings],
     omittedCleanupWarningCount: transaction.omittedCleanupWarningCount,
-    preservedPaths: [".dove/research/**", ".dove/install/DOCTOR.md"]
+    preservedPaths: [".dove/research/**", ".dove/reviews/**", ".dove/runs/**", ".dove/install/DOCTOR.md"]
   };
 }
 

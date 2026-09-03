@@ -75,14 +75,28 @@ function manifestSummary(manifest) {
 function inspectIntegration(start, options) {
   const project = inspectProjectRoot(start, { fsOps: options.fsOps, hostIds: PROJECT_HOST_IDS });
   if (!project.initialized) return { healthy: false, state: project.state, start: project.start, root: project.root, error: project.error, manifest: null, missing: [], drifted: [] };
+  let manifest;
   try {
-    const manifest = readProjectInstallationManifest(project.root, { fsOps: options.fsOps, hostIds: PROJECT_HOST_IDS });
-    if (options.packageName !== undefined && options.packageVersion !== undefined) {
-      const compatibility = classifyPackageCompatibility(manifest.package, { name: options.packageName, version: options.packageVersion });
-      if (["identity-mismatch", "newer", "invalid-version"].includes(compatibility)) {
-        return { healthy: false, state: "invalid", start: project.start, root: project.root, error: "Dove project integration package is incompatible with the running CLI.", manifest: manifestSummary(manifest), packageCompatibility: compatibility, missing: [], drifted: [] };
-      }
+    manifest = readProjectInstallationManifest(project.root, { fsOps: options.fsOps, hostIds: PROJECT_HOST_IDS });
+  } catch (error) {
+    return {
+      healthy: false,
+      state: "invalid",
+      start: project.start,
+      root: project.root,
+      error: messageFor(error),
+      manifest: null,
+      missing: [],
+      drifted: []
+    };
+  }
+  if (options.packageName !== undefined && options.packageVersion !== undefined) {
+    const compatibility = classifyPackageCompatibility(manifest.package, { name: options.packageName, version: options.packageVersion });
+    if (["identity-mismatch", "newer", "invalid-version"].includes(compatibility)) {
+      return { healthy: false, state: "invalid", start: project.start, root: project.root, error: "Dove project integration package is incompatible with the running CLI.", manifest: manifestSummary(manifest), packageCompatibility: compatibility, missing: [], drifted: [] };
     }
+  }
+  try {
     const canonical = (options.inspectCurrentIntegration ?? inspectProjectIntegration)(project.root, {
       packageName: options.packageName ?? manifest.package.name,
       packageVersion: options.packageVersion ?? manifest.package.version,
@@ -108,7 +122,7 @@ function inspectIntegration(start, options) {
       start: project.start,
       root: project.root,
       error: message,
-      manifest: null,
+      manifest: manifestSummary(manifest),
       missing: [],
       drifted: []
     };
@@ -178,8 +192,7 @@ function actionsFor(result) {
   const actions = [];
   const adoptReady = result.adoption.state === "adoptable";
   if (adoptReady) actions.push({ kind: "update", command: "dove update" });
-  if (!adoptReady && result.workspaceState.state === "previous-research-format") actions.push({ kind: "export-research", command: "dove export-research" });
-  else if (!adoptReady && result.setup.mode === "init") actions.push({ kind: "init", command: "dove init" });
+  if (!adoptReady && result.setup.mode === "init") actions.push({ kind: "init", command: "dove init" });
   else if (!adoptReady && result.projectIntegration.state === "needs-sync") actions.push({ kind: "update", command: "dove update" });
   else if (!adoptReady && result.setup.mode === "reinstall" && result.projectIntegration.state !== "current") actions.push({ kind: "reinstall", command: "dove reinstall" });
   else if (!adoptReady && result.setup.mode === "blocked") actions.push({ kind: "inspect", command: "dove doctor --json" });

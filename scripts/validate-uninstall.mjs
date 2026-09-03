@@ -5,7 +5,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { initializeProjectIntegration, previewProjectUninstall, uninstallProjectIntegration, adoptProjectIntegration } from "../src/core/project-installation.mjs";
+import {
+  adoptProjectIntegration,
+  completeReinstallProjectIntegration,
+  initializeProjectIntegration,
+  previewProjectCompleteReinstall,
+  previewProjectUninstall,
+  uninstallProjectIntegration,
+  updateProjectIntegration
+} from "../src/core/project-installation.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { inspectProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
@@ -17,7 +25,7 @@ import {
 } from "../src/core/web-access-integration.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const fixture = path.join(path.dirname(root), ".dove-dev", "tmp", "uninstall-fixture");
+const fixture = path.join(root, ".dove-dev", "tmp", "uninstall-fixture");
 
 function reset() {
   fs.rmSync(fixture, { recursive: true, force: true });
@@ -34,6 +42,7 @@ function digest(file) {
 
 function makeAdoptableProject() {
   reset();
+  fs.mkdirSync(path.join(fixture, ".git"));
   fs.mkdirSync(path.join(fixture, ".dove", "research"), { recursive: true });
   fs.writeFileSync(path.join(fixture, ".dove", "research", "RESEARCH.md"), "# Research\n\nResearcher-owned.\n");
   fs.writeFileSync(path.join(fixture, ".dove", "manifest.json"), `${JSON.stringify({
@@ -61,6 +70,12 @@ assert.equal(statusline.status, 0, statusline.stderr || statusline.stdout);
 assert.equal(statusline.stdout.trim(), fs.realpathSync.native(fixture));
 const doctor = path.join(fixture, ".dove", "install", "DOCTOR.md");
 fs.writeFileSync(doctor, "preserve this feedback\n");
+const reviewRecord = path.join(fixture, ".dove", "reviews", "review-preserve", "review.json");
+fs.mkdirSync(path.dirname(reviewRecord), { recursive: true });
+fs.writeFileSync(reviewRecord, "{\"schema\":\"user-owned-review\"}\n");
+const runRecord = path.join(fixture, ".dove", "runs", "run-preserve", "run.jsonl");
+fs.mkdirSync(path.dirname(runRecord), { recursive: true });
+fs.writeFileSync(runRecord, "{\"schemaVersion\":\"dove.run.event.v1\",\"seq\":1,\"at\":\"2026-09-02T00:00:00.000Z\",\"type\":\"run.started\",\"runId\":\"run-preserve\"}\n");
 const research = path.join(fixture, ".dove", "research", "RESEARCH.md");
 const legacyMarker = path.join(fixture, ".dove", "manifest.json");
 fs.writeFileSync(legacyMarker, `${JSON.stringify({
@@ -70,7 +85,7 @@ fs.writeFileSync(legacyMarker, `${JSON.stringify({
   createdAt: "2026-07-17T10:56:07.603Z",
   packageVersion: "0.4.0"
 }, null, 2)}\n`);
-const before = { doctor: digest(doctor), research: digest(research) };
+const before = { doctor: digest(doctor), research: digest(research), review: digest(reviewRecord), run: digest(runRecord) };
 const preview = previewProjectUninstall(fixture);
 assert.equal(preview.action, "uninstall");
 assert(preview.removedPaths.includes(".dove/install/manifest.json"));
@@ -83,7 +98,7 @@ assert.equal(fs.existsSync(path.join(fixture, ".dove", "install", "manifest.json
 assert.equal(fs.existsSync(legacyMarker), false);
 assert.equal(fs.existsSync(path.join(fixture, ".claude", "agents", "dove.md")), false);
 assert.equal(fs.existsSync(path.join(fixture, ".dsh", "skills", "dove-research", "SKILL.md")), false);
-assert.deepEqual({ doctor: digest(doctor), research: digest(research) }, before);
+assert.deepEqual({ doctor: digest(doctor), research: digest(research), review: digest(reviewRecord), run: digest(runRecord) }, before);
 const settings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.equal(settings.statusLine, undefined);
 assert.equal(settings.permissions, undefined);
@@ -125,8 +140,53 @@ assert.equal(nonArrayStopCleanedSettings.hooks.Stop, "user-owned-stop");
 
 reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
-fs.appendFileSync(path.join(fixture, ".claude", "agents", "dove.md"), "drift\n");
+const driftAgent = path.join(fixture, ".claude", "agents", "dove.md");
+const driftSettings = path.join(fixture, ".claude", "settings.json");
+const driftResearch = path.join(fixture, ".dove", "research", "RESEARCH.md");
+const driftDoctor = path.join(fixture, ".dove", "install", "DOCTOR.md");
+fs.writeFileSync(driftDoctor, "preserve drift repair feedback\n");
+const settingsBeforeDrift = JSON.parse(fs.readFileSync(driftSettings, "utf8"));
+settingsBeforeDrift.statusLine = { type: "command", command: "user-modified-dove-statusline" };
+settingsBeforeDrift.enabledPlugins = { demo: true };
+fs.writeFileSync(driftSettings, `${JSON.stringify(settingsBeforeDrift, null, 2)}\n`);
+fs.appendFileSync(driftAgent, "drift\n");
+const driftReview = path.join(fixture, ".dove", "reviews", "drift-review", "review.json");
+fs.mkdirSync(path.dirname(driftReview), { recursive: true });
+fs.writeFileSync(driftReview, "{\"schema\":\"preserve-review\"}\n");
+const driftRun = path.join(fixture, ".dove", "runs", "drift-run", "run.jsonl");
+fs.mkdirSync(path.dirname(driftRun), { recursive: true });
+fs.writeFileSync(driftRun, "{\"schemaVersion\":\"dove.run.event.v1\",\"seq\":1,\"at\":\"2026-09-02T00:00:00.000Z\",\"type\":\"run.started\",\"runId\":\"drift-run\"}\n");
+const driftPreservedBefore = { research: digest(driftResearch), doctor: digest(driftDoctor), review: digest(driftReview), run: digest(driftRun) };
+assert.throws(
+  () => updateProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }),
+  /ownership drift/u
+);
 assert.throws(() => previewProjectUninstall(fixture), /ownership drift/u);
+const reinstallPreview = previewProjectCompleteReinstall(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+assert(reinstallPreview.replacedPaths.includes(".claude/agents/dove.md"));
+assert(reinstallPreview.replacedPaths.includes(".claude/settings.json"));
+fs.appendFileSync(driftAgent, "after preview\n");
+assert.throws(
+  () => completeReinstallProjectIntegration(fixture, {
+    packageName: PACKAGE_NAME,
+    packageVersion: PACKAGE_VERSION,
+    confirmed: true,
+    preview: reinstallPreview
+  }),
+  /preview is stale/u
+);
+const refreshedPreview = previewProjectCompleteReinstall(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+completeReinstallProjectIntegration(fixture, {
+  packageName: PACKAGE_NAME,
+  packageVersion: PACKAGE_VERSION,
+  confirmed: true,
+  preview: refreshedPreview
+});
+const repairedSettings = JSON.parse(fs.readFileSync(driftSettings, "utf8"));
+assert.deepEqual(repairedSettings.statusLine, { type: "command", command: 'dove hook statusline --project "$CLAUDE_PROJECT_DIR"' });
+assert.deepEqual(repairedSettings.enabledPlugins, { demo: true });
+assert.equal(fs.readFileSync(driftAgent, "utf8").includes("after preview"), false);
+assert.deepEqual({ research: digest(driftResearch), doctor: digest(driftDoctor), review: digest(driftReview), run: digest(driftRun) }, driftPreservedBefore);
 assert.equal(fs.existsSync(path.join(fixture, ".dove", "install", "manifest.json")), true);
 
 reset();

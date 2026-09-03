@@ -8,7 +8,7 @@
 
 Dove is file-first without treating research as machine-owned state. The host performs substantive work. Researchers preserve useful context in ordinary Markdown, and Dove-owned software metadata remains separate.
 
-There is no Dove research-state MCP service, Research Format marker, entity database, hidden research state machine, or runtime fallback reader in Dove 3. The optional external paper MCP is project tooling and stores no Dove research state.
+There is no Dove research-state MCP service, Research Format marker, entity database, hidden research state machine, or runtime fallback reader in Dove 3. The pinned `dove-paper-search` MCP is optional Claude project tooling for scholarly paper discovery, download, and full-text reading, and hosted Exa is optional Claude project tooling for ordinary webpage bodies, documentation pages, venue pages, and known URLs; neither stores Dove research state.
 
 ## Boundary Model
 
@@ -18,19 +18,21 @@ There is no Dove research-state MCP service, Research Format marker, entity data
 - A **project artifact** holds substantive work in a normal project path.
 - An **installation resource** belongs to Dove-managed project integration.
 - **Dove feedback** is ordinary `.dove/install/DOCTOR.md` Markdown maintained by the host when the user explicitly comments on Dove or Dove itself actually fails during use.
-- An **export archive** preserves original legacy JSON bytes under `.dove/archive/...` after explicit conversion.
+- A **review exchange record** under `.dove/reviews/...` preserves an explicit isolated reviewer handoff, copied-material snapshot, backend provenance, and returned Markdown.
+- A **run receipt** under `.dove/runs/...` preserves a local execution JSONL journal plus stdout/stderr logs for an explicit experiment or diagnostic.
+- **Preserved legacy data** remains user-owned and in place; Dove may detect it read-only but does not automatically convert or delete it.
 
 Across the nine capabilities, Dove keeps a shared mainline anchor, identifies the highest-level active limit, keeps candidate explanations explicit, chooses a discriminating action, and counts progress only when the result materially changes or protects the decision.
 
-Drafts, figures, code, data, logs, papers, review bundles, and rebuttals remain ordinary project artifacts rather than Dove stores.
+Drafts, figures, code, data, logs, papers, review bundles, run outputs, and rebuttals remain ordinary project artifacts rather than Dove stores. `.dove/reviews/**` holds explicit exchange provenance for isolated review runtime rounds, and `.dove/runs/**` holds local execution receipts for experiments or diagnostics. Both are preserved across lifecycle operations.
 
 ## Installation State
 
-`.dove/install/manifest.json` is software installation metadata at revision `2.0`. Package version, installation revision, and the content of research Markdown are separate concerns.
+`.dove/install/manifest.json` is software installation metadata at revision `2.0`. Package version, installation revision, `.dove/reviews/**` exchange records, `.dove/runs/**` run receipts, and the content of research Markdown are separate concerns.
 
 Optional `.dove/install/DOCTOR.md` is ordinary natural-language feedback, not a generated projection. It records explicit user feedback, corrections, complaints, improvement ideas, and actual failures of Dove Skills, hooks, routing, integration, document behavior, or guidance. It has no JSON state, IDs, severity, counters, statuses, or fixed template. Ordinary research uncertainty, project bugs, and external-tool failures stay out. Managed-file digests or hashes protect installation bytes and detect drift; they must never be cited as research evidence, source authority, review integrity, or scientific validation.
 
-Claude Code and DeepSeek Harness are the supported project initialization paths. Claude initialization installs the Dove agent surface, SessionStart/prompt hooks, the minimal researcher-owned `RESEARCH.md` bootstrap, pinned external paper-acquisition and hosted Exa MCP fragments plus hidden support Skills, and a project-scoped `permissions.deny` entry for built-in `WebFetch` while preserving built-in `WebSearch`; DSH initialization installs project-local filesystem Skills only. Dove does not register a research-state service, install the external runtime, approve project trust, write credentials, add CLI/shell/fetch fallbacks, or claim that the minimal research entry is substantive research content.
+Claude Code and DeepSeek Harness are the supported project initialization paths. Claude initialization installs the Dove agent surface, SessionStart/prompt hooks, the minimal researcher-owned `RESEARCH.md` bootstrap, pinned `dove-paper-search` and hosted Exa MCP fragments plus hidden Claude guidance Skills for those tools, and a project-scoped `permissions.deny` entry for built-in `WebFetch` while preserving built-in `WebSearch`; DSH initialization installs project-local filesystem Skills only. Dove does not register a research-state service, install external runtimes, approve project trust, write credentials, add CLI/shell/`curl`/fetch-script substitutions for web retrieval, or claim that the minimal research entry is substantive research content.
 
 ## Research Documents
 
@@ -39,7 +41,7 @@ Research context lives under `.dove/research/`:
 - root `RESEARCH.md` is the researcher-owned concise overview and navigation document;
 - missions, experiments, sources, reviews, claims, and lessons may each have one researcher-owned directory summary when useful;
 - `lessons/` contains optional researcher-owned advisory materials when they exist; and
-- other files, including explicit-export `lessons/imported-lessons.md`, are researcher-owned human-named linked topic documents in the corresponding directory.
+- other preserved legacy or user-owned files are researcher-owned human-named linked topic documents in the corresponding directory.
 
 This is recommended organization, not a schema. Do not require fixed headings, frontmatter, generated IDs, enums, machine indexes, stored counts, fingerprints, or research hashes.
 
@@ -54,7 +56,7 @@ This is recommended organization, not a schema. Do not require fixed headings, f
 
 - Mission documents may preserve bounded goals, competing explanations, substantive work, current conclusions, decisions, and next branches in a natural structure.
 - Source documents may preserve citations or URLs and what was actually inspected and learned.
-- A central experiment serves a real problem, key uncertainty, or route decision. When that basis is missing, Dove pauses central design and inspects actual project material, relevant sources, or a smallest low-risk diagnostic instead of inventing a substitute experiment or stopping at the gap. When newly executed central work needs recording, one Experiment document holds the prospective plan and later actual execution and results; design-only work stops before execution, existing results are analyzed directly, and retrospective records remain retrospective.
+- A central experiment serves a real problem, key uncertainty, or route decision. When that basis is missing, Dove pauses central design and inspects actual project material, relevant sources, or a smallest low-risk diagnostic instead of inventing a substitute experiment or stopping at the gap. When newly executed central work needs recording, one Experiment document holds the prospective plan and later actual execution and results; local command execution may also have `.dove/runs/<id>/` receipts, but those receipts do not replace the Experiment document. Design-only work stops before execution, existing results are analyzed directly, and retrospective records remain retrospective.
 - A Review document may preserve author-side scientific self-check, `dove-review` handoff purpose, frozen materials, explicit limits, prompt, clarification, rebuttal, and actual reviewer returns; author handling is added only when requested.
 - Claims remain scoped prose, tables, or dedicated human-readable documents when useful. There is no Claim store.
 - Lessons remain fallible advisory prose and are never evidence or a completion certificate.
@@ -68,14 +70,14 @@ This is recommended organization, not a schema. Do not require fixed headings, f
 - Treat contribution, mechanism, novelty, and positioning above method, evidence, experiment analysis, baselines, and failure analysis; those above argument, writing, and figures; delivery last.
 - Do not let bounded-task completion masquerade as Workspace mainline progress.
 - Never synthesize a prospective experiment plan after execution.
-- Never fabricate a reviewer return or overwrite the original return with an author summary.
+- Preserve only actual reviewer returns; do not overwrite the original return with an author summary.
 - Do not normalize researcher documents into a mandatory template.
 
 Status performs no mutations. Ambient routing does not create research documents merely because a prompt was routed.
 
 ## Default Progression Boundary
 
-Default multi-round progression is foreground autonomous work. It reads the user-confirmed Workspace mainline from substantive research context, the current conversation, and actual project artifacts, and keeps that mainline stable. A short `/dove:research` continues toward the confirmed mainline; if no mainline is confirmed, Dove asks the user before multi-round work.
+Default multi-round progression is foreground autonomous work. It reads the user-confirmed Workspace mainline from substantive research context, the current conversation, and actual project artifacts, and keeps that mainline stable. A short `/dove:research` continues toward the confirmed mainline. If no mainline is confirmed, open exploration may begin from an explicitly labeled provisional question or route; Dove asks only when a material direction, scope, completion meaning, or user boundary would change.
 
 Default progression uses a mainline-evidence-action-outcome continuation cycle. It judges what was found, accessed, inspected, used, executed, verified, contradicted, or remains missing; then uses Explore, Execute, and Express as orthogonal action lenses rather than stages, roles, Skills, or a fixed order. Dove chooses the capability or help that best advances the current decision, performs the action, and compares the result with the mainline or immediate goal. A checkpoint is internal, not a default stopping point.
 
@@ -85,16 +87,16 @@ Dove asks only when a material direction, scope, or real boundary would change t
 
 Review can be author-side scientific self-check or a `dove-review` exchange. Author-side scientific self-check tests the contribution, novelty, claims, evidence, method, experiment conditions, limitations, writing clarity, and likely reader confusion across the current full paper; it returns a natural-language author-side acceptability recommendation without claiming independent external review.
 
-For an isolated `dove-review` exchange, Dove prepares a frozen near-submission handoff and uses a genuinely isolated persistent `dove-review` context when the host actually provides one. The context keeps its own venue grounding and review history across re-review rounds but never reads author private transcripts or unlisted materials. Each round receives the current full paper, authoritative LaTeX source and compiled output, actual submission appendices or supplements, and other listed venue-facing files; the reviewer reads only that round's frozen list, makes no edits, and returns a whole-paper recommendation with scientific acceptability separate from delivery readiness. Old Reviews, historical returns, author private transcript, and unlisted materials are not visible by default. Findings are evidence to analyze rather than direct rewrite or claim-narrowing triggers; feasible high-level author-side action comes first, narrowing requires evidence or a real boundary, and changes to the confirmed mainline, contribution, or completion meaning go to the user. The actual return is preserved faithfully in the corresponding document, and author handling remains separate. A host label, same-context role prompt, or provenance statement does not prove independence.
+For an isolated `dove-review` exchange, Dove prepares a frozen near-submission handoff and uses `dove review handoff|resume|rerun` to reach a genuinely isolated persistent Claude Code reviewer context when the runtime is available. The context keeps its own review history across re-review rounds but never reads author private transcripts or unlisted materials. Each runtime round receives the current full paper, authoritative LaTeX source and compiled output, actual submission appendices or supplements, and other listed venue-facing files copied into the isolated workspace; the reviewer reads only that round's frozen list with Read-only tools, makes no edits, and returns a whole-paper recommendation with scientific acceptability separate from delivery readiness. Old Reviews, historical returns, author private transcript, and unlisted materials are not visible by default. Findings are evidence to analyze rather than direct rewrite or claim-narrowing triggers; feasible high-level author-side action comes first, narrowing requires evidence or a real boundary, and changes to the confirmed mainline, contribution, or completion meaning go to the user. The actual return is preserved faithfully in the corresponding document, and author handling remains separate. A host label, same-context role prompt, or provenance statement does not prove independence.
 
 ## Lifecycle Behavior
 
 - `init` creates supported software integration, the Dove agent surface, and the minimal researcher-owned `RESEARCH.md` bootstrap in one transaction.
-- `update` refreshes recognized package-managed integration and preserves existing `.dove/research/**`; it does not create missing summaries, complete navigation, replace Lessons, or delete retired researcher-visible materials.
+- `update` refreshes recognized package-managed integration and preserves existing `.dove/research/**`, `.dove/reviews/**`, and `.dove/runs/**`; it does not create missing summaries, complete navigation, replace Lessons, or delete retired researcher-visible materials, review records, or run receipts.
 - Retired exact Dove-owned Stop hook fragments are removed during update and uninstall only when the array entry exactly matches the old managed fragment; user-owned or non-array Stop settings are preserved.
 - `doctor` reports software and local readability facts without repairing research content; missing summaries are optional documentation, not corruption.
-- `export-research` is a one-time supported legacy JSON research records-to-Markdown conversion. It archives the original legacy JSON bytes under `.dove/archive/...`, writes into the new directory structure even when the minimal bootstrap exists, preserves legacy `.dove/LESSONS.md` as `lessons/imported-lessons.md`, does not convert v1, and installs no runtime fallback. Real export requires separate user authorization.
-- `reinstall` displays the deletion and replacement scope and defaults to No. After confirmation it rebuilds package-managed integration while preserving `.dove/research/**`, `.dove/install/DOCTOR.md`, and ordinary project files.
+- Old legacy research data is detected read-only, left in place, and not automatically converted, deleted, normalized into Markdown, or used through a runtime fallback.
+- `reinstall` displays the deletion and replacement scope and defaults to No. After confirmation it rebuilds package-managed integration while preserving `.dove/research/**`, `.dove/reviews/**`, `.dove/runs/**`, `.dove/install/DOCTOR.md`, and ordinary project files.
 
 ## Project File Safety
 

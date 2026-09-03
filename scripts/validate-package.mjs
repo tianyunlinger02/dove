@@ -11,7 +11,7 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs"
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "../src/core/web-access-integration.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "hot-sync:validate", "package:validate", "check", "release:check"];
+const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "hot-sync:validate", "uninstall:validate", "review-runtime:validate", "runs:validate", "package:validate", "check", "release:check"];
 const FORBIDDEN_PACKAGE_PATHS = [
   ".paper",
   ".claude/agents/dove-reviewer.md",
@@ -40,6 +40,8 @@ assert.equal(packageLock.version, packageJson.version);
 assert.equal(packageLock.packages?.[""]?.version, packageJson.version);
 assert.deepEqual(packageJson.bin, { dove: "bin/dove-package.mjs" });
 assert.deepEqual(packageJson.exports, { ".": "./dist/index.mjs" });
+assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "review-runtime:validate"), true);
+assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "runs:validate"), true);
 for (const script of REQUIRED_SCRIPTS) assert.equal(typeof packageJson.scripts?.[script], "string", `missing package script ${script}`);
 for (const script of FORBIDDEN_SCRIPTS) assert.equal(Object.hasOwn(packageJson.scripts ?? {}, script), false, `retired package script remains: ${script}`);
 for (const relativePath of FORBIDDEN_PACKAGE_PATHS) assert.equal(packageJson.files.includes(relativePath), false, `retired package file remains: ${relativePath}`);
@@ -53,6 +55,12 @@ assert.equal(MANAGED_PACKAGE_PATHS.includes(`package-resources/hosts/claude/${EX
 const packageExports = await import(new URL("../dist/index.mjs", import.meta.url));
 assert.equal(packageExports.PACKAGE_NAME, packageJson.name);
 assert.equal(packageExports.PACKAGE_VERSION, packageJson.version);
+for (const retiredExport of ["exportResearch", "previewResearchExport"]) assert.equal(Object.hasOwn(packageExports, retiredExport), false, `retired package export remains: ${retiredExport}`);
+
+for (const bundlePath of ["dist/index.mjs", "bin/dove-package.mjs", "scripts/dove-user-prompt-submit-package.mjs"]) {
+  const bundleText = fs.readFileSync(path.join(ROOT, bundlePath), "utf8");
+  assert.doesNotMatch(bundleText, /src\/core\/research-export\.mjs|export-research|previewResearchExport|exportResearch|exportCommand/iu, `${bundlePath} must not contain retired legacy export runtime`);
+}
 
 const cliVersion = spawnSync(process.execPath, [path.join(ROOT, "bin", "dove-package.mjs"), "--version"], { cwd: ROOT, encoding: "utf8" });
 assert.equal(cliVersion.status, 0, cliVersion.stderr || cliVersion.stdout);

@@ -27,7 +27,6 @@ export {
   researchDefaultTransactionEntries
 } from "./research-defaults.mjs";
 export { RESEARCH_DOCUMENT_PATHS, inspectResearchDocuments } from "./research-documents.mjs";
-export { exportResearch, previewResearchExport } from "./research-export.mjs";
 export {
   PAPER_SEARCH_MCP_FRAGMENT,
   PAPER_SEARCH_MCP_PATH,
@@ -93,3 +92,19 @@ export {
 } from "./project-installation.mjs";
 export { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "./dove-lifecycle.mjs";
 export { inspectProjectDoctor } from "./project-doctor.mjs";
+export { DOVE_REVIEW_BACKEND_ID, runClaudeReviewBackend } from "./review-claude-backend.mjs";
+export { REVIEW_MATERIAL_DENY_PATTERNS, createReviewSnapshot, normalizeReviewMaterialList, snapshotDigest } from "./review-snapshot.mjs";
+export { assertReviewWorkspaceMatchesSnapshot, createReviewId, normalizeReviewId, prepareReviewWorkspace, resolveReviewStateRoot } from "./review-workspace.mjs";
+export { handoffReview, importReviewReturn, inspectReviewStatus, rerunReview, resumeReview, reviewStateLocation } from "./review-runtime.mjs";
+export {
+  RUNS_DIRECTORY_PATH,
+  RUN_EVENT_SCHEMA_VERSION,
+  compareRuns,
+  createRunId,
+  inspectRunStatus,
+  normalizeRunId,
+  readRunEvents,
+  runRelativePaths,
+  summarizeRun
+} from "./run-record.mjs";
+export { finalizeRunWithSupervisor, resumeRun, startDetachedRunSupervisor } from "./run-supervisor.mjs";

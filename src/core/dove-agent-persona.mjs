@@ -1,49 +1,20 @@
 import {
   DOVE_RESEARCH_AGENT_DESCRIPTION,
   DOVE_RESEARCH_AGENT_NAME,
-  DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY,
-  DOVE_RESEARCH_DEFAULT_AUTONOMY,
-  DOVE_RESEARCH_DEFAULT_GOAL_CONTEXT,
-  DOVE_RESEARCH_DEFAULT_ROUNDS,
-  DOVE_RESEARCH_DEFAULT_CONTEXT,
-  DOVE_RESEARCH_DEFAULT_OUTER_STOP,
-  DOVE_RESEARCH_DEFAULT_PRIORITY,
-  DOVE_RESEARCH_DEFAULT_REVIEW_ABSORPTION,
-  DOVE_RESEARCH_CAPABILITY_RETURN,
   DOVE_RESEARCH_CAPSULE_BULLETS,
-  DOVE_RESEARCH_CLARIFICATION,
   DOVE_RESEARCH_CROSS_DOMAIN_INTUITION,
-  DOVE_RESEARCH_OVERALL_BEST_ACTION,
-  DOVE_RESEARCH_REAL_BLOCKER,
   DOVE_RESEARCH_CURIOSITY,
   DOVE_RESEARCH_DIRECT_JUDGMENT,
-  DOVE_RESEARCH_FIGURE_CAPABILITY_BOUNDARY,
-  DOVE_RESEARCH_FIGURE_EVIDENCE_BOUNDARY,
   DOVE_RESEARCH_FLAT_SKILL_SENTENCE,
   DOVE_RESEARCH_FRAME,
-  DOVE_RESEARCH_HOST_TOOL_BOUNDARY,
   DOVE_RESEARCH_HUNCH,
   DOVE_RESEARCH_LAYERING,
-  DOVE_RESEARCH_MAINLINE,
   DOVE_RESEARCH_MAINTENANCE_TRIGGER,
   DOVE_RESEARCH_ONE_AGENT,
-  DOVE_RESEARCH_REVIEW_ANTI_GAMING,
-  DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY,
-  DOVE_RESEARCH_REVIEW_DEFAULT,
-  DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
-  DOVE_RESEARCH_REVIEW_DUAL_COMPLETION,
-  DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF,
-  DOVE_RESEARCH_REVIEW_ISOLATED_PERSISTENT,
-  DOVE_RESEARCH_REVIEW_MODES,
-  DOVE_RESEARCH_REVIEW_NEGATIVE_CONTINUITY,
-  DOVE_RESEARCH_REVIEW_NO_INDEPENDENT_STATUS_CLAIM,
-  DOVE_RESEARCH_REVIEW_RETURN_PROVENANCE,
-  DOVE_RESEARCH_REVIEW_VERSION_CURRENCY,
   DOVE_RESEARCH_PERSONA_BULLETS,
   DOVE_RESEARCH_PROPORTIONALITY,
   DOVE_RESEARCH_SHARED_CONTRACT_BULLETS,
-  DOVE_RESEARCH_STOPPING,
-  DOVE_RESEARCH_SUPPORT_SUBORDINATION_BOUNDARY
+  DOVE_RESEARCH_STOPPING
 } from "./dove-research-contract.mjs";
 
 export const DOVE_AGENT_NAME = DOVE_RESEARCH_AGENT_NAME;
@@ -65,11 +36,11 @@ function bullets(items) {
 }
 
 export function renderDoveSharedResearchContractSection() {
-  return `## Shared research contract\n\n${bullets(DOVE_RESEARCH_SHARED_CONTRACT_BULLETS)}`;
+  return `## Shared research commitments\n\n${bullets(DOVE_RESEARCH_SHARED_CONTRACT_BULLETS)}`;
 }
 
 export function renderDoveAgentPersonaSection() {
-  return `## Dove research-agent persona\n\n${bullets(DOVE_AGENT_PERSONA_BULLETS)}\n\n${renderDoveSharedResearchContractSection()}`;
+  return `## Dove research-agent persona\n\n${bullets(DOVE_AGENT_PERSONA_BULLETS)}`;
 }
 
 export function renderDoveAgentInstructions() {
@@ -77,45 +48,21 @@ export function renderDoveAgentInstructions() {
 
 ${DOVE_RESEARCH_ONE_AGENT} ${DOVE_RESEARCH_FLAT_SKILL_SENTENCE}
 
-${renderDoveAgentPersonaSection()}
+## Research judgment
 
-## Default research progression
+${DOVE_RESEARCH_FRAME}
 
-- ${DOVE_RESEARCH_DEFAULT_AUTONOMY}
-- ${DOVE_RESEARCH_CLARIFICATION}
-- ${DOVE_RESEARCH_CROSS_DOMAIN_INTUITION}
-- ${DOVE_RESEARCH_OVERALL_BEST_ACTION}
-- ${DOVE_RESEARCH_REAL_BLOCKER}
-- ${DOVE_RESEARCH_DEFAULT_CONTEXT}
-- ${DOVE_RESEARCH_DEFAULT_GOAL_CONTEXT}
-- ${DOVE_RESEARCH_DEFAULT_ROUNDS}
-- ${DOVE_RESEARCH_DEFAULT_PRIORITY}
-- ${DOVE_RESEARCH_DEFAULT_REVIEW_ABSORPTION}
-- ${DOVE_RESEARCH_CAPABILITY_RETURN}
-- ${DOVE_RESEARCH_DEFAULT_OUTER_STOP}
+${DOVE_RESEARCH_CROSS_DOMAIN_INTUITION}
 
-## Author-side review and dove-review
+${DOVE_RESEARCH_HUNCH} ${DOVE_RESEARCH_CURIOSITY}
 
-- ${DOVE_RESEARCH_REVIEW_MODES} ${DOVE_RESEARCH_REVIEW_DEFAULT}
-- ${DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC}
-- ${DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY}
-- ${DOVE_RESEARCH_REVIEW_ISOLATED_PERSISTENT}
-- ${DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF}
-- ${DOVE_RESEARCH_REVIEW_DUAL_COMPLETION}
-- ${DOVE_RESEARCH_REVIEW_NEGATIVE_CONTINUITY}
-- ${DOVE_RESEARCH_REVIEW_VERSION_CURRENCY}
-- ${DOVE_RESEARCH_REVIEW_ANTI_GAMING}
-- ${DOVE_RESEARCH_REVIEW_NO_INDEPENDENT_STATUS_CLAIM}
-- ${DOVE_RESEARCH_REVIEW_RETURN_PROVENANCE}
+## Evidence, scope, and follow-through
 
-## Tool and support boundaries
-
-- ${DOVE_RESEARCH_HOST_TOOL_BOUNDARY}
-- Maintain Dove research Markdown when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.
-- ${DOVE_RESEARCH_DIRECT_JUDGMENT}
-- ${DOVE_RESEARCH_MAINLINE}
-- ${DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY}
-- ${DOVE_RESEARCH_FIGURE_EVIDENCE_BOUNDARY} ${DOVE_RESEARCH_FIGURE_CAPABILITY_BOUNDARY}
-- ${DOVE_RESEARCH_SUPPORT_SUBORDINATION_BOUNDARY}
+- Treat inspected material, retrieved sources, executed work, rendered figures, and checked artifacts as evidence; notes, files, or checks alone are not research progress.
+- Preserve the user-confirmed Workspace mainline, intended contribution, key route decision, and completion meaning; bring material changes to the user instead of switching silently.
+- For negative results or near misses, first check validity, then turn the signal into a new hypothesis, diagnostic, or route update rather than discarding it.
+- Answer and stop for pure judgment or bounded requests; in an active confirmed research context, perform the feasible next in-scope step and continue while an effective mainline action remains.
+- Use only exposed, permitted host tools and actual materials. Maintain Dove research Markdown when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.
+- Author-side Review is Dove's own scientific self-check; independent \`dove-review\` exists only when a real isolated persistent reviewer context judges the current frozen handoff, and its findings inform Dove's author-side judgment and response.
 `;
 }

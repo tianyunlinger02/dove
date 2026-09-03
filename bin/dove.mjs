@@ -21,19 +21,22 @@ import {
 import { parseUserPromptSubmitPayload, userPromptSubmitOutput } from "../src/core/ambient-hook.mjs";
 import { parseSessionStartPayload, sessionStartOutput } from "../src/core/session-start-hook.mjs";
 import { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
-import { exportResearch, previewResearchExport } from "../src/core/research-export.mjs";
 import { PROJECT_HOST_IDS } from "../src/core/host-registry.mjs";
 import { classifyPackageCompatibility, PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { initializeProjectIntegration, inspectProjectIntegration, previewProjectCompleteReinstall, synchronizeProjectIntegrationOnly } from "../src/core/project-installation.mjs";
 import { readProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
 import { resolveExactInstalledProjectRoot, resolveInstalledProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
+import { compareRuns, inspectRunStatus } from "../src/core/run-record.mjs";
+import { finalizeRunWithSupervisor, isRunSupervisorInvocation, resumeRun, runSupervisorMain, startDetachedRunSupervisor } from "../src/core/run-supervisor.mjs";
+import { handoffReview, importReviewReturn, inspectReviewStatus, rerunReview, resumeReview } from "../src/core/review-runtime.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
-const KNOWN_COMMANDS = new Set(["init", "update", "reinstall", "uninstall", "doctor", "export-research", "hook"]);
+if (isRunSupervisorInvocation(process.argv.slice(2))) await runSupervisorMain(process.argv.slice(2));
+const KNOWN_COMMANDS = new Set(["init", "update", "reinstall", "uninstall", "doctor", "review", "run", "hook"]);
 
 function usage() {
   console.log(`dove
@@ -46,12 +49,21 @@ Usage:
   dove reinstall [--project <dir>] [--json|--format json]
   dove uninstall [--project <dir>] [--json|--format json]
   dove doctor [--project <dir>] [--json|--format json]
-  dove export-research [--project <dir>] [--json|--format json]
+  dove review handoff --project <dir> --venue <venue> --material <path>... [--id <id>] [--json|--format json]
+  dove review status --project <dir> [--id <id>] [--json|--format json]
+  dove review resume --project <dir> --id <id> [--json|--format json]
+  dove review rerun --project <dir> --id <id> --material <path>... [--venue <venue>] [--json|--format json]
+  dove review import --project <dir> --id <id> --file <report.md> [--venue <venue>] [--material <path>...] [--json|--format json]
+  dove run start --project <dir> [--id <id>] [--group <name>] [--wall-time <duration>|--timeout-ms <ms>] [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--data <basis>] [--evaluator <basis>] [--resource-basis <basis>] [--kill-grace-ms <ms>] [--json|--format json] -- <command> [args...]
+  dove run status --project <dir> [--id <id>|--group <name>] [--json|--format json]
+  dove run resume --project <dir> --id <id> [--json|--format json]
+  dove run finalize --project <dir> --id <id> --metric-value <number> [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--decision <text>] [--note <text>] [--json|--format json]
+  dove run compare --project <dir> [--group <name>|--id <id>...] [--json|--format json]
   dove hook session-start --project <dir>
   dove hook user-prompt-submit --project <dir>
   dove hook statusline --project <dir>
 
-The runtime CLI manages project integration, diagnostics, one-time legacy JSON research export, and host lifecycle hooks. Research work uses one Dove agent and nine optional capability Skills with ordinary Markdown research documents. Project initialization creates the minimal researcher-owned \`.dove/research/RESEARCH.md\` entry, but it does not create research progress, a Mission, or a scientific conclusion. Dove does not install or expose a Stop hook.
+The runtime CLI manages project integration, diagnostics, host lifecycle hooks, the explicit isolated dove-review handoff runtime, and detached experiment run receipts under \`.dove/runs/<id>/\`. Research work uses one Dove agent and nine optional capability Skills with ordinary Markdown research documents. Project initialization creates the minimal researcher-owned \`.dove/research/RESEARCH.md\` entry, but it does not create research progress, a Mission, or a scientific conclusion. Dove does not install or expose a Stop hook.
 `);
 }
 
@@ -79,7 +91,59 @@ function selectedHosts(args) {
   const raw = readFlagValues(args, "--host");
   if (raw.length === 0) return undefined;
   const requested = raw.flatMap((value) => value.split(",").map((item) => item.trim()).filter(Boolean));
-  return [...new Set(requested.includes("all") ? PROJECT_HOST_IDS : requested)];
+  return [...new Set(requested)];
+}
+
+function reviewMaterials(args) {
+  const values = readFlagValues(args, "--material");
+  return values.length === 0 ? undefined : values;
+}
+
+function reviewIdFlag(args) {
+  return readFlagValue(args, "--id") ?? undefined;
+}
+
+function reviewVenueFlag(args) {
+  return readFlagValue(args, "--venue") ?? undefined;
+}
+
+function reviewFileFlag(args) {
+  return readFlagValue(args, "--file") ?? undefined;
+}
+
+function runIdFlag(args) {
+  return readFlagValue(args, "--id") ?? undefined;
+}
+
+function runIds(args) {
+  const values = readFlagValues(args, "--id");
+  return values.length === 0 ? undefined : values;
+}
+
+function runGroupFlag(args) {
+  return readFlagValue(args, "--group") ?? undefined;
+}
+
+function runCommonFlags(args) {
+  return {
+    project: projectFlag(args) ?? process.cwd(),
+    id: runIdFlag(args),
+    group: runGroupFlag(args),
+    wallTime: readFlagValue(args, "--wall-time") ?? undefined,
+    timeoutMs: readFlagValue(args, "--timeout-ms") ?? undefined,
+    killGraceMs: readFlagValue(args, "--kill-grace-ms") ?? undefined,
+    metricName: readFlagValue(args, "--metric-name") ?? undefined,
+    direction: readFlagValue(args, "--direction") ?? undefined,
+    metricUnit: readFlagValue(args, "--metric-unit") ?? undefined,
+    data: readFlagValue(args, "--data") ?? undefined,
+    evaluator: readFlagValue(args, "--evaluator") ?? undefined,
+    resourceBasis: readFlagValue(args, "--resource-basis") ?? undefined,
+    decision: readFlagValue(args, "--decision") ?? undefined,
+    note: readFlagValue(args, "--note") ?? undefined,
+    metricValue: readFlagValue(args, "--metric-value") ?? undefined,
+    cwd: process.cwd(),
+    executablePath: __filename
+  };
 }
 
 function wantsJson(args) {
@@ -99,6 +163,164 @@ function writeIntegrationResult(command, result, args) {
 function writeLifecycleResult(command, result, args) {
   if (wantsJson(args)) console.log(JSON.stringify(integrationResult(result), null, 2));
   else console.log(renderDoveLifecycleResult(command, result, { stream: process.stdout, env: process.env }));
+}
+
+function terminalSafeText(value) {
+  return String(value ?? "").replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
+}
+
+function renderReviewResult(result) {
+  if (result.command === "status" && Array.isArray(result.reviews)) {
+    const lines = ["Dove review 状态", "", `项目：${terminalSafeText(result.project)}`];
+    if (result.reviews.length === 0) lines.push("", "尚无 .dove/reviews/** 记录。");
+    else lines.push("", ...result.reviews.map((review) => `- ${terminalSafeText(review.reviewId)}: ${terminalSafeText(review.status)} round ${review.currentRound}${review.sessionId ? ` session ${terminalSafeText(review.sessionId)}` : ""}`));
+    return lines.join("\n");
+  }
+  if (result.command === "status") {
+    return [
+      "Dove review 状态",
+      "",
+      `项目：${terminalSafeText(result.project)}`,
+      `Review：${terminalSafeText(result.reviewId)}`,
+      `状态：${terminalSafeText(result.status)}`,
+      `当前轮次：${terminalSafeText(result.currentRound)}`,
+      `Session：${terminalSafeText(result.sessionId ?? "无")}`,
+      "",
+      ...(result.rounds ?? []).map((round) => {
+        const latest = round.latestReportPath ?? round.reportPath;
+        const canonical = latest === round.reportPath ? "" : `；原始报告保留在 ${terminalSafeText(round.reportPath)}`;
+        return `- round ${round.round}: ${round.status} (${round.provenance}) ${terminalSafeText(latest)}${canonical}`;
+      })
+    ].join("\n");
+  }
+  const heading = {
+    handoff: "Dove review handoff 已完成",
+    resume: "Dove review 已恢复并更新当前轮次",
+    rerun: "Dove review 已在同一 reviewer session 开始新完整轮次",
+    import: "Dove review return 已导入"
+  }[result.command] ?? "Dove review 完成";
+  const materialLines = (result.materials ?? []).map((material) => `- ${material.path} (${material.size} bytes)`);
+  return [
+    heading,
+    "",
+    `项目：${terminalSafeText(result.project)}`,
+    `Review：${terminalSafeText(result.reviewId)}`,
+    `轮次：${terminalSafeText(result.round)}`,
+    `状态：${terminalSafeText(result.status)}`,
+    `来源：${terminalSafeText(result.provenance)}`,
+    `Session：${terminalSafeText(result.sessionId ?? "无")}`,
+    `报告：${terminalSafeText(result.latestReportPath ?? result.reportPath)}`,
+    `Backend：${terminalSafeText(result.latestBackendPath ?? result.backendPath)}`,
+    "",
+    "冻结材料：",
+    ...(materialLines.length > 0 ? materialLines : ["- 无；这是导入的外部返回记录"]),
+    "",
+    result.command === "import" ? "导入内容按用户提供文件原样保存；未声称由 Dove runtime reviewer 生成。" : "Reviewer 只接收本轮冻结材料；不会读取私有 transcript。"
+  ].join("\n");
+}
+
+function writeReviewResult(result, args) {
+  if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
+  else console.log(renderReviewResult(result));
+}
+
+function renderRunMetric(metric) {
+  if (!metric || metric.name === null || metric.name === undefined) return "未指定";
+  const value = Object.hasOwn(metric, "value") ? `=${terminalSafeText(metric.value)}` : "";
+  return `${terminalSafeText(metric.name)} ${terminalSafeText(metric.direction)}${metric.unit ? ` ${terminalSafeText(metric.unit)}` : ""}${value}`;
+}
+
+function renderRunResult(result) {
+  if (result.command === "start") {
+    return [
+      "Dove run 已启动",
+      "",
+      `项目：${terminalSafeText(result.project)}`,
+      `Run：${terminalSafeText(result.runId)}`,
+      `状态：${terminalSafeText(result.status)}`,
+      `Supervisor PID：${terminalSafeText(result.supervisorPid)}`,
+      `命令：${terminalSafeText(result.argv.join(" "))}`,
+      `工作目录：${terminalSafeText(result.cwd)}`,
+      `Journal：${terminalSafeText(result.paths.journalPath)}`,
+      `stdout：${terminalSafeText(result.paths.stdoutPath)}`,
+      `stderr：${terminalSafeText(result.paths.stderrPath)}`,
+      "",
+      "Run 记录只证明该命令的本地执行收据；科研结论仍需 Dove 根据真实结果判断。"
+    ].join("\n");
+  }
+  if (result.command === "status" && Array.isArray(result.runs)) {
+    const lines = ["Dove run 状态", "", `项目：${terminalSafeText(result.project)}`];
+    if (result.group) lines.push(`Group：${terminalSafeText(result.group)}`);
+    if (result.runs.length === 0) lines.push("", "尚无匹配的 .dove/runs/** 记录。");
+    else lines.push("", ...result.runs.map((run) => `- ${terminalSafeText(run.runId)}: ${terminalSafeText(run.status)}${run.group ? ` group ${terminalSafeText(run.group)}` : ""}${run.finalized ? ` metric ${renderRunMetric(run.metric)}` : ""}`));
+    return lines.join("\n");
+  }
+  if (result.command === "status") {
+    return [
+      "Dove run 状态",
+      "",
+      `项目：${terminalSafeText(result.project)}`,
+      `Run：${terminalSafeText(result.runId)}`,
+      `状态：${terminalSafeText(result.status)}`,
+      `Lifecycle：${terminalSafeText(result.lifecycle)}`,
+      `Terminal：${terminalSafeText(result.terminal)}`,
+      `Finalized：${terminalSafeText(result.finalized)}`,
+      `Exit：${terminalSafeText(result.exitCode ?? "无")}`,
+      `Signal：${terminalSafeText(result.signal ?? "无")}`,
+      `Metric：${renderRunMetric(result.metric)}`,
+      `Journal：${terminalSafeText(result.paths.journalPath)}`,
+      `stdout：${terminalSafeText(result.paths.stdoutPath)}`,
+      `stderr：${terminalSafeText(result.paths.stderrPath)}`,
+      "",
+      "PID 只作为观察信号，不是强身份。status 只读，不会修复或追加记录。"
+    ].join("\n");
+  }
+  if (result.command === "resume") {
+    return [
+      "Dove run resume",
+      "",
+      `Run：${terminalSafeText(result.run?.runId)}`,
+      `状态：${terminalSafeText(result.status)}`,
+      `动作：${terminalSafeText(result.action)}`,
+      `写入：${terminalSafeText(result.write)}`,
+      `说明：${terminalSafeText(result.reason)}`
+    ].join("\n");
+  }
+  if (result.command === "finalize") {
+    return [
+      "Dove run 已 finalize",
+      "",
+      `Run：${terminalSafeText(result.summary.runId)}`,
+      `Metric：${renderRunMetric(result.event.metric)}`,
+      `Decision：${terminalSafeText(result.event.decision ?? "无")}`,
+      `Note：${terminalSafeText(result.event.note ?? "无")}`
+    ].join("\n");
+  }
+  if (result.command === "compare") {
+    if (!result.comparable) {
+      return [
+        "Dove run compare",
+        "",
+        `Comparable：false`,
+        `字段：${terminalSafeText((result.fields ?? []).join(", ") || "无")}`,
+        "只比较 terminal 且 finalized，并且 metric、budget、data、evaluator、resource basis 完全一致的 runs。"
+      ].join("\n");
+    }
+    return [
+      "Dove run compare",
+      "",
+      `Comparable：true`,
+      `Metric：${renderRunMetric(result.basis.metric)}`,
+      "",
+      ...result.ranking.map((item) => `${item.rank}. ${terminalSafeText(item.runId)} ${terminalSafeText(item.metricValue)} delta ${terminalSafeText(item.deltaFromBest)}`)
+    ].join("\n");
+  }
+  return JSON.stringify(result, null, 2);
+}
+
+function writeRunResult(result, args) {
+  if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
+  else console.log(renderRunResult(result));
 }
 
 function operationalFailure(error, args = []) {
@@ -179,9 +401,9 @@ if (!command) {
       await runInteractiveDoveSetup({
         target: process.cwd(),
         inspect: inspectHome,
-        initialize: (target) => initializeProjectIntegration(target, PACKAGE_OPTIONS),
-        update: (target) => updateDoveLifecycle(target, { ...PACKAGE_OPTIONS, inspect }),
-        previewCompleteReinstall: (target) => previewProjectCompleteReinstall(target, PACKAGE_OPTIONS),
+        initialize: (target, lifecycleOptions) => initializeProjectIntegration(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
+        update: (target, lifecycleOptions) => updateDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions, inspect }),
+        previewCompleteReinstall: (target, lifecycleOptions) => previewProjectCompleteReinstall(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
         completeReinstall: (target, lifecycleOptions) => completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
         previewUninstall: (target) => previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS),
         uninstall: (target, lifecycleOptions) => uninstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
@@ -268,7 +490,7 @@ try {
     const preview = previewProjectCompleteReinstall(target, PACKAGE_OPTIONS);
     process.stdout.write(`${renderCompleteReinstallInventory(preview, { color })}\n\n`);
     const approved = await confirm({
-      message: "警告：这会重新安装 Dove 管理的项目接入；研究 Markdown 与 DOCTOR.md 会保留。确认重新安装项目配置？",
+      message: "警告：这会重新安装 Dove 管理的项目接入；研究 Markdown、Review records、run receipts 与 DOCTOR.md 会保留。确认重新安装项目配置？",
       default: false
     });
     if (!approved) {
@@ -290,7 +512,7 @@ try {
     const color = terminalColorEnabled(process.stdout, process.env);
     process.stdout.write(`${renderUninstallInventory(preview, { color })}\n\n`);
     const approved = await confirm({
-      message: "确认从当前项目卸载 Dove？研究 Markdown 与 DOCTOR.md 会保留。",
+      message: "确认从当前项目卸载 Dove？研究 Markdown、Review records、run receipts 与 DOCTOR.md 会保留。",
       default: false
     });
     if (!approved) {
@@ -309,25 +531,62 @@ try {
     process.exit(result.staticChecksPassed ? 0 : 1);
   }
 
-  if (command === "export-research") {
-    const target = path.resolve(projectFlag(args) ?? process.cwd());
-    const now = new Date();
-    const preview = previewResearchExport(target, { now });
-    if (wantsJson(args)) {
-      const { plan, ...publicPreview } = preview;
-      console.log(JSON.stringify({ ...publicPreview, confirmation: { required: true, default: false } }, null, 2));
-      process.exit(0);
+
+  if (command === "review") {
+    const subcommand = parsed.positionals[0];
+    const project = projectFlag(args) ?? process.cwd();
+    const common = {
+      project,
+      id: reviewIdFlag(args),
+      venue: reviewVenueFlag(args),
+      materials: reviewMaterials(args),
+      file: reviewFileFlag(args),
+      env: process.env,
+      cwd: process.cwd()
+    };
+    let result;
+    if (subcommand === "handoff") {
+      result = handoffReview(common);
+    } else if (subcommand === "status") {
+      result = inspectReviewStatus(common);
+    } else if (subcommand === "resume") {
+      if (!common.id) throw new Error("dove review resume requires --id <review-id>.");
+      result = resumeReview(common);
+    } else if (subcommand === "rerun") {
+      if (!common.id) throw new Error("dove review rerun requires --id <review-id>.");
+      result = rerunReview(common);
+    } else if (subcommand === "import") {
+      if (!common.id) throw new Error("dove review import requires --id <review-id>.");
+      if (!common.file) throw new Error("dove review import requires --file <report.md>.");
+      result = importReviewReturn(common);
+    } else {
+      throw new Error("dove review accepts only handoff, status, resume, rerun, or import.");
     }
-    const approved = await confirm({
-      message: `将旧版 JSON 科研记录导出为 Markdown，并把原始文件归档到 ${preview.archiveDirectory}。确认导出？`,
-      default: false
-    });
-    if (!approved) {
-      console.log("未修改任何文件。");
-      process.exit(0);
+    writeReviewResult(result, args);
+    process.exit(0);
+  }
+
+  if (command === "run") {
+    const subcommand = parsed.positionals[0];
+    const common = runCommonFlags(args);
+    let result;
+    if (subcommand === "start") {
+      result = await startDetachedRunSupervisor({ ...common, argv: parsed.passthrough ?? [] });
+    } else if (subcommand === "status") {
+      result = inspectRunStatus(common);
+    } else if (subcommand === "resume") {
+      if (!common.id) throw new Error("dove run resume requires --id <run-id>.");
+      result = await resumeRun(common);
+    } else if (subcommand === "finalize") {
+      if (!common.id) throw new Error("dove run finalize requires --id <run-id>.");
+      if (common.metricValue === undefined) throw new Error("dove run finalize requires --metric-value <number>.");
+      result = await finalizeRunWithSupervisor(common);
+    } else if (subcommand === "compare") {
+      result = compareRuns({ ...common, ids: runIds(args) });
+    } else {
+      throw new Error("dove run accepts only start, status, resume, finalize, or compare.");
     }
-    const result = exportResearch(target, { confirmed: true, now });
-    console.log(`研究记录已导出到 ${result.researchDirectory}；原始旧版 JSON 科研记录已归档到 ${result.archiveDirectory}。`);
+    writeRunResult(result, args);
     process.exit(0);
   }
 
@@ -348,7 +607,6 @@ try {
       synchronizeProjectIntegrationOnly(target, PACKAGE_OPTIONS);
       process.exit(0);
     }
-    synchronizeProjectIntegrationOnly(target, PACKAGE_OPTIONS);
     const output = userPromptSubmitOutput(input);
     if (output !== null) process.stdout.write(JSON.stringify(output));
     process.exit(0);
