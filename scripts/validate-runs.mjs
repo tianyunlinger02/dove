@@ -155,6 +155,8 @@ try {
   const beforeStatus = fileState(statusJournal);
   const singleStatus = jsonCli(["run", "status", "--project", project, "--id", "success-a", "--json"]);
   assert.equal(singleStatus.status, "succeeded");
+  assert.equal(singleStatus.timeoutTriggered, false);
+  assert.equal(Object.hasOwn(singleStatus, "timeoutRequested"), false);
   assertFileStateEqual(fileState(statusJournal), beforeStatus, "status must be read-only");
   const ambiguousStatus = cli(["run", "status", "--project", project, "--id", "success-a", "--group", "compatible", "--json"]);
   assert.notEqual(ambiguousStatus.status, 0);
@@ -209,6 +211,8 @@ try {
   startRun(project, "timeout-a", ["--timeout-ms", "200", "--kill-grace-ms", "50"], [process.execPath, timeoutScript]);
   const timeoutStatus = waitForTerminal(project, "timeout-a");
   assert.equal(timeoutStatus.status, "timed-out");
+  assert.equal(timeoutStatus.timeoutTriggered, true);
+  assert.equal(Object.hasOwn(timeoutStatus, "timeoutRequested"), false);
   const timeoutEvents = assertJournal(project, "timeout-a");
   assert.equal(timeoutEvents.some((event) => event.type === "timeout.requested"), true);
   assert.match(fs.readFileSync(runPath(project, "timeout-a", "stdout.log"), "utf8"), /timeout start/u);

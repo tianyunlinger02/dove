@@ -18878,7 +18878,7 @@ function summarizeStatus(projectRoot, runId, events) {
       target: targetObservation,
       note: "PID liveness is observation only and is not a strong process identity."
     },
-    timeoutRequested: timeout !== null,
+    timeoutTriggered: timeout !== null,
     paths,
     eventCount: events.length,
     latestEventType: events.at(-1)?.type ?? null
