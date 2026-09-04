@@ -117,24 +117,24 @@ var require_cli_width = __commonJS({
   "node_modules/cli-width/index.js"(exports, module) {
     "use strict";
     module.exports = cliWidth2;
-    function normalizeOpts(options) {
+    function normalizeOpts(options2) {
       const defaultOpts = {
         defaultWidth: 0,
         output: process.stdout,
         tty: __require("tty")
       };
-      if (!options) {
+      if (!options2) {
         return defaultOpts;
       }
       Object.keys(defaultOpts).forEach(function(key) {
-        if (!options[key]) {
-          options[key] = defaultOpts[key];
+        if (!options2[key]) {
+          options2[key] = defaultOpts[key];
         }
       });
-      return options;
+      return options2;
     }
-    function cliWidth2(options) {
-      const opts = normalizeOpts(options);
+    function cliWidth2(options2) {
+      const opts = normalizeOpts(options2);
       if (opts.output.getWindowSize) {
         return opts.output.getWindowSize()[0] || opts.defaultWidth;
       }
@@ -834,9 +834,9 @@ var require_conversions = __commonJS({
       const b = c * Math.sin(hr);
       return [l, a, b];
     };
-    convert.rgb.ansi16 = function(args2, saturation = null) {
-      const [r, g, b] = args2;
-      let value2 = saturation === null ? convert.rgb.hsv(args2)[2] : saturation;
+    convert.rgb.ansi16 = function(args, saturation = null) {
+      const [r, g, b] = args;
+      let value2 = saturation === null ? convert.rgb.hsv(args)[2] : saturation;
       value2 = Math.round(value2 / 50);
       if (value2 === 0) {
         return 30;
@@ -847,13 +847,13 @@ var require_conversions = __commonJS({
       }
       return ansi;
     };
-    convert.hsv.ansi16 = function(args2) {
-      return convert.rgb.ansi16(convert.hsv.rgb(args2), args2[2]);
+    convert.hsv.ansi16 = function(args) {
+      return convert.rgb.ansi16(convert.hsv.rgb(args), args[2]);
     };
-    convert.rgb.ansi256 = function(args2) {
-      const r = args2[0];
-      const g = args2[1];
-      const b = args2[2];
+    convert.rgb.ansi256 = function(args) {
+      const r = args[0];
+      const g = args[1];
+      const b = args[2];
       if (r === g && g === b) {
         if (r < 8) {
           return 16;
@@ -866,40 +866,40 @@ var require_conversions = __commonJS({
       const ansi = 16 + 36 * Math.round(r / 255 * 5) + 6 * Math.round(g / 255 * 5) + Math.round(b / 255 * 5);
       return ansi;
     };
-    convert.ansi16.rgb = function(args2) {
-      let color = args2 % 10;
+    convert.ansi16.rgb = function(args) {
+      let color = args % 10;
       if (color === 0 || color === 7) {
-        if (args2 > 50) {
+        if (args > 50) {
           color += 3.5;
         }
         color = color / 10.5 * 255;
         return [color, color, color];
       }
-      const mult = (~~(args2 > 50) + 1) * 0.5;
+      const mult = (~~(args > 50) + 1) * 0.5;
       const r = (color & 1) * mult * 255;
       const g = (color >> 1 & 1) * mult * 255;
       const b = (color >> 2 & 1) * mult * 255;
       return [r, g, b];
     };
-    convert.ansi256.rgb = function(args2) {
-      if (args2 >= 232) {
-        const c = (args2 - 232) * 10 + 8;
+    convert.ansi256.rgb = function(args) {
+      if (args >= 232) {
+        const c = (args - 232) * 10 + 8;
         return [c, c, c];
       }
-      args2 -= 16;
+      args -= 16;
       let rem;
-      const r = Math.floor(args2 / 36) / 5 * 255;
-      const g = Math.floor((rem = args2 % 36) / 6) / 5 * 255;
+      const r = Math.floor(args / 36) / 5 * 255;
+      const g = Math.floor((rem = args % 36) / 6) / 5 * 255;
       const b = rem % 6 / 5 * 255;
       return [r, g, b];
     };
-    convert.rgb.hex = function(args2) {
-      const integer = ((Math.round(args2[0]) & 255) << 16) + ((Math.round(args2[1]) & 255) << 8) + (Math.round(args2[2]) & 255);
+    convert.rgb.hex = function(args) {
+      const integer = ((Math.round(args[0]) & 255) << 16) + ((Math.round(args[1]) & 255) << 8) + (Math.round(args[2]) & 255);
       const string = integer.toString(16).toUpperCase();
       return "000000".substring(string.length) + string;
     };
-    convert.hex.rgb = function(args2) {
-      const match = args2.toString(16).match(/[a-f0-9]{6}|[a-f0-9]{3}/i);
+    convert.hex.rgb = function(args) {
+      const match = args.toString(16).match(/[a-f0-9]{6}|[a-f0-9]{3}/i);
       if (!match) {
         return [0, 0, 0];
       }
@@ -1057,11 +1057,11 @@ var require_conversions = __commonJS({
     convert.rgb.apple = function(rgb) {
       return [rgb[0] / 255 * 65535, rgb[1] / 255 * 65535, rgb[2] / 255 * 65535];
     };
-    convert.gray.rgb = function(args2) {
-      return [args2[0] / 100 * 255, args2[0] / 100 * 255, args2[0] / 100 * 255];
+    convert.gray.rgb = function(args) {
+      return [args[0] / 100 * 255, args[0] / 100 * 255, args[0] / 100 * 255];
     };
-    convert.gray.hsl = function(args2) {
-      return [0, 0, args2[0]];
+    convert.gray.hsl = function(args) {
+      return [0, 0, args[0]];
     };
     convert.gray.hsv = convert.gray.hsl;
     convert.gray.hwb = function(gray) {
@@ -1123,20 +1123,20 @@ var require_route = __commonJS({
       return graph;
     }
     function link(from, to) {
-      return function(args2) {
-        return to(from(args2));
+      return function(args) {
+        return to(from(args));
       };
     }
     function wrapConversion(toModel, graph) {
-      const path21 = [graph[toModel].parent, toModel];
+      const path22 = [graph[toModel].parent, toModel];
       let fn = conversions[graph[toModel].parent][toModel];
       let cur = graph[toModel].parent;
       while (graph[cur].parent) {
-        path21.unshift(graph[cur].parent);
+        path22.unshift(graph[cur].parent);
         fn = link(conversions[graph[cur].parent][cur], fn);
         cur = graph[cur].parent;
       }
-      fn.conversion = path21;
+      fn.conversion = path22;
       return fn;
     }
     module.exports = function(fromModel) {
@@ -1164,15 +1164,15 @@ var require_color_convert = __commonJS({
     var convert = {};
     var models = Object.keys(conversions);
     function wrapRaw(fn) {
-      const wrappedFn = function(...args2) {
-        const arg0 = args2[0];
+      const wrappedFn = function(...args) {
+        const arg0 = args[0];
         if (arg0 === void 0 || arg0 === null) {
           return arg0;
         }
         if (arg0.length > 1) {
-          args2 = arg0;
+          args = arg0;
         }
-        return fn(args2);
+        return fn(args);
       };
       if ("conversion" in fn) {
         wrappedFn.conversion = fn.conversion;
@@ -1180,15 +1180,15 @@ var require_color_convert = __commonJS({
       return wrappedFn;
     }
     function wrapRounded(fn) {
-      const wrappedFn = function(...args2) {
-        const arg0 = args2[0];
+      const wrappedFn = function(...args) {
+        const arg0 = args[0];
         if (arg0 === void 0 || arg0 === null) {
           return arg0;
         }
         if (arg0.length > 1) {
-          args2 = arg0;
+          args = arg0;
         }
-        const result = fn(args2);
+        const result = fn(args);
         if (typeof result === "object") {
           for (let len = result.length, i = 0; i < len; i++) {
             result[i] = Math.round(result[i]);
@@ -1221,16 +1221,16 @@ var require_color_convert = __commonJS({
 var require_ansi_styles = __commonJS({
   "node_modules/ansi-styles/index.js"(exports, module) {
     "use strict";
-    var wrapAnsi16 = (fn, offset) => (...args2) => {
-      const code = fn(...args2);
+    var wrapAnsi16 = (fn, offset) => (...args) => {
+      const code = fn(...args);
       return `\x1B[${code + offset}m`;
     };
-    var wrapAnsi256 = (fn, offset) => (...args2) => {
-      const code = fn(...args2);
+    var wrapAnsi256 = (fn, offset) => (...args) => {
+      const code = fn(...args);
       return `\x1B[${38 + offset};5;${code}m`;
     };
-    var wrapAnsi16m = (fn, offset) => (...args2) => {
-      const rgb = fn(...args2);
+    var wrapAnsi16m = (fn, offset) => (...args) => {
+      const rgb = fn(...args);
       return `\x1B[${38 + offset};2;${rgb[0]};${rgb[1]};${rgb[2]}m`;
     };
     var ansi2ansi = (n) => n;
@@ -1418,8 +1418,8 @@ var require_wrap_ansi = __commonJS({
       }
       return words.slice(0, last).join(" ") + words.slice(last).join("");
     };
-    var exec = (string, columns, options = {}) => {
-      if (options.trim !== false && string.trim() === "") {
+    var exec = (string, columns, options2 = {}) => {
+      if (options2.trim !== false && string.trim() === "") {
         return "";
       }
       let pre = "";
@@ -1428,21 +1428,21 @@ var require_wrap_ansi = __commonJS({
       const lengths = wordLengths(string);
       let rows = [""];
       for (const [index, word] of string.split(" ").entries()) {
-        if (options.trim !== false) {
+        if (options2.trim !== false) {
           rows[rows.length - 1] = rows[rows.length - 1].trimLeft();
         }
         let rowLength = stringWidth(rows[rows.length - 1]);
         if (index !== 0) {
-          if (rowLength >= columns && (options.wordWrap === false || options.trim === false)) {
+          if (rowLength >= columns && (options2.wordWrap === false || options2.trim === false)) {
             rows.push("");
             rowLength = 0;
           }
-          if (rowLength > 0 || options.trim === false) {
+          if (rowLength > 0 || options2.trim === false) {
             rows[rows.length - 1] += " ";
             rowLength++;
           }
         }
-        if (options.hard && lengths[index] > columns) {
+        if (options2.hard && lengths[index] > columns) {
           const remainingColumns = columns - rowLength;
           const breaksStartingThisLine = 1 + Math.floor((lengths[index] - remainingColumns - 1) / columns);
           const breaksStartingNextLine = Math.floor((lengths[index] - 1) / columns);
@@ -1453,19 +1453,19 @@ var require_wrap_ansi = __commonJS({
           continue;
         }
         if (rowLength + lengths[index] > columns && rowLength > 0 && lengths[index] > 0) {
-          if (options.wordWrap === false && rowLength < columns) {
+          if (options2.wordWrap === false && rowLength < columns) {
             wrapWord(rows, word, columns);
             continue;
           }
           rows.push("");
         }
-        if (rowLength + lengths[index] > columns && options.wordWrap === false) {
+        if (rowLength + lengths[index] > columns && options2.wordWrap === false) {
           wrapWord(rows, word, columns);
           continue;
         }
         rows[rows.length - 1] += word;
       }
-      if (options.trim !== false) {
+      if (options2.trim !== false) {
         rows = rows.map(stringVisibleTrimSpacesRight);
       }
       pre = rows.join("\n");
@@ -1486,8 +1486,8 @@ var require_wrap_ansi = __commonJS({
       }
       return ret;
     };
-    module.exports = (string, columns, options) => {
-      return String(string).normalize().replace(/\r\n/g, "\n").split("\n").map((line) => exec(line, columns, options)).join("\n");
+    module.exports = (string, columns, options2) => {
+      return String(string).normalize().replace(/\r\n/g, "\n").split("\n").map((line) => exec(line, columns, options2)).join("\n");
     };
   }
 });
@@ -1516,12 +1516,12 @@ var require_lib = __commonJS({
         }
         return def;
       }
-      #proxy(method, ...args2) {
+      #proxy(method, ...args) {
         if (typeof this._dest?.[method] === "function") {
-          this._dest[method](...args2);
+          this._dest[method](...args);
         }
         if (typeof this._src?.[method] === "function") {
-          this._src[method](...args2);
+          this._src[method](...args);
         }
       }
       get isTTY() {
@@ -1549,9 +1549,9 @@ var require_lib = __commonJS({
       _onpipe(src) {
         this._src = src;
       }
-      pipe(dest, options) {
+      pipe(dest, options2) {
         this._dest = dest;
-        return super.pipe(dest, options);
+        return super.pipe(dest, options2);
       }
       pause() {
         if (this._src) {
@@ -1600,14 +1600,14 @@ var require_lib = __commonJS({
         }
         this.emit("end");
       }
-      destroy(...args2) {
-        return this.#proxy("destroy", ...args2);
+      destroy(...args) {
+        return this.#proxy("destroy", ...args);
       }
-      destroySoon(...args2) {
-        return this.#proxy("destroySoon", ...args2);
+      destroySoon(...args) {
+        return this.#proxy("destroySoon", ...args);
       }
-      close(...args2) {
-        return this.#proxy("close", ...args2);
+      close(...args) {
+        return this.#proxy("close", ...args);
       }
     };
     module.exports = MuteStream2;
@@ -7632,10 +7632,10 @@ var require_lib2 = __commonJS({
     exports.analyse = analyse;
     var detectFile = (filepath, opts = {}) => new Promise((resolve, reject) => {
       let fd;
-      const fs18 = (0, node_1.default)();
+      const fs19 = (0, node_1.default)();
       const handler = (err, buffer) => {
         if (fd) {
-          fs18.closeSync(fd);
+          fs19.closeSync(fd);
         }
         if (err) {
           reject(err);
@@ -7647,9 +7647,9 @@ var require_lib2 = __commonJS({
       };
       const sampleSize = (opts === null || opts === void 0 ? void 0 : opts.sampleSize) || 0;
       if (sampleSize > 0) {
-        fd = fs18.openSync(filepath, "r");
+        fd = fs19.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(sampleSize);
-        fs18.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
+        fs19.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
           if (err) {
             handler(err, null);
           } else {
@@ -7661,22 +7661,22 @@ var require_lib2 = __commonJS({
         });
         return;
       }
-      fs18.readFile(filepath, handler);
+      fs19.readFile(filepath, handler);
     });
     exports.detectFile = detectFile;
     var detectFileSync = (filepath, opts = {}) => {
-      const fs18 = (0, node_1.default)();
+      const fs19 = (0, node_1.default)();
       if (opts && opts.sampleSize) {
-        const fd = fs18.openSync(filepath, "r");
+        const fd = fs19.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(opts.sampleSize);
-        const bytesRead = fs18.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
+        const bytesRead = fs19.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
         if (bytesRead < opts.sampleSize) {
           sample = sample.subarray(0, bytesRead);
         }
-        fs18.closeSync(fd);
+        fs19.closeSync(fd);
         return (0, exports.detect)(sample);
       }
-      return (0, exports.detect)(fs18.readFileSync(filepath));
+      return (0, exports.detect)(fs19.readFileSync(filepath));
     };
     exports.detectFileSync = detectFileSync;
     exports.default = {
@@ -7762,7 +7762,7 @@ var require_bom_handling = __commonJS({
     "use strict";
     var BOMChar = "\uFEFF";
     exports.PrependBOM = PrependBOMWrapper;
-    function PrependBOMWrapper(encoder, options) {
+    function PrependBOMWrapper(encoder, options2) {
       this.encoder = encoder;
       this.addBOM = true;
     }
@@ -7777,10 +7777,10 @@ var require_bom_handling = __commonJS({
       return this.encoder.end();
     };
     exports.StripBOM = StripBOMWrapper;
-    function StripBOMWrapper(decoder, options) {
+    function StripBOMWrapper(decoder, options2) {
       this.decoder = decoder;
       this.pass = false;
-      this.options = options || {};
+      this.options = options2 || {};
     }
     StripBOMWrapper.prototype.write = function(buf) {
       var res = this.decoder.write(buf);
@@ -7855,7 +7855,7 @@ var require_internal = __commonJS({
     InternalCodec.prototype.encoder = InternalEncoder;
     InternalCodec.prototype.decoder = InternalDecoder;
     var StringDecoder = __require("string_decoder").StringDecoder;
-    function InternalDecoder(options, codec) {
+    function InternalDecoder(options2, codec) {
       this.decoder = new StringDecoder(codec.enc);
     }
     InternalDecoder.prototype.write = function(buf) {
@@ -7867,7 +7867,7 @@ var require_internal = __commonJS({
     InternalDecoder.prototype.end = function() {
       return this.decoder.end();
     };
-    function InternalEncoder(options, codec) {
+    function InternalEncoder(options2, codec) {
       this.enc = codec.enc;
     }
     InternalEncoder.prototype.write = function(str) {
@@ -7875,7 +7875,7 @@ var require_internal = __commonJS({
     };
     InternalEncoder.prototype.end = function() {
     };
-    function InternalEncoderBase64(options, codec) {
+    function InternalEncoderBase64(options2, codec) {
       this.prevStr = "";
     }
     InternalEncoderBase64.prototype.write = function(str) {
@@ -7888,7 +7888,7 @@ var require_internal = __commonJS({
     InternalEncoderBase64.prototype.end = function() {
       return Buffer2.from(this.prevStr, "base64");
     };
-    function InternalEncoderCesu8(options, codec) {
+    function InternalEncoderCesu8(options2, codec) {
     }
     InternalEncoderCesu8.prototype.write = function(str) {
       var buf = Buffer2.alloc(str.length * 3);
@@ -7910,7 +7910,7 @@ var require_internal = __commonJS({
     };
     InternalEncoderCesu8.prototype.end = function() {
     };
-    function InternalDecoderCesu8(options, codec) {
+    function InternalDecoderCesu8(options2, codec) {
       this.acc = 0;
       this.contBytes = 0;
       this.accBytes = 0;
@@ -7972,7 +7972,7 @@ var require_internal = __commonJS({
       }
       return res;
     };
-    function InternalEncoderUtf8(options, codec) {
+    function InternalEncoderUtf8(options2, codec) {
       this.highSurrogate = "";
     }
     InternalEncoderUtf8.prototype.write = function(str) {
@@ -8016,7 +8016,7 @@ var require_utf32 = __commonJS({
     exports.ucs4be = "utf32be";
     Utf32Codec.prototype.encoder = Utf32Encoder;
     Utf32Codec.prototype.decoder = Utf32Decoder;
-    function Utf32Encoder(options, codec) {
+    function Utf32Encoder(options2, codec) {
       this.isLE = codec.isLE;
       this.highSurrogate = 0;
     }
@@ -8067,7 +8067,7 @@ var require_utf32 = __commonJS({
       this.highSurrogate = 0;
       return buf;
     };
-    function Utf32Decoder(options, codec) {
+    function Utf32Decoder(options2, codec) {
       this.isLE = codec.isLE;
       this.badChar = codec.iconv.defaultCharUnicode.charCodeAt(0);
       this.overflow = [];
@@ -8134,17 +8134,17 @@ var require_utf32 = __commonJS({
     };
     exports.utf32 = Utf32AutoCodec;
     exports.ucs4 = "utf32";
-    function Utf32AutoCodec(options, iconv2) {
+    function Utf32AutoCodec(options2, iconv2) {
       this.iconv = iconv2;
     }
     Utf32AutoCodec.prototype.encoder = Utf32AutoEncoder;
     Utf32AutoCodec.prototype.decoder = Utf32AutoDecoder;
-    function Utf32AutoEncoder(options, codec) {
-      options = options || {};
-      if (options.addBOM === void 0) {
-        options.addBOM = true;
+    function Utf32AutoEncoder(options2, codec) {
+      options2 = options2 || {};
+      if (options2.addBOM === void 0) {
+        options2.addBOM = true;
       }
-      this.encoder = codec.iconv.getEncoder(options.defaultEncoding || "utf-32le", options);
+      this.encoder = codec.iconv.getEncoder(options2.defaultEncoding || "utf-32le", options2);
     }
     Utf32AutoEncoder.prototype.write = function(str) {
       return this.encoder.write(str);
@@ -8152,11 +8152,11 @@ var require_utf32 = __commonJS({
     Utf32AutoEncoder.prototype.end = function() {
       return this.encoder.end();
     };
-    function Utf32AutoDecoder(options, codec) {
+    function Utf32AutoDecoder(options2, codec) {
       this.decoder = null;
       this.initialBufs = [];
       this.initialBufsLen = 0;
-      this.options = options || {};
+      this.options = options2 || {};
       this.iconv = codec.iconv;
     }
     Utf32AutoDecoder.prototype.write = function(buf) {
@@ -8290,12 +8290,12 @@ var require_utf16 = __commonJS({
     }
     Utf16Codec.prototype.encoder = Utf16Encoder;
     Utf16Codec.prototype.decoder = Utf16Decoder;
-    function Utf16Encoder(options, codec) {
-      options = options || {};
-      if (options.addBOM === void 0) {
-        options.addBOM = true;
+    function Utf16Encoder(options2, codec) {
+      options2 = options2 || {};
+      if (options2.addBOM === void 0) {
+        options2.addBOM = true;
       }
-      this.encoder = codec.iconv.getEncoder("utf-16le", options);
+      this.encoder = codec.iconv.getEncoder("utf-16le", options2);
     }
     Utf16Encoder.prototype.write = function(str) {
       return this.encoder.write(str);
@@ -8303,11 +8303,11 @@ var require_utf16 = __commonJS({
     Utf16Encoder.prototype.end = function() {
       return this.encoder.end();
     };
-    function Utf16Decoder(options, codec) {
+    function Utf16Decoder(options2, codec) {
       this.decoder = null;
       this.initialBufs = [];
       this.initialBufsLen = 0;
-      this.options = options || {};
+      this.options = options2 || {};
       this.iconv = codec.iconv;
     }
     Utf16Decoder.prototype.write = function(buf) {
@@ -8391,7 +8391,7 @@ var require_utf7 = __commonJS({
     Utf7Codec.prototype.decoder = Utf7Decoder;
     Utf7Codec.prototype.bomAware = true;
     var nonDirectChars = /[^A-Za-z0-9'\(\),-\.\/:\? \n\r\t]+/g;
-    function Utf7Encoder(options, codec) {
+    function Utf7Encoder(options2, codec) {
       this.iconv = codec.iconv;
     }
     Utf7Encoder.prototype.write = function(str) {
@@ -8401,7 +8401,7 @@ var require_utf7 = __commonJS({
     };
     Utf7Encoder.prototype.end = function() {
     };
-    function Utf7Decoder(options, codec) {
+    function Utf7Decoder(options2, codec) {
       this.iconv = codec.iconv;
       this.inBase64 = false;
       this.base64Accum = "";
@@ -8473,7 +8473,7 @@ var require_utf7 = __commonJS({
     Utf7IMAPCodec.prototype.encoder = Utf7IMAPEncoder;
     Utf7IMAPCodec.prototype.decoder = Utf7IMAPDecoder;
     Utf7IMAPCodec.prototype.bomAware = true;
-    function Utf7IMAPEncoder(options, codec) {
+    function Utf7IMAPEncoder(options2, codec) {
       this.iconv = codec.iconv;
       this.inBase64 = false;
       this.base64Accum = Buffer2.alloc(6);
@@ -8534,7 +8534,7 @@ var require_utf7 = __commonJS({
       }
       return buf.slice(0, bufIdx);
     };
-    function Utf7IMAPDecoder(options, codec) {
+    function Utf7IMAPDecoder(options2, codec) {
       this.iconv = codec.iconv;
       this.inBase64 = false;
       this.base64Accum = "";
@@ -8624,7 +8624,7 @@ var require_sbcs_codec = __commonJS({
     }
     SBCSCodec.prototype.encoder = SBCSEncoder;
     SBCSCodec.prototype.decoder = SBCSDecoder;
-    function SBCSEncoder(options, codec) {
+    function SBCSEncoder(options2, codec) {
       this.encodeBuf = codec.encodeBuf;
     }
     SBCSEncoder.prototype.write = function(str) {
@@ -8636,7 +8636,7 @@ var require_sbcs_codec = __commonJS({
     };
     SBCSEncoder.prototype.end = function() {
     };
-    function SBCSDecoder(options, codec) {
+    function SBCSDecoder(options2, codec) {
       this.decodeBuf = codec.decodeBuf;
     }
     SBCSDecoder.prototype.write = function(buf) {
@@ -9498,7 +9498,7 @@ var require_dbcs_codec = __commonJS({
       }
       return hasValues;
     };
-    function DBCSEncoder(options, codec) {
+    function DBCSEncoder(options2, codec) {
       this.leadSurrogate = -1;
       this.seqObj = void 0;
       this.encodeTable = codec.encodeTable;
@@ -9633,7 +9633,7 @@ var require_dbcs_codec = __commonJS({
       return newBuf.slice(0, j);
     };
     DBCSEncoder.prototype.findIdx = findIdx;
-    function DBCSDecoder(options, codec) {
+    function DBCSDecoder(options2, codec) {
       this.nodeIdx = 0;
       this.prevBytes = [];
       this.decodeTables = codec.decodeTables;
@@ -11254,11 +11254,11 @@ var require_streams = __commonJS({
     var Buffer2 = require_safer().Buffer;
     module.exports = function(streamModule) {
       var Transform = streamModule.Transform;
-      function IconvLiteEncoderStream(conv, options) {
+      function IconvLiteEncoderStream(conv, options2) {
         this.conv = conv;
-        options = options || {};
-        options.decodeStrings = false;
-        Transform.call(this, options);
+        options2 = options2 || {};
+        options2.decodeStrings = false;
+        Transform.call(this, options2);
       }
       IconvLiteEncoderStream.prototype = Object.create(Transform.prototype, {
         constructor: { value: IconvLiteEncoderStream }
@@ -11295,11 +11295,11 @@ var require_streams = __commonJS({
         });
         return this;
       };
-      function IconvLiteDecoderStream(conv, options) {
+      function IconvLiteDecoderStream(conv, options2) {
         this.conv = conv;
-        options = options || {};
-        options.encoding = this.encoding = "utf8";
-        Transform.call(this, options);
+        options2 = options2 || {};
+        options2.encoding = this.encoding = "utf8";
+        Transform.call(this, options2);
       }
       IconvLiteDecoderStream.prototype = Object.create(Transform.prototype, {
         constructor: { value: IconvLiteDecoderStream }
@@ -11354,14 +11354,14 @@ var require_lib3 = __commonJS({
     module.exports.encodings = null;
     module.exports.defaultCharUnicode = "\uFFFD";
     module.exports.defaultCharSingleByte = "?";
-    module.exports.encode = function encode(str, encoding, options) {
+    module.exports.encode = function encode(str, encoding, options2) {
       str = "" + (str || "");
-      var encoder = module.exports.getEncoder(encoding, options);
+      var encoder = module.exports.getEncoder(encoding, options2);
       var res = encoder.write(str);
       var trail = encoder.end();
       return trail && trail.length > 0 ? Buffer2.concat([res, trail]) : res;
     };
-    module.exports.decode = function decode(buf, encoding, options) {
+    module.exports.decode = function decode(buf, encoding, options2) {
       if (typeof buf === "string") {
         if (!module.exports.skipDecodeWarning) {
           console.error("Iconv-lite warning: decode()-ing strings is deprecated. Refer to https://github.com/ashtuchkin/iconv-lite/wiki/Use-Buffers-when-decoding");
@@ -11369,7 +11369,7 @@ var require_lib3 = __commonJS({
         }
         buf = Buffer2.from("" + (buf || ""), "binary");
       }
-      var decoder = module.exports.getDecoder(encoding, options);
+      var decoder = module.exports.getDecoder(encoding, options2);
       var res = decoder.write(buf);
       var trail = decoder.end();
       return trail ? res + trail : res;
@@ -11427,19 +11427,19 @@ var require_lib3 = __commonJS({
     module.exports._canonicalizeEncoding = function(encoding) {
       return ("" + encoding).toLowerCase().replace(/:\d{4}$|[^0-9a-z]/g, "");
     };
-    module.exports.getEncoder = function getEncoder(encoding, options) {
+    module.exports.getEncoder = function getEncoder(encoding, options2) {
       var codec = module.exports.getCodec(encoding);
-      var encoder = new codec.encoder(options, codec);
-      if (codec.bomAware && options && options.addBOM) {
-        encoder = new bomHandling.PrependBOM(encoder, options);
+      var encoder = new codec.encoder(options2, codec);
+      if (codec.bomAware && options2 && options2.addBOM) {
+        encoder = new bomHandling.PrependBOM(encoder, options2);
       }
       return encoder;
     };
-    module.exports.getDecoder = function getDecoder(encoding, options) {
+    module.exports.getDecoder = function getDecoder(encoding, options2) {
       var codec = module.exports.getCodec(encoding);
-      var decoder = new codec.decoder(options, codec);
-      if (codec.bomAware && !(options && options.stripBOM === false)) {
-        decoder = new bomHandling.StripBOM(decoder, options);
+      var decoder = new codec.decoder(options2, codec);
+      if (codec.bomAware && !(options2 && options2.stripBOM === false)) {
+        decoder = new bomHandling.StripBOM(decoder, options2);
       }
       return decoder;
     };
@@ -11450,11 +11450,11 @@ var require_lib3 = __commonJS({
       var streams = require_streams()(streamModule2);
       module.exports.IconvLiteEncoderStream = streams.IconvLiteEncoderStream;
       module.exports.IconvLiteDecoderStream = streams.IconvLiteDecoderStream;
-      module.exports.encodeStream = function encodeStream(encoding, options) {
-        return new module.exports.IconvLiteEncoderStream(module.exports.getEncoder(encoding, options), options);
+      module.exports.encodeStream = function encodeStream(encoding, options2) {
+        return new module.exports.IconvLiteEncoderStream(module.exports.getEncoder(encoding, options2), options2);
       };
-      module.exports.decodeStream = function decodeStream(encoding, options) {
-        return new module.exports.IconvLiteDecoderStream(module.exports.getDecoder(encoding, options), options);
+      module.exports.decodeStream = function decodeStream(encoding, options2) {
+        return new module.exports.IconvLiteDecoderStream(module.exports.getDecoder(encoding, options2), options2);
       };
       module.exports.supportsStreams = true;
     };
@@ -11477,7 +11477,7 @@ var require_lib3 = __commonJS({
 });
 
 // bin/dove.mjs
-import path20 from "node:path";
+import path21 from "node:path";
 import process6 from "node:process";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
@@ -11504,9 +11504,9 @@ var isEnterKey = (key) => key.name === "enter" || key.name === "return";
 var AbortPromptError = class extends Error {
   name = "AbortPromptError";
   message = "Prompt was aborted";
-  constructor(options) {
+  constructor(options2) {
     super();
-    this.cause = options?.cause;
+    this.cause = options2?.cause;
   }
 };
 var CancelPromptError = class extends Error {
@@ -11565,14 +11565,14 @@ function readline() {
   return getStore().rl;
 }
 function withUpdates(fn) {
-  const wrapped = (...args2) => {
+  const wrapped = (...args) => {
     const store = getStore();
     let shouldUpdate = false;
     const oldHandleChange = store.handleChange;
     store.handleChange = () => {
       shouldUpdate = true;
     };
-    const returnValue = fn(...args2);
+    const returnValue = fn(...args);
     if (shouldUpdate) {
       oldHandleChange();
     }
@@ -12385,17 +12385,17 @@ var SignalExit = class extends SignalExitBase {
     this.#emitter.emit("exit", this.#process.exitCode, null);
     return this.#originalProcessReallyExit.call(this.#process, this.#process.exitCode);
   }
-  #processEmit(ev, ...args2) {
+  #processEmit(ev, ...args) {
     const og = this.#originalProcessEmit;
     if (ev === "exit" && processOk(this.#process)) {
-      if (typeof args2[0] === "number") {
-        this.#process.exitCode = args2[0];
+      if (typeof args[0] === "number") {
+        this.#process.exitCode = args[0];
       }
-      const ret = og.call(this.#process, ev, ...args2);
+      const ret = og.call(this.#process, ev, ...args);
       this.#emitter.emit("exit", this.#process.exitCode, null);
       return ret;
     } else {
-      return og.call(this.#process, ev, ...args2);
+      return og.call(this.#process, ev, ...args);
     }
   }
 };
@@ -13884,9 +13884,10 @@ var esm_default11 = createPrompt((config, done) => {
 });
 
 // src/cli/command-parser.mjs
-var value = (name, options = {}) => ({ name, kind: "value", ...options });
-var boolean = (name, options = {}) => ({ name, kind: "boolean", ...options });
+var value = (name, options2 = {}) => ({ name, kind: "value", key: optionKey(name), ...options2 });
+var boolean = (name, options2 = {}) => ({ name, kind: "boolean", key: optionKey(name), ...options2 });
 var projectOption = value("--project");
+var hostOption = value("--host", { repeatable: true, commaSeparated: true, dedupe: true, choices: ["claude", "dsh"] });
 var outputOptions = [boolean("--json", { conflictsWith: ["--format"] }), value("--format", { choices: ["json"], conflictsWith: ["--json"] })];
 var reviewOptions = [projectOption, value("--venue"), value("--material", { repeatable: true }), value("--id"), value("--file"), ...outputOptions];
 var runMetricOptions = [value("--metric-name"), value("--direction", { choices: ["min", "max"] }), value("--metric-unit")];
@@ -13897,68 +13898,144 @@ var runStatusOptions = [projectOption, value("--id", { conflictsWith: ["--group"
 var runResumeOptions = [projectOption, value("--id"), ...outputOptions];
 var runFinalizeOptions = [projectOption, value("--id"), ...runMetricOptions, value("--metric-value"), value("--decision"), value("--note"), ...outputOptions];
 var runCompareOptions = [projectOption, value("--id", { repeatable: true, conflictsWith: ["--group"] }), value("--group", { conflictsWith: ["--id"] }), ...outputOptions];
-function command(options = [], positional = { min: 0, max: 0 }, subcommands = null) {
-  return subcommands === null ? { options, positional } : { options, positional, subcommands };
+function optionKey(name) {
+  return String(name).replace(/^--/u, "").replace(/-([a-z0-9])/giu, (_, character) => character.toUpperCase());
+}
+function command(options2 = [], extra = {}) {
+  return { options: options2, ...extra };
 }
 var CLI_COMMAND_SPECS = Object.freeze({
-  init: command([projectOption, value("--host", { repeatable: true }), ...outputOptions]),
-  update: command([projectOption, value("--host", { repeatable: true }), ...outputOptions]),
+  init: command([projectOption, hostOption, ...outputOptions]),
+  update: command([projectOption, hostOption, ...outputOptions]),
   reinstall: command([projectOption, ...outputOptions]),
   uninstall: command([projectOption, ...outputOptions]),
   doctor: command([projectOption, ...outputOptions]),
-  review: command([], { min: 0, max: 0 }, {
-    handoff: command(reviewOptions, { min: 1, max: 1 }),
-    status: command([projectOption, value("--id"), ...outputOptions], { min: 1, max: 1 }),
-    resume: command([projectOption, value("--id"), ...outputOptions], { min: 1, max: 1 }),
-    rerun: command(reviewOptions, { min: 1, max: 1 }),
-    import: command(reviewOptions, { min: 1, max: 1 })
+  review: command([], {
+    subcommands: {
+      handoff: command(reviewOptions),
+      status: command([projectOption, value("--id"), ...outputOptions]),
+      resume: command([projectOption, value("--id"), ...outputOptions]),
+      rerun: command(reviewOptions),
+      import: command(reviewOptions)
+    }
   }),
-  run: command([], { min: 0, max: 0 }, {
-    start: command(runStartOptions, { min: 1, max: 1, passthroughAfterSeparator: true }),
-    status: command(runStatusOptions, { min: 1, max: 1 }),
-    resume: command(runResumeOptions, { min: 1, max: 1 }),
-    finalize: command(runFinalizeOptions, { min: 1, max: 1 }),
-    compare: command(runCompareOptions, { min: 1, max: 1 })
+  run: command([], {
+    subcommands: {
+      start: command(runStartOptions, { passthroughAfterSeparator: true }),
+      status: command(runStatusOptions),
+      resume: command(runResumeOptions),
+      finalize: command(runFinalizeOptions),
+      compare: command(runCompareOptions)
+    }
   }),
-  hook: command([projectOption], { min: 1, max: 1 })
+  hook: command([], {
+    subcommands: {
+      "session-start": command([projectOption]),
+      "user-prompt-submit": command([projectOption]),
+      statusline: command([projectOption])
+    }
+  })
 });
+function optionNameFromToken(raw) {
+  const equalsIndex = String(raw).indexOf("=");
+  return equalsIndex > 0 ? String(raw).slice(0, equalsIndex) : String(raw);
+}
+function inlineValueFromToken(raw) {
+  const equalsIndex = String(raw).indexOf("=");
+  return equalsIndex > 0 ? String(raw).slice(equalsIndex + 1) : null;
+}
+function jsonRequestedBeforeSeparator(argv) {
+  const tokens = Array.from(argv ?? [], (item) => String(item));
+  for (let index = 0; index < tokens.length; index += 1) {
+    const raw = tokens[index];
+    if (raw === "--") break;
+    const name = optionNameFromToken(raw);
+    const inlineValue = inlineValueFromToken(raw);
+    if (name === "--json") return true;
+    if (name === "--format") {
+      if (inlineValue === "json") return true;
+      if (inlineValue === null && tokens[index + 1] === "json") return true;
+    }
+  }
+  return false;
+}
+function attachJsonRequested(error, jsonRequested) {
+  if (error instanceof Error && !Object.hasOwn(error, "jsonRequested")) error.jsonRequested = jsonRequested;
+  return error;
+}
 function optionMap(spec) {
   const map = /* @__PURE__ */ new Map();
-  for (const option of spec.options) {
-    if (map.has(option.name)) throw new Error(`Duplicate CLI option spec: ${option.name}`);
+  for (const option of spec.options ?? []) {
+    if (map.has(option.name)) throw new Error(`Dove CLI \u9009\u9879\u5B9A\u4E49\u91CD\u590D\uFF1A${option.name}\u3002`);
     map.set(option.name, option);
   }
   return map;
 }
-function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
+function splitOptionValues(option, rawValue, fail) {
+  const values = option.commaSeparated === true ? String(rawValue).split(",").map((item) => item.trim()).filter(Boolean) : [rawValue];
+  if (values.length === 0) fail(`${option.name} \u9700\u8981\u4E00\u4E2A\u503C\u3002`);
+  for (const item of values) {
+    if (item === "") fail(`${option.name} \u9700\u8981\u4E00\u4E2A\u503C\u3002`);
+    if (Array.isArray(option.choices) && !option.choices.includes(item)) fail(`${option.name} \u53EA\u63A5\u53D7 ${formatChoices(option.choices)}\u3002`);
+  }
+  return values;
+}
+function rememberOption(seenNames, seenKeys, option) {
+  seenNames.set(option.name, (seenNames.get(option.name) ?? 0) + 1);
+  seenKeys.set(option.key, (seenKeys.get(option.key) ?? 0) + 1);
+}
+function conflictSeen(seenNames, seenKeys, conflict) {
+  return seenNames.has(conflict) || seenKeys.has(optionKey(conflict));
+}
+function formatChoices(values) {
+  if (values.length <= 2) return values.join(" \u6216 ");
+  return `${values.slice(0, -1).join("\u3001")}\uFF0C\u6216 ${values.at(-1)}`;
+}
+function parseTokens(argv, specs, jsonRequested) {
+  const fail = (message) => {
+    const error = new Error(message);
+    error.jsonRequested = jsonRequested;
+    throw error;
+  };
   const tokens = Array.from(argv ?? [], (item) => String(item));
-  if (tokens.length === 0) return { command: null, positionals: [], args: [] };
+  const result = (commandName2, subcommandName2, options2, passthrough2) => ({
+    command: commandName2,
+    subcommand: subcommandName2,
+    options: options2,
+    passthrough: passthrough2
+  });
+  if (tokens.length === 0) return result(null, null, {}, []);
   const commandName = tokens.shift();
   if (["--help", "--version"].includes(commandName)) {
-    if (tokens.length > 0) throw new Error(`${commandName} does not accept additional arguments.`);
-    return { command: commandName, positionals: [], args: [] };
+    if (tokens.length > 0) fail(`${commandName} \u540E\u9762\u4E0D\u63A5\u53D7\u5176\u4ED6\u53C2\u6570\u3002`);
+    return result(commandName, null, {}, []);
   }
-  let spec = specs[commandName];
-  if (!spec) throw new Error(`Unknown or unsupported Dove command: ${commandName}.`);
-  if (spec.subcommands) {
-    const subcommandName = tokens[0];
-    const subcommandSpec = spec.subcommands[subcommandName];
-    if (!subcommandSpec) throw new Error(`${commandName} accepts only ${Object.keys(spec.subcommands).join(", ")}.`);
-    spec = { ...subcommandSpec, positional: { ...subcommandSpec.positional ?? {}, min: 1, max: 1 } };
+  const commandSpec = specs[commandName];
+  if (!commandSpec) fail(`Dove \u4E0D\u652F\u6301\u8FD9\u4E2A\u547D\u4EE4\uFF1A${commandName}\u3002`);
+  let subcommandName = null;
+  let spec = commandSpec;
+  if (commandSpec.subcommands) {
+    const allowed = formatChoices(Object.keys(commandSpec.subcommands));
+    subcommandName = tokens.shift();
+    if (!subcommandName || !Object.hasOwn(commandSpec.subcommands, subcommandName)) fail(`${commandName} \u53EA\u63A5\u53D7\u8FD9\u4E9B\u5B50\u547D\u4EE4\uFF1A${allowed}\u3002`);
+    spec = commandSpec.subcommands[subcommandName];
   }
-  const options = optionMap(spec);
-  const args2 = [];
-  const positionals = [];
+  const optionsByName = optionMap(spec);
+  const parsedOptions = {};
   const passthrough = [];
-  const seen = /* @__PURE__ */ new Map();
+  const positionals = [];
+  const seenNames = /* @__PURE__ */ new Map();
+  const seenKeys = /* @__PURE__ */ new Map();
   let separated = false;
+  let separatorSeen = false;
   for (let index = 0; index < tokens.length; index += 1) {
     const raw = tokens[index];
     if (!separated && raw === "--") {
       separated = true;
+      separatorSeen = true;
       continue;
     }
-    if (separated && spec.positional?.passthroughAfterSeparator === true) {
+    if (separated && spec.passthroughAfterSeparator === true) {
       passthrough.push(raw);
       continue;
     }
@@ -13966,40 +14043,58 @@ function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
       positionals.push(raw);
       continue;
     }
-    const equalsIndex = raw.indexOf("=");
-    const name = equalsIndex > 0 ? raw.slice(0, equalsIndex) : raw;
-    const inlineValue = equalsIndex > 0 ? raw.slice(equalsIndex + 1) : null;
-    const option = options.get(name);
-    if (!option) throw new Error(`Unknown or unsupported CLI argument: ${name}.`);
-    const key = option.key ?? option.name;
+    const name = optionNameFromToken(raw);
+    const inlineValue = inlineValueFromToken(raw);
+    const option = optionsByName.get(name);
+    if (!option) fail(`Dove \u4E0D\u652F\u6301\u8FD9\u4E2A\u53C2\u6570\uFF1A${name}\u3002`);
     for (const conflict of option.conflictsWith ?? []) {
-      if (seen.has(conflict)) throw new Error(`${name} cannot be combined with ${conflict}.`);
+      if (conflictSeen(seenNames, seenKeys, conflict)) fail(`${name} \u4E0D\u80FD\u548C ${conflict} \u540C\u65F6\u4F7F\u7528\u3002`);
     }
-    const count = seen.get(key) ?? 0;
-    if (count > 0 && !option.repeatable) throw new Error(`${name} may be provided only once.`);
-    seen.set(key, count + 1);
+    const count = seenKeys.get(option.key) ?? 0;
+    if (count > 0 && !option.repeatable) fail(`${name} \u53EA\u80FD\u63D0\u4F9B\u4E00\u6B21\u3002`);
+    rememberOption(seenNames, seenKeys, option);
     if (option.kind === "boolean") {
-      if (inlineValue !== null) throw new Error(`${name} does not accept a value.`);
-      args2.push(name);
+      if (inlineValue !== null) fail(`${name} \u4E0D\u63A5\u53D7\u503C\u3002`);
+      parsedOptions[option.key] = true;
       continue;
     }
     let optionValue = inlineValue;
     if (optionValue === null) {
       const next = tokens[index + 1];
-      const nextName = next?.split("=", 1)[0];
-      if (next === void 0 || next === "--" || options.has(nextName)) throw new Error(`${name} requires a value.`);
+      const nextName = next === void 0 ? void 0 : optionNameFromToken(next);
+      if (next === void 0 || next === "--" || optionsByName.has(nextName)) fail(`${name} \u9700\u8981\u4E00\u4E2A\u503C\u3002`);
       optionValue = next;
       index += 1;
     }
-    if (optionValue === "") throw new Error(`${name} requires a value.`);
-    if (Array.isArray(option.choices) && !option.choices.includes(optionValue)) throw new Error(`${name} accepts only ${option.choices.join(" or ")}.`);
-    args2.push(name, optionValue);
+    if (optionValue === "") fail(`${name} \u9700\u8981\u4E00\u4E2A\u503C\u3002`);
+    const values = splitOptionValues(option, optionValue, fail);
+    if (option.repeatable) {
+      const existing = Array.isArray(parsedOptions[option.key]) ? parsedOptions[option.key] : [];
+      for (const item of values) {
+        if (option.dedupe === true && existing.includes(item)) continue;
+        existing.push(item);
+      }
+      parsedOptions[option.key] = existing;
+    } else {
+      parsedOptions[option.key] = values[0];
+    }
   }
-  if (spec.positional?.passthroughAfterSeparator === true && passthrough.length === 0) throw new Error(`${commandName} requires command arguments after '--'.`);
-  const { min = 0, max = 0 } = spec.positional ?? {};
-  if (positionals.length < min) throw new Error(`${commandName} requires ${min} positional argument(s).`);
-  if (positionals.length > max) throw new Error(`${commandName} accepts at most ${max} positional argument(s).`);
-  return { command: commandName, positionals, args: args2, ...passthrough.length > 0 ? { passthrough } : {} };
+  const qualifiedName = subcommandName ? `${commandName} ${subcommandName}` : commandName;
+  if (spec.passthroughAfterSeparator === true && !separatorSeen) fail(`${qualifiedName} \u9700\u8981\u5728 '--' \u540E\u63D0\u4F9B\u8981\u6267\u884C\u7684\u547D\u4EE4\u3002`);
+  if (positionals.length > 0) {
+    if (spec.passthroughAfterSeparator === true) fail(`${qualifiedName} \u7684 Dove \u9009\u9879\u5FC5\u987B\u5199\u5728 '--' \u524D\uFF1B\u8981\u6267\u884C\u7684\u547D\u4EE4\u548C\u5B83\u7684\u53C2\u6570\u53EA\u80FD\u5199\u5728 '--' \u540E\u3002`);
+    fail(`${qualifiedName} \u4E0D\u63A5\u53D7\u4F4D\u7F6E\u53C2\u6570\u3002`);
+  }
+  if (spec.passthroughAfterSeparator === true && passthrough.length === 0) fail(`${qualifiedName} \u9700\u8981\u5728 '--' \u540E\u63D0\u4F9B\u8981\u6267\u884C\u7684\u547D\u4EE4\u3002`);
+  return result(commandName, subcommandName, parsedOptions, passthrough);
+}
+function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
+  const jsonRequested = jsonRequestedBeforeSeparator(argv);
+  try {
+    return parseTokens(argv, specs, jsonRequested);
+  } catch (error) {
+    throw attachJsonRequested(error, jsonRequested);
+  }
 }
 
 // src/cli/terminal-output.mjs
@@ -14034,24 +14129,24 @@ function terminalColorEnabled(stream, env = process.env) {
   const noColor = env?.NO_COLOR;
   return isInteractiveTerminal(stream) && !(typeof noColor === "string" && noColor.length > 0);
 }
-function terminalStyle(text, style, options = {}) {
-  if (options.color !== true) return text;
+function terminalStyle(text, style, options2 = {}) {
+  if (options2.color !== true) return text;
   const code = ANSI[style];
   if (!code) throw new Error(`Unknown Dove terminal style: ${style}.`);
   return `${code}${text}${ANSI.reset}`;
 }
-function renderDovePixelArt(options = {}) {
-  const color = options.color === true;
+function renderDovePixelArt(options2 = {}) {
+  const color = options2.color === true;
   return DOVE_PIXEL_ART.map((line) => terminalStyle(line, "cyan", { color })).join("\n");
 }
 function terminalSafeText(value2) {
   return String(value2).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
 }
-function renderCompleteReinstallInventory(preview, options = {}) {
+function renderCompleteReinstallInventory(preview, options2 = {}) {
   if (!preview || preview.action !== "reinstall" || typeof preview.target !== "string" || !Array.isArray(preview.removedPaths) || !Array.isArray(preview.replacedPaths)) {
     throw new Error("Complete Reinstall inventory is invalid.");
   }
-  const color = options.color === true;
+  const color = options2.color === true;
   const removed = preview.removedPaths.length > 0 ? preview.removedPaths.map((relativePath) => `- ${terminalSafeText(relativePath)}`) : ["- \u65E0"];
   const replaced = preview.replacedPaths.length > 0 ? preview.replacedPaths.map((relativePath) => `- ${terminalSafeText(relativePath)}`) : ["- \u65E0"];
   return [
@@ -14068,11 +14163,11 @@ function renderCompleteReinstallInventory(preview, options = {}) {
     "\u786E\u8BA4\u540E\u4F1A\u91CD\u5EFA\u5F53\u524D\u9879\u76EE\u96C6\u6210\uFF1B.dove/research/**\u3001.dove/reviews/**\u3001.dove/runs/**\u3001DOCTOR.md\u3001\u666E\u901A\u9879\u76EE\u6587\u4EF6\u4E0E\u7528\u6237\u7EA7 Dove \u5B89\u88C5\u4E0D\u53D7\u7BA1\u7406\u3002"
   ].join("\n");
 }
-function renderUninstallInventory(preview, options = {}) {
+function renderUninstallInventory(preview, options2 = {}) {
   if (!preview || preview.action !== "uninstall" || typeof preview.target !== "string" || !Array.isArray(preview.removedPaths)) {
     throw new Error("Dove uninstall inventory is invalid.");
   }
-  const color = options.color === true;
+  const color = options2.color === true;
   const removed = preview.removedPaths.length > 0 ? preview.removedPaths.map((item) => `- ${terminalSafeText(item)}`) : ["- \u65E0"];
   return [
     terminalStyle("\u5378\u8F7D Dove \u9879\u76EE\u63A5\u5165", "bold", { color }),
@@ -14092,10 +14187,10 @@ function renderUninstallInventory(preview, options = {}) {
     "\u786E\u8BA4\u540E\u624D\u4F1A\u6267\u884C\uFF1B\u53D6\u6D88\u4E0D\u4F1A\u4FEE\u6539\u4EFB\u4F55\u6587\u4EF6\u3002"
   ].join("\n");
 }
-function renderDoveLifecycleResult(command3, result, options = {}) {
+function renderDoveLifecycleResult(command3, result, options2 = {}) {
   if (command3 === "uninstall" && result?.status === "uninstalled") {
     return [
-      terminalStyle("Dove \u5DF2\u4ECE\u5F53\u524D\u9879\u76EE\u5378\u8F7D", "bold", { color: options.color === true }),
+      terminalStyle("Dove \u5DF2\u4ECE\u5F53\u524D\u9879\u76EE\u5378\u8F7D", "bold", { color: options2.color === true }),
       "",
       "\u2713 Dove \u9879\u76EE\u63A5\u5165\u3001\u547D\u4EE4\u3001agent\u3001Hooks\u3001MCP \u58F0\u660E\u548C\u5B89\u88C5\u8BB0\u5F55\u5DF2\u79FB\u9664",
       "\u2713 .dove/research/**\u3001.dove/reviews/**\u3001.dove/runs/** \u4E0E .dove/install/DOCTOR.md \u5DF2\u4FDD\u7559",
@@ -14105,8 +14200,8 @@ function renderDoveLifecycleResult(command3, result, options = {}) {
   if (command3 !== "reinstall" || result?.status !== "reinstalled") {
     throw new Error(`Unsupported Dove lifecycle presentation: ${command3}/${result?.status ?? "unknown"}.`);
   }
-  const stream = options.stream ?? process.stdout;
-  const env = options.env ?? process.env;
+  const stream = options2.stream ?? process.stdout;
+  const env = options2.env ?? process.env;
   const color = terminalColorEnabled(stream, env);
   return [
     terminalStyle("Dove \u9879\u76EE\u914D\u7F6E\u5B8C\u5168\u91CD\u65B0\u5B89\u88C5\u5B8C\u6210", "bold", { color }),
@@ -14119,13 +14214,13 @@ function renderDoveLifecycleResult(command3, result, options = {}) {
     "\u7814\u7A76\u6587\u6863\u53EA\u662F\u7814\u7A76\u8005\u7EF4\u62A4\u7684\u666E\u901A\u5165\u53E3\uFF0C\u4E0D\u4EE3\u8868\u79D1\u7814\u5DE5\u4F5C\u3001\u7ED3\u8BBA\u6216\u9A8C\u8BC1\u5DF2\u7ECF\u5B8C\u6210\u3002"
   ].join("\n");
 }
-function renderDoveHome(options = {}) {
-  const stream = options.stream ?? process.stdout;
-  const env = options.env ?? process.env;
+function renderDoveHome(options2 = {}) {
+  const stream = options2.stream ?? process.stdout;
+  const env = options2.env ?? process.env;
   const interactive = isInteractiveTerminal(stream);
   const color = terminalColorEnabled(stream, env);
-  const state2 = options.state ?? (options.projectInitialized === true ? "current" : "uninitialized");
-  const nextCommand = options.nextCommand ?? (state2 === "uninitialized" ? "dove" : state2 === "needs-sync" ? "dove update" : state2 === "blocked" ? "dove doctor" : "\u8FDB\u5165\u652F\u6301\u7684\u5BBF\u4E3B\u540E\u76F4\u63A5\u63D0\u51FA\u79D1\u7814\u8BF7\u6C42\uFF1BClaude Code \u4E2D\u7684 /dove:* \u53EA\u662F\u53EF\u9009\u4E13\u9879\u5FEB\u6377\u5165\u53E3");
+  const state2 = options2.state ?? (options2.projectInitialized === true ? "current" : "uninitialized");
+  const nextCommand = options2.nextCommand ?? (state2 === "uninitialized" ? "dove" : state2 === "needs-sync" ? "dove update" : state2 === "blocked" ? "dove doctor" : "\u8FDB\u5165\u652F\u6301\u7684\u5BBF\u4E3B\u540E\u76F4\u63A5\u63D0\u51FA\u79D1\u7814\u8BF7\u6C42\uFF1BClaude Code \u4E2D\u7684 /dove:* \u53EA\u662F\u53EF\u9009\u4E13\u9879\u5FEB\u6377\u5165\u53E3");
   const stateLabel = {
     uninitialized: "\u5C1A\u672A\u914D\u7F6E Dove",
     "needs-sync": "Dove \u9879\u76EE\u96C6\u6210\u9700\u8981\u66F4\u65B0",
@@ -14180,9 +14275,9 @@ function recommendedDoveAction(result) {
   }
   return { kind: "static-checks-passed", command: "\u65E0\u9700\u5904\u7406", message: "Dove \u8F6F\u4EF6\u3001package-managed \u9879\u76EE\u63A5\u5165\u548C\u7814\u7A76\u6587\u6863\u5916\u5C42\u9759\u6001\u68C0\u67E5\u901A\u8FC7\uFF1B\u8FD9\u4E0D\u8BC1\u660E\u5F53\u524D\u5BBF\u4E3B\u4F1A\u8BDD\u5DF2\u52A0\u8F7D agent\u3001Skills\u3001Hooks \u6216 MCP\uFF0C\u4E5F\u4E0D\u4EE3\u8868\u8FD0\u884C\u65F6\u6216\u79D1\u7814\u5C31\u7EEA\u3002" };
 }
-function renderDoveDoctor(result, options = {}) {
-  const stream = options.stream ?? process.stdout;
-  const env = options.env ?? process.env;
+function renderDoveDoctor(result, options2 = {}) {
+  const stream = options2.stream ?? process.stdout;
+  const env = options2.env ?? process.env;
   const color = terminalColorEnabled(stream, env);
   const action2 = recommendedDoveAction(result);
   return [
@@ -14197,6 +14292,36 @@ function renderDoveDoctor(result, options = {}) {
     `${terminalStyle("\u4E0B\u4E00\u6B65", "bold", { color })}  ${action2.command}`,
     action2.message
   ].join("\n");
+}
+
+// src/cli/help-output.mjs
+function renderDoveHelp() {
+  return `dove
+
+\u7528\u6CD5\uFF1A
+  dove --help
+  dove --version
+  dove init [--project <dir>] [--host <host>...] [--json|--format json]
+  dove update [--project <dir>] [--host <host>...] [--json|--format json]
+  dove reinstall [--project <dir>] [--json|--format json]
+  dove uninstall [--project <dir>] [--json|--format json]
+  dove doctor [--project <dir>] [--json|--format json]
+  dove review handoff --project <dir> --venue <venue> --material <path>... [--id <id>] [--json|--format json]
+  dove review status --project <dir> [--id <id>] [--json|--format json]
+  dove review resume --project <dir> --id <id> [--json|--format json]
+  dove review rerun --project <dir> --id <id> --material <path>... [--venue <venue>] [--json|--format json]
+  dove review import --project <dir> --id <id> --file <report.md> [--venue <venue>] [--material <path>...] [--json|--format json]
+  dove run start --project <dir> [--id <id>] [--group <name>] [--wall-time <duration>|--timeout-ms <ms>] [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--data <basis>] [--evaluator <basis>] [--resource-basis <basis>] [--kill-grace-ms <ms>] [--json|--format json] -- <command> [args...]
+  dove run status --project <dir> [--id <id>|--group <name>] [--json|--format json]
+  dove run resume --project <dir> --id <id> [--json|--format json]
+  dove run finalize --project <dir> --id <id> --metric-value <number> [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--decision <text>] [--note <text>] [--json|--format json]
+  dove run compare --project <dir> [--group <name>|--id <id>...] [--json|--format json]
+  dove hook session-start --project <dir>
+  dove hook user-prompt-submit --project <dir>
+  dove hook statusline --project <dir>
+
+Dove \u8D1F\u8D23\u628A\u5F53\u524D\u9879\u76EE\u63A5\u5165\u652F\u6301\u7684\u5BBF\u4E3B\uFF0C\u5E76\u63D0\u4F9B doctor\u3001review\u3001run \u4E0E hook \u7B49\u9879\u76EE\u7EA7\u547D\u4EE4\u3002\u771F\u6B63\u7684\u79D1\u7814\u63A8\u8FDB\u4ECD\u5728\u4E00\u4E2A Dove agent \u4E2D\u5B8C\u6210\uFF1B\u7814\u7A76\u8BB0\u5F55\u662F\u7814\u7A76\u8005\u7EF4\u62A4\u7684\u666E\u901A Markdown\u3002\u521D\u59CB\u5316\u53EA\u521B\u5EFA\u6700\u5C0F\u5165\u53E3 \`.dove/research/RESEARCH.md\`\uFF0C\u4E0D\u4EE3\u8868\u5DF2\u7ECF\u5B8C\u6210\u7814\u7A76\u3001\u7ED3\u8BBA\u6216\u9A8C\u8BC1\u3002Dove \u4E0D\u5B89\u88C5\u4E5F\u4E0D\u66B4\u9732 Stop hook\u3002
+`;
 }
 
 // src/cli/interactive-setup.mjs
@@ -14251,9 +14376,9 @@ function defaultSelection(defaultWhenEmpty) {
   if (defaultWhenEmpty === true || defaultWhenEmpty === void 0) return [...DEFAULT_INITIALIZABLE_HOSTS];
   return selectionValues(defaultWhenEmpty);
 }
-function normalizeHostSelection(raw, options = {}) {
+function normalizeHostSelection(raw, options2 = {}) {
   const requested = selectionValues(raw);
-  const source = requested.length > 0 ? requested : defaultSelection(options.defaultWhenEmpty);
+  const source = requested.length > 0 ? requested : defaultSelection(options2.defaultWhenEmpty);
   for (const hostId of source) {
     if (typeof hostId !== "string" || !hostId || hostId !== hostId.trim()) {
       throw new Error(`Invalid Dove project host id: ${String(hostId)}.`);
@@ -14263,7 +14388,7 @@ function normalizeHostSelection(raw, options = {}) {
   const unknown = [...new Set(source.filter((hostId) => !PROJECT_HOST_IDS.includes(hostId)))];
   if (unknown.length > 0) throw new Error(`Unknown Dove project host(s): ${unknown.join(", ")}.`);
   const selected = PROJECT_HOST_IDS.filter((hostId) => source.includes(hostId));
-  if (options.requireInitializable === true) {
+  if (options2.requireInitializable === true) {
     const unavailable = selected.filter((hostId) => !HOST_REGISTRY[hostId].projectInitializable);
     if (unavailable.length > 0) {
       throw new Error(`Dove project initialization is not available for host(s): ${unavailable.join(", ")}.`);
@@ -14325,14 +14450,14 @@ function setupLines(command3, status, hosts) {
   else lines.push("\u2713 Dove \u80FD\u529B\u5165\u53E3\u548C\u5DF2\u9009\u5BBF\u4E3B\u63A5\u5165\u5DF2\u5237\u65B0");
   return lines;
 }
-function renderProjectIntegrationResult(command3, result, options = {}) {
+function renderProjectIntegrationResult(command3, result, options2 = {}) {
   assertIntegrationResult(result);
   if (!(/* @__PURE__ */ new Set(["init", "update"])).has(command3)) throw new Error(`Unsupported Dove integration command: ${command3}.`);
   for (const field of INTERNAL_FIELD_NAMES) {
-    if (Object.hasOwn(options, field)) throw new Error(`Dove integration renderer does not accept internal field option: ${field}.`);
+    if (Object.hasOwn(options2, field)) throw new Error(`Dove integration renderer does not accept internal field option: ${field}.`);
   }
-  const stream = options.stream ?? process.stdout;
-  const env = options.env ?? process.env;
+  const stream = options2.stream ?? process.stdout;
+  const env = options2.env ?? process.env;
   const interactive = isInteractiveTerminal(stream);
   const color = terminalColorEnabled(stream, env);
   const heading = headingFor(command3, result.status);
@@ -14497,7 +14622,7 @@ ${renderDoveLifecycleResult("reinstall", {
 `);
   return { status: "reinstalled", action: "reinstall", result };
 }
-async function runInteractiveDoveSetup(options) {
+async function runInteractiveDoveSetup(options2) {
   const {
     inspect: inspect2,
     initialize,
@@ -14512,7 +14637,7 @@ async function runInteractiveDoveSetup(options) {
     promptSelect = esm_default11,
     stream = process.stdout,
     env = process.env
-  } = options;
+  } = options2;
   const color = terminalColorEnabled(stream, env);
   const initial = await inspect2(target);
   const setupTarget = initial.target ?? target;
@@ -14615,6 +14740,157 @@ ${renderProjectIntegrationResult("update", {
     }
     throw new Error(`Dove \u4EA4\u4E92\u83DC\u5355\u4E0D\u652F\u6301\u64CD\u4F5C\uFF1A${String(action2)}\u3002`);
   }
+}
+
+// src/cli/review-output.mjs
+function terminalSafeText3(value2) {
+  return String(value2 ?? "").replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
+}
+function renderReviewResult(result) {
+  if (result.command === "status" && Array.isArray(result.reviews)) {
+    const lines = ["Dove review \u72B6\u6001", "", `\u9879\u76EE\uFF1A${terminalSafeText3(result.project)}`];
+    if (result.reviews.length === 0) lines.push("", "\u5C1A\u65E0 .dove/reviews/** \u8BB0\u5F55\u3002");
+    else lines.push("", ...result.reviews.map((review) => `- ${terminalSafeText3(review.reviewId)}\uFF1A${terminalSafeText3(review.status)}\uFF0C\u8F6E\u6B21 ${terminalSafeText3(review.currentRound)}${review.sessionId ? `\uFF0C\u4F1A\u8BDD ${terminalSafeText3(review.sessionId)}` : ""}`));
+    return lines.join("\n");
+  }
+  if (result.command === "status") {
+    return [
+      "Dove review \u72B6\u6001",
+      "",
+      `\u9879\u76EE\uFF1A${terminalSafeText3(result.project)}`,
+      `\u5BA1\u9605\u8BB0\u5F55\uFF1A${terminalSafeText3(result.reviewId)}`,
+      `\u72B6\u6001\uFF1A${terminalSafeText3(result.status)}`,
+      `\u5F53\u524D\u8F6E\u6B21\uFF1A${terminalSafeText3(result.currentRound)}`,
+      `\u4F1A\u8BDD\uFF1A${terminalSafeText3(result.sessionId ?? "\u65E0")}`,
+      "",
+      ...(result.rounds ?? []).map((round) => {
+        const latest = round.latestReportPath ?? round.reportPath;
+        const canonical = latest === round.reportPath ? "" : `\uFF1B\u539F\u59CB\u62A5\u544A\u4FDD\u7559\u5728 ${terminalSafeText3(round.reportPath)}`;
+        return `- \u8F6E\u6B21 ${terminalSafeText3(round.round)}\uFF1A${terminalSafeText3(round.status)}\uFF08${terminalSafeText3(round.provenance)}\uFF09\uFF0C\u62A5\u544A ${terminalSafeText3(latest)}${canonical}`;
+      })
+    ].join("\n");
+  }
+  const heading = {
+    handoff: "Dove review handoff \u5DF2\u5B8C\u6210",
+    resume: "Dove review \u5DF2\u6062\u590D\u5E76\u66F4\u65B0\u5F53\u524D\u8F6E\u6B21",
+    rerun: "Dove review \u5DF2\u5728\u540C\u4E00 reviewer session \u4E2D\u5F00\u59CB\u65B0\u7684\u5B8C\u6574\u8F6E\u6B21",
+    import: "Dove review return \u5DF2\u5BFC\u5165"
+  }[result.command] ?? "Dove review \u5B8C\u6210";
+  const materialLines2 = (result.materials ?? []).map((material) => `- ${terminalSafeText3(material.path)} (${terminalSafeText3(material.size)} bytes)`);
+  return [
+    heading,
+    "",
+    `\u9879\u76EE\uFF1A${terminalSafeText3(result.project)}`,
+    `\u5BA1\u9605\u8BB0\u5F55\uFF1A${terminalSafeText3(result.reviewId)}`,
+    `\u8F6E\u6B21\uFF1A${terminalSafeText3(result.round)}`,
+    `\u72B6\u6001\uFF1A${terminalSafeText3(result.status)}`,
+    `\u6765\u6E90\uFF1A${terminalSafeText3(result.provenance)}`,
+    `\u4F1A\u8BDD\uFF1A${terminalSafeText3(result.sessionId ?? "\u65E0")}`,
+    `\u62A5\u544A\uFF1A${terminalSafeText3(result.latestReportPath ?? result.reportPath)}`,
+    `\u540E\u7AEF\u8BB0\u5F55\uFF1A${terminalSafeText3(result.latestBackendPath ?? result.backendPath)}`,
+    "",
+    "\u51BB\u7ED3\u6750\u6599\uFF1A",
+    ...materialLines2.length > 0 ? materialLines2 : ["- \u65E0\uFF1B\u8FD9\u662F\u5BFC\u5165\u7684\u5916\u90E8\u8FD4\u56DE\u8BB0\u5F55"],
+    "",
+    result.command === "import" ? "\u5BFC\u5165\u5185\u5BB9\u6309\u7528\u6237\u63D0\u4F9B\u6587\u4EF6\u539F\u6837\u4FDD\u5B58\uFF1B\u672A\u58F0\u79F0\u7531 Dove runtime reviewer \u751F\u6210\u3002" : "Reviewer \u53EA\u63A5\u6536\u672C\u8F6E\u51BB\u7ED3\u6750\u6599\uFF1B\u4E0D\u4F1A\u8BFB\u53D6\u79C1\u6709 transcript\u3002"
+  ].join("\n");
+}
+
+// src/cli/run-output.mjs
+function terminalSafeText4(value2) {
+  return String(value2 ?? "").replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
+}
+function renderRunMetric(metric) {
+  if (!metric || metric.name === null || metric.name === void 0) return "\u672A\u6307\u5B9A";
+  const value2 = Object.hasOwn(metric, "value") ? `=${terminalSafeText4(metric.value)}` : "";
+  return `${terminalSafeText4(metric.name)} ${terminalSafeText4(metric.direction)}${metric.unit ? ` ${terminalSafeText4(metric.unit)}` : ""}${value2}`;
+}
+function renderRunResult(result) {
+  if (result.command === "start") {
+    return [
+      "Dove run \u5DF2\u542F\u52A8",
+      "",
+      `\u9879\u76EE\uFF1A${terminalSafeText4(result.project)}`,
+      `\u8FD0\u884C\u8BB0\u5F55\uFF1A${terminalSafeText4(result.runId)}`,
+      `\u72B6\u6001\uFF1A${terminalSafeText4(result.status)}`,
+      `Supervisor PID\uFF1A${terminalSafeText4(result.supervisorPid)}`,
+      `\u547D\u4EE4\uFF1A${terminalSafeText4(result.argv.join(" "))}`,
+      `\u5DE5\u4F5C\u76EE\u5F55\uFF1A${terminalSafeText4(result.cwd)}`,
+      `\u65E5\u5FD7\uFF1A${terminalSafeText4(result.paths.journalPath)}`,
+      `stdout\uFF1A${terminalSafeText4(result.paths.stdoutPath)}`,
+      `stderr\uFF1A${terminalSafeText4(result.paths.stderrPath)}`,
+      "",
+      "Run \u8BB0\u5F55\u53EA\u8BC1\u660E\u8BE5\u547D\u4EE4\u7684\u672C\u5730\u6267\u884C\u6536\u636E\uFF1B\u79D1\u7814\u7ED3\u8BBA\u4ECD\u9700 Dove \u6839\u636E\u771F\u5B9E\u7ED3\u679C\u5224\u65AD\u3002"
+    ].join("\n");
+  }
+  if (result.command === "status" && Array.isArray(result.runs)) {
+    const lines = ["Dove run \u72B6\u6001", "", `\u9879\u76EE\uFF1A${terminalSafeText4(result.project)}`];
+    if (result.group) lines.push(`\u5206\u7EC4\uFF1A${terminalSafeText4(result.group)}`);
+    if (result.runs.length === 0) lines.push("", "\u5C1A\u65E0\u5339\u914D\u7684 .dove/runs/** \u8BB0\u5F55\u3002");
+    else lines.push("", ...result.runs.map((run) => `- ${terminalSafeText4(run.runId)}\uFF1A${terminalSafeText4(run.status)}${run.group ? `\uFF0C\u5206\u7EC4 ${terminalSafeText4(run.group)}` : ""}${run.finalized ? `\uFF0C\u6307\u6807 ${renderRunMetric(run.metric)}` : ""}`));
+    return lines.join("\n");
+  }
+  if (result.command === "status") {
+    return [
+      "Dove run \u72B6\u6001",
+      "",
+      `\u9879\u76EE\uFF1A${terminalSafeText4(result.project)}`,
+      `\u8FD0\u884C\u8BB0\u5F55\uFF1A${terminalSafeText4(result.runId)}`,
+      `\u72B6\u6001\uFF1A${terminalSafeText4(result.status)}`,
+      `\u751F\u547D\u5468\u671F\uFF1A${terminalSafeText4(result.lifecycle)}`,
+      `\u5DF2\u7ED3\u675F\uFF1A${terminalSafeText4(result.terminal)}`,
+      `\u5DF2 finalize\uFF1A${terminalSafeText4(result.finalized)}`,
+      `\u9000\u51FA\u7801\uFF1A${terminalSafeText4(result.exitCode ?? "\u65E0")}`,
+      `\u4FE1\u53F7\uFF1A${terminalSafeText4(result.signal ?? "\u65E0")}`,
+      `\u6307\u6807\uFF1A${renderRunMetric(result.metric)}`,
+      `\u65E5\u5FD7\uFF1A${terminalSafeText4(result.paths.journalPath)}`,
+      `stdout\uFF1A${terminalSafeText4(result.paths.stdoutPath)}`,
+      `stderr\uFF1A${terminalSafeText4(result.paths.stderrPath)}`,
+      "",
+      "PID \u53EA\u4F5C\u4E3A\u89C2\u5BDF\u4FE1\u53F7\uFF0C\u4E0D\u662F\u5F3A\u8EAB\u4EFD\u3002status \u53EA\u8BFB\uFF0C\u4E0D\u4F1A\u4FEE\u590D\u6216\u8FFD\u52A0\u8BB0\u5F55\u3002"
+    ].join("\n");
+  }
+  if (result.command === "resume") {
+    return [
+      "Dove run resume",
+      "",
+      `\u8FD0\u884C\u8BB0\u5F55\uFF1A${terminalSafeText4(result.run?.runId)}`,
+      `\u72B6\u6001\uFF1A${terminalSafeText4(result.status)}`,
+      `\u52A8\u4F5C\uFF1A${terminalSafeText4(result.action)}`,
+      `\u5199\u5165\uFF1A${terminalSafeText4(result.write)}`,
+      `\u8BF4\u660E\uFF1A${terminalSafeText4(result.reason)}`
+    ].join("\n");
+  }
+  if (result.command === "finalize") {
+    return [
+      "Dove run \u5DF2 finalize",
+      "",
+      `\u8FD0\u884C\u8BB0\u5F55\uFF1A${terminalSafeText4(result.summary.runId)}`,
+      `\u6307\u6807\uFF1A${renderRunMetric(result.event.metric)}`,
+      `\u51B3\u5B9A\uFF1A${terminalSafeText4(result.event.decision ?? "\u65E0")}`,
+      `\u5907\u6CE8\uFF1A${terminalSafeText4(result.event.note ?? "\u65E0")}`
+    ].join("\n");
+  }
+  if (result.command === "compare") {
+    if (!result.comparable) {
+      return [
+        "Dove run compare",
+        "",
+        "\u53EF\u6BD4\u8F83\uFF1Afalse",
+        `\u5B57\u6BB5\uFF1A${terminalSafeText4((result.fields ?? []).join(", ") || "\u65E0")}`,
+        "\u53EA\u6BD4\u8F83 terminal \u4E14 finalized\uFF0C\u5E76\u4E14 metric\u3001budget\u3001data\u3001evaluator\u3001resource basis \u5B8C\u5168\u4E00\u81F4\u7684 runs\u3002"
+      ].join("\n");
+    }
+    return [
+      "Dove run compare",
+      "",
+      "\u53EF\u6BD4\u8F83\uFF1Atrue",
+      `\u6307\u6807\uFF1A${renderRunMetric(result.basis.metric)}`,
+      "",
+      ...result.ranking.map((item) => `${terminalSafeText4(item.rank)}. ${terminalSafeText4(item.runId)} \u6307\u6807\u503C ${terminalSafeText4(item.metricValue)}\uFF0C\u4E0E\u6700\u4F73\u5DEE\u503C ${terminalSafeText4(item.deltaFromBest)}`)
+    ].join("\n");
+  }
+  return JSON.stringify(result, null, 2);
 }
 
 // src/core/dove-research-contract.mjs
@@ -14877,130 +15153,12 @@ function sessionStartOutput(input) {
 }
 
 // src/core/dove-lifecycle.mjs
-import fs11 from "node:fs";
-import path14 from "node:path";
+import fs12 from "node:fs";
+import path15 from "node:path";
 
 // src/core/project-installation.mjs
-import crypto3 from "node:crypto";
-import fs10 from "node:fs";
-import path13 from "node:path";
-
-// src/core/paper-search-integration.mjs
-var PAPER_SEARCH_MCP_SERVER_NAME = "dove-paper-search";
-var PAPER_SEARCH_MCP_PATH = ".mcp.json";
-var PAPER_SEARCH_MCP_SELECTOR = `/mcpServers/${PAPER_SEARCH_MCP_SERVER_NAME}`;
-var PAPER_SEARCH_PACKAGE = "paper-search-mcp";
-var PAPER_SEARCH_PACKAGE_VERSION = "0.1.4";
-var PAPER_SEARCH_PACKAGE_SPECIFIER = `${PAPER_SEARCH_PACKAGE}==${PAPER_SEARCH_PACKAGE_VERSION}`;
-var PAPER_SEARCH_SUPPORT_SKILL_PATH = ".claude/skills/dove-paper-search/SKILL.md";
-var PAPER_SEARCH_MCP_FRAGMENT = Object.freeze({
-  type: "stdio",
-  command: "uvx",
-  args: Object.freeze(["--from", PAPER_SEARCH_PACKAGE_SPECIFIER, PAPER_SEARCH_PACKAGE])
-});
-function renderPaperSearchSupportSkill() {
-  return `---
-name: dove-paper-search
-description: Search, retrieve, and read academic papers through the pinned dove-paper-search project MCP when scholarly material is relevant and the current host exposes it and current user/project permissions permit it.
-user-invocable: false
----
-
-# Dove Paper Search
-
-Use the pinned \`dove-paper-search\` project MCP only when academic paper discovery, retrieval, or full-text reading materially helps the current request and the current host exposes that MCP and current user/project permissions permit it.
-
-- Keep searches bounded and choose relevant scholarly sources instead of querying every available index or service by default.
-- Download or read full text only when the task needs it. Distinguish material merely found, downloaded, or actually read, and report saved paths when useful.
-- Prefer source-native open download and read tools. If \`download_with_fallback\` is needed, always pass \`use_scihub: false\` explicitly. Do not call Sci-Hub tools.
-- Use only MCP tools that the current host actually exposes and current user/project permissions permit. If current user/project permissions do not permit it, \`uvx\` is unavailable, or the server fails, state that the academic paper discovery, download, or full text was not obtained through \`dove-paper-search\`, then choose any exposed and permitted material or action that can still advance the question: \`WebSearch\` discovery snippets, Exa ordinary webpage/documentation/venue/known-URL text when exposed, local project material, user-provided material, theory, experiment, or analysis. Do not install dependencies or substitute a CLI, shell, \`curl\`, or ad hoc fetch script for this MCP, and do not follow a fixed substitute sequence.
-- Keep \`dove-paper-search\` for scholarly paper acquisition. Use built-in \`WebSearch\` for discovery when appropriate, and use the project \`exa\` MCP for ordinary webpage bodies, documentation pages, venue pages, and known URLs outside academic paper acquisition when Exa is exposed and current user/project permissions permit it.
-- Do not turn paper identifiers into Dove IDs, hashes, trust scores, ledgers, or database records.
-`;
-}
-
-// src/core/web-access-integration.mjs
-var EXA_MCP_SERVER_NAME = "exa";
-var EXA_MCP_SELECTOR = `/mcpServers/${EXA_MCP_SERVER_NAME}`;
-var EXA_MCP_URL = "https://mcp.exa.ai/mcp";
-var EXA_WEB_SUPPORT_SKILL_PATH = ".claude/skills/dove-web-reader/SKILL.md";
-var WEB_FETCH_DENY_PERMISSION = "WebFetch";
-var WEB_FETCH_DENY_SELECTOR = "/permissions/deny[WebFetch]";
-var EXA_MCP_FRAGMENT = Object.freeze({
-  url: EXA_MCP_URL,
-  type: "http"
-});
-function plainObject2(value2) {
-  return value2 !== null && typeof value2 === "object" && !Array.isArray(value2);
-}
-function webFetchDenyFragmentState(settings) {
-  if (settings.permissions !== void 0 && !plainObject2(settings.permissions)) {
-    throw new Error(".claude/settings.json permissions must be a JSON object.");
-  }
-  const deny = settings.permissions?.deny;
-  if (deny !== void 0 && !Array.isArray(deny)) {
-    throw new Error(".claude/settings.json permissions.deny must be an array.");
-  }
-  if (!Array.isArray(deny) || !deny.includes(WEB_FETCH_DENY_PERMISSION)) {
-    return { exists: false, digest: null, fragment: null };
-  }
-  return { exists: true, digest: null, fragment: WEB_FETCH_DENY_PERMISSION };
-}
-function mergeWebFetchDenyPermission(settings) {
-  if (!plainObject2(settings)) throw new Error(".claude/settings.json must contain a JSON object.");
-  const permissions = settings.permissions;
-  if (permissions !== void 0 && !plainObject2(permissions)) throw new Error(".claude/settings.json permissions must be a JSON object.");
-  const deny = permissions?.deny;
-  if (deny !== void 0 && !Array.isArray(deny)) throw new Error(".claude/settings.json permissions.deny must be an array.");
-  const currentDeny = deny ?? [];
-  if (currentDeny.includes(WEB_FETCH_DENY_PERMISSION)) return { settings, changed: false };
-  return {
-    settings: {
-      ...settings,
-      permissions: {
-        ...permissions ?? {},
-        deny: [...currentDeny, WEB_FETCH_DENY_PERMISSION]
-      }
-    },
-    changed: true
-  };
-}
-function removeWebFetchDenyPermission(settings) {
-  if (!plainObject2(settings)) throw new Error(".claude/settings.json must contain a JSON object.");
-  const permissions = settings.permissions;
-  if (permissions === void 0) return { settings, changed: false };
-  if (!plainObject2(permissions)) throw new Error(".claude/settings.json permissions must be a JSON object.");
-  const deny = permissions.deny;
-  if (deny === void 0) return { settings, changed: false };
-  if (!Array.isArray(deny)) throw new Error(".claude/settings.json permissions.deny must be an array.");
-  const index = deny.indexOf(WEB_FETCH_DENY_PERMISSION);
-  if (index < 0) return { settings, changed: false };
-  const nextDeny = [...deny.slice(0, index), ...deny.slice(index + 1)];
-  const nextPermissions = { ...permissions };
-  if (nextDeny.length > 0) nextPermissions.deny = nextDeny;
-  else delete nextPermissions.deny;
-  const nextSettings = { ...settings };
-  if (Object.keys(nextPermissions).length > 0) nextSettings.permissions = nextPermissions;
-  else delete nextSettings.permissions;
-  return { settings: nextSettings, changed: true };
-}
-function renderExaWebSupportSkill() {
-  return `---
-name: dove-web-reader
-description: Read ordinary webpages and known URLs through the hosted Exa project MCP when webpage content is relevant and the current host exposes it and current user/project permissions permit it.
-user-invocable: false
----
-
-# Dove Web Reader
-
-Use the \`exa\` hosted project MCP only when ordinary webpage body retrieval, documentation page reading, venue page reading, crawling, or a known URL materially helps the current request and the current host exposes Exa and current user/project permissions permit it.
-
-- Keep built-in \`WebSearch\` available for web discovery and search-result triage; do not substitute webpage retrieval for search.
-- Use the pinned \`dove-paper-search\` project MCP for academic paper discovery, download, and full-text reading when that MCP is exposed and current user/project permissions permit it. Use \`exa\` for ordinary webpage bodies, documentation pages, venue pages, and known URLs outside academic paper acquisition when Exa is exposed and current user/project permissions permit it.
-- Do not use built-in \`WebFetch\`; Claude project permissions deny it so webpage body retrieval goes through \`exa\`.
-- Use only MCP tools that the current host actually exposes and current user/project permissions permit. If current user/project permissions do not permit it, Exa is unavailable, or the server fails, state that the ordinary webpage body, documentation page, venue page, or known URL was not obtained through Exa, then choose any exposed and permitted material or action that can still advance the question: \`WebSearch\` discovery snippets, \`dove-paper-search\` academic paper discovery/download/full text when exposed, local project material, user-provided material, theory, experiment, or analysis. Do not use CLI, shell, \`curl\`, Node/Python fetch scripts, or built-in \`WebFetch\` instead, and do not follow a fixed substitute sequence.
-- Do not turn URLs into Dove IDs, hashes, trust scores, ledgers, or database records.
-`;
-}
+import fs11 from "node:fs";
+import path14 from "node:path";
 
 // src/core/file-set-transaction.mjs
 import crypto from "node:crypto";
@@ -15026,8 +15184,8 @@ function normalizeRelativePath(relativePath, label = "Filesystem path") {
   return normalized;
 }
 var RootedFilesystem = class {
-  constructor(root, options = {}) {
-    this.fsOps = options.fsOps ?? fs;
+  constructor(root, options2 = {}) {
+    this.fsOps = options2.fsOps ?? fs;
     this.root = realpathNative(this.fsOps, path4.resolve(root));
     const stat = this.fsOps.lstatSync(this.root);
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Rooted workspace must be a real directory: ${this.root}`);
@@ -15083,21 +15241,21 @@ var RootedFilesystem = class {
     this.inspectRegularFile(relativePath);
     return Buffer.from(this.fsOps.readFileSync(this.displayPath(relativePath)));
   }
-  writeNewFile(relativePath, content, options = {}) {
+  writeNewFile(relativePath, content, options2 = {}) {
     this.assertParentChain(relativePath);
     this.fsOps.writeFileSync(this.displayPath(relativePath), content, {
       flag: "wx",
-      mode: options.mode ?? 384,
-      ...options.encoding === void 0 ? {} : { encoding: options.encoding }
+      mode: options2.mode ?? 384,
+      ...options2.encoding === void 0 ? {} : { encoding: options2.encoding }
     });
   }
   chmod(relativePath, mode) {
     this.inspectRegularFile(relativePath);
     this.fsOps.chmodSync(this.displayPath(relativePath), mode);
   }
-  mkdir(relativePath, options = {}) {
+  mkdir(relativePath, options2 = {}) {
     const normalized = this.normalize(relativePath, "Directory path");
-    if (options.recursive === true) {
+    if (options2.recursive === true) {
       let current = "";
       for (const component of normalized.split("/")) {
         current = current ? `${current}/${component}` : component;
@@ -15106,23 +15264,23 @@ var RootedFilesystem = class {
           if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Rooted directory component is not a real directory: ${current}`);
           continue;
         }
-        this.mkdir(current, { mode: options.mode });
+        this.mkdir(current, { mode: options2.mode });
       }
       return;
     }
     this.assertParentChain(normalized);
     this.fsOps.mkdirSync(this.displayPath(normalized), {
       recursive: false,
-      ...options.mode === void 0 ? {} : { mode: options.mode }
+      ...options2.mode === void 0 ? {} : { mode: options2.mode }
     });
   }
-  readdir(relativePath = null, options = {}) {
+  readdir(relativePath = null, options2 = {}) {
     const target = relativePath === null || relativePath === "" || relativePath === "." ? this.root : this.displayPath(relativePath);
     if (relativePath !== null && relativePath !== "" && relativePath !== ".") {
       const stat = this.lstat(relativePath);
       if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Rooted directory must be a real directory: ${relativePath}`);
     }
-    return this.fsOps.readdirSync(target, options);
+    return this.fsOps.readdirSync(target, options2);
   }
   rename(fromRelativePath, toRelativePath) {
     const from = this.normalize(fromRelativePath, "Rename source");
@@ -15135,39 +15293,39 @@ var RootedFilesystem = class {
     if (destinationStat?.isSymbolicLink()) throw new Error(`Rooted rename destination must not be a symbolic link: ${to}`);
     this.fsOps.renameSync(this.displayPath(from), this.displayPath(to));
   }
-  unlink(relativePath, options = {}) {
+  unlink(relativePath, options2 = {}) {
     try {
       const stat = this.lstat(relativePath);
       if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`Rooted unlink target must be a regular file: ${relativePath}`);
       this.fsOps.unlinkSync(this.displayPath(relativePath));
     } catch (error) {
-      if (options.force === true && error?.code === "ENOENT") return;
+      if (options2.force === true && error?.code === "ENOENT") return;
       throw error;
     }
   }
-  rmdir(relativePath, options = {}) {
+  rmdir(relativePath, options2 = {}) {
     try {
       const normalized = this.normalize(relativePath);
       const stat = this.lstat(normalized);
       if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Rooted removal target must be a real directory: ${normalized}`);
       this.fsOps.rmdirSync(this.displayPath(normalized));
     } catch (error) {
-      if (options.force === true && error?.code === "ENOENT") return;
+      if (options2.force === true && error?.code === "ENOENT") return;
       throw error;
     }
   }
-  remove(relativePath, options = {}) {
+  remove(relativePath, options2 = {}) {
     const normalized = this.normalize(relativePath, "Removal path");
     const stat = this.tryLstat(normalized);
     if (!stat) {
-      if (options.force === true) return;
+      if (options2.force === true) return;
       const error = new Error(`Rooted removal target does not exist: ${normalized}`);
       error.code = "ENOENT";
       throw error;
     }
     if (stat.isSymbolicLink()) throw new Error(`Rooted removal target must not be a symbolic link: ${normalized}`);
     if (stat.isDirectory()) {
-      if (options.recursive !== true) return this.rmdir(normalized);
+      if (options2.recursive !== true) return this.rmdir(normalized);
       for (const entry of this.readdir(normalized, { withFileTypes: true })) {
         const childPath = `${normalized}/${entry.name}`;
         const childStat = this.lstat(childPath);
@@ -15176,14 +15334,14 @@ var RootedFilesystem = class {
         else if (childStat.isFile()) this.unlink(childPath);
         else throw new Error(`Rooted cleanup encountered an unsupported path type: ${childPath}`);
       }
-      return this.rmdir(normalized, { force: options.force });
+      return this.rmdir(normalized, { force: options2.force });
     }
-    if (stat.isFile()) return this.unlink(normalized, { force: options.force });
+    if (stat.isFile()) return this.unlink(normalized, { force: options2.force });
     throw new Error(`Rooted removal target has an unsupported path type: ${normalized}`);
   }
 };
-function openRootedFilesystem(root, options = {}) {
-  return new RootedFilesystem(root, options);
+function openRootedFilesystem(root, options2 = {}) {
+  return new RootedFilesystem(root, options2);
 }
 
 // src/core/file-set-transaction.mjs
@@ -15271,10 +15429,10 @@ function committedResult(entries, cleanupFailures) {
     omittedCleanupWarningCount: Math.max(0, cleanupFailures.length - warnings.length)
   };
 }
-function writeFileSetTransaction(entries, options = {}) {
+function writeFileSetTransaction(entries, options2 = {}) {
   if (!Array.isArray(entries)) throw new Error("Transactional write entries must be an array.");
-  const fsOps = options.fsOps ?? fs2;
-  const transactionId = (options.transactionId ?? crypto.randomUUID()).replace(/[^a-z0-9._-]/giu, "-");
+  const fsOps = options2.fsOps ?? fs2;
+  const transactionId = (options2.transactionId ?? crypto.randomUUID()).replace(/[^a-z0-9._-]/giu, "-");
   const anchors = /* @__PURE__ */ new Map();
   const resolved = [];
   const targets = /* @__PURE__ */ new Set();
@@ -15319,7 +15477,7 @@ function writeFileSetTransaction(entries, options = {}) {
     }
     if (resolved.length === 0) return committedResult([], []);
     for (const anchor of new Set(resolved.map((entry) => entry.anchor))) {
-      const transactionBase = anchor.normalize(options.transactionBase ?? ".dove/install/transactions", "Transactional staging base");
+      const transactionBase = anchor.normalize(options2.transactionBase ?? ".dove/install/transactions", "Transactional staging base");
       const transactionPath = `${transactionBase}/${transactionId}`;
       if (anchor.exists(transactionPath)) throw new Error(`Transactional staging path is already occupied: ${anchor.displayPath(transactionPath)}.`);
       const transactionParents = parentDirectories(`${transactionPath}/placeholder`).map((relativePath) => ({ relativePath, existed: anchor.exists(relativePath) }));
@@ -15405,8 +15563,8 @@ import fs3 from "node:fs";
 import path6 from "node:path";
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path21) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path21 === "$" ? key : `${path21}.${key}`}.`);
+function duplicateKeyError(label, key, path22) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path22 === "$" ? key : `${path22}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -15442,7 +15600,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path21) {
+  function parseArray(path22) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -15451,7 +15609,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path21}[${itemIndex}]`);
+      parseValue(`${path22}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -15463,7 +15621,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path21) {
+  function parseObject(path22) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -15473,12 +15631,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path21);
+      if (keys.has(key)) duplicateKeyError(label, key, path22);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path21 === "$" ? `$.${key}` : `${path21}.${key}`);
+      parseValue(path22 === "$" ? `$.${key}` : `${path22}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -15489,11 +15647,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path21) {
+  function parseValue(path22) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path21);
-    else if (character === "[") parseArray(path21);
+    if (character === "{") parseObject(path22);
+    else if (character === "[") parseArray(path22);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -15547,9 +15705,9 @@ function assertMarker(value2) {
   if (typeof value2.packageVersion !== "string" || !value2.packageVersion.trim()) throw new Error("Dove legacy workspace marker packageVersion is invalid.");
   return value2;
 }
-function readLegacyWorkspaceMarker(root, options = {}) {
-  const fsOps = options.fsOps ?? fs3;
-  const markerPath = options.markerPath ?? ".dove/manifest.json";
+function readLegacyWorkspaceMarker(root, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs3;
+  const markerPath = options2.markerPath ?? ".dove/manifest.json";
   const absolutePath = path6.join(root, markerPath);
   const stat = lstatOrNull(fsOps, absolutePath);
   if (stat === null) return null;
@@ -15563,7 +15721,7 @@ function readLegacyWorkspaceMarker(root, options = {}) {
     }
     return assertMarker(parseJsonWithoutDuplicateKeys(text, markerPath));
   } catch (error) {
-    if (options.strict === false) return null;
+    if (options2.strict === false) return null;
     throw error;
   }
 }
@@ -15663,11 +15821,11 @@ var MANAGED_FIELDS = /* @__PURE__ */ new Set(["path", "kind", "selector", "diges
 var MANAGED_KINDS = /* @__PURE__ */ new Set(["exclusive-file", "json-fragment", "text-block"]);
 var SHA256 = /^[a-f0-9]{64}$/u;
 var SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
-function plainObject3(value2) {
+function plainObject2(value2) {
   return value2 !== null && typeof value2 === "object" && !Array.isArray(value2);
 }
 function assertPlainObject(value2, label) {
-  if (!plainObject3(value2)) throw new Error(`${label} must be a plain object.`);
+  if (!plainObject2(value2)) throw new Error(`${label} must be a plain object.`);
 }
 function assertFields(value2, fields, label) {
   assertPlainObject(value2, label);
@@ -15704,8 +15862,8 @@ function canonicalProjectRelativePath(value2, label) {
   }
   return value2;
 }
-function normalizeAllowedHosts(options) {
-  const allowed = options.hostIds;
+function normalizeAllowedHosts(options2) {
+  const allowed = options2.hostIds;
   if (!Array.isArray(allowed) || allowed.length === 0 || allowed.some((hostId) => typeof hostId !== "string" || !hostId || hostId === "all")) {
     throw new Error("Project installation manifest validation requires concrete hostIds in registry order.");
   }
@@ -15772,8 +15930,8 @@ function normalizeManaged(rawManaged = []) {
   }
   return [...byKey.values()].sort(compareManaged);
 }
-function validateProjectInstallationManifest(value2, options = {}) {
-  const allowedHosts = normalizeAllowedHosts(options);
+function validateProjectInstallationManifest(value2, options2 = {}) {
+  const allowedHosts = normalizeAllowedHosts(options2);
   assertFields(value2, MANIFEST_FIELDS, "Project installation manifest");
   if (value2.revision !== INSTALLATION_MANIFEST_REVISION) {
     throw new Error(`Project installation manifest revision must equal ${INSTALLATION_MANIFEST_REVISION}.`);
@@ -15791,8 +15949,8 @@ function validateProjectInstallationManifest(value2, options = {}) {
   if (Date.parse(updatedAt) < Date.parse(createdAt)) throw new Error("Project installation manifest updatedAt must not precede createdAt.");
   return value2;
 }
-function createProjectInstallationManifest(input = {}, options = {}) {
-  const allowedHosts = normalizeAllowedHosts(options);
+function createProjectInstallationManifest(input = {}, options2 = {}) {
+  const allowedHosts = normalizeAllowedHosts(options2);
   const requestedHosts = input.hosts ?? [];
   if (!Array.isArray(requestedHosts) || requestedHosts.some((hostId) => hostId === "all" || !allowedHosts.includes(hostId))) {
     throw new Error("Project installation manifest hosts must contain only concrete known host ids.");
@@ -15812,8 +15970,8 @@ function createProjectInstallationManifest(input = {}, options = {}) {
   validateProjectInstallationManifest(manifest, { hostIds: allowedHosts });
   return manifest;
 }
-function serializeProjectInstallationManifest(value2, options = {}) {
-  validateProjectInstallationManifest(value2, options);
+function serializeProjectInstallationManifest(value2, options2 = {}) {
+  validateProjectInstallationManifest(value2, options2);
   return `${JSON.stringify(value2, null, 2)}
 `;
 }
@@ -15838,12 +15996,12 @@ function inspectManifestFile(root, fsOps, manifestRelativePath) {
   if (!stat.isFile()) throw new Error(`Dove project installation manifest must be a regular file: ${manifestRelativePath}.`);
   return manifestPath;
 }
-function readProjectInstallationManifest(root, options = {}) {
-  const fsOps = options.fsOps ?? fs5;
+function readProjectInstallationManifest(root, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs5;
   const manifestPath = inspectManifestFile(root, fsOps, INSTALLATION_MANIFEST_PATH);
   try {
     const parsed2 = parseJsonWithoutDuplicateKeys(fsOps.readFileSync(manifestPath, "utf8"), "Dove project installation manifest");
-    validateProjectInstallationManifest(parsed2, options);
+    validateProjectInstallationManifest(parsed2, options2);
     return parsed2;
   } catch (error) {
     throw new Error(`Invalid Dove project installation manifest at ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
@@ -15857,14 +16015,14 @@ function validatePreviousManagedEntry(entry, index) {
   validateManagedEntry(normalized, index);
   return normalized;
 }
-function normalizePreviousManifest(value2, manifestPath, options) {
+function normalizePreviousManifest(value2, manifestPath, options2) {
   assertPlainObject(value2, "Dove 1.0 installation manifest");
   const recognizedRevision = value2.revision === PREVIOUS_INSTALLATION_MANIFEST_REVISION;
   const recognizedReleasedShape = value2.schemaVersion === 1 && value2.integrationVersion === 4 && value2.ownershipVersion === 4 && value2.runtime?.protocolVersion === 3;
   if (!recognizedRevision && !recognizedReleasedShape) {
     throw new Error(`Dove migration accepts only installation revision ${PREVIOUS_INSTALLATION_MANIFEST_REVISION}.`);
   }
-  const allowedHosts = normalizeAllowedHosts(options);
+  const allowedHosts = normalizeAllowedHosts(options2);
   assertPlainObject(value2.package, "Dove 1.0 installation manifest package");
   nonEmptyString(value2.package.name, "Dove 1.0 installation manifest package.name");
   nonEmptyString(value2.package.version, "Dove 1.0 installation manifest package.version");
@@ -15888,587 +16046,148 @@ function normalizePreviousManifest(value2, manifestPath, options) {
     sourcePath: manifestPath
   };
 }
-function readProjectInstallationManifestForMigration(root, options = {}) {
-  const fsOps = options.fsOps ?? fs5;
-  const relativePath = options.manifestPath ?? INSTALLATION_MANIFEST_PATH;
+function readProjectInstallationManifestForMigration(root, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs5;
+  const relativePath = options2.manifestPath ?? INSTALLATION_MANIFEST_PATH;
   if (![INSTALLATION_MANIFEST_PATH, LEGACY_INSTALLATION_MANIFEST_PATH].includes(relativePath)) {
     throw new Error(`Unsupported Dove installation migration manifest path: ${relativePath}.`);
   }
   const manifestPath = inspectManifestFile(root, fsOps, relativePath);
   try {
     const parsed2 = parseJsonWithoutDuplicateKeys(fsOps.readFileSync(manifestPath, "utf8"), "Dove 1.0 installation manifest");
-    return normalizePreviousManifest(parsed2, relativePath, options);
+    return normalizePreviousManifest(parsed2, relativePath, options2);
   } catch (error) {
     throw new Error(`Invalid Dove 1.0 installation manifest at ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
   }
 }
 
-// src/core/project-root.mjs
-import fs6 from "node:fs";
-import path9 from "node:path";
-var INSTALLATION_DIRECTORY = path9.posix.dirname(INSTALLATION_MANIFEST_PATH);
-function realpathNative2(fsOps, targetPath) {
-  return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
-}
-function canonicalExistingDirectory(value2, label, fsOps) {
-  if (typeof value2 !== "string" || !value2.trim() || value2.includes("\0")) throw new Error(`${label} must name an existing directory.`);
-  const resolved = path9.resolve(value2);
-  let stat;
-  try {
-    stat = fsOps.statSync(resolved);
-  } catch (error) {
-    if (error?.code === "ENOENT") throw new Error(`${label} must name an existing directory: ${resolved}.`);
-    throw error;
-  }
-  if (!stat.isDirectory()) throw new Error(`${label} must name an existing directory: ${resolved}.`);
-  return realpathNative2(fsOps, resolved);
-}
-function parentDirectories2(start) {
-  const directories = [];
-  let current = start;
-  while (true) {
-    directories.push(current);
-    const parent = path9.dirname(current);
-    if (parent === current) return directories;
-    current = parent;
-  }
-}
-function lstatOrNull3(fsOps, targetPath) {
-  try {
-    return fsOps.lstatSync(targetPath);
-  } catch (error) {
-    if (error?.code === "ENOENT") return null;
-    throw error;
-  }
-}
-function preservedDoctorOnly(directoryPath, directoryStat, fsOps) {
-  if (directoryStat === null) return false;
-  if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) return false;
-  const children = fsOps.readdirSync(directoryPath).map(String).sort();
-  if (children.length !== 1 || children[0] !== "DOCTOR.md") return false;
-  const doctorStat = lstatOrNull3(fsOps, path9.join(directoryPath, "DOCTOR.md"));
-  return doctorStat?.isFile() === true && !doctorStat.isSymbolicLink();
-}
-function installationStateAt(root, options) {
-  const fsOps = options.fsOps ?? fs6;
-  const directoryPath = path9.join(root, INSTALLATION_DIRECTORY);
-  const manifestPath = path9.join(root, INSTALLATION_MANIFEST_PATH);
-  const manifestStat = lstatOrNull3(fsOps, manifestPath);
-  if (manifestStat === null) {
-    const directoryStat2 = lstatOrNull3(fsOps, directoryPath);
-    if (directoryStat2 === null || preservedDoctorOnly(directoryPath, directoryStat2, fsOps)) return { state: "absent", root, manifestPath };
-    return { state: "residue", root, manifestPath, directoryPath, directoryStat: directoryStat2 };
-  }
-  if (manifestStat.isSymbolicLink()) throw new Error(`Dove project installation manifest must not be a symbolic link: ${manifestPath}.`);
-  if (!manifestStat.isFile()) throw new Error(`Dove project installation manifest must be a regular file: ${manifestPath}.`);
-  const directoryStat = lstatOrNull3(fsOps, directoryPath);
-  if (directoryStat === null || directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) throw new Error(`Dove installation path must be a real directory: ${directoryPath}.`);
-  const manifest = readProjectInstallationManifest(root, { ...options, hostIds: options.hostIds ?? PROJECT_HOST_IDS });
-  return { state: "initialized", root, manifestPath, manifest };
-}
-function assertSafeInitCandidate(candidate, installation) {
-  if (installation.state !== "residue") return;
-  const stat = installation.directoryStat;
-  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove installation path must be a real directory: ${installation.directoryPath}.`);
-  throw new Error(`Dove installation directory is incomplete because ${INSTALLATION_MANIFEST_PATH} is missing at ${candidate}.`);
-}
-function setupEvidenceAt(root, fsOps, options = {}) {
-  const paths = [
-    INSTALLATION_MANIFEST_PATH,
-    LEGACY_INSTALLATION_MANIFEST_PATH,
-    ...options.includeResearch === true ? [".dove/manifest.json"] : []
-  ];
-  for (const relativePath of paths) {
-    const target = path9.join(root, relativePath);
-    const stat = lstatOrNull3(fsOps, target);
-    if (stat === null) continue;
-    if (stat.isSymbolicLink() || !stat.isFile()) {
-      throw new Error(`Dove setup marker must be a regular non-symbolic-link file: ${target}.`);
-    }
-    return { state: "marker", relativePath };
-  }
-  for (const relativePath of [INSTALLATION_DIRECTORY, ".dove-install"]) {
-    const target = path9.join(root, relativePath);
-    const stat = lstatOrNull3(fsOps, target);
-    if (stat === null) continue;
-    if (stat.isSymbolicLink() || !stat.isDirectory()) {
-      throw new Error(`Dove setup path must be a real directory: ${target}.`);
-    }
-    if (relativePath === INSTALLATION_DIRECTORY && preservedDoctorOnly(target, stat, fsOps)) continue;
-    return { state: "residue", relativePath };
-  }
-  return { state: "absent", relativePath: null };
-}
-function legacyInitError(candidate, root, evidence) {
-  if (evidence.relativePath === LEGACY_INSTALLATION_MANIFEST_PATH) {
-    return new Error(`Dove found a legacy project installation at ${root}. Current adoption accepts only a readable Markdown research tree with the old .dove/manifest.json marker. Run 'dove doctor --json' before choosing explicit reinstall or manual recovery.`);
-  }
-  if (evidence.relativePath === ".dove/manifest.json") {
-    return new Error(`Dove found existing Dove research workspace state at ${root}. Run 'dove update' to adopt it when the Markdown research tree is current, or 'dove doctor --json' for diagnosis.`);
-  }
-  return new Error(`Dove found incomplete legacy Dove state at ${root}. Run 'dove doctor --json' before initializing another project.`);
-}
-function gitRootFrom(start, fsOps) {
-  for (const directory of parentDirectories2(start)) {
-    const dotGit = path9.join(directory, ".git");
-    const stat = lstatOrNull3(fsOps, dotGit);
-    if (stat === null) continue;
-    if (stat.isSymbolicLink()) throw new Error(`Git project marker must not be a symbolic link: ${dotGit}.`);
-    if (!stat.isDirectory() && !stat.isFile()) throw new Error(`Git project marker must be a file or directory: ${dotGit}.`);
-    return directory;
-  }
-  return null;
-}
-function initRequiredError(start) {
-  return new Error(`Dove project integration is not initialized from ${start}. Run 'dove init' from the project root, or use 'dove init --project <dir>'.`);
-}
-function resolveProjectRootForInit(project, options = {}) {
-  const fsOps = options.fsOps ?? fs6;
-  const explicitProject = project !== void 0 && project !== null;
-  const candidateInput = explicitProject ? project : options.cwd ?? process.cwd();
-  const candidate = canonicalExistingDirectory(candidateInput, explicitProject ? "Dove project" : "Current working directory", fsOps);
-  const gitRoot = gitRootFrom(candidate, fsOps);
-  const allDirectories = parentDirectories2(candidate);
-  const directories = gitRoot === null ? allDirectories : allDirectories.slice(0, allDirectories.indexOf(gitRoot) + 1);
-  for (let index = 0; index < directories.length; index += 1) {
-    const directory = directories[index];
-    const installation = installationStateAt(directory, options);
-    if (index === 0) assertSafeInitCandidate(candidate, installation);
-    if (installation.state === "initialized") {
-      if (index === 0) throw new Error(`Dove project integration is already initialized at ${directory}. Use dove update instead.`);
-      throw new Error(`Refusing nested Dove project initialization at ${candidate}; an initialized project already exists at ${directory}.`);
-    }
-    const evidence = setupEvidenceAt(directory, fsOps, { includeResearch: index === 0 });
-    if (evidence.state !== "absent") throw legacyInitError(candidate, directory, evidence);
-  }
-  return !explicitProject && gitRoot !== null ? gitRoot : candidate;
-}
-function packageProjectBoundary(directory, fsOps) {
-  const packageJson = lstatOrNull3(fsOps, path9.join(directory, "package.json"));
-  const nodeModules = lstatOrNull3(fsOps, path9.join(directory, "node_modules"));
-  return packageJson?.isFile() && !packageJson.isSymbolicLink() && nodeModules?.isDirectory() && !nodeModules.isSymbolicLink();
-}
-function resolveProjectRootForSetup(start, options = {}) {
-  const fsOps = options.fsOps ?? fs6;
-  const candidate = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project setup start", fsOps);
-  for (const directory of parentDirectories2(candidate)) {
-    if (setupEvidenceAt(directory, fsOps).state !== "absent") return directory;
-    const dotGit = lstatOrNull3(fsOps, path9.join(directory, ".git"));
-    if (dotGit !== null) {
-      if (dotGit.isSymbolicLink() || !dotGit.isDirectory() && !dotGit.isFile()) {
-        throw new Error(`Git project marker must be a file or directory: ${path9.join(directory, ".git")}.`);
-      }
-      return directory;
-    }
-    if (packageProjectBoundary(directory, fsOps)) return directory;
-  }
-  return candidate;
-}
-function resolveInstalledProjectRoot(start, options = {}) {
-  const fsOps = options.fsOps ?? fs6;
-  const startingDirectory = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", fsOps);
-  for (const directory of parentDirectories2(startingDirectory)) {
-    const installation = installationStateAt(directory, options);
-    if (installation.state === "initialized") return directory;
-  }
-  throw initRequiredError(startingDirectory);
-}
-function resolveExactInstalledProjectRoot(start, options = {}) {
-  const fsOps = options.fsOps ?? fs6;
-  if (typeof start !== "string" || !start.trim() || start.includes("\0")) throw new Error("Dove hook project must name an initialized project root.");
-  const resolved = path9.resolve(start);
-  const stat = lstatOrNull3(fsOps, resolved);
-  if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove hook project must be a real directory: ${resolved}.`);
-  const root = realpathNative2(fsOps, resolved);
-  const installation = installationStateAt(root, options);
-  if (installation.state !== "initialized") throw initRequiredError(root);
-  return root;
-}
-function inspectProjectRoot(start, options = {}) {
-  let canonicalStart = null;
-  try {
-    canonicalStart = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", options.fsOps ?? fs6);
-    const root = resolveInstalledProjectRoot(canonicalStart, options);
-    return Object.freeze({ state: "initialized", initialized: true, start: canonicalStart, root, error: null });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const uninitialized = message.includes("Dove project integration is not initialized");
-    return Object.freeze({
-      state: uninitialized ? "uninitialized" : "invalid",
-      initialized: false,
-      start: canonicalStart,
-      root: null,
-      error: message
-    });
-  }
-}
-
-// src/core/research-defaults.mjs
-import crypto2 from "node:crypto";
+// src/core/project-installation-plan.mjs
 import fs7 from "node:fs";
 import path10 from "node:path";
-var RESEARCH_ROOT = ARTIFACT_PATHS.researchDocumentsDir;
-var RESEARCH_DEFAULT_PATHS = Object.freeze({
-  root: RESEARCH_ROOT,
-  overview: ARTIFACT_PATHS.researchOverview,
-  missionsDirectory: `${RESEARCH_ROOT}/missions`,
-  missionsSummary: `${RESEARCH_ROOT}/missions/MISSIONS.md`,
-  experimentsDirectory: `${RESEARCH_ROOT}/experiments`,
-  experimentsSummary: `${RESEARCH_ROOT}/experiments/EXPERIMENTS.md`,
-  sourcesDirectory: `${RESEARCH_ROOT}/sources`,
-  sourcesSummary: `${RESEARCH_ROOT}/sources/SOURCES.md`,
-  reviewsDirectory: `${RESEARCH_ROOT}/reviews`,
-  reviewsSummary: `${RESEARCH_ROOT}/reviews/REVIEWS.md`,
-  claimsDirectory: `${RESEARCH_ROOT}/claims`,
-  claimsSummary: `${RESEARCH_ROOT}/claims/CLAIMS.md`,
-  lessonsDirectory: `${RESEARCH_ROOT}/lessons`,
-  lessonsSummary: ARTIFACT_PATHS.researchLessons,
-  decisionMaking: `${RESEARCH_ROOT}/lessons/decision-making.md`,
-  researchMethod: `${RESEARCH_ROOT}/lessons/research-method.md`,
-  experimentsAndEvidence: `${RESEARCH_ROOT}/lessons/experiments-and-evidence.md`,
-  engineeringAndValidation: `${RESEARCH_ROOT}/lessons/engineering-and-validation.md`,
-  writingAndReview: `${RESEARCH_ROOT}/lessons/writing-and-review.md`,
-  collaborationAndEnvironment: `${RESEARCH_ROOT}/lessons/collaboration-and-environment.md`,
-  importedLessons: `${RESEARCH_ROOT}/lessons/imported-lessons.md`
+
+// src/core/paper-search-integration.mjs
+var PAPER_SEARCH_MCP_SERVER_NAME = "dove-paper-search";
+var PAPER_SEARCH_MCP_PATH = ".mcp.json";
+var PAPER_SEARCH_MCP_SELECTOR = `/mcpServers/${PAPER_SEARCH_MCP_SERVER_NAME}`;
+var PAPER_SEARCH_PACKAGE = "paper-search-mcp";
+var PAPER_SEARCH_PACKAGE_VERSION = "0.1.4";
+var PAPER_SEARCH_PACKAGE_SPECIFIER = `${PAPER_SEARCH_PACKAGE}==${PAPER_SEARCH_PACKAGE_VERSION}`;
+var PAPER_SEARCH_SUPPORT_SKILL_PATH = ".claude/skills/dove-paper-search/SKILL.md";
+var PAPER_SEARCH_MCP_FRAGMENT = Object.freeze({
+  type: "stdio",
+  command: "uvx",
+  args: Object.freeze(["--from", PAPER_SEARCH_PACKAGE_SPECIFIER, PAPER_SEARCH_PACKAGE])
 });
-var RETIRED_RESEARCH_PATHS = Object.freeze({
-  additionalLessons: `${RESEARCH_ROOT}/lessons/additional-lessons.md`,
-  topLevelLessons: `${RESEARCH_ROOT}/LESSONS.md`
-});
-var SUMMARY_DOCUMENTS = Object.freeze([
-  Object.freeze({
-    path: RESEARCH_DEFAULT_PATHS.overview,
-    title: "# Research",
-    blocks: Object.freeze([
-      "This researcher-owned entry keeps the current research mainline, material progress, important conclusions and limits, linked work, and next priorities concise and recoverable."
-    ]),
-    navigationHeading: null,
-    navigationLines: Object.freeze([])
-  })
-]);
-var RESEARCH_LESSON_TOPICS = Object.freeze([]);
-function renderDocument({ title, blocks = [], navigationHeading = null, navigationLines = [] }) {
-  const parts = [title, ...blocks];
-  if (navigationLines.length > 0) parts.push(navigationHeading, navigationLines.join("\n"));
-  return `${parts.join("\n\n")}
+function renderPaperSearchSupportSkill() {
+  return `---
+name: dove-paper-search
+description: Search, retrieve, and read academic papers through the pinned dove-paper-search project MCP when scholarly material is relevant and the current host exposes it and current user/project permissions permit it.
+user-invocable: false
+---
+
+# Dove Paper Search
+
+Use the pinned \`dove-paper-search\` project MCP only when academic paper discovery, retrieval, or full-text reading materially helps the current request and the current host exposes that MCP and current user/project permissions permit it.
+
+- Keep searches bounded and choose relevant scholarly sources instead of querying every available index or service by default.
+- Download or read full text only when the task needs it. Distinguish material merely found, downloaded, or actually read, and report saved paths when useful.
+- Prefer source-native open download and read tools. If \`download_with_fallback\` is needed, always pass \`use_scihub: false\` explicitly. Do not call Sci-Hub tools.
+- Use only MCP tools that the current host actually exposes and current user/project permissions permit. If current user/project permissions do not permit it, \`uvx\` is unavailable, or the server fails, state that the academic paper discovery, download, or full text was not obtained through \`dove-paper-search\`, then choose any exposed and permitted material or action that can still advance the question: \`WebSearch\` discovery snippets, Exa ordinary webpage/documentation/venue/known-URL text when exposed, local project material, user-provided material, theory, experiment, or analysis. Do not install dependencies or substitute a CLI, shell, \`curl\`, or ad hoc fetch script for this MCP, and do not follow a fixed substitute sequence.
+- Keep \`dove-paper-search\` for scholarly paper acquisition. Use built-in \`WebSearch\` for discovery when appropriate, and use the project \`exa\` MCP for ordinary webpage bodies, documentation pages, venue pages, and known URLs outside academic paper acquisition when Exa is exposed and current user/project permissions permit it.
+- Do not turn paper identifiers into Dove IDs, hashes, trust scores, ledgers, or database records.
 `;
-}
-var RESEARCH_DEFAULT_DOCUMENTS = Object.freeze(
-  SUMMARY_DOCUMENTS.map((document) => Object.freeze({ path: document.path, content: renderDocument(document) }))
-);
-var RESEARCH_DEFAULT_FILE_PATHS = Object.freeze(RESEARCH_DEFAULT_DOCUMENTS.map((document) => document.path));
-var RESEARCH_DEFAULT_DIRECTORY_PATHS = Object.freeze([
-  RESEARCH_DEFAULT_PATHS.root
-]);
-function sha2562(content) {
-  return crypto2.createHash("sha256").update(content).digest("hex");
-}
-function canonicalRoot(root, fsOps) {
-  const resolved = path10.resolve(root);
-  return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
-}
-function decodeMarkdown(bytes, relativePath) {
-  let text;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
-  } catch (error) {
-    throw new Error(`${relativePath} must contain valid UTF-8 Markdown.`, { cause: error });
-  }
-  if (text.includes("\0")) throw new Error(`${relativePath} contains null bytes.`);
-  return text;
-}
-function absentState(relativePath) {
-  return { relativePath, exists: false, type: "absent", bytes: null, text: null, sha256: null, mode: null };
-}
-function readFileState(anchor, relativePath, options = {}) {
-  const stat = anchor.tryLstat(relativePath);
-  if (!stat) return absentState(relativePath);
-  if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`${relativePath} must be a regular file without symbolic links.`);
-  const bytes = anchor.readFile(relativePath);
-  return {
-    relativePath,
-    exists: true,
-    type: "file",
-    bytes,
-    text: options.decode === false ? null : decodeMarkdown(bytes, relativePath),
-    sha256: sha2562(bytes),
-    mode: stat.mode & 4095
-  };
-}
-function assertRealDirectoryIfPresent(anchor, relativePath) {
-  const stat = anchor.tryLstat(relativePath);
-  if (stat && (stat.isSymbolicLink() || !stat.isDirectory())) throw new Error(`${relativePath} must be a real directory.`);
-  return stat !== null;
-}
-function expectedState2(state2) {
-  return state2.exists ? { exists: true, type: "file", sha256: state2.sha256, mode: state2.mode } : { exists: false, type: "absent", sha256: null, mode: null };
-}
-function exactLinePresent(text, line) {
-  return text.split(/\r?\n/u).includes(line);
-}
-function exactMarkdownBlockPresent(text, block) {
-  let offset = 0;
-  while (offset <= text.length) {
-    const index = text.indexOf(block, offset);
-    if (index === -1) return false;
-    const end = index + block.length;
-    const startsAtLineBoundary = index === 0 || index === 1 && text[0] === "\uFEFF" || text[index - 1] === "\n";
-    const endsAtLineBoundary = end === text.length || text[end] === "\n" || text.startsWith("\r\n", end);
-    if (startsAtLineBoundary && endsAtLineBoundary) return true;
-    offset = index + 1;
-  }
-  return false;
-}
-function appendSeparator(text) {
-  if (!text) return "";
-  if (text.endsWith("\n\n")) return "";
-  if (text.endsWith("\n")) return "\n";
-  return "\n\n";
-}
-function appendExactMarkdownBlocks(original, blocks) {
-  let result = String(original);
-  for (const raw of blocks) {
-    const block = String(raw).trimEnd();
-    if (!block || exactMarkdownBlockPresent(result, block)) continue;
-    result += `${appendSeparator(result)}${block}
-`;
-  }
-  return result;
-}
-function appendExactMarkdownLines(original, heading, lines) {
-  const missing = lines.filter((line) => !exactLinePresent(original, line));
-  if (missing.length === 0) return original;
-  const parts = [];
-  if (heading && !exactLinePresent(original, heading)) parts.push(heading);
-  parts.push(...missing);
-  return appendExactMarkdownBlocks(original, [parts.join("\n")]);
-}
-function readResearchDefaultsSnapshot(root, options = {}) {
-  const fsOps = options.fsOps ?? fs7;
-  const replace = options.mode === "replace";
-  const anchor = openRootedFilesystem(canonicalRoot(root, fsOps), { ...options, fsOps });
-  for (const directoryPath of RESEARCH_DEFAULT_DIRECTORY_PATHS) assertRealDirectoryIfPresent(anchor, directoryPath);
-  const states = /* @__PURE__ */ new Map();
-  const selectedPaths = /* @__PURE__ */ new Set([
-    ...RESEARCH_DEFAULT_FILE_PATHS,
-    RESEARCH_DEFAULT_PATHS.missionsSummary,
-    RESEARCH_DEFAULT_PATHS.experimentsSummary,
-    RESEARCH_DEFAULT_PATHS.sourcesSummary,
-    RESEARCH_DEFAULT_PATHS.reviewsSummary,
-    RESEARCH_DEFAULT_PATHS.claimsSummary,
-    RESEARCH_DEFAULT_PATHS.lessonsSummary,
-    RETIRED_RESEARCH_PATHS.additionalLessons,
-    RESEARCH_DEFAULT_PATHS.importedLessons,
-    RETIRED_RESEARCH_PATHS.topLevelLessons
-  ]);
-  for (const relativePath of selectedPaths) {
-    const opaque = relativePath === RETIRED_RESEARCH_PATHS.additionalLessons || relativePath === RESEARCH_DEFAULT_PATHS.importedLessons || relativePath === RETIRED_RESEARCH_PATHS.topLevelLessons;
-    states.set(relativePath, readFileState(anchor, relativePath, { decode: !replace && !opaque }));
-  }
-  return { states };
-}
-function stateFor(snapshot, relativePath) {
-  return snapshot.states.get(relativePath) ?? absentState(relativePath);
-}
-function setWrite(writes, snapshot, relativePath, content) {
-  const bytes = Buffer.isBuffer(content) ? Buffer.from(content) : Buffer.from(String(content), "utf8");
-  const state2 = stateFor(snapshot, relativePath);
-  if (state2.exists && state2.bytes.equals(bytes)) {
-    writes.delete(relativePath);
-    return;
-  }
-  writes.set(relativePath, bytes);
-}
-function currentText(snapshot, writes, relativePath) {
-  if (writes.has(relativePath)) return decodeMarkdown(writes.get(relativePath), relativePath);
-  const state2 = stateFor(snapshot, relativePath);
-  return state2.exists ? state2.text : null;
-}
-function planSummaryDocument(snapshot, writes, document) {
-  const state2 = stateFor(snapshot, document.path);
-  if (!state2.exists) {
-    setWrite(writes, snapshot, document.path, renderDocument(document));
-    return;
-  }
-  const content = appendExactMarkdownLines(currentText(snapshot, writes, document.path), document.navigationHeading, document.navigationLines);
-  setWrite(writes, snapshot, document.path, content);
-}
-function planResearchDefaults(snapshot, options = {}) {
-  if (!snapshot || !(snapshot.states instanceof Map)) {
-    throw new Error("Research defaults planning requires a research Markdown snapshot.");
-  }
-  const mode = options.mode ?? "sync";
-  if (!(/* @__PURE__ */ new Set(["sync", "replace"])).has(mode)) throw new Error(`Unsupported research defaults planning mode: ${mode}.`);
-  const writes = /* @__PURE__ */ new Map();
-  const deletes = /* @__PURE__ */ new Set();
-  for (const document of SUMMARY_DOCUMENTS) {
-    if (mode === "replace") setWrite(writes, snapshot, document.path, renderDocument(document));
-    else planSummaryDocument(snapshot, writes, document);
-  }
-  return { writes, deletes };
-}
-function researchDefaultTransactionEntries(root, snapshot, plan, options = {}) {
-  const label = options.label ?? "Dove research bootstrap";
-  return [
-    ...[...plan.writes.entries()].map(([relativePath, content]) => ({
-      root,
-      relativePath,
-      content,
-      force: true,
-      expectedState: expectedState2(stateFor(snapshot, relativePath)),
-      label: `${label} ${relativePath}`
-    })),
-    ...[...plan.deletes].map((relativePath) => ({
-      root,
-      relativePath,
-      delete: true,
-      force: true,
-      expectedState: expectedState2(stateFor(snapshot, relativePath)),
-      label: `Retired Dove research document ${relativePath}`
-    }))
-  ];
-}
-function prepareResearchDefaults(root, options = {}) {
-  const fsOps = options.fsOps ?? fs7;
-  const canonical = canonicalRoot(root, fsOps);
-  const mode = options.mode ?? "sync";
-  const snapshot = readResearchDefaultsSnapshot(canonical, { ...options, fsOps, mode });
-  const plan = planResearchDefaults(snapshot, { mode });
-  const entries = researchDefaultTransactionEntries(canonical, snapshot, plan, { label: options.label });
-  return {
-    root: canonical,
-    snapshot,
-    plan,
-    entries,
-    changedPaths: entries.map((entry) => entry.relativePath)
-  };
 }
 
-// src/core/research-documents.mjs
-import fs8 from "node:fs";
-import path11 from "node:path";
-var V2_FORMAT_PATH = ".dove/format.json";
-var V2_FORMAT = "dove-research-v2";
-var RESEARCH_DOCUMENT_PATHS = Object.freeze({ ...RESEARCH_DEFAULT_PATHS });
-var SUMMARY_ENTRIES = Object.freeze([
-  Object.freeze(["missions", RESEARCH_DOCUMENT_PATHS.missionsDirectory, RESEARCH_DOCUMENT_PATHS.missionsSummary]),
-  Object.freeze(["experiments", RESEARCH_DOCUMENT_PATHS.experimentsDirectory, RESEARCH_DOCUMENT_PATHS.experimentsSummary]),
-  Object.freeze(["sources", RESEARCH_DOCUMENT_PATHS.sourcesDirectory, RESEARCH_DOCUMENT_PATHS.sourcesSummary]),
-  Object.freeze(["reviews", RESEARCH_DOCUMENT_PATHS.reviewsDirectory, RESEARCH_DOCUMENT_PATHS.reviewsSummary]),
-  Object.freeze(["claims", RESEARCH_DOCUMENT_PATHS.claimsDirectory, RESEARCH_DOCUMENT_PATHS.claimsSummary]),
-  Object.freeze(["lessons", RESEARCH_DOCUMENT_PATHS.lessonsDirectory, RESEARCH_DOCUMENT_PATHS.lessonsSummary])
-]);
-function messageFor(error) {
-  return error instanceof Error ? error.message : String(error);
+// src/core/web-access-integration.mjs
+var EXA_MCP_SERVER_NAME = "exa";
+var EXA_MCP_SELECTOR = `/mcpServers/${EXA_MCP_SERVER_NAME}`;
+var EXA_MCP_URL = "https://mcp.exa.ai/mcp";
+var EXA_WEB_SUPPORT_SKILL_PATH = ".claude/skills/dove-web-reader/SKILL.md";
+var WEB_FETCH_DENY_PERMISSION = "WebFetch";
+var WEB_FETCH_DENY_SELECTOR = "/permissions/deny[WebFetch]";
+var EXA_MCP_FRAGMENT = Object.freeze({
+  url: EXA_MCP_URL,
+  type: "http"
+});
+function plainObject3(value2) {
+  return value2 !== null && typeof value2 === "object" && !Array.isArray(value2);
 }
-function canonicalRoot2(root, fsOps) {
-  const resolved = path11.resolve(root);
-  return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
-}
-function readMarkdown(anchor, relativePath) {
-  const stat = anchor.tryLstat(relativePath);
-  if (!stat) return null;
-  if (stat.isSymbolicLink() || !stat.isFile()) {
-    throw new Error(`${relativePath} must be a regular file without symbolic links.`);
+function webFetchDenyFragmentState(settings) {
+  if (settings.permissions !== void 0 && !plainObject3(settings.permissions)) {
+    throw new Error(".claude/settings.json permissions must be a JSON object.");
   }
-  let markdown;
-  try {
-    markdown = new TextDecoder("utf-8", { fatal: true }).decode(anchor.readFile(relativePath));
-  } catch (error) {
-    throw new Error(`${relativePath} must contain valid UTF-8 Markdown.`, { cause: error });
+  const deny = settings.permissions?.deny;
+  if (deny !== void 0 && !Array.isArray(deny)) {
+    throw new Error(".claude/settings.json permissions.deny must be an array.");
   }
-  if (markdown.includes("\0")) throw new Error(`${relativePath} contains null bytes.`);
-  return markdown;
+  if (!Array.isArray(deny) || !deny.includes(WEB_FETCH_DENY_PERMISSION)) {
+    return { exists: false, digest: null, fragment: null };
+  }
+  return { exists: true, digest: null, fragment: WEB_FETCH_DENY_PERMISSION };
 }
-function inspectDirectory(anchor, relativePath) {
-  const stat = anchor.tryLstat(relativePath);
-  if (!stat) return false;
-  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`${relativePath} must be a real directory.`);
-  return true;
-}
-function emptyResult(state2, fields = {}) {
+function mergeWebFetchDenyPermission(settings) {
+  if (!plainObject3(settings)) throw new Error(".claude/settings.json must contain a JSON object.");
+  const permissions = settings.permissions;
+  if (permissions !== void 0 && !plainObject3(permissions)) throw new Error(".claude/settings.json permissions must be a JSON object.");
+  const deny = permissions?.deny;
+  if (deny !== void 0 && !Array.isArray(deny)) throw new Error(".claude/settings.json permissions.deny must be an array.");
+  const currentDeny = deny ?? [];
+  if (currentDeny.includes(WEB_FETCH_DENY_PERMISSION)) return { settings, changed: false };
   return {
-    healthy: true,
-    state: state2,
-    root: RESEARCH_DOCUMENT_PATHS.root,
-    overview: null,
-    summaries: {
-      missions: null,
-      experiments: null,
-      sources: null,
-      reviews: null,
-      claims: null,
-      lessons: null
+    settings: {
+      ...settings,
+      permissions: {
+        ...permissions ?? {},
+        deny: [...currentDeny, WEB_FETCH_DENY_PERMISSION]
+      }
     },
-    missingSummaries: [],
-    optionalSummaries: SUMMARY_ENTRIES.map(([, , summaryPath]) => summaryPath),
-    ...fields
+    changed: true
   };
 }
-function inspectResearchDocuments(root, options = {}) {
-  const fsOps = options.fsOps ?? fs8;
-  let anchor;
-  try {
-    anchor = openRootedFilesystem(canonicalRoot2(root, fsOps), { ...options, fsOps });
-    const directory = anchor.tryLstat(RESEARCH_DOCUMENT_PATHS.root);
-    if (!directory) {
-      const format = anchor.tryLstat(V2_FORMAT_PATH);
-      if (format) {
-        if (format.isSymbolicLink() || !format.isFile()) {
-          throw new Error(`${V2_FORMAT_PATH} must be a regular file without symbolic links.`);
-        }
-        const marker = parseJsonWithoutDuplicateKeys(
-          new TextDecoder("utf-8", { fatal: true }).decode(anchor.readFile(V2_FORMAT_PATH)),
-          V2_FORMAT_PATH
-        );
-        if (marker?.format === V2_FORMAT && Object.keys(marker).length === 1) {
-          return emptyResult("previous-research-format", { legacyDataPolicy: "Old legacy research data is left in place; Dove does not automatically convert or delete it." });
-        }
-      }
-      return emptyResult("absent");
-    }
-    if (directory.isSymbolicLink() || !directory.isDirectory()) {
-      throw new Error(`${RESEARCH_DOCUMENT_PATHS.root} must be a real directory.`);
-    }
-    const overview = readMarkdown(anchor, RESEARCH_DOCUMENT_PATHS.overview);
-    const summaries = {};
-    for (const [name, directoryPath, summaryPath] of SUMMARY_ENTRIES) {
-      const directoryExists = inspectDirectory(anchor, directoryPath);
-      const markdown = directoryExists ? readMarkdown(anchor, summaryPath) : null;
-      summaries[name] = markdown === null ? null : { path: summaryPath };
-    }
-    return {
-      healthy: true,
-      state: "current",
-      root: RESEARCH_DOCUMENT_PATHS.root,
-      overview: overview === null ? null : { path: RESEARCH_DOCUMENT_PATHS.overview },
-      summaries,
-      missingSummaries: [],
-      optionalSummaries: SUMMARY_ENTRIES.map(([, , summaryPath]) => summaryPath)
-    };
-  } catch (error) {
-    return {
-      healthy: false,
-      state: "invalid",
-      root: RESEARCH_DOCUMENT_PATHS.root,
-      overview: null,
-      summaries: {
-        missions: null,
-        experiments: null,
-        sources: null,
-        reviews: null,
-        claims: null,
-        lessons: null
-      },
-      missingSummaries: [],
-      error: messageFor(error)
-    };
-  }
+function removeWebFetchDenyPermission(settings) {
+  if (!plainObject3(settings)) throw new Error(".claude/settings.json must contain a JSON object.");
+  const permissions = settings.permissions;
+  if (permissions === void 0) return { settings, changed: false };
+  if (!plainObject3(permissions)) throw new Error(".claude/settings.json permissions must be a JSON object.");
+  const deny = permissions.deny;
+  if (deny === void 0) return { settings, changed: false };
+  if (!Array.isArray(deny)) throw new Error(".claude/settings.json permissions.deny must be an array.");
+  const index = deny.indexOf(WEB_FETCH_DENY_PERMISSION);
+  if (index < 0) return { settings, changed: false };
+  const nextDeny = [...deny.slice(0, index), ...deny.slice(index + 1)];
+  const nextPermissions = { ...permissions };
+  if (nextDeny.length > 0) nextPermissions.deny = nextDeny;
+  else delete nextPermissions.deny;
+  const nextSettings = { ...settings };
+  if (Object.keys(nextPermissions).length > 0) nextSettings.permissions = nextPermissions;
+  else delete nextSettings.permissions;
+  return { settings: nextSettings, changed: true };
 }
+function renderExaWebSupportSkill() {
+  return `---
+name: dove-web-reader
+description: Read ordinary webpages and known URLs through the hosted Exa project MCP when webpage content is relevant and the current host exposes it and current user/project permissions permit it.
+user-invocable: false
+---
+
+# Dove Web Reader
+
+Use the \`exa\` hosted project MCP only when ordinary webpage body retrieval, documentation page reading, venue page reading, crawling, or a known URL materially helps the current request and the current host exposes Exa and current user/project permissions permit it.
+
+- Keep built-in \`WebSearch\` available for web discovery and search-result triage; do not substitute webpage retrieval for search.
+- Use the pinned \`dove-paper-search\` project MCP for academic paper discovery, download, and full-text reading when that MCP is exposed and current user/project permissions permit it. Use \`exa\` for ordinary webpage bodies, documentation pages, venue pages, and known URLs outside academic paper acquisition when Exa is exposed and current user/project permissions permit it.
+- Do not use built-in \`WebFetch\`; Claude project permissions deny it so webpage body retrieval goes through \`exa\`.
+- Use only MCP tools that the current host actually exposes and current user/project permissions permit. If current user/project permissions do not permit it, Exa is unavailable, or the server fails, state that the ordinary webpage body, documentation page, venue page, or known URL was not obtained through Exa, then choose any exposed and permitted material or action that can still advance the question: \`WebSearch\` discovery snippets, \`dove-paper-search\` academic paper discovery/download/full text when exposed, local project material, user-provided material, theory, experiment, or analysis. Do not use CLI, shell, \`curl\`, Node/Python fetch scripts, or built-in \`WebFetch\` instead, and do not follow a fixed substitute sequence.
+- Do not turn URLs into Dove IDs, hashes, trust scores, ledgers, or database records.
+`;
+}
+
+// src/core/project-installation-resources.mjs
+import crypto2 from "node:crypto";
 
 // scripts/generate-command-adapters.mjs
-import fs9 from "node:fs";
-import path12 from "node:path";
+import fs6 from "node:fs";
+import path9 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/core/dove-agent-persona.mjs
@@ -16576,20 +16295,20 @@ function hostGuidance(extra = {}) {
     ...extra[hostId] ?? []
   ]]));
 }
-function action(capability, instruction, options = {}) {
+function action(capability, instruction, options2 = {}) {
   return {
     type: "host",
     capability,
-    readOnly: options.readOnly === true,
-    persistWhen: options.persistWhen ?? "never",
-    persistencePolicy: options.persistencePolicy ?? "never",
+    readOnly: options2.readOnly === true,
+    persistWhen: options2.persistWhen ?? "never",
+    persistencePolicy: options2.persistencePolicy ?? "never",
     instruction
   };
 }
 var readResearchDocuments = (instruction) => action("research-document-reading", instruction, { readOnly: true });
-var updateResearchDocuments = (instruction, options = {}) => action("research-document-maintenance", instruction, {
-  persistWhen: options.persistWhen ?? RESEARCH_MAINTENANCE_TRIGGER,
-  persistencePolicy: options.persistencePolicy ?? "standard-research"
+var updateResearchDocuments = (instruction, options2 = {}) => action("research-document-maintenance", instruction, {
+  persistWhen: options2.persistWhen ?? RESEARCH_MAINTENANCE_TRIGGER,
+  persistencePolicy: options2.persistencePolicy ?? "standard-research"
 });
 var LESSONS_VALUE_STANDARD = "could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes";
 var relevantLessons = action(
@@ -16634,17 +16353,17 @@ function sharedResearchJudgmentSection() {
     responsibilities: [...SHARED_RESEARCH_JUDGMENT_RESPONSIBILITIES]
   };
 }
-function capabilityContract(options) {
-  const semanticSections = Array.isArray(options.semanticSections) && options.semanticSections.length > 0 ? [sharedResearchJudgmentSection(), ...options.semanticSections] : null;
+function capabilityContract(options2) {
+  const semanticSections = Array.isArray(options2.semanticSections) && options2.semanticSections.length > 0 ? [sharedResearchJudgmentSection(), ...options2.semanticSections] : null;
   const contract2 = {
-    purpose: options.purpose,
-    when: options.when,
-    responsibilities: semanticSections ? sectionItems(semanticSections, "responsibilities") : [...SHARED_RESEARCH_JUDGMENT_RESPONSIBILITIES, ...options.responsibilities ?? []],
-    actions: semanticSections ? sectionItems(semanticSections, "actions") : options.actions ?? [],
-    boundaries: semanticSections ? options.boundaries ?? [] : [...SHARED_RESEARCH_JUDGMENT_BOUNDARIES, ...options.boundaries ?? []],
-    nonGoals: semanticSections ? sectionItems(semanticSections, "nonGoals") : options.nonGoals ?? [],
-    clarification: options.clarification ?? commonClarification,
-    hostGuidance: options.hostGuidance ?? hostGuidance()
+    purpose: options2.purpose,
+    when: options2.when,
+    responsibilities: semanticSections ? sectionItems(semanticSections, "responsibilities") : [...SHARED_RESEARCH_JUDGMENT_RESPONSIBILITIES, ...options2.responsibilities ?? []],
+    actions: semanticSections ? sectionItems(semanticSections, "actions") : options2.actions ?? [],
+    boundaries: semanticSections ? options2.boundaries ?? [] : [...SHARED_RESEARCH_JUDGMENT_BOUNDARIES, ...options2.boundaries ?? []],
+    nonGoals: semanticSections ? sectionItems(semanticSections, "nonGoals") : options2.nonGoals ?? [],
+    clarification: options2.clarification ?? commonClarification,
+    hostGuidance: options2.hostGuidance ?? hostGuidance()
   };
   if (semanticSections) contract2.semanticSections = semanticSections;
   return contract2;
@@ -17011,8 +16730,8 @@ var MANAGED_PACKAGE_PATHS = Object.freeze([
 
 // scripts/generate-command-adapters.mjs
 var __filename = fileURLToPath2(import.meta.url);
-var __dirname = path12.dirname(__filename);
-var PACKAGE_ROOT = path12.resolve(__dirname, "..");
+var __dirname = path9.dirname(__filename);
+var PACKAGE_ROOT = path9.resolve(__dirname, "..");
 function markdownTitle(command3) {
   return command3.title.replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -17179,17 +16898,13 @@ function generatedClaudeAmbientProjectEntries() {
   ];
 }
 
-// src/core/project-installation.mjs
-var MCP_PATH = PAPER_SEARCH_MCP_PATH;
+// src/core/project-installation-resources.mjs
 var SETTINGS_SELECTOR = "/hooks/UserPromptSubmit[dove-user-prompt-submit]";
 var STATUS_LINE_SELECTOR = "/statusLine[dove-project-directory]";
 var CLAUDE_HOST = "claude";
 var FORBIDDEN_RESOURCE_PREFIXES = [".dove/", "bin/", "dist/", "mcp/", "scripts/"];
-function plainObject4(value2) {
-  return value2 !== null && typeof value2 === "object" && !Array.isArray(value2);
-}
-function sha2563(content) {
-  return crypto3.createHash("sha256").update(content).digest("hex");
+function sha2562(content) {
+  return crypto2.createHash("sha256").update(content).digest("hex");
 }
 function canonicalJson(value2) {
   if (value2 === null || typeof value2 !== "object") return JSON.stringify(value2);
@@ -17197,7 +16912,7 @@ function canonicalJson(value2) {
   return `{${Object.keys(value2).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value2[key])}`).join(",")}}`;
 }
 function semanticDigest(value2) {
-  return sha2563(canonicalJson(value2));
+  return sha2562(canonicalJson(value2));
 }
 function normalizedGeneratedContent(content) {
   return `${String(content).trimEnd()}
@@ -17220,23 +16935,6 @@ function sameManaged(left, right) {
   const sortedRight = [...right].sort(compareManaged2);
   return sortedLeft.length === sortedRight.length && sortedLeft.every((entry, index) => managedKey2(entry) === managedKey2(sortedRight[index]) && entry.digest === sortedRight[index].digest);
 }
-function exactTimestamp(value2) {
-  if (value2 === void 0) return (/* @__PURE__ */ new Date()).toISOString();
-  const timestamp = value2 instanceof Date ? value2.toISOString() : value2;
-  if (typeof timestamp !== "string" || new Date(timestamp).toISOString() !== timestamp) throw new Error("Project integration now must be a Date or exact ISO timestamp.");
-  return timestamp;
-}
-function assertPackageInput(packageName, packageVersion, { required }) {
-  if (!required && packageName === void 0 && packageVersion === void 0) return;
-  if (typeof packageName !== "string" || !packageName || packageName !== packageName.trim() || packageName.includes("\0")) throw new Error("Project integration packageName must be a non-empty trimmed string.");
-  if (typeof packageVersion !== "string" || !packageVersion || packageVersion !== packageVersion.trim()) throw new Error("Project integration packageVersion must be a semantic version string.");
-}
-function normalizeSelectedHosts(raw, { defaultWhenEmpty }) {
-  if (Array.isArray(raw) && raw.length === 0) throw new Error("Dove project integration requires at least one host.");
-  const hosts = normalizeHostSelection(raw, { defaultWhenEmpty, requireInitializable: true });
-  if (hosts.length === 0) throw new Error("Dove project integration requires at least one host.");
-  return [...hosts];
-}
 function assertManagedResourcePath(relativePath) {
   if (relativePath === ".dove" || relativePath.startsWith(".dove/")) throw new Error(`Project integration resources must not manage Dove workspace state: ${relativePath}.`);
   if (FORBIDDEN_RESOURCE_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) throw new Error(`Project integration resources must not install runtime bundles: ${relativePath}.`);
@@ -17257,7 +16955,7 @@ function claudeResources() {
       kind: "exclusive-file",
       selector: null,
       content,
-      digest: sha2563(content)
+      digest: sha2562(content)
     };
   });
   const hooks = {
@@ -17317,14 +17015,22 @@ function dshResources() {
       kind: "exclusive-file",
       selector: null,
       content,
-      digest: sha2563(content)
+      digest: sha2562(content)
     };
   });
 }
 function resourcesForHosts(hosts) {
   return [...claudeResources(), ...dshResources()].filter((entry) => hosts.includes(entry.hostId)).sort(compareManaged2);
 }
-function lstatOrNull4(fsOps, targetPath) {
+function desiredManaged(resources) {
+  return resources.map(({ path: relativePath, kind, selector, digest }) => ({ path: relativePath, kind, selector, digest })).sort(compareManaged2);
+}
+
+// src/core/project-installation-plan.mjs
+function plainObject4(value2) {
+  return value2 !== null && typeof value2 === "object" && !Array.isArray(value2);
+}
+function lstatOrNull3(fsOps, targetPath) {
   try {
     return fsOps.lstatSync(targetPath);
   } catch (error) {
@@ -17332,20 +17038,21 @@ function lstatOrNull4(fsOps, targetPath) {
     throw error;
   }
 }
-function inspectRegularProjectFile(root, relativePath, fsOps) {
+function inspectRegularProjectFile(root, relativePath, fsOps = fs7) {
   let current = root;
-  for (const [index, component] of relativePath.split("/").entries()) {
-    current = path13.join(current, component);
-    const stat = lstatOrNull4(fsOps, current);
+  const components = relativePath.split("/");
+  for (const [index, component] of components.entries()) {
+    current = path10.join(current, component);
+    const stat = lstatOrNull3(fsOps, current);
     if (stat === null) return { exists: false, bytes: null, digest: null, mode: null, type: "absent" };
     if (stat.isSymbolicLink()) throw new Error(`Dove project integration path must not be a symbolic link: ${relativePath}.`);
-    if (index < relativePath.split("/").length - 1) {
+    if (index < components.length - 1) {
       if (!stat.isDirectory()) throw new Error(`Dove project integration parent must be a directory: ${relativePath}.`);
       continue;
     }
     if (!stat.isFile()) throw new Error(`Dove project integration path must be absent or a regular file: ${relativePath}.`);
     const bytes = fsOps.readFileSync(current);
-    return { exists: true, bytes, digest: sha2563(bytes), mode: stat.mode & 4095, type: "file" };
+    return { exists: true, bytes, digest: sha2562(bytes), mode: stat.mode & 4095, type: "file" };
   }
   throw new Error(`Invalid Dove project integration path: ${relativePath}.`);
 }
@@ -17431,7 +17138,7 @@ function removeExactLegacyDoveStopHook(settings) {
   };
 }
 function namedMcpFragmentState(config, serverName) {
-  if (config.mcpServers !== void 0 && !plainObject4(config.mcpServers)) throw new Error(`${MCP_PATH} mcpServers must be a JSON object.`);
+  if (config.mcpServers !== void 0 && !plainObject4(config.mcpServers)) throw new Error(`${PAPER_SEARCH_MCP_PATH} mcpServers must be a JSON object.`);
   if (!Object.hasOwn(config.mcpServers ?? {}, serverName)) return { exists: false, digest: null, fragment: null };
   const fragment = config.mcpServers[serverName];
   return { exists: true, digest: semanticDigest(fragment), fragment };
@@ -17446,10 +17153,10 @@ function webFetchDenyFragmentState2(settings) {
   const state2 = webFetchDenyFragmentState(settings);
   return state2.exists ? { ...state2, digest: semanticDigest(state2.fragment) } : state2;
 }
-function settingsHookFragmentState(value2, options = {}) {
+function settingsHookFragmentState(value2, options2 = {}) {
   const prompt = hookFragmentState(value2, "UserPromptSubmit");
   const sessionStart = hookFragmentState(value2, "SessionStart");
-  const stop = options.includeRetiredStop === true ? hookFragmentState(value2, "Stop") : { exists: false };
+  const stop = options2.includeRetiredStop === true ? hookFragmentState(value2, "Stop") : { exists: false };
   if (!prompt.exists) return { exists: false, digest: null, index: -1, fragment: null };
   const fragment = {
     UserPromptSubmit: prompt.fragment,
@@ -17469,7 +17176,7 @@ function fragmentState(resource, value2) {
   if (resource.selector === EXA_MCP_SELECTOR) return exaMcpFragmentState(value2);
   throw new Error(`Unsupported Dove project integration selector: ${resource.selector}.`);
 }
-function removeFragment(resource, value2, current, options = {}) {
+function removeFragment(resource, value2, current, options2 = {}) {
   if (resource.selector === SETTINGS_SELECTOR) {
     let next = value2;
     for (const eventName of ["UserPromptSubmit", "SessionStart"]) {
@@ -17481,7 +17188,7 @@ function removeFragment(resource, value2, current, options = {}) {
   }
   if (resource.selector === STATUS_LINE_SELECTOR) {
     const next = { ...value2 };
-    if (options.force === true || JSON.stringify(next.statusLine) === JSON.stringify(DOVE_CLAUDE_STATUS_LINE)) delete next.statusLine;
+    if (options2.force === true || JSON.stringify(next.statusLine) === JSON.stringify(DOVE_CLAUDE_STATUS_LINE)) delete next.statusLine;
     return next;
   }
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) {
@@ -17511,9 +17218,9 @@ function driftError(resource, currentDigest) {
 function conflictError(resource) {
   return new Error(`Dove project integration cannot claim conflicting content at ${resource.path}${resource.selector ? `#${resource.selector}` : ""}.`);
 }
-function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
+function planExclusive(root, desired, oldEntry, fsOps, options2 = {}) {
   const resource = desired ?? oldEntry;
-  const replaceDrift = options.replacementPolicy === "confirmed-reinstall";
+  const replaceDrift = options2.replacementPolicy === "confirmed-reinstall";
   const observed = inspectRegularProjectFile(root, resource.path, fsOps);
   if (!oldEntry) {
     if (!observed.exists) return { entry: transactionWrite(root, desired, desired.content, observed), changed: true };
@@ -17557,8 +17264,8 @@ function addFragment(resource, value2) {
   }
   throw new Error(`Dove does not install unsupported project-local fragment ${resource.path}#${resource.selector}.`);
 }
-function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps, options = {}) {
-  const replaceDrift = options.replacementPolicy === "confirmed-reinstall";
+function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps = fs7, options2 = {}) {
+  const replaceDrift = options2.replacementPolicy === "confirmed-reinstall";
   const observed = inspectRegularProjectFile(root, relativePath, fsOps);
   const original = parseSharedJson(observed, relativePath);
   const desiredByKey = new Map(desiredEntries.map((entry) => [managedKey2(entry), entry]));
@@ -17579,7 +17286,7 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
     const current = fragmentState(resource2, next);
     if (!oldEntry) {
       if (current.exists && current.digest === desired.digest) continue;
-      const adoptableClaudeHookFragment = options.adopt === true && relativePath === DOVE_CLAUDE_SETTINGS_PATH && resource2.selector === SETTINGS_SELECTOR;
+      const adoptableClaudeHookFragment = options2.adopt === true && relativePath === DOVE_CLAUDE_SETTINGS_PATH && resource2.selector === SETTINGS_SELECTOR;
       if (adoptableClaudeHookFragment) {
         for (const eventName of ["UserPromptSubmit", "SessionStart"]) {
           const eventState = hookFragmentState(next, eventName);
@@ -17624,15 +17331,12 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
     changed: true
   };
 }
-function planResource(root, desired, oldEntry, fsOps, options = {}) {
+function planResource(root, desired, oldEntry, fsOps = fs7, options2 = {}) {
   const kind = desired?.kind ?? oldEntry.kind;
-  if (kind === "exclusive-file") return planExclusive(root, desired, oldEntry, fsOps, options);
+  if (kind === "exclusive-file") return planExclusive(root, desired, oldEntry, fsOps, options2);
   throw new Error(`Unsupported project integration resource kind: ${kind}.`);
 }
-function desiredManaged(resources) {
-  return resources.map(({ path: relativePath, kind, selector, digest }) => ({ path: relativePath, kind, selector, digest })).sort(compareManaged2);
-}
-function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps, manifest = null, adopt = false, replacementPolicy = "safe" }) {
+function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs7, manifest = null, adopt = false, replacementPolicy = "safe" }) {
   const oldByKey = new Map((manifest?.managed ?? []).map((entry) => [managedKey2(entry), entry]));
   const desiredResources = resourcesForHosts(hosts).filter((entry) => {
     if (entry.selector !== WEB_FETCH_DENY_SELECTOR || oldByKey.has(managedKey2(entry))) return true;
@@ -17683,6 +17387,588 @@ function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps, man
   }
   return { entries, manifest: nextManifest, manifestChanged };
 }
+
+// src/core/project-root.mjs
+import fs8 from "node:fs";
+import path11 from "node:path";
+var INSTALLATION_DIRECTORY = path11.posix.dirname(INSTALLATION_MANIFEST_PATH);
+function realpathNative2(fsOps, targetPath) {
+  return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
+}
+function canonicalExistingDirectory(value2, label, fsOps) {
+  if (typeof value2 !== "string" || !value2.trim() || value2.includes("\0")) throw new Error(`${label} must name an existing directory.`);
+  const resolved = path11.resolve(value2);
+  let stat;
+  try {
+    stat = fsOps.statSync(resolved);
+  } catch (error) {
+    if (error?.code === "ENOENT") throw new Error(`${label} must name an existing directory: ${resolved}.`);
+    throw error;
+  }
+  if (!stat.isDirectory()) throw new Error(`${label} must name an existing directory: ${resolved}.`);
+  return realpathNative2(fsOps, resolved);
+}
+function parentDirectories2(start) {
+  const directories = [];
+  let current = start;
+  while (true) {
+    directories.push(current);
+    const parent = path11.dirname(current);
+    if (parent === current) return directories;
+    current = parent;
+  }
+}
+function lstatOrNull4(fsOps, targetPath) {
+  try {
+    return fsOps.lstatSync(targetPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+function preservedDoctorOnly(directoryPath, directoryStat, fsOps) {
+  if (directoryStat === null) return false;
+  if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) return false;
+  const children = fsOps.readdirSync(directoryPath).map(String).sort();
+  if (children.length !== 1 || children[0] !== "DOCTOR.md") return false;
+  const doctorStat = lstatOrNull4(fsOps, path11.join(directoryPath, "DOCTOR.md"));
+  return doctorStat?.isFile() === true && !doctorStat.isSymbolicLink();
+}
+function installationStateAt(root, options2) {
+  const fsOps = options2.fsOps ?? fs8;
+  const directoryPath = path11.join(root, INSTALLATION_DIRECTORY);
+  const manifestPath = path11.join(root, INSTALLATION_MANIFEST_PATH);
+  const manifestStat = lstatOrNull4(fsOps, manifestPath);
+  if (manifestStat === null) {
+    const directoryStat2 = lstatOrNull4(fsOps, directoryPath);
+    if (directoryStat2 === null || preservedDoctorOnly(directoryPath, directoryStat2, fsOps)) return { state: "absent", root, manifestPath };
+    return { state: "residue", root, manifestPath, directoryPath, directoryStat: directoryStat2 };
+  }
+  if (manifestStat.isSymbolicLink()) throw new Error(`Dove project installation manifest must not be a symbolic link: ${manifestPath}.`);
+  if (!manifestStat.isFile()) throw new Error(`Dove project installation manifest must be a regular file: ${manifestPath}.`);
+  const directoryStat = lstatOrNull4(fsOps, directoryPath);
+  if (directoryStat === null || directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) throw new Error(`Dove installation path must be a real directory: ${directoryPath}.`);
+  const manifest = readProjectInstallationManifest(root, { ...options2, hostIds: options2.hostIds ?? PROJECT_HOST_IDS });
+  return { state: "initialized", root, manifestPath, manifest };
+}
+function assertSafeInitCandidate(candidate, installation) {
+  if (installation.state !== "residue") return;
+  const stat = installation.directoryStat;
+  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove installation path must be a real directory: ${installation.directoryPath}.`);
+  throw new Error(`Dove installation directory is incomplete because ${INSTALLATION_MANIFEST_PATH} is missing at ${candidate}.`);
+}
+function setupEvidenceAt(root, fsOps, options2 = {}) {
+  const paths = [
+    INSTALLATION_MANIFEST_PATH,
+    LEGACY_INSTALLATION_MANIFEST_PATH,
+    ...options2.includeResearch === true ? [".dove/manifest.json"] : []
+  ];
+  for (const relativePath of paths) {
+    const target = path11.join(root, relativePath);
+    const stat = lstatOrNull4(fsOps, target);
+    if (stat === null) continue;
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error(`Dove setup marker must be a regular non-symbolic-link file: ${target}.`);
+    }
+    return { state: "marker", relativePath };
+  }
+  for (const relativePath of [INSTALLATION_DIRECTORY, ".dove-install"]) {
+    const target = path11.join(root, relativePath);
+    const stat = lstatOrNull4(fsOps, target);
+    if (stat === null) continue;
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      throw new Error(`Dove setup path must be a real directory: ${target}.`);
+    }
+    if (relativePath === INSTALLATION_DIRECTORY && preservedDoctorOnly(target, stat, fsOps)) continue;
+    return { state: "residue", relativePath };
+  }
+  return { state: "absent", relativePath: null };
+}
+function legacyInitError(candidate, root, evidence) {
+  if (evidence.relativePath === LEGACY_INSTALLATION_MANIFEST_PATH) {
+    return new Error(`Dove found a legacy project installation at ${root}. Current adoption accepts only a readable Markdown research tree with the old .dove/manifest.json marker. Run 'dove doctor --json' before choosing explicit reinstall or manual recovery.`);
+  }
+  if (evidence.relativePath === ".dove/manifest.json") {
+    return new Error(`Dove found existing Dove research workspace state at ${root}. Run 'dove update' to adopt it when the Markdown research tree is current, or 'dove doctor --json' for diagnosis.`);
+  }
+  return new Error(`Dove found incomplete legacy Dove state at ${root}. Run 'dove doctor --json' before initializing another project.`);
+}
+function gitRootFrom(start, fsOps) {
+  for (const directory of parentDirectories2(start)) {
+    const dotGit = path11.join(directory, ".git");
+    const stat = lstatOrNull4(fsOps, dotGit);
+    if (stat === null) continue;
+    if (stat.isSymbolicLink()) throw new Error(`Git project marker must not be a symbolic link: ${dotGit}.`);
+    if (!stat.isDirectory() && !stat.isFile()) throw new Error(`Git project marker must be a file or directory: ${dotGit}.`);
+    return directory;
+  }
+  return null;
+}
+function initRequiredError(start) {
+  return new Error(`Dove project integration is not initialized from ${start}. Run 'dove init' from the project root, or use 'dove init --project <dir>'.`);
+}
+function resolveProjectRootForInit(project, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs8;
+  const explicitProject = project !== void 0 && project !== null;
+  const candidateInput = explicitProject ? project : options2.cwd ?? process.cwd();
+  const candidate = canonicalExistingDirectory(candidateInput, explicitProject ? "Dove project" : "Current working directory", fsOps);
+  const gitRoot = gitRootFrom(candidate, fsOps);
+  const allDirectories = parentDirectories2(candidate);
+  const directories = gitRoot === null ? allDirectories : allDirectories.slice(0, allDirectories.indexOf(gitRoot) + 1);
+  for (let index = 0; index < directories.length; index += 1) {
+    const directory = directories[index];
+    const installation = installationStateAt(directory, options2);
+    if (index === 0) assertSafeInitCandidate(candidate, installation);
+    if (installation.state === "initialized") {
+      if (index === 0) throw new Error(`Dove project integration is already initialized at ${directory}. Use dove update instead.`);
+      throw new Error(`Refusing nested Dove project initialization at ${candidate}; an initialized project already exists at ${directory}.`);
+    }
+    const evidence = setupEvidenceAt(directory, fsOps, { includeResearch: index === 0 });
+    if (evidence.state !== "absent") throw legacyInitError(candidate, directory, evidence);
+  }
+  return !explicitProject && gitRoot !== null ? gitRoot : candidate;
+}
+function packageProjectBoundary(directory, fsOps) {
+  const packageJson = lstatOrNull4(fsOps, path11.join(directory, "package.json"));
+  const nodeModules = lstatOrNull4(fsOps, path11.join(directory, "node_modules"));
+  return packageJson?.isFile() && !packageJson.isSymbolicLink() && nodeModules?.isDirectory() && !nodeModules.isSymbolicLink();
+}
+function resolveProjectRootForSetup(start, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs8;
+  const candidate = canonicalExistingDirectory(start ?? options2.cwd ?? process.cwd(), "Dove project setup start", fsOps);
+  for (const directory of parentDirectories2(candidate)) {
+    if (setupEvidenceAt(directory, fsOps).state !== "absent") return directory;
+    const dotGit = lstatOrNull4(fsOps, path11.join(directory, ".git"));
+    if (dotGit !== null) {
+      if (dotGit.isSymbolicLink() || !dotGit.isDirectory() && !dotGit.isFile()) {
+        throw new Error(`Git project marker must be a file or directory: ${path11.join(directory, ".git")}.`);
+      }
+      return directory;
+    }
+    if (packageProjectBoundary(directory, fsOps)) return directory;
+  }
+  return candidate;
+}
+function resolveInstalledProjectRoot(start, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs8;
+  const startingDirectory = canonicalExistingDirectory(start ?? options2.cwd ?? process.cwd(), "Dove project search start", fsOps);
+  for (const directory of parentDirectories2(startingDirectory)) {
+    const installation = installationStateAt(directory, options2);
+    if (installation.state === "initialized") return directory;
+  }
+  throw initRequiredError(startingDirectory);
+}
+function resolveExactInstalledProjectRoot(start, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs8;
+  if (typeof start !== "string" || !start.trim() || start.includes("\0")) throw new Error("Dove hook project must name an initialized project root.");
+  const resolved = path11.resolve(start);
+  const stat = lstatOrNull4(fsOps, resolved);
+  if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove hook project must be a real directory: ${resolved}.`);
+  const root = realpathNative2(fsOps, resolved);
+  const installation = installationStateAt(root, options2);
+  if (installation.state !== "initialized") throw initRequiredError(root);
+  return root;
+}
+function inspectProjectRoot(start, options2 = {}) {
+  let canonicalStart = null;
+  try {
+    canonicalStart = canonicalExistingDirectory(start ?? options2.cwd ?? process.cwd(), "Dove project search start", options2.fsOps ?? fs8);
+    const root = resolveInstalledProjectRoot(canonicalStart, options2);
+    return Object.freeze({ state: "initialized", initialized: true, start: canonicalStart, root, error: null });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const uninitialized = message.includes("Dove project integration is not initialized");
+    return Object.freeze({
+      state: uninitialized ? "uninitialized" : "invalid",
+      initialized: false,
+      start: canonicalStart,
+      root: null,
+      error: message
+    });
+  }
+}
+
+// src/core/research-defaults.mjs
+import crypto3 from "node:crypto";
+import fs9 from "node:fs";
+import path12 from "node:path";
+var RESEARCH_ROOT = ARTIFACT_PATHS.researchDocumentsDir;
+var RESEARCH_DEFAULT_PATHS = Object.freeze({
+  root: RESEARCH_ROOT,
+  overview: ARTIFACT_PATHS.researchOverview,
+  missionsDirectory: `${RESEARCH_ROOT}/missions`,
+  missionsSummary: `${RESEARCH_ROOT}/missions/MISSIONS.md`,
+  experimentsDirectory: `${RESEARCH_ROOT}/experiments`,
+  experimentsSummary: `${RESEARCH_ROOT}/experiments/EXPERIMENTS.md`,
+  sourcesDirectory: `${RESEARCH_ROOT}/sources`,
+  sourcesSummary: `${RESEARCH_ROOT}/sources/SOURCES.md`,
+  reviewsDirectory: `${RESEARCH_ROOT}/reviews`,
+  reviewsSummary: `${RESEARCH_ROOT}/reviews/REVIEWS.md`,
+  claimsDirectory: `${RESEARCH_ROOT}/claims`,
+  claimsSummary: `${RESEARCH_ROOT}/claims/CLAIMS.md`,
+  lessonsDirectory: `${RESEARCH_ROOT}/lessons`,
+  lessonsSummary: ARTIFACT_PATHS.researchLessons,
+  decisionMaking: `${RESEARCH_ROOT}/lessons/decision-making.md`,
+  researchMethod: `${RESEARCH_ROOT}/lessons/research-method.md`,
+  experimentsAndEvidence: `${RESEARCH_ROOT}/lessons/experiments-and-evidence.md`,
+  engineeringAndValidation: `${RESEARCH_ROOT}/lessons/engineering-and-validation.md`,
+  writingAndReview: `${RESEARCH_ROOT}/lessons/writing-and-review.md`,
+  collaborationAndEnvironment: `${RESEARCH_ROOT}/lessons/collaboration-and-environment.md`,
+  importedLessons: `${RESEARCH_ROOT}/lessons/imported-lessons.md`
+});
+var RETIRED_RESEARCH_PATHS = Object.freeze({
+  additionalLessons: `${RESEARCH_ROOT}/lessons/additional-lessons.md`,
+  topLevelLessons: `${RESEARCH_ROOT}/LESSONS.md`
+});
+var SUMMARY_DOCUMENTS = Object.freeze([
+  Object.freeze({
+    path: RESEARCH_DEFAULT_PATHS.overview,
+    title: "# Research",
+    blocks: Object.freeze([
+      "This researcher-owned entry keeps the current research mainline, material progress, important conclusions and limits, linked work, and next priorities concise and recoverable."
+    ]),
+    navigationHeading: null,
+    navigationLines: Object.freeze([])
+  })
+]);
+var RESEARCH_LESSON_TOPICS = Object.freeze([]);
+function renderDocument({ title, blocks = [], navigationHeading = null, navigationLines = [] }) {
+  const parts = [title, ...blocks];
+  if (navigationLines.length > 0) parts.push(navigationHeading, navigationLines.join("\n"));
+  return `${parts.join("\n\n")}
+`;
+}
+var RESEARCH_DEFAULT_DOCUMENTS = Object.freeze(
+  SUMMARY_DOCUMENTS.map((document) => Object.freeze({ path: document.path, content: renderDocument(document) }))
+);
+var RESEARCH_DEFAULT_FILE_PATHS = Object.freeze(RESEARCH_DEFAULT_DOCUMENTS.map((document) => document.path));
+var RESEARCH_DEFAULT_DIRECTORY_PATHS = Object.freeze([
+  RESEARCH_DEFAULT_PATHS.root
+]);
+function sha2563(content) {
+  return crypto3.createHash("sha256").update(content).digest("hex");
+}
+function canonicalRoot(root, fsOps) {
+  const resolved = path12.resolve(root);
+  return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
+}
+function decodeMarkdown(bytes, relativePath) {
+  let text;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch (error) {
+    throw new Error(`${relativePath} must contain valid UTF-8 Markdown.`, { cause: error });
+  }
+  if (text.includes("\0")) throw new Error(`${relativePath} contains null bytes.`);
+  return text;
+}
+function absentState(relativePath) {
+  return { relativePath, exists: false, type: "absent", bytes: null, text: null, sha256: null, mode: null };
+}
+function readFileState(anchor, relativePath, options2 = {}) {
+  const stat = anchor.tryLstat(relativePath);
+  if (!stat) return absentState(relativePath);
+  if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`${relativePath} must be a regular file without symbolic links.`);
+  const bytes = anchor.readFile(relativePath);
+  return {
+    relativePath,
+    exists: true,
+    type: "file",
+    bytes,
+    text: options2.decode === false ? null : decodeMarkdown(bytes, relativePath),
+    sha256: sha2563(bytes),
+    mode: stat.mode & 4095
+  };
+}
+function assertRealDirectoryIfPresent(anchor, relativePath) {
+  const stat = anchor.tryLstat(relativePath);
+  if (stat && (stat.isSymbolicLink() || !stat.isDirectory())) throw new Error(`${relativePath} must be a real directory.`);
+  return stat !== null;
+}
+function expectedState2(state2) {
+  return state2.exists ? { exists: true, type: "file", sha256: state2.sha256, mode: state2.mode } : { exists: false, type: "absent", sha256: null, mode: null };
+}
+function exactLinePresent(text, line) {
+  return text.split(/\r?\n/u).includes(line);
+}
+function exactMarkdownBlockPresent(text, block) {
+  let offset = 0;
+  while (offset <= text.length) {
+    const index = text.indexOf(block, offset);
+    if (index === -1) return false;
+    const end = index + block.length;
+    const startsAtLineBoundary = index === 0 || index === 1 && text[0] === "\uFEFF" || text[index - 1] === "\n";
+    const endsAtLineBoundary = end === text.length || text[end] === "\n" || text.startsWith("\r\n", end);
+    if (startsAtLineBoundary && endsAtLineBoundary) return true;
+    offset = index + 1;
+  }
+  return false;
+}
+function appendSeparator(text) {
+  if (!text) return "";
+  if (text.endsWith("\n\n")) return "";
+  if (text.endsWith("\n")) return "\n";
+  return "\n\n";
+}
+function appendExactMarkdownBlocks(original, blocks) {
+  let result = String(original);
+  for (const raw of blocks) {
+    const block = String(raw).trimEnd();
+    if (!block || exactMarkdownBlockPresent(result, block)) continue;
+    result += `${appendSeparator(result)}${block}
+`;
+  }
+  return result;
+}
+function appendExactMarkdownLines(original, heading, lines) {
+  const missing = lines.filter((line) => !exactLinePresent(original, line));
+  if (missing.length === 0) return original;
+  const parts = [];
+  if (heading && !exactLinePresent(original, heading)) parts.push(heading);
+  parts.push(...missing);
+  return appendExactMarkdownBlocks(original, [parts.join("\n")]);
+}
+function readResearchDefaultsSnapshot(root, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs9;
+  const replace = options2.mode === "replace";
+  const anchor = openRootedFilesystem(canonicalRoot(root, fsOps), { ...options2, fsOps });
+  for (const directoryPath of RESEARCH_DEFAULT_DIRECTORY_PATHS) assertRealDirectoryIfPresent(anchor, directoryPath);
+  const states = /* @__PURE__ */ new Map();
+  const selectedPaths = /* @__PURE__ */ new Set([
+    ...RESEARCH_DEFAULT_FILE_PATHS,
+    RESEARCH_DEFAULT_PATHS.missionsSummary,
+    RESEARCH_DEFAULT_PATHS.experimentsSummary,
+    RESEARCH_DEFAULT_PATHS.sourcesSummary,
+    RESEARCH_DEFAULT_PATHS.reviewsSummary,
+    RESEARCH_DEFAULT_PATHS.claimsSummary,
+    RESEARCH_DEFAULT_PATHS.lessonsSummary,
+    RETIRED_RESEARCH_PATHS.additionalLessons,
+    RESEARCH_DEFAULT_PATHS.importedLessons,
+    RETIRED_RESEARCH_PATHS.topLevelLessons
+  ]);
+  for (const relativePath of selectedPaths) {
+    const opaque = relativePath === RETIRED_RESEARCH_PATHS.additionalLessons || relativePath === RESEARCH_DEFAULT_PATHS.importedLessons || relativePath === RETIRED_RESEARCH_PATHS.topLevelLessons;
+    states.set(relativePath, readFileState(anchor, relativePath, { decode: !replace && !opaque }));
+  }
+  return { states };
+}
+function stateFor(snapshot, relativePath) {
+  return snapshot.states.get(relativePath) ?? absentState(relativePath);
+}
+function setWrite(writes, snapshot, relativePath, content) {
+  const bytes = Buffer.isBuffer(content) ? Buffer.from(content) : Buffer.from(String(content), "utf8");
+  const state2 = stateFor(snapshot, relativePath);
+  if (state2.exists && state2.bytes.equals(bytes)) {
+    writes.delete(relativePath);
+    return;
+  }
+  writes.set(relativePath, bytes);
+}
+function currentText(snapshot, writes, relativePath) {
+  if (writes.has(relativePath)) return decodeMarkdown(writes.get(relativePath), relativePath);
+  const state2 = stateFor(snapshot, relativePath);
+  return state2.exists ? state2.text : null;
+}
+function planSummaryDocument(snapshot, writes, document) {
+  const state2 = stateFor(snapshot, document.path);
+  if (!state2.exists) {
+    setWrite(writes, snapshot, document.path, renderDocument(document));
+    return;
+  }
+  const content = appendExactMarkdownLines(currentText(snapshot, writes, document.path), document.navigationHeading, document.navigationLines);
+  setWrite(writes, snapshot, document.path, content);
+}
+function planResearchDefaults(snapshot, options2 = {}) {
+  if (!snapshot || !(snapshot.states instanceof Map)) {
+    throw new Error("Research defaults planning requires a research Markdown snapshot.");
+  }
+  const mode = options2.mode ?? "sync";
+  if (!(/* @__PURE__ */ new Set(["sync", "replace"])).has(mode)) throw new Error(`Unsupported research defaults planning mode: ${mode}.`);
+  const writes = /* @__PURE__ */ new Map();
+  const deletes = /* @__PURE__ */ new Set();
+  for (const document of SUMMARY_DOCUMENTS) {
+    if (mode === "replace") setWrite(writes, snapshot, document.path, renderDocument(document));
+    else planSummaryDocument(snapshot, writes, document);
+  }
+  return { writes, deletes };
+}
+function researchDefaultTransactionEntries(root, snapshot, plan, options2 = {}) {
+  const label = options2.label ?? "Dove research bootstrap";
+  return [
+    ...[...plan.writes.entries()].map(([relativePath, content]) => ({
+      root,
+      relativePath,
+      content,
+      force: true,
+      expectedState: expectedState2(stateFor(snapshot, relativePath)),
+      label: `${label} ${relativePath}`
+    })),
+    ...[...plan.deletes].map((relativePath) => ({
+      root,
+      relativePath,
+      delete: true,
+      force: true,
+      expectedState: expectedState2(stateFor(snapshot, relativePath)),
+      label: `Retired Dove research document ${relativePath}`
+    }))
+  ];
+}
+function prepareResearchDefaults(root, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs9;
+  const canonical = canonicalRoot(root, fsOps);
+  const mode = options2.mode ?? "sync";
+  const snapshot = readResearchDefaultsSnapshot(canonical, { ...options2, fsOps, mode });
+  const plan = planResearchDefaults(snapshot, { mode });
+  const entries = researchDefaultTransactionEntries(canonical, snapshot, plan, { label: options2.label });
+  return {
+    root: canonical,
+    snapshot,
+    plan,
+    entries,
+    changedPaths: entries.map((entry) => entry.relativePath)
+  };
+}
+
+// src/core/research-documents.mjs
+import fs10 from "node:fs";
+import path13 from "node:path";
+var V2_FORMAT_PATH = ".dove/format.json";
+var V2_FORMAT = "dove-research-v2";
+var RESEARCH_DOCUMENT_PATHS = Object.freeze({ ...RESEARCH_DEFAULT_PATHS });
+var SUMMARY_ENTRIES = Object.freeze([
+  Object.freeze(["missions", RESEARCH_DOCUMENT_PATHS.missionsDirectory, RESEARCH_DOCUMENT_PATHS.missionsSummary]),
+  Object.freeze(["experiments", RESEARCH_DOCUMENT_PATHS.experimentsDirectory, RESEARCH_DOCUMENT_PATHS.experimentsSummary]),
+  Object.freeze(["sources", RESEARCH_DOCUMENT_PATHS.sourcesDirectory, RESEARCH_DOCUMENT_PATHS.sourcesSummary]),
+  Object.freeze(["reviews", RESEARCH_DOCUMENT_PATHS.reviewsDirectory, RESEARCH_DOCUMENT_PATHS.reviewsSummary]),
+  Object.freeze(["claims", RESEARCH_DOCUMENT_PATHS.claimsDirectory, RESEARCH_DOCUMENT_PATHS.claimsSummary]),
+  Object.freeze(["lessons", RESEARCH_DOCUMENT_PATHS.lessonsDirectory, RESEARCH_DOCUMENT_PATHS.lessonsSummary])
+]);
+function messageFor(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+function canonicalRoot2(root, fsOps) {
+  const resolved = path13.resolve(root);
+  return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
+}
+function readMarkdown(anchor, relativePath) {
+  const stat = anchor.tryLstat(relativePath);
+  if (!stat) return null;
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new Error(`${relativePath} must be a regular file without symbolic links.`);
+  }
+  let markdown;
+  try {
+    markdown = new TextDecoder("utf-8", { fatal: true }).decode(anchor.readFile(relativePath));
+  } catch (error) {
+    throw new Error(`${relativePath} must contain valid UTF-8 Markdown.`, { cause: error });
+  }
+  if (markdown.includes("\0")) throw new Error(`${relativePath} contains null bytes.`);
+  return markdown;
+}
+function inspectDirectory(anchor, relativePath) {
+  const stat = anchor.tryLstat(relativePath);
+  if (!stat) return false;
+  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`${relativePath} must be a real directory.`);
+  return true;
+}
+function emptyResult(state2, fields = {}) {
+  return {
+    healthy: true,
+    state: state2,
+    root: RESEARCH_DOCUMENT_PATHS.root,
+    overview: null,
+    summaries: {
+      missions: null,
+      experiments: null,
+      sources: null,
+      reviews: null,
+      claims: null,
+      lessons: null
+    },
+    missingSummaries: [],
+    optionalSummaries: SUMMARY_ENTRIES.map(([, , summaryPath]) => summaryPath),
+    ...fields
+  };
+}
+function inspectResearchDocuments(root, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs10;
+  let anchor;
+  try {
+    anchor = openRootedFilesystem(canonicalRoot2(root, fsOps), { ...options2, fsOps });
+    const directory = anchor.tryLstat(RESEARCH_DOCUMENT_PATHS.root);
+    if (!directory) {
+      const format = anchor.tryLstat(V2_FORMAT_PATH);
+      if (format) {
+        if (format.isSymbolicLink() || !format.isFile()) {
+          throw new Error(`${V2_FORMAT_PATH} must be a regular file without symbolic links.`);
+        }
+        const marker = parseJsonWithoutDuplicateKeys(
+          new TextDecoder("utf-8", { fatal: true }).decode(anchor.readFile(V2_FORMAT_PATH)),
+          V2_FORMAT_PATH
+        );
+        if (marker?.format === V2_FORMAT && Object.keys(marker).length === 1) {
+          return emptyResult("previous-research-format", { legacyDataPolicy: "Old legacy research data is left in place; Dove does not automatically convert or delete it." });
+        }
+      }
+      return emptyResult("absent");
+    }
+    if (directory.isSymbolicLink() || !directory.isDirectory()) {
+      throw new Error(`${RESEARCH_DOCUMENT_PATHS.root} must be a real directory.`);
+    }
+    const overview = readMarkdown(anchor, RESEARCH_DOCUMENT_PATHS.overview);
+    const summaries = {};
+    for (const [name, directoryPath, summaryPath] of SUMMARY_ENTRIES) {
+      const directoryExists = inspectDirectory(anchor, directoryPath);
+      const markdown = directoryExists ? readMarkdown(anchor, summaryPath) : null;
+      summaries[name] = markdown === null ? null : { path: summaryPath };
+    }
+    return {
+      healthy: true,
+      state: "current",
+      root: RESEARCH_DOCUMENT_PATHS.root,
+      overview: overview === null ? null : { path: RESEARCH_DOCUMENT_PATHS.overview },
+      summaries,
+      missingSummaries: [],
+      optionalSummaries: SUMMARY_ENTRIES.map(([, , summaryPath]) => summaryPath)
+    };
+  } catch (error) {
+    return {
+      healthy: false,
+      state: "invalid",
+      root: RESEARCH_DOCUMENT_PATHS.root,
+      overview: null,
+      summaries: {
+        missions: null,
+        experiments: null,
+        sources: null,
+        reviews: null,
+        claims: null,
+        lessons: null
+      },
+      missingSummaries: [],
+      error: messageFor(error)
+    };
+  }
+}
+
+// src/core/project-installation.mjs
+function exactTimestamp(value2) {
+  if (value2 === void 0) return (/* @__PURE__ */ new Date()).toISOString();
+  const timestamp = value2 instanceof Date ? value2.toISOString() : value2;
+  if (typeof timestamp !== "string" || new Date(timestamp).toISOString() !== timestamp) throw new Error("Project integration now must be a Date or exact ISO timestamp.");
+  return timestamp;
+}
+function assertPackageInput(packageName, packageVersion, { required }) {
+  if (!required && packageName === void 0 && packageVersion === void 0) return;
+  if (typeof packageName !== "string" || !packageName || packageName !== packageName.trim() || packageName.includes("\0")) throw new Error("Project integration packageName must be a non-empty trimmed string.");
+  if (typeof packageVersion !== "string" || !packageVersion || packageVersion !== packageVersion.trim()) throw new Error("Project integration packageVersion must be a semantic version string.");
+}
+function normalizeSelectedHosts(raw, { defaultWhenEmpty }) {
+  if (Array.isArray(raw) && raw.length === 0) throw new Error("Dove project integration requires at least one host.");
+  const hosts = normalizeHostSelection(raw, { defaultWhenEmpty, requireInitializable: true });
+  if (hosts.length === 0) throw new Error("Dove project integration requires at least one host.");
+  return [...hosts];
+}
 function resultFromTransaction(status, target, hosts, manifest, transaction) {
   return {
     status,
@@ -17696,18 +17982,18 @@ function resultFromTransaction(status, target, hosts, manifest, transaction) {
     manifest
   };
 }
-function appendResearchBootstrap(root, entries, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
-  const researchRoot = path13.join(root, ".dove", "research");
-  const researchStat = lstatOrNull4(fsOps, researchRoot);
+function appendResearchBootstrap(root, entries, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs11;
+  const researchRoot = path14.join(root, ".dove", "research");
+  const researchStat = lstatOrNull3(fsOps, researchRoot);
   if (researchStat !== null) {
     if (researchStat.isSymbolicLink() || !researchStat.isDirectory()) throw new Error("Dove research root must be a real directory when project integration is initialized.");
     return null;
   }
   const prepared = prepareResearchDefaults(root, {
     fsOps,
-    mode: options.mode ?? "sync",
-    label: options.label
+    mode: options2.mode ?? "sync",
+    label: options2.label
   });
   const existingTargets = new Set(entries.map((entry) => entry.relativePath));
   for (const entry of prepared.entries) {
@@ -17715,16 +18001,16 @@ function appendResearchBootstrap(root, entries, options = {}) {
   }
   return prepared;
 }
-function transactionOptions(fsOps, options = {}) {
-  return { ...options, fsOps };
+function transactionOptions(fsOps, options2 = {}) {
+  return { ...options2, fsOps };
 }
-function initializeProjectIntegration(rootOrProject, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
-  const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
-  const now = exactTimestamp(options.now);
+function initializeProjectIntegration(rootOrProject, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs11;
+  assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
+  const hosts = normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: true });
+  const now = exactTimestamp(options2.now);
   const root = resolveProjectRootForInit(rootOrProject, { fsOps, hostIds: PROJECT_HOST_IDS });
-  const plan = preparePlan({ root, hosts, packageName: options.packageName, packageVersion: options.packageVersion, now, fsOps });
+  const plan = preparePlan({ root, hosts, packageName: options2.packageName, packageVersion: options2.packageVersion, now, fsOps });
   appendResearchBootstrap(root, plan.entries, { fsOps, label: "Dove research bootstrap" });
   return resultFromTransaction(
     "initialized",
@@ -17734,22 +18020,22 @@ function initializeProjectIntegration(rootOrProject, options = {}) {
     writeFileSetTransaction(plan.entries, transactionOptions(fsOps))
   );
 }
-function prepareInstalledIntegrationPlan(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
+function prepareInstalledIntegrationPlan(start, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs11;
   const root = resolveInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
-  const hosts = options.hosts === void 0 ? [...manifest.hosts] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
-  const packageName = options.packageName ?? manifest.package.name;
-  const packageVersion = options.packageVersion ?? manifest.package.version;
+  const hosts = options2.hosts === void 0 ? [...manifest.hosts] : normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: false });
+  const packageName = options2.packageName ?? manifest.package.name;
+  const packageVersion = options2.packageVersion ?? manifest.package.version;
   assertPackageInput(packageName, packageVersion, { required: true });
-  const plan = preparePlan({ root, hosts, packageName, packageVersion, now: exactTimestamp(options.now), fsOps, manifest });
+  const plan = preparePlan({ root, hosts, packageName, packageVersion, now: exactTimestamp(options2.now), fsOps, manifest });
   return { fsOps, root, hosts, currentManifest: manifest, ...plan };
 }
-function prepareInstalledPlan(start, options = {}) {
-  return prepareInstalledIntegrationPlan(start, options);
+function prepareInstalledPlan(start, options2 = {}) {
+  return prepareInstalledIntegrationPlan(start, options2);
 }
-function synchronizeProjectIntegration(start, options = {}) {
-  const prepared = prepareInstalledPlan(start, options);
+function synchronizeProjectIntegration(start, options2 = {}) {
+  const prepared = prepareInstalledPlan(start, options2);
   const transaction = writeFileSetTransaction(
     prepared.entries,
     transactionOptions(prepared.fsOps)
@@ -17767,14 +18053,14 @@ function assertIntegrationOnlyEntries(entries) {
     throw new Error("Dove SessionStart sync refuses to write Dove run records.");
   }
 }
-function synchronizeProjectIntegrationOnly(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
+function synchronizeProjectIntegrationOnly(start, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs11;
+  assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const root = resolveExactInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
   const currentManifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
   const compatibility = classifyPackageCompatibility(currentManifest.package, {
-    name: options.packageName,
-    version: options.packageVersion
+    name: options2.packageName,
+    version: options2.packageVersion
   });
   if (["identity-mismatch", "invalid-version", "newer"].includes(compatibility)) {
     throw new Error("Dove SessionStart sync refuses missing, invalid, newer, or foreign project integration.");
@@ -17785,9 +18071,9 @@ function synchronizeProjectIntegrationOnly(start, options = {}) {
   const plan = preparePlan({
     root,
     hosts: [...currentManifest.hosts],
-    packageName: options.packageName,
-    packageVersion: options.packageVersion,
-    now: exactTimestamp(options.now),
+    packageName: options2.packageName,
+    packageVersion: options2.packageVersion,
+    now: exactTimestamp(options2.now),
     fsOps,
     manifest: currentManifest
   });
@@ -17795,8 +18081,8 @@ function synchronizeProjectIntegrationOnly(start, options = {}) {
   const transaction = writeFileSetTransaction(plan.entries, transactionOptions(fsOps));
   return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "synchronized", root, currentManifest.hosts, plan.manifest, transaction);
 }
-function inspectProjectIntegration(start, options = {}) {
-  const prepared = prepareInstalledPlan(start, options);
+function inspectProjectIntegration(start, options2 = {}) {
+  const prepared = prepareInstalledPlan(start, options2);
   const writtenPaths = prepared.entries.filter((entry) => entry.delete !== true).map((entry) => entry.relativePath);
   const removedPaths = prepared.entries.filter((entry) => entry.delete === true).map((entry) => entry.relativePath);
   return {
@@ -17810,14 +18096,14 @@ function inspectProjectIntegration(start, options = {}) {
   };
 }
 function canonicalLifecycleRoot(start, fsOps) {
-  const resolved = path13.resolve(start ?? process.cwd());
+  const resolved = path14.resolve(start ?? process.cwd());
   const stat = fsOps.lstatSync(resolved);
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove lifecycle project root must be a real directory: ${resolved}.`);
   return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
 }
 function walkDeletion(root, relativePath, fsOps, entries, scope, preservePaths = /* @__PURE__ */ new Set()) {
-  const absolutePath = path13.join(root, relativePath);
-  const stat = lstatOrNull4(fsOps, absolutePath);
+  const absolutePath = path14.join(root, relativePath);
+  const stat = lstatOrNull3(fsOps, absolutePath);
   if (stat === null) return;
   if (stat.isSymbolicLink()) throw new Error(`Dove lifecycle refuses symbolic links in destructive scope: ${relativePath}.`);
   if (stat.isFile()) {
@@ -17829,7 +18115,7 @@ function walkDeletion(root, relativePath, fsOps, entries, scope, preservePaths =
   }
   if (!stat.isDirectory()) throw new Error(`Dove lifecycle found unsupported project state: ${relativePath}.`);
   for (const child of fsOps.readdirSync(absolutePath).map(String).sort()) {
-    walkDeletion(root, path13.posix.join(relativePath, child), fsOps, entries, scope, preservePaths);
+    walkDeletion(root, path14.posix.join(relativePath, child), fsOps, entries, scope, preservePaths);
   }
   if (preservePaths.has(relativePath)) return;
   entries.push({
@@ -17844,8 +18130,8 @@ function walkDeletion(root, relativePath, fsOps, entries, scope, preservePaths =
   scope.push({ path: relativePath, kind: "directory", digest: null });
 }
 function migrationSource(root, fsOps) {
-  const current = lstatOrNull4(fsOps, path13.join(root, INSTALLATION_MANIFEST_PATH));
-  const legacy = lstatOrNull4(fsOps, path13.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
+  const current = lstatOrNull3(fsOps, path14.join(root, INSTALLATION_MANIFEST_PATH));
+  const legacy = lstatOrNull3(fsOps, path14.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
   if (current !== null && legacy !== null) throw new Error("Dove project update found both current and 1.0 project installation manifests.");
   if (current !== null) return readProjectInstallationManifestForMigration(root, { fsOps, hostIds: PROJECT_HOST_IDS, manifestPath: INSTALLATION_MANIFEST_PATH });
   if (legacy !== null) return readProjectInstallationManifestForMigration(root, { fsOps, hostIds: PROJECT_HOST_IDS, manifestPath: LEGACY_INSTALLATION_MANIFEST_PATH });
@@ -17858,12 +18144,12 @@ function assertAdoptableResearch(root, fsOps) {
   }
   return research;
 }
-function adoptionSource(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
+function adoptionSource(start, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs11;
   const root = resolveProjectRootForSetup(start, { fsOps, hostIds: PROJECT_HOST_IDS });
-  const current = lstatOrNull4(fsOps, path13.join(root, INSTALLATION_MANIFEST_PATH));
+  const current = lstatOrNull3(fsOps, path14.join(root, INSTALLATION_MANIFEST_PATH));
   if (current !== null) throw new Error("Dove project adoption requires an uninitialized project without a current installation manifest.");
-  const legacyInstall = lstatOrNull4(fsOps, path13.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
+  const legacyInstall = lstatOrNull3(fsOps, path14.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
   if (legacyInstall !== null) throw new Error("Dove project adoption accepts only the old .dove/manifest.json workspace marker, not legacy installation manifests.");
   if (readLegacyWorkspaceMarker(root, { fsOps }) === null) {
     throw new Error("Dove project adoption requires the old .dove/manifest.json workspace marker.");
@@ -17871,17 +18157,17 @@ function adoptionSource(start, options = {}) {
   assertAdoptableResearch(root, fsOps);
   return { root, sourcePath: LEGACY_WORKSPACE_MARKER_PATH, createdAt: null };
 }
-function prepareLifecycleIntegration(root, options, { hosts, source = null, reinstall = false, adopt = false }) {
-  const fsOps = options.fsOps ?? fs10;
+function prepareLifecycleIntegration(root, options2, { hosts, source = null, reinstall = false, adopt = false }) {
+  const fsOps = options2.fsOps ?? fs11;
   const entries = [];
   const scope = [];
   const oldManifest = source ? { ...source, managed: source.managed } : null;
-  const now = exactTimestamp(options.now);
+  const now = exactTimestamp(options2.now);
   const planned = preparePlan({
     root,
     hosts,
-    packageName: options.packageName,
-    packageVersion: options.packageVersion,
+    packageName: options2.packageName,
+    packageVersion: options2.packageVersion,
     now,
     fsOps,
     manifest: oldManifest,
@@ -17895,12 +18181,12 @@ function prepareLifecycleIntegration(root, options, { hosts, source = null, rein
     entries.push(entry);
   }
   if (reinstall) {
-    const doveRoot = path13.join(root, ".dove");
-    const doveStat = lstatOrNull4(fsOps, doveRoot);
+    const doveRoot = path14.join(root, ".dove");
+    const doveStat = lstatOrNull3(fsOps, doveRoot);
     if (doveStat !== null) {
       if (doveStat.isSymbolicLink() || !doveStat.isDirectory()) throw new Error("Complete Reinstall requires .dove to be a real directory.");
-      const installRoot = path13.join(doveRoot, "install");
-      const installStat = lstatOrNull4(fsOps, installRoot);
+      const installRoot = path14.join(doveRoot, "install");
+      const installStat = lstatOrNull3(fsOps, installRoot);
       if (installStat !== null) {
         if (installStat.isSymbolicLink() || !installStat.isDirectory()) throw new Error("Complete Reinstall requires .dove/install to be a real directory.");
         for (const child of fsOps.readdirSync(installRoot).map(String).sort()) {
@@ -17910,13 +18196,13 @@ function prepareLifecycleIntegration(root, options, { hosts, source = null, rein
     }
     walkDeletion(root, ".dove-install", fsOps, entries, scope);
   } else if (source?.sourcePath === LEGACY_INSTALLATION_MANIFEST_PATH) {
-    const legacyDirectory = lstatOrNull4(fsOps, path13.join(root, ".dove-install"));
+    const legacyDirectory = lstatOrNull3(fsOps, path14.join(root, ".dove-install"));
     if (legacyDirectory?.isSymbolicLink() || legacyDirectory !== null && !legacyDirectory.isDirectory()) {
       throw new Error("Updating Dove project integration requires .dove-install to be a real directory.");
     }
     const legacyObserved = inspectRegularProjectFile(root, LEGACY_INSTALLATION_MANIFEST_PATH, fsOps);
     entries.push(transactionDelete(root, { path: LEGACY_INSTALLATION_MANIFEST_PATH }, legacyObserved));
-    const legacyChildren = legacyDirectory === null ? [] : fsOps.readdirSync(path13.join(root, ".dove-install")).map(String).sort();
+    const legacyChildren = legacyDirectory === null ? [] : fsOps.readdirSync(path14.join(root, ".dove-install")).map(String).sort();
     if (sameArray(legacyChildren, ["manifest.json"])) {
       entries.push({
         root,
@@ -17960,20 +18246,20 @@ function previewShape(kind, root, hosts, prepared, confirmationRequired) {
   }
   return preview;
 }
-function previewProjectAdoption(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
-  const source = adoptionSource(start, { ...options, fsOps });
-  const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
-  const prepared = prepareLifecycleIntegration(source.root, options, { hosts, source: null, reinstall: false, adopt: true });
+function previewProjectAdoption(start, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs11;
+  assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
+  const source = adoptionSource(start, { ...options2, fsOps });
+  const hosts = normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: true });
+  const prepared = prepareLifecycleIntegration(source.root, options2, { hosts, source: null, reinstall: false, adopt: true });
   return previewShape("adopt", source.root, hosts, prepared, false);
 }
-function adoptProjectIntegration(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
-  const source = adoptionSource(start, { ...options, fsOps });
-  const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
-  const prepared = prepareLifecycleIntegration(source.root, options, { hosts, source: null, reinstall: false, adopt: true });
+function adoptProjectIntegration(start, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs11;
+  assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
+  const source = adoptionSource(start, { ...options2, fsOps });
+  const hosts = normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: true });
+  const prepared = prepareLifecycleIntegration(source.root, options2, { hosts, source: null, reinstall: false, adopt: true });
   return resultFromTransaction(
     "adopted",
     source.root,
@@ -17982,9 +18268,9 @@ function adoptProjectIntegration(start, options = {}) {
     writeFileSetTransaction(prepared.entries, transactionOptions(fsOps))
   );
 }
-function previewProjectCompleteReinstall(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
+function previewProjectCompleteReinstall(start, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs11;
+  assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   let source = null;
   try {
@@ -17996,8 +18282,8 @@ function previewProjectCompleteReinstall(start, options = {}) {
       source = null;
     }
   }
-  const hosts = options.hosts === void 0 ? [...source?.hosts ?? [CLAUDE_HOST]] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
-  const prepared = prepareLifecycleIntegration(root, options, { hosts, source, reinstall: true });
+  const hosts = options2.hosts === void 0 ? [...source?.hosts ?? [CLAUDE_HOST]] : normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: false });
+  const prepared = prepareLifecycleIntegration(root, options2, { hosts, source, reinstall: true });
   return previewShape("reinstall", root, hosts, prepared, true);
 }
 function reinstallPreviewScope(preview) {
@@ -18012,11 +18298,11 @@ function reinstallPreviewScope(preview) {
     approvalState: preview.approvalState
   });
 }
-function completeReinstallProjectIntegration(start, options = {}) {
-  if (options.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true after displaying the real destructive scope.");
-  if (!options.preview || options.preview.action !== "reinstall") throw new Error("Complete Reinstall requires the approved reinstall preview.");
-  const fsOps = options.fsOps ?? fs10;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
+function completeReinstallProjectIntegration(start, options2 = {}) {
+  if (options2.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true after displaying the real destructive scope.");
+  if (!options2.preview || options2.preview.action !== "reinstall") throw new Error("Complete Reinstall requires the approved reinstall preview.");
+  const fsOps = options2.fsOps ?? fs11;
+  assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   let source = null;
   try {
@@ -18028,10 +18314,10 @@ function completeReinstallProjectIntegration(start, options = {}) {
       source = null;
     }
   }
-  const hosts = options.hosts === void 0 ? [...source?.hosts ?? [CLAUDE_HOST]] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
-  const prepared = prepareLifecycleIntegration(root, options, { hosts, source, reinstall: true });
+  const hosts = options2.hosts === void 0 ? [...source?.hosts ?? [CLAUDE_HOST]] : normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: false });
+  const prepared = prepareLifecycleIntegration(root, options2, { hosts, source, reinstall: true });
   const currentPreview = previewShape("reinstall", root, hosts, prepared, true);
-  if (reinstallPreviewScope(currentPreview) !== reinstallPreviewScope(options.preview)) {
+  if (reinstallPreviewScope(currentPreview) !== reinstallPreviewScope(options2.preview)) {
     throw new Error("Complete Reinstall preview is stale; review the current destructive scope and confirm again.");
   }
   return resultFromTransaction(
@@ -18047,8 +18333,8 @@ function completeReinstallProjectIntegration(start, options = {}) {
     )
   );
 }
-function prepareUninstall(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
+function prepareUninstall(start, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs11;
   const root = canonicalLifecycleRoot(start, fsOps);
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
   const entries = [];
@@ -18092,12 +18378,12 @@ function uninstallPreview(prepared) {
     confirmation: { required: true, default: false }
   };
 }
-function previewProjectUninstall(start, options = {}) {
-  return uninstallPreview(prepareUninstall(start, options));
+function previewProjectUninstall(start, options2 = {}) {
+  return uninstallPreview(prepareUninstall(start, options2));
 }
-function uninstallProjectIntegration(start, options = {}) {
-  if (options.confirmed !== true) throw new Error("Dove uninstall requires confirmed: true after displaying the exact removal scope.");
-  const prepared = prepareUninstall(start, options);
+function uninstallProjectIntegration(start, options2 = {}) {
+  if (options2.confirmed !== true) throw new Error("Dove uninstall requires confirmed: true after displaying the exact removal scope.");
+  const prepared = prepareUninstall(start, options2);
   const transaction = writeFileSetTransaction(prepared.entries, transactionOptions(prepared.fsOps));
   return {
     status: "uninstalled",
@@ -18111,8 +18397,8 @@ function uninstallProjectIntegration(start, options = {}) {
     preservedPaths: [".dove/research/**", ".dove/reviews/**", ".dove/runs/**", ".dove/install/DOCTOR.md"]
   };
 }
-function updateProjectIntegration(start, options = {}) {
-  return synchronizeProjectIntegration(start, options);
+function updateProjectIntegration(start, options2 = {}) {
+  return synchronizeProjectIntegration(start, options2);
 }
 var PROJECT_INTEGRATION_MANAGED_PATHS = Object.freeze(claudeResources().map((resource) => resource.path).sort());
 
@@ -18132,28 +18418,28 @@ function lstatOrNull5(fsOps, targetPath) {
   }
 }
 function hasCurrentManifest(root, fsOps) {
-  return lstatOrNull5(fsOps, path14.join(root, INSTALLATION_MANIFEST_PATH)) !== null;
+  return lstatOrNull5(fsOps, path15.join(root, INSTALLATION_MANIFEST_PATH)) !== null;
 }
-function updateDoveLifecycle(start, options = {}) {
-  const fsOps = options.fsOps ?? fs11;
+function updateDoveLifecycle(start, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs12;
   const root = resolveProjectRootForSetup(start, { fsOps });
-  return publicUpdateResult(hasCurrentManifest(root, fsOps) ? updateProjectIntegration(root, options) : adoptProjectIntegration(root, options));
+  return publicUpdateResult(hasCurrentManifest(root, fsOps) ? updateProjectIntegration(root, options2) : adoptProjectIntegration(root, options2));
 }
-function completeReinstallDoveLifecycle(start, options = {}) {
-  if (options.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true.");
-  return completeReinstallProjectIntegration(start, options);
+function completeReinstallDoveLifecycle(start, options2 = {}) {
+  if (options2.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true.");
+  return completeReinstallProjectIntegration(start, options2);
 }
-function previewUninstallDoveLifecycle(start, options = {}) {
-  return previewProjectUninstall(start, options);
+function previewUninstallDoveLifecycle(start, options2 = {}) {
+  return previewProjectUninstall(start, options2);
 }
-function uninstallDoveLifecycle(start, options = {}) {
-  if (options.confirmed !== true) throw new Error("Dove uninstall requires confirmed: true.");
-  return uninstallProjectIntegration(start, options);
+function uninstallDoveLifecycle(start, options2 = {}) {
+  if (options2.confirmed !== true) throw new Error("Dove uninstall requires confirmed: true.");
+  return uninstallProjectIntegration(start, options2);
 }
 
 // src/core/project-doctor.mjs
-import fs12 from "node:fs";
-import path15 from "node:path";
+import fs13 from "node:fs";
+import path16 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/core/project-setup-classification.mjs
@@ -18187,8 +18473,8 @@ function classifyProjectSetup(result) {
 }
 
 // src/core/project-doctor.mjs
-var MODULE_DIRECTORY = path15.dirname(fileURLToPath3(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path15.resolve(MODULE_DIRECTORY, "../..");
+var MODULE_DIRECTORY = path16.dirname(fileURLToPath3(import.meta.url));
+var DEFAULT_PACKAGE_ROOT = path16.resolve(MODULE_DIRECTORY, "../..");
 function messageFor2(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -18207,26 +18493,26 @@ function regularNonSymlink(fsOps, targetPath) {
   const stat = lstatOrNull6(fsOps, targetPath);
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
-function inspectUserCli(options) {
-  const fsOps = options.fsOps ?? fs12;
-  const packageRoot = path15.resolve(options.packageRoot ?? DEFAULT_PACKAGE_ROOT);
-  const runtimePaths = (options.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
-    const absolutePath = path15.resolve(packageRoot, relativePath);
-    const relative = path15.relative(packageRoot, absolutePath);
-    const contained = relative !== "" && !relative.startsWith("..") && !path15.isAbsolute(relative);
+function inspectUserCli(options2) {
+  const fsOps = options2.fsOps ?? fs13;
+  const packageRoot = path16.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
+  const runtimePaths = (options2.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
+    const absolutePath = path16.resolve(packageRoot, relativePath);
+    const relative = path16.relative(packageRoot, absolutePath);
+    const contained = relative !== "" && !relative.startsWith("..") && !path16.isAbsolute(relative);
     const healthy2 = contained && regularNonSymlink(fsOps, absolutePath);
     return { path: relativePath, healthy: healthy2, state: healthy2 ? "current" : contained ? "missing-or-invalid" : "outside-package-root" };
   });
-  const executablePath = path15.resolve(options.executablePath ?? path15.join(packageRoot, "bin/dove-package.mjs"));
-  const executableRelative = path15.relative(packageRoot, executablePath);
-  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path15.isAbsolute(executableRelative);
+  const executablePath = path16.resolve(options2.executablePath ?? path16.join(packageRoot, "bin/dove-package.mjs"));
+  const executableRelative = path16.relative(packageRoot, executablePath);
+  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path16.isAbsolute(executableRelative);
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
   const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
   return {
     healthy,
     state: healthy ? "healthy" : "unhealthy",
-    package: { name: options.packageName ?? null, version: options.packageVersion ?? null, root: packageRoot },
+    package: { name: options2.packageName ?? null, version: options2.packageVersion ?? null, root: packageRoot },
     runtimePaths,
     executable,
     missing: runtimePaths.filter((entry) => !entry.healthy).map((entry) => entry.path)
@@ -18241,12 +18527,12 @@ function manifestSummary(manifest) {
     hosts: [...manifest.hosts]
   } : null;
 }
-function inspectIntegration(start, options) {
-  const project = inspectProjectRoot(start, { fsOps: options.fsOps, hostIds: PROJECT_HOST_IDS });
+function inspectIntegration(start, options2) {
+  const project = inspectProjectRoot(start, { fsOps: options2.fsOps, hostIds: PROJECT_HOST_IDS });
   if (!project.initialized) return { healthy: false, state: project.state, start: project.start, root: project.root, error: project.error, manifest: null, missing: [], drifted: [] };
   let manifest;
   try {
-    manifest = readProjectInstallationManifest(project.root, { fsOps: options.fsOps, hostIds: PROJECT_HOST_IDS });
+    manifest = readProjectInstallationManifest(project.root, { fsOps: options2.fsOps, hostIds: PROJECT_HOST_IDS });
   } catch (error) {
     return {
       healthy: false,
@@ -18259,17 +18545,17 @@ function inspectIntegration(start, options) {
       drifted: []
     };
   }
-  if (options.packageName !== void 0 && options.packageVersion !== void 0) {
-    const compatibility = classifyPackageCompatibility(manifest.package, { name: options.packageName, version: options.packageVersion });
+  if (options2.packageName !== void 0 && options2.packageVersion !== void 0) {
+    const compatibility = classifyPackageCompatibility(manifest.package, { name: options2.packageName, version: options2.packageVersion });
     if (["identity-mismatch", "newer", "invalid-version"].includes(compatibility)) {
       return { healthy: false, state: "invalid", start: project.start, root: project.root, error: "Dove project integration package is incompatible with the running CLI.", manifest: manifestSummary(manifest), packageCompatibility: compatibility, missing: [], drifted: [] };
     }
   }
   try {
-    const canonical = (options.inspectCurrentIntegration ?? inspectProjectIntegration)(project.root, {
-      packageName: options.packageName ?? manifest.package.name,
-      packageVersion: options.packageVersion ?? manifest.package.version,
-      fsOps: options.fsOps
+    const canonical = (options2.inspectCurrentIntegration ?? inspectProjectIntegration)(project.root, {
+      packageName: options2.packageName ?? manifest.package.name,
+      packageVersion: options2.packageVersion ?? manifest.package.version,
+      fsOps: options2.fsOps
     });
     return {
       healthy: canonical.status === "current",
@@ -18297,15 +18583,15 @@ function inspectIntegration(start, options) {
     };
   }
 }
-function inspectMigration(root, options) {
-  const fsOps = options.fsOps ?? fs12;
-  const current = lstatOrNull6(fsOps, path15.join(root, INSTALLATION_MANIFEST_PATH));
-  const legacy = lstatOrNull6(fsOps, path15.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
+function inspectMigration(root, options2) {
+  const fsOps = options2.fsOps ?? fs13;
+  const current = lstatOrNull6(fsOps, path16.join(root, INSTALLATION_MANIFEST_PATH));
+  const legacy = lstatOrNull6(fsOps, path16.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
   const migrationPath = legacy ? LEGACY_INSTALLATION_MANIFEST_PATH : current ? INSTALLATION_MANIFEST_PATH : null;
   const result = (state2, fields = {}) => ({ state: state2, root, markerPath: migrationPath, ...fields });
   if (current && legacy) return result("conflicting-manifests", { error: "Dove found both current and 1.0 installation manifests." });
   if (!legacy && !current) {
-    const legacyDirectory = lstatOrNull6(fsOps, path15.join(root, ".dove-install"));
+    const legacyDirectory = lstatOrNull6(fsOps, path16.join(root, ".dove-install"));
     return legacyDirectory ? result("invalid-legacy", { error: "Dove found an incomplete 1.0 installation directory." }) : result("absent", { error: null });
   }
   if (current) {
@@ -18322,10 +18608,10 @@ function inspectMigration(root, options) {
     return result("invalid-legacy", { error: messageFor2(error) });
   }
 }
-function researchState(root, options) {
+function researchState(root, options2) {
   if (!root) return { healthy: false, state: "unavailable", mode: "unavailable", error: "Project root is unavailable." };
   try {
-    const inspected = (options.inspectResearchDocuments ?? inspectResearchDocuments)(root, { fsOps: options.fsOps });
+    const inspected = (options2.inspectResearchDocuments ?? inspectResearchDocuments)(root, { fsOps: options2.fsOps });
     if (!plainObject5(inspected)) throw new Error("Research document inspection returned an invalid result.");
     const mode = inspected.state === "absent" ? "absent" : inspected.state === "previous-research-format" ? "previous-research-format" : inspected.healthy === true ? "current" : "invalid";
     return { ...inspected, mode, healthy: inspected.healthy === true };
@@ -18333,13 +18619,13 @@ function researchState(root, options) {
     return { healthy: false, state: "invalid", mode: "invalid", error: messageFor2(error) };
   }
 }
-function adoptionState(root, options) {
+function adoptionState(root, options2) {
   if (!root) return { state: "absent", ready: false, preview: null, error: "Project root is unavailable." };
   try {
-    const preview = (options.previewProjectAdoption ?? previewProjectAdoption)(root, {
-      fsOps: options.fsOps,
-      packageName: options.packageName,
-      packageVersion: options.packageVersion
+    const preview = (options2.previewProjectAdoption ?? previewProjectAdoption)(root, {
+      fsOps: options2.fsOps,
+      packageName: options2.packageName,
+      packageVersion: options2.packageVersion
     });
     return { state: "adoptable", ready: true, preview, error: null };
   } catch (error) {
@@ -18356,19 +18642,19 @@ function actionsFor(result) {
   else if (!adoptReady && result.setup.mode === "blocked") actions.push({ kind: "inspect", command: "dove doctor --json" });
   return actions;
 }
-function inspectProjectDoctor(start, options = {}) {
-  const userCli = inspectUserCli(options);
+function inspectProjectDoctor(start, options2 = {}) {
+  const userCli = inspectUserCli(options2);
   let setupRoot = null;
   try {
-    setupRoot = resolveProjectRootForSetup(start, { fsOps: options.fsOps });
+    setupRoot = resolveProjectRootForSetup(start, { fsOps: options2.fsOps });
   } catch {
-    setupRoot = typeof start === "string" ? path15.resolve(start) : null;
+    setupRoot = typeof start === "string" ? path16.resolve(start) : null;
   }
-  const projectIntegration = inspectIntegration(start, options);
+  const projectIntegration = inspectIntegration(start, options2);
   const safeRoot = projectIntegration.root ?? setupRoot;
-  const migrationInstallation = safeRoot ? inspectMigration(safeRoot, options) : { state: "absent", root: null, error: "Project root is unavailable." };
-  const workspaceState = researchState(safeRoot, options);
-  const adoption = safeRoot ? adoptionState(safeRoot, options) : { state: "absent", ready: false, preview: null, error: "Project root is unavailable." };
+  const migrationInstallation = safeRoot ? inspectMigration(safeRoot, options2) : { state: "absent", root: null, error: "Project root is unavailable." };
+  const workspaceState = researchState(safeRoot, options2);
+  const adoption = safeRoot ? adoptionState(safeRoot, options2) : { state: "absent", ready: false, preview: null, error: "Project root is unavailable." };
   const setup2 = classifyProjectSetup({ projectIntegration, migrationInstallation, workspaceState, adoption });
   const staticChecksPassed = userCli.healthy && projectIntegration.healthy && workspaceState.healthy;
   const result = {
@@ -18388,9 +18674,9 @@ function inspectProjectDoctor(start, options = {}) {
 
 // src/core/run-record.mjs
 import crypto4 from "node:crypto";
-import fs13 from "node:fs";
+import fs14 from "node:fs";
 import os2 from "node:os";
-import path16 from "node:path";
+import path17 from "node:path";
 import process4 from "node:process";
 var RUN_EVENT_SCHEMA_VERSION = "dove.run.event.v1";
 var RUNS_DIRECTORY_PATH = ARTIFACT_PATHS.runsDir;
@@ -18438,12 +18724,12 @@ function exactIsoTimestamp2(value2 = /* @__PURE__ */ new Date(), label = "Dove r
   if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString() !== timestamp) throw new Error(`${label} must be an exact ISO timestamp.`);
   return timestamp;
 }
-function sanitizeOptionalText(value2, label, options = {}) {
+function sanitizeOptionalText(value2, label, options2 = {}) {
   if (value2 === void 0 || value2 === null || value2 === "") return null;
   if (typeof value2 !== "string") throw new Error(`${label} must be a string.`);
   const trimmed = value2.trim();
   if (!trimmed || trimmed.includes("\0")) throw new Error(`${label} must be a non-empty string without NUL bytes.`);
-  const max = options.max ?? 1e3;
+  const max = options2.max ?? 1e3;
   if (trimmed.length > max) throw new Error(`${label} must be at most ${max} characters.`);
   return trimmed;
 }
@@ -18487,8 +18773,8 @@ function observePid(pid) {
 function sleepSync(milliseconds) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
-function createRunId(options = {}) {
-  const now = options.now instanceof Date ? options.now : new Date(options.now ?? Date.now());
+function createRunId(options2 = {}) {
+  const now = options2.now instanceof Date ? options2.now : new Date(options2.now ?? Date.now());
   const date = now.toISOString().slice(0, 10).replace(/-/gu, "");
   const time = now.toISOString().slice(11, 19).replace(/:/gu, "");
   const suffix = crypto4.randomBytes(4).toString("hex");
@@ -18501,9 +18787,9 @@ function normalizeRunId(value2) {
   if (WINDOWS_RESERVED_NAMES.has(upper)) throw new Error(`Dove run id must not use a reserved device name: ${value2}`);
   return value2;
 }
-function normalizeRunProject(project, options = {}) {
-  const fsOps = options.fsOps ?? fs13;
-  return resolveInstalledProjectRoot(project ?? options.cwd ?? process4.cwd(), { fsOps });
+function normalizeRunProject(project, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
+  return resolveInstalledProjectRoot(project ?? options2.cwd ?? process4.cwd(), { fsOps });
 }
 function runRelativePaths(runId) {
   const id = normalizeRunId(runId);
@@ -18519,17 +18805,17 @@ function runAbsolutePaths(projectRoot, runId) {
   const relative = runRelativePaths(runId);
   return {
     ...relative,
-    absoluteRunDirectory: path16.join(projectRoot, relative.runDirectory),
-    absoluteJournalPath: path16.join(projectRoot, relative.journalPath),
-    absoluteStdoutPath: path16.join(projectRoot, relative.stdoutPath),
-    absoluteStderrPath: path16.join(projectRoot, relative.stderrPath)
+    absoluteRunDirectory: path17.join(projectRoot, relative.runDirectory),
+    absoluteJournalPath: path17.join(projectRoot, relative.journalPath),
+    absoluteStdoutPath: path17.join(projectRoot, relative.stdoutPath),
+    absoluteStderrPath: path17.join(projectRoot, relative.stderrPath)
   };
 }
-function ensureRunsRoot(projectRoot, options = {}) {
-  const fsOps = options.fsOps ?? fs13;
-  const doveRoot = path16.join(projectRoot, ARTIFACT_PATHS.doveRoot);
+function ensureRunsRoot(projectRoot, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
+  const doveRoot = path17.join(projectRoot, ARTIFACT_PATHS.doveRoot);
   assertRealDirectory(fsOps, doveRoot, "Dove workspace root");
-  const runsRoot = path16.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const runsRoot = path17.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull7(fsOps, runsRoot);
   if (stat !== null) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -18544,10 +18830,10 @@ function ensureRunsRoot(projectRoot, options = {}) {
   }
   return runsRoot;
 }
-function reserveRunDirectory(options = {}) {
-  const fsOps = options.fsOps ?? fs13;
-  const projectRoot = normalizeRunProject(options.project, options);
-  const runId = normalizeRunId(options.id ?? createRunId({ now: options.now }));
+function reserveRunDirectory(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
+  const projectRoot = normalizeRunProject(options2.project, options2);
+  const runId = normalizeRunId(options2.id ?? createRunId({ now: options2.now }));
   ensureRunsRoot(projectRoot, { fsOps });
   const paths = runAbsolutePaths(projectRoot, runId);
   try {
@@ -18559,14 +18845,14 @@ function reserveRunDirectory(options = {}) {
   assertRealDirectory(fsOps, paths.absoluteRunDirectory, "Dove run directory");
   return { projectRoot, runId, paths };
 }
-function requireRunDirectory(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs13;
+function requireRunDirectory(projectRoot, runId, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
   const paths = runAbsolutePaths(projectRoot, runId);
   assertRealDirectory(fsOps, paths.absoluteRunDirectory, "Dove run directory");
   return paths;
 }
-function tryRunDirectory(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs13;
+function tryRunDirectory(projectRoot, runId, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
   const paths = runAbsolutePaths(projectRoot, runId);
   const stat = lstatOrNull7(fsOps, paths.absoluteRunDirectory);
   if (stat === null) return null;
@@ -18574,7 +18860,7 @@ function tryRunDirectory(projectRoot, runId, options = {}) {
   return paths;
 }
 function readRunLockOwner(fsOps, lockPath) {
-  const ownerPath = path16.join(lockPath, RUN_LOCK_OWNER_FILE);
+  const ownerPath = path17.join(lockPath, RUN_LOCK_OWNER_FILE);
   const stat = lstatOrNull7(fsOps, ownerPath);
   if (stat === null) return null;
   if (stat.isSymbolicLink() || !stat.isFile()) return { invalid: true, reason: "owner file is not a regular file" };
@@ -18586,8 +18872,8 @@ function readRunLockOwner(fsOps, lockPath) {
     return { invalid: true, reason: "owner file is not readable JSON" };
   }
 }
-function recoverExistingRunMutationLock(runId, lockPath, options) {
-  const fsOps = options.fsOps;
+function recoverExistingRunMutationLock(runId, lockPath, options2) {
+  const fsOps = options2.fsOps;
   const stat = lstatOrNull7(fsOps, lockPath);
   if (stat === null) return { recovered: true, reason: "lock disappeared" };
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove run ${runId} journal lock is not a real directory.`);
@@ -18616,22 +18902,22 @@ function recoverExistingRunMutationLock(runId, lockPath, options) {
     reason: owner?.invalid === true ? `journal writer lock owner is incomplete (${owner.reason}) and only ${Math.round(ageMs)}ms old` : `journal writer lock has no owner yet and is only ${Math.round(ageMs)}ms old`
   };
 }
-function writeRunLockOwner(fsOps, lockPath, runId, token, options) {
+function writeRunLockOwner(fsOps, lockPath, runId, token, options2) {
   const owner = {
     schemaVersion: RUN_LOCK_OWNER_SCHEMA_VERSION,
     runId,
     pid: process4.pid,
     token,
-    createdAt: exactIsoTimestamp2(options.now ?? /* @__PURE__ */ new Date()),
-    operation: options.operation ?? "append"
+    createdAt: exactIsoTimestamp2(options2.now ?? /* @__PURE__ */ new Date()),
+    operation: options2.operation ?? "append"
   };
-  fsOps.writeFileSync(path16.join(lockPath, RUN_LOCK_OWNER_FILE), `${JSON.stringify(owner)}
+  fsOps.writeFileSync(path17.join(lockPath, RUN_LOCK_OWNER_FILE), `${JSON.stringify(owner)}
 `, { encoding: "utf8", mode: 384, flag: "wx" });
 }
-function acquireRunMutationLock(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs13;
+function acquireRunMutationLock(projectRoot, runId, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
   const paths = requireRunDirectory(projectRoot, runId, { fsOps });
-  const lockPath = path16.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
+  const lockPath = path17.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
   const token = crypto4.randomBytes(16).toString("hex");
   const start = Date.now();
   let lastReason = "journal writer lock is busy";
@@ -18639,7 +18925,7 @@ function acquireRunMutationLock(projectRoot, runId, options = {}) {
     try {
       fsOps.mkdirSync(lockPath, { mode: 448 });
       try {
-        writeRunLockOwner(fsOps, lockPath, runId, token, options);
+        writeRunLockOwner(fsOps, lockPath, runId, token, options2);
       } catch (error) {
         fsOps.rmSync(lockPath, { recursive: true, force: true });
         throw error;
@@ -18672,8 +18958,8 @@ function validateRunEvent(value2, expectedRunId, expectedSeq, label) {
   if (value2.runId !== expectedRunId) throw new Error(`${label}.runId must equal ${expectedRunId}.`);
   return value2;
 }
-function readRunEvents(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs13;
+function readRunEvents(projectRoot, runId, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
   const id = normalizeRunId(runId);
   const paths = requireRunDirectory(projectRoot, id, { fsOps });
   assertRegularFile(fsOps, paths.absoluteJournalPath, "Dove run journal");
@@ -18687,8 +18973,8 @@ function readRunEvents(projectRoot, runId, options = {}) {
     return validateRunEvent(parsed2, id, index + 1, `${paths.journalPath}:${index + 1}`);
   });
 }
-function tryReadRunEvents(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs13;
+function tryReadRunEvents(projectRoot, runId, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
   const id = normalizeRunId(runId);
   const paths = tryRunDirectory(projectRoot, id, { fsOps });
   if (paths === null) return null;
@@ -18696,17 +18982,17 @@ function tryReadRunEvents(projectRoot, runId, options = {}) {
   if (stat === null) return null;
   return readRunEvents(projectRoot, id, { fsOps });
 }
-function appendRunEvents(projectRoot, runId, items, options = {}) {
+function appendRunEvents(projectRoot, runId, items, options2 = {}) {
   if (!Array.isArray(items) || items.length === 0) throw new Error("Dove run event append requires at least one event item.");
-  const fsOps = options.fsOps ?? fs13;
+  const fsOps = options2.fsOps ?? fs14;
   const id = normalizeRunId(runId);
   const lock = acquireRunMutationLock(projectRoot, id, { fsOps });
   try {
     const paths = requireRunDirectory(projectRoot, id, { fsOps });
     const exists = lstatOrNull7(fsOps, paths.absoluteJournalPath) !== null;
     const previousEvents = exists ? readRunEvents(projectRoot, id, { fsOps }) : [];
-    if (options.requireExisting === true && previousEvents.length === 0) throw new Error(`Dove run journal does not exist: ${paths.journalPath}`);
-    if (typeof options.precondition === "function") options.precondition(previousEvents);
+    if (options2.requireExisting === true && previousEvents.length === 0) throw new Error(`Dove run journal does not exist: ${paths.journalPath}`);
+    if (typeof options2.precondition === "function") options2.precondition(previousEvents);
     const appended = [];
     for (const [index, item] of items.entries()) {
       if (!plainObject6(item)) throw new Error(`Dove run event append item ${index} must be an object.`);
@@ -18719,7 +19005,7 @@ function appendRunEvents(projectRoot, runId, items, options = {}) {
       appended.push({
         schemaVersion: RUN_EVENT_SCHEMA_VERSION,
         seq: previousEvents.length + appended.length + 1,
-        at: exactIsoTimestamp2(options.now ?? /* @__PURE__ */ new Date()),
+        at: exactIsoTimestamp2(options2.now ?? /* @__PURE__ */ new Date()),
         type,
         runId: id,
         ...resolvedPayload
@@ -18731,8 +19017,8 @@ function appendRunEvents(projectRoot, runId, items, options = {}) {
     lock.release();
   }
 }
-function appendRunEvent(projectRoot, runId, type, payload = {}, options = {}) {
-  return appendRunEvents(projectRoot, runId, [{ type, payload }], options)[0];
+function appendRunEvent(projectRoot, runId, type, payload = {}, options2 = {}) {
+  return appendRunEvents(projectRoot, runId, [{ type, payload }], options2)[0];
 }
 function normalizeRunCommandArgv(rawArgv) {
   if (!Array.isArray(rawArgv) || rawArgv.length === 0) throw new Error("dove run start requires a command after '--'.");
@@ -18755,35 +19041,35 @@ function parseWallTime(value2) {
   if (!Number.isSafeInteger(milliseconds) || milliseconds <= 0) throw new Error("--wall-time is too large.");
   return milliseconds;
 }
-function normalizeRunBudget(options = {}) {
-  const timeoutMsFromNumber = positiveIntegerOrNull(options.timeoutMs, "--timeout-ms");
-  const timeoutMsFromWallTime = parseWallTime(options.wallTime);
+function normalizeRunBudget(options2 = {}) {
+  const timeoutMsFromNumber = positiveIntegerOrNull(options2.timeoutMs, "--timeout-ms");
+  const timeoutMsFromWallTime = parseWallTime(options2.wallTime);
   if (timeoutMsFromNumber !== null && timeoutMsFromWallTime !== null) throw new Error("Use only one of --timeout-ms or --wall-time for a Dove run.");
   const timeoutMs = timeoutMsFromNumber ?? timeoutMsFromWallTime;
-  const killGraceMs = options.killGraceMs === void 0 || options.killGraceMs === null || options.killGraceMs === "" ? 5e3 : nonNegativeInteger(options.killGraceMs, "--kill-grace-ms");
+  const killGraceMs = options2.killGraceMs === void 0 || options2.killGraceMs === null || options2.killGraceMs === "" ? 5e3 : nonNegativeInteger(options2.killGraceMs, "--kill-grace-ms");
   return { timeoutMs, killGraceMs };
 }
-function normalizeRunMetricSpec(options = {}) {
-  const name = sanitizeOptionalText(options.metricName ?? options.name, "--metric-name", { max: 200 });
-  const direction = sanitizeOptionalText(options.direction, "--direction", { max: 3 });
-  const unit = sanitizeOptionalText(options.metricUnit ?? options.unit, "--metric-unit", { max: 80 });
+function normalizeRunMetricSpec(options2 = {}) {
+  const name = sanitizeOptionalText(options2.metricName ?? options2.name, "--metric-name", { max: 200 });
+  const direction = sanitizeOptionalText(options2.direction, "--direction", { max: 3 });
+  const unit = sanitizeOptionalText(options2.metricUnit ?? options2.unit, "--metric-unit", { max: 80 });
   if ((direction !== null || unit !== null) && name === null) throw new Error("--direction and --metric-unit require --metric-name.");
   if (name !== null && !["min", "max"].includes(direction ?? "")) throw new Error("--metric-name requires --direction min or --direction max.");
   return name === null ? { name: null, direction: null, unit: null } : { name, direction, unit };
 }
-function normalizeRunBasis(options = {}) {
+function normalizeRunBasis(options2 = {}) {
   return {
-    data: sanitizeOptionalText(options.data, "--data", { max: 500 }),
-    evaluator: sanitizeOptionalText(options.evaluator, "--evaluator", { max: 500 }),
-    resourceBasis: sanitizeOptionalText(options.resourceBasis, "--resource-basis", { max: 500 })
+    data: sanitizeOptionalText(options2.data, "--data", { max: 500 }),
+    evaluator: sanitizeOptionalText(options2.evaluator, "--evaluator", { max: 500 }),
+    resourceBasis: sanitizeOptionalText(options2.resourceBasis, "--resource-basis", { max: 500 })
   };
 }
 function normalizeRunGroup(value2) {
   return sanitizeOptionalText(value2, "--group", { max: 200 });
 }
-function normalizeFinalizeInput(options = {}, startedMetric = { name: null, direction: null, unit: null }) {
-  const metricValue = finiteNumber(options.metricValue, "--metric-value");
-  const explicitMetric = normalizeRunMetricSpec(options);
+function normalizeFinalizeInput(options2 = {}, startedMetric = { name: null, direction: null, unit: null }) {
+  const metricValue = finiteNumber(options2.metricValue, "--metric-value");
+  const explicitMetric = normalizeRunMetricSpec(options2);
   const name = explicitMetric.name ?? startedMetric?.name ?? null;
   const direction = explicitMetric.direction ?? startedMetric?.direction ?? null;
   const unit = explicitMetric.name === null ? startedMetric?.unit ?? null : explicitMetric.unit;
@@ -18797,8 +19083,8 @@ function normalizeFinalizeInput(options = {}, startedMetric = { name: null, dire
   }
   return {
     metric: { name, direction, unit: unit ?? null, value: metricValue },
-    decision: sanitizeOptionalText(options.decision, "--decision", { max: FINAL_DECISIONS_MAX_LENGTH }),
-    note: sanitizeOptionalText(options.note, "--note", { max: FINAL_NOTE_MAX_LENGTH })
+    decision: sanitizeOptionalText(options2.decision, "--decision", { max: FINAL_DECISIONS_MAX_LENGTH }),
+    note: sanitizeOptionalText(options2.note, "--note", { max: FINAL_NOTE_MAX_LENGTH })
   };
 }
 function terminalEventFrom(events) {
@@ -18884,13 +19170,13 @@ function summarizeStatus(projectRoot, runId, events) {
     latestEventType: events.at(-1)?.type ?? null
   };
 }
-function summarizeRun(projectRoot, runId, options = {}) {
-  const events = readRunEvents(projectRoot, runId, options);
+function summarizeRun(projectRoot, runId, options2 = {}) {
+  const events = readRunEvents(projectRoot, runId, options2);
   return summarizeStatus(projectRoot, normalizeRunId(runId), events);
 }
-function runsRootEntries(projectRoot, options = {}) {
-  const fsOps = options.fsOps ?? fs13;
-  const runsRoot = path16.join(projectRoot, RUNS_DIRECTORY_PATH);
+function runsRootEntries(projectRoot, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
+  const runsRoot = path17.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull7(fsOps, runsRoot);
   if (stat === null) return [];
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -18899,10 +19185,10 @@ function runsRootEntries(projectRoot, options = {}) {
     return normalizeRunId(entry.name);
   }).sort();
 }
-function listRunSummaries(options = {}) {
-  const fsOps = options.fsOps ?? fs13;
-  const projectRoot = normalizeRunProject(options.project, options);
-  const group = normalizeRunGroup(options.group);
+function listRunSummaries(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
+  const projectRoot = normalizeRunProject(options2.project, options2);
+  const group = normalizeRunGroup(options2.group);
   const runs = [];
   for (const runId of runsRootEntries(projectRoot, { fsOps })) {
     const events = tryReadRunEvents(projectRoot, runId, { fsOps });
@@ -18913,18 +19199,18 @@ function listRunSummaries(options = {}) {
   }
   return { command: "status", status: "ok", project: projectRoot, group, runs };
 }
-function inspectRunStatus(options = {}) {
-  const fsOps = options.fsOps ?? fs13;
-  const projectRoot = normalizeRunProject(options.project, options);
-  if (options.id !== void 0 && options.id !== null) {
-    if (options.group !== void 0 && options.group !== null) throw new Error("Use only one of --id or --group for dove run status.");
-    const runId = normalizeRunId(options.id);
+function inspectRunStatus(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
+  const projectRoot = normalizeRunProject(options2.project, options2);
+  if (options2.id !== void 0 && options2.id !== null) {
+    if (options2.group !== void 0 && options2.group !== null) throw new Error("Use only one of --id or --group for dove run status.");
+    const runId = normalizeRunId(options2.id);
     return { command: "status", ...summarizeRun(projectRoot, runId, { fsOps }) };
   }
-  return listRunSummaries({ ...options, fsOps, project: projectRoot });
+  return listRunSummaries({ ...options2, fsOps, project: projectRoot });
 }
-function appendReconciledInterrupted(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs13;
+function appendReconciledInterrupted(projectRoot, runId, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
   const id = normalizeRunId(runId);
   const event = appendRunEvent(projectRoot, id, "run.reconciled", {
     outcome: "interrupted",
@@ -18932,8 +19218,8 @@ function appendReconciledInterrupted(projectRoot, runId, options = {}) {
     terminal: true,
     reason: "supervisor-and-target-not-observed",
     observed: {
-      supervisorPid: options.supervisorPid ?? null,
-      targetPid: options.targetPid ?? null,
+      supervisorPid: options2.supervisorPid ?? null,
+      targetPid: options2.targetPid ?? null,
       supervisorAlive: false,
       targetAlive: false,
       pidIdentity: "pid-only"
@@ -18942,7 +19228,7 @@ function appendReconciledInterrupted(projectRoot, runId, options = {}) {
   }, {
     fsOps,
     requireExisting: true,
-    now: options.now,
+    now: options2.now,
     operation: "reconcile",
     precondition(events) {
       if (terminalEventFrom(events) || reconciledEventFrom(events)?.terminal === true) throw new Error(`Dove run ${id} is already terminal.`);
@@ -18951,18 +19237,18 @@ function appendReconciledInterrupted(projectRoot, runId, options = {}) {
   });
   return { event, summary: summarizeRun(projectRoot, id, { fsOps }) };
 }
-function appendFinalizedRun(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs13;
-  const root = normalizeRunProject(projectRoot, { fsOps, cwd: options.cwd });
+function appendFinalizedRun(projectRoot, runId, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
+  const root = normalizeRunProject(projectRoot, { fsOps, cwd: options2.cwd });
   const id = normalizeRunId(runId);
   const event = appendRunEvent(root, id, "run.finalized", (events) => {
     const started = startedEventFrom(events);
     if (!started) throw new Error(`Dove run ${id} has no run.started event.`);
-    return normalizeFinalizeInput(options, started.metric ?? { name: null, direction: null, unit: null });
+    return normalizeFinalizeInput(options2, started.metric ?? { name: null, direction: null, unit: null });
   }, {
     fsOps,
     requireExisting: true,
-    now: options.now,
+    now: options2.now,
     operation: "finalize",
     precondition(events) {
       if (!startedEventFrom(events)) throw new Error(`Dove run ${id} has no run.started event.`);
@@ -18987,18 +19273,18 @@ function mismatchFields(summaries) {
   const baseline = compareBasis(summaries[0]);
   return Object.keys(baseline).filter((field) => summaries.some((summary) => stableJson(compareBasis(summary)[field]) !== stableJson(baseline[field])));
 }
-function selectedRunIds(projectRoot, options = {}) {
-  const explicitIds = Array.isArray(options.ids) ? options.ids.map(normalizeRunId) : [];
-  if (explicitIds.length > 0 && options.group !== void 0 && options.group !== null) throw new Error("Use only one of --id or --group for dove run compare.");
-  const byGroup = options.group === void 0 || options.group === null ? [] : listRunSummaries({ ...options, project: projectRoot }).runs.map((run) => run.runId);
+function selectedRunIds(projectRoot, options2 = {}) {
+  const explicitIds = Array.isArray(options2.ids) ? options2.ids.map(normalizeRunId) : [];
+  if (explicitIds.length > 0 && options2.group !== void 0 && options2.group !== null) throw new Error("Use only one of --id or --group for dove run compare.");
+  const byGroup = options2.group === void 0 || options2.group === null ? [] : listRunSummaries({ ...options2, project: projectRoot }).runs.map((run) => run.runId);
   return [.../* @__PURE__ */ new Set([...explicitIds, ...byGroup])].sort();
 }
-function compareRuns(options = {}) {
-  const fsOps = options.fsOps ?? fs13;
-  const projectRoot = normalizeRunProject(options.project, options);
-  const runIds2 = selectedRunIds(projectRoot, { ...options, fsOps });
+function compareRuns(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs14;
+  const projectRoot = normalizeRunProject(options2.project, options2);
+  const runIds2 = selectedRunIds(projectRoot, { ...options2, fsOps });
   if (runIds2.length === 0) {
-    return { command: "compare", status: "ok", comparable: false, fields: ["selection"], project: projectRoot, group: options.group ?? null, runIds: runIds2, runs: [], message: "No Dove runs were selected for comparison." };
+    return { command: "compare", status: "ok", comparable: false, fields: ["selection"], project: projectRoot, group: options2.group ?? null, runIds: runIds2, runs: [], message: "No Dove runs were selected for comparison." };
   }
   const summaries = runIds2.map((runId) => summarizeRun(projectRoot, runId, { fsOps }));
   const notReady = summaries.filter((summary) => !summary.terminal || !summary.finalized || typeof summary.metric?.value !== "number" || !Number.isFinite(summary.metric.value));
@@ -19009,7 +19295,7 @@ function compareRuns(options = {}) {
       comparable: false,
       fields: ["state"],
       project: projectRoot,
-      group: options.group ?? null,
+      group: options2.group ?? null,
       runIds: runIds2,
       runs: summaries.map((summary) => ({ runId: summary.runId, status: summary.status, terminal: summary.terminal, finalized: summary.finalized, metric: summary.metric }))
     };
@@ -19022,7 +19308,7 @@ function compareRuns(options = {}) {
       comparable: false,
       fields,
       project: projectRoot,
-      group: options.group ?? null,
+      group: options2.group ?? null,
       runIds: runIds2,
       runs: summaries.map((summary) => ({ runId: summary.runId, basis: compareBasis(summary), metric: summary.metric, status: summary.status }))
     };
@@ -19043,7 +19329,7 @@ function compareRuns(options = {}) {
     stdoutPath: summary.paths.stdoutPath,
     stderrPath: summary.paths.stderrPath
   }));
-  return { command: "compare", status: "ok", comparable: true, fields: [], project: projectRoot, group: options.group ?? null, runIds: runIds2, basis, ranking };
+  return { command: "compare", status: "ok", comparable: true, fields: [], project: projectRoot, group: options2.group ?? null, runIds: runIds2, basis, ranking };
 }
 function runPlatformRecord() {
   return {
@@ -19056,7 +19342,7 @@ function runPlatformRecord() {
 
 // src/core/run-supervisor.mjs
 import { spawn as spawn2 } from "node:child_process";
-import fs14 from "node:fs";
+import fs15 from "node:fs";
 import process5 from "node:process";
 var SUPERVISOR_ENTRY = "__dove-run-supervisor";
 var SUPERVISOR_READY_TIMEOUT_MS = 1e4;
@@ -19091,7 +19377,7 @@ function sendSupervisorMessageAsync(message) {
 function closeFd(fd) {
   if (!Number.isInteger(fd)) return;
   try {
-    fs14.closeSync(fd);
+    fs15.closeSync(fd);
   } catch {
   }
 }
@@ -19124,19 +19410,19 @@ function terminalPayloadForClose(code, signal, timedOut) {
   if (code === 0) return { outcome: "succeeded", status: "succeeded", timedOut: false, exitCode: 0, signal: null };
   return { outcome: "failed", status: "failed", timedOut: false, exitCode: code ?? null, signal: null };
 }
-function appendTerminalEvent(projectRoot, runId, payload, options = {}) {
+function appendTerminalEvent(projectRoot, runId, payload, options2 = {}) {
   appendRunEvent(projectRoot, runId, "run.terminal", {
     ...payload,
     terminal: true,
-    source: options.source ?? "supervisor",
+    source: options2.source ?? "supervisor",
     supervisorPid: process5.pid,
-    targetPid: options.targetPid ?? null
-  }, { now: options.now, operation: "terminal" });
+    targetPid: options2.targetPid ?? null
+  }, { now: options2.now, operation: "terminal" });
 }
 function openRunLogFiles(paths) {
   return {
-    stdoutFd: fs14.openSync(paths.absoluteStdoutPath, "wx", 384),
-    stderrFd: fs14.openSync(paths.absoluteStderrPath, "wx", 384)
+    stdoutFd: fs15.openSync(paths.absoluteStdoutPath, "wx", 384),
+    stderrFd: fs15.openSync(paths.absoluteStderrPath, "wx", 384)
   };
 }
 function normalizeStartPayload(raw) {
@@ -19361,19 +19647,19 @@ async function finalizeRun(rawPayload) {
     process5.exit(1);
   }
 }
-function spawnSupervisor(executablePath, payload, options = {}) {
+function spawnSupervisor(executablePath, payload, options2 = {}) {
   if (typeof executablePath !== "string" || !executablePath.trim()) throw new Error("Dove run supervisor requires the current CLI executable path.");
   const child = spawn2(process5.execPath, [executablePath, SUPERVISOR_ENTRY], {
     cwd: payload.projectRoot,
-    detached: options.detached === true,
+    detached: options2.detached === true,
     windowsHide: true,
     stdio: ["ignore", "ignore", "ignore", "ipc"]
   });
   return child;
 }
-function waitForSupervisorMessage(child, acceptedTypes, options = {}) {
+function waitForSupervisorMessage(child, acceptedTypes, options2 = {}) {
   return new Promise((resolve, reject) => {
-    const timeoutMs = options.timeoutMs ?? SUPERVISOR_READY_TIMEOUT_MS;
+    const timeoutMs = options2.timeoutMs ?? SUPERVISOR_READY_TIMEOUT_MS;
     const expected = acceptedTypes.join("/");
     let settled = false;
     const timer = setTimeout(() => {
@@ -19430,20 +19716,20 @@ async function configureSupervisorAndWait(child, payload, acceptedTypes) {
   }
   return await result;
 }
-function removeEmptyReservedRunDirectory(paths, fsOps = fs14) {
+function removeEmptyReservedRunDirectory(paths, fsOps = fs15) {
   try {
     const entries = fsOps.readdirSync(paths.absoluteRunDirectory);
     if (entries.length === 0) fsOps.rmdirSync(paths.absoluteRunDirectory);
   } catch {
   }
 }
-async function startDetachedRunSupervisor(options = {}) {
-  const argv = normalizeRunCommandArgv(options.argv);
-  const budget = normalizeRunBudget(options);
-  const metric = normalizeRunMetricSpec(options);
-  const basis = normalizeRunBasis(options);
-  const group = normalizeRunGroup(options.group);
-  const reserved = reserveRunDirectory({ project: options.project, id: options.id ?? createRunId(), cwd: options.cwd, now: options.now });
+async function startDetachedRunSupervisor(options2 = {}) {
+  const argv = normalizeRunCommandArgv(options2.argv);
+  const budget = normalizeRunBudget(options2);
+  const metric = normalizeRunMetricSpec(options2);
+  const basis = normalizeRunBasis(options2);
+  const group = normalizeRunGroup(options2.group);
+  const reserved = reserveRunDirectory({ project: options2.project, id: options2.id ?? createRunId(), cwd: options2.cwd, now: options2.now });
   const payload = {
     mode: "start",
     projectRoot: reserved.projectRoot,
@@ -19454,7 +19740,7 @@ async function startDetachedRunSupervisor(options = {}) {
     basis,
     group
   };
-  const child = spawnSupervisor(options.executablePath, payload, { detached: true });
+  const child = spawnSupervisor(options2.executablePath, payload, { detached: true });
   let ready;
   try {
     ready = await configureSupervisorAndWait(child, payload, ["ready"]);
@@ -19493,17 +19779,17 @@ async function startDetachedRunSupervisor(options = {}) {
     }
   };
 }
-async function runReconcileSupervisor(options = {}) {
-  const projectRoot = options.projectRoot;
-  const runId = normalizeRunId(options.runId);
+async function runReconcileSupervisor(options2 = {}) {
+  const projectRoot = options2.projectRoot;
+  const runId = normalizeRunId(options2.runId);
   const payload = {
     mode: "reconcile",
     projectRoot,
     runId,
-    supervisorPid: options.supervisorPid ?? null,
-    targetPid: options.targetPid ?? null
+    supervisorPid: options2.supervisorPid ?? null,
+    targetPid: options2.targetPid ?? null
   };
-  const child = spawnSupervisor(options.executablePath, payload, { detached: false });
+  const child = spawnSupervisor(options2.executablePath, payload, { detached: false });
   const message = await configureSupervisorAndWait(child, payload, ["reconciled"]);
   try {
     child.disconnect();
@@ -19511,20 +19797,20 @@ async function runReconcileSupervisor(options = {}) {
   }
   return message;
 }
-async function finalizeRunWithSupervisor(options = {}) {
-  const initial = inspectRunStatus(options);
+async function finalizeRunWithSupervisor(options2 = {}) {
+  const initial = inspectRunStatus(options2);
   const payload = {
     mode: "finalize",
     projectRoot: initial.project,
     runId: initial.runId,
-    metricName: options.metricName,
-    direction: options.direction,
-    metricUnit: options.metricUnit,
-    metricValue: options.metricValue,
-    decision: options.decision,
-    note: options.note
+    metricName: options2.metricName,
+    direction: options2.direction,
+    metricUnit: options2.metricUnit,
+    metricValue: options2.metricValue,
+    decision: options2.decision,
+    note: options2.note
   };
-  const child = spawnSupervisor(options.executablePath, payload, { detached: false });
+  const child = spawnSupervisor(options2.executablePath, payload, { detached: false });
   const message = await configureSupervisorAndWait(child, payload, ["finalized"]);
   try {
     child.disconnect();
@@ -19532,19 +19818,19 @@ async function finalizeRunWithSupervisor(options = {}) {
   }
   return { command: "finalize", event: message.event, summary: message.summary };
 }
-async function resumeRun(options = {}) {
-  const initial = inspectRunStatus(options);
+async function resumeRun(options2 = {}) {
+  const initial = inspectRunStatus(options2);
   if (initial.terminal) return { command: "resume", status: "terminal", action: "none", write: false, reason: "run is already terminal", run: initial };
   if (initial.pidObservation.supervisor.alive) return { command: "resume", status: "active", action: "none", write: false, reason: "supervisor pid is currently observable by PID-only liveness; Dove will not reconcile or mutate it", run: initial };
   if (initial.pidObservation.target.alive) return { command: "resume", status: "orphaned", action: "blocked", write: false, reason: "target pid is observable by PID-only liveness but supervisor pid is not; Dove will not rerun or mutate this run", run: initial };
   await runReconcileSupervisor({
-    executablePath: options.executablePath,
+    executablePath: options2.executablePath,
     projectRoot: initial.project,
     runId: initial.runId,
     supervisorPid: initial.supervisorPid,
     targetPid: initial.targetPid
   });
-  const reconciled = summarizeRun(initial.project, initial.runId, { fsOps: options.fsOps ?? fs14 });
+  const reconciled = summarizeRun(initial.project, initial.runId, { fsOps: options2.fsOps ?? fs15 });
   return { command: "resume", status: "interrupted", action: "reconciled", write: true, reason: "supervisor and target pids were not observable, so Dove recorded one interrupted reconciliation", run: reconciled };
 }
 function isRunSupervisorInvocation(argv) {
@@ -19600,8 +19886,8 @@ async function runSupervisorMain(argv = process5.argv.slice(2)) {
 
 // src/core/review-runtime.mjs
 import crypto8 from "node:crypto";
-import fs17 from "node:fs";
-import path19 from "node:path";
+import fs18 from "node:fs";
+import path20 from "node:path";
 
 // src/core/review-claude-backend.mjs
 import { spawnSync as spawnSync2 } from "node:child_process";
@@ -19631,8 +19917,8 @@ function exactIsoTimestamp3(value2 = /* @__PURE__ */ new Date()) {
   if (typeof timestamp !== "string" || new Date(timestamp).toISOString() !== timestamp) throw new Error("Dove review backend timestamp must be an exact ISO timestamp.");
   return timestamp;
 }
-function commandFromOptions(options = {}) {
-  const command3 = options.claudeCommand ?? options.env?.DOVE_CLAUDE_COMMAND ?? process.env.DOVE_CLAUDE_COMMAND ?? "claude";
+function commandFromOptions(options2 = {}) {
+  const command3 = options2.claudeCommand ?? options2.env?.DOVE_CLAUDE_COMMAND ?? process.env.DOVE_CLAUDE_COMMAND ?? "claude";
   if (typeof command3 !== "string" || !command3.trim() || command3.includes("\0")) throw new Error("Dove review Claude command must be a non-empty executable name or path.");
   return command3;
 }
@@ -19663,29 +19949,29 @@ function claudeArgs(session) {
   const sessionId = normalizeSessionId(session?.sessionId, "Dove review session id") ?? crypto5.randomUUID();
   return { args: [...BASE_CLAUDE_ARGS, "--session-id", sessionId], requestedSessionId: sessionId, resumed: false };
 }
-function runClaudeReviewBackend(options = {}) {
-  const command3 = commandFromOptions(options);
-  const { args: args2, requestedSessionId, resumed } = claudeArgs(options.session ?? {});
-  const startedAt = exactIsoTimestamp3(options.now ?? /* @__PURE__ */ new Date());
+function runClaudeReviewBackend(options2 = {}) {
+  const command3 = commandFromOptions(options2);
+  const { args, requestedSessionId, resumed } = claudeArgs(options2.session ?? {});
+  const startedAt = exactIsoTimestamp3(options2.now ?? /* @__PURE__ */ new Date());
   const spawnOptions = {
-    cwd: options.workspaceRoot,
-    input: options.prompt,
+    cwd: options2.workspaceRoot,
+    input: options2.prompt,
     encoding: "utf8",
-    maxBuffer: options.maxBuffer ?? 10 * 1024 * 1024,
-    env: options.env ?? process.env,
-    timeout: options.timeout ?? 10 * 60 * 1e3
+    maxBuffer: options2.maxBuffer ?? 10 * 1024 * 1024,
+    env: options2.env ?? process.env,
+    timeout: options2.timeout ?? 10 * 60 * 1e3
   };
-  const spawned = (options.spawnSync ?? spawnSync2)(command3, args2, spawnOptions);
+  const spawned = (options2.spawnSync ?? spawnSync2)(command3, args, spawnOptions);
   const completedAt = exactIsoTimestamp3(/* @__PURE__ */ new Date());
   const baseRecord = {
     schema: "dove.review.backend.v1",
     backend: DOVE_REVIEW_BACKEND_ID,
     command: command3,
-    argv: args2,
-    cwd: options.workspaceRoot,
+    argv: args,
+    cwd: options2.workspaceRoot,
     startedAt,
     completedAt,
-    promptSha256: sha2564(Buffer.from(String(options.prompt ?? ""), "utf8")),
+    promptSha256: sha2564(Buffer.from(String(options2.prompt ?? ""), "utf8")),
     requestedSessionId,
     resumed,
     exitStatus: spawned.status ?? null,
@@ -19723,8 +20009,8 @@ function runClaudeReviewBackend(options = {}) {
 
 // src/core/review-snapshot.mjs
 import crypto6 from "node:crypto";
-import fs15 from "node:fs";
-import path17 from "node:path";
+import fs16 from "node:fs";
+import path18 from "node:path";
 var REVIEW_MATERIAL_DENY_PATTERNS = Object.freeze([
   /(?:^|\/)CLAUDE\.md$/u,
   /(?:^|\/)\.claude(?:\/|$)/u,
@@ -19758,14 +20044,14 @@ function canonicalProjectFile(projectFs, rawPath) {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Dove review material must be a regular non-symlink file: ${relativePath}`);
   const absolutePath = projectFs.displayPath(relativePath);
   const canonical = projectFs.fsOps.realpathSync.native?.(absolutePath) ?? projectFs.fsOps.realpathSync(absolutePath);
-  const relative = path17.relative(projectFs.root, canonical);
-  if (relative === "" || relative === ".." || relative.startsWith(`..${path17.sep}`) || path17.isAbsolute(relative)) throw new Error(`Dove review material must stay inside the initialized project: ${relativePath}`);
-  if (relative.split(path17.sep).join("/") !== relativePath) throw new Error(`Dove review material path must be canonical project-relative form: ${rawPath}`);
+  const relative = path18.relative(projectFs.root, canonical);
+  if (relative === "" || relative === ".." || relative.startsWith(`..${path18.sep}`) || path18.isAbsolute(relative)) throw new Error(`Dove review material must stay inside the initialized project: ${relativePath}`);
+  if (relative.split(path18.sep).join("/") !== relativePath) throw new Error(`Dove review material path must be canonical project-relative form: ${rawPath}`);
   return { relativePath, absolutePath };
 }
-function normalizeReviewMaterialList(materials, options = {}) {
+function normalizeReviewMaterialList(materials, options2 = {}) {
   if (!Array.isArray(materials) || materials.length === 0) throw new Error("dove review requires at least one --material <path>.");
-  const projectFs = openRootedFilesystem(options.projectRoot, { fsOps: options.fsOps ?? fs15 });
+  const projectFs = openRootedFilesystem(options2.projectRoot, { fsOps: options2.fsOps ?? fs16 });
   const byPath = /* @__PURE__ */ new Map();
   for (const material of materials) {
     const { relativePath } = canonicalProjectFile(projectFs, material);
@@ -19773,11 +20059,11 @@ function normalizeReviewMaterialList(materials, options = {}) {
   }
   return [...byPath.keys()].sort();
 }
-function createReviewSnapshot(options = {}) {
-  const fsOps = options.fsOps ?? fs15;
-  const projectRoot = fsOps.realpathSync.native?.(path17.resolve(options.projectRoot)) ?? fsOps.realpathSync(path17.resolve(options.projectRoot));
+function createReviewSnapshot(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs16;
+  const projectRoot = fsOps.realpathSync.native?.(path18.resolve(options2.projectRoot)) ?? fsOps.realpathSync(path18.resolve(options2.projectRoot));
   const projectFs = openRootedFilesystem(projectRoot, { fsOps });
-  const materialPaths = normalizeReviewMaterialList(options.materials, { projectRoot, fsOps });
+  const materialPaths = normalizeReviewMaterialList(options2.materials, { projectRoot, fsOps });
   const files = [];
   const manifest = [];
   for (const materialPath of materialPaths) {
@@ -19790,11 +20076,11 @@ function createReviewSnapshot(options = {}) {
   return {
     snapshot: {
       schema: "dove.review.snapshot.v1",
-      reviewId: options.reviewId,
-      round: options.round,
+      reviewId: options2.reviewId,
+      round: options2.round,
       projectRoot,
-      venue: options.venue ?? null,
-      createdAt: exactIsoTimestamp4(options.now),
+      venue: options2.venue ?? null,
+      createdAt: exactIsoTimestamp4(options2.now),
       materials: manifest
     },
     files
@@ -19803,9 +20089,9 @@ function createReviewSnapshot(options = {}) {
 
 // src/core/review-workspace.mjs
 import crypto7 from "node:crypto";
-import fs16 from "node:fs";
+import fs17 from "node:fs";
 import os3 from "node:os";
-import path18 from "node:path";
+import path19 from "node:path";
 var REVIEW_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 function lstatOrNull8(fsOps, targetPath) {
   try {
@@ -19822,18 +20108,18 @@ function realpathNative3(fsOps, targetPath) {
   return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
 }
 function pathInside(parentPath, childPath) {
-  const relative = path18.relative(parentPath, childPath);
-  return relative === "" || !relative.startsWith(`..${path18.sep}`) && relative !== ".." && !path18.isAbsolute(relative);
+  const relative = path19.relative(parentPath, childPath);
+  return relative === "" || !relative.startsWith(`..${path19.sep}`) && relative !== ".." && !path19.isAbsolute(relative);
 }
 function assertStateRootOutsideProject(stateRoot, projectRoot, fsOps) {
   if (projectRoot === void 0 || projectRoot === null) return;
-  const project = realpathNative3(fsOps, path18.resolve(projectRoot));
-  const candidate = path18.resolve(stateRoot);
+  const project = realpathNative3(fsOps, path19.resolve(projectRoot));
+  const candidate = path19.resolve(stateRoot);
   if (pathInside(project, candidate)) throw new Error("Dove review workspace state root must be outside the initialized project so the reviewer sees only copied listed materials.");
 }
 function assertResolvedStateRootOutsideProject(stateRoot, projectRoot, fsOps) {
   if (projectRoot === void 0 || projectRoot === null) return;
-  const project = realpathNative3(fsOps, path18.resolve(projectRoot));
+  const project = realpathNative3(fsOps, path19.resolve(projectRoot));
   const resolved = realpathNative3(fsOps, stateRoot);
   if (pathInside(project, resolved)) throw new Error("Dove review workspace state root must be outside the initialized project so the reviewer sees only copied listed materials.");
 }
@@ -19845,8 +20131,8 @@ function exactIsoTimestamp5(value2 = /* @__PURE__ */ new Date()) {
   if (typeof timestamp !== "string" || new Date(timestamp).toISOString() !== timestamp) throw new Error("Dove review timestamp must be an exact ISO timestamp.");
   return timestamp;
 }
-function createReviewId(options = {}) {
-  const date = exactIsoTimestamp5(options.now).slice(0, 10).replace(/-/gu, "");
+function createReviewId(options2 = {}) {
+  const date = exactIsoTimestamp5(options2.now).slice(0, 10).replace(/-/gu, "");
   return `review-${date}-${crypto7.randomUUID().slice(0, 8)}`;
 }
 function normalizeReviewId(value2, label = "Dove review id") {
@@ -19854,33 +20140,33 @@ function normalizeReviewId(value2, label = "Dove review id") {
   if (value2 === "." || value2 === ".." || !REVIEW_ID_PATTERN.test(value2)) throw new Error(`${label} may contain only letters, numbers, dot, underscore, and dash, and must not be a path.`);
   return value2;
 }
-function resolveReviewStateRoot(options = {}) {
-  const env = options.env ?? process.env;
-  const fsOps = options.fsOps ?? fs16;
-  const explicit = options.stateRoot ?? env.DOVE_REVIEW_STATE_ROOT;
+function resolveReviewStateRoot(options2 = {}) {
+  const env = options2.env ?? process.env;
+  const fsOps = options2.fsOps ?? fs17;
+  const explicit = options2.stateRoot ?? env.DOVE_REVIEW_STATE_ROOT;
   const xdgState = env.XDG_STATE_HOME;
   const home = env.HOME ?? os3.homedir();
   let stateRoot;
   if (typeof explicit === "string" && explicit.trim()) stateRoot = explicit;
-  else if (typeof xdgState === "string" && xdgState.trim()) stateRoot = path18.join(xdgState, "dove", "reviews");
-  else if (typeof home === "string" && home.trim()) stateRoot = path18.join(home, ".local", "state", "dove", "reviews");
+  else if (typeof xdgState === "string" && xdgState.trim()) stateRoot = path19.join(xdgState, "dove", "reviews");
+  else if (typeof home === "string" && home.trim()) stateRoot = path19.join(home, ".local", "state", "dove", "reviews");
   else throw new Error("Dove review workspace requires DOVE_REVIEW_STATE_ROOT, XDG_STATE_HOME, or HOME.");
-  assertStateRootOutsideProject(stateRoot, options.projectRoot, fsOps);
+  assertStateRootOutsideProject(stateRoot, options2.projectRoot, fsOps);
   const resolved = ensureRealDirectory(stateRoot, { fsOps, label: "Dove review state root" });
-  assertResolvedStateRootOutsideProject(resolved, options.projectRoot, fsOps);
+  assertResolvedStateRootOutsideProject(resolved, options2.projectRoot, fsOps);
   return resolved;
 }
-function ensureRealDirectory(directoryPath, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
-  const label = options.label ?? "Directory";
+function ensureRealDirectory(directoryPath, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs17;
+  const label = options2.label ?? "Directory";
   if (typeof directoryPath !== "string" || !directoryPath.trim() || directoryPath.includes("\0")) throw new Error(`${label} must name a directory.`);
-  const resolved = path18.resolve(directoryPath);
-  const parsed2 = path18.parse(resolved);
+  const resolved = path19.resolve(directoryPath);
+  const parsed2 = path19.parse(resolved);
   let current = parsed2.root;
-  const relative = path18.relative(parsed2.root, resolved);
-  const components = relative ? relative.split(path18.sep).filter(Boolean) : [];
+  const relative = path19.relative(parsed2.root, resolved);
+  const components = relative ? relative.split(path19.sep).filter(Boolean) : [];
   for (const component of components) {
-    current = path18.join(current, component);
+    current = path19.join(current, component);
     const stat = lstatOrNull8(fsOps, current);
     if (stat === null) {
       fsOps.mkdirSync(current, { mode: 448 });
@@ -19892,10 +20178,10 @@ function ensureRealDirectory(directoryPath, options = {}) {
   if (finalStat.isSymbolicLink() || !finalStat.isDirectory()) throw new Error(`${label} must be a real directory: ${resolved}`);
   return realpathNative3(fsOps, resolved);
 }
-function reviewWorkspaceLocation(reviewId, options = {}) {
+function reviewWorkspaceLocation(reviewId, options2 = {}) {
   const id = normalizeReviewId(reviewId);
-  const fsOps = options.fsOps ?? fs16;
-  const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
+  const fsOps = options2.fsOps ?? fs17;
+  const stateRoot = resolveReviewStateRoot({ ...options2, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   return { id, stateRoot, stateRootFs, workspaceRoot: stateRootFs.displayPath(id) };
 }
@@ -19903,15 +20189,15 @@ function writeMaterialFiles(root, files, fsOps) {
   const anchor = openRootedFilesystem(root, { fsOps });
   for (const file of files) {
     const relativePath = anchor.normalize(file.path, "Dove review copied material path");
-    const parent = path18.posix.dirname(relativePath);
+    const parent = path19.posix.dirname(relativePath);
     if (parent !== ".") anchor.mkdir(parent, { recursive: true, mode: 448 });
     anchor.writeNewFile(relativePath, file.bytes, { mode: 384 });
   }
 }
-function prepareReviewWorkspace(options = {}) {
-  const fsOps = options.fsOps ?? fs16;
-  if (!Array.isArray(options.files)) throw new Error("Dove review workspace files must be an array.");
-  const { id, stateRoot, stateRootFs, workspaceRoot } = reviewWorkspaceLocation(options.reviewId, options);
+function prepareReviewWorkspace(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs17;
+  if (!Array.isArray(options2.files)) throw new Error("Dove review workspace files must be an array.");
+  const { id, stateRoot, stateRootFs, workspaceRoot } = reviewWorkspaceLocation(options2.reviewId, options2);
   const stagingName = `.${id}.staging-${crypto7.randomUUID()}`;
   const backupName = `.${id}.previous-${crypto7.randomUUID()}`;
   let backupCreated = false;
@@ -19919,7 +20205,7 @@ function prepareReviewWorkspace(options = {}) {
   stateRootFs.mkdir(stagingName, { mode: 448 });
   const stagingRoot = stateRootFs.displayPath(stagingName);
   try {
-    writeMaterialFiles(stagingRoot, options.files, fsOps);
+    writeMaterialFiles(stagingRoot, options2.files, fsOps);
     const existing = stateRootFs.tryLstat(id);
     if (existing !== null) {
       if (existing.isSymbolicLink() || !existing.isDirectory()) throw new Error(`Dove review workspace must be a real directory: ${workspaceRoot}`);
@@ -19939,7 +20225,7 @@ function prepareReviewWorkspace(options = {}) {
       }
       throw promoteError;
     }
-    if (backupCreated && options.keepPreviousWorkspaceBackup === true) {
+    if (backupCreated && options2.keepPreviousWorkspaceBackup === true) {
       return { reviewId: id, stateRoot, workspaceRoot, previousWorkspaceBackupName: backupName };
     }
     try {
@@ -19960,7 +20246,7 @@ function prepareReviewWorkspace(options = {}) {
     throw error;
   } finally {
     try {
-      if (promoted && backupCreated && options.keepPreviousWorkspaceBackup !== true && stateRootFs.exists(backupName)) stateRootFs.remove(backupName, { recursive: true, force: true });
+      if (promoted && backupCreated && options2.keepPreviousWorkspaceBackup !== true && stateRootFs.exists(backupName)) stateRootFs.remove(backupName, { recursive: true, force: true });
     } catch {
     }
   }
@@ -19978,20 +20264,20 @@ function listWorkspaceFiles(anchor, relativeDir = "") {
   }
   return files.sort();
 }
-function finalizePreparedReviewWorkspace(workspace, options = {}) {
+function finalizePreparedReviewWorkspace(workspace, options2 = {}) {
   if (!workspace?.previousWorkspaceBackupName) return;
-  const fsOps = options.fsOps ?? fs16;
-  const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
+  const fsOps = options2.fsOps ?? fs17;
+  const stateRoot = resolveReviewStateRoot({ ...options2, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   try {
     stateRootFs.remove(workspace.previousWorkspaceBackupName, { recursive: true, force: true });
   } catch {
   }
 }
-function restorePreparedReviewWorkspace(workspace, options = {}) {
+function restorePreparedReviewWorkspace(workspace, options2 = {}) {
   if (!workspace?.reviewId) return;
-  const fsOps = options.fsOps ?? fs16;
-  const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
+  const fsOps = options2.fsOps ?? fs17;
+  const stateRoot = resolveReviewStateRoot({ ...options2, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   const current = stateRootFs.tryLstat(workspace.reviewId);
   if (current !== null) {
@@ -20001,11 +20287,11 @@ function restorePreparedReviewWorkspace(workspace, options = {}) {
   if (!workspace.previousWorkspaceBackupName) return;
   stateRootFs.rename(workspace.previousWorkspaceBackupName, workspace.reviewId);
 }
-function assertReviewWorkspaceMatchesSnapshot(options = {}) {
-  const fsOps = options.fsOps ?? fs16;
-  const snapshot = options.snapshot;
+function assertReviewWorkspaceMatchesSnapshot(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs17;
+  const snapshot = options2.snapshot;
   if (!snapshot || !Array.isArray(snapshot.materials)) throw new Error("Dove review snapshot is missing its material manifest.");
-  const { workspaceRoot } = reviewWorkspaceLocation(options.reviewId, options);
+  const { workspaceRoot } = reviewWorkspaceLocation(options2.reviewId, options2);
   const anchor = openRootedFilesystem(workspaceRoot, { fsOps });
   const expected = new Map(snapshot.materials.map((material) => [material.path, material]));
   const actualPaths = listWorkspaceFiles(anchor);
@@ -20066,18 +20352,18 @@ function serializeJson(value2) {
 function materialLines(snapshot) {
   return snapshot.materials.map((material) => `- ${material.path} (${material.size} bytes, sha256 ${material.sha256})`).join("\n");
 }
-function promptForRound(options) {
-  const materialList = materialLines(options.snapshot);
-  const operationLine = options.operation === "resume" ? "Continue the current frozen round in this same reviewer session. Re-read the listed current materials as needed before updating the review." : options.operation === "rerun" ? "This is a new full-material round in the same reviewer session. Review the complete current submission again, not just a diff." : "This is the initial full-material review round for this isolated reviewer session.";
+function promptForRound(options2) {
+  const materialList = materialLines(options2.snapshot);
+  const operationLine = options2.operation === "resume" ? "Continue the current frozen round in this same reviewer session. Re-read the listed current materials as needed before updating the review." : options2.operation === "rerun" ? "This is a new full-material round in the same reviewer session. Review the complete current submission again, not just a diff." : "This is the initial full-material review round for this isolated reviewer session.";
   return `${renderDoveAgentInstructions()}
 
 # Independent dove-review task
 
 You are running in a separate Claude Code reviewer session for Dove's isolated \`dove-review\` path. Review only the copied materials in this workspace. Do not use author private conversation, author research notes, prior reviews, hidden settings, CLAUDE.md, transcripts, web tools, shell commands, Edit, Write, Bash, MCP, or any unlisted path. Your available tool is Read, and the large files are intentionally not inlined here.
 
-Target venue: ${options.venue ?? "not specified"}
-Review id: ${options.reviewId}
-Round: ${options.round}
+Target venue: ${options2.venue ?? "not specified"}
+Review id: ${options2.reviewId}
+Round: ${options2.round}
 
 ${operationLine}
 
@@ -20092,14 +20378,14 @@ Return Markdown only. Read the whole current manuscript/submission represented b
 Also include the strongest objections, evidence needed to resolve them, and concrete author-side next actions. Do not edit files and do not claim external acceptance or certification.
 `;
 }
-function normalizeProject(project, options = {}) {
-  return resolveInstalledProjectRoot(project ?? options.cwd ?? process.cwd(), { fsOps: options.fsOps ?? fs17 });
+function normalizeProject(project, options2 = {}) {
+  return resolveInstalledProjectRoot(project ?? options2.cwd ?? process.cwd(), { fsOps: options2.fsOps ?? fs18 });
 }
 function absentFileState() {
   return { exists: false, type: "absent", sha256: null, mode: null };
 }
-function fileState(projectRoot, relativePath, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+function fileState(projectRoot, relativePath, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs18;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const stat = anchor.tryLstat(relativePath);
   if (!stat) return absentFileState();
@@ -20109,8 +20395,8 @@ function fileState(projectRoot, relativePath, options = {}) {
   const bytes = anchor.readFile(relativePath);
   return { exists: true, type: "file", sha256: sha2567(bytes), mode: stat.mode & 4095 };
 }
-function readReviewRecordWithState(projectRoot, reviewId, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+function readReviewRecordWithState(projectRoot, reviewId, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs18;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const pathName = reviewPath(reviewId);
   const stat = anchor.tryLstat(pathName);
@@ -20123,26 +20409,26 @@ function readReviewRecordWithState(projectRoot, reviewId, options = {}) {
   }
   return { record: value2, expectedState: { exists: true, type: "file", sha256: sha2567(bytes), mode: stat.mode & 4095 } };
 }
-function readReviewRecord(projectRoot, reviewId, options = {}) {
-  return readReviewRecordWithState(projectRoot, reviewId, options).record;
+function readReviewRecord(projectRoot, reviewId, options2 = {}) {
+  return readReviewRecordWithState(projectRoot, reviewId, options2).record;
 }
-function requireReviewRecordWithState(projectRoot, reviewId, options = {}) {
-  const result = readReviewRecordWithState(projectRoot, reviewId, options);
+function requireReviewRecordWithState(projectRoot, reviewId, options2 = {}) {
+  const result = readReviewRecordWithState(projectRoot, reviewId, options2);
   if (result.record === null) throw new Error(`Dove review record does not exist: ${reviewPath(reviewId)}`);
   return result;
 }
-function requireReviewRecord(projectRoot, reviewId, options = {}) {
-  return requireReviewRecordWithState(projectRoot, reviewId, options).record;
+function requireReviewRecord(projectRoot, reviewId, options2 = {}) {
+  return requireReviewRecordWithState(projectRoot, reviewId, options2).record;
 }
-function readSnapshot(projectRoot, reviewId, round, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+function readSnapshot(projectRoot, reviewId, round, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs18;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const pathName = roundPaths(reviewId, round).snapshot;
   const value2 = parseJsonWithoutDuplicateKeys(anchor.readFile(pathName).toString("utf8"), pathName);
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2) || !Array.isArray(value2.materials)) throw new Error(`Dove review snapshot is invalid: ${pathName}`);
   return value2;
 }
-function writeReviewFiles(projectRoot, files, options = {}) {
+function writeReviewFiles(projectRoot, files, options2 = {}) {
   const entries = files.map((file) => ({
     root: projectRoot,
     relativePath: file.relativePath,
@@ -20152,7 +20438,7 @@ function writeReviewFiles(projectRoot, files, options = {}) {
     ...file.expectedState ? { expectedState: file.expectedState } : {},
     label: "Dove review record path"
   }));
-  return writeFileSetTransaction(entries, { fsOps: options.fsOps ?? fs17, transactionBase: ".dove/reviews/.transactions" });
+  return writeFileSetTransaction(entries, { fsOps: options2.fsOps ?? fs18, transactionBase: ".dove/reviews/.transactions" });
 }
 function reportBytesForOutcome(outcome) {
   if (outcome.status === "completed") return Buffer.from(outcome.report, "utf8");
@@ -20161,25 +20447,25 @@ function reportBytesForOutcome(outcome) {
 No reviewer report was generated. See \`backend.json\` for the backend error.
 `, "utf8");
 }
-function makeRoundRecord(options) {
-  const paths = roundPaths(options.reviewId, options.round);
+function makeRoundRecord(options2) {
+  const paths = roundPaths(options2.reviewId, options2.round);
   return {
-    round: options.round,
-    status: options.status,
-    provenance: options.provenance,
-    venue: options.venue ?? null,
-    createdAt: options.createdAt,
-    updatedAt: options.updatedAt,
+    round: options2.round,
+    status: options2.status,
+    provenance: options2.provenance,
+    venue: options2.venue ?? null,
+    createdAt: options2.createdAt,
+    updatedAt: options2.updatedAt,
     snapshotPath: paths.snapshot,
     reportPath: paths.report,
     backendPath: paths.backend,
-    latestReportPath: options.latestReportPath ?? paths.report,
-    latestBackendPath: options.latestBackendPath ?? paths.backend,
-    materials: options.materials,
-    reportSha256: options.reportSha256,
-    sessionId: options.sessionId ?? null,
-    imported: options.provenance === "imported",
-    attempts: Array.isArray(options.attempts) ? options.attempts : []
+    latestReportPath: options2.latestReportPath ?? paths.report,
+    latestBackendPath: options2.latestBackendPath ?? paths.backend,
+    materials: options2.materials,
+    reportSha256: options2.reportSha256,
+    sessionId: options2.sessionId ?? null,
+    imported: options2.provenance === "imported",
+    attempts: Array.isArray(options2.attempts) ? options2.attempts : []
   };
 }
 function nextAttemptNumber(roundRecord) {
@@ -20187,17 +20473,17 @@ function nextAttemptNumber(roundRecord) {
   const max = attempts.reduce((current, attempt) => Number.isInteger(attempt?.attempt) && attempt.attempt > current ? attempt.attempt : current, 0);
   return max + 1;
 }
-function makeAttemptRecord(options) {
-  const paths = roundAttemptPaths(options.reviewId, options.round, options.attempt);
+function makeAttemptRecord(options2) {
+  const paths = roundAttemptPaths(options2.reviewId, options2.round, options2.attempt);
   return {
-    attempt: options.attempt,
-    status: options.status,
-    provenance: options.provenance,
-    createdAt: options.createdAt,
+    attempt: options2.attempt,
+    status: options2.status,
+    provenance: options2.provenance,
+    createdAt: options2.createdAt,
     reportPath: paths.report,
     backendPath: paths.backend,
-    reportSha256: options.reportSha256,
-    sessionId: options.sessionId ?? null
+    reportSha256: options2.reportSha256,
+    sessionId: options2.sessionId ?? null
   };
 }
 function upsertRound(record, roundRecord) {
@@ -20208,8 +20494,8 @@ function recordStatusFromRound(roundRecord) {
   if (roundRecord.provenance === "imported") return "imported";
   return roundRecord.status;
 }
-function updateRecordForRound(record, roundRecord, options = {}) {
-  const sessionId = typeof options.sessionId === "string" && options.sessionId.trim() ? options.sessionId : record.session?.sessionId ?? null;
+function updateRecordForRound(record, roundRecord, options2 = {}) {
+  const sessionId = typeof options2.sessionId === "string" && options2.sessionId.trim() ? options2.sessionId : record.session?.sessionId ?? null;
   return {
     ...record,
     venue: roundRecord.venue ?? record.venue ?? null,
@@ -20223,23 +20509,23 @@ function updateRecordForRound(record, roundRecord, options = {}) {
     rounds: upsertRound(record, roundRecord)
   };
 }
-function newRecord(options) {
+function newRecord(options2) {
   return {
     schema: REVIEW_RECORD_SCHEMA,
-    id: options.reviewId,
-    projectRoot: options.projectRoot,
-    venue: options.venue ?? null,
-    createdAt: options.createdAt,
-    updatedAt: options.updatedAt,
+    id: options2.reviewId,
+    projectRoot: options2.projectRoot,
+    venue: options2.venue ?? null,
+    createdAt: options2.createdAt,
+    updatedAt: options2.updatedAt,
     status: "pending",
     currentRound: 0,
     session: { backend: DOVE_REVIEW_BACKEND_ID, sessionId: null },
     rounds: []
   };
 }
-function localBackendFailure(error, options = {}) {
+function localBackendFailure(error, options2 = {}) {
   const message = error instanceof Error ? error.message : String(error);
-  const now = exactIsoTimestamp6(options.now ?? /* @__PURE__ */ new Date());
+  const now = exactIsoTimestamp6(options2.now ?? /* @__PURE__ */ new Date());
   return {
     schema: "dove.review.backend.v1",
     backend: LOCAL_BACKEND_ID,
@@ -20249,13 +20535,13 @@ function localBackendFailure(error, options = {}) {
     error: message
   };
 }
-function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, options = {}) {
-  const now = exactIsoTimestamp6(options.now ?? /* @__PURE__ */ new Date());
-  const round = options.round;
+function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, options2 = {}) {
+  const now = exactIsoTimestamp6(options2.now ?? /* @__PURE__ */ new Date());
+  const round = options2.round;
   const reportSha = sha2567(reportBytes);
   const status = backend.status === "completed" ? "completed" : "failed";
   const existingRound = Array.isArray(record.rounds) ? record.rounds.find((item) => item.round === round) : null;
-  const appendAttempt = options.preserveCurrentRoundReturn === true && existingRound;
+  const appendAttempt = options2.preserveCurrentRoundReturn === true && existingRound;
   const paths = appendAttempt ? roundAttemptPaths(record.id, round, nextAttemptNumber(existingRound)) : roundPaths(record.id, round);
   const attempts = appendAttempt ? [
     ...Array.isArray(existingRound.attempts) ? existingRound.attempts : [],
@@ -20284,7 +20570,7 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
     status,
     provenance: "runtime",
     venue: snapshot.venue ?? record.venue,
-    createdAt: options.roundCreatedAt ?? now,
+    createdAt: options2.roundCreatedAt ?? now,
     updatedAt: now,
     materials: snapshot.materials,
     reportSha256: reportSha,
@@ -20294,14 +20580,14 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
     attempts
   });
   const nextRecord = updateRecordForRound(record, roundRecord, { sessionId: backend.sessionId });
-  const recordState = options.recordExpectedState ?? fileState(projectRoot, reviewPath(record.id), options);
+  const recordState = options2.recordExpectedState ?? fileState(projectRoot, reviewPath(record.id), options2);
   const writeEntries = [
     { relativePath: paths.report, content: reportBytes, expectedState: absentFileState() },
     { relativePath: paths.backend, content: serializeJson(backend), encoding: "utf8", expectedState: absentFileState() },
     { relativePath: reviewPath(record.id), content: serializeJson(nextRecord), encoding: "utf8", expectedState: recordState }
   ];
   if (!appendAttempt) writeEntries.unshift({ relativePath: roundPaths(record.id, round).snapshot, content: serializeJson(snapshot), encoding: "utf8", expectedState: absentFileState() });
-  writeReviewFiles(projectRoot, writeEntries, options);
+  writeReviewFiles(projectRoot, writeEntries, options2);
   return { record: nextRecord, round: roundRecord, reportPath: paths.report, backendPath: paths.backend, snapshotPath: roundPaths(record.id, round).snapshot };
 }
 function sessionIdOrThrow(record) {
@@ -20316,12 +20602,12 @@ function assertCurrentRoundCanUseRuntime(record) {
   if (current.provenance !== "runtime") throw new Error(`Dove review ${record.id} current round is ${current.provenance}; import another return or start a new runtime review id instead of resuming runtime continuity from imported material.`);
   return current;
 }
-function stateRootOptions(options = {}) {
+function stateRootOptions(options2 = {}) {
   return {
-    fsOps: options.fsOps ?? fs17,
-    env: options.env ?? process.env,
-    ...options.stateRoot ? { stateRoot: options.stateRoot } : {},
-    ...options.projectRoot ? { projectRoot: options.projectRoot } : {}
+    fsOps: options2.fsOps ?? fs18,
+    env: options2.env ?? process.env,
+    ...options2.stateRoot ? { stateRoot: options2.stateRoot } : {},
+    ...options2.projectRoot ? { projectRoot: options2.projectRoot } : {}
   };
 }
 function ensureLockRoot(stateRootFs) {
@@ -20340,9 +20626,9 @@ function ensureLockRoot(stateRootFs) {
   }
   return lockRoot;
 }
-function acquireReviewMutationLock(reviewId, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
-  const stateRoot = resolveReviewStateRoot(stateRootOptions(options));
+function acquireReviewMutationLock(reviewId, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs18;
+  const stateRoot = resolveReviewStateRoot(stateRootOptions(options2));
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   const lockRoot = ensureLockRoot(stateRootFs);
   const lockPath = `${lockRoot}/${normalizeReviewId(reviewId)}.lock`;
@@ -20361,8 +20647,8 @@ function acquireReviewMutationLock(reviewId, options = {}) {
     }
   };
 }
-function withReviewMutationLock(reviewId, options, callback) {
-  const lock = acquireReviewMutationLock(reviewId, options);
+function withReviewMutationLock(reviewId, options2, callback) {
+  const lock = acquireReviewMutationLock(reviewId, options2);
   try {
     return callback();
   } finally {
@@ -20410,45 +20696,45 @@ function publicReviewResult(kind, projectRoot, review, round, extras = {}) {
     ...extras
   };
 }
-function handoffReview(options = {}) {
-  const fsOps = options.fsOps ?? fs17;
-  const projectRoot = normalizeProject(options.project, options);
-  const reviewId = normalizeReviewId(options.id ?? createReviewId({ now: options.now }));
-  return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
+function handoffReview(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs18;
+  const projectRoot = normalizeProject(options2.project, options2);
+  const reviewId = normalizeReviewId(options2.id ?? createReviewId({ now: options2.now }));
+  return withReviewMutationLock(reviewId, { ...options2, projectRoot }, () => {
     const existingRecord = readReviewRecordWithState(projectRoot, reviewId, { fsOps });
     if (existingRecord.record !== null) throw new Error(`Dove review record already exists: ${reviewPath(reviewId)}. Use resume or rerun.`);
     const reviewDirectoryState = fileState(projectRoot, reviewBasePath(reviewId), { fsOps });
     if (reviewDirectoryState.exists) throw new Error(`Dove review path already exists without a valid record: ${reviewBasePath(reviewId)}.`);
-    const createdAt = exactIsoTimestamp6(options.now ?? /* @__PURE__ */ new Date());
-    const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round: 1, venue: options.venue, materials: options.materials, now: createdAt, fsOps });
-    const workspace = prepareReviewWorkspace({ reviewId, files, ...stateRootOptions({ ...options, projectRoot }) });
-    const sessionId = options.sessionId ?? crypto8.randomUUID();
-    const prompt = promptForRound({ operation: "handoff", reviewId, round: 1, venue: options.venue, snapshot });
+    const createdAt = exactIsoTimestamp6(options2.now ?? /* @__PURE__ */ new Date());
+    const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round: 1, venue: options2.venue, materials: options2.materials, now: createdAt, fsOps });
+    const workspace = prepareReviewWorkspace({ reviewId, files, ...stateRootOptions({ ...options2, projectRoot }) });
+    const sessionId = options2.sessionId ?? crypto8.randomUUID();
+    const prompt = promptForRound({ operation: "handoff", reviewId, round: 1, venue: options2.venue, snapshot });
     const outcome = runClaudeReviewBackend({
       workspaceRoot: workspace.workspaceRoot,
       prompt,
       session: { sessionId },
-      claudeCommand: options.claudeCommand,
-      env: options.env,
-      spawnSync: options.spawnSync,
-      timeout: options.timeout
+      claudeCommand: options2.claudeCommand,
+      env: options2.env,
+      spawnSync: options2.spawnSync,
+      timeout: options2.timeout
     });
-    const record = newRecord({ reviewId, projectRoot, venue: options.venue, createdAt, updatedAt: createdAt });
+    const record = newRecord({ reviewId, projectRoot, venue: options2.venue, createdAt, updatedAt: createdAt });
     const reportBytes = reportBytesForOutcome(outcome);
     try {
-      const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round: 1, roundCreatedAt: createdAt, recordExpectedState: existingRecord.expectedState });
+      const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options2, round: 1, roundCreatedAt: createdAt, recordExpectedState: existingRecord.expectedState });
       return publicReviewResult("handoff", projectRoot, written.record, written.round, { workspaceRoot: workspace.workspaceRoot });
     } catch (error) {
-      restorePreparedReviewWorkspace(workspace, stateRootOptions({ ...options, projectRoot }));
+      restorePreparedReviewWorkspace(workspace, stateRootOptions({ ...options2, projectRoot }));
       throw error;
     }
   });
 }
-function resumeReview(options = {}) {
-  const fsOps = options.fsOps ?? fs17;
-  const projectRoot = normalizeProject(options.project, options);
-  const reviewId = normalizeReviewId(options.id);
-  return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
+function resumeReview(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs18;
+  const projectRoot = normalizeProject(options2.project, options2);
+  const reviewId = normalizeReviewId(options2.id);
+  return withReviewMutationLock(reviewId, { ...options2, projectRoot }, () => {
     const { record, expectedState: expectedState3 } = requireReviewRecordWithState(projectRoot, reviewId, { fsOps });
     const sessionId = sessionIdOrThrow(record);
     const round = record.currentRound;
@@ -20458,37 +20744,37 @@ function resumeReview(options = {}) {
     let workspace;
     let outcome;
     try {
-      workspace = assertReviewWorkspaceMatchesSnapshot({ reviewId, snapshot, ...stateRootOptions({ ...options, projectRoot }) });
+      workspace = assertReviewWorkspaceMatchesSnapshot({ reviewId, snapshot, ...stateRootOptions({ ...options2, projectRoot }) });
       const prompt = promptForRound({ operation: "resume", reviewId, round, venue: record.venue, snapshot });
       outcome = runClaudeReviewBackend({
         workspaceRoot: workspace.workspaceRoot,
         prompt,
         session: { resumeSessionId: sessionId },
-        claudeCommand: options.claudeCommand,
-        env: options.env,
-        spawnSync: options.spawnSync,
-        timeout: options.timeout
+        claudeCommand: options2.claudeCommand,
+        env: options2.env,
+        spawnSync: options2.spawnSync,
+        timeout: options2.timeout
       });
     } catch (error) {
-      outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options) };
+      outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options2) };
     }
     const reportBytes = reportBytesForOutcome(outcome);
-    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round, roundCreatedAt: existingRound.createdAt ?? exactIsoTimestamp6(options.now ?? /* @__PURE__ */ new Date()), preserveCurrentRoundReturn: true, recordExpectedState: expectedState3 });
+    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options2, round, roundCreatedAt: existingRound.createdAt ?? exactIsoTimestamp6(options2.now ?? /* @__PURE__ */ new Date()), preserveCurrentRoundReturn: true, recordExpectedState: expectedState3 });
     return publicReviewResult("resume", projectRoot, written.record, written.round, { workspaceRoot: workspace?.workspaceRoot ?? null, latestReportPath: written.reportPath, latestBackendPath: written.backendPath });
   });
 }
-function rerunReview(options = {}) {
-  const fsOps = options.fsOps ?? fs17;
-  const projectRoot = normalizeProject(options.project, options);
-  const reviewId = normalizeReviewId(options.id);
-  return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
+function rerunReview(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs18;
+  const projectRoot = normalizeProject(options2.project, options2);
+  const reviewId = normalizeReviewId(options2.id);
+  return withReviewMutationLock(reviewId, { ...options2, projectRoot }, () => {
     const { record, expectedState: expectedState3 } = requireReviewRecordWithState(projectRoot, reviewId, { fsOps });
     const sessionId = sessionIdOrThrow(record);
     const round = record.currentRound + 1;
-    const createdAt = exactIsoTimestamp6(options.now ?? /* @__PURE__ */ new Date());
-    const venue = options.venue ?? record.venue ?? null;
-    const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round, venue, materials: options.materials, now: createdAt, fsOps });
-    const workspaceOptions = stateRootOptions({ ...options, projectRoot });
+    const createdAt = exactIsoTimestamp6(options2.now ?? /* @__PURE__ */ new Date());
+    const venue = options2.venue ?? record.venue ?? null;
+    const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round, venue, materials: options2.materials, now: createdAt, fsOps });
+    const workspaceOptions = stateRootOptions({ ...options2, projectRoot });
     const workspace = prepareReviewWorkspace({ reviewId, files, keepPreviousWorkspaceBackup: true, ...workspaceOptions });
     try {
       const prompt = promptForRound({ operation: "rerun", reviewId, round, venue, snapshot });
@@ -20496,13 +20782,13 @@ function rerunReview(options = {}) {
         workspaceRoot: workspace.workspaceRoot,
         prompt,
         session: { resumeSessionId: sessionId },
-        claudeCommand: options.claudeCommand,
-        env: options.env,
-        spawnSync: options.spawnSync,
-        timeout: options.timeout
+        claudeCommand: options2.claudeCommand,
+        env: options2.env,
+        spawnSync: options2.spawnSync,
+        timeout: options2.timeout
       });
       const reportBytes = reportBytesForOutcome(outcome);
-      const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round, roundCreatedAt: createdAt, recordExpectedState: expectedState3 });
+      const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options2, round, roundCreatedAt: createdAt, recordExpectedState: expectedState3 });
       finalizePreparedReviewWorkspace(workspace, workspaceOptions);
       return publicReviewResult("rerun", projectRoot, written.record, written.round, { workspaceRoot: workspace.workspaceRoot });
     } catch (error) {
@@ -20511,49 +20797,49 @@ function rerunReview(options = {}) {
     }
   });
 }
-function importFileBytes(filePath, options = {}) {
+function importFileBytes(filePath, options2 = {}) {
   if (typeof filePath !== "string" || !filePath.trim() || filePath.includes("\0")) throw new Error("dove review import requires --file <path>.");
-  const fsOps = options.fsOps ?? fs17;
-  const resolved = path19.resolve(options.cwd ?? process.cwd(), filePath);
+  const fsOps = options2.fsOps ?? fs18;
+  const resolved = path20.resolve(options2.cwd ?? process.cwd(), filePath);
   const stat = fsOps.lstatSync(resolved);
   if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`Dove review import file must be a regular non-symlink file: ${resolved}`);
   return { sourceFile: resolved, bytes: fsOps.readFileSync(resolved) };
 }
-function importedSnapshot(options) {
-  if (Array.isArray(options.materials) && options.materials.length > 0) {
+function importedSnapshot(options2) {
+  if (Array.isArray(options2.materials) && options2.materials.length > 0) {
     return createReviewSnapshot({
-      projectRoot: options.projectRoot,
-      reviewId: options.reviewId,
-      round: options.round,
-      venue: options.venue,
-      materials: options.materials,
-      now: options.createdAt,
-      fsOps: options.fsOps ?? fs17
+      projectRoot: options2.projectRoot,
+      reviewId: options2.reviewId,
+      round: options2.round,
+      venue: options2.venue,
+      materials: options2.materials,
+      now: options2.createdAt,
+      fsOps: options2.fsOps ?? fs18
     }).snapshot;
   }
   return {
     schema: IMPORTED_SNAPSHOT_SCHEMA,
-    reviewId: options.reviewId,
-    round: options.round,
-    projectRoot: options.projectRoot,
-    venue: options.venue ?? null,
-    createdAt: options.createdAt,
+    reviewId: options2.reviewId,
+    round: options2.round,
+    projectRoot: options2.projectRoot,
+    venue: options2.venue ?? null,
+    createdAt: options2.createdAt,
     imported: true,
     materials: []
   };
 }
-function importReviewReturn(options = {}) {
-  const fsOps = options.fsOps ?? fs17;
-  const projectRoot = normalizeProject(options.project, options);
-  const reviewId = normalizeReviewId(options.id);
-  return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
+function importReviewReturn(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs18;
+  const projectRoot = normalizeProject(options2.project, options2);
+  const reviewId = normalizeReviewId(options2.id);
+  return withReviewMutationLock(reviewId, { ...options2, projectRoot }, () => {
     const { record: existing, expectedState: expectedState3 } = readReviewRecordWithState(projectRoot, reviewId, { fsOps });
     if (existing === null && fileState(projectRoot, reviewBasePath(reviewId), { fsOps }).exists) throw new Error(`Dove review path already exists without a valid record: ${reviewBasePath(reviewId)}.`);
-    const createdAt = exactIsoTimestamp6(options.now ?? /* @__PURE__ */ new Date());
+    const createdAt = exactIsoTimestamp6(options2.now ?? /* @__PURE__ */ new Date());
     const round = existing ? existing.currentRound + 1 : 1;
-    const venue = options.venue ?? existing?.venue ?? null;
-    const { sourceFile, bytes } = importFileBytes(options.file, { fsOps, cwd: options.cwd });
-    const snapshot = importedSnapshot({ projectRoot, reviewId, round, venue, materials: options.materials, createdAt, fsOps });
+    const venue = options2.venue ?? existing?.venue ?? null;
+    const { sourceFile, bytes } = importFileBytes(options2.file, { fsOps, cwd: options2.cwd });
+    const snapshot = importedSnapshot({ projectRoot, reviewId, round, venue, materials: options2.materials, createdAt, fsOps });
     const backend = {
       schema: "dove.review.backend.v1",
       backend: null,
@@ -20589,23 +20875,23 @@ function importReviewReturn(options = {}) {
       { relativePath: paths.report, content: bytes, expectedState: absentFileState() },
       { relativePath: paths.backend, content: serializeJson(backend), encoding: "utf8", expectedState: absentFileState() },
       { relativePath: reviewPath(reviewId), content: serializeJson(nextRecord), encoding: "utf8", expectedState: expectedState3 }
-    ], options);
+    ], options2);
     return publicReviewResult("import", projectRoot, nextRecord, roundRecord, { sourceFile });
   });
 }
-function reviewRecordsDirectory(projectRoot, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+function reviewRecordsDirectory(projectRoot, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs18;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const stat = anchor.tryLstat(".dove/reviews");
   if (!stat) return [];
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error("Dove review records directory must be a real directory: .dove/reviews");
   return anchor.readdir(".dove/reviews", { withFileTypes: true }).filter((entry) => !entry.name.startsWith(".") && entry.isDirectory() && !entry.isSymbolicLink()).map((entry) => entry.name).sort();
 }
-function inspectReviewStatus(options = {}) {
-  const fsOps = options.fsOps ?? fs17;
-  const projectRoot = normalizeProject(options.project, options);
-  if (options.id !== void 0 && options.id !== null) {
-    const reviewId = normalizeReviewId(options.id);
+function inspectReviewStatus(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs18;
+  const projectRoot = normalizeProject(options2.project, options2);
+  if (options2.id !== void 0 && options2.id !== null) {
+    const reviewId = normalizeReviewId(options2.id);
     const record = requireReviewRecord(projectRoot, reviewId, { fsOps });
     return {
       command: "status",
@@ -20633,297 +20919,95 @@ function inspectReviewStatus(options = {}) {
 
 // bin/dove.mjs
 var __filename2 = fileURLToPath4(import.meta.url);
-var __dirname2 = path20.dirname(__filename2);
-var PACKAGE_ROOT2 = path20.resolve(__dirname2, "..");
+var __dirname2 = path21.dirname(__filename2);
+var PACKAGE_ROOT2 = path21.resolve(__dirname2, "..");
 var PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
 if (isRunSupervisorInvocation(process6.argv.slice(2))) await runSupervisorMain(process6.argv.slice(2));
-var KNOWN_COMMANDS = /* @__PURE__ */ new Set(["init", "update", "reinstall", "uninstall", "doctor", "review", "run", "hook"]);
-function usage() {
-  console.log(`dove
-
-Usage:
-  dove --help
-  dove --version
-  dove init [--project <dir>] [--host <host>...] [--json|--format json]
-  dove update [--project <dir>] [--host <host>...] [--json|--format json]
-  dove reinstall [--project <dir>] [--json|--format json]
-  dove uninstall [--project <dir>] [--json|--format json]
-  dove doctor [--project <dir>] [--json|--format json]
-  dove review handoff --project <dir> --venue <venue> --material <path>... [--id <id>] [--json|--format json]
-  dove review status --project <dir> [--id <id>] [--json|--format json]
-  dove review resume --project <dir> --id <id> [--json|--format json]
-  dove review rerun --project <dir> --id <id> --material <path>... [--venue <venue>] [--json|--format json]
-  dove review import --project <dir> --id <id> --file <report.md> [--venue <venue>] [--material <path>...] [--json|--format json]
-  dove run start --project <dir> [--id <id>] [--group <name>] [--wall-time <duration>|--timeout-ms <ms>] [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--data <basis>] [--evaluator <basis>] [--resource-basis <basis>] [--kill-grace-ms <ms>] [--json|--format json] -- <command> [args...]
-  dove run status --project <dir> [--id <id>|--group <name>] [--json|--format json]
-  dove run resume --project <dir> --id <id> [--json|--format json]
-  dove run finalize --project <dir> --id <id> --metric-value <number> [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--decision <text>] [--note <text>] [--json|--format json]
-  dove run compare --project <dir> [--group <name>|--id <id>...] [--json|--format json]
-  dove hook session-start --project <dir>
-  dove hook user-prompt-submit --project <dir>
-  dove hook statusline --project <dir>
-
-The runtime CLI manages project integration, diagnostics, host lifecycle hooks, the explicit isolated dove-review handoff runtime, and detached experiment run receipts under \`.dove/runs/<id>/\`. Research work uses one Dove agent and nine optional capability Skills with ordinary Markdown research documents. Project initialization creates the minimal researcher-owned \`.dove/research/RESEARCH.md\` entry, but it does not create research progress, a Mission, or a scientific conclusion. Dove does not install or expose a Stop hook.
-`);
+function projectOption2(options2) {
+  return options2.project ?? void 0;
 }
-function readFlagValue(args2, flag) {
-  const index = args2.indexOf(flag);
-  return index >= 0 && index + 1 < args2.length ? args2[index + 1] : null;
+function selectedHosts(options2) {
+  return options2.host ?? void 0;
 }
-function readFlagValues(args2, flag) {
-  const values = [];
-  for (let index = 0; index < args2.length; index += 1) {
-    if (args2[index] === flag && index + 1 < args2.length) {
-      values.push(args2[index + 1]);
-      index += 1;
-    }
-  }
-  return values;
+function reviewMaterials(options2) {
+  return Array.isArray(options2.material) && options2.material.length > 0 ? options2.material : void 0;
 }
-function projectFlag(args2) {
-  return readFlagValue(args2, "--project") ?? void 0;
+function runIds(options2) {
+  if (Array.isArray(options2.id)) return options2.id.length > 0 ? options2.id : void 0;
+  return options2.id === void 0 ? void 0 : [options2.id];
 }
-function selectedHosts(args2) {
-  const raw = readFlagValues(args2, "--host");
-  if (raw.length === 0) return void 0;
-  const requested = raw.flatMap((value2) => value2.split(",").map((item) => item.trim()).filter(Boolean));
-  return [...new Set(requested)];
-}
-function reviewMaterials(args2) {
-  const values = readFlagValues(args2, "--material");
-  return values.length === 0 ? void 0 : values;
-}
-function reviewIdFlag(args2) {
-  return readFlagValue(args2, "--id") ?? void 0;
-}
-function reviewVenueFlag(args2) {
-  return readFlagValue(args2, "--venue") ?? void 0;
-}
-function reviewFileFlag(args2) {
-  return readFlagValue(args2, "--file") ?? void 0;
-}
-function runIdFlag(args2) {
-  return readFlagValue(args2, "--id") ?? void 0;
-}
-function runIds(args2) {
-  const values = readFlagValues(args2, "--id");
-  return values.length === 0 ? void 0 : values;
-}
-function runGroupFlag(args2) {
-  return readFlagValue(args2, "--group") ?? void 0;
-}
-function runCommonFlags(args2) {
+function runCommonOptions(options2) {
   return {
-    project: projectFlag(args2) ?? process6.cwd(),
-    id: runIdFlag(args2),
-    group: runGroupFlag(args2),
-    wallTime: readFlagValue(args2, "--wall-time") ?? void 0,
-    timeoutMs: readFlagValue(args2, "--timeout-ms") ?? void 0,
-    killGraceMs: readFlagValue(args2, "--kill-grace-ms") ?? void 0,
-    metricName: readFlagValue(args2, "--metric-name") ?? void 0,
-    direction: readFlagValue(args2, "--direction") ?? void 0,
-    metricUnit: readFlagValue(args2, "--metric-unit") ?? void 0,
-    data: readFlagValue(args2, "--data") ?? void 0,
-    evaluator: readFlagValue(args2, "--evaluator") ?? void 0,
-    resourceBasis: readFlagValue(args2, "--resource-basis") ?? void 0,
-    decision: readFlagValue(args2, "--decision") ?? void 0,
-    note: readFlagValue(args2, "--note") ?? void 0,
-    metricValue: readFlagValue(args2, "--metric-value") ?? void 0,
+    project: projectOption2(options2) ?? process6.cwd(),
+    id: Array.isArray(options2.id) ? void 0 : options2.id,
+    group: options2.group,
+    wallTime: options2.wallTime,
+    timeoutMs: options2.timeoutMs,
+    killGraceMs: options2.killGraceMs,
+    metricName: options2.metricName,
+    direction: options2.direction,
+    metricUnit: options2.metricUnit,
+    data: options2.data,
+    evaluator: options2.evaluator,
+    resourceBasis: options2.resourceBasis,
+    decision: options2.decision,
+    note: options2.note,
+    metricValue: options2.metricValue,
     cwd: process6.cwd(),
     executablePath: __filename2
   };
 }
-function wantsJson(args2) {
-  return args2.includes("--json") || readFlagValue(args2, "--format") === "json";
+function wantsJson(options2 = {}) {
+  return options2.json === true || options2.format === "json";
 }
 function integrationResult(result) {
   const { manifest, ...publicFields } = result;
   return publicFields;
 }
-function writeIntegrationResult(command3, result, args2) {
-  if (wantsJson(args2)) console.log(JSON.stringify(result, null, 2));
+function writeJson(value2) {
+  console.log(JSON.stringify(value2, null, 2));
+}
+function writeIntegrationResult(command3, result, options2) {
+  if (wantsJson(options2)) writeJson(result);
   else console.log(renderProjectIntegrationResult(command3, result, { stream: process6.stdout, env: process6.env }));
 }
-function writeLifecycleResult(command3, result, args2) {
-  if (wantsJson(args2)) console.log(JSON.stringify(integrationResult(result), null, 2));
+function writeLifecycleResult(command3, result, options2) {
+  if (wantsJson(options2)) writeJson(integrationResult(result));
   else console.log(renderDoveLifecycleResult(command3, result, { stream: process6.stdout, env: process6.env }));
 }
-function terminalSafeText3(value2) {
-  return String(value2 ?? "").replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
-}
-function renderReviewResult(result) {
-  if (result.command === "status" && Array.isArray(result.reviews)) {
-    const lines = ["Dove review \u72B6\u6001", "", `\u9879\u76EE\uFF1A${terminalSafeText3(result.project)}`];
-    if (result.reviews.length === 0) lines.push("", "\u5C1A\u65E0 .dove/reviews/** \u8BB0\u5F55\u3002");
-    else lines.push("", ...result.reviews.map((review) => `- ${terminalSafeText3(review.reviewId)}: ${terminalSafeText3(review.status)} round ${review.currentRound}${review.sessionId ? ` session ${terminalSafeText3(review.sessionId)}` : ""}`));
-    return lines.join("\n");
-  }
-  if (result.command === "status") {
-    return [
-      "Dove review \u72B6\u6001",
-      "",
-      `\u9879\u76EE\uFF1A${terminalSafeText3(result.project)}`,
-      `Review\uFF1A${terminalSafeText3(result.reviewId)}`,
-      `\u72B6\u6001\uFF1A${terminalSafeText3(result.status)}`,
-      `\u5F53\u524D\u8F6E\u6B21\uFF1A${terminalSafeText3(result.currentRound)}`,
-      `Session\uFF1A${terminalSafeText3(result.sessionId ?? "\u65E0")}`,
-      "",
-      ...(result.rounds ?? []).map((round) => {
-        const latest = round.latestReportPath ?? round.reportPath;
-        const canonical = latest === round.reportPath ? "" : `\uFF1B\u539F\u59CB\u62A5\u544A\u4FDD\u7559\u5728 ${terminalSafeText3(round.reportPath)}`;
-        return `- round ${round.round}: ${round.status} (${round.provenance}) ${terminalSafeText3(latest)}${canonical}`;
-      })
-    ].join("\n");
-  }
-  const heading = {
-    handoff: "Dove review handoff \u5DF2\u5B8C\u6210",
-    resume: "Dove review \u5DF2\u6062\u590D\u5E76\u66F4\u65B0\u5F53\u524D\u8F6E\u6B21",
-    rerun: "Dove review \u5DF2\u5728\u540C\u4E00 reviewer session \u5F00\u59CB\u65B0\u5B8C\u6574\u8F6E\u6B21",
-    import: "Dove review return \u5DF2\u5BFC\u5165"
-  }[result.command] ?? "Dove review \u5B8C\u6210";
-  const materialLines2 = (result.materials ?? []).map((material) => `- ${material.path} (${material.size} bytes)`);
-  return [
-    heading,
-    "",
-    `\u9879\u76EE\uFF1A${terminalSafeText3(result.project)}`,
-    `Review\uFF1A${terminalSafeText3(result.reviewId)}`,
-    `\u8F6E\u6B21\uFF1A${terminalSafeText3(result.round)}`,
-    `\u72B6\u6001\uFF1A${terminalSafeText3(result.status)}`,
-    `\u6765\u6E90\uFF1A${terminalSafeText3(result.provenance)}`,
-    `Session\uFF1A${terminalSafeText3(result.sessionId ?? "\u65E0")}`,
-    `\u62A5\u544A\uFF1A${terminalSafeText3(result.latestReportPath ?? result.reportPath)}`,
-    `Backend\uFF1A${terminalSafeText3(result.latestBackendPath ?? result.backendPath)}`,
-    "",
-    "\u51BB\u7ED3\u6750\u6599\uFF1A",
-    ...materialLines2.length > 0 ? materialLines2 : ["- \u65E0\uFF1B\u8FD9\u662F\u5BFC\u5165\u7684\u5916\u90E8\u8FD4\u56DE\u8BB0\u5F55"],
-    "",
-    result.command === "import" ? "\u5BFC\u5165\u5185\u5BB9\u6309\u7528\u6237\u63D0\u4F9B\u6587\u4EF6\u539F\u6837\u4FDD\u5B58\uFF1B\u672A\u58F0\u79F0\u7531 Dove runtime reviewer \u751F\u6210\u3002" : "Reviewer \u53EA\u63A5\u6536\u672C\u8F6E\u51BB\u7ED3\u6750\u6599\uFF1B\u4E0D\u4F1A\u8BFB\u53D6\u79C1\u6709 transcript\u3002"
-  ].join("\n");
-}
-function writeReviewResult(result, args2) {
-  if (wantsJson(args2)) console.log(JSON.stringify(result, null, 2));
+function writeReviewResult(result, options2) {
+  if (wantsJson(options2)) writeJson(result);
   else console.log(renderReviewResult(result));
 }
-function renderRunMetric(metric) {
-  if (!metric || metric.name === null || metric.name === void 0) return "\u672A\u6307\u5B9A";
-  const value2 = Object.hasOwn(metric, "value") ? `=${terminalSafeText3(metric.value)}` : "";
-  return `${terminalSafeText3(metric.name)} ${terminalSafeText3(metric.direction)}${metric.unit ? ` ${terminalSafeText3(metric.unit)}` : ""}${value2}`;
-}
-function renderRunResult(result) {
-  if (result.command === "start") {
-    return [
-      "Dove run \u5DF2\u542F\u52A8",
-      "",
-      `\u9879\u76EE\uFF1A${terminalSafeText3(result.project)}`,
-      `Run\uFF1A${terminalSafeText3(result.runId)}`,
-      `\u72B6\u6001\uFF1A${terminalSafeText3(result.status)}`,
-      `Supervisor PID\uFF1A${terminalSafeText3(result.supervisorPid)}`,
-      `\u547D\u4EE4\uFF1A${terminalSafeText3(result.argv.join(" "))}`,
-      `\u5DE5\u4F5C\u76EE\u5F55\uFF1A${terminalSafeText3(result.cwd)}`,
-      `Journal\uFF1A${terminalSafeText3(result.paths.journalPath)}`,
-      `stdout\uFF1A${terminalSafeText3(result.paths.stdoutPath)}`,
-      `stderr\uFF1A${terminalSafeText3(result.paths.stderrPath)}`,
-      "",
-      "Run \u8BB0\u5F55\u53EA\u8BC1\u660E\u8BE5\u547D\u4EE4\u7684\u672C\u5730\u6267\u884C\u6536\u636E\uFF1B\u79D1\u7814\u7ED3\u8BBA\u4ECD\u9700 Dove \u6839\u636E\u771F\u5B9E\u7ED3\u679C\u5224\u65AD\u3002"
-    ].join("\n");
-  }
-  if (result.command === "status" && Array.isArray(result.runs)) {
-    const lines = ["Dove run \u72B6\u6001", "", `\u9879\u76EE\uFF1A${terminalSafeText3(result.project)}`];
-    if (result.group) lines.push(`Group\uFF1A${terminalSafeText3(result.group)}`);
-    if (result.runs.length === 0) lines.push("", "\u5C1A\u65E0\u5339\u914D\u7684 .dove/runs/** \u8BB0\u5F55\u3002");
-    else lines.push("", ...result.runs.map((run) => `- ${terminalSafeText3(run.runId)}: ${terminalSafeText3(run.status)}${run.group ? ` group ${terminalSafeText3(run.group)}` : ""}${run.finalized ? ` metric ${renderRunMetric(run.metric)}` : ""}`));
-    return lines.join("\n");
-  }
-  if (result.command === "status") {
-    return [
-      "Dove run \u72B6\u6001",
-      "",
-      `\u9879\u76EE\uFF1A${terminalSafeText3(result.project)}`,
-      `Run\uFF1A${terminalSafeText3(result.runId)}`,
-      `\u72B6\u6001\uFF1A${terminalSafeText3(result.status)}`,
-      `Lifecycle\uFF1A${terminalSafeText3(result.lifecycle)}`,
-      `Terminal\uFF1A${terminalSafeText3(result.terminal)}`,
-      `Finalized\uFF1A${terminalSafeText3(result.finalized)}`,
-      `Exit\uFF1A${terminalSafeText3(result.exitCode ?? "\u65E0")}`,
-      `Signal\uFF1A${terminalSafeText3(result.signal ?? "\u65E0")}`,
-      `Metric\uFF1A${renderRunMetric(result.metric)}`,
-      `Journal\uFF1A${terminalSafeText3(result.paths.journalPath)}`,
-      `stdout\uFF1A${terminalSafeText3(result.paths.stdoutPath)}`,
-      `stderr\uFF1A${terminalSafeText3(result.paths.stderrPath)}`,
-      "",
-      "PID \u53EA\u4F5C\u4E3A\u89C2\u5BDF\u4FE1\u53F7\uFF0C\u4E0D\u662F\u5F3A\u8EAB\u4EFD\u3002status \u53EA\u8BFB\uFF0C\u4E0D\u4F1A\u4FEE\u590D\u6216\u8FFD\u52A0\u8BB0\u5F55\u3002"
-    ].join("\n");
-  }
-  if (result.command === "resume") {
-    return [
-      "Dove run resume",
-      "",
-      `Run\uFF1A${terminalSafeText3(result.run?.runId)}`,
-      `\u72B6\u6001\uFF1A${terminalSafeText3(result.status)}`,
-      `\u52A8\u4F5C\uFF1A${terminalSafeText3(result.action)}`,
-      `\u5199\u5165\uFF1A${terminalSafeText3(result.write)}`,
-      `\u8BF4\u660E\uFF1A${terminalSafeText3(result.reason)}`
-    ].join("\n");
-  }
-  if (result.command === "finalize") {
-    return [
-      "Dove run \u5DF2 finalize",
-      "",
-      `Run\uFF1A${terminalSafeText3(result.summary.runId)}`,
-      `Metric\uFF1A${renderRunMetric(result.event.metric)}`,
-      `Decision\uFF1A${terminalSafeText3(result.event.decision ?? "\u65E0")}`,
-      `Note\uFF1A${terminalSafeText3(result.event.note ?? "\u65E0")}`
-    ].join("\n");
-  }
-  if (result.command === "compare") {
-    if (!result.comparable) {
-      return [
-        "Dove run compare",
-        "",
-        `Comparable\uFF1Afalse`,
-        `\u5B57\u6BB5\uFF1A${terminalSafeText3((result.fields ?? []).join(", ") || "\u65E0")}`,
-        "\u53EA\u6BD4\u8F83 terminal \u4E14 finalized\uFF0C\u5E76\u4E14 metric\u3001budget\u3001data\u3001evaluator\u3001resource basis \u5B8C\u5168\u4E00\u81F4\u7684 runs\u3002"
-      ].join("\n");
-    }
-    return [
-      "Dove run compare",
-      "",
-      `Comparable\uFF1Atrue`,
-      `Metric\uFF1A${renderRunMetric(result.basis.metric)}`,
-      "",
-      ...result.ranking.map((item) => `${item.rank}. ${terminalSafeText3(item.runId)} ${terminalSafeText3(item.metricValue)} delta ${terminalSafeText3(item.deltaFromBest)}`)
-    ].join("\n");
-  }
-  return JSON.stringify(result, null, 2);
-}
-function writeRunResult(result, args2) {
-  if (wantsJson(args2)) console.log(JSON.stringify(result, null, 2));
+function writeRunResult(result, options2) {
+  if (wantsJson(options2)) writeJson(result);
   else console.log(renderRunResult(result));
 }
-function operationalFailure(error, args2 = []) {
+function operationalFailure(error, jsonOrOptions = {}) {
   const message = error instanceof Error ? error.message : String(error);
-  if (wantsJson(args2)) console.error(JSON.stringify({ status: "blocked", message }, null, 2));
-  else console.error(message);
+  const jsonRequested = typeof jsonOrOptions === "boolean" ? jsonOrOptions : wantsJson(jsonOrOptions);
+  if (jsonRequested) console.error(JSON.stringify({ status: "blocked", message }, null, 2));
+  else console.error(`Dove \u4E0D\u80FD\u7EE7\u7EED\uFF1A${message}`);
 }
-function inspect(target, options = {}) {
+function inspect(target, options2 = {}) {
   return inspectProjectDoctor(target, {
     ...PACKAGE_OPTIONS,
     packageRoot: PACKAGE_ROOT2,
     executablePath: __filename2,
     claudeCommand: process6.env.DOVE_CLAUDE_COMMAND || "claude",
-    ...options
+    ...options2
   });
 }
 function assertRecognizedHookManifest(manifest) {
   const compatibility = classifyPackageCompatibility(manifest.package, { name: PACKAGE_NAME, version: PACKAGE_VERSION });
   if (compatibility === "identity-mismatch") {
-    throw new Error("Dove hook execution requires matching package identity. Run dove doctor --json before making changes.");
+    throw new Error("Dove hook \u6267\u884C\u9700\u8981\u5339\u914D\u7684 package identity\u3002\u8BF7\u5148\u8FD0\u884C dove doctor --json\uFF0C\u518D\u51B3\u5B9A\u662F\u5426\u4FEE\u6539\u3002");
   }
   if (["newer", "invalid-version"].includes(compatibility)) {
-    throw new Error("Dove hook execution refuses project integration from a newer or invalid package version. Run dove doctor --json before making changes.");
+    throw new Error("Dove hook \u62D2\u7EDD\u6765\u81EA\u66F4\u65B0\u6216\u65E0\u6548 package version \u7684\u9879\u76EE\u96C6\u6210\u3002\u8BF7\u5148\u8FD0\u884C dove doctor --json\uFF0C\u518D\u51B3\u5B9A\u662F\u5426\u4FEE\u6539\u3002");
   }
   if (!manifest.hosts.includes("claude")) {
-    throw new Error("Dove project hooks require Claude host integration. Run dove update --host claude for this project.");
+    throw new Error("Dove project hooks \u9700\u8981 Claude host integration\u3002\u8BF7\u5728\u8FD9\u4E2A\u9879\u76EE\u4E2D\u8FD0\u884C dove update --host claude\u3002");
   }
 }
 function prepareHookProject(project) {
@@ -20934,9 +21018,9 @@ function prepareHookProject(project) {
 }
 function assertHookPayloadProject(payload, target) {
   if (payload?.cwd === void 0) return;
-  if (typeof payload.cwd !== "string" || !payload.cwd.trim()) throw new Error("Dove hook cwd must name a directory in the initialized project.");
+  if (typeof payload.cwd !== "string" || !payload.cwd.trim()) throw new Error("Dove hook cwd \u5FC5\u987B\u6307\u5411\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u4E2D\u7684\u76EE\u5F55\u3002");
   const cwdRoot = resolveInstalledProjectRoot(payload.cwd, { hostIds: PROJECT_HOST_IDS });
-  if (cwdRoot !== target) throw new Error("Dove hook cwd does not belong to the declared initialized project.");
+  if (cwdRoot !== target) throw new Error("Dove hook cwd \u4E0D\u5C5E\u4E8E\u58F0\u660E\u7684\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u3002");
 }
 async function readStdin() {
   let input = "";
@@ -20948,7 +21032,7 @@ var parsed;
 try {
   parsed = parseDoveCli(process6.argv.slice(2));
 } catch (error) {
-  operationalFailure(error, process6.argv.slice(2));
+  operationalFailure(error, error?.jsonRequested === true);
   process6.exit(1);
 }
 function inspectHome(target) {
@@ -20962,7 +21046,8 @@ function homeState(inspection) {
   return "blocked";
 }
 var command2 = parsed.command;
-var args = parsed.args;
+var subcommand = parsed.subcommand;
+var options = parsed.options;
 if (!command2) {
   try {
     if (isInteractiveTerminal(process6.stdin) && isInteractiveTerminal(process6.stdout)) {
@@ -20988,25 +21073,21 @@ if (!command2) {
     }
     process6.exit(0);
   } catch (error) {
-    operationalFailure(error, args);
+    operationalFailure(error, options);
     process6.exit(1);
   }
 }
 if (command2 === "--help") {
-  usage();
+  process6.stdout.write(renderDoveHelp());
   process6.exit(0);
 }
 if (command2 === "--version") {
   console.log(PACKAGE_VERSION);
   process6.exit(0);
 }
-if (!KNOWN_COMMANDS.has(command2)) {
-  usage();
-  process6.exit(1);
-}
 try {
   if (command2 === "init") {
-    const requestedProject = projectFlag(args);
+    const requestedProject = projectOption2(options);
     let target;
     try {
       target = resolveProjectRootForInit(requestedProject, { cwd: process6.cwd(), hostIds: PROJECT_HOST_IDS });
@@ -21014,9 +21095,9 @@ try {
       if (!(error instanceof Error) || !error.message.includes("Dove project integration is already initialized at")) throw error;
       target = resolveInstalledProjectRoot(requestedProject ?? process6.cwd());
       const manifest = readProjectInstallationManifest(target, { hostIds: PROJECT_HOST_IDS });
-      const requestedHosts = selectedHosts(args);
+      const requestedHosts = selectedHosts(options);
       if (requestedHosts !== void 0 && JSON.stringify([...requestedHosts].sort()) !== JSON.stringify([...manifest.hosts].sort())) {
-        throw new Error("Dove is already initialized with a different host selection. Use dove update --host <host> to change it.");
+        throw new Error("Dove \u5DF2\u7ECF\u7528\u53E6\u4E00\u7EC4 host \u521D\u59CB\u5316\u3002\u8BF7\u4F7F\u7528 dove update --host <host> \u4FEE\u6539\u3002");
       }
       inspectProjectIntegration(target, PACKAGE_OPTIONS);
       writeIntegrationResult("init", {
@@ -21026,29 +21107,29 @@ try {
         writtenPaths: [],
         removedPaths: [],
         changedPaths: []
-      }, args);
+      }, options);
       process6.exit(0);
     }
-    const result = initializeProjectIntegration(target, { ...PACKAGE_OPTIONS, hosts: selectedHosts(args) });
-    writeIntegrationResult("init", integrationResult(result), args);
+    const result = initializeProjectIntegration(target, { ...PACKAGE_OPTIONS, hosts: selectedHosts(options) });
+    writeIntegrationResult("init", integrationResult(result), options);
     process6.exit(0);
   }
   if (command2 === "update") {
-    const target = projectFlag(args) ?? process6.cwd();
+    const target = projectOption2(options) ?? process6.cwd();
     const result = updateDoveLifecycle(target, {
       ...PACKAGE_OPTIONS,
-      hosts: selectedHosts(args),
+      hosts: selectedHosts(options),
       inspect
     });
-    writeIntegrationResult("update", integrationResult(result), args);
+    writeIntegrationResult("update", integrationResult(result), options);
     process6.exit(0);
   }
   if (command2 === "reinstall") {
-    const target = path20.resolve(projectFlag(args) ?? process6.cwd());
-    if (wantsJson(args)) {
+    const target = path21.resolve(projectOption2(options) ?? process6.cwd());
+    if (wantsJson(options)) {
       const preview2 = previewProjectCompleteReinstall(target, PACKAGE_OPTIONS);
       const { manifest, ...publicPreview } = preview2;
-      console.log(JSON.stringify(publicPreview, null, 2));
+      writeJson(publicPreview);
       process6.exit(0);
     }
     const color = terminalColorEnabled(process6.stdout, process6.env);
@@ -21065,14 +21146,14 @@ try {
       process6.exit(0);
     }
     const result = completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true, preview });
-    writeLifecycleResult("reinstall", result, args);
+    writeLifecycleResult("reinstall", result, options);
     process6.exit(0);
   }
   if (command2 === "uninstall") {
-    const target = path20.resolve(projectFlag(args) ?? process6.cwd());
+    const target = path21.resolve(projectOption2(options) ?? process6.cwd());
     const preview = previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS);
-    if (wantsJson(args)) {
-      console.log(JSON.stringify(preview, null, 2));
+    if (wantsJson(options)) {
+      writeJson(preview);
       process6.exit(0);
     }
     const color = terminalColorEnabled(process6.stdout, process6.env);
@@ -21088,24 +21169,23 @@ try {
       process6.exit(0);
     }
     const result = uninstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true, preview });
-    writeLifecycleResult("uninstall", result, args);
+    writeLifecycleResult("uninstall", result, options);
     process6.exit(0);
   }
   if (command2 === "doctor") {
-    const result = inspect(projectFlag(args) ?? process6.cwd());
-    if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
+    const result = inspect(projectOption2(options) ?? process6.cwd());
+    if (wantsJson(options)) writeJson(result);
     else console.log(renderDoveDoctor(result, { stream: process6.stdout, env: process6.env }));
     process6.exit(result.staticChecksPassed ? 0 : 1);
   }
   if (command2 === "review") {
-    const subcommand = parsed.positionals[0];
-    const project = projectFlag(args) ?? process6.cwd();
+    const project = projectOption2(options) ?? process6.cwd();
     const common2 = {
       project,
-      id: reviewIdFlag(args),
-      venue: reviewVenueFlag(args),
-      materials: reviewMaterials(args),
-      file: reviewFileFlag(args),
+      id: options.id,
+      venue: options.venue,
+      materials: reviewMaterials(options),
+      file: options.file,
       env: process6.env,
       cwd: process6.cwd()
     };
@@ -21115,50 +21195,48 @@ try {
     } else if (subcommand === "status") {
       result = inspectReviewStatus(common2);
     } else if (subcommand === "resume") {
-      if (!common2.id) throw new Error("dove review resume requires --id <review-id>.");
+      if (!common2.id) throw new Error("dove review resume \u9700\u8981 --id <review-id>\u3002");
       result = resumeReview(common2);
     } else if (subcommand === "rerun") {
-      if (!common2.id) throw new Error("dove review rerun requires --id <review-id>.");
+      if (!common2.id) throw new Error("dove review rerun \u9700\u8981 --id <review-id>\u3002");
       result = rerunReview(common2);
     } else if (subcommand === "import") {
-      if (!common2.id) throw new Error("dove review import requires --id <review-id>.");
-      if (!common2.file) throw new Error("dove review import requires --file <report.md>.");
+      if (!common2.id) throw new Error("dove review import \u9700\u8981 --id <review-id>\u3002");
+      if (!common2.file) throw new Error("dove review import \u9700\u8981 --file <report.md>\u3002");
       result = importReviewReturn(common2);
     } else {
-      throw new Error("dove review accepts only handoff, status, resume, rerun, or import.");
+      throw new Error("dove review \u53EA\u63A5\u53D7 handoff\u3001status\u3001resume\u3001rerun \u6216 import\u3002");
     }
-    writeReviewResult(result, args);
+    writeReviewResult(result, options);
     process6.exit(0);
   }
   if (command2 === "run") {
-    const subcommand = parsed.positionals[0];
-    const common2 = runCommonFlags(args);
+    const common2 = runCommonOptions(options);
     let result;
     if (subcommand === "start") {
-      result = await startDetachedRunSupervisor({ ...common2, argv: parsed.passthrough ?? [] });
+      result = await startDetachedRunSupervisor({ ...common2, argv: parsed.passthrough });
     } else if (subcommand === "status") {
       result = inspectRunStatus(common2);
     } else if (subcommand === "resume") {
-      if (!common2.id) throw new Error("dove run resume requires --id <run-id>.");
+      if (!common2.id) throw new Error("dove run resume \u9700\u8981 --id <run-id>\u3002");
       result = await resumeRun(common2);
     } else if (subcommand === "finalize") {
-      if (!common2.id) throw new Error("dove run finalize requires --id <run-id>.");
-      if (common2.metricValue === void 0) throw new Error("dove run finalize requires --metric-value <number>.");
+      if (!common2.id) throw new Error("dove run finalize \u9700\u8981 --id <run-id>\u3002");
+      if (common2.metricValue === void 0) throw new Error("dove run finalize \u9700\u8981 --metric-value <number>\u3002");
       result = await finalizeRunWithSupervisor(common2);
     } else if (subcommand === "compare") {
-      result = compareRuns({ ...common2, ids: runIds(args) });
+      result = compareRuns({ ...common2, ids: runIds(options) });
     } else {
-      throw new Error("dove run accepts only start, status, resume, finalize, or compare.");
+      throw new Error("dove run \u53EA\u63A5\u53D7 start\u3001status\u3001resume\u3001finalize \u6216 compare\u3002");
     }
-    writeRunResult(result, args);
+    writeRunResult(result, options);
     process6.exit(0);
   }
   if (command2 === "hook") {
-    const hookName = parsed.positionals[0];
-    if (!["session-start", "user-prompt-submit", "statusline"].includes(hookName)) throw new Error("dove hook accepts only session-start, user-prompt-submit, or statusline.");
-    if (projectFlag(args) === void 0) throw new Error(`dove hook ${hookName} requires --project <dir>.`);
+    const hookName = subcommand;
+    if (projectOption2(options) === void 0) throw new Error(`dove hook ${hookName} \u9700\u8981 --project <dir>\u3002`);
     const input = await readStdin();
-    const target = prepareHookProject(projectFlag(args));
+    const target = prepareHookProject(projectOption2(options));
     if (hookName === "statusline") {
       process6.stdout.write(`${target}
 `);
@@ -21176,6 +21254,6 @@ try {
     process6.exit(0);
   }
 } catch (error) {
-  operationalFailure(error, args);
+  operationalFailure(error, options);
   process6.exit(1);
 }

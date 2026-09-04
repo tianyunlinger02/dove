@@ -21,6 +21,7 @@ import {
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "./web-access-integration.mjs";
 
 export const PACKAGE_DOCUMENTATION_PATHS = ["README.md", "docs/README.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"];
+export const PACKAGE_LEGAL_PATHS = ["LICENSE"];
 export const PACKAGE_RUNTIME_PATHS = ["dist/index.mjs", "bin/dove-package.mjs", "scripts/dove-user-prompt-submit-package.mjs"];
 export const RETIRED_PACKAGE_RUNTIME_PATHS = [
   "mcp/dove-state-server-package.mjs",

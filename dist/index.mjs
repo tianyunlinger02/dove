@@ -783,8 +783,8 @@ import fs4 from "node:fs";
 import path4 from "node:path";
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path17) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path17 === "$" ? key : `${path17}.${key}`}.`);
+function duplicateKeyError(label, key, path18) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path18 === "$" ? key : `${path18}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -820,7 +820,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path17) {
+  function parseArray(path18) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -829,7 +829,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path17}[${itemIndex}]`);
+      parseValue(`${path18}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -841,7 +841,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path17) {
+  function parseObject(path18) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -851,12 +851,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path17);
+      if (keys.has(key)) duplicateKeyError(label, key, path18);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path17 === "$" ? `$.${key}` : `${path17}.${key}`);
+      parseValue(path18 === "$" ? `$.${key}` : `${path18}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -867,11 +867,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path17) {
+  function parseValue(path18) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path17);
-    else if (character === "[") parseArray(path17);
+    if (character === "{") parseObject(path18);
+    else if (character === "[") parseArray(path18);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -1688,9 +1688,8 @@ var MANAGED_PACKAGE_PATHS = Object.freeze([
 ]);
 
 // src/core/project-installation.mjs
-import crypto3 from "node:crypto";
-import fs10 from "node:fs";
-import path10 from "node:path";
+import fs11 from "node:fs";
+import path11 from "node:path";
 
 // src/core/file-set-transaction.mjs
 import crypto2 from "node:crypto";
@@ -2291,213 +2290,20 @@ function readProjectInstallationManifestForMigration(root, options = {}) {
   }
 }
 
-// src/core/project-root.mjs
-import fs8 from "node:fs";
-import path8 from "node:path";
-var INSTALLATION_DIRECTORY = path8.posix.dirname(INSTALLATION_MANIFEST_PATH);
-function realpathNative2(fsOps, targetPath) {
-  return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
-}
-function canonicalExistingDirectory(value, label, fsOps) {
-  if (typeof value !== "string" || !value.trim() || value.includes("\0")) throw new Error(`${label} must name an existing directory.`);
-  const resolved = path8.resolve(value);
-  let stat;
-  try {
-    stat = fsOps.statSync(resolved);
-  } catch (error) {
-    if (error?.code === "ENOENT") throw new Error(`${label} must name an existing directory: ${resolved}.`);
-    throw error;
-  }
-  if (!stat.isDirectory()) throw new Error(`${label} must name an existing directory: ${resolved}.`);
-  return realpathNative2(fsOps, resolved);
-}
-function parentDirectories2(start) {
-  const directories = [];
-  let current = start;
-  while (true) {
-    directories.push(current);
-    const parent = path8.dirname(current);
-    if (parent === current) return directories;
-    current = parent;
-  }
-}
-function lstatOrNull3(fsOps, targetPath) {
-  try {
-    return fsOps.lstatSync(targetPath);
-  } catch (error) {
-    if (error?.code === "ENOENT") return null;
-    throw error;
-  }
-}
-function preservedDoctorOnly(directoryPath, directoryStat, fsOps) {
-  if (directoryStat === null) return false;
-  if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) return false;
-  const children = fsOps.readdirSync(directoryPath).map(String).sort();
-  if (children.length !== 1 || children[0] !== "DOCTOR.md") return false;
-  const doctorStat = lstatOrNull3(fsOps, path8.join(directoryPath, "DOCTOR.md"));
-  return doctorStat?.isFile() === true && !doctorStat.isSymbolicLink();
-}
-function installationStateAt(root, options) {
-  const fsOps = options.fsOps ?? fs8;
-  const directoryPath = path8.join(root, INSTALLATION_DIRECTORY);
-  const manifestPath = path8.join(root, INSTALLATION_MANIFEST_PATH);
-  const manifestStat = lstatOrNull3(fsOps, manifestPath);
-  if (manifestStat === null) {
-    const directoryStat2 = lstatOrNull3(fsOps, directoryPath);
-    if (directoryStat2 === null || preservedDoctorOnly(directoryPath, directoryStat2, fsOps)) return { state: "absent", root, manifestPath };
-    return { state: "residue", root, manifestPath, directoryPath, directoryStat: directoryStat2 };
-  }
-  if (manifestStat.isSymbolicLink()) throw new Error(`Dove project installation manifest must not be a symbolic link: ${manifestPath}.`);
-  if (!manifestStat.isFile()) throw new Error(`Dove project installation manifest must be a regular file: ${manifestPath}.`);
-  const directoryStat = lstatOrNull3(fsOps, directoryPath);
-  if (directoryStat === null || directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) throw new Error(`Dove installation path must be a real directory: ${directoryPath}.`);
-  const manifest = readProjectInstallationManifest(root, { ...options, hostIds: options.hostIds ?? PROJECT_HOST_IDS2 });
-  return { state: "initialized", root, manifestPath, manifest };
-}
-function assertSafeInitCandidate(candidate, installation) {
-  if (installation.state !== "residue") return;
-  const stat = installation.directoryStat;
-  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove installation path must be a real directory: ${installation.directoryPath}.`);
-  throw new Error(`Dove installation directory is incomplete because ${INSTALLATION_MANIFEST_PATH} is missing at ${candidate}.`);
-}
-function setupEvidenceAt(root, fsOps, options = {}) {
-  const paths = [
-    INSTALLATION_MANIFEST_PATH,
-    LEGACY_INSTALLATION_MANIFEST_PATH,
-    ...options.includeResearch === true ? [".dove/manifest.json"] : []
-  ];
-  for (const relativePath of paths) {
-    const target = path8.join(root, relativePath);
-    const stat = lstatOrNull3(fsOps, target);
-    if (stat === null) continue;
-    if (stat.isSymbolicLink() || !stat.isFile()) {
-      throw new Error(`Dove setup marker must be a regular non-symbolic-link file: ${target}.`);
-    }
-    return { state: "marker", relativePath };
-  }
-  for (const relativePath of [INSTALLATION_DIRECTORY, ".dove-install"]) {
-    const target = path8.join(root, relativePath);
-    const stat = lstatOrNull3(fsOps, target);
-    if (stat === null) continue;
-    if (stat.isSymbolicLink() || !stat.isDirectory()) {
-      throw new Error(`Dove setup path must be a real directory: ${target}.`);
-    }
-    if (relativePath === INSTALLATION_DIRECTORY && preservedDoctorOnly(target, stat, fsOps)) continue;
-    return { state: "residue", relativePath };
-  }
-  return { state: "absent", relativePath: null };
-}
-function legacyInitError(candidate, root, evidence) {
-  if (evidence.relativePath === LEGACY_INSTALLATION_MANIFEST_PATH) {
-    return new Error(`Dove found a legacy project installation at ${root}. Current adoption accepts only a readable Markdown research tree with the old .dove/manifest.json marker. Run 'dove doctor --json' before choosing explicit reinstall or manual recovery.`);
-  }
-  if (evidence.relativePath === ".dove/manifest.json") {
-    return new Error(`Dove found existing Dove research workspace state at ${root}. Run 'dove update' to adopt it when the Markdown research tree is current, or 'dove doctor --json' for diagnosis.`);
-  }
-  return new Error(`Dove found incomplete legacy Dove state at ${root}. Run 'dove doctor --json' before initializing another project.`);
-}
-function gitRootFrom(start, fsOps) {
-  for (const directory of parentDirectories2(start)) {
-    const dotGit = path8.join(directory, ".git");
-    const stat = lstatOrNull3(fsOps, dotGit);
-    if (stat === null) continue;
-    if (stat.isSymbolicLink()) throw new Error(`Git project marker must not be a symbolic link: ${dotGit}.`);
-    if (!stat.isDirectory() && !stat.isFile()) throw new Error(`Git project marker must be a file or directory: ${dotGit}.`);
-    return directory;
-  }
-  return null;
-}
-function initRequiredError(start) {
-  return new Error(`Dove project integration is not initialized from ${start}. Run 'dove init' from the project root, or use 'dove init --project <dir>'.`);
-}
-function resolveProjectRootForInit(project, options = {}) {
-  const fsOps = options.fsOps ?? fs8;
-  const explicitProject = project !== void 0 && project !== null;
-  const candidateInput = explicitProject ? project : options.cwd ?? process.cwd();
-  const candidate = canonicalExistingDirectory(candidateInput, explicitProject ? "Dove project" : "Current working directory", fsOps);
-  const gitRoot = gitRootFrom(candidate, fsOps);
-  const allDirectories = parentDirectories2(candidate);
-  const directories = gitRoot === null ? allDirectories : allDirectories.slice(0, allDirectories.indexOf(gitRoot) + 1);
-  for (let index = 0; index < directories.length; index += 1) {
-    const directory = directories[index];
-    const installation = installationStateAt(directory, options);
-    if (index === 0) assertSafeInitCandidate(candidate, installation);
-    if (installation.state === "initialized") {
-      if (index === 0) throw new Error(`Dove project integration is already initialized at ${directory}. Use dove update instead.`);
-      throw new Error(`Refusing nested Dove project initialization at ${candidate}; an initialized project already exists at ${directory}.`);
-    }
-    const evidence = setupEvidenceAt(directory, fsOps, { includeResearch: index === 0 });
-    if (evidence.state !== "absent") throw legacyInitError(candidate, directory, evidence);
-  }
-  return !explicitProject && gitRoot !== null ? gitRoot : candidate;
-}
-function packageProjectBoundary(directory, fsOps) {
-  const packageJson = lstatOrNull3(fsOps, path8.join(directory, "package.json"));
-  const nodeModules = lstatOrNull3(fsOps, path8.join(directory, "node_modules"));
-  return packageJson?.isFile() && !packageJson.isSymbolicLink() && nodeModules?.isDirectory() && !nodeModules.isSymbolicLink();
-}
-function resolveProjectRootForSetup(start, options = {}) {
-  const fsOps = options.fsOps ?? fs8;
-  const candidate = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project setup start", fsOps);
-  for (const directory of parentDirectories2(candidate)) {
-    if (setupEvidenceAt(directory, fsOps).state !== "absent") return directory;
-    const dotGit = lstatOrNull3(fsOps, path8.join(directory, ".git"));
-    if (dotGit !== null) {
-      if (dotGit.isSymbolicLink() || !dotGit.isDirectory() && !dotGit.isFile()) {
-        throw new Error(`Git project marker must be a file or directory: ${path8.join(directory, ".git")}.`);
-      }
-      return directory;
-    }
-    if (packageProjectBoundary(directory, fsOps)) return directory;
-  }
-  return candidate;
-}
-function resolveInstalledProjectRoot(start, options = {}) {
-  const fsOps = options.fsOps ?? fs8;
-  const startingDirectory = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", fsOps);
-  for (const directory of parentDirectories2(startingDirectory)) {
-    const installation = installationStateAt(directory, options);
-    if (installation.state === "initialized") return directory;
-  }
-  throw initRequiredError(startingDirectory);
-}
-function resolveExactInstalledProjectRoot(start, options = {}) {
-  const fsOps = options.fsOps ?? fs8;
-  if (typeof start !== "string" || !start.trim() || start.includes("\0")) throw new Error("Dove hook project must name an initialized project root.");
-  const resolved = path8.resolve(start);
-  const stat = lstatOrNull3(fsOps, resolved);
-  if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove hook project must be a real directory: ${resolved}.`);
-  const root = realpathNative2(fsOps, resolved);
-  const installation = installationStateAt(root, options);
-  if (installation.state !== "initialized") throw initRequiredError(root);
-  return root;
-}
-function inspectProjectRoot(start, options = {}) {
-  let canonicalStart = null;
-  try {
-    canonicalStart = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", options.fsOps ?? fs8);
-    const root = resolveInstalledProjectRoot(canonicalStart, options);
-    return Object.freeze({ state: "initialized", initialized: true, start: canonicalStart, root, error: null });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const uninitialized = message.includes("Dove project integration is not initialized");
-    return Object.freeze({
-      state: uninitialized ? "uninitialized" : "invalid",
-      initialized: false,
-      start: canonicalStart,
-      root: null,
-      error: message
-    });
-  }
-}
-
-// scripts/generate-command-adapters.mjs
+// src/core/project-installation-plan.mjs
 import fs9 from "node:fs";
 import path9 from "node:path";
+
+// src/core/project-installation-resources.mjs
+import crypto3 from "node:crypto";
+
+// scripts/generate-command-adapters.mjs
+import fs8 from "node:fs";
+import path8 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var __filename = fileURLToPath2(import.meta.url);
-var __dirname = path9.dirname(__filename);
-var PACKAGE_ROOT = path9.resolve(__dirname, "..");
+var __dirname = path8.dirname(__filename);
+var PACKAGE_ROOT = path8.resolve(__dirname, "..");
 function markdownTitle(command) {
   return command.title.replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -2664,15 +2470,11 @@ function generatedClaudeAmbientProjectEntries() {
   ];
 }
 
-// src/core/project-installation.mjs
-var MCP_PATH = PAPER_SEARCH_MCP_PATH;
+// src/core/project-installation-resources.mjs
 var SETTINGS_SELECTOR = "/hooks/UserPromptSubmit[dove-user-prompt-submit]";
 var STATUS_LINE_SELECTOR = "/statusLine[dove-project-directory]";
 var CLAUDE_HOST = "claude";
 var FORBIDDEN_RESOURCE_PREFIXES = [".dove/", "bin/", "dist/", "mcp/", "scripts/"];
-function plainObject4(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 function sha2563(content) {
   return crypto3.createHash("sha256").update(content).digest("hex");
 }
@@ -2704,23 +2506,6 @@ function sameManaged(left, right) {
   const sortedLeft = [...left].sort(compareManaged2);
   const sortedRight = [...right].sort(compareManaged2);
   return sortedLeft.length === sortedRight.length && sortedLeft.every((entry, index) => managedKey2(entry) === managedKey2(sortedRight[index]) && entry.digest === sortedRight[index].digest);
-}
-function exactTimestamp(value) {
-  if (value === void 0) return (/* @__PURE__ */ new Date()).toISOString();
-  const timestamp = value instanceof Date ? value.toISOString() : value;
-  if (typeof timestamp !== "string" || new Date(timestamp).toISOString() !== timestamp) throw new Error("Project integration now must be a Date or exact ISO timestamp.");
-  return timestamp;
-}
-function assertPackageInput(packageName, packageVersion, { required }) {
-  if (!required && packageName === void 0 && packageVersion === void 0) return;
-  if (typeof packageName !== "string" || !packageName || packageName !== packageName.trim() || packageName.includes("\0")) throw new Error("Project integration packageName must be a non-empty trimmed string.");
-  if (typeof packageVersion !== "string" || !packageVersion || packageVersion !== packageVersion.trim()) throw new Error("Project integration packageVersion must be a semantic version string.");
-}
-function normalizeSelectedHosts(raw, { defaultWhenEmpty }) {
-  if (Array.isArray(raw) && raw.length === 0) throw new Error("Dove project integration requires at least one host.");
-  const hosts = normalizeHostSelection(raw, { defaultWhenEmpty, requireInitializable: true });
-  if (hosts.length === 0) throw new Error("Dove project integration requires at least one host.");
-  return [...hosts];
 }
 function assertManagedResourcePath(relativePath) {
   if (relativePath === ".dove" || relativePath.startsWith(".dove/")) throw new Error(`Project integration resources must not manage Dove workspace state: ${relativePath}.`);
@@ -2809,7 +2594,15 @@ function dshResources() {
 function resourcesForHosts(hosts) {
   return [...claudeResources(), ...dshResources()].filter((entry) => hosts.includes(entry.hostId)).sort(compareManaged2);
 }
-function lstatOrNull4(fsOps, targetPath) {
+function desiredManaged(resources) {
+  return resources.map(({ path: relativePath, kind, selector, digest }) => ({ path: relativePath, kind, selector, digest })).sort(compareManaged2);
+}
+
+// src/core/project-installation-plan.mjs
+function plainObject4(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function lstatOrNull3(fsOps, targetPath) {
   try {
     return fsOps.lstatSync(targetPath);
   } catch (error) {
@@ -2817,14 +2610,15 @@ function lstatOrNull4(fsOps, targetPath) {
     throw error;
   }
 }
-function inspectRegularProjectFile(root, relativePath, fsOps) {
+function inspectRegularProjectFile(root, relativePath, fsOps = fs9) {
   let current = root;
-  for (const [index, component] of relativePath.split("/").entries()) {
-    current = path10.join(current, component);
-    const stat = lstatOrNull4(fsOps, current);
+  const components = relativePath.split("/");
+  for (const [index, component] of components.entries()) {
+    current = path9.join(current, component);
+    const stat = lstatOrNull3(fsOps, current);
     if (stat === null) return { exists: false, bytes: null, digest: null, mode: null, type: "absent" };
     if (stat.isSymbolicLink()) throw new Error(`Dove project integration path must not be a symbolic link: ${relativePath}.`);
-    if (index < relativePath.split("/").length - 1) {
+    if (index < components.length - 1) {
       if (!stat.isDirectory()) throw new Error(`Dove project integration parent must be a directory: ${relativePath}.`);
       continue;
     }
@@ -2916,7 +2710,7 @@ function removeExactLegacyDoveStopHook(settings) {
   };
 }
 function namedMcpFragmentState(config, serverName) {
-  if (config.mcpServers !== void 0 && !plainObject4(config.mcpServers)) throw new Error(`${MCP_PATH} mcpServers must be a JSON object.`);
+  if (config.mcpServers !== void 0 && !plainObject4(config.mcpServers)) throw new Error(`${PAPER_SEARCH_MCP_PATH} mcpServers must be a JSON object.`);
   if (!Object.hasOwn(config.mcpServers ?? {}, serverName)) return { exists: false, digest: null, fragment: null };
   const fragment = config.mcpServers[serverName];
   return { exists: true, digest: semanticDigest(fragment), fragment };
@@ -3042,7 +2836,7 @@ function addFragment(resource, value) {
   }
   throw new Error(`Dove does not install unsupported project-local fragment ${resource.path}#${resource.selector}.`);
 }
-function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps, options = {}) {
+function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps = fs9, options = {}) {
   const replaceDrift = options.replacementPolicy === "confirmed-reinstall";
   const observed = inspectRegularProjectFile(root, relativePath, fsOps);
   const original = parseSharedJson(observed, relativePath);
@@ -3109,15 +2903,12 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
     changed: true
   };
 }
-function planResource(root, desired, oldEntry, fsOps, options = {}) {
+function planResource(root, desired, oldEntry, fsOps = fs9, options = {}) {
   const kind = desired?.kind ?? oldEntry.kind;
   if (kind === "exclusive-file") return planExclusive(root, desired, oldEntry, fsOps, options);
   throw new Error(`Unsupported project integration resource kind: ${kind}.`);
 }
-function desiredManaged(resources) {
-  return resources.map(({ path: relativePath, kind, selector, digest }) => ({ path: relativePath, kind, selector, digest })).sort(compareManaged2);
-}
-function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps, manifest = null, adopt = false, replacementPolicy = "safe" }) {
+function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs9, manifest = null, adopt = false, replacementPolicy = "safe" }) {
   const oldByKey = new Map((manifest?.managed ?? []).map((entry) => [managedKey2(entry), entry]));
   const desiredResources = resourcesForHosts(hosts).filter((entry) => {
     if (entry.selector !== WEB_FETCH_DENY_SELECTOR || oldByKey.has(managedKey2(entry))) return true;
@@ -3168,6 +2959,225 @@ function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps, man
   }
   return { entries, manifest: nextManifest, manifestChanged };
 }
+
+// src/core/project-root.mjs
+import fs10 from "node:fs";
+import path10 from "node:path";
+var INSTALLATION_DIRECTORY = path10.posix.dirname(INSTALLATION_MANIFEST_PATH);
+function realpathNative2(fsOps, targetPath) {
+  return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
+}
+function canonicalExistingDirectory(value, label, fsOps) {
+  if (typeof value !== "string" || !value.trim() || value.includes("\0")) throw new Error(`${label} must name an existing directory.`);
+  const resolved = path10.resolve(value);
+  let stat;
+  try {
+    stat = fsOps.statSync(resolved);
+  } catch (error) {
+    if (error?.code === "ENOENT") throw new Error(`${label} must name an existing directory: ${resolved}.`);
+    throw error;
+  }
+  if (!stat.isDirectory()) throw new Error(`${label} must name an existing directory: ${resolved}.`);
+  return realpathNative2(fsOps, resolved);
+}
+function parentDirectories2(start) {
+  const directories = [];
+  let current = start;
+  while (true) {
+    directories.push(current);
+    const parent = path10.dirname(current);
+    if (parent === current) return directories;
+    current = parent;
+  }
+}
+function lstatOrNull4(fsOps, targetPath) {
+  try {
+    return fsOps.lstatSync(targetPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+function preservedDoctorOnly(directoryPath, directoryStat, fsOps) {
+  if (directoryStat === null) return false;
+  if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) return false;
+  const children = fsOps.readdirSync(directoryPath).map(String).sort();
+  if (children.length !== 1 || children[0] !== "DOCTOR.md") return false;
+  const doctorStat = lstatOrNull4(fsOps, path10.join(directoryPath, "DOCTOR.md"));
+  return doctorStat?.isFile() === true && !doctorStat.isSymbolicLink();
+}
+function installationStateAt(root, options) {
+  const fsOps = options.fsOps ?? fs10;
+  const directoryPath = path10.join(root, INSTALLATION_DIRECTORY);
+  const manifestPath = path10.join(root, INSTALLATION_MANIFEST_PATH);
+  const manifestStat = lstatOrNull4(fsOps, manifestPath);
+  if (manifestStat === null) {
+    const directoryStat2 = lstatOrNull4(fsOps, directoryPath);
+    if (directoryStat2 === null || preservedDoctorOnly(directoryPath, directoryStat2, fsOps)) return { state: "absent", root, manifestPath };
+    return { state: "residue", root, manifestPath, directoryPath, directoryStat: directoryStat2 };
+  }
+  if (manifestStat.isSymbolicLink()) throw new Error(`Dove project installation manifest must not be a symbolic link: ${manifestPath}.`);
+  if (!manifestStat.isFile()) throw new Error(`Dove project installation manifest must be a regular file: ${manifestPath}.`);
+  const directoryStat = lstatOrNull4(fsOps, directoryPath);
+  if (directoryStat === null || directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) throw new Error(`Dove installation path must be a real directory: ${directoryPath}.`);
+  const manifest = readProjectInstallationManifest(root, { ...options, hostIds: options.hostIds ?? PROJECT_HOST_IDS2 });
+  return { state: "initialized", root, manifestPath, manifest };
+}
+function assertSafeInitCandidate(candidate, installation) {
+  if (installation.state !== "residue") return;
+  const stat = installation.directoryStat;
+  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove installation path must be a real directory: ${installation.directoryPath}.`);
+  throw new Error(`Dove installation directory is incomplete because ${INSTALLATION_MANIFEST_PATH} is missing at ${candidate}.`);
+}
+function setupEvidenceAt(root, fsOps, options = {}) {
+  const paths = [
+    INSTALLATION_MANIFEST_PATH,
+    LEGACY_INSTALLATION_MANIFEST_PATH,
+    ...options.includeResearch === true ? [".dove/manifest.json"] : []
+  ];
+  for (const relativePath of paths) {
+    const target = path10.join(root, relativePath);
+    const stat = lstatOrNull4(fsOps, target);
+    if (stat === null) continue;
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error(`Dove setup marker must be a regular non-symbolic-link file: ${target}.`);
+    }
+    return { state: "marker", relativePath };
+  }
+  for (const relativePath of [INSTALLATION_DIRECTORY, ".dove-install"]) {
+    const target = path10.join(root, relativePath);
+    const stat = lstatOrNull4(fsOps, target);
+    if (stat === null) continue;
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      throw new Error(`Dove setup path must be a real directory: ${target}.`);
+    }
+    if (relativePath === INSTALLATION_DIRECTORY && preservedDoctorOnly(target, stat, fsOps)) continue;
+    return { state: "residue", relativePath };
+  }
+  return { state: "absent", relativePath: null };
+}
+function legacyInitError(candidate, root, evidence) {
+  if (evidence.relativePath === LEGACY_INSTALLATION_MANIFEST_PATH) {
+    return new Error(`Dove found a legacy project installation at ${root}. Current adoption accepts only a readable Markdown research tree with the old .dove/manifest.json marker. Run 'dove doctor --json' before choosing explicit reinstall or manual recovery.`);
+  }
+  if (evidence.relativePath === ".dove/manifest.json") {
+    return new Error(`Dove found existing Dove research workspace state at ${root}. Run 'dove update' to adopt it when the Markdown research tree is current, or 'dove doctor --json' for diagnosis.`);
+  }
+  return new Error(`Dove found incomplete legacy Dove state at ${root}. Run 'dove doctor --json' before initializing another project.`);
+}
+function gitRootFrom(start, fsOps) {
+  for (const directory of parentDirectories2(start)) {
+    const dotGit = path10.join(directory, ".git");
+    const stat = lstatOrNull4(fsOps, dotGit);
+    if (stat === null) continue;
+    if (stat.isSymbolicLink()) throw new Error(`Git project marker must not be a symbolic link: ${dotGit}.`);
+    if (!stat.isDirectory() && !stat.isFile()) throw new Error(`Git project marker must be a file or directory: ${dotGit}.`);
+    return directory;
+  }
+  return null;
+}
+function initRequiredError(start) {
+  return new Error(`Dove project integration is not initialized from ${start}. Run 'dove init' from the project root, or use 'dove init --project <dir>'.`);
+}
+function resolveProjectRootForInit(project, options = {}) {
+  const fsOps = options.fsOps ?? fs10;
+  const explicitProject = project !== void 0 && project !== null;
+  const candidateInput = explicitProject ? project : options.cwd ?? process.cwd();
+  const candidate = canonicalExistingDirectory(candidateInput, explicitProject ? "Dove project" : "Current working directory", fsOps);
+  const gitRoot = gitRootFrom(candidate, fsOps);
+  const allDirectories = parentDirectories2(candidate);
+  const directories = gitRoot === null ? allDirectories : allDirectories.slice(0, allDirectories.indexOf(gitRoot) + 1);
+  for (let index = 0; index < directories.length; index += 1) {
+    const directory = directories[index];
+    const installation = installationStateAt(directory, options);
+    if (index === 0) assertSafeInitCandidate(candidate, installation);
+    if (installation.state === "initialized") {
+      if (index === 0) throw new Error(`Dove project integration is already initialized at ${directory}. Use dove update instead.`);
+      throw new Error(`Refusing nested Dove project initialization at ${candidate}; an initialized project already exists at ${directory}.`);
+    }
+    const evidence = setupEvidenceAt(directory, fsOps, { includeResearch: index === 0 });
+    if (evidence.state !== "absent") throw legacyInitError(candidate, directory, evidence);
+  }
+  return !explicitProject && gitRoot !== null ? gitRoot : candidate;
+}
+function packageProjectBoundary(directory, fsOps) {
+  const packageJson = lstatOrNull4(fsOps, path10.join(directory, "package.json"));
+  const nodeModules = lstatOrNull4(fsOps, path10.join(directory, "node_modules"));
+  return packageJson?.isFile() && !packageJson.isSymbolicLink() && nodeModules?.isDirectory() && !nodeModules.isSymbolicLink();
+}
+function resolveProjectRootForSetup(start, options = {}) {
+  const fsOps = options.fsOps ?? fs10;
+  const candidate = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project setup start", fsOps);
+  for (const directory of parentDirectories2(candidate)) {
+    if (setupEvidenceAt(directory, fsOps).state !== "absent") return directory;
+    const dotGit = lstatOrNull4(fsOps, path10.join(directory, ".git"));
+    if (dotGit !== null) {
+      if (dotGit.isSymbolicLink() || !dotGit.isDirectory() && !dotGit.isFile()) {
+        throw new Error(`Git project marker must be a file or directory: ${path10.join(directory, ".git")}.`);
+      }
+      return directory;
+    }
+    if (packageProjectBoundary(directory, fsOps)) return directory;
+  }
+  return candidate;
+}
+function resolveInstalledProjectRoot(start, options = {}) {
+  const fsOps = options.fsOps ?? fs10;
+  const startingDirectory = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", fsOps);
+  for (const directory of parentDirectories2(startingDirectory)) {
+    const installation = installationStateAt(directory, options);
+    if (installation.state === "initialized") return directory;
+  }
+  throw initRequiredError(startingDirectory);
+}
+function resolveExactInstalledProjectRoot(start, options = {}) {
+  const fsOps = options.fsOps ?? fs10;
+  if (typeof start !== "string" || !start.trim() || start.includes("\0")) throw new Error("Dove hook project must name an initialized project root.");
+  const resolved = path10.resolve(start);
+  const stat = lstatOrNull4(fsOps, resolved);
+  if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove hook project must be a real directory: ${resolved}.`);
+  const root = realpathNative2(fsOps, resolved);
+  const installation = installationStateAt(root, options);
+  if (installation.state !== "initialized") throw initRequiredError(root);
+  return root;
+}
+function inspectProjectRoot(start, options = {}) {
+  let canonicalStart = null;
+  try {
+    canonicalStart = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", options.fsOps ?? fs10);
+    const root = resolveInstalledProjectRoot(canonicalStart, options);
+    return Object.freeze({ state: "initialized", initialized: true, start: canonicalStart, root, error: null });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const uninitialized = message.includes("Dove project integration is not initialized");
+    return Object.freeze({
+      state: uninitialized ? "uninitialized" : "invalid",
+      initialized: false,
+      start: canonicalStart,
+      root: null,
+      error: message
+    });
+  }
+}
+
+// src/core/project-installation.mjs
+function exactTimestamp(value) {
+  if (value === void 0) return (/* @__PURE__ */ new Date()).toISOString();
+  const timestamp = value instanceof Date ? value.toISOString() : value;
+  if (typeof timestamp !== "string" || new Date(timestamp).toISOString() !== timestamp) throw new Error("Project integration now must be a Date or exact ISO timestamp.");
+  return timestamp;
+}
+function assertPackageInput(packageName, packageVersion, { required }) {
+  if (!required && packageName === void 0 && packageVersion === void 0) return;
+  if (typeof packageName !== "string" || !packageName || packageName !== packageName.trim() || packageName.includes("\0")) throw new Error("Project integration packageName must be a non-empty trimmed string.");
+  if (typeof packageVersion !== "string" || !packageVersion || packageVersion !== packageVersion.trim()) throw new Error("Project integration packageVersion must be a semantic version string.");
+}
+function normalizeSelectedHosts(raw, { defaultWhenEmpty }) {
+  if (Array.isArray(raw) && raw.length === 0) throw new Error("Dove project integration requires at least one host.");
+  const hosts = normalizeHostSelection(raw, { defaultWhenEmpty, requireInitializable: true });
+  if (hosts.length === 0) throw new Error("Dove project integration requires at least one host.");
+  return [...hosts];
+}
 function resultFromTransaction(status, target, hosts, manifest, transaction) {
   return {
     status,
@@ -3182,9 +3192,9 @@ function resultFromTransaction(status, target, hosts, manifest, transaction) {
   };
 }
 function appendResearchBootstrap(root, entries, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
-  const researchRoot = path10.join(root, ".dove", "research");
-  const researchStat = lstatOrNull4(fsOps, researchRoot);
+  const fsOps = options.fsOps ?? fs11;
+  const researchRoot = path11.join(root, ".dove", "research");
+  const researchStat = lstatOrNull3(fsOps, researchRoot);
   if (researchStat !== null) {
     if (researchStat.isSymbolicLink() || !researchStat.isDirectory()) throw new Error("Dove research root must be a real directory when project integration is initialized.");
     return null;
@@ -3204,7 +3214,7 @@ function transactionOptions(fsOps, options = {}) {
   return { ...options, fsOps };
 }
 function initializeProjectIntegration(rootOrProject, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
+  const fsOps = options.fsOps ?? fs11;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
   const now = exactTimestamp(options.now);
@@ -3220,7 +3230,7 @@ function initializeProjectIntegration(rootOrProject, options = {}) {
   );
 }
 function prepareInstalledIntegrationPlan(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
+  const fsOps = options.fsOps ?? fs11;
   const root = resolveInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS2 });
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS2 });
   const hosts = options.hosts === void 0 ? [...manifest.hosts] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
@@ -3253,7 +3263,7 @@ function assertIntegrationOnlyEntries(entries) {
   }
 }
 function synchronizeProjectIntegrationOnly(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
+  const fsOps = options.fsOps ?? fs11;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const root = resolveExactInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS2 });
   const currentManifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS2 });
@@ -3295,14 +3305,14 @@ function inspectProjectIntegration(start, options = {}) {
   };
 }
 function canonicalLifecycleRoot(start, fsOps) {
-  const resolved = path10.resolve(start ?? process.cwd());
+  const resolved = path11.resolve(start ?? process.cwd());
   const stat = fsOps.lstatSync(resolved);
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove lifecycle project root must be a real directory: ${resolved}.`);
   return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
 }
 function walkDeletion(root, relativePath, fsOps, entries, scope, preservePaths = /* @__PURE__ */ new Set()) {
-  const absolutePath = path10.join(root, relativePath);
-  const stat = lstatOrNull4(fsOps, absolutePath);
+  const absolutePath = path11.join(root, relativePath);
+  const stat = lstatOrNull3(fsOps, absolutePath);
   if (stat === null) return;
   if (stat.isSymbolicLink()) throw new Error(`Dove lifecycle refuses symbolic links in destructive scope: ${relativePath}.`);
   if (stat.isFile()) {
@@ -3314,7 +3324,7 @@ function walkDeletion(root, relativePath, fsOps, entries, scope, preservePaths =
   }
   if (!stat.isDirectory()) throw new Error(`Dove lifecycle found unsupported project state: ${relativePath}.`);
   for (const child of fsOps.readdirSync(absolutePath).map(String).sort()) {
-    walkDeletion(root, path10.posix.join(relativePath, child), fsOps, entries, scope, preservePaths);
+    walkDeletion(root, path11.posix.join(relativePath, child), fsOps, entries, scope, preservePaths);
   }
   if (preservePaths.has(relativePath)) return;
   entries.push({
@@ -3329,8 +3339,8 @@ function walkDeletion(root, relativePath, fsOps, entries, scope, preservePaths =
   scope.push({ path: relativePath, kind: "directory", digest: null });
 }
 function migrationSource(root, fsOps) {
-  const current = lstatOrNull4(fsOps, path10.join(root, INSTALLATION_MANIFEST_PATH));
-  const legacy = lstatOrNull4(fsOps, path10.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
+  const current = lstatOrNull3(fsOps, path11.join(root, INSTALLATION_MANIFEST_PATH));
+  const legacy = lstatOrNull3(fsOps, path11.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
   if (current !== null && legacy !== null) throw new Error("Dove project update found both current and 1.0 project installation manifests.");
   if (current !== null) return readProjectInstallationManifestForMigration(root, { fsOps, hostIds: PROJECT_HOST_IDS2, manifestPath: INSTALLATION_MANIFEST_PATH });
   if (legacy !== null) return readProjectInstallationManifestForMigration(root, { fsOps, hostIds: PROJECT_HOST_IDS2, manifestPath: LEGACY_INSTALLATION_MANIFEST_PATH });
@@ -3344,11 +3354,11 @@ function assertAdoptableResearch(root, fsOps) {
   return research;
 }
 function adoptionSource(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
+  const fsOps = options.fsOps ?? fs11;
   const root = resolveProjectRootForSetup(start, { fsOps, hostIds: PROJECT_HOST_IDS2 });
-  const current = lstatOrNull4(fsOps, path10.join(root, INSTALLATION_MANIFEST_PATH));
+  const current = lstatOrNull3(fsOps, path11.join(root, INSTALLATION_MANIFEST_PATH));
   if (current !== null) throw new Error("Dove project adoption requires an uninitialized project without a current installation manifest.");
-  const legacyInstall = lstatOrNull4(fsOps, path10.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
+  const legacyInstall = lstatOrNull3(fsOps, path11.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
   if (legacyInstall !== null) throw new Error("Dove project adoption accepts only the old .dove/manifest.json workspace marker, not legacy installation manifests.");
   if (readLegacyWorkspaceMarker(root, { fsOps }) === null) {
     throw new Error("Dove project adoption requires the old .dove/manifest.json workspace marker.");
@@ -3357,7 +3367,7 @@ function adoptionSource(start, options = {}) {
   return { root, sourcePath: LEGACY_WORKSPACE_MARKER_PATH, createdAt: null };
 }
 function prepareLifecycleIntegration(root, options, { hosts, source = null, reinstall = false, adopt = false }) {
-  const fsOps = options.fsOps ?? fs10;
+  const fsOps = options.fsOps ?? fs11;
   const entries = [];
   const scope = [];
   const oldManifest = source ? { ...source, managed: source.managed } : null;
@@ -3380,12 +3390,12 @@ function prepareLifecycleIntegration(root, options, { hosts, source = null, rein
     entries.push(entry);
   }
   if (reinstall) {
-    const doveRoot = path10.join(root, ".dove");
-    const doveStat = lstatOrNull4(fsOps, doveRoot);
+    const doveRoot = path11.join(root, ".dove");
+    const doveStat = lstatOrNull3(fsOps, doveRoot);
     if (doveStat !== null) {
       if (doveStat.isSymbolicLink() || !doveStat.isDirectory()) throw new Error("Complete Reinstall requires .dove to be a real directory.");
-      const installRoot = path10.join(doveRoot, "install");
-      const installStat = lstatOrNull4(fsOps, installRoot);
+      const installRoot = path11.join(doveRoot, "install");
+      const installStat = lstatOrNull3(fsOps, installRoot);
       if (installStat !== null) {
         if (installStat.isSymbolicLink() || !installStat.isDirectory()) throw new Error("Complete Reinstall requires .dove/install to be a real directory.");
         for (const child of fsOps.readdirSync(installRoot).map(String).sort()) {
@@ -3395,13 +3405,13 @@ function prepareLifecycleIntegration(root, options, { hosts, source = null, rein
     }
     walkDeletion(root, ".dove-install", fsOps, entries, scope);
   } else if (source?.sourcePath === LEGACY_INSTALLATION_MANIFEST_PATH) {
-    const legacyDirectory = lstatOrNull4(fsOps, path10.join(root, ".dove-install"));
+    const legacyDirectory = lstatOrNull3(fsOps, path11.join(root, ".dove-install"));
     if (legacyDirectory?.isSymbolicLink() || legacyDirectory !== null && !legacyDirectory.isDirectory()) {
       throw new Error("Updating Dove project integration requires .dove-install to be a real directory.");
     }
     const legacyObserved = inspectRegularProjectFile(root, LEGACY_INSTALLATION_MANIFEST_PATH, fsOps);
     entries.push(transactionDelete(root, { path: LEGACY_INSTALLATION_MANIFEST_PATH }, legacyObserved));
-    const legacyChildren = legacyDirectory === null ? [] : fsOps.readdirSync(path10.join(root, ".dove-install")).map(String).sort();
+    const legacyChildren = legacyDirectory === null ? [] : fsOps.readdirSync(path11.join(root, ".dove-install")).map(String).sort();
     if (sameArray(legacyChildren, ["manifest.json"])) {
       entries.push({
         root,
@@ -3446,7 +3456,7 @@ function previewShape(kind, root, hosts, prepared, confirmationRequired) {
   return preview;
 }
 function previewProjectAdoption(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
+  const fsOps = options.fsOps ?? fs11;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const source = adoptionSource(start, { ...options, fsOps });
   const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
@@ -3454,7 +3464,7 @@ function previewProjectAdoption(start, options = {}) {
   return previewShape("adopt", source.root, hosts, prepared, false);
 }
 function adoptProjectIntegration(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
+  const fsOps = options.fsOps ?? fs11;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const source = adoptionSource(start, { ...options, fsOps });
   const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
@@ -3468,7 +3478,7 @@ function adoptProjectIntegration(start, options = {}) {
   );
 }
 function previewProjectCompleteReinstall(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
+  const fsOps = options.fsOps ?? fs11;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   let source = null;
@@ -3500,7 +3510,7 @@ function reinstallPreviewScope(preview) {
 function completeReinstallProjectIntegration(start, options = {}) {
   if (options.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true after displaying the real destructive scope.");
   if (!options.preview || options.preview.action !== "reinstall") throw new Error("Complete Reinstall requires the approved reinstall preview.");
-  const fsOps = options.fsOps ?? fs10;
+  const fsOps = options.fsOps ?? fs11;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   let source = null;
@@ -3533,7 +3543,7 @@ function completeReinstallProjectIntegration(start, options = {}) {
   );
 }
 function prepareUninstall(start, options = {}) {
-  const fsOps = options.fsOps ?? fs10;
+  const fsOps = options.fsOps ?? fs11;
   const root = canonicalLifecycleRoot(start, fsOps);
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS2 });
   const entries = [];
@@ -3602,8 +3612,8 @@ function updateProjectIntegration(start, options = {}) {
 var PROJECT_INTEGRATION_MANAGED_PATHS = Object.freeze(claudeResources().map((resource) => resource.path).sort());
 
 // src/core/dove-lifecycle.mjs
-import fs11 from "node:fs";
-import path11 from "node:path";
+import fs12 from "node:fs";
+import path12 from "node:path";
 function publicUpdateResult(result) {
   return {
     ...result,
@@ -3619,10 +3629,10 @@ function lstatOrNull5(fsOps, targetPath) {
   }
 }
 function hasCurrentManifest(root, fsOps) {
-  return lstatOrNull5(fsOps, path11.join(root, INSTALLATION_MANIFEST_PATH)) !== null;
+  return lstatOrNull5(fsOps, path12.join(root, INSTALLATION_MANIFEST_PATH)) !== null;
 }
 function updateDoveLifecycle(start, options = {}) {
-  const fsOps = options.fsOps ?? fs11;
+  const fsOps = options.fsOps ?? fs12;
   const root = resolveProjectRootForSetup(start, { fsOps });
   return publicUpdateResult(hasCurrentManifest(root, fsOps) ? updateProjectIntegration(root, options) : adoptProjectIntegration(root, options));
 }
@@ -3639,8 +3649,8 @@ function uninstallDoveLifecycle(start, options = {}) {
 }
 
 // src/core/project-doctor.mjs
-import fs12 from "node:fs";
-import path12 from "node:path";
+import fs13 from "node:fs";
+import path13 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/core/project-setup-classification.mjs
@@ -3674,8 +3684,8 @@ function classifyProjectSetup(result) {
 }
 
 // src/core/project-doctor.mjs
-var MODULE_DIRECTORY = path12.dirname(fileURLToPath3(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path12.resolve(MODULE_DIRECTORY, "../..");
+var MODULE_DIRECTORY = path13.dirname(fileURLToPath3(import.meta.url));
+var DEFAULT_PACKAGE_ROOT = path13.resolve(MODULE_DIRECTORY, "../..");
 function messageFor2(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -3695,18 +3705,18 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 function inspectUserCli(options) {
-  const fsOps = options.fsOps ?? fs12;
-  const packageRoot = path12.resolve(options.packageRoot ?? DEFAULT_PACKAGE_ROOT);
+  const fsOps = options.fsOps ?? fs13;
+  const packageRoot = path13.resolve(options.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
-    const absolutePath = path12.resolve(packageRoot, relativePath);
-    const relative = path12.relative(packageRoot, absolutePath);
-    const contained = relative !== "" && !relative.startsWith("..") && !path12.isAbsolute(relative);
+    const absolutePath = path13.resolve(packageRoot, relativePath);
+    const relative = path13.relative(packageRoot, absolutePath);
+    const contained = relative !== "" && !relative.startsWith("..") && !path13.isAbsolute(relative);
     const healthy2 = contained && regularNonSymlink(fsOps, absolutePath);
     return { path: relativePath, healthy: healthy2, state: healthy2 ? "current" : contained ? "missing-or-invalid" : "outside-package-root" };
   });
-  const executablePath = path12.resolve(options.executablePath ?? path12.join(packageRoot, "bin/dove-package.mjs"));
-  const executableRelative = path12.relative(packageRoot, executablePath);
-  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path12.isAbsolute(executableRelative);
+  const executablePath = path13.resolve(options.executablePath ?? path13.join(packageRoot, "bin/dove-package.mjs"));
+  const executableRelative = path13.relative(packageRoot, executablePath);
+  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path13.isAbsolute(executableRelative);
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
   const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
@@ -3785,14 +3795,14 @@ function inspectIntegration(start, options) {
   }
 }
 function inspectMigration(root, options) {
-  const fsOps = options.fsOps ?? fs12;
-  const current = lstatOrNull6(fsOps, path12.join(root, INSTALLATION_MANIFEST_PATH));
-  const legacy = lstatOrNull6(fsOps, path12.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
+  const fsOps = options.fsOps ?? fs13;
+  const current = lstatOrNull6(fsOps, path13.join(root, INSTALLATION_MANIFEST_PATH));
+  const legacy = lstatOrNull6(fsOps, path13.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
   const migrationPath = legacy ? LEGACY_INSTALLATION_MANIFEST_PATH : current ? INSTALLATION_MANIFEST_PATH : null;
   const result = (state2, fields = {}) => ({ state: state2, root, markerPath: migrationPath, ...fields });
   if (current && legacy) return result("conflicting-manifests", { error: "Dove found both current and 1.0 installation manifests." });
   if (!legacy && !current) {
-    const legacyDirectory = lstatOrNull6(fsOps, path12.join(root, ".dove-install"));
+    const legacyDirectory = lstatOrNull6(fsOps, path13.join(root, ".dove-install"));
     return legacyDirectory ? result("invalid-legacy", { error: "Dove found an incomplete 1.0 installation directory." }) : result("absent", { error: null });
   }
   if (current) {
@@ -3849,7 +3859,7 @@ function inspectProjectDoctor(start, options = {}) {
   try {
     setupRoot = resolveProjectRootForSetup(start, { fsOps: options.fsOps });
   } catch {
-    setupRoot = typeof start === "string" ? path12.resolve(start) : null;
+    setupRoot = typeof start === "string" ? path13.resolve(start) : null;
   }
   const projectIntegration = inspectIntegration(start, options);
   const safeRoot = projectIntegration.root ?? setupRoot;
@@ -3993,8 +4003,8 @@ function runClaudeReviewBackend(options = {}) {
 
 // src/core/review-snapshot.mjs
 import crypto5 from "node:crypto";
-import fs13 from "node:fs";
-import path13 from "node:path";
+import fs14 from "node:fs";
+import path14 from "node:path";
 var REVIEW_MATERIAL_DENY_PATTERNS = Object.freeze([
   /(?:^|\/)CLAUDE\.md$/u,
   /(?:^|\/)\.claude(?:\/|$)/u,
@@ -4033,14 +4043,14 @@ function canonicalProjectFile(projectFs, rawPath) {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Dove review material must be a regular non-symlink file: ${relativePath}`);
   const absolutePath = projectFs.displayPath(relativePath);
   const canonical = projectFs.fsOps.realpathSync.native?.(absolutePath) ?? projectFs.fsOps.realpathSync(absolutePath);
-  const relative = path13.relative(projectFs.root, canonical);
-  if (relative === "" || relative === ".." || relative.startsWith(`..${path13.sep}`) || path13.isAbsolute(relative)) throw new Error(`Dove review material must stay inside the initialized project: ${relativePath}`);
-  if (relative.split(path13.sep).join("/") !== relativePath) throw new Error(`Dove review material path must be canonical project-relative form: ${rawPath}`);
+  const relative = path14.relative(projectFs.root, canonical);
+  if (relative === "" || relative === ".." || relative.startsWith(`..${path14.sep}`) || path14.isAbsolute(relative)) throw new Error(`Dove review material must stay inside the initialized project: ${relativePath}`);
+  if (relative.split(path14.sep).join("/") !== relativePath) throw new Error(`Dove review material path must be canonical project-relative form: ${rawPath}`);
   return { relativePath, absolutePath };
 }
 function normalizeReviewMaterialList(materials, options = {}) {
   if (!Array.isArray(materials) || materials.length === 0) throw new Error("dove review requires at least one --material <path>.");
-  const projectFs = openRootedFilesystem(options.projectRoot, { fsOps: options.fsOps ?? fs13 });
+  const projectFs = openRootedFilesystem(options.projectRoot, { fsOps: options.fsOps ?? fs14 });
   const byPath = /* @__PURE__ */ new Map();
   for (const material of materials) {
     const { relativePath } = canonicalProjectFile(projectFs, material);
@@ -4049,8 +4059,8 @@ function normalizeReviewMaterialList(materials, options = {}) {
   return [...byPath.keys()].sort();
 }
 function createReviewSnapshot(options = {}) {
-  const fsOps = options.fsOps ?? fs13;
-  const projectRoot = fsOps.realpathSync.native?.(path13.resolve(options.projectRoot)) ?? fsOps.realpathSync(path13.resolve(options.projectRoot));
+  const fsOps = options.fsOps ?? fs14;
+  const projectRoot = fsOps.realpathSync.native?.(path14.resolve(options.projectRoot)) ?? fsOps.realpathSync(path14.resolve(options.projectRoot));
   const projectFs = openRootedFilesystem(projectRoot, { fsOps });
   const materialPaths = normalizeReviewMaterialList(options.materials, { projectRoot, fsOps });
   const files = [];
@@ -4082,9 +4092,9 @@ function snapshotDigest(snapshot) {
 
 // src/core/review-workspace.mjs
 import crypto6 from "node:crypto";
-import fs14 from "node:fs";
+import fs15 from "node:fs";
 import os from "node:os";
-import path14 from "node:path";
+import path15 from "node:path";
 var REVIEW_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 function lstatOrNull7(fsOps, targetPath) {
   try {
@@ -4101,18 +4111,18 @@ function realpathNative3(fsOps, targetPath) {
   return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
 }
 function pathInside(parentPath, childPath) {
-  const relative = path14.relative(parentPath, childPath);
-  return relative === "" || !relative.startsWith(`..${path14.sep}`) && relative !== ".." && !path14.isAbsolute(relative);
+  const relative = path15.relative(parentPath, childPath);
+  return relative === "" || !relative.startsWith(`..${path15.sep}`) && relative !== ".." && !path15.isAbsolute(relative);
 }
 function assertStateRootOutsideProject(stateRoot, projectRoot, fsOps) {
   if (projectRoot === void 0 || projectRoot === null) return;
-  const project = realpathNative3(fsOps, path14.resolve(projectRoot));
-  const candidate = path14.resolve(stateRoot);
+  const project = realpathNative3(fsOps, path15.resolve(projectRoot));
+  const candidate = path15.resolve(stateRoot);
   if (pathInside(project, candidate)) throw new Error("Dove review workspace state root must be outside the initialized project so the reviewer sees only copied listed materials.");
 }
 function assertResolvedStateRootOutsideProject(stateRoot, projectRoot, fsOps) {
   if (projectRoot === void 0 || projectRoot === null) return;
-  const project = realpathNative3(fsOps, path14.resolve(projectRoot));
+  const project = realpathNative3(fsOps, path15.resolve(projectRoot));
   const resolved = realpathNative3(fsOps, stateRoot);
   if (pathInside(project, resolved)) throw new Error("Dove review workspace state root must be outside the initialized project so the reviewer sees only copied listed materials.");
 }
@@ -4135,14 +4145,14 @@ function normalizeReviewId(value, label = "Dove review id") {
 }
 function resolveReviewStateRoot(options = {}) {
   const env = options.env ?? process.env;
-  const fsOps = options.fsOps ?? fs14;
+  const fsOps = options.fsOps ?? fs15;
   const explicit = options.stateRoot ?? env.DOVE_REVIEW_STATE_ROOT;
   const xdgState = env.XDG_STATE_HOME;
   const home = env.HOME ?? os.homedir();
   let stateRoot;
   if (typeof explicit === "string" && explicit.trim()) stateRoot = explicit;
-  else if (typeof xdgState === "string" && xdgState.trim()) stateRoot = path14.join(xdgState, "dove", "reviews");
-  else if (typeof home === "string" && home.trim()) stateRoot = path14.join(home, ".local", "state", "dove", "reviews");
+  else if (typeof xdgState === "string" && xdgState.trim()) stateRoot = path15.join(xdgState, "dove", "reviews");
+  else if (typeof home === "string" && home.trim()) stateRoot = path15.join(home, ".local", "state", "dove", "reviews");
   else throw new Error("Dove review workspace requires DOVE_REVIEW_STATE_ROOT, XDG_STATE_HOME, or HOME.");
   assertStateRootOutsideProject(stateRoot, options.projectRoot, fsOps);
   const resolved = ensureRealDirectory(stateRoot, { fsOps, label: "Dove review state root" });
@@ -4150,16 +4160,16 @@ function resolveReviewStateRoot(options = {}) {
   return resolved;
 }
 function ensureRealDirectory(directoryPath, options = {}) {
-  const fsOps = options.fsOps ?? fs14;
+  const fsOps = options.fsOps ?? fs15;
   const label = options.label ?? "Directory";
   if (typeof directoryPath !== "string" || !directoryPath.trim() || directoryPath.includes("\0")) throw new Error(`${label} must name a directory.`);
-  const resolved = path14.resolve(directoryPath);
-  const parsed = path14.parse(resolved);
+  const resolved = path15.resolve(directoryPath);
+  const parsed = path15.parse(resolved);
   let current = parsed.root;
-  const relative = path14.relative(parsed.root, resolved);
-  const components = relative ? relative.split(path14.sep).filter(Boolean) : [];
+  const relative = path15.relative(parsed.root, resolved);
+  const components = relative ? relative.split(path15.sep).filter(Boolean) : [];
   for (const component of components) {
-    current = path14.join(current, component);
+    current = path15.join(current, component);
     const stat = lstatOrNull7(fsOps, current);
     if (stat === null) {
       fsOps.mkdirSync(current, { mode: 448 });
@@ -4173,7 +4183,7 @@ function ensureRealDirectory(directoryPath, options = {}) {
 }
 function reviewWorkspaceLocation(reviewId, options = {}) {
   const id = normalizeReviewId(reviewId);
-  const fsOps = options.fsOps ?? fs14;
+  const fsOps = options.fsOps ?? fs15;
   const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   return { id, stateRoot, stateRootFs, workspaceRoot: stateRootFs.displayPath(id) };
@@ -4182,13 +4192,13 @@ function writeMaterialFiles(root, files, fsOps) {
   const anchor = openRootedFilesystem(root, { fsOps });
   for (const file of files) {
     const relativePath = anchor.normalize(file.path, "Dove review copied material path");
-    const parent = path14.posix.dirname(relativePath);
+    const parent = path15.posix.dirname(relativePath);
     if (parent !== ".") anchor.mkdir(parent, { recursive: true, mode: 448 });
     anchor.writeNewFile(relativePath, file.bytes, { mode: 384 });
   }
 }
 function prepareReviewWorkspace(options = {}) {
-  const fsOps = options.fsOps ?? fs14;
+  const fsOps = options.fsOps ?? fs15;
   if (!Array.isArray(options.files)) throw new Error("Dove review workspace files must be an array.");
   const { id, stateRoot, stateRootFs, workspaceRoot } = reviewWorkspaceLocation(options.reviewId, options);
   const stagingName = `.${id}.staging-${crypto6.randomUUID()}`;
@@ -4259,7 +4269,7 @@ function listWorkspaceFiles(anchor, relativeDir = "") {
 }
 function finalizePreparedReviewWorkspace(workspace, options = {}) {
   if (!workspace?.previousWorkspaceBackupName) return;
-  const fsOps = options.fsOps ?? fs14;
+  const fsOps = options.fsOps ?? fs15;
   const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   try {
@@ -4269,7 +4279,7 @@ function finalizePreparedReviewWorkspace(workspace, options = {}) {
 }
 function restorePreparedReviewWorkspace(workspace, options = {}) {
   if (!workspace?.reviewId) return;
-  const fsOps = options.fsOps ?? fs14;
+  const fsOps = options.fsOps ?? fs15;
   const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   const current = stateRootFs.tryLstat(workspace.reviewId);
@@ -4281,7 +4291,7 @@ function restorePreparedReviewWorkspace(workspace, options = {}) {
   stateRootFs.rename(workspace.previousWorkspaceBackupName, workspace.reviewId);
 }
 function assertReviewWorkspaceMatchesSnapshot(options = {}) {
-  const fsOps = options.fsOps ?? fs14;
+  const fsOps = options.fsOps ?? fs15;
   const snapshot = options.snapshot;
   if (!snapshot || !Array.isArray(snapshot.materials)) throw new Error("Dove review snapshot is missing its material manifest.");
   const { workspaceRoot } = reviewWorkspaceLocation(options.reviewId, options);
@@ -4302,8 +4312,8 @@ function assertReviewWorkspaceMatchesSnapshot(options = {}) {
 
 // src/core/review-runtime.mjs
 import crypto7 from "node:crypto";
-import fs15 from "node:fs";
-import path15 from "node:path";
+import fs16 from "node:fs";
+import path16 from "node:path";
 var REVIEW_RECORD_SCHEMA = "dove.review.record.v1";
 var IMPORTED_SNAPSHOT_SCHEMA = "dove.review.imported-snapshot.v1";
 var LOCAL_BACKEND_ID = "dove-review-runtime";
@@ -4375,13 +4385,13 @@ Also include the strongest objections, evidence needed to resolve them, and conc
 `;
 }
 function normalizeProject(project, options = {}) {
-  return resolveInstalledProjectRoot(project ?? options.cwd ?? process.cwd(), { fsOps: options.fsOps ?? fs15 });
+  return resolveInstalledProjectRoot(project ?? options.cwd ?? process.cwd(), { fsOps: options.fsOps ?? fs16 });
 }
 function absentFileState() {
   return { exists: false, type: "absent", sha256: null, mode: null };
 }
 function fileState(projectRoot, relativePath, options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const stat = anchor.tryLstat(relativePath);
   if (!stat) return absentFileState();
@@ -4392,7 +4402,7 @@ function fileState(projectRoot, relativePath, options = {}) {
   return { exists: true, type: "file", sha256: sha2567(bytes), mode: stat.mode & 4095 };
 }
 function readReviewRecordWithState(projectRoot, reviewId, options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const pathName = reviewPath(reviewId);
   const stat = anchor.tryLstat(pathName);
@@ -4417,7 +4427,7 @@ function requireReviewRecord(projectRoot, reviewId, options = {}) {
   return requireReviewRecordWithState(projectRoot, reviewId, options).record;
 }
 function readSnapshot(projectRoot, reviewId, round, options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const pathName = roundPaths(reviewId, round).snapshot;
   const value = parseJsonWithoutDuplicateKeys(anchor.readFile(pathName).toString("utf8"), pathName);
@@ -4434,7 +4444,7 @@ function writeReviewFiles(projectRoot, files, options = {}) {
     ...file.expectedState ? { expectedState: file.expectedState } : {},
     label: "Dove review record path"
   }));
-  return writeFileSetTransaction(entries, { fsOps: options.fsOps ?? fs15, transactionBase: ".dove/reviews/.transactions" });
+  return writeFileSetTransaction(entries, { fsOps: options.fsOps ?? fs16, transactionBase: ".dove/reviews/.transactions" });
 }
 function reportBytesForOutcome(outcome) {
   if (outcome.status === "completed") return Buffer.from(outcome.report, "utf8");
@@ -4600,7 +4610,7 @@ function assertCurrentRoundCanUseRuntime(record) {
 }
 function stateRootOptions(options = {}) {
   return {
-    fsOps: options.fsOps ?? fs15,
+    fsOps: options.fsOps ?? fs16,
     env: options.env ?? process.env,
     ...options.stateRoot ? { stateRoot: options.stateRoot } : {},
     ...options.projectRoot ? { projectRoot: options.projectRoot } : {}
@@ -4623,7 +4633,7 @@ function ensureLockRoot(stateRootFs) {
   return lockRoot;
 }
 function acquireReviewMutationLock(reviewId, options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const stateRoot = resolveReviewStateRoot(stateRootOptions(options));
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   const lockRoot = ensureLockRoot(stateRootFs);
@@ -4693,7 +4703,7 @@ function publicReviewResult(kind, projectRoot, review, round, extras = {}) {
   };
 }
 function handoffReview(options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id ?? createReviewId({ now: options.now }));
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
@@ -4727,7 +4737,7 @@ function handoffReview(options = {}) {
   });
 }
 function resumeReview(options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
@@ -4760,7 +4770,7 @@ function resumeReview(options = {}) {
   });
 }
 function rerunReview(options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
@@ -4795,8 +4805,8 @@ function rerunReview(options = {}) {
 }
 function importFileBytes(filePath, options = {}) {
   if (typeof filePath !== "string" || !filePath.trim() || filePath.includes("\0")) throw new Error("dove review import requires --file <path>.");
-  const fsOps = options.fsOps ?? fs15;
-  const resolved = path15.resolve(options.cwd ?? process.cwd(), filePath);
+  const fsOps = options.fsOps ?? fs16;
+  const resolved = path16.resolve(options.cwd ?? process.cwd(), filePath);
   const stat = fsOps.lstatSync(resolved);
   if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`Dove review import file must be a regular non-symlink file: ${resolved}`);
   return { sourceFile: resolved, bytes: fsOps.readFileSync(resolved) };
@@ -4810,7 +4820,7 @@ function importedSnapshot(options) {
       venue: options.venue,
       materials: options.materials,
       now: options.createdAt,
-      fsOps: options.fsOps ?? fs15
+      fsOps: options.fsOps ?? fs16
     }).snapshot;
   }
   return {
@@ -4825,7 +4835,7 @@ function importedSnapshot(options) {
   };
 }
 function importReviewReturn(options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
@@ -4876,7 +4886,7 @@ function importReviewReturn(options = {}) {
   });
 }
 function reviewRecordsDirectory(projectRoot, options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const stat = anchor.tryLstat(".dove/reviews");
   if (!stat) return [];
@@ -4884,7 +4894,7 @@ function reviewRecordsDirectory(projectRoot, options = {}) {
   return anchor.readdir(".dove/reviews", { withFileTypes: true }).filter((entry) => !entry.name.startsWith(".") && entry.isDirectory() && !entry.isSymbolicLink()).map((entry) => entry.name).sort();
 }
 function inspectReviewStatus(options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const projectRoot = normalizeProject(options.project, options);
   if (options.id !== void 0 && options.id !== null) {
     const reviewId = normalizeReviewId(options.id);
@@ -4919,9 +4929,9 @@ function reviewStateLocation(options = {}) {
 
 // src/core/run-record.mjs
 import crypto8 from "node:crypto";
-import fs16 from "node:fs";
+import fs17 from "node:fs";
 import os2 from "node:os";
-import path16 from "node:path";
+import path17 from "node:path";
 import process2 from "node:process";
 var RUN_EVENT_SCHEMA_VERSION = "dove.run.event.v1";
 var RUNS_DIRECTORY_PATH = ARTIFACT_PATHS.runsDir;
@@ -5011,7 +5021,7 @@ function normalizeRunId(value) {
   return value;
 }
 function normalizeRunProject(project, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   return resolveInstalledProjectRoot(project ?? options.cwd ?? process2.cwd(), { fsOps });
 }
 function runRelativePaths(runId) {
@@ -5028,17 +5038,17 @@ function runAbsolutePaths(projectRoot, runId) {
   const relative = runRelativePaths(runId);
   return {
     ...relative,
-    absoluteRunDirectory: path16.join(projectRoot, relative.runDirectory),
-    absoluteJournalPath: path16.join(projectRoot, relative.journalPath),
-    absoluteStdoutPath: path16.join(projectRoot, relative.stdoutPath),
-    absoluteStderrPath: path16.join(projectRoot, relative.stderrPath)
+    absoluteRunDirectory: path17.join(projectRoot, relative.runDirectory),
+    absoluteJournalPath: path17.join(projectRoot, relative.journalPath),
+    absoluteStdoutPath: path17.join(projectRoot, relative.stdoutPath),
+    absoluteStderrPath: path17.join(projectRoot, relative.stderrPath)
   };
 }
 function ensureRunsRoot(projectRoot, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
-  const doveRoot = path16.join(projectRoot, ARTIFACT_PATHS.doveRoot);
+  const fsOps = options.fsOps ?? fs17;
+  const doveRoot = path17.join(projectRoot, ARTIFACT_PATHS.doveRoot);
   assertRealDirectory(fsOps, doveRoot, "Dove workspace root");
-  const runsRoot = path16.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const runsRoot = path17.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull8(fsOps, runsRoot);
   if (stat !== null) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -5054,7 +5064,7 @@ function ensureRunsRoot(projectRoot, options = {}) {
   return runsRoot;
 }
 function reserveRunDirectory(options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const projectRoot = normalizeRunProject(options.project, options);
   const runId = normalizeRunId(options.id ?? createRunId({ now: options.now }));
   ensureRunsRoot(projectRoot, { fsOps });
@@ -5069,13 +5079,13 @@ function reserveRunDirectory(options = {}) {
   return { projectRoot, runId, paths };
 }
 function requireRunDirectory(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const paths = runAbsolutePaths(projectRoot, runId);
   assertRealDirectory(fsOps, paths.absoluteRunDirectory, "Dove run directory");
   return paths;
 }
 function tryRunDirectory(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const paths = runAbsolutePaths(projectRoot, runId);
   const stat = lstatOrNull8(fsOps, paths.absoluteRunDirectory);
   if (stat === null) return null;
@@ -5092,7 +5102,7 @@ function validateRunEvent(value, expectedRunId, expectedSeq, label) {
   return value;
 }
 function readRunEvents(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const id = normalizeRunId(runId);
   const paths = requireRunDirectory(projectRoot, id, { fsOps });
   assertRegularFile(fsOps, paths.absoluteJournalPath, "Dove run journal");
@@ -5107,7 +5117,7 @@ function readRunEvents(projectRoot, runId, options = {}) {
   });
 }
 function tryReadRunEvents(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const id = normalizeRunId(runId);
   const paths = tryRunDirectory(projectRoot, id, { fsOps });
   if (paths === null) return null;
@@ -5250,8 +5260,8 @@ function summarizeRun(projectRoot, runId, options = {}) {
   return summarizeStatus(projectRoot, normalizeRunId(runId), events);
 }
 function runsRootEntries(projectRoot, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
-  const runsRoot = path16.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const fsOps = options.fsOps ?? fs17;
+  const runsRoot = path17.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull8(fsOps, runsRoot);
   if (stat === null) return [];
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -5261,7 +5271,7 @@ function runsRootEntries(projectRoot, options = {}) {
   }).sort();
 }
 function listRunSummaries(options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const projectRoot = normalizeRunProject(options.project, options);
   const group = normalizeRunGroup(options.group);
   const runs = [];
@@ -5275,7 +5285,7 @@ function listRunSummaries(options = {}) {
   return { command: "status", status: "ok", project: projectRoot, group, runs };
 }
 function inspectRunStatus(options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const projectRoot = normalizeRunProject(options.project, options);
   if (options.id !== void 0 && options.id !== null) {
     if (options.group !== void 0 && options.group !== null) throw new Error("Use only one of --id or --group for dove run status.");
@@ -5306,7 +5316,7 @@ function selectedRunIds(projectRoot, options = {}) {
   return [.../* @__PURE__ */ new Set([...explicitIds, ...byGroup])].sort();
 }
 function compareRuns(options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const projectRoot = normalizeRunProject(options.project, options);
   const runIds = selectedRunIds(projectRoot, { ...options, fsOps });
   if (runIds.length === 0) {
@@ -5360,7 +5370,7 @@ function compareRuns(options = {}) {
 
 // src/core/run-supervisor.mjs
 import { spawn } from "node:child_process";
-import fs17 from "node:fs";
+import fs18 from "node:fs";
 import process3 from "node:process";
 var SUPERVISOR_ENTRY = "__dove-run-supervisor";
 var SUPERVISOR_READY_TIMEOUT_MS = 1e4;
@@ -5437,7 +5447,7 @@ async function configureSupervisorAndWait(child, payload, acceptedTypes) {
   }
   return await result;
 }
-function removeEmptyReservedRunDirectory(paths, fsOps = fs17) {
+function removeEmptyReservedRunDirectory(paths, fsOps = fs18) {
   try {
     const entries = fsOps.readdirSync(paths.absoluteRunDirectory);
     if (entries.length === 0) fsOps.rmdirSync(paths.absoluteRunDirectory);
@@ -5551,7 +5561,7 @@ async function resumeRun(options = {}) {
     supervisorPid: initial.supervisorPid,
     targetPid: initial.targetPid
   });
-  const reconciled = summarizeRun(initial.project, initial.runId, { fsOps: options.fsOps ?? fs17 });
+  const reconciled = summarizeRun(initial.project, initial.runId, { fsOps: options.fsOps ?? fs18 });
   return { command: "resume", status: "interrupted", action: "reconciled", write: true, reason: "supervisor and target pids were not observable, so Dove recorded one interrupted reconciliation", run: reconciled };
 }
 export {

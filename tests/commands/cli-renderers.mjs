@@ -1,0 +1,287 @@
+import assert from "node:assert/strict";
+
+import { CLI_COMMAND_SPECS, parseDoveCli } from "../../src/cli/command-parser.mjs";
+import { renderDoveHelp } from "../../src/cli/help-output.mjs";
+import { renderReviewResult } from "../../src/cli/review-output.mjs";
+import { renderRunMetric, renderRunResult } from "../../src/cli/run-output.mjs";
+
+function assertRuntimeCli() {
+  assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "init"));
+  assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "hook"));
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS.hook.subcommands), ["session-start", "user-prompt-submit", "statusline"], "hook subcommands must be formal parser subcommands");
+  assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "mcp"), false, "CLI must not expose the retired MCP server");
+  assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "migrate-research"), false, "CLI must not expose format migration");
+  assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "export-research"), false, "CLI must not expose the retired legacy export command");
+  assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "review"), "CLI must expose explicit isolated review handoff runtime");
+  assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "run"), "CLI must expose detached experiment run receipts");
+
+  const assertParserShape = (value) => {
+    assert.deepEqual(Object.keys(value), ["command", "subcommand", "options", "passthrough"], "parser result must expose only command/subcommand/options/passthrough");
+    assert.equal(Object.hasOwn(value, "args"), false, "parser must not return args compatibility output");
+    assert.equal(Object.hasOwn(value, "positionals"), false, "parser must not return positionals compatibility output");
+    return value;
+  };
+  const assertParserError = (argv, pattern, jsonRequested) => {
+    let caught = null;
+    try {
+      parseDoveCli(argv);
+    } catch (error) {
+      caught = error;
+    }
+    assert.ok(caught instanceof Error, `${argv.join(" ")} must fail parsing`);
+    assert.match(caught.message, pattern);
+    assert.equal(caught.jsonRequested, jsonRequested, "parser error jsonRequested must reflect only flags before '--'");
+  };
+
+  assert.deepEqual(assertParserShape(parseDoveCli(["review", "handoff", "--project=/workspace", "--venue", "TestConf", "--material", "paper/main.tex", "--material=build/main.pdf", "--id", "review-1", "--json"])), {
+    command: "review",
+    subcommand: "handoff",
+    options: { project: "/workspace", venue: "TestConf", material: ["paper/main.tex", "build/main.pdf"], id: "review-1", json: true },
+    passthrough: []
+  });
+  assert.deepEqual(assertParserShape(parseDoveCli(["hook", "user-prompt-submit", "--project=/workspace"])), {
+    command: "hook",
+    subcommand: "user-prompt-submit",
+    options: { project: "/workspace" },
+    passthrough: []
+  });
+  assert.deepEqual(assertParserShape(parseDoveCli(["init", "--host", "claude,dsh", "--host=dsh,claude", "--project=/workspace"])), {
+    command: "init",
+    subcommand: null,
+    options: { host: ["claude", "dsh"], project: "/workspace" },
+    passthrough: []
+  });
+  assert.deepEqual(assertParserShape(parseDoveCli(["run", "start", "--project", "/workspace", "--id", "run-a", "--metric-name", "score", "--direction", "max", "--", "node", "script.mjs", "--flag", "--not-dove"])), {
+    command: "run",
+    subcommand: "start",
+    options: { project: "/workspace", id: "run-a", metricName: "score", direction: "max" },
+    passthrough: ["node", "script.mjs", "--flag", "--not-dove"]
+  });
+  assert.deepEqual(assertParserShape(parseDoveCli(["run", "start", "--project", "/workspace", "--", "node", "script.mjs", "--json", "--format", "json"])), {
+    command: "run",
+    subcommand: "start",
+    options: { project: "/workspace" },
+    passthrough: ["node", "script.mjs", "--json", "--format", "json"]
+  });
+  assertParserError(["run", "status", "--project", "/workspace", "--id", "run-a", "--group", "group-a"], /(?:--id 不能和 --group|--group 不能和 --id) 同时使用/iu, false);
+  assertParserError(["run", "start", "--project", "/workspace", "--format", "text", "--", "node"], /--format 只接受 json/iu, false);
+  assertParserError(["run", "start", "--project", "/workspace", "--direction", "mean", "--", "node"], /--direction 只接受 min 或 max/iu, false);
+  assertParserError(["doctor", "--json", "--format", "json"], /--format 不能和 --json 同时使用/iu, true);
+  assertParserError(["doctor", "--", "--json"], /doctor 不接受位置参数/iu, false);
+  assertParserError(["run", "start", "--project", "/workspace", "node"], /run start 需要在 '--' 后提供要执行的命令/iu, false);
+  assertParserError(["run", "start", "--project", "/workspace", "node", "--", "script.mjs"], /Dove 选项必须写在 '--' 前/iu, false);
+  assertParserError(["mcp", "serve"], /Dove 不支持这个命令：mcp/iu, false);
+  assertParserError(["review"], /review 只接受这些子命令/iu, false);
+  assertParserError(["review", "unknown"], /review 只接受这些子命令/iu, false);
+}
+
+function assertDoveCliHelpRenderer() {
+  const output = renderDoveHelp();
+  assert.match(output, /^dove\n/u);
+  assert.match(output, /dove init \[--project <dir>\] \[--host <host>\.\.\.\] \[--json\|--format json\]/u);
+  assert.match(output, /dove review handoff --project <dir> --venue <venue> --material <path>\.\.\./u);
+  assert.match(output, /dove run start --project <dir>.* -- <command> \[args\.\.\.\]/u);
+  assert.match(output, /dove hook session-start --project <dir>/u);
+  assert.match(output, /doctor、review、run 与 hook 等项目级命令/u);
+  assert.match(output, /真正的科研推进仍在一个 Dove agent 中完成/u);
+  assert.match(output, /研究记录是研究者维护的普通 Markdown/u);
+  assert.match(output, /Dove 不安装也不暴露 Stop hook/u);
+  assert.doesNotMatch(output, /(^|[^A-Za-z0-9_])mcp([^A-Za-z0-9_]|$)|migrate-research|export-research|auto|paper-factory/iu);
+}
+
+function assertReviewResultRenderer() {
+  const emptyStatus = renderReviewResult({ command: "status", project: "/workspace/example-project", reviews: [] });
+  assert.match(emptyStatus, /Dove review 状态/u);
+  assert.match(emptyStatus, /尚无 \.dove\/reviews\/\*\* 记录/u);
+
+  const listStatus = renderReviewResult({
+    command: "status",
+    project: "/workspace/example-project",
+    reviews: [{ reviewId: "review-1", status: "completed", currentRound: 2, sessionId: "session-1" }]
+  });
+  assert.match(listStatus, /review-1：completed，轮次 2，会话 session-1/u);
+
+  const detailedStatus = renderReviewResult({
+    command: "status",
+    project: "/workspace/example-project",
+    reviewId: "review-1",
+    status: "completed",
+    currentRound: 2,
+    sessionId: null,
+    rounds: [{ round: 1, status: "completed", provenance: "runtime", reportPath: ".dove/reviews/review-1/rounds/1/report.md", latestReportPath: ".dove/reviews/review-1/rounds/1/report-imported.md" }]
+  });
+  assert.match(detailedStatus, /审阅记录：review-1/u);
+  assert.match(detailedStatus, /会话：无/u);
+  assert.doesNotMatch(detailedStatus, /^Review：|^Session：|^Backend：/mu);
+  assert.match(detailedStatus, /轮次 1：completed（runtime），报告 \.dove\/reviews\/review-1\/rounds\/1\/report-imported\.md/u);
+  assert.match(detailedStatus, /原始报告保留在 \.dove\/reviews\/review-1\/rounds\/1\/report\.md/u);
+
+  const handoff = renderReviewResult({
+    command: "handoff",
+    project: "/workspace/example-project",
+    reviewId: "review-1",
+    round: 1,
+    status: "waiting",
+    provenance: "runtime",
+    sessionId: "session-1",
+    reportPath: ".dove/reviews/review-1/rounds/1/report.md",
+    backendPath: ".dove/reviews/review-1/rounds/1/backend.json",
+    materials: [{ path: "paper/main.tex", size: 123 }, { path: "paper/unsafe" + String.fromCharCode(7) + ".tex", size: "bad" + String.fromCharCode(0) }]
+  });
+  assert.match(handoff, /Dove review handoff 已完成/u);
+  assert.match(handoff, /paper\/main\.tex \(123 bytes\)/u);
+  assert.match(handoff, /paper\/unsafe\?\.tex \(bad\? bytes\)/u);
+  assert.match(handoff, /Reviewer 只接收本轮冻结材料/u);
+
+  const imported = renderReviewResult({
+    command: "import",
+    project: "/workspace/example-project",
+    reviewId: "review-1",
+    round: 2,
+    status: "imported",
+    provenance: "imported",
+    sessionId: null,
+    reportPath: ".dove/reviews/review-1/rounds/2/report.md",
+    backendPath: ".dove/reviews/review-1/rounds/2/backend.json",
+    materials: []
+  });
+  assert.match(imported, /Dove review return 已导入/u);
+  assert.match(imported, /无；这是导入的外部返回记录/u);
+  assert.match(imported, /按用户提供文件原样保存/u);
+
+  const safe = renderReviewResult({
+    command: "status",
+    project: "/workspace" + String.fromCharCode(0) + "bad",
+    reviews: [{ reviewId: "review" + String.fromCharCode(7) + "bad", status: "ok", currentRound: 1 }]
+  });
+  assert.match(safe, /\?/u);
+  for (const character of safe) {
+    const code = character.codePointAt(0);
+    assert.ok(code === 10 || code >= 32, "review renderer must replace non-newline control characters");
+  }
+}
+
+function assertRunResultRenderer() {
+  assert.equal(renderRunMetric(null), "未指定");
+  assert.equal(renderRunMetric({ name: "score", direction: "max", unit: "f1", value: 0.9 }), "score max f1=0.9");
+
+  const start = renderRunResult({
+    command: "start",
+    project: "/workspace/example-project",
+    runId: "run-1",
+    status: "running",
+    supervisorPid: 1234,
+    argv: ["node", "script.mjs"],
+    cwd: "/workspace/example-project",
+    paths: { journalPath: ".dove/runs/run-1/run.jsonl", stdoutPath: ".dove/runs/run-1/stdout.log", stderrPath: ".dove/runs/run-1/stderr.log" }
+  });
+  assert.match(start, /Dove run 已启动/u);
+  assert.match(start, /日志：\.dove\/runs\/run-1\/run\.jsonl/u);
+  assert.doesNotMatch(start, /^Run：|^Journal：/mu);
+  assert.match(start, /本地执行收据/u);
+
+  const listStatus = renderRunResult({
+    command: "status",
+    project: "/workspace/example-project",
+    group: "main",
+    runs: [{ runId: "run-1", status: "terminal", group: "main", finalized: true, metric: { name: "score", direction: "max", value: 0.9 } }]
+  });
+  assert.match(listStatus, /Dove run 状态/u);
+  assert.match(listStatus, /分组：main/u);
+  assert.match(listStatus, /run-1：terminal，分组 main，指标 score max=0.9/u);
+
+  const emptyListStatus = renderRunResult({ command: "status", project: "/workspace/example-project", runs: [] });
+  assert.match(emptyListStatus, /尚无匹配的 \.dove\/runs\/\*\* 记录/u);
+
+  const detailStatus = renderRunResult({
+    command: "status",
+    project: "/workspace/example-project",
+    runId: "run-1",
+    status: "terminal",
+    lifecycle: "completed",
+    terminal: true,
+    finalized: false,
+    exitCode: 0,
+    signal: null,
+    metric: { name: "score", direction: "max" },
+    paths: { journalPath: ".dove/runs/run-1/run.jsonl", stdoutPath: ".dove/runs/run-1/stdout.log", stderrPath: ".dove/runs/run-1/stderr.log" }
+  });
+  assert.match(detailStatus, /PID 只作为观察信号，不是强身份/u);
+  assert.match(detailStatus, /退出码：0/u);
+  assert.match(detailStatus, /信号：无/u);
+  assert.doesNotMatch(detailStatus, /^Run：|^Lifecycle：|^Terminal：|^Finalized：|^Exit：|^Signal：|^Metric：|^Journal：/mu);
+
+  const resume = renderRunResult({ command: "resume", status: "terminal", action: "none", write: "none", reason: "already terminal", run: { runId: "run-1" } });
+  assert.match(resume, /Dove run resume/u);
+  assert.match(resume, /动作：none/u);
+
+  const finalize = renderRunResult({ command: "finalize", summary: { runId: "run-1" }, event: { metric: { name: "score", direction: "max", unit: "f1", value: 0.9 }, decision: "keep", note: "ok" } });
+  assert.match(finalize, /Dove run 已 finalize/u);
+  assert.match(finalize, /指标：score max f1=0.9/u);
+  assert.doesNotMatch(finalize, /^Metric：|^Decision：|^Note：/mu);
+
+  const notComparable = renderRunResult({ command: "compare", comparable: false, fields: ["metric", "budget"] });
+  assert.match(notComparable, /可比较：false/u);
+  assert.match(notComparable, /terminal 且 finalized/u);
+
+  const comparable = renderRunResult({
+    command: "compare",
+    comparable: true,
+    basis: { metric: { name: "score", direction: "max", value: 0.9 } },
+    ranking: [{ rank: 1, runId: "run-1", metricValue: 0.9, deltaFromBest: 0 }]
+  });
+  assert.match(comparable, /可比较：true/u);
+  assert.match(comparable, /1\. run-1 指标值 0\.9，与最佳差值 0/u);
+
+  const fallback = renderRunResult({ command: "unknown", value: 1 });
+  assert.equal(fallback, JSON.stringify({ command: "unknown", value: 1 }, null, 2));
+}
+
+function assertCliParserAdditionalCases() {
+  const assertParserShape = (value) => {
+    assert.deepEqual(Object.keys(value), ["command", "subcommand", "options", "passthrough"], "parser result must expose only command/subcommand/options/passthrough");
+    return value;
+  };
+  assert.deepEqual(assertParserShape(parseDoveCli(["--help"])), { command: "--help", subcommand: null, options: {}, passthrough: [] });
+  assert.deepEqual(assertParserShape(parseDoveCli(["--version"])), { command: "--version", subcommand: null, options: {}, passthrough: [] });
+  assert.deepEqual(assertParserShape(parseDoveCli(["doctor", "--format=json"])), { command: "doctor", subcommand: null, options: { format: "json" }, passthrough: [] });
+  assert.deepEqual(assertParserShape(parseDoveCli(["run", "compare", "--project", "/workspace", "--id", "run-a", "--id=run-b"])), {
+    command: "run",
+    subcommand: "compare",
+    options: { project: "/workspace", id: ["run-a", "run-b"] },
+    passthrough: []
+  });
+  assert.deepEqual(assertParserShape(parseDoveCli(["review", "status", "--project", "/workspace", "--id", "review-1", "--format", "json"])), {
+    command: "review",
+    subcommand: "status",
+    options: { project: "/workspace", id: "review-1", format: "json" },
+    passthrough: []
+  });
+
+  for (const [argv, pattern, jsonRequested] of [
+    [["--help", "extra"], /--help 后面不接受其他参数/iu, false],
+    [["doctor", "--json=true"], /--json 不接受值/iu, true],
+    [["doctor", "--json", "--json"], /--json 只能提供一次/iu, true],
+    [["init", "--host", ",,"], /--host 需要一个值/iu, false],
+    [["init", "--host", "all"], /--host 只接受 claude 或 dsh/iu, false],
+    [["doctor", "--json", "--", "--format", "json"], /doctor 不接受位置参数/iu, true]
+  ]) {
+    let caught = null;
+    try {
+      parseDoveCli(argv);
+    } catch (error) {
+      caught = error;
+    }
+    assert.ok(caught instanceof Error, `${argv.join(" ")} must fail parsing`);
+    assert.match(caught.message, pattern);
+    assert.equal(caught.jsonRequested, jsonRequested, "parser error jsonRequested must reflect only flags before '--'");
+  }
+}
+
+export function assertCliParserAndRenderers() {
+  assertRuntimeCli();
+  assertCliParserAdditionalCases();
+  assertDoveCliHelpRenderer();
+  assertReviewResultRenderer();
+  assertRunResultRenderer();
+}

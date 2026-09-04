@@ -8,8 +8,11 @@ import { confirm } from "@inquirer/prompts";
 
 import { parseDoveCli } from "../src/cli/command-parser.mjs";
 import { renderDoveDoctor } from "../src/cli/doctor-output.mjs";
+import { renderDoveHelp } from "../src/cli/help-output.mjs";
 import { runInteractiveDoveSetup } from "../src/cli/interactive-setup.mjs";
 import { renderProjectIntegrationResult } from "../src/cli/project-integration-output.mjs";
+import { renderReviewResult } from "../src/cli/review-output.mjs";
+import { renderRunResult } from "../src/cli/run-output.mjs";
 import {
   isInteractiveTerminal,
   renderCompleteReinstallInventory,
@@ -36,118 +39,48 @@ const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
 if (isRunSupervisorInvocation(process.argv.slice(2))) await runSupervisorMain(process.argv.slice(2));
-const KNOWN_COMMANDS = new Set(["init", "update", "reinstall", "uninstall", "doctor", "review", "run", "hook"]);
 
-function usage() {
-  console.log(`dove
-
-Usage:
-  dove --help
-  dove --version
-  dove init [--project <dir>] [--host <host>...] [--json|--format json]
-  dove update [--project <dir>] [--host <host>...] [--json|--format json]
-  dove reinstall [--project <dir>] [--json|--format json]
-  dove uninstall [--project <dir>] [--json|--format json]
-  dove doctor [--project <dir>] [--json|--format json]
-  dove review handoff --project <dir> --venue <venue> --material <path>... [--id <id>] [--json|--format json]
-  dove review status --project <dir> [--id <id>] [--json|--format json]
-  dove review resume --project <dir> --id <id> [--json|--format json]
-  dove review rerun --project <dir> --id <id> --material <path>... [--venue <venue>] [--json|--format json]
-  dove review import --project <dir> --id <id> --file <report.md> [--venue <venue>] [--material <path>...] [--json|--format json]
-  dove run start --project <dir> [--id <id>] [--group <name>] [--wall-time <duration>|--timeout-ms <ms>] [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--data <basis>] [--evaluator <basis>] [--resource-basis <basis>] [--kill-grace-ms <ms>] [--json|--format json] -- <command> [args...]
-  dove run status --project <dir> [--id <id>|--group <name>] [--json|--format json]
-  dove run resume --project <dir> --id <id> [--json|--format json]
-  dove run finalize --project <dir> --id <id> --metric-value <number> [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--decision <text>] [--note <text>] [--json|--format json]
-  dove run compare --project <dir> [--group <name>|--id <id>...] [--json|--format json]
-  dove hook session-start --project <dir>
-  dove hook user-prompt-submit --project <dir>
-  dove hook statusline --project <dir>
-
-The runtime CLI manages project integration, diagnostics, host lifecycle hooks, the explicit isolated dove-review handoff runtime, and detached experiment run receipts under \`.dove/runs/<id>/\`. Research work uses one Dove agent and nine optional capability Skills with ordinary Markdown research documents. Project initialization creates the minimal researcher-owned \`.dove/research/RESEARCH.md\` entry, but it does not create research progress, a Mission, or a scientific conclusion. Dove does not install or expose a Stop hook.
-`);
+function projectOption(options) {
+  return options.project ?? undefined;
 }
 
-function readFlagValue(args, flag) {
-  const index = args.indexOf(flag);
-  return index >= 0 && index + 1 < args.length ? args[index + 1] : null;
+function selectedHosts(options) {
+  return options.host ?? undefined;
 }
 
-function readFlagValues(args, flag) {
-  const values = [];
-  for (let index = 0; index < args.length; index += 1) {
-    if (args[index] === flag && index + 1 < args.length) {
-      values.push(args[index + 1]);
-      index += 1;
-    }
-  }
-  return values;
+function reviewMaterials(options) {
+  return Array.isArray(options.material) && options.material.length > 0 ? options.material : undefined;
 }
 
-function projectFlag(args) {
-  return readFlagValue(args, "--project") ?? undefined;
+function runIds(options) {
+  if (Array.isArray(options.id)) return options.id.length > 0 ? options.id : undefined;
+  return options.id === undefined ? undefined : [options.id];
 }
 
-function selectedHosts(args) {
-  const raw = readFlagValues(args, "--host");
-  if (raw.length === 0) return undefined;
-  const requested = raw.flatMap((value) => value.split(",").map((item) => item.trim()).filter(Boolean));
-  return [...new Set(requested)];
-}
-
-function reviewMaterials(args) {
-  const values = readFlagValues(args, "--material");
-  return values.length === 0 ? undefined : values;
-}
-
-function reviewIdFlag(args) {
-  return readFlagValue(args, "--id") ?? undefined;
-}
-
-function reviewVenueFlag(args) {
-  return readFlagValue(args, "--venue") ?? undefined;
-}
-
-function reviewFileFlag(args) {
-  return readFlagValue(args, "--file") ?? undefined;
-}
-
-function runIdFlag(args) {
-  return readFlagValue(args, "--id") ?? undefined;
-}
-
-function runIds(args) {
-  const values = readFlagValues(args, "--id");
-  return values.length === 0 ? undefined : values;
-}
-
-function runGroupFlag(args) {
-  return readFlagValue(args, "--group") ?? undefined;
-}
-
-function runCommonFlags(args) {
+function runCommonOptions(options) {
   return {
-    project: projectFlag(args) ?? process.cwd(),
-    id: runIdFlag(args),
-    group: runGroupFlag(args),
-    wallTime: readFlagValue(args, "--wall-time") ?? undefined,
-    timeoutMs: readFlagValue(args, "--timeout-ms") ?? undefined,
-    killGraceMs: readFlagValue(args, "--kill-grace-ms") ?? undefined,
-    metricName: readFlagValue(args, "--metric-name") ?? undefined,
-    direction: readFlagValue(args, "--direction") ?? undefined,
-    metricUnit: readFlagValue(args, "--metric-unit") ?? undefined,
-    data: readFlagValue(args, "--data") ?? undefined,
-    evaluator: readFlagValue(args, "--evaluator") ?? undefined,
-    resourceBasis: readFlagValue(args, "--resource-basis") ?? undefined,
-    decision: readFlagValue(args, "--decision") ?? undefined,
-    note: readFlagValue(args, "--note") ?? undefined,
-    metricValue: readFlagValue(args, "--metric-value") ?? undefined,
+    project: projectOption(options) ?? process.cwd(),
+    id: Array.isArray(options.id) ? undefined : options.id,
+    group: options.group,
+    wallTime: options.wallTime,
+    timeoutMs: options.timeoutMs,
+    killGraceMs: options.killGraceMs,
+    metricName: options.metricName,
+    direction: options.direction,
+    metricUnit: options.metricUnit,
+    data: options.data,
+    evaluator: options.evaluator,
+    resourceBasis: options.resourceBasis,
+    decision: options.decision,
+    note: options.note,
+    metricValue: options.metricValue,
     cwd: process.cwd(),
     executablePath: __filename
   };
 }
 
-function wantsJson(args) {
-  return args.includes("--json") || readFlagValue(args, "--format") === "json";
+function wantsJson(options = {}) {
+  return options.json === true || options.format === "json";
 }
 
 function integrationResult(result) {
@@ -155,178 +88,35 @@ function integrationResult(result) {
   return publicFields;
 }
 
-function writeIntegrationResult(command, result, args) {
-  if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
+function writeJson(value) {
+  console.log(JSON.stringify(value, null, 2));
+}
+
+function writeIntegrationResult(command, result, options) {
+  if (wantsJson(options)) writeJson(result);
   else console.log(renderProjectIntegrationResult(command, result, { stream: process.stdout, env: process.env }));
 }
 
-function writeLifecycleResult(command, result, args) {
-  if (wantsJson(args)) console.log(JSON.stringify(integrationResult(result), null, 2));
+function writeLifecycleResult(command, result, options) {
+  if (wantsJson(options)) writeJson(integrationResult(result));
   else console.log(renderDoveLifecycleResult(command, result, { stream: process.stdout, env: process.env }));
 }
 
-function terminalSafeText(value) {
-  return String(value ?? "").replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
-}
-
-function renderReviewResult(result) {
-  if (result.command === "status" && Array.isArray(result.reviews)) {
-    const lines = ["Dove review 状态", "", `项目：${terminalSafeText(result.project)}`];
-    if (result.reviews.length === 0) lines.push("", "尚无 .dove/reviews/** 记录。");
-    else lines.push("", ...result.reviews.map((review) => `- ${terminalSafeText(review.reviewId)}: ${terminalSafeText(review.status)} round ${review.currentRound}${review.sessionId ? ` session ${terminalSafeText(review.sessionId)}` : ""}`));
-    return lines.join("\n");
-  }
-  if (result.command === "status") {
-    return [
-      "Dove review 状态",
-      "",
-      `项目：${terminalSafeText(result.project)}`,
-      `Review：${terminalSafeText(result.reviewId)}`,
-      `状态：${terminalSafeText(result.status)}`,
-      `当前轮次：${terminalSafeText(result.currentRound)}`,
-      `Session：${terminalSafeText(result.sessionId ?? "无")}`,
-      "",
-      ...(result.rounds ?? []).map((round) => {
-        const latest = round.latestReportPath ?? round.reportPath;
-        const canonical = latest === round.reportPath ? "" : `；原始报告保留在 ${terminalSafeText(round.reportPath)}`;
-        return `- round ${round.round}: ${round.status} (${round.provenance}) ${terminalSafeText(latest)}${canonical}`;
-      })
-    ].join("\n");
-  }
-  const heading = {
-    handoff: "Dove review handoff 已完成",
-    resume: "Dove review 已恢复并更新当前轮次",
-    rerun: "Dove review 已在同一 reviewer session 开始新完整轮次",
-    import: "Dove review return 已导入"
-  }[result.command] ?? "Dove review 完成";
-  const materialLines = (result.materials ?? []).map((material) => `- ${material.path} (${material.size} bytes)`);
-  return [
-    heading,
-    "",
-    `项目：${terminalSafeText(result.project)}`,
-    `Review：${terminalSafeText(result.reviewId)}`,
-    `轮次：${terminalSafeText(result.round)}`,
-    `状态：${terminalSafeText(result.status)}`,
-    `来源：${terminalSafeText(result.provenance)}`,
-    `Session：${terminalSafeText(result.sessionId ?? "无")}`,
-    `报告：${terminalSafeText(result.latestReportPath ?? result.reportPath)}`,
-    `Backend：${terminalSafeText(result.latestBackendPath ?? result.backendPath)}`,
-    "",
-    "冻结材料：",
-    ...(materialLines.length > 0 ? materialLines : ["- 无；这是导入的外部返回记录"]),
-    "",
-    result.command === "import" ? "导入内容按用户提供文件原样保存；未声称由 Dove runtime reviewer 生成。" : "Reviewer 只接收本轮冻结材料；不会读取私有 transcript。"
-  ].join("\n");
-}
-
-function writeReviewResult(result, args) {
-  if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
+function writeReviewResult(result, options) {
+  if (wantsJson(options)) writeJson(result);
   else console.log(renderReviewResult(result));
 }
 
-function renderRunMetric(metric) {
-  if (!metric || metric.name === null || metric.name === undefined) return "未指定";
-  const value = Object.hasOwn(metric, "value") ? `=${terminalSafeText(metric.value)}` : "";
-  return `${terminalSafeText(metric.name)} ${terminalSafeText(metric.direction)}${metric.unit ? ` ${terminalSafeText(metric.unit)}` : ""}${value}`;
-}
-
-function renderRunResult(result) {
-  if (result.command === "start") {
-    return [
-      "Dove run 已启动",
-      "",
-      `项目：${terminalSafeText(result.project)}`,
-      `Run：${terminalSafeText(result.runId)}`,
-      `状态：${terminalSafeText(result.status)}`,
-      `Supervisor PID：${terminalSafeText(result.supervisorPid)}`,
-      `命令：${terminalSafeText(result.argv.join(" "))}`,
-      `工作目录：${terminalSafeText(result.cwd)}`,
-      `Journal：${terminalSafeText(result.paths.journalPath)}`,
-      `stdout：${terminalSafeText(result.paths.stdoutPath)}`,
-      `stderr：${terminalSafeText(result.paths.stderrPath)}`,
-      "",
-      "Run 记录只证明该命令的本地执行收据；科研结论仍需 Dove 根据真实结果判断。"
-    ].join("\n");
-  }
-  if (result.command === "status" && Array.isArray(result.runs)) {
-    const lines = ["Dove run 状态", "", `项目：${terminalSafeText(result.project)}`];
-    if (result.group) lines.push(`Group：${terminalSafeText(result.group)}`);
-    if (result.runs.length === 0) lines.push("", "尚无匹配的 .dove/runs/** 记录。");
-    else lines.push("", ...result.runs.map((run) => `- ${terminalSafeText(run.runId)}: ${terminalSafeText(run.status)}${run.group ? ` group ${terminalSafeText(run.group)}` : ""}${run.finalized ? ` metric ${renderRunMetric(run.metric)}` : ""}`));
-    return lines.join("\n");
-  }
-  if (result.command === "status") {
-    return [
-      "Dove run 状态",
-      "",
-      `项目：${terminalSafeText(result.project)}`,
-      `Run：${terminalSafeText(result.runId)}`,
-      `状态：${terminalSafeText(result.status)}`,
-      `Lifecycle：${terminalSafeText(result.lifecycle)}`,
-      `Terminal：${terminalSafeText(result.terminal)}`,
-      `Finalized：${terminalSafeText(result.finalized)}`,
-      `Exit：${terminalSafeText(result.exitCode ?? "无")}`,
-      `Signal：${terminalSafeText(result.signal ?? "无")}`,
-      `Metric：${renderRunMetric(result.metric)}`,
-      `Journal：${terminalSafeText(result.paths.journalPath)}`,
-      `stdout：${terminalSafeText(result.paths.stdoutPath)}`,
-      `stderr：${terminalSafeText(result.paths.stderrPath)}`,
-      "",
-      "PID 只作为观察信号，不是强身份。status 只读，不会修复或追加记录。"
-    ].join("\n");
-  }
-  if (result.command === "resume") {
-    return [
-      "Dove run resume",
-      "",
-      `Run：${terminalSafeText(result.run?.runId)}`,
-      `状态：${terminalSafeText(result.status)}`,
-      `动作：${terminalSafeText(result.action)}`,
-      `写入：${terminalSafeText(result.write)}`,
-      `说明：${terminalSafeText(result.reason)}`
-    ].join("\n");
-  }
-  if (result.command === "finalize") {
-    return [
-      "Dove run 已 finalize",
-      "",
-      `Run：${terminalSafeText(result.summary.runId)}`,
-      `Metric：${renderRunMetric(result.event.metric)}`,
-      `Decision：${terminalSafeText(result.event.decision ?? "无")}`,
-      `Note：${terminalSafeText(result.event.note ?? "无")}`
-    ].join("\n");
-  }
-  if (result.command === "compare") {
-    if (!result.comparable) {
-      return [
-        "Dove run compare",
-        "",
-        `Comparable：false`,
-        `字段：${terminalSafeText((result.fields ?? []).join(", ") || "无")}`,
-        "只比较 terminal 且 finalized，并且 metric、budget、data、evaluator、resource basis 完全一致的 runs。"
-      ].join("\n");
-    }
-    return [
-      "Dove run compare",
-      "",
-      `Comparable：true`,
-      `Metric：${renderRunMetric(result.basis.metric)}`,
-      "",
-      ...result.ranking.map((item) => `${item.rank}. ${terminalSafeText(item.runId)} ${terminalSafeText(item.metricValue)} delta ${terminalSafeText(item.deltaFromBest)}`)
-    ].join("\n");
-  }
-  return JSON.stringify(result, null, 2);
-}
-
-function writeRunResult(result, args) {
-  if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
+function writeRunResult(result, options) {
+  if (wantsJson(options)) writeJson(result);
   else console.log(renderRunResult(result));
 }
 
-function operationalFailure(error, args = []) {
+function operationalFailure(error, jsonOrOptions = {}) {
   const message = error instanceof Error ? error.message : String(error);
-  if (wantsJson(args)) console.error(JSON.stringify({ status: "blocked", message }, null, 2));
-  else console.error(message);
+  const jsonRequested = typeof jsonOrOptions === "boolean" ? jsonOrOptions : wantsJson(jsonOrOptions);
+  if (jsonRequested) console.error(JSON.stringify({ status: "blocked", message }, null, 2));
+  else console.error(`Dove 不能继续：${message}`);
 }
 
 function inspect(target, options = {}) {
@@ -342,13 +132,13 @@ function inspect(target, options = {}) {
 function assertRecognizedHookManifest(manifest) {
   const compatibility = classifyPackageCompatibility(manifest.package, { name: PACKAGE_NAME, version: PACKAGE_VERSION });
   if (compatibility === "identity-mismatch") {
-    throw new Error("Dove hook execution requires matching package identity. Run dove doctor --json before making changes.");
+    throw new Error("Dove hook 执行需要匹配的 package identity。请先运行 dove doctor --json，再决定是否修改。");
   }
   if (["newer", "invalid-version"].includes(compatibility)) {
-    throw new Error("Dove hook execution refuses project integration from a newer or invalid package version. Run dove doctor --json before making changes.");
+    throw new Error("Dove hook 拒绝来自更新或无效 package version 的项目集成。请先运行 dove doctor --json，再决定是否修改。");
   }
   if (!manifest.hosts.includes("claude")) {
-    throw new Error("Dove project hooks require Claude host integration. Run dove update --host claude for this project.");
+    throw new Error("Dove project hooks 需要 Claude host integration。请在这个项目中运行 dove update --host claude。");
   }
 }
 
@@ -361,9 +151,9 @@ function prepareHookProject(project) {
 
 function assertHookPayloadProject(payload, target) {
   if (payload?.cwd === undefined) return;
-  if (typeof payload.cwd !== "string" || !payload.cwd.trim()) throw new Error("Dove hook cwd must name a directory in the initialized project.");
+  if (typeof payload.cwd !== "string" || !payload.cwd.trim()) throw new Error("Dove hook cwd 必须指向已初始化项目中的目录。");
   const cwdRoot = resolveInstalledProjectRoot(payload.cwd, { hostIds: PROJECT_HOST_IDS });
-  if (cwdRoot !== target) throw new Error("Dove hook cwd does not belong to the declared initialized project.");
+  if (cwdRoot !== target) throw new Error("Dove hook cwd 不属于声明的已初始化项目。");
 }
 
 async function readStdin() {
@@ -377,7 +167,7 @@ let parsed;
 try {
   parsed = parseDoveCli(process.argv.slice(2));
 } catch (error) {
-  operationalFailure(error, process.argv.slice(2));
+  operationalFailure(error, error?.jsonRequested === true);
   process.exit(1);
 }
 
@@ -394,7 +184,8 @@ function homeState(inspection) {
 }
 
 const command = parsed.command;
-const args = parsed.args;
+const subcommand = parsed.subcommand;
+const options = parsed.options;
 if (!command) {
   try {
     if (isInteractiveTerminal(process.stdin) && isInteractiveTerminal(process.stdout)) {
@@ -420,26 +211,22 @@ if (!command) {
     }
     process.exit(0);
   } catch (error) {
-    operationalFailure(error, args);
+    operationalFailure(error, options);
     process.exit(1);
   }
 }
 if (command === "--help") {
-  usage();
+  process.stdout.write(renderDoveHelp());
   process.exit(0);
 }
 if (command === "--version") {
   console.log(PACKAGE_VERSION);
   process.exit(0);
 }
-if (!KNOWN_COMMANDS.has(command)) {
-  usage();
-  process.exit(1);
-}
 
 try {
   if (command === "init") {
-    const requestedProject = projectFlag(args);
+    const requestedProject = projectOption(options);
     let target;
     try {
       target = resolveProjectRootForInit(requestedProject, { cwd: process.cwd(), hostIds: PROJECT_HOST_IDS });
@@ -447,9 +234,9 @@ try {
       if (!(error instanceof Error) || !error.message.includes("Dove project integration is already initialized at")) throw error;
       target = resolveInstalledProjectRoot(requestedProject ?? process.cwd());
       const manifest = readProjectInstallationManifest(target, { hostIds: PROJECT_HOST_IDS });
-      const requestedHosts = selectedHosts(args);
+      const requestedHosts = selectedHosts(options);
       if (requestedHosts !== undefined && JSON.stringify([...requestedHosts].sort()) !== JSON.stringify([...manifest.hosts].sort())) {
-        throw new Error("Dove is already initialized with a different host selection. Use dove update --host <host> to change it.");
+        throw new Error("Dove 已经用另一组 host 初始化。请使用 dove update --host <host> 修改。");
       }
       inspectProjectIntegration(target, PACKAGE_OPTIONS);
       writeIntegrationResult("init", {
@@ -459,31 +246,31 @@ try {
         writtenPaths: [],
         removedPaths: [],
         changedPaths: []
-      }, args);
+      }, options);
       process.exit(0);
     }
-    const result = initializeProjectIntegration(target, { ...PACKAGE_OPTIONS, hosts: selectedHosts(args) });
-    writeIntegrationResult("init", integrationResult(result), args);
+    const result = initializeProjectIntegration(target, { ...PACKAGE_OPTIONS, hosts: selectedHosts(options) });
+    writeIntegrationResult("init", integrationResult(result), options);
     process.exit(0);
   }
 
   if (command === "update") {
-    const target = projectFlag(args) ?? process.cwd();
+    const target = projectOption(options) ?? process.cwd();
     const result = updateDoveLifecycle(target, {
       ...PACKAGE_OPTIONS,
-      hosts: selectedHosts(args),
+      hosts: selectedHosts(options),
       inspect
     });
-    writeIntegrationResult("update", integrationResult(result), args);
+    writeIntegrationResult("update", integrationResult(result), options);
     process.exit(0);
   }
 
   if (command === "reinstall") {
-    const target = path.resolve(projectFlag(args) ?? process.cwd());
-    if (wantsJson(args)) {
+    const target = path.resolve(projectOption(options) ?? process.cwd());
+    if (wantsJson(options)) {
       const preview = previewProjectCompleteReinstall(target, PACKAGE_OPTIONS);
       const { manifest, ...publicPreview } = preview;
-      console.log(JSON.stringify(publicPreview, null, 2));
+      writeJson(publicPreview);
       process.exit(0);
     }
     const color = terminalColorEnabled(process.stdout, process.env);
@@ -498,15 +285,15 @@ try {
       process.exit(0);
     }
     const result = completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true, preview });
-    writeLifecycleResult("reinstall", result, args);
+    writeLifecycleResult("reinstall", result, options);
     process.exit(0);
   }
 
   if (command === "uninstall") {
-    const target = path.resolve(projectFlag(args) ?? process.cwd());
+    const target = path.resolve(projectOption(options) ?? process.cwd());
     const preview = previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS);
-    if (wantsJson(args)) {
-      console.log(JSON.stringify(preview, null, 2));
+    if (wantsJson(options)) {
+      writeJson(preview);
       process.exit(0);
     }
     const color = terminalColorEnabled(process.stdout, process.env);
@@ -520,27 +307,25 @@ try {
       process.exit(0);
     }
     const result = uninstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true, preview });
-    writeLifecycleResult("uninstall", result, args);
+    writeLifecycleResult("uninstall", result, options);
     process.exit(0);
   }
 
   if (command === "doctor") {
-    const result = inspect(projectFlag(args) ?? process.cwd());
-    if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
+    const result = inspect(projectOption(options) ?? process.cwd());
+    if (wantsJson(options)) writeJson(result);
     else console.log(renderDoveDoctor(result, { stream: process.stdout, env: process.env }));
     process.exit(result.staticChecksPassed ? 0 : 1);
   }
 
-
   if (command === "review") {
-    const subcommand = parsed.positionals[0];
-    const project = projectFlag(args) ?? process.cwd();
+    const project = projectOption(options) ?? process.cwd();
     const common = {
       project,
-      id: reviewIdFlag(args),
-      venue: reviewVenueFlag(args),
-      materials: reviewMaterials(args),
-      file: reviewFileFlag(args),
+      id: options.id,
+      venue: options.venue,
+      materials: reviewMaterials(options),
+      file: options.file,
       env: process.env,
       cwd: process.cwd()
     };
@@ -550,52 +335,50 @@ try {
     } else if (subcommand === "status") {
       result = inspectReviewStatus(common);
     } else if (subcommand === "resume") {
-      if (!common.id) throw new Error("dove review resume requires --id <review-id>.");
+      if (!common.id) throw new Error("dove review resume 需要 --id <review-id>。");
       result = resumeReview(common);
     } else if (subcommand === "rerun") {
-      if (!common.id) throw new Error("dove review rerun requires --id <review-id>.");
+      if (!common.id) throw new Error("dove review rerun 需要 --id <review-id>。");
       result = rerunReview(common);
     } else if (subcommand === "import") {
-      if (!common.id) throw new Error("dove review import requires --id <review-id>.");
-      if (!common.file) throw new Error("dove review import requires --file <report.md>.");
+      if (!common.id) throw new Error("dove review import 需要 --id <review-id>。");
+      if (!common.file) throw new Error("dove review import 需要 --file <report.md>。");
       result = importReviewReturn(common);
     } else {
-      throw new Error("dove review accepts only handoff, status, resume, rerun, or import.");
+      throw new Error("dove review 只接受 handoff、status、resume、rerun 或 import。");
     }
-    writeReviewResult(result, args);
+    writeReviewResult(result, options);
     process.exit(0);
   }
 
   if (command === "run") {
-    const subcommand = parsed.positionals[0];
-    const common = runCommonFlags(args);
+    const common = runCommonOptions(options);
     let result;
     if (subcommand === "start") {
-      result = await startDetachedRunSupervisor({ ...common, argv: parsed.passthrough ?? [] });
+      result = await startDetachedRunSupervisor({ ...common, argv: parsed.passthrough });
     } else if (subcommand === "status") {
       result = inspectRunStatus(common);
     } else if (subcommand === "resume") {
-      if (!common.id) throw new Error("dove run resume requires --id <run-id>.");
+      if (!common.id) throw new Error("dove run resume 需要 --id <run-id>。");
       result = await resumeRun(common);
     } else if (subcommand === "finalize") {
-      if (!common.id) throw new Error("dove run finalize requires --id <run-id>.");
-      if (common.metricValue === undefined) throw new Error("dove run finalize requires --metric-value <number>.");
+      if (!common.id) throw new Error("dove run finalize 需要 --id <run-id>。");
+      if (common.metricValue === undefined) throw new Error("dove run finalize 需要 --metric-value <number>。");
       result = await finalizeRunWithSupervisor(common);
     } else if (subcommand === "compare") {
-      result = compareRuns({ ...common, ids: runIds(args) });
+      result = compareRuns({ ...common, ids: runIds(options) });
     } else {
-      throw new Error("dove run accepts only start, status, resume, finalize, or compare.");
+      throw new Error("dove run 只接受 start、status、resume、finalize 或 compare。");
     }
-    writeRunResult(result, args);
+    writeRunResult(result, options);
     process.exit(0);
   }
 
   if (command === "hook") {
-    const hookName = parsed.positionals[0];
-    if (!["session-start", "user-prompt-submit", "statusline"].includes(hookName)) throw new Error("dove hook accepts only session-start, user-prompt-submit, or statusline.");
-    if (projectFlag(args) === undefined) throw new Error(`dove hook ${hookName} requires --project <dir>.`);
+    const hookName = subcommand;
+    if (projectOption(options) === undefined) throw new Error(`dove hook ${hookName} 需要 --project <dir>。`);
     const input = await readStdin();
-    const target = prepareHookProject(projectFlag(args));
+    const target = prepareHookProject(projectOption(options));
     if (hookName === "statusline") {
       process.stdout.write(`${target}\n`);
       process.exit(0);
@@ -612,6 +395,6 @@ try {
     process.exit(0);
   }
 } catch (error) {
-  operationalFailure(error, args);
+  operationalFailure(error, options);
   process.exit(1);
 }

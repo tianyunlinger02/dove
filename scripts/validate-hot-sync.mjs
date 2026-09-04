@@ -199,7 +199,7 @@ try {
   fs.mkdirSync(path.join(allHostRoot, ".git"));
   const allHost = cliDove(["init", "--project", allHostRoot, "--host", "all", "--json"]);
   assert.notEqual(allHost.status, 0);
-  assert.match(allHost.stderr, /'all' is not supported|host selection accepts only claude or dsh/iu);
+  assert.match(allHost.stderr, /--host 只接受 claude 或 dsh|'all' is not supported|host selection accepts only claude or dsh/iu);
   assert.equal(fs.existsSync(path.join(allHostRoot, INSTALLATION_MANIFEST_PATH)), false);
 
   const absentResearchRoot = makeProject();
@@ -288,7 +288,7 @@ try {
     last_assistant_message: "internal phrasing"
   });
   assert.notEqual(stopCli.status, 0);
-  assert.match(stopCli.stderr, /accepts only session-start, user-prompt-submit, or statusline/iu);
+  assert.match(stopCli.stderr, /hook 只接受这些子命令：session-start、user-prompt-submit，或 statusline|accepts only session-start, user-prompt-submit, or statusline/iu);
 
   const adoptionRoot = makeAdoptableProject();
   roots.push(adoptionRoot);
@@ -418,7 +418,7 @@ try {
   roots.push(otherRoot);
   const mismatchCwd = cliHook(stopRoot, "session-start", { hook_event_name: "SessionStart", cwd: otherRoot });
   assert.notEqual(mismatchCwd.status, 0);
-  assert.match(mismatchCwd.stderr, /does not belong/iu);
+  assert.match(mismatchCwd.stderr, /不属于声明的已初始化项目|does not belong/iu);
 
   console.log(JSON.stringify({ status: "passed" }, null, 2));
 } finally {

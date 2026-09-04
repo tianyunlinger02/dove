@@ -20,7 +20,8 @@
     "docs/PACKAGING.md",
     "docs/CAPABILITY_MATRIX.md",
     "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "dove": "node ./bin/dove.mjs",
@@ -51,17 +52,22 @@
     "type": "git",
     "url": "git+https://github.com/tianyunlinger02/dove.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "research",
+    "academic-writing",
+    "experiments",
+    "claude-code",
+    "markdown",
+    "cli"
+  ],
+  "author": "tianyunlinger02",
   "license": "SEE LICENSE IN LICENSE",
   "bugs": {
     "url": "https://github.com/tianyunlinger02/dove/issues"
   },
   "homepage": "https://github.com/tianyunlinger02/dove#readme",
   "devDependencies": {
+    "@inquirer/prompts": "^7.10.1",
     "esbuild": "^0.28.1"
-  },
-  "dependencies": {
-    "@inquirer/prompts": "^7.10.1"
   }
 }

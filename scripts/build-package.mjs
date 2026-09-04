@@ -21,23 +21,71 @@ const EXPECTED_OUTPUTS = [
   { entry: "bin/dove.mjs", output: "bin/dove-package.mjs", shebang: true },
   { entry: "scripts/dove-user-prompt-submit.mjs", output: "scripts/dove-user-prompt-submit-package.mjs", shebang: true }
 ];
+const NODE_EXTERNAL_IMPORT = /^(?:node:)?(?:assert|assert\/strict|async_hooks|buffer|child_process|crypto|events|fs|os|path|process|readline|stream|string_decoder|tty|url|util)$/u;
+const INQUIRER_INPUT = /^node_modules\/@inquirer\//u;
+const INQUIRER_SPECIFIER = /^@inquirer\//u;
+const REQUIRED_CLI_INQUIRER_PACKAGES = ["@inquirer/prompts", "@inquirer/select", "@inquirer/confirm", "@inquirer/checkbox"];
 
 function projectRelative(filePath) {
   return path.relative(PACKAGE_ROOT, filePath).split(path.sep).join("/");
 }
 
-function assertExternalImports(metafile, label) {
+function inputPackage(input) {
+  const match = String(input).match(/^node_modules\/(?:((?:@[^/]+\/[^/]+)|[^/]+))\//u);
+  return match?.[1] ?? null;
+}
+
+function externalImports(metafile) {
   const external = new Set();
-  for (const input of Object.values(metafile.inputs)) {
-    for (const item of input.imports) {
-      if (item.external) {
-        external.add(item.path);
-      }
+  for (const input of Object.values(metafile.inputs ?? {})) {
+    for (const item of input.imports ?? []) {
+      if (item.external) external.add(item.path);
     }
   }
-  for (const specifier of external) {
-    assert.match(specifier, /^(?:node:)?(?:assert|assert\/strict|async_hooks|buffer|child_process|crypto|events|fs|os|path|process|readline|stream|string_decoder|tty|url|util)$/u, `${label} has non-node external import ${specifier}`);
+  return [...external].sort();
+}
+
+function assertExternalImports(metafile, label) {
+  for (const specifier of externalImports(metafile)) {
+    assert.match(specifier, NODE_EXTERNAL_IMPORT, `${label} has non-node external import ${specifier}`);
   }
+}
+
+function assertInquirerBundled(metafile, item) {
+  const inputs = Object.keys(metafile.inputs ?? {}).sort();
+  const inquirerInputs = inputs.filter((input) => INQUIRER_INPUT.test(input));
+  const inquirerPackages = new Set(inquirerInputs.map(inputPackage).filter(Boolean));
+  const inquirerExternals = externalImports(metafile).filter((specifier) => INQUIRER_SPECIFIER.test(specifier));
+  assert.deepEqual(inquirerExternals, [], `${item.output} must bundle Inquirer instead of leaving external package imports`);
+
+  if (item.output === "bin/dove-package.mjs") {
+    for (const packageName of REQUIRED_CLI_INQUIRER_PACKAGES) {
+      assert.equal(inquirerPackages.has(packageName), true, `${item.output} metafile must prove ${packageName} is bundled`);
+    }
+    return [...inquirerPackages].sort();
+  }
+
+  assert.equal(inquirerInputs.length, 0, `${item.output} must not carry unused Inquirer code`);
+  return [];
+}
+
+function assertMetafileStandaloneProof(result, item) {
+  assert.ok(result.metafile, `${item.output} must produce an esbuild metafile`);
+  const outputEntries = Object.entries(result.metafile.outputs ?? {});
+  assert.equal(outputEntries.length, 1, `${item.output} metafile must describe one standalone output`);
+  const [[outputPath, output]] = outputEntries;
+  assert.equal(output.entryPoint, item.entry, `${item.output} metafile must record entry point ${item.entry}`);
+  const bundledInquirerPackages = assertInquirerBundled(result.metafile, item);
+  return {
+    output: item.output,
+    metafile: true,
+    standalone: true,
+    metafileOutput: outputPath,
+    bytes: output.bytes,
+    inputCount: Object.keys(result.metafile.inputs ?? {}).length,
+    bundledInquirerPackages,
+    externalImports: externalImports(result.metafile)
+  };
 }
 
 function assertOutputSet(outputFiles, outputRoot) {
@@ -51,6 +99,7 @@ function assertOutputSet(outputFiles, outputRoot) {
 
 async function buildAll(outputRoot, write) {
   const outputFiles = [];
+  const proof = [];
   for (const item of EXPECTED_OUTPUTS) {
     const outfile = path.join(outputRoot, item.output);
     const result = await build({
@@ -74,6 +123,7 @@ async function buildAll(outputRoot, write) {
       logLevel: "silent"
     });
     assertExternalImports(result.metafile, item.output);
+    proof.push(assertMetafileStandaloneProof(result, item));
     if (write) {
       outputFiles.push({ path: outfile, contents: fs.readFileSync(outfile) });
     } else {
@@ -87,7 +137,7 @@ async function buildAll(outputRoot, write) {
     assert.ok(output, `missing ${item.output}`);
     assert.match(Buffer.from(output.contents).toString("utf8"), /^#!\/usr\/bin\/env node\n/u, `${item.output} must keep its shebang`);
   }
-  return outputFiles;
+  return { outputFiles, proof };
 }
 
 async function checkBuild() {
@@ -95,7 +145,8 @@ async function checkBuild() {
   fs.mkdirSync(tempBase, { recursive: true });
   const tempRoot = fs.mkdtempSync(path.join(tempBase, "dove-package-build-"));
   try {
-    const outputFiles = await buildAll(tempRoot, false);
+    const { outputFiles, proof } = await buildAll(tempRoot, false);
+    console.error(`Package build proof: ${JSON.stringify(proof)}`);
     for (const item of EXPECTED_OUTPUTS) {
       const trackedPath = path.join(PACKAGE_ROOT, item.output);
       assert.ok(fs.existsSync(trackedPath), `${item.output} is missing; run npm run build`);
@@ -106,15 +157,16 @@ async function checkBuild() {
     console.error("Package bundles are up to date.");
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
+    try { fs.rmdirSync(tempBase); } catch (error) { if (error?.code !== "ENOTEMPTY" && error?.code !== "ENOENT") throw error; }
   }
 }
 
 if (CHECK_MODE) {
   await checkBuild();
 } else {
-  await buildAll(PACKAGE_ROOT, true);
+  const { proof } = await buildAll(PACKAGE_ROOT, true);
   for (const item of EXPECTED_OUTPUTS.filter((entry) => entry.shebang)) {
     fs.chmodSync(path.join(PACKAGE_ROOT, item.output), 0o755);
   }
-  console.log(JSON.stringify({ written: EXPECTED_OUTPUTS.map((item) => item.output) }, null, 2));
+  console.log(JSON.stringify({ written: EXPECTED_OUTPUTS.map((item) => item.output), proof }, null, 2));
 }

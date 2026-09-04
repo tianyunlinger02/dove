@@ -22,7 +22,7 @@ Dove 已在此项目启用
 下一步  重新进入 Claude Code，直接提出科研请求；/dove:* 是可选专项入口。首次使用外部论文或网页阅读能力时，宿主可能请求你的批准。
 ```
 
-Piped output should omit mascot art and ANSI styling while keeping the same human summary. Explicit JSON modes should return one direct machine-readable result.
+Piped output should omit mascot art and ANSI styling while keeping the same human summary. Human CLI output is Chinese while commands, paths, technical names, JSON keys, and enums remain exact. Explicit JSON modes should return one direct machine-readable result with no prose wrapper. For `dove run start`, flags after `--` belong to the target command and do not request Dove JSON output.
 
 ## Dove agent excerpt
 
@@ -102,11 +102,11 @@ A `dove run` receipt records local execution facts before Dove interprets the re
 ```text
 Dove run 已启动
 
-Run：run-20260903-a1b2c3d4
+运行记录：run-20260903-a1b2c3d4
 状态：started
 Supervisor PID：12345
 命令：node scripts/diagnostic.mjs
-Journal：.dove/runs/run-20260903-a1b2c3d4/run.jsonl
+日志：.dove/runs/run-20260903-a1b2c3d4/run.jsonl
 stdout：.dove/runs/run-20260903-a1b2c3d4/stdout.log
 stderr：.dove/runs/run-20260903-a1b2c3d4/stderr.log
 ```
@@ -132,12 +132,12 @@ A `dove-review` handoff result should point to the frozen materials and returned
 ```text
 Dove review handoff 已完成
 
-Review：review-20260902-a1b2c3d4
+审阅记录：review-20260902-a1b2c3d4
 轮次：1
 状态：completed
-Session：00000000-0000-4000-8000-000000000000
+会话：00000000-0000-4000-8000-000000000000
 报告：.dove/reviews/review-20260902-a1b2c3d4/rounds/1/report.md
-Backend：.dove/reviews/review-20260902-a1b2c3d4/rounds/1/backend.json
+后端记录：.dove/reviews/review-20260902-a1b2c3d4/rounds/1/backend.json
 
 冻结材料：
 - paper/main.tex (12345 bytes)
@@ -149,7 +149,22 @@ Reviewer 只接收本轮冻结材料；不会读取私有 transcript。
 
 ## Error result
 
-Errors should be direct and actionable.
+Errors should be direct and actionable. Parser errors use natural Chinese while preserving the exact command or flag names.
+
+```text
+Dove 不能继续：--direction 只接受 min 或 max。
+```
+
+When JSON was requested before `--`, the error remains clean JSON:
+
+```json
+{
+  "status": "blocked",
+  "message": "--direction 只接受 min 或 max。"
+}
+```
+
+Operational errors should give the same direct shape:
 
 ```text
 Dove 不能继续：当前项目没有有效的 `.dove/install/manifest.json`，所以无法判断 Dove 管理的项目集成。

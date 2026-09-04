@@ -125,7 +125,7 @@ try {
 
   const invalidStart = cli(["run", "start", "--project", project, "--id", "invalid-start", "--metric-name", "score", "--direction", "mean", "--json", "--", process.execPath, "-e", "process.exit(0)"]);
   assert.notEqual(invalidStart.status, 0);
-  assert.match(invalidStart.stderr, /--direction accepts only min or max|--direction min or --direction max/iu);
+  assert.match(invalidStart.stderr, /--direction 只接受 min 或 max|--direction accepts only min or max|--direction min or --direction max/iu);
   assert.equal(fs.existsSync(path.join(project, ".dove", "runs", "invalid-start")), false, "invalid run start options must not reserve a run directory");
 
   const successScript = path.join(project, "scripts", "success.mjs");
@@ -160,7 +160,7 @@ try {
   assertFileStateEqual(fileState(statusJournal), beforeStatus, "status must be read-only");
   const ambiguousStatus = cli(["run", "status", "--project", project, "--id", "success-a", "--group", "compatible", "--json"]);
   assert.notEqual(ambiguousStatus.status, 0);
-  assert.match(ambiguousStatus.stderr, /Use only one of --id or --group|cannot be combined/iu);
+  assert.match(ambiguousStatus.stderr, /(?:--id 不能和 --group|--group 不能和 --id) 同时使用|Use only one of --id or --group|cannot be combined/iu);
   assertFileStateEqual(fileState(statusJournal), beforeStatus, "ambiguous status must be zero-write");
 
   const beforeResume = fileState(statusJournal);
@@ -266,7 +266,7 @@ try {
   assert.equal(compareCompatible.ranking[1].deltaFromBest, 2);
   const ambiguousCompare = cli(["run", "compare", "--project", project, "--id", "success-a", "--group", "compatible", "--json"]);
   assert.notEqual(ambiguousCompare.status, 0);
-  assert.match(ambiguousCompare.stderr, /Use only one of --id or --group|cannot be combined/iu);
+  assert.match(ambiguousCompare.stderr, /(?:--id 不能和 --group|--group 不能和 --id) 同时使用|Use only one of --id or --group|cannot be combined/iu);
 
   startRun(project, "basis-mismatch", [
     "--group", "compatible",

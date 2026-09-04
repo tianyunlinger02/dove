@@ -2,16 +2,19 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { COMMAND_SURFACES, MANAGED_PACKAGE_PATHS } from "../src/core/command-manifest.mjs";
+import { COMMAND_SURFACES, MANAGED_PACKAGE_PATHS, PACKAGE_LEGAL_PATHS } from "../src/core/command-manifest.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "../src/core/web-access-integration.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "hot-sync:validate", "uninstall:validate", "review-runtime:validate", "runs:validate", "package:validate", "check", "release:check"];
+const PRODUCTION_DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "bundleDependencies", "bundledDependencies"];
+const REQUIRED_PACKAGE_KEYWORDS = ["research", "academic-writing", "experiments", "claude-code", "markdown", "cli"];
 const FORBIDDEN_PACKAGE_PATHS = [
   ".paper",
   ".claude/agents/dove-reviewer.md",
@@ -34,12 +37,281 @@ const FORBIDDEN_SCRIPTS = ["mcp:serve", "mcp:validate"];
 const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
 const packageLock = JSON.parse(fs.readFileSync(path.join(ROOT, "package-lock.json"), "utf8"));
 
-assert.equal(packageJson.name, PACKAGE_NAME);
-assert.equal(packageJson.version, PACKAGE_VERSION);
-assert.equal(packageLock.version, packageJson.version);
-assert.equal(packageLock.packages?.[""]?.version, packageJson.version);
-assert.deepEqual(packageJson.bin, { dove: "bin/dove-package.mjs" });
-assert.deepEqual(packageJson.exports, { ".": "./dist/index.mjs" });
+function assertAbsentProductionDependencies(manifest, label) {
+  for (const field of PRODUCTION_DEPENDENCY_FIELDS) {
+    assert.equal(Object.hasOwn(manifest, field), false, `${label} must not declare production ${field}`);
+  }
+}
+
+function assertNonEmptyTrimmedString(value, label) {
+  assert.equal(typeof value, "string", `${label} must be a string`);
+  assert.equal(value.trim(), value, `${label} must be trimmed`);
+  assert.notEqual(value, "", `${label} must be non-empty`);
+}
+
+function assertPackageMetadata() {
+  assert.equal(packageJson.name, "dove");
+  assert.equal(packageJson.name, PACKAGE_NAME);
+  assert.equal(packageJson.version, PACKAGE_VERSION);
+  assertNonEmptyTrimmedString(packageJson.description, "package description");
+  assert.equal(packageJson.author, "tianyunlinger02");
+  assert.equal(packageJson.license, "SEE LICENSE IN LICENSE");
+  assert.equal(packageJson.type, "module");
+  assert.equal(packageJson.main, "dist/index.mjs");
+  assert.deepEqual(packageJson.bin, { dove: "bin/dove-package.mjs" });
+  assert.deepEqual(packageJson.exports, { ".": "./dist/index.mjs" });
+  assert.equal(packageJson.engines?.node, ">=22");
+  assert.equal(typeof packageJson.repository?.url, "string");
+  assert.match(packageJson.repository.url, /github\.com\/tianyunlinger02\/dove\.git$/u);
+  assert.equal(typeof packageJson.bugs?.url, "string");
+  assert.match(packageJson.bugs.url, /github\.com\/tianyunlinger02\/dove\/issues$/u);
+  assert.equal(typeof packageJson.homepage, "string");
+  assert.match(packageJson.homepage, /github\.com\/tianyunlinger02\/dove#readme$/u);
+  assert.equal(Array.isArray(packageJson.keywords), true, "package keywords must be an array");
+  for (const requiredKeyword of REQUIRED_PACKAGE_KEYWORDS) {
+    assert.equal(packageJson.keywords.includes(requiredKeyword), true, `package keywords must include ${requiredKeyword}`);
+  }
+  for (const [index, keyword] of packageJson.keywords.entries()) assertNonEmptyTrimmedString(keyword, `package keyword ${index}`);
+  assert.equal(new Set(packageJson.keywords).size, packageJson.keywords.length, "package keywords must be unique");
+  assert.equal(packageJson.devDependencies?.["@inquirer/prompts"], "^7.10.1");
+  assert.equal(packageJson.devDependencies?.esbuild, "^0.28.1");
+  assertAbsentProductionDependencies(packageJson, "package.json");
+}
+
+function assertLegalInventory() {
+  for (const relativePath of PACKAGE_LEGAL_PATHS) {
+    assert.equal(packageJson.files.includes(relativePath), true, `package files manifest must include legal path ${relativePath}`);
+    assert.equal(fs.existsSync(path.join(ROOT, relativePath)), true, `legal file must exist: ${relativePath}`);
+  }
+  const licenseText = fs.readFileSync(path.join(ROOT, "LICENSE"), "utf8");
+  assert.match(licenseText, /^# PolyForm Noncommercial License 1\.0\.0\n/u);
+  assert.match(licenseText, /<https:\/\/polyformproject\.org\/licenses\/noncommercial\/1\.0\.0>/u);
+  assert.match(licenseText, /## Noncommercial Purposes\n\nAny noncommercial purpose is a permitted purpose\./u);
+  assert.doesNotMatch(licenseText, /Permission to use, copy, modify,[\s\S]{0,200}for any purpose/u);
+}
+
+function assertLockfile() {
+  assert.equal(packageLock.name, packageJson.name);
+  assert.equal(packageLock.version, packageJson.version);
+  assert.equal(packageLock.lockfileVersion, 3);
+  assert.equal(packageLock.requires, true);
+  const rootPackage = packageLock.packages?.[""];
+  assert.ok(rootPackage, "package-lock root package metadata is missing");
+  assert.equal(rootPackage.name, packageJson.name);
+  assert.equal(rootPackage.version, packageJson.version);
+  assert.equal(rootPackage.license, packageJson.license);
+  assert.deepEqual(rootPackage.bin, packageJson.bin);
+  assert.deepEqual(rootPackage.devDependencies, packageJson.devDependencies);
+  assertAbsentProductionDependencies(rootPackage, "package-lock root package");
+  assert.equal(Object.hasOwn(packageLock, "dependencies"), false, "package-lock must not have lockfile v1/v2 dependency mirror");
+  for (const [packagePath, metadata] of Object.entries(packageLock.packages ?? {})) {
+    if (packagePath === "") continue;
+    assert.equal(metadata.dev, true, `lockfile package ${packagePath} must be dev-only`);
+  }
+}
+
+function spawnChecked(command, args, options = {}) {
+  const result = spawnSync(command, args, { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, ...options });
+  assert.equal(result.error, undefined, result.error?.message);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result;
+}
+
+function realPackagePack(tempRoot) {
+  const packed = spawnChecked("npm", ["pack", ROOT, "--json", "--ignore-scripts"], { cwd: tempRoot });
+  const parsed = JSON.parse(packed.stdout);
+  assert.equal(Array.isArray(parsed), true, "npm pack --json must return an array");
+  assert.equal(parsed.length, 1, "npm pack must produce exactly one tarball");
+  const pack = parsed[0];
+  const tarball = path.join(tempRoot, pack.filename);
+  assert.equal(fs.existsSync(tarball), true, `real npm pack tarball missing: ${tarball}`);
+  assert.equal(path.dirname(fs.realpathSync.native(tarball)), fs.realpathSync.native(tempRoot), "npm pack tarball must stay outside the repository");
+  return { pack, tarball };
+}
+
+function assertBuildCurrent() {
+  spawnChecked(process.execPath, [path.join(ROOT, "scripts", "build-package.mjs"), "--check"], { cwd: ROOT });
+}
+
+function assertPackedFiles(pack) {
+  assert.equal(pack.name, packageJson.name);
+  assert.equal(pack.version, packageJson.version);
+  assert.equal(pack.filename, `${packageJson.name}-${packageJson.version}.tgz`);
+  const expectedFiles = [...MANAGED_PACKAGE_PATHS, ...PACKAGE_LEGAL_PATHS, "package.json"].sort();
+  assert.deepEqual(pack.files.map((file) => file.path).sort(), expectedFiles);
+  for (const relativePath of FORBIDDEN_PACKAGE_PATHS) assert.equal(pack.files.some((file) => file.path === relativePath), false, `retired path packed: ${relativePath}`);
+  for (const packedFile of pack.files) {
+    assert.doesNotMatch(packedFile.path, /(?:^|\/)\.paper(?:\/|$)/u, `.paper path packed: ${packedFile.path}`);
+    assert.doesNotMatch(packedFile.path, /^\.opencode\/skills\/dove-(?:planner|builder|reviewer|reader|referee)\/SKILL\.md$/u, `retired role skill packed: ${packedFile.path}`);
+    assert.doesNotMatch(packedFile.path, /^\.(?:claude|opencode)\/agents\/dove-(?:reviewer|reader|referee)\.md$/u, `retired review-role agent packed: ${packedFile.path}`);
+  }
+}
+
+function initInstallProject(projectRoot) {
+  fs.mkdirSync(projectRoot, { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, "package.json"), JSON.stringify({ private: true, type: "module" }, null, 2));
+}
+
+function installPackedPackage(tarball, installRoot) {
+  initInstallProject(installRoot);
+  spawnChecked("npm", ["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", tarball], { cwd: installRoot });
+  const installedPackageJsonPath = path.join(installRoot, "node_modules", packageJson.name, "package.json");
+  const installedPackageJson = JSON.parse(fs.readFileSync(installedPackageJsonPath, "utf8"));
+  assert.equal(installedPackageJson.name, packageJson.name);
+  assert.equal(installedPackageJson.version, packageJson.version);
+  assertAbsentProductionDependencies(installedPackageJson, "installed package.json");
+  for (const packageName of ["@inquirer", "esbuild"]) {
+    assert.equal(fs.existsSync(path.join(installRoot, "node_modules", packageName)), false, `--omit=dev install must not install ${packageName}`);
+  }
+  const installedPackageNames = fs.readdirSync(path.join(installRoot, "node_modules")).filter((entry) => !entry.startsWith("."));
+  assert.deepEqual(installedPackageNames, [packageJson.name], "--omit=dev install must install only the package itself");
+  return path.join(installRoot, "node_modules", ".bin", process.platform === "win32" ? "dove.cmd" : "dove");
+}
+
+function assertInstalledCli(installedBin, cwd) {
+  const version = spawnChecked(installedBin, ["--version"], { cwd });
+  assert.equal(version.stdout.trim(), packageJson.version);
+  const help = spawnChecked(installedBin, ["--help"], { cwd });
+  assert.match(help.stdout, /^dove\n/u);
+  assert.match(help.stdout, /dove --version/u);
+  assert.match(help.stdout, /dove init \[--project <dir>\]/u);
+  assert.match(help.stdout, /(?:Dove 负责|The runtime CLI manages project integration)/u);
+}
+
+function digestFile(filePath) {
+  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
+function snapshotDirectory(root) {
+  const entries = [];
+  function visit(directory, prefix) {
+    for (const dirent of fs.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+      const relativePath = prefix ? `${prefix}/${dirent.name}` : dirent.name;
+      const absolutePath = path.join(directory, dirent.name);
+      if (dirent.isSymbolicLink()) {
+        entries.push({ path: relativePath, type: "symlink", target: fs.readlinkSync(absolutePath) });
+      } else if (dirent.isDirectory()) {
+        entries.push({ path: relativePath, type: "directory" });
+        visit(absolutePath, relativePath);
+      } else if (dirent.isFile()) {
+        const stat = fs.statSync(absolutePath);
+        entries.push({ path: relativePath, type: "file", mode: stat.mode & 0o7777, size: stat.size, sha256: digestFile(absolutePath) });
+      } else {
+        entries.push({ path: relativePath, type: "other" });
+      }
+    }
+  }
+  visit(root, "");
+  return entries;
+}
+
+function runPtyBareMenuExit(installedBin, projectRoot) {
+  const script = String.raw`
+import json
+import os
+import pty
+import select
+import signal
+import sys
+import time
+
+installed_bin = sys.argv[1]
+project_root = sys.argv[2]
+env = os.environ.copy()
+env["NO_COLOR"] = "1"
+env["TERM"] = env.get("TERM") or "xterm-256color"
+
+pid, fd = pty.fork()
+if pid == 0:
+    os.chdir(project_root)
+    os.execvpe(installed_bin, [installed_bin], env)
+
+output = b""
+sent = False
+exit_code = None
+deadline = time.time() + 15
+try:
+    while time.time() < deadline:
+        readable, _, _ = select.select([fd], [], [], 0.05)
+        if readable:
+            try:
+                chunk = os.read(fd, 8192)
+            except OSError:
+                chunk = b""
+            if chunk:
+                output += chunk
+                if (not sent) and ("退出".encode("utf-8") in output or "请选择".encode("utf-8") in output):
+                    time.sleep(0.1)
+                    os.write(fd, b"\x1b[B\x1b[B\r")
+                    sent = True
+            else:
+                break
+        child, status = os.waitpid(pid, os.WNOHANG)
+        if child == pid:
+            exit_code = os.waitstatus_to_exitcode(status)
+            break
+    if exit_code is None and not sent:
+        os.write(fd, b"\x1b[B\x1b[B\r")
+        sent = True
+        wait_deadline = time.time() + 5
+        while time.time() < wait_deadline:
+            readable, _, _ = select.select([fd], [], [], 0.05)
+            if readable:
+                try:
+                    chunk = os.read(fd, 8192)
+                except OSError:
+                    chunk = b""
+                if chunk:
+                    output += chunk
+            child, status = os.waitpid(pid, os.WNOHANG)
+            if child == pid:
+                exit_code = os.waitstatus_to_exitcode(status)
+                break
+    if exit_code is None:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        time.sleep(0.2)
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        try:
+            _, status = os.waitpid(pid, 0)
+            exit_code = os.waitstatus_to_exitcode(status)
+        except ChildProcessError:
+            exit_code = 124
+finally:
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+
+print(json.dumps({"exitCode": exit_code, "sentExitKeys": sent, "output": output.decode("utf-8", "replace")}))
+`;
+  const result = spawnChecked("python3", ["-c", script, installedBin, projectRoot], { cwd: projectRoot, timeout: 30000 });
+  const smoke = JSON.parse(result.stdout);
+  assert.equal(smoke.sentExitKeys, true, "PTY smoke did not send the bare menu exit selection");
+  assert.equal(smoke.exitCode, 0, smoke.output);
+  assert.match(smoke.output, /退出/u, "PTY smoke must render the exit choice");
+  assert.match(smoke.output, /未修改任何文件/u, "PTY smoke must exit without modifying files");
+  return smoke;
+}
+
+function assertPtyBareMenuExit(installedBin, projectRoot) {
+  fs.mkdirSync(projectRoot, { recursive: true });
+  const before = snapshotDirectory(projectRoot);
+  const smoke = runPtyBareMenuExit(installedBin, projectRoot);
+  const after = snapshotDirectory(projectRoot);
+  assert.deepEqual(after, before, "bare dove PTY menu exit must not write to the synthetic project");
+  return smoke;
+}
+
+assertBuildCurrent();
+assertPackageMetadata();
+assertLegalInventory();
+assertLockfile();
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "review-runtime:validate"), true);
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "runs:validate"), true);
 for (const script of REQUIRED_SCRIPTS) assert.equal(typeof packageJson.scripts?.[script], "string", `missing package script ${script}`);
@@ -62,22 +334,22 @@ for (const bundlePath of ["dist/index.mjs", "bin/dove-package.mjs", "scripts/dov
   assert.doesNotMatch(bundleText, /src\/core\/research-export\.mjs|export-research|previewResearchExport|exportResearch|exportCommand/iu, `${bundlePath} must not contain retired legacy export runtime`);
 }
 
-const cliVersion = spawnSync(process.execPath, [path.join(ROOT, "bin", "dove-package.mjs"), "--version"], { cwd: ROOT, encoding: "utf8" });
-assert.equal(cliVersion.status, 0, cliVersion.stderr || cliVersion.stdout);
+const cliVersion = spawnChecked(process.execPath, [path.join(ROOT, "bin", "dove-package.mjs"), "--version"], { cwd: ROOT });
 assert.equal(cliVersion.stdout.trim(), packageJson.version);
 
-const packed = spawnSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: ROOT, encoding: "utf8" });
-assert.equal(packed.status, 0, packed.stderr || packed.stdout);
-const [pack] = JSON.parse(packed.stdout);
-assert.equal(pack.name, packageJson.name);
-assert.equal(pack.version, packageJson.version);
-assert.equal(pack.filename, `${packageJson.name}-${packageJson.version}.tgz`);
-assert.deepEqual(pack.files.map((file) => file.path).sort(), [...MANAGED_PACKAGE_PATHS, "package.json"].sort());
-for (const relativePath of FORBIDDEN_PACKAGE_PATHS) assert.equal(pack.files.some((file) => file.path === relativePath), false, `retired path packed: ${relativePath}`);
-for (const packedFile of pack.files) {
-  assert.doesNotMatch(packedFile.path, /(?:^|\/)\.paper(?:\/|$)/u, `.paper path packed: ${packedFile.path}`);
-  assert.doesNotMatch(packedFile.path, /^\.opencode\/skills\/dove-(?:planner|builder|reviewer|reader|referee)\/SKILL\.md$/u, `retired role skill packed: ${packedFile.path}`);
-  assert.doesNotMatch(packedFile.path, /^\.(?:claude|opencode)\/agents\/dove-(?:reviewer|reader|referee)\.md$/u, `retired review-role agent packed: ${packedFile.path}`);
+const tempBase = path.join(path.dirname(ROOT), ".dove-package-validate");
+fs.mkdirSync(tempBase, { recursive: true });
+const tempRoot = fs.mkdtempSync(path.join(tempBase, "run-"));
+try {
+  const { pack, tarball } = realPackagePack(tempRoot);
+  assertPackedFiles(pack);
+  const installRoot = path.join(tempRoot, "install-project");
+  const installedBin = installPackedPackage(tarball, installRoot);
+  assertInstalledCli(installedBin, installRoot);
+  const syntheticProject = path.join(tempRoot, "synthetic-project");
+  const smoke = assertPtyBareMenuExit(installedBin, syntheticProject);
+  console.log(JSON.stringify({ status: "passed", packed: pack.filename, installedVersion: packageJson.version, ptyBareMenuExit: { exitCode: smoke.exitCode, zeroProjectWrites: true } }, null, 2));
+} finally {
+  fs.rmSync(tempRoot, { recursive: true, force: true });
+  try { fs.rmdirSync(tempBase); } catch (error) { if (error?.code !== "ENOTEMPTY" && error?.code !== "ENOENT") throw error; }
 }
-
-console.log(JSON.stringify({ status: "passed" }, null, 2));
