@@ -1,10 +1,10 @@
 # Usage
 
-Dove helps move a research project forward. Tell it the goal directly, or use a `/dove:*` command when you want a specific entrance. For a confirmed goal, Dove keeps working while another useful in-scope step can still help; it asks when the next step needs your decision, permission, or a change in direction.
+Dove helps move a research project forward. For a confirmed goal, it keeps working while another useful in-scope step can help. It asks when the next step needs your decision, permission, or a material change in direction. Pure questions and bounded requests can finish without starting a larger project.
 
 ## Start using Dove
 
-Install an exact trusted Dove artifact once for the current user, then run Dove in the target project:
+Install an exact trusted Dove artifact once for the current user, then initialize the target project:
 
 ```bash
 npm install --global <exact-dove-package-specifier>
@@ -16,129 +16,133 @@ The bare public npm package name `dove` is unrelated. For package trust, lifecyc
 
 ## Entry modes
 
-### Direct Dove agent
-
-Claude projects receive a direct Dove agent. Use it when you want Dove to choose the next research action itself.
-
-### Ordinary prompt
-
-For normal non-slash prompts, the host handles general routing. In initialized Claude projects, Dove context is added only for clearly research-related requests. It does not write notes or force a Skill; Dove uses the visible conversation, project facts, research notes, and available tools to answer, clarify, or work.
-
-### Slash commands
-
-Use `/dove:*` when you want to enter through a specific capability:
+- **Ordinary Claude conversation** uses the project rule's shared research judgment. Normal host routing remains in charge; there is no `UserPromptSubmit`, hidden intake, or replacement per-prompt hook.
+- **`claude --agent dove`** starts a full author-side research session. This is the place for ongoing mainline work and decisions that need the full conversation or user clarification.
+- **A Dove subagent** can investigate a bounded research question when separate context helps. Give it a clear question, relevant materials, and a return scope. Do not delegate work that needs the full user conversation, important clarification, or continuing ownership of the author's mainline. Separate context does not create a new persona or automatically make the task an independent paper review.
+- **`/dove:*` commands** are nine flat capability shortcuts for the same Dove, not stages or an Auto mode. DSH receives these as project-local filesystem Skills rather than Claude commands or agent integration.
 
 | Skill | Use it for |
 |---|---|
-| `dove.research` | Advance a research goal and let Dove choose the next useful step. |
-| `dove.status` | Read current research notes, open questions, and next priorities without writing. |
-| `dove.source` | Find, read, check, save when useful, and use sources that matter to the question. |
-| `dove.experiment` | Design experiments, analyze results, record useful findings, or explicitly run diagnostics and experiments. |
-| `dove.draft` | Draft, assess, or revise manuscripts, responses, methods, results, and other text from real evidence. |
-| `dove.figure` | Gather materials, draw or revise figures, check them in manuscript context, and write captions. |
-| `dove.review` | Do author-side self-check, delivery review, `dove-review` handoff, returned-review import, or review inspection. |
-| `dove.rebuttal` | Analyze review findings, write responses, and make requested evidence-backed revisions. |
-| `dove.lessons` | Read or maintain reusable lessons that may improve current or future research judgment. |
-
-The Skills are shortcuts for the same Dove, not separate personas, fixed stages, or an Auto mode.
+| `dove.research` | Advance a research goal and choose the next useful step. |
+| `dove.status` | Read research notes, open questions, and next priorities without writing. |
+| `dove.source` | Find, read, check, and use relevant sources, including bounded bibliography DOI identity checks. |
+| `dove.experiment` | Design experiments, analyze results, record findings, or explicitly run diagnostics and experiments. |
+| `dove.draft` | Draft, assess, or revise text and project artifacts from real evidence. |
+| `dove.figure` | Gather materials, draw or revise figures, inspect them in context, and caption them. |
+| `dove.review` | Do author-side self-check, delivery review, isolated review handoff, returned-review import, or inspection. |
+| `dove.rebuttal` | Analyze findings, write responses, and make requested evidence-backed revisions. |
+| `dove.lessons` | Read or maintain reusable advice that may improve research judgment. |
 
 ## Tools and sources
 
-Dove uses the tools the current host exposes and the current project permits. In Claude projects, search discovery, scholarly paper reading, and ordinary webpage reading are configured during setup; details are in [Installation](INSTALL.md). If a needed tool or source is unavailable, Dove says what is missing and either continues with useful available material or asks for the needed permission.
+Dove uses only tools the current host exposes and the project permits. Claude project setup declares paper-search and webpage-reading support; declaration is not approval or proof of connectivity. If a needed source or tool is unavailable, Dove names the gap and uses other available material or asks for the necessary permission. It does not replace unavailable retrieval with shell, `curl`, or custom-fetch scripts.
 
 ## Research Markdown
 
-Research context lives under `.dove/research/` as ordinary Markdown. Fresh initialization creates only `RESEARCH.md`. Mission, Source, Experiment, Review, Claim, and Lesson documents are optional notes created when useful.
+Research context lives under `.dove/research/` as ordinary Markdown. Fresh initialization creates only `RESEARCH.md`. Mission, Source, Experiment, Review, Claim, and Lesson documents appear when useful, not merely because a Skill ran.
 
-Use research Markdown to preserve:
+Record the research direction, important conclusions, inspected evidence, experiment plans and results, review exchanges, or reusable Lessons when the user asks, a material judgment changes, or the notes have real evidence or continuation value. Use ordinary relative links and readable project-relative artifact paths when they help a future reader recover the work. There are no required headings, generated IDs, frontmatter, link parsers, backlink audits, or research databases.
 
-- the current research direction, important conclusions, and next priorities;
-- sources actually inspected and what they support or contradict;
-- experiment plans and actual results when a newly executed experiment needs recording;
-- review handoffs, returned reviews, and author handling when requested;
-- reusable Lessons that can improve future judgment.
-
-Dove writes or updates notes when you ask, when results clearly change the research direction or conclusion, or when saving evidence and continuation context will help future work. It does not create documents merely to show that a Skill ran. `dove update`, SessionStart sync, reinstall, and uninstall preserve existing `.dove/research/**` content, `.dove/reviews/**` review records, and `.dove/runs/**` local run receipts. `UserPromptSubmit` does not write; it only validates and routes hidden intake for clearly research-related prompts.
-
-Use ordinary Markdown relative links between research documents, and use readable project-relative artifact paths for drafts, data, logs, rendered figures, editable sources, run receipts, and review returns. Add those links or paths only when they help a future reader recover evidence or continue work. Dove does not add generated IDs, frontmatter, a link parser, backlink audit, consistency matrix, or research database around them; a broken link remains an ordinary documentation problem.
+Update, SessionStart sync, reinstall, and uninstall preserve existing `.dove/research/**`, `.dove/reviews/**`, and `.dove/runs/**` content. Research Markdown is not package-managed integration.
 
 ## Working with the nine capabilities
 
 ### Research
 
-Use `/dove:research` for “advance this goal.” Dove may choose source work, analysis, experiment, coding, drafting, figure work, review handling, or another useful action. It stops when the goal is reached, when real investigation finds no effective in-scope path, or when the next step needs your decision or an outside permission/limit.
+Use `/dove:research` for “advance this goal.” Dove chooses source work, analysis, experiment, coding, drafting, figures, review handling, or another useful action. It stops when the goal is reached, real investigation finds no effective in-scope path, or the next step needs a user decision or outside permission/limit. Open exploration remains explicitly provisional until the user confirms the direction.
 
 ### Status
 
-Use `/dove:status` to read current research notes and priorities without writes. Missing overview files and broken links are reported plainly.
+Use `/dove:status` to read current research notes and relevant project material without writes. Missing overviews and broken links are ordinary documentation facts. Keep the visible conversation and current development work distinct from durable research notes; the newest record is not necessarily the mainline.
+
+SessionStart is not Status. Only after **compact/resume**, its read-only facts card reports:
+
+- `RESEARCH.md` existence and absolute modification time;
+- latest Review by `updatedAt`: id, current round, absolute update time, and material currentness;
+- latest Run by `startedAt`: id, absolute start time, status, and exit code.
+
+Missing or unreadable facts stay `unavailable`. The card does not read research Markdown bodies, review reports, or stdout/stderr logs, summarize research, choose a next step, or infer the current mainline. It reads review metadata and run journals; Review currentness compares the latest round's listed project files with its internal snapshot receipt. **Startup/clear gets no research card.** Dove must still use the visible conversation and relevant materials to understand what to continue.
 
 ### Source
 
-Use `/dove:source` to turn external material into research judgment. Dove distinguishes material found from material actually read and used. It also checks citation identity separately from whether the source supports a specific claim.
+Use `/dove:source` to turn external material into research judgment. Material found, identity-verified, retrieved, inspected, and used are different things. Citation identity is separate from support for a claim.
 
-Ordinary source work stays proportional to the question. Systematic review, meta-analysis, evidence grading, or auditable synthesis requests use a structured method appropriate to the field.
+When a DOI matters and direct lookup is exposed and permitted, check it before fuzzy title search. Compare DOI, title, authors, year, and venue or version; report verified, conflict, not-found, or unknown. A requested **bounded bibliography DOI identity check** is within Source's scope: check only the selected entries. Metadata verification does not establish full-text inspection or claim support. Keep checks transient unless they change a manuscript citation, research judgment, or useful continuation context; do not build a ledger, cache, or BibTeX parser.
+
+Ordinary source work stays proportional. Explicit systematic review, meta-analysis, evidence grading, or auditable synthesis uses an appropriate structured method.
 
 ### Experiment
 
-Use `/dove:experiment` for design-only work, requested execution, existing-result analysis, retrospective recording, and diagnostic checks. Before a central experiment, Dove clarifies what uncertainty the experiment should resolve and what result would matter.
+Use `/dove:experiment` for design-only work, requested execution, existing-result analysis, retrospective recording, or diagnostics. Before a central experiment, establish the uncertainty it should resolve, the strongest alternative explanation, and what result would matter. If that basis is missing, inspect the actual project or sources, or do a small diagnostic rather than inventing a substitute central experiment.
 
-When newly executed central work needs recording, the same Experiment document should contain the plan and later the actual results. For local command-based work, Dove may use `dove run start -- <command> [args...]` after first stating what judgment the run can change and how the result will be judged. Surprising or unstable results are checked first for implementation, data, configuration, randomness, metric, baseline, or analysis errors before being used as scientific evidence.
+When newly executed central work needs recording, write the plan before execution and append actual results to the same Experiment document. Keep retrospective records retrospective. Check surprising or unstable results for implementation, data, configuration, randomness, metric, baseline, and analysis errors before using them scientifically.
 
 ### Run receipts
 
-`dove run` is a local execution receipt helper for explicit experiments or diagnostics:
+`dove run` keeps local execution evidence for explicit experiments or diagnostics:
 
 ```bash
-dove run start --project <dir> --id <id> --group <name> --metric-name <name> --direction min|max --timeout-ms <ms> -- <command> [args...]
+dove run start --project <dir> --id <id> --group <name> --seed <short-text> --metric-name <name> --direction min|max --timeout-ms <ms> -- <command> [args...]
 dove run status --project <dir> --id <id>
 dove run resume --project <dir> --id <id>
 dove run finalize --project <dir> --id <id> --metric-value <number>
 dove run compare --project <dir> --group <name>
 ```
 
-`start` launches a detached Dove supervisor, which is the only writer for the run journal while it directly spawns the target command from the project root without a shell. It stores `.dove/runs/<id>/run.jsonl`, `stdout.log`, and `stderr.log`; the journal intentionally records the explicit argv and comparison basis, so do not put secrets in run command arguments or basis fields. Ordinary completion writes one `run.terminal` event. `status` is strictly read-only. `resume` never reruns the target: it reports terminal or live runs without writing, reports orphaned target observations without writing, and only records one interrupted `run.reconciled` event when neither supervisor nor target is observable and the terminal event is missing. `finalize` appends one scalar metric after terminal completion, with optional decision or note. `compare` only ranks terminal and finalized runs whose metric definition, budget, data, evaluator, and resource basis are identical; otherwise it returns `comparable: false` and the mismatched fields. POSIX timeouts signal the target process group and only promise same-group descendants; Windows termination is direct-child best effort.
+`start` launches a detached supervisor that directly spawns the target from the project root without a shell. It writes `.dove/runs/<id>/run.jsonl`, `stdout.log`, and `stderr.log`. The receipt records command, timing, outcome, metric, budget and comparison basis, plus an explicitly declared seed and minimum Git facts: commit and dirty `true`/`false`/`null`. It is not an environment inventory. Git capture failure leaves unknown facts as `null` without blocking the run; a declared seed does not prove the target used it. Do not put secrets in command arguments or basis fields.
+
+Ordinary completion writes one `run.terminal`. `status` is read-only. `resume` never reruns: it reports terminal, live, or orphaned observations, and records interrupted reconciliation only when neither supervisor nor target is observable and the terminal event is missing. `finalize` appends one scalar metric after terminal completion, with an optional decision or note. `compare` ranks only terminal finalized runs with matching metric, budget, data, evaluator, and resource basis; otherwise it reports `comparable: false` and mismatched fields. Git commit/dirty do not affect comparability or ranking. Receipt compatibility is not a scientific comparability or reproducibility guarantee.
+
+Budget metadata describes the comparison basis, not prepaid resources or an automatically enforced spending cap. Actual work still respects explicit user limits, permissions, and timeout controls. POSIX timeouts signal the target process group and only cover same-group descendants; Windows termination is direct-child best effort.
 
 ### Draft
 
-Use `/dove:draft` to create, assess, or revise text from inspected evidence. Dove does not silently strengthen or weaken claims. Methods, Results, citations, samples, data, and field facts come from actual project or source material.
+Use `/dove:draft` to create, assess, or revise text from inspected evidence. Dove does not silently strengthen or weaken claims. Methods, Results, citations, samples, data, and field facts come from actual project or source material. Preserve the user's current authoritative manuscript format; for a new manuscript, default to LaTeX source and inspect its actual compiled output when the venue accepts LaTeX. If the venue does not accept LaTeX, use its required format rather than forcing a conversion.
 
 ### Figure
 
-Use `/dove:figure` for drawing, redrawing, generation, revision, checking, and captioning. Dove starts from what the figure needs to show, gathers the relevant data or visual material, uses the best available tool, and checks the result in its real manuscript context when relevant.
+Use `/dove:figure` to gather materials, draw, redraw, generate, revise, inspect, and caption figures. Choose tools from what the figure must show. Quantitative figures use real data. Check important figures in their real manuscript context: inspect the rendered figure, caption, nearby claims, placement, and legibility at near-final size in the actual compiled manuscript, not just as isolated previews.
 
 ### Review
 
-Use `/dove:review` for five operations:
+Use `/dove:review` for author-side scientific self-check, delivery review, `dove-review` handoff, faithful review import, or read-only context inspection. Author-side self-check is useful but not independent external review; delivery checks do not decide scientific acceptability.
 
-1. author-side scientific self-check;
-2. conditional delivery review;
-3. `dove-review` handoff preparation;
-4. returned-review import;
-5. review-context inspection.
+**Isolated review is the same researcher in a reviewer position**, not a second persona. It shares evidence discipline but reconstructs and challenges the contribution from the frozen materials instead of inheriting the author's mainline or carrying out author revisions. For a complete paper it asks:
 
-Author-side self-check is Dove checking the current work from the author side. It can inspect the paper, target venue, evidence, likely reader objections, and source support, then return concrete findings and a recommendation. It is not independent external review.
+1. Does the method answer the research question?
+2. Are the mechanisms, terms, comparisons, literature, counterexamples, and limits correct for the field?
+3. Do the contribution, evidence, scope, and expression fit the target venue and readers?
+4. What is the strongest reasonable objection, and what evidence or revision would answer it?
 
-`dove-review` is the separate review path. For a near-submission paper, Dove can run `dove review handoff --project <dir> --venue <venue> --material <path>...` to freeze the current paper and listed submission materials for an isolated Claude Code reviewer context. Use `dove review resume --id <id>` to continue the current frozen round, `dove review rerun --id <id> --material <path>...` after substantive changes to review a new full snapshot in the same reviewer session, and `dove review import --id <id> --file <report.md>` to preserve a user-provided return without claiming runtime provenance. The returned review is preserved as evidence for author-side analysis, rebuttal, or revision.
+The requested return has four Markdown headings: `Verdict`, `Blocking issues`, `Grounding basis`, and `Author-side next actions`. These guide the review; the runtime does not parse them into an acceptance gate. Local paragraph, figure, citation, or method review stays within its requested scope.
+
+For a near-submission paper, use `dove review handoff --project <dir> --venue <venue> --material <path>...` with the current complete paper, authoritative source, actual compiled output, supplements, and other submission materials. The runtime copies only listed files into an isolated Claude Code workspace and exposes Read only. It provides no web/MCP access or author private conversation. Obtain necessary venue rules and literature on the author side and include them explicitly; missing grounding limits the review rather than permitting unlisted retrieval.
+
+`resume` continues the current frozen round. `rerun --material <path>...` reviews a new complete snapshot in the same reviewer session after substantive changes. That session retains its own earlier review history; it does not gain access to author-side Review files or other unlisted project files. `import --file <report.md>` preserves a supplied return as imported provenance, not a runtime-generated review.
+
+`dove review status --id <id>` compares snapshot receipts with current project files read-only. Public human and CLI JSON results report paths, safe size/existence/type/error facts, and `current`, `changed`, `missing`, or `unavailable`, without SHA fields or interpreting report verdict text. Hashes are internal byte-comparison metadata, not research evidence. Current material bytes alone do not establish a current scientific verdict.
+
+Preserve the actual return. Author-side analysis treats findings as evidence, not automatic orders to rewrite, narrow claims, or declare failure. A session id, a prompt, or a software check alone does not prove reviewer independence or external acceptance.
 
 ### Rebuttal
 
-Use `/dove:rebuttal` for author-side response and revision. Dove reads the review and artifacts, checks which findings hold, identifies needed evidence or edits, drafts responses, and makes requested changes. New citations and new experiment explanations must come from actual checked material.
+Use `/dove:rebuttal` for author-side response and requested revision. Check which findings hold, identify useful evidence or changes, and respond from inspected material. New citations and experiment explanations require actual sources and results.
 
 ### Lessons
 
-Use `/dove:lessons` to read or maintain reusable advice when it may improve current or future work. Lessons are not proof that a claim, review, or project is correct.
+Use `/dove:lessons` for reusable advice that may improve current or future work. Lessons are fallible guidance, not proof that a claim or project is correct.
 
 ## Submission readiness
 
-For a paper submission goal, Dove normally treats LaTeX source and the compiled output as the working paper unless the target venue requires another format. Readiness depends on the current full paper, evidence, figures, review findings when required, and the venue's real delivery requirements together. A build pass, old review, generated file, or Markdown update does not by itself prove readiness.
+Submission work starts from the user's current authoritative manuscript and the venue's actual format requirements. For new manuscripts, LaTeX source and actual compiled output are the default only when the venue accepts LaTeX. Readiness depends on the current complete paper, evidence, figures, required review, and real delivery requirements together. A build pass, old review, generated file, or Markdown update alone is not readiness.
 
 ## Maintenance commands
 
-From an initialized project:
+- `dove update` refreshes manifest-owned integration, **replaces its local edits**, and reports what was replaced in human output and `replacedLocalEdits` JSON. Unowned files and unrelated configuration remain protected.
+- SessionStart **skips local edits**, syncs the remaining safe resources, and reminds the user through `systemMessage`. It updates disk resources, not already-loaded host context.
+- `dove doctor` reports software and readability facts without repairing research content or testing live tool readiness.
+- `dove reinstall` and `dove uninstall` preview their real scope and require default-No confirmation. Research Markdown, review records, run receipts, Doctor notes, and ordinary project files remain preserved.
 
-- `dove update` refreshes package-managed integration and preserves `.dove/research/**`, `.dove/reviews/**`, and `.dove/runs/**`.
-- `dove doctor` reports software and local readability facts without repairing research content. Old legacy research data is reported and left in place; Dove does not automatically convert or delete it.
-- `dove reinstall` previews its deletion and replacement scope and defaults to No.
-- `dove uninstall` removes Dove-owned integration after confirmation while preserving research Markdown, `.dove/reviews/**` review records, `.dove/runs/**` run receipts, and ordinary project files.
+Dove does not install or manage `statusLine`. The retained `dove hook statusline` helper is only for user-owned composition scripts. `UserPromptSubmit` and intake are retired with no replacement per-prompt hook. See [Installation](INSTALL.md) for exact ownership and retirement rules.
 
-Maintainer source-checkout checks are documented in the development and packaging guides. Software checks do not prove scientific correctness, research completion, acceptance, independent review, or Dove research quality.
+Software validation is separate from scientific correctness, research completion, acceptance, independent review, and Dove research quality.

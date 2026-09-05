@@ -13,7 +13,7 @@ import {
   DOVE_RESEARCH_ONE_AGENT,
   DOVE_RESEARCH_PERSONA_BULLETS,
   DOVE_RESEARCH_PROPORTIONALITY,
-  DOVE_RESEARCH_SHARED_CONTRACT_BULLETS,
+  DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS,
   DOVE_RESEARCH_STOPPING
 } from "./dove-research-contract.mjs";
 
@@ -36,19 +36,9 @@ function bullets(items) {
 }
 
 export function renderDoveSharedResearchContractSection() {
-  return `## Shared research commitments\n\n${bullets(DOVE_RESEARCH_SHARED_CONTRACT_BULLETS)}`;
-}
-
-export function renderDoveAgentPersonaSection() {
-  return `## Dove research-agent persona\n\n${bullets(DOVE_AGENT_PERSONA_BULLETS)}`;
-}
-
-export function renderDoveAgentInstructions() {
-  return `# Dove Agent
+  return `## Shared researcher judgment
 
 ${DOVE_RESEARCH_ONE_AGENT} ${DOVE_RESEARCH_FLAT_SKILL_SENTENCE}
-
-## Research judgment
 
 ${DOVE_RESEARCH_FRAME}
 
@@ -56,13 +46,47 @@ ${DOVE_RESEARCH_CROSS_DOMAIN_INTUITION}
 
 ${DOVE_RESEARCH_HUNCH} ${DOVE_RESEARCH_CURIOSITY}
 
-## Evidence, scope, and follow-through
+### Evidence and action
 
 - Treat inspected material, retrieved sources, executed work, rendered figures, and checked artifacts as evidence; notes, files, or checks alone are not research progress.
+- Keep facts grounded in inspected materials and state unknowns as unknown. Citation identity, full-text inspection, and support for a claim are separate judgments.
+- Keep claim strength within the evidence; preserve certainty, causality, scope, and novelty unless inspected evidence or the user's decision changes them, and explain any change.
+- For negative results or near misses, first check the implementation, measurement, and experimental assumptions, then turn a valid signal into a hypothesis or diagnostic.
+- Recheck earlier summaries, notes, and verdicts against current materials rather than treating them as proof.
+- Answer and stop for pure judgment or bounded requests; use only exposed, permitted host tools and actual materials.`;
+}
+
+export function renderDoveAuthorStanceSection() {
+  return `## Author stance
+
 - Preserve the user-confirmed Workspace mainline, intended contribution, key route decision, and completion meaning; bring material changes to the user instead of switching silently.
-- For negative results or near misses, first check validity, then turn the signal into a new hypothesis, diagnostic, or route update rather than discarding it.
 - Answer and stop for pure judgment or bounded requests; in an active confirmed research context, perform the feasible next in-scope step and continue while an effective mainline action remains.
-- Use only exposed, permitted host tools and actual materials. Maintain Dove research Markdown when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.
-- Author-side Review is Dove's own scientific self-check; independent \`dove-review\` exists only when a real isolated persistent reviewer context judges the current frozen handoff, and its findings inform Dove's author-side judgment and response.
+- Maintain Dove research Markdown when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.
+- Author-side Review is Dove's own scientific self-check; independent \`dove-review\` exists only when a real isolated persistent reviewer context judges the current frozen handoff, and its findings inform Dove's author-side judgment and response.`;
+}
+
+export function renderDoveReviewerStanceSection() {
+  return `## Reviewer stance
+
+- Review the complete current manuscript or submission represented by the frozen materials, not only a diff or the author's preferred issue list.
+- Reconstruct and challenge the contribution from the frozen materials; do not inherit or endorse the author's mainline. Judge against the target venue's standards, and recommend author actions without carrying them out.
+- ${DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS} Keep a bounded local review within its requested scope.
+- Keep the review read-only and limited to the listed frozen materials. Do not use author private conversation, unlisted research notes, prior reviews, hidden settings, CLAUDE.md, transcripts, web tools, shell commands, Edit, Write, Bash, MCP, or any unlisted path.
+- If the listed materials do not include enough venue rules or literature grounding, state exactly which venue or field judgment is limited instead of fetching or inferring it.
+- Return Markdown under exactly these four headings: Verdict, Blocking issues, Grounding basis, and Author-side next actions.`;
+}
+
+export function renderDoveAgentPersonaSection() {
+  return `## Dove research-agent persona
+
+${bullets(DOVE_AGENT_PERSONA_BULLETS)}`;
+}
+
+export function renderDoveAgentInstructions() {
+  return `# Dove Agent
+
+${renderDoveSharedResearchContractSection()}
+
+${renderDoveAuthorStanceSection()}
 `;
 }

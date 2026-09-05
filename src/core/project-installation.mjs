@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { DOVE_CLAUDE_AMBIENT_HOOK_COMMAND } from "./ambient-policy.mjs";
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
 import { PROJECT_HOST_IDS, normalizeHostSelection } from "./host-registry.mjs";
 import { LEGACY_WORKSPACE_MARKER_PATH, readLegacyWorkspaceMarker } from "./legacy-workspace-marker.mjs";
@@ -45,7 +44,7 @@ function normalizeSelectedHosts(raw, { defaultWhenEmpty }) {
   return [...hosts];
 }
 
-function resultFromTransaction(status, target, hosts, manifest, transaction) {
+function resultFromTransaction(status, target, hosts, manifest, transaction, details = {}) {
   return {
     status,
     target,
@@ -55,6 +54,8 @@ function resultFromTransaction(status, target, hosts, manifest, transaction) {
     changedPaths: [...transaction.changedPaths],
     cleanupWarnings: [...transaction.cleanupWarnings],
     omittedCleanupWarningCount: transaction.omittedCleanupWarningCount,
+    skippedLocalEdits: [...(details.skippedLocalEdits ?? [])],
+    replacedLocalEdits: [...(details.replacedLocalEdits ?? [])],
     manifest
   };
 }
@@ -108,7 +109,7 @@ function prepareInstalledIntegrationPlan(start, options = {}) {
   const packageName = options.packageName ?? manifest.package.name;
   const packageVersion = options.packageVersion ?? manifest.package.version;
   assertPackageInput(packageName, packageVersion, { required: true });
-  const plan = preparePlan({ root, hosts, packageName, packageVersion, now: exactTimestamp(options.now), fsOps, manifest });
+  const plan = preparePlan({ root, hosts, packageName, packageVersion, now: exactTimestamp(options.now), fsOps, manifest, replacementPolicy: options.replacementPolicy ?? "safe" });
   return { fsOps, root, hosts, currentManifest: manifest, ...plan };
 }
 
@@ -117,12 +118,12 @@ function prepareInstalledPlan(start, options = {}) {
 }
 
 function synchronizeProjectIntegration(start, options = {}) {
-  const prepared = prepareInstalledPlan(start, options);
+  const prepared = prepareInstalledPlan(start, { ...options, replacementPolicy: "explicit-update" });
   const transaction = writeFileSetTransaction(
     prepared.entries,
     transactionOptions(prepared.fsOps)
   );
-  return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "synchronized", prepared.root, prepared.hosts, prepared.manifest, transaction);
+  return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "synchronized", prepared.root, prepared.hosts, prepared.manifest, transaction, prepared);
 }
 
 function assertIntegrationOnlyEntries(entries) {
@@ -134,6 +135,9 @@ function assertIntegrationOnlyEntries(entries) {
   }
   if (entries.some((entry) => entry.relativePath === ".dove/runs" || entry.relativePath.startsWith(".dove/runs/"))) {
     throw new Error("Dove SessionStart sync refuses to write Dove run records.");
+  }
+  if (entries.some((entry) => entry.relativePath === ".dove/install/DOCTOR.md")) {
+    throw new Error("Dove SessionStart sync refuses to write Dove Doctor feedback.");
   }
 }
 
@@ -159,24 +163,28 @@ export function synchronizeProjectIntegrationOnly(start, options = {}) {
     packageVersion: options.packageVersion,
     now: exactTimestamp(options.now),
     fsOps,
-    manifest: currentManifest
+    manifest: currentManifest,
+    replacementPolicy: "session-start"
   });
   assertIntegrationOnlyEntries(plan.entries);
   const transaction = writeFileSetTransaction(plan.entries, transactionOptions(fsOps));
-  return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "synchronized", root, currentManifest.hosts, plan.manifest, transaction);
+  return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "synchronized", root, currentManifest.hosts, plan.manifest, transaction, plan);
 }
 
 export function inspectProjectIntegration(start, options = {}) {
   const prepared = prepareInstalledPlan(start, options);
   const writtenPaths = prepared.entries.filter((entry) => entry.delete !== true).map((entry) => entry.relativePath);
   const removedPaths = prepared.entries.filter((entry) => entry.delete === true).map((entry) => entry.relativePath);
+  const needsSync = prepared.entries.length > 0 || prepared.skippedLocalEdits.length > 0;
   return {
-    status: prepared.entries.length === 0 ? "current" : "needs-sync",
+    status: needsSync ? "needs-sync" : "current",
     target: prepared.root,
     hosts: [...prepared.hosts],
     writtenPaths,
     removedPaths,
     changedPaths: prepared.entries.map((entry) => entry.relativePath),
+    skippedLocalEdits: [...prepared.skippedLocalEdits],
+    replacedLocalEdits: [...prepared.replacedLocalEdits],
     manifest: prepared.currentManifest
   };
 }
@@ -263,7 +271,7 @@ function prepareLifecycleIntegration(root, options, { hosts, source = null, rein
     fsOps,
     manifest: oldManifest,
     adopt,
-    replacementPolicy: reinstall ? "confirmed-reinstall" : "safe"
+    replacementPolicy: reinstall ? "confirmed-reinstall" : "explicit-update"
   });
   const existingPaths = new Set(entries.map((entry) => entry.relativePath));
   for (const entry of planned.entries) {
@@ -306,7 +314,7 @@ function prepareLifecycleIntegration(root, options, { hosts, source = null, rein
       });
     }
   }
-  return { entries, manifest: planned.manifest, scope };
+  return { entries, manifest: planned.manifest, scope, skippedLocalEdits: planned.skippedLocalEdits, replacedLocalEdits: planned.replacedLocalEdits };
 }
 
 function previewShape(kind, root, hosts, prepared, confirmationRequired) {
@@ -361,7 +369,8 @@ export function upgradeProjectIntegration(start, options = {}) {
     root,
     hosts,
     prepared.manifest,
-    writeFileSetTransaction(prepared.entries, transactionOptions(fsOps))
+    writeFileSetTransaction(prepared.entries, transactionOptions(fsOps)),
+    prepared
   );
 }
 
@@ -385,7 +394,8 @@ export function adoptProjectIntegration(start, options = {}) {
     source.root,
     hosts,
     prepared.manifest,
-    writeFileSetTransaction(prepared.entries, transactionOptions(fsOps))
+    writeFileSetTransaction(prepared.entries, transactionOptions(fsOps)),
+    prepared
   );
 }
 
@@ -445,7 +455,8 @@ export function completeReinstallProjectIntegration(start, options = {}) {
       transactionOptions(fsOps, {
         transactionBase: ".dove-transaction"
       })
-    )
+    ),
+    prepared
   );
 }
 
@@ -461,7 +472,8 @@ function prepareUninstall(start, options = {}) {
       relativePath,
       [],
       manifest.managed.filter((entry) => entry.kind === "json-fragment" && entry.path === relativePath),
-      fsOps
+      fsOps,
+      { replacementPolicy: "safe" }
     );
     if (planned.entry) entries.push(planned.entry);
   }
@@ -522,4 +534,3 @@ export function updateProjectIntegration(start, options = {}) {
 }
 
 export const PROJECT_INTEGRATION_MANAGED_PATHS = Object.freeze(claudeResources().map((resource) => resource.path).sort());
-export const PROJECT_INTEGRATION_CLAUDE_HOOK_COMMAND = DOVE_CLAUDE_AMBIENT_HOOK_COMMAND;

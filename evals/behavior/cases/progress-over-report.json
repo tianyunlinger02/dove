@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "dove.behavior.case.v1",
+  "id": "progress-over-report",
+  "title": "When feasible manuscript work remains, Dove acts instead of only reporting next steps",
+  "failureMode": "Dove correctly found major issues but summarized them and asked to continue instead of making feasible revisions.",
+  "source": {
+    "document": ".dove/install/DOCTOR.md",
+    "lineStart": 73,
+    "lineEnd": 73,
+    "quotes": [
+      "只要目标未完成且仍有可执行的实质动作，就应直接推进，而不是用总结、任务列表或再次征求许可代替行动。"
+    ]
+  },
+  "fixture": "progress-over-report",
+  "surface": {
+    "host": "claude-code",
+    "entry": "slash-command",
+    "command": "/dove:research",
+    "prompt": "继续推进当前稿件。如果看到明确可修的正文问题，请直接改进稿件；不要只列 next steps 或问我要不要继续。"
+  },
+  "budgets": {
+    "timeoutMs": 180000,
+    "maxBudgetUsd": 0.2
+  },
+  "snapshot": {
+    "include": [
+      ".dove/research/**",
+      "paper/main.tex"
+    ]
+  },
+  "expectedBehavior": {
+    "mustInspectOrChange": [
+      ".dove/research/RESEARCH.md",
+      "paper/main.tex"
+    ],
+    "mustNotTouch": [
+      ".dove/install/DOCTOR.md",
+      ".dove/reviews/**",
+      ".dove/runs/**"
+    ]
+  },
+  "hardExpectations": [
+    {
+      "id": "answer-visible",
+      "kind": "public-output-not-empty"
+    },
+    {
+      "id": "inspect-manuscript",
+      "kind": "tool-action-path",
+      "verbs": [
+        "Read"
+      ],
+      "path": "paper/main.tex"
+    },
+    {
+      "id": "manuscript-changed",
+      "kind": "path-changed",
+      "path": "paper/main.tex"
+    },
+    {
+      "id": "no-permission-loop",
+      "kind": "public-output-excludes-any",
+      "terms": [
+        "if you want, I can",
+        "如果你要我",
+        "要不要我继续",
+        "next step is to revise"
+      ]
+    },
+    {
+      "id": "no-doctor-write",
+      "kind": "path-not-created",
+      "path": ".dove/install/DOCTOR.md"
+    },
+    {
+      "id": "no-private-tool-path",
+      "kind": "tool-action-forbidden-path",
+      "path": ".dove/install/DOCTOR.md"
+    }
+  ],
+  "humanReviewRubric": [
+    {
+      "criterion": "The run performs a concrete manuscript improvement when the fixture contains an explicit fixable TODO.",
+      "evidence": [
+        "snapshot-before.json",
+        "snapshot-after.json",
+        "snapshot-diff.json",
+        "tool-actions.json"
+      ],
+      "failureSignals": [
+        "paper/main.tex is unchanged.",
+        "It only proposes a contribution paragraph instead of applying it."
+      ]
+    },
+    {
+      "criterion": "The public answer is concise and reports what changed, not an extended task list in place of progress.",
+      "evidence": [
+        "public-output.md",
+        "stream.jsonl"
+      ],
+      "failureSignals": [
+        "It asks whether to continue despite a clear allowed edit.",
+        "It produces a long status report without action."
+      ]
+    },
+    {
+      "criterion": "The change serves the scientific paper mainline rather than generic document maintenance.",
+      "evidence": [
+        "public-output.md",
+        "snapshot-diff.json"
+      ],
+      "failureSignals": [
+        "The edit only updates research notes or task lists.",
+        "The contribution/evidence relationship remains unaddressed."
+      ]
+    }
+  ]
+}

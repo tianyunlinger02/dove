@@ -8,12 +8,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  DOVE_CLAUDE_AMBIENT_HOOK_COMMAND,
-  DOVE_CLAUDE_SESSION_START_HOOK_COMMAND
+  DOVE_CLAUDE_SESSION_START_HOOK_COMMAND,
+  DOVE_CLAUDE_STATUS_LINE
 } from "../src/core/ambient-policy.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { PAPER_SEARCH_MCP_FRAGMENT, PAPER_SEARCH_MCP_SERVER_NAME } from "../src/core/paper-search-integration.mjs";
-import { adoptProjectIntegration, initializeProjectIntegration, previewProjectAdoption, synchronizeProjectIntegrationOnly } from "../src/core/project-installation.mjs";
+import { adoptProjectIntegration, initializeProjectIntegration, previewProjectAdoption, synchronizeProjectIntegrationOnly, updateProjectIntegration } from "../src/core/project-installation.mjs";
 import { INSTALLATION_MANIFEST_PATH } from "../src/core/project-installation-manifest.mjs";
 import { RESEARCH_DEFAULT_DIRECTORY_PATHS, RESEARCH_DEFAULT_DOCUMENTS } from "../src/core/research-defaults.mjs";
 import {
@@ -123,6 +123,296 @@ function cliHook(root, name, payload) {
   return cliDove(["hook", name, "--project", root], { input: JSON.stringify(payload) });
 }
 
+function treeSnapshot(root) {
+  const entries = [];
+  const visit = (relativePath) => {
+    const target = path.join(root, relativePath);
+    const stat = fs.lstatSync(target, { bigint: true });
+    entries.push({
+      path: relativePath,
+      mtime: stat.mtimeNs,
+      bytes: stat.isFile() ? fs.readFileSync(target) : null,
+      link: stat.isSymbolicLink() ? fs.readlinkSync(target) : null
+    });
+    if (stat.isDirectory()) {
+      for (const child of fs.readdirSync(target).sort()) visit(path.join(relativePath, child));
+    }
+  };
+  visit(".");
+  return entries;
+}
+
+// Preload the real CLI process so even swallowed read errors fail validation.
+// No contents of research Markdown, reports, logs, or historical materials are
+// needed to select metadata and check the latest round's listed material.
+function hookReadGuard(root, source) {
+  return `
+    import fs from "node:fs";
+    import path from "node:path";
+    import { fileURLToPath } from "node:url";
+    import { syncBuiltinESMExports } from "node:module";
+    const root = ${JSON.stringify(root)};
+    const facts = ${JSON.stringify(source === "compact" || source === "resume")};
+    const historicalDescriptors = new Map();
+    function guard(target, operation) {
+      if (typeof target === "number") {
+        if (historicalDescriptors.has(target) && operation !== "readSync") {
+          process.stderr.write("Forbidden full historical journal read\\n");
+          throw new Error("Forbidden full historical journal read");
+        }
+        return;
+      }
+      const file = target instanceof URL ? fileURLToPath(target) : String(target);
+      const relative = path.relative(root, path.resolve(file)).split(path.sep).join("/");
+      const historicalJournal = relative === ".dove/runs/z-older/run.jsonl";
+      const forbidden = (historicalJournal && operation !== "openSync")
+        || relative.startsWith(".dove/research/")
+        || relative === "historical-material.txt" || relative === "unlisted-report.md"
+        || relative === "synthetic-transcript.jsonl"
+        || (relative.startsWith(".dove/reviews/") && !(facts && (
+          /^\\.dove\\/reviews\\/[^/]+\\/review\\.json$/u.test(relative)
+          || relative === ".dove/reviews/a-latest/rounds/2/snapshot.json")))
+        || (relative.startsWith(".dove/runs/") && !(facts && /^\\.dove\\/runs\\/[^/]+\\/run\\.jsonl$/u.test(relative)));
+      if (forbidden) {
+        process.stderr.write("Forbidden hook read: " + relative + "\\n");
+        throw new Error("Forbidden hook read");
+      }
+    }
+    for (const name of ["readFileSync", "readFile", "openSync", "open", "createReadStream"]) {
+      const original = fs[name];
+      fs[name] = function(target, ...args) {
+        guard(target, name);
+        const result = original.call(this, target, ...args);
+        if (name === "openSync" && String(target) === path.join(root, ".dove/runs/z-older/run.jsonl")) historicalDescriptors.set(result, false);
+        return result;
+      };
+    }
+    for (const name of ["readFile", "open"]) {
+      const original = fs.promises[name];
+      fs.promises[name] = function(target, ...args) { guard(target, name); return original.call(this, target, ...args); };
+    }
+    const readSync = fs.readSync;
+    fs.readSync = function(fd, buffer, offset, length, position) {
+      if (historicalDescriptors.has(fd) && (historicalDescriptors.get(fd) || length > 1024)) {
+        process.stderr.write("Forbidden historical journal tail scan\\n");
+        throw new Error("Forbidden historical journal tail scan");
+      }
+      const count = readSync.call(this, fd, buffer, offset, length, position);
+      if (historicalDescriptors.has(fd) && buffer.subarray(offset, offset + count).includes(10)) historicalDescriptors.set(fd, true);
+      return count;
+    };
+    const closeSync = fs.closeSync;
+    fs.closeSync = function(fd) { historicalDescriptors.delete(fd); return closeSync.call(this, fd); };
+    const kill = process.kill;
+    process.kill = function(pid, signal) {
+      if (pid === 214214) {
+        process.stderr.write("Forbidden historical PID observation\\n");
+        throw new Error("Forbidden historical PID observation");
+      }
+      return kill.call(this, pid, signal);
+    };
+    syncBuiltinESMExports();
+  `;
+}
+
+function validateSessionFacts(root, executable) {
+  const researchPath = path.join(root, ".dove/research/RESEARCH.md");
+  const reviewPath = path.join(root, ".dove/reviews/a-latest/review.json");
+  const snapshotPath = path.join(root, ".dove/reviews/a-latest/rounds/2/snapshot.json");
+  const journalPath = path.join(root, ".dove/runs/a-latest/run.jsonl");
+  const oldTime = "2026-08-01T00:00:00.000Z";
+  const reviewTime = "2026-08-03T00:00:00.000Z";
+  const runTime = "2026-08-02T00:00:00.000Z";
+  const secret = "DO_NOT_INJECT_BODY_REPORT_LOG_TRANSCRIPT_OR_EXTRA_FIELDS";
+
+  const invoke = (source, overrides = {}, rawInput = null) => {
+    const before = treeSnapshot(root);
+    const result = spawnSync(process.execPath, [
+      "--import", `data:text/javascript,${encodeURIComponent(hookReadGuard(root, source))}`,
+      executable, "hook", "session-start", "--project", root
+    ], {
+      cwd: ROOT,
+      input: rawInput ?? JSON.stringify({ hook_event_name: "SessionStart", source, cwd: root, transcript_path: path.join(root, "synthetic-transcript.jsonl"), ...overrides }),
+      encoding: "utf8",
+      timeout: 15000
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(result.stderr, "", "The hook must not attempt forbidden reads, even when errors are caught.");
+    assert.deepEqual(treeSnapshot(root), before, "No-op/failed hook must preserve all tree bytes and file/directory mtimes.");
+    const output = result.stdout ? JSON.parse(result.stdout) : null;
+    if (output?.hookSpecificOutput) {
+      assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
+      const context = output.hookSpecificOutput.additionalContext;
+      assert.equal(typeof context, "string");
+      assert.equal(context.split("\n").length, 4, "Facts stay limited to one header and three items.");
+      assert.match(context, /not the current research mainline/u);
+      assert.doesNotMatch(context, /sha256|digest|report\.md|stdout\.log|stderr\.log|ago|minutes? later|DO_NOT_INJECT/iu);
+      assert.doesNotMatch(context, /z-older|historical-material/u);
+    }
+    return output;
+  };
+  const context = (source = "compact") => invoke(source).hookSpecificOutput.additionalContext;
+
+  // Missing trees stay missing. No read helper may create its input directories.
+  fs.rmSync(path.join(root, ".dove/research"), { recursive: true });
+  for (const source of ["startup", "clear", "compact", "resume"]) {
+    const output = invoke(source);
+    if (source === "startup" || source === "clear") assert.equal(output, null);
+    else {
+      assert.match(output.hookSpecificOutput.additionalContext, /RESEARCH\.md: exists=no; mtime=unavailable/u);
+      assert.match(output.hookSpecificOutput.additionalContext, /Latest Review: unavailable\nLatest Run: unavailable/u);
+    }
+  }
+  for (const directory of ["research", "reviews", "runs"]) assert.equal(fs.existsSync(path.join(root, ".dove", directory)), false);
+
+  writeFile(root, ".dove/research/RESEARCH.md", secret);
+  fs.utimesSync(researchPath, new Date(oldTime), new Date(oldTime));
+  writeFile(root, "paper.txt", "current paper bytes\n");
+  writeFile(root, "historical-material.txt", secret);
+  writeFile(root, "unlisted-report.md", secret);
+  writeFile(root, "synthetic-transcript.jsonl", secret);
+  const material = { path: "paper.txt", size: Buffer.byteLength("current paper bytes\n"), sha256: crypto.createHash("sha256").update("current paper bytes\n").digest("hex") };
+  const latestReview = {
+    schema: "dove.review.record.v1", id: "a-latest", createdAt: oldTime, updatedAt: reviewTime, currentRound: 2,
+    rounds: [{ round: 1, createdAt: oldTime }, { round: 2, createdAt: reviewTime, updatedAt: reviewTime }],
+    report: secret, privateNote: secret
+  };
+  writeJson(reviewPath, latestReview);
+  const latestSnapshot = { schema: "dove.review.snapshot.v1", reviewId: "a-latest", round: 2, materials: [material] };
+  writeJson(snapshotPath, latestSnapshot);
+  writeJson(path.join(root, ".dove/reviews/a-latest/rounds/1/snapshot.json"), { materials: [{ ...material, path: "historical-material.txt" }] });
+  writeJson(path.join(root, ".dove/reviews/z-older/review.json"), { ...latestReview, id: "z-older", updatedAt: oldTime, currentRound: 1 });
+  writeJson(path.join(root, ".dove/reviews/z-older/rounds/1/snapshot.json"), { materials: [{ ...material, path: "historical-material.txt" }] });
+  writeFile(root, ".dove/reviews/a-latest/rounds/2/report.md", secret);
+  writeFile(root, ".dove/reviews/a-latest/rounds/2/backend.json", secret);
+  const writeRun = (id, at, exitCode) => writeFile(root, `.dove/runs/${id}/run.jsonl`, [
+    { schemaVersion: "dove.run.event.v1", seq: 1, at, type: "run.started", runId: id, argv: [secret], note: secret },
+    { schemaVersion: "dove.run.event.v1", seq: 2, at, type: "run.terminal", runId: id, outcome: exitCode === 0 ? "succeeded" : "failed", exitCode }
+  ].map((event) => JSON.stringify(event)).join("\n") + "\n");
+  writeRun("a-latest", runTime, 7);
+  writeRun("z-older", oldTime, 0);
+  writeFile(root, ".dove/runs/a-latest/stdout.log", secret);
+  writeFile(root, ".dove/runs/a-latest/stderr.log", secret);
+  // Selection follows absolute record timestamps, not directory name or mtime.
+  fs.utimesSync(reviewPath, new Date(oldTime), new Date(oldTime));
+  fs.utimesSync(journalPath, new Date(oldTime), new Date(oldTime));
+  for (const source of ["startup", "clear", "compact", "resume"]) {
+    const output = invoke(source);
+    if (source === "startup" || source === "clear") assert.equal(output, null);
+    else {
+      const facts = output.hookSpecificOutput.additionalContext;
+      assert.match(facts, new RegExp(`RESEARCH\\.md: exists=yes; mtime=${oldTime}`, "u"));
+      assert.ok(facts.includes(`Latest Review: id=a-latest; round=2; updatedAt=${reviewTime}; material currentness=current`));
+      assert.ok(facts.includes(`Latest Run: id=a-latest; startedAt=${runTime}; status=failed; exit=7`));
+    }
+  }
+
+  const olderJournalPath = path.join(root, ".dove/runs/z-older/run.jsonl");
+  const olderJournal = fs.readFileSync(olderJournalPath, "utf8");
+  const olderEvents = olderJournal.trimEnd().split("\n").map((line) => JSON.parse(line));
+  olderEvents[0].supervisorPid = 214214;
+  olderEvents[0].note = "多字节启动元数据".repeat(400);
+  const olderStart = JSON.stringify(olderEvents[0]) + "\n";
+  const selectedJournal = fs.readFileSync(journalPath, "utf8");
+  const selectedStart = selectedJournal.slice(0, selectedJournal.indexOf("\n") + 1);
+  // An old journal's truncated terminal/finalized event is not relevant to
+  // latest selection. The guard also rejects full old-journal reads, scans past
+  // its first newline, and observations of its synthetic supervisor PID.
+  for (const type of ["run.terminal", "run.finalized"]) {
+    const brokenTail = `{"type":"${type}","note":"${"x".repeat(100000)}`;
+    fs.writeFileSync(olderJournalPath, olderStart + brokenTail);
+    for (const source of ["compact", "resume"]) {
+      assert.ok(context(source).includes(`Latest Run: id=a-latest; startedAt=${runTime}; status=failed; exit=7`));
+    }
+    fs.writeFileSync(journalPath, selectedStart + brokenTail);
+    for (const source of ["compact", "resume"]) assert.match(context(source), /material currentness=current\nLatest Run: unavailable/u);
+    fs.writeFileSync(journalPath, selectedJournal);
+  }
+  // Even a directory named like an old run cannot be skipped when its start
+  // timestamp is unknown: it could actually be the newest candidate.
+  for (const invalidStart of [
+    "{broken\n",
+    JSON.stringify({ ...olderEvents[0], at: undefined }) + "\n",
+    JSON.stringify({ ...olderEvents[0], type: "run.terminal" }) + "\n",
+    olderStart.trimEnd()
+  ]) {
+    fs.writeFileSync(olderJournalPath, invalidStart);
+    assert.match(context(), /material currentness=current\nLatest Run: unavailable/u);
+  }
+  fs.writeFileSync(olderJournalPath, olderJournal);
+
+  writeFile(root, "paper.txt", "changed paper bytes\n");
+  assert.match(context(), /material currentness=changed/u);
+  fs.rmSync(path.join(root, "paper.txt"));
+  assert.match(context("resume"), /material currentness=missing/u);
+  writeFile(root, "paper.txt", "current paper bytes\n");
+  assert.match(context(), /material currentness=current/u);
+  fs.writeFileSync(snapshotPath, "{broken");
+  assert.match(context(), /round=2; updatedAt=.*; material currentness=unavailable/u);
+  fs.rmSync(snapshotPath);
+  assert.match(context(), /material currentness=unavailable/u);
+  writeJson(snapshotPath, latestSnapshot);
+
+  fs.writeFileSync(reviewPath, "{broken");
+  assert.match(context(), /RESEARCH\.md: exists=yes.*\nLatest Review: unavailable\nLatest Run: id=a-latest/u);
+  fs.rmSync(reviewPath);
+  assert.match(context(), /Latest Review: unavailable\nLatest Run: id=a-latest/u);
+  writeJson(reviewPath, { ...latestReview, currentRound: 3 });
+  assert.match(context(), /Latest Review: unavailable/u);
+  for (const updatedAt of [null, "yesterday", undefined]) {
+    writeJson(reviewPath, { ...latestReview, updatedAt });
+    assert.match(context(), /Latest Review: unavailable\nLatest Run: id=a-latest/u);
+  }
+  writeJson(reviewPath, latestReview);
+  const journal = fs.readFileSync(journalPath);
+  fs.writeFileSync(journalPath, "{broken\n");
+  assert.match(context(), /material currentness=current\nLatest Run: unavailable/u);
+  fs.rmSync(journalPath);
+  assert.match(context(), /material currentness=current\nLatest Run: unavailable/u);
+  const missingRunTime = journal.toString("utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
+  delete missingRunTime[0].at;
+  fs.writeFileSync(journalPath, missingRunTime.map((event) => JSON.stringify(event)).join("\n") + "\n");
+  assert.match(context(), /Latest Run: unavailable/u);
+  fs.writeFileSync(journalPath, journal);
+  fs.rmSync(researchPath);
+  fs.mkdirSync(researchPath);
+  assert.match(context(), /RESEARCH\.md: unavailable\nLatest Review: id=a-latest/u);
+  fs.rmdirSync(researchPath);
+  fs.symlinkSync(path.join(root, "unlisted-report.md"), researchPath);
+  assert.match(context(), /RESEARCH\.md: unavailable\nLatest Review: id=a-latest/u);
+  fs.unlinkSync(researchPath);
+  writeFile(root, ".dove/research/RESEARCH.md", secret);
+
+  fs.appendFileSync(path.join(root, ".claude/commands/dove/research.md"), "local edit\n");
+  for (const source of ["startup", "clear", "compact", "resume"]) {
+    const output = invoke(source);
+    assert.match(output.systemMessage, /local edits.*dove update/u);
+    assert.equal(Object.hasOwn(output, "hookSpecificOutput"), source === "compact" || source === "resume");
+  }
+  const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);
+  const manifest = readJson(manifestPath);
+  writeJson(manifestPath, { ...manifest, package: { ...manifest.package, version: "99.0.0" } });
+  for (const source of ["startup", "clear", "compact", "resume"]) {
+    const output = invoke(source);
+    assert.match(output.systemMessage, /did not synchronize.*(?:refuses|拒绝)/u);
+    assert.equal(Object.hasOwn(output, "hookSpecificOutput"), false, "Do not read facts after an unsafe sync failure.");
+  }
+  writeJson(manifestPath, manifest);
+  const settingsPath = path.join(root, ".claude/settings.json");
+  const settings = fs.readFileSync(settingsPath);
+  fs.writeFileSync(settingsPath, "{broken");
+  for (const source of ["startup", "clear", "compact", "resume"]) {
+    const output = invoke(source);
+    assert.match(output.systemMessage, /did not synchronize/u);
+    assert.equal(Object.hasOwn(output, "hookSpecificOutput"), false);
+  }
+  fs.writeFileSync(settingsPath, settings);
+  const malformedEvent = invoke("compact", { hook_event_name: "OtherEvent" });
+  assert.match(malformedEvent.systemMessage, /unsupported or missing hook event/u);
+  assert.equal(Object.hasOwn(malformedEvent, "hookSpecificOutput"), false);
+  assert.match(invoke("compact", {}, "{broken").systemMessage, /malformed JSON/u);
+}
+
 const roots = [];
 try {
   const bridgeRoot = makeProject();
@@ -137,7 +427,8 @@ try {
   const retiredResearchPath = path.join(bridgeRoot, ".dove", "research", "LESSONS.md");
 
   const initializedSettings = readJson(settingsPath);
-  assert.deepEqual(Object.keys(initializedSettings.hooks), ["UserPromptSubmit", "SessionStart"]);
+  assert.deepEqual(Object.keys(initializedSettings.hooks).sort(), ["SessionStart"]);
+  assert.equal(Object.hasOwn(initializedSettings, "statusLine"), false);
   assert.equal(initializedSettings.permissions.deny.includes(WEB_FETCH_DENY_PERMISSION), true);
 
   fs.writeFileSync(researchPath, "# Researcher-owned mainline\n\nDo not rewrite.\n");
@@ -153,28 +444,31 @@ try {
   const protectedBefore = researchSnapshot(bridgeRoot);
 
   const oldSettings = readJson(settingsPath);
-  delete oldSettings.hooks.SessionStart;
-  oldSettings.hooks.UserPromptSubmit.push({ hooks: [{ type: "command", command: "user-owned-prompt", timeout: 5 }] });
-  oldSettings.hooks.SessionStart = [{ hooks: [{ type: "command", command: "user-owned-session-start", timeout: 5 }] }];
+  oldSettings.hooks.UserPromptSubmit = [
+    { hooks: [{ type: "command", command: 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] },
+    { hooks: [{ type: "command", command: "user-owned-prompt", timeout: 5 }] }
+  ];
+  oldSettings.hooks.SessionStart.push({ hooks: [{ type: "command", command: "user-owned-session-start", timeout: 5 }] });
   writeJson(settingsPath, oldSettings);
-  const oldFragment = {
-    UserPromptSubmit: oldSettings.hooks.UserPromptSubmit.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook user-prompt-submit")))
-  };
   const oldManifest = readJson(manifestPath);
   oldManifest.package.version = "2.9.0";
-  oldManifest.managed.find((entry) => entry.path === ".claude/settings.json").digest = semanticDigest(oldFragment);
+  oldManifest.managed.push({
+    path: ".claude/settings.json",
+    kind: "json-fragment",
+    selector: "/hooks/UserPromptSubmit[dove-user-prompt-submit]",
+    digest: semanticDigest(oldSettings.hooks.UserPromptSubmit[0])
+  });
   writeJson(manifestPath, oldManifest);
-  const driftBeforePrompt = fileSnapshot(bridgeRoot);
+  const promptHookBeforeSessionStart = fileSnapshot(bridgeRoot);
 
-  const prompt = cliHook(bridgeRoot, "user-prompt-submit", {
+  const retiredPromptHook = cliHook(bridgeRoot, "user-prompt-submit", {
     hook_event_name: "UserPromptSubmit",
     cwd: bridgeRoot,
     prompt: "继续"
   });
-  assert.equal(prompt.status, 0, prompt.stderr || prompt.stdout);
-  assert.equal(prompt.stdout, "");
-  assertSnapshotUnchanged(bridgeRoot, driftBeforePrompt, "UserPromptSubmit zero-write");
-  assertResearchSnapshotUnchanged(bridgeRoot, protectedBefore, "UserPromptSubmit protected state");
+  assert.notEqual(retiredPromptHook.status, 0);
+  assertSnapshotUnchanged(bridgeRoot, promptHookBeforeSessionStart, "retired UserPromptSubmit CLI path");
+  assertResearchSnapshotUnchanged(bridgeRoot, protectedBefore, "retired UserPromptSubmit protected state");
   assert.equal(readJson(manifestPath).package.version, "2.9.0");
 
   const session = cliHook(bridgeRoot, "session-start", { hook_event_name: "SessionStart", cwd: bridgeRoot });
@@ -184,8 +478,51 @@ try {
   assert.equal(bridgedSettings.hooks.SessionStart.some((entry) => entry.hooks?.some((hook) => hook.command === 'dove hook session-start --project "$CLAUDE_PROJECT_DIR"')), true);
   assert.equal(bridgedSettings.hooks.SessionStart.some((entry) => entry.hooks?.some((hook) => hook.command === "user-owned-session-start")), true);
   assert.equal(bridgedSettings.hooks.UserPromptSubmit.some((entry) => entry.hooks?.some((hook) => hook.command === "user-owned-prompt")), true);
+  assert.equal(bridgedSettings.hooks.UserPromptSubmit.some((entry) => entry.hooks?.some((hook) => hook.command === 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"')), false);
   assert.equal(readJson(manifestPath).package.version, PACKAGE_VERSION);
+  assert.equal(readJson(manifestPath).managed.some((entry) => entry.selector === "/hooks/SessionStart[dove-session-start]"), true);
+  assert.equal(readJson(manifestPath).managed.some((entry) => entry.selector === "/hooks/UserPromptSubmit[dove-user-prompt-submit]"), false);
+  assert.equal(readJson(manifestPath).managed.some((entry) => entry.selector === "/statusLine[dove-project-directory]"), false);
   assertResearchSnapshotUnchanged(bridgeRoot, protectedBefore, "SessionStart protected state");
+
+  const statusLineReleaseRoot = makeProject();
+  roots.push(statusLineReleaseRoot);
+  const statusLineReleaseSettingsPath = path.join(statusLineReleaseRoot, ".claude", "settings.json");
+  const statusLineReleaseSettings = readJson(statusLineReleaseSettingsPath);
+  statusLineReleaseSettings.statusLine = DOVE_CLAUDE_STATUS_LINE;
+  writeJson(statusLineReleaseSettingsPath, statusLineReleaseSettings);
+  const statusLineReleaseManifestPath = path.join(statusLineReleaseRoot, INSTALLATION_MANIFEST_PATH);
+  const statusLineReleaseManifest = readJson(statusLineReleaseManifestPath);
+  statusLineReleaseManifest.managed.push({
+    path: ".claude/settings.json",
+    kind: "json-fragment",
+    selector: "/statusLine[dove-project-directory]",
+    digest: semanticDigest(DOVE_CLAUDE_STATUS_LINE)
+  });
+  writeJson(statusLineReleaseManifestPath, statusLineReleaseManifest);
+  const statusLineReleased = updateProjectIntegration(statusLineReleaseRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  assert.equal(statusLineReleased.replacedLocalEdits.length, 0);
+  assert.equal(Object.hasOwn(readJson(statusLineReleaseSettingsPath), "statusLine"), false);
+  assert.equal(readJson(statusLineReleaseManifestPath).managed.some((entry) => entry.selector === "/statusLine[dove-project-directory]"), false);
+
+  const userStatusLineReleaseRoot = makeProject();
+  roots.push(userStatusLineReleaseRoot);
+  const userStatusLineSettingsPath = path.join(userStatusLineReleaseRoot, ".claude", "settings.json");
+  const userStatusLineSettings = readJson(userStatusLineSettingsPath);
+  userStatusLineSettings.statusLine = { type: "command", command: "user-statusline" };
+  writeJson(userStatusLineSettingsPath, userStatusLineSettings);
+  const userStatusLineManifestPath = path.join(userStatusLineReleaseRoot, INSTALLATION_MANIFEST_PATH);
+  const userStatusLineManifest = readJson(userStatusLineManifestPath);
+  userStatusLineManifest.managed.push({
+    path: ".claude/settings.json",
+    kind: "json-fragment",
+    selector: "/statusLine[dove-project-directory]",
+    digest: semanticDigest(DOVE_CLAUDE_STATUS_LINE)
+  });
+  writeJson(userStatusLineManifestPath, userStatusLineManifest);
+  updateProjectIntegration(userStatusLineReleaseRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  assert.deepEqual(readJson(userStatusLineSettingsPath).statusLine, { type: "command", command: "user-statusline" });
+  assert.equal(readJson(userStatusLineManifestPath).managed.some((entry) => entry.selector === "/statusLine[dove-project-directory]"), false);
 
   const dshRoot = fs.mkdtempSync(path.join(SCRATCH_ROOT, "dove-dsh-"));
   roots.push(dshRoot);
@@ -211,11 +548,37 @@ try {
   const driftRoot = makeProject();
   roots.push(driftRoot);
   const driftResearch = path.join(driftRoot, ".claude", "commands", "dove", "research.md");
+  const driftBefore = fs.readFileSync(driftResearch, "utf8");
   fs.appendFileSync(driftResearch, "drift\n");
-  assert.throws(
-    () => synchronizeProjectIntegrationOnly(driftRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }),
-    /ownership drift/iu
-  );
+  const partialSync = synchronizeProjectIntegrationOnly(driftRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  assert.equal(partialSync.status, "unchanged");
+  assert.deepEqual(partialSync.skippedLocalEdits, [{ path: ".claude/commands/dove/research.md", selector: null }]);
+  assert.equal(fs.readFileSync(driftResearch, "utf8"), `${driftBefore}drift\n`);
+  const partialHook = cliHook(driftRoot, "session-start", { hook_event_name: "SessionStart", cwd: driftRoot });
+  assert.equal(partialHook.status, 0, partialHook.stderr || partialHook.stdout);
+  assert.match(JSON.parse(partialHook.stdout).systemMessage, /skipped|local edits|dove update/iu);
+  const replaced = updateProjectIntegration(driftRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  assert.deepEqual(replaced.replacedLocalEdits, [{ path: ".claude/commands/dove/research.md", selector: null }]);
+  assert.equal(fs.readFileSync(driftResearch, "utf8"), driftBefore);
+  fs.appendFileSync(driftResearch, "drift-again\n");
+  const replacedHuman = cliDove(["update", "--project", driftRoot]);
+  assert.equal(replacedHuman.status, 0, replacedHuman.stderr || replacedHuman.stdout);
+  assert.match(replacedHuman.stdout, /已覆盖 1 个 manifest-owned 本地编辑/iu);
+  assert.match(replacedHuman.stdout, /\.claude\/commands\/dove\/research\.md/u);
+  assert.equal(fs.readFileSync(driftResearch, "utf8"), driftBefore);
+
+  const jsonDriftRoot = makeProject();
+  roots.push(jsonDriftRoot);
+  const jsonDriftSettingsPath = path.join(jsonDriftRoot, ".claude", "settings.json");
+  const jsonDriftSettings = readJson(jsonDriftSettingsPath);
+  jsonDriftSettings.hooks.UserPromptSubmit = [{ hooks: [{ type: "command", command: 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR" && user-local-edit', timeout: 10 }] }];
+  delete jsonDriftSettings.hooks.SessionStart;
+  writeJson(jsonDriftSettingsPath, jsonDriftSettings);
+  const jsonDriftPartial = synchronizeProjectIntegrationOnly(jsonDriftRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  assert.deepEqual(jsonDriftPartial.skippedLocalEdits, []);
+  const jsonDriftAfter = readJson(jsonDriftSettingsPath);
+  assert.equal(jsonDriftAfter.hooks.UserPromptSubmit[0].hooks[0].command.endsWith("user-local-edit"), true);
+  assert.equal(jsonDriftAfter.hooks.SessionStart.some((entry) => entry.hooks?.some((hook) => hook.command === DOVE_CLAUDE_SESSION_START_HOOK_COMMAND)), true);
 
   const newerRoot = makeProject();
   roots.push(newerRoot);
@@ -227,6 +590,9 @@ try {
     () => synchronizeProjectIntegrationOnly(newerRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }),
     /SessionStart sync refuses/iu
   );
+  const newerHook = cliHook(newerRoot, "session-start", { hook_event_name: "SessionStart", cwd: newerRoot });
+  assert.equal(newerHook.status, 0, "Unsafe sync must report through host-consumed hook JSON.");
+  assert.match(JSON.parse(newerHook.stdout).systemMessage, /did not synchronize|refuses/iu);
 
   const mismatchRoot = makeProject();
   roots.push(mismatchRoot);
@@ -238,6 +604,46 @@ try {
     () => synchronizeProjectIntegrationOnly(mismatchRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }),
     /SessionStart sync refuses/iu
   );
+  const mismatchHook = cliHook(mismatchRoot, "session-start", { hook_event_name: "SessionStart", cwd: mismatchRoot });
+  assert.equal(mismatchHook.status, 0, "Unsafe sync must report through host-consumed hook JSON.");
+  assert.match(JSON.parse(mismatchHook.stdout).systemMessage, /did not synchronize|refuses/iu);
+
+  const combinedHookRoot = makeProject();
+  roots.push(combinedHookRoot);
+  const combinedSettingsPath = path.join(combinedHookRoot, ".claude", "settings.json");
+  const combinedSettings = readJson(combinedSettingsPath);
+  combinedSettings.hooks.UserPromptSubmit = [
+    { hooks: [{ type: "command", command: 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] },
+    { hooks: [{ type: "command", command: "user-owned-prompt", timeout: 5 }] }
+  ];
+  combinedSettings.hooks.SessionStart.push({ hooks: [{ type: "command", command: "user-owned-session-start", timeout: 5 }] });
+  combinedSettings.hooks.Stop = [{ hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] }];
+  writeJson(combinedSettingsPath, combinedSettings);
+  const combinedManifestPath = path.join(combinedHookRoot, INSTALLATION_MANIFEST_PATH);
+  const combinedManifest = readJson(combinedManifestPath);
+  const sessionStartIndex = combinedManifest.managed.findIndex((entry) => entry.selector === "/hooks/SessionStart[dove-session-start]");
+  assert.notEqual(sessionStartIndex, -1);
+  combinedManifest.managed.splice(sessionStartIndex, 1);
+  combinedManifest.managed.push({
+    path: ".claude/settings.json",
+    kind: "json-fragment",
+    selector: "/hooks/UserPromptSubmit[dove-user-prompt-submit]",
+    digest: semanticDigest({
+      UserPromptSubmit: combinedSettings.hooks.UserPromptSubmit[0],
+      SessionStart: combinedSettings.hooks.SessionStart.find((entry) => entry.hooks?.some((hook) => hook.command === DOVE_CLAUDE_SESSION_START_HOOK_COMMAND))
+    })
+  });
+  writeJson(combinedManifestPath, combinedManifest);
+  synchronizeProjectIntegrationOnly(combinedHookRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  const combinedAfter = readJson(combinedSettingsPath);
+  assert.equal(combinedAfter.hooks.UserPromptSubmit.length, 1);
+  assert.equal(combinedAfter.hooks.UserPromptSubmit[0].hooks[0].command, "user-owned-prompt");
+  assert.equal(combinedAfter.hooks.SessionStart.some((entry) => entry.hooks?.some((hook) => hook.command === DOVE_CLAUDE_SESSION_START_HOOK_COMMAND)), true);
+  assert.equal(combinedAfter.hooks.SessionStart.some((entry) => entry.hooks?.some((hook) => hook.command === "user-owned-session-start")), true);
+  assert.equal(Object.hasOwn(combinedAfter.hooks, "Stop"), false);
+  const combinedManagedSelectors = readJson(combinedManifestPath).managed.filter((entry) => entry.path === ".claude/settings.json").map((entry) => entry.selector);
+  assert.equal(combinedManagedSelectors.includes("/hooks/SessionStart[dove-session-start]"), true);
+  assert.equal(combinedManagedSelectors.includes("/hooks/UserPromptSubmit[dove-user-prompt-submit]"), false);
 
   const stopRoot = makeProject();
   roots.push(stopRoot);
@@ -250,11 +656,7 @@ try {
   writeJson(stopSettingsPath, oldStopSettings);
   const stopManifest = readJson(path.join(stopRoot, INSTALLATION_MANIFEST_PATH));
   stopManifest.package.version = "2.9.0";
-  stopManifest.managed.find((entry) => entry.path === ".claude/settings.json").digest = semanticDigest({
-    UserPromptSubmit: oldStopSettings.hooks.UserPromptSubmit.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook user-prompt-submit"))),
-    SessionStart: oldStopSettings.hooks.SessionStart.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook session-start"))),
-    Stop: oldStopSettings.hooks.Stop.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook stop")))
-  });
+  stopManifest.managed.find((entry) => entry.selector === "/hooks/SessionStart[dove-session-start]").digest = semanticDigest(oldStopSettings.hooks.SessionStart.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook session-start"))));
   writeJson(path.join(stopRoot, INSTALLATION_MANIFEST_PATH), stopManifest);
   synchronizeProjectIntegrationOnly(stopRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
   const cleanedStopSettings = readJson(stopSettingsPath);
@@ -288,7 +690,7 @@ try {
     last_assistant_message: "internal phrasing"
   });
   assert.notEqual(stopCli.status, 0);
-  assert.match(stopCli.stderr, /hook 只接受这些子命令：session-start、user-prompt-submit，或 statusline|accepts only session-start, user-prompt-submit, or statusline/iu);
+  assert.match(stopCli.stderr, /hook 只接受这些子命令：session-start(?:，或| 或) statusline|accepts only session-start, or statusline/iu);
 
   const adoptionRoot = makeAdoptableProject();
   roots.push(adoptionRoot);
@@ -306,6 +708,7 @@ try {
   });
   writeJson(path.join(adoptionRoot, ".claude", "settings.json"), {
     permissions: { deny: [WEB_FETCH_DENY_PERMISSION] },
+    statusLine: DOVE_CLAUDE_STATUS_LINE,
     hooks: {
       OtherEvent: [{ hooks: [{ type: "command", command: "user-owned-other", timeout: 5 }] }]
     }
@@ -332,9 +735,11 @@ try {
   assert.equal(adoptionManifest.managed.some((entry) => entry.selector === WEB_FETCH_DENY_SELECTOR), false);
   const adoptedSettings = readJson(path.join(adoptionRoot, ".claude", "settings.json"));
   assert.equal(adoptedSettings.hooks.OtherEvent.some((entry) => entry.hooks?.some((hook) => hook.command === "user-owned-other")), true);
-  assert.equal(adoptedSettings.hooks.UserPromptSubmit.some((entry) => entry.hooks?.some((hook) => hook.command === DOVE_CLAUDE_AMBIENT_HOOK_COMMAND)), true);
+  assert.equal(Object.hasOwn(adoptedSettings.hooks, "UserPromptSubmit"), false);
   assert.equal(adoptedSettings.hooks.SessionStart.some((entry) => entry.hooks?.some((hook) => hook.command === DOVE_CLAUDE_SESSION_START_HOOK_COMMAND)), true);
   assert.equal(adoptedSettings.permissions.deny.includes(WEB_FETCH_DENY_PERMISSION), true);
+  assert.deepEqual(adoptedSettings.statusLine, DOVE_CLAUDE_STATUS_LINE);
+  assert.equal(adoptionManifest.managed.some((entry) => entry.selector === "/statusLine[dove-project-directory]"), false);
   assert.equal(Object.hasOwn(adoptedSettings.hooks, "Stop"), false);
   const adoptedMcp = readJson(path.join(adoptionRoot, ".mcp.json"));
   assert.equal(adoptedMcp.mcpServers.userServer.command, "user-server");
@@ -363,7 +768,7 @@ try {
     prompt: "research this"
   });
   assert.notEqual(hookAdoption.status, 0);
-  assert.match(hookAdoption.stderr, /not initialized/iu);
+  assert.match(hookAdoption.stderr, /hook 只接受这些子命令：session-start(?:，或| 或) statusline/iu);
   assert.equal(fs.existsSync(path.join(hookAdoptionRoot, INSTALLATION_MANIFEST_PATH)), false);
 
   const exclusiveDriftAdoptionRoot = makeAdoptableProject();
@@ -382,10 +787,8 @@ try {
       UserPromptSubmit: [{ hooks: [{ type: "command", command: "dove hook user-prompt-submit --project somewhere-else", timeout: 10 }] }]
     }
   });
-  assert.throws(
-    () => previewProjectAdoption(hookDriftAdoptionRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }),
-    /cannot claim conflicting content/iu
-  );
+  const promptHookAdoptionPreview = previewProjectAdoption(hookDriftAdoptionRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  assert.equal(promptHookAdoptionPreview.writtenPaths.includes(".claude/settings.json"), true);
   assert.equal(fs.existsSync(path.join(hookDriftAdoptionRoot, INSTALLATION_MANIFEST_PATH)), false);
 
   const mcpDriftAdoptionRoot = makeAdoptableProject();
@@ -417,10 +820,17 @@ try {
   const otherRoot = makeProject();
   roots.push(otherRoot);
   const mismatchCwd = cliHook(stopRoot, "session-start", { hook_event_name: "SessionStart", cwd: otherRoot });
-  assert.notEqual(mismatchCwd.status, 0);
-  assert.match(mismatchCwd.stderr, /不属于声明的已初始化项目|does not belong/iu);
+  assert.equal(mismatchCwd.status, 0, "Invalid project boundaries must report through host-consumed hook JSON.");
+  assert.match(JSON.parse(mismatchCwd.stdout).systemMessage, /不属于声明的已初始化项目|does not belong/iu);
 
-  console.log(JSON.stringify({ status: "passed" }, null, 2));
+  const cliEntrypoints = process.argv.includes("--source-only") ? ["dove.mjs"] : ["dove.mjs", "dove-package.mjs"];
+  for (const entrypoint of cliEntrypoints) {
+    const factsRoot = makeProject();
+    roots.push(factsRoot);
+    validateSessionFacts(factsRoot, path.join(ROOT, "bin", entrypoint));
+  }
+
+  console.log(JSON.stringify({ status: "passed", sessionFactsCli: cliEntrypoints }, null, 2));
 } finally {
   for (const root of roots.reverse()) fs.rmSync(root, { recursive: true, force: true });
 }

@@ -1,10 +1,15 @@
 ---
-description: "Read or maintain researcher-owned Lessons that can inspire, improve, broaden, or protect future work."
+description: "Use when reusable research guidance should be read or preserved without recording routine progress twice."
+argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
 ---
 
 # dove.lessons
 
-Read or maintain researcher-owned Lessons that can inspire, improve, broaden, or protect future work.
+Use when reusable research guidance should be read or preserved without recording routine progress twice.
+
+## Request
+
+$ARGUMENTS
 
 ## Examples
 
@@ -18,13 +23,12 @@ These are flexible research considerations, not a required order or report templ
 
 Read or maintain researcher-owned Lessons that can improve current or subsequent work.
 
-### When it helps
+### When to use
 
 Use when existing or newly learned guidance could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes, including when the user asks to inspect, remember, reflect on, or preserve Lessons.
 
 ### What Dove will examine
 
-- Return with what was inspected, what changed, what remains unresolved, and the next useful action.
 - Treat Lessons as broad, fallible guidance for research methods, successful and failed routes, cross-domain intuitions, experiment and source practice, figures, writing, review, collaboration, and other reusable work—not as evidence or a completion certificate.
 - For reading, use the Lessons summary and linked themes whenever they could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes; include directly relevant and plausibly useful material, while reusing active-context Lessons instead of rereading them mechanically.
 - For maintenance, preserve a Lesson whenever the experience could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes. Write only the reusable insight and useful conditions, not a routine activity log.
@@ -52,3 +56,7 @@ Use when existing or newly learned guidance could inspire current or subsequent 
 
 - Use only tools and materials that the current host exposes and current user/project permissions permit. If something needed is unavailable, name it and use any other available material or action that can still advance the request.
 - Use Claude Code waiting or background affordances only for real long-running host actions, then return to Dove's mainline judgment when results arrive.
+
+### Return with
+
+- Inspected evidence, material change, unresolved limits, and the next useful action.

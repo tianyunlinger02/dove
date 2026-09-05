@@ -5,7 +5,8 @@ import path from "node:path";
 
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 
-const REVIEW_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+const REVIEW_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$/u;
+const WINDOWS_RESERVED_NAMES = new Set(["CON", "PRN", "AUX", "NUL", ...Array.from({ length: 9 }, (_, index) => `COM${index + 1}`), ...Array.from({ length: 9 }, (_, index) => `LPT${index + 1}`)]);
 
 function lstatOrNull(fsOps, targetPath) {
   try {
@@ -60,7 +61,9 @@ export function createReviewId(options = {}) {
 
 export function normalizeReviewId(value, label = "Dove review id") {
   if (typeof value !== "string" || !value.trim() || value !== value.trim() || value.includes("\0")) throw new Error(`${label} must be a non-empty path-safe identifier.`);
-  if (value === "." || value === ".." || !REVIEW_ID_PATTERN.test(value)) throw new Error(`${label} may contain only letters, numbers, dot, underscore, and dash, and must not be a path.`);
+  if (!REVIEW_ID_PATTERN.test(value)) throw new Error(`${label} may contain only letters, numbers, dot, underscore, and dash, must start and end with a letter or number, and must not be a path.`);
+  const upper = value.split(".", 1)[0].toUpperCase();
+  if (WINDOWS_RESERVED_NAMES.has(upper)) throw new Error(`${label} must not use a reserved device name: ${value}`);
   return value;
 }
 

@@ -4,7 +4,6 @@ import path from "node:path";
 
 import { renderProjectIntegrationResult } from "../../src/cli/project-integration-output.mjs";
 import { renderDoveHome } from "../../src/cli/terminal-output.mjs";
-import { isResearchRelatedWakeupPrompt } from "../../src/core/ambient-policy.mjs";
 import { renderClaudeDoveAgent } from "../../src/core/dove-agent-definition.mjs";
 import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
 import {
@@ -29,87 +28,51 @@ import { ROOT, assertDoveAgentSurfaceSemantics } from "./common.mjs";
 
 const EXPECTED_AMBIENT_PATHS = [
   ".claude/rules/dove.md",
-  ".claude/skills/dove-intake/SKILL.md",
   PAPER_SEARCH_SUPPORT_SKILL_PATH,
   EXA_WEB_SUPPORT_SKILL_PATH
 ];
 
 export function assertAmbientRouting() {
-  for (const prompt of [
-    "继续",
-    "现在怎么办",
-    "那接下来呢",
-    "what now",
-    "fix this bug",
-    "review this code",
-    "帮我整理这个 Markdown",
-    "research travel options",
-    "research laptop prices",
-    "I am researching laptop options",
-    "researcher job application",
-    "帮我研究一下电脑怎么选",
-    "研究一下购物选项",
-    "帮我写研究生申请邮件",
-    "Dove 菜单输出有错",
-    "update the Dove CLI help",
-    "/dove:research"
-  ]) assert.equal(isResearchRelatedWakeupPrompt(prompt), false, `${prompt} must not wake Dove from the research-relevance gate`);
-  for (const prompt of [
-    "research problem: retrieval-augmented generation under domain shift",
-    "research project on retrieval-augmented generation",
-    "find papers about retrieval-augmented generation",
-    "分析这个实验结果",
-    "记录这个实验结果到 Dove",
-    "更新研究记录",
-    "设计一个实验验证这个假设",
-    "prepare a review handoff for this manuscript",
-    "do you think we should run an experiment",
-    "do you think we should run an experiment, and if useful run it",
-    "判断是否需要更新研究记录，需要就记录"
-  ]) assert.equal(isResearchRelatedWakeupPrompt(prompt), true, `${prompt} must remain eligible for Dove research intake`);
-
   const entries = generatedClaudeAmbientProjectEntries();
   assert.deepEqual(entries.map((entry) => entry.destinationPath), EXPECTED_AMBIENT_PATHS);
   const byPath = new Map(entries.map((entry) => [entry.destinationPath, entry.content]));
   const rule = byPath.get(".claude/rules/dove.md");
-  const intake = byPath.get(".claude/skills/dove-intake/SKILL.md");
   const paperSearch = byPath.get(PAPER_SEARCH_SUPPORT_SKILL_PATH);
   const webReader = byPath.get(EXA_WEB_SUPPORT_SKILL_PATH);
-  const ordinary = `${rule}\n${intake}`;
-  assert.match(ordinary, /zero-write/iu);
-  assert.match(ordinary, /one complete (?:Dove )?research agent|same research collaboration/iu);
-  assert.match(ordinary, /nine Skills.*(?:same research collaboration|current decision|optional specialist methods)|optional specialist capabilities/isu);
-  assert.doesNotMatch(ordinary, /Planner.*Builder\/Author.*Reviewer/isu);
-  assert.match(rule, /host handles general task routing/iu);
-  assert.match(rule, /clearly research-related non-slash requests/iu);
-  assert.match(rule, /hidden `dove-intake`.*thin zero-write bridge/isu);
-  assert.match(rule, /does not choose a Skill, authorize work, decide continuation or completion, or narrow claims/iu);
-  assert.match(rule, /Ask only when a consequential ambiguity would change the next useful action/iu);
-  assert.match(rule, /weigh current evidence, task risk, user preference, and the research mainline/iu);
-  assert.match(rule, /useful next move.*stop before unrequested execution or recording/iu);
+  assert.match(rule, /shared researcher judgment/iu);
+  assert.match(rule, /one complete (?:Dove )?research agent|same research collaboration/iu);
+  assert.match(rule, /nine Skills.*(?:same research collaboration|current decision|optional specialist methods)|optional specialist capabilities/isu);
+  assert.match(rule, /research requests in the current conversation/iu);
+  assert.match(rule, /answer, clarify, or use a Dove capability when useful/iu);
+  assert.match(rule, /Ask when ambiguity or a change to the confirmed goal needs the user's decision/iu);
+  assert.match(rule, /Answer and stop for pure judgment or bounded requests/iu);
+  assert.match(rule, /confirmed research goal.*carry out the next feasible in-scope action.*continue/isu);
+  assert.match(rule, /Citation identity, full-text inspection, and support for a claim are separate judgments/iu);
+  assert.match(rule, /claim strength within the evidence/iu);
+  assert.match(rule, /Recheck earlier summaries.*against current materials/iu);
   assert.match(rule, /real paper and webpage reading tools/iu);
   assert.match(rule, /search snippets can guide discovery/iu);
   assert.match(rule, /do not replace unretrieved paper or webpage content with shell, `curl`, or ad hoc fetch substitutes/iu);
   assert.match(rule, /Record concise natural-language notes in `\.dove\/install\/DOCTOR\.md` only for explicit feedback about Dove itself or actual Dove integration, routing, Skill, document, or guidance failures/iu);
   assert.match(rule, /Preserve reusable ordinary research or collaboration experience as Lessons instead/iu);
-  assert.doesNotMatch(rule, /Stop hook|Stop-hook|Stop does not drive|plain-language rendering path|说人话/iu);
+  assert.doesNotMatch(rule, /hidden `dove-intake`|dove-intake|UserPromptSubmit.*zero-write|Stop hook|Stop-hook|Stop does not drive|plain-language rendering path|说人话/iu);
   assert.doesNotMatch(rule, /dove-paper-search|hosted `exa`|built-in `WebFetch`|built-in `WebSearch`|MCP|severity fields|fixed template|Do not ask the user to run `dove doctor`/iu);
-  assert.match(intake, /likely research-related/iu);
-  assert.match(intake, /zero-write/iu);
-  assert.match(intake, /does not select a Skill/iu);
-  assert.match(intake, /do not read, search, execute, modify files/iu);
-  assert.doesNotMatch(intake, /sync/iu);
-  assert.doesNotMatch(ordinary, /dove-lessons-intake|manage_dove|public Dove MCP|semantic ID/iu);
+  assert.doesNotMatch(entries.map((entry) => entry.destinationPath).join("\n"), /dove-intake/iu);
+  assert.doesNotMatch(rule, /dove-lessons-intake|manage_dove|public Dove MCP|semantic ID/iu);
   assert.match(paperSearch, /user-invocable: false/u);
-  assert.match(paperSearch, /Search, retrieve, and read academic papers through the pinned dove-paper-search project MCP/iu);
-  assert.match(paperSearch, /academic paper discovery, retrieval, or full-text reading materially helps/iu);
+  assert.match(paperSearch, /Search, verify metadata, retrieve, and read academic papers through the pinned dove-paper-search project MCP/iu);
+  assert.match(paperSearch, /academic paper discovery, metadata verification, retrieval, or full-text reading materially helps/iu);
+  assert.match(paperSearch, /get_crossref_paper_by_doi/u);
+  assert.match(paperSearch, /direct lookup before fuzzy title search/iu);
+  assert.match(paperSearch, /verified, conflict, not-found, or unknown/iu);
+  assert.match(paperSearch, /Metadata identity is not full-text inspection or claim support/iu);
   assert.match(paperSearch, /use_scihub: false/u);
   assert.match(paperSearch, /current host actually exposes and current user\/project permissions permit/iu);
-  assert.match(paperSearch, /academic paper discovery, download, or full text was not obtained through `dove-paper-search`/iu);
+  assert.match(paperSearch, /academic paper discovery, metadata lookup, download, or full text was not obtained through `dove-paper-search`/iu);
   assert.match(paperSearch, /choose any exposed and permitted material or action that can still advance the question: `WebSearch` discovery snippets, Exa ordinary webpage\/documentation\/venue\/known-URL text when exposed, local project material, user-provided material, theory, experiment, or analysis/iu);
   assert.match(paperSearch, /Do not install dependencies or substitute a CLI, shell, `curl`, or ad hoc fetch script for this MCP, and do not follow a fixed substitute sequence/iu);
   assert.match(paperSearch, /Use built-in `WebSearch` for discovery when appropriate/iu);
-  assert.match(paperSearch, /project `exa` MCP for ordinary webpage bodies, documentation pages, venue pages, and known URLs/iu);
+  assert.match(paperSearch, /project `exa` MCP for ordinary webpages and known URLs/iu);
   assert.doesNotMatch(paperSearch, /WebFetch/iu);
   assert.match(webReader, /user-invocable: false/u);
   assert.match(webReader, /hosted Exa project MCP/iu);
@@ -157,7 +120,7 @@ export function assertPublicDocumentationBoundaries() {
     assert.doesNotMatch(document, /documented or recovered mainline|recovers the current mainline|Review-gated|Auto-gate|latest current `PASS`|actual `dove:review` call/iu);
   }
   assert.match(usage, /real manuscript context|manuscript layout|check(?:s|ing)? the result in its real manuscript context/iu);
-  assert.match(usage, /generation.*revision.*checking|best available tool|drawing, redrawing, generation/isu);
+  assert.match(usage, /generation.*revision.*checking|best available tool|draw.*generate.*revise.*inspect/isu);
   assert.match(usage, /LaTeX source/iu);
   assert.match(usage, /unless the target venue requires another format|venue.*(?:does not provide or accept|lacks|required|requires).*LaTeX/isu);
   assert.match(packaging, /generated adapters/iu);
@@ -187,7 +150,7 @@ export function assertUserFacingCliOutput() {
   assert.match(initOutput, /Dove agent 与 9 个可选专项入口已安装/u);
   assert.match(initOutput, /9 个可选专项入口已安装/u);
   assert.match(initOutput, /直接提出科研请求/u);
-  assert.match(initOutput, /WebFetch 禁用/u);
+  assert.match(initOutput, /SessionStart hook 与 WebFetch 禁用/u);
   assert.match(initOutput, /普通网页 Exa MCP/u);
   assert.match(initOutput, /WebSearch 保留用于搜索发现，WebFetch 由项目权限禁用/u);
   assert.doesNotMatch(initOutput, /12 个 Dove 工作入口|Dove-only MCP 批准|\/dove:workspace/u);

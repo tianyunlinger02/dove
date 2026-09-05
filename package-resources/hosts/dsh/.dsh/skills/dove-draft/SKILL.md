@@ -1,11 +1,15 @@
 ---
 name: dove-draft
-description: "Draft, assess, or revise ordinary project text and artifacts from the available evidence."
+description: "Use when the user names a draft/artifact to write or revise, with available evidence prioritized over polishing."
 ---
 
 # Dove Draft
 
-Draft, assess, or revise ordinary project text and artifacts from the available evidence.
+Use when the user names a draft/artifact to write or revise, with available evidence prioritized over polishing.
+
+## Research judgment
+
+Start from the real research question, user need, key uncertainty, current or provisional route, and decision that matters. Compare serious mechanisms or approaches by assumptions, applicability, predictions, inspected evidence, and failure conditions. Use claim-driven experiments or diagnostics when they can distinguish the strongest alternatives, and check anomalous results before using them as evidence. State facts from inspected material, keep conclusions within the tested or read conditions, and preserve claim strength unless evidence or the user changes it. Absorb each material result into the route, paper spine, claim scope, or next action before continuing. Answer and stop for pure judgment or bounded requests; continue useful in-scope work when the user has confirmed a research goal.
 
 ## How Dove approaches this work
 
@@ -13,16 +17,15 @@ These are flexible research considerations, not a required order or report templ
 
 ### What this is for
 
-Draft, assess, or revise project text and artifacts from the available evidence.
+Draft, assess, or revise the user-specified project text or artifact from the available evidence.
 
-### When it helps
+### When to use
 
-Use when the user requests drafting, assessment, or revision, or when expression, argument, or an authoritative delivery artifact is the limiting deficiency.
+Use when the user specifies a manuscript, section, claim-bearing artifact, draft, assessment, or revision target, or when expression, argument, or an authoritative delivery artifact is the limiting deficiency.
 
 ### What Dove will examine
 
-- Return with what was inspected, what changed, what remains unresolved, and the next useful action.
-- Read the target artifact and the evidence needed for its material claims; leave unchecked methods, results, citations, samples, data, and field facts unknown.
+- Prioritize the user-specified manuscript or artifact and the evidence needed for its material claims; leave unchecked methods, results, citations, samples, data, and field facts unknown.
 - Preserve certainty, causality, scope, generality, quantitative qualifiers, and novelty unless evidence or the user changes them; say what changed before changing the text.
 - Build or repair the paper spine: problem → gap → insight/mechanism → method → evidence → claim → limitation → reader takeaway.
 - Use reliable author samples only for stable style cues such as rhythm, paragraphing, hedging, transitions, reporting verbs, and citation integration; keep accuracy and venue norms above voice imitation.
@@ -35,11 +38,11 @@ Use when the user requests drafting, assessment, or revision, or when expression
 
 ### Ways Dove may proceed
 
-- When existing Dove research context would materially help the draft and its material claims, read `.dove/research/RESEARCH.md`, then `.dove/research/claims/CLAIMS.md`, then only directly relevant linked details. Otherwise work directly from the user's request and specified project materials. Do not recursively scan the research tree. If a needed entry or link is absent, say so naturally.
+- When an existing Claim note is directly relevant to the user-specified draft or material claim, read `.dove/research/RESEARCH.md`, then `.dove/research/claims/CLAIMS.md`, then only directly relevant linked details. Otherwise work from the target artifact and specified evidence without reading Claims merely because Draft was invoked.
 - When existing Lessons could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes, read ".dove/research/lessons/LESSONS.md" if it exists, then the directly relevant or plausibly useful linked Lessons. Read ".dove/research/RESEARCH.md" first only when project context is still needed and it has not already been read in the active context. Reuse Lessons already read in the active context instead of rereading them mechanically. If Lessons materials are absent, work without them. Treat Lessons as fallible guidance, never as evidence.
 - Read the target and relevant material, then draft, assess, create, or revise the ordinary artifact when the deliverable requires it. For manuscript work, edit the authoritative source and propagate through the real build or export path before claiming the artifact is current.
 - Run the checks needed for the requested artifact, fix in-scope issues, and report remaining material issues, scope limits, or user choices.
-- Create or revise a naturally named Claim document only when an important research claim needs durable treatment; when useful for recovery, link supporting or challenging Source, Experiment, Figure, and manuscript locations without copying evidence into a claim store. Use ordinary Markdown links and readable project-relative artifact paths only when useful for recovery; do not add databases, generated IDs, frontmatter, backlink audits, or consistency matrices. Update only the narrowest relevant research document. Update `.dove/research/claims/CLAIMS.md` only when its own links or synthesis materially change. Update `.dove/research/RESEARCH.md` only for a project-level mainline, conclusion, navigation, or priority change.
+- Create or revise a naturally named Claim document only when an important research claim needs durable treatment; when useful for recovery, link supporting or challenging Source, Experiment, Figure, and manuscript locations without copying evidence into a claim store. Use ordinary Markdown links and readable project-relative artifact paths only when useful for recovery, and keep the note as human prose rather than a structured store. Update only the narrowest relevant research document. Update `.dove/research/claims/CLAIMS.md` only when its own links or synthesis materially change. Update `.dove/research/RESEARCH.md` only for a project-level mainline, conclusion, navigation, or priority change.
 
 ### What this should not replace
 
@@ -53,4 +56,8 @@ Use when the user requests drafting, assessment, or revision, or when expression
 ### Using host tools
 
 - Use only tools and materials that the current host exposes and current user/project permissions permit. If something needed is unavailable, name it and use any other available material or action that can still advance the request.
-- DSH adapters are project-local filesystem Skills; use only affordances that the current DSH run actually exposes.
+- In DSH, work from project-local files and whatever tools the current run actually exposes.
+
+### Return with
+
+- Inspected evidence, material change, unresolved limits, and the next useful action.

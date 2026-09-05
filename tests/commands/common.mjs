@@ -19,7 +19,7 @@ export function skillContract(command) {
   const contract = command.contract;
   assert.equal(typeof contract?.purpose, "string", `${command.id} needs a purpose`);
   assert.equal(typeof contract?.when, "string", `${command.id} needs use guidance`);
-  for (const field of ["responsibilities", "actions", "boundaries", "nonGoals", "clarification"]) {
+  for (const field of ["responsibilities", "returnWith", "actions", "boundaries", "nonGoals", "clarification"]) {
     assert.ok(Array.isArray(contract[field]), `${command.id} contract.${field} must be an array`);
   }
   assert.equal(typeof contract.hostGuidance, "object", `${command.id} needs conditional host guidance`);
@@ -100,7 +100,7 @@ export function assertDoveAgentSurfaceSemantics(value, label) {
     /Maintain Dove research Markdown.*record, update, or save/iu,
     /preserving the work's evidence and continuation context is genuinely useful/iu,
     /author-side Review.*scientific self-check|author-side Review is Dove's own scientific self-check/isu,
-    /independent `dove-review`.*real isolated persistent reviewer context|real isolated persistent reviewer context.*current frozen handoff/isu,
+    /independent `dove-review`.*real isolated persistent reviewer context|real isolated persistent reviewer context.*current frozen handoff|isolated `dove-review` exists only when a real isolated persistent reviewer context judges the current frozen handoff/isu,
     /findings.*inform.*author-side judgment|findings.*evidence to absorb|not authority over the Workspace mainline/isu
   ]);
 }

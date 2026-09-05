@@ -7,6 +7,9 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { captureRunGitFacts, normalizeRunGitFacts } from "../src/core/run-environment.mjs";
+import { inspectRunStatus, normalizeRunSeed } from "../src/core/run-record.mjs";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCRATCH_ROOT = path.join(ROOT, ".dove-dev", "tmp");
 fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
@@ -23,7 +26,73 @@ function jsonCli(args, options = {}) {
   const result = cli(args, options);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.equal(result.stderr, "");
-  return JSON.parse(result.stdout);
+  const value = JSON.parse(result.stdout);
+  if (args[0] === "run") assertNoPublicDeprecatedRunFields(value, args.join(" "));
+  return value;
+}
+
+function git(project, args, options = {}) {
+  const result = spawnSync("git", args, {
+    cwd: project,
+    encoding: "utf8",
+    shell: false,
+    timeout: 10000,
+    maxBuffer: 4 * 1024 * 1024,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: "Dove Validator",
+      GIT_AUTHOR_EMAIL: "dove@example.invalid",
+      GIT_COMMITTER_NAME: "Dove Validator",
+      GIT_COMMITTER_EMAIL: "dove@example.invalid"
+    },
+    ...options
+  });
+  assert.equal(result.error, undefined, result.error?.message);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result.stdout.trim();
+}
+
+function initializeGitSnapshot(project) {
+  git(project, ["init", "-q"]);
+  git(project, ["add", "-A"]);
+  const tree = git(project, ["write-tree"]);
+  const commit = git(project, ["commit-tree", tree, "-m", "fixture snapshot"]);
+  git(project, ["update-ref", "HEAD", commit]);
+  return commit;
+}
+
+function refreshGitSnapshot(project) {
+  git(project, ["add", "-A"]);
+  const tree = git(project, ["write-tree"]);
+  const commit = git(project, ["commit-tree", tree, "-p", git(project, ["rev-parse", "HEAD"]), "-m", "fixture snapshot"]);
+  git(project, ["update-ref", "HEAD", commit]);
+  return commit;
+}
+
+function assertNoPublicDeprecatedRunFields(value, label = "public run result") {
+  const forbidden = new Set(["environment", "environmentComparison", "environmentFields", "stagedCount", "unstagedCount", "untrackedCount", "porcelainStatusSha256", "lockfiles", "platform"]);
+  const visit = (item, trail) => {
+    if (Array.isArray(item)) {
+      item.forEach((entry, index) => visit(entry, `${trail}[${index}]`));
+      return;
+    }
+    if (item === null || typeof item !== "object") return;
+    for (const [key, nested] of Object.entries(item)) {
+      assert.equal(forbidden.has(key), false, `${label} must not expose deprecated field ${trail}.${key}`);
+      visit(nested, `${trail}.${key}`);
+    }
+  };
+  visit(value, "$ ");
+}
+
+function assertNoNewJournalDeprecatedRunFields(event, label = "run.started") {
+  for (const key of ["environment", "platform", "stagedCount", "unstagedCount", "untrackedCount", "porcelainStatusSha256", "lockfiles"]) {
+    assert.equal(Object.hasOwn(event, key), false, `${label} must not record ${key}`);
+  }
+}
+
+function readStartedEvent(project, runId) {
+  return readJsonLines(runPath(project, runId, "run.jsonl")).find((event) => event.type === "run.started");
 }
 
 function readJsonLines(filePath) {
@@ -106,8 +175,8 @@ function writeManualRunJournal(project, runId, events) {
   return manualDir;
 }
 
-function startRun(project, runId, extraArgs, commandArgs) {
-  return jsonCli(["run", "start", "--project", project, "--id", runId, ...extraArgs, "--json", "--", ...commandArgs]);
+function startRun(project, runId, extraArgs, commandArgs, options = {}) {
+  return jsonCli(["run", "start", "--project", project, "--id", runId, ...extraArgs, "--json", "--", ...commandArgs], options);
 }
 
 function finalize(project, runId, metricValue, extra = []) {
@@ -122,14 +191,21 @@ try {
   fs.mkdirSync(path.join(project, ".git"));
   const init = jsonCli(["init", "--project", project, "--host", "claude", "--json"]);
   assert.equal(init.status, "initialized");
+  fs.writeFileSync(path.join(project, "package-lock.json"), "{\"lockfileVersion\":3}\n");
 
   const invalidStart = cli(["run", "start", "--project", project, "--id", "invalid-start", "--metric-name", "score", "--direction", "mean", "--json", "--", process.execPath, "-e", "process.exit(0)"]);
   assert.notEqual(invalidStart.status, 0);
   assert.match(invalidStart.stderr, /--direction 只接受 min 或 max|--direction accepts only min or max|--direction min or --direction max/iu);
   assert.equal(fs.existsSync(path.join(project, ".dove", "runs", "invalid-start")), false, "invalid run start options must not reserve a run directory");
 
+  const invalidSeed = cli(["run", "start", "--project", project, "--id", "invalid-seed", "--seed", "line\nbreak", "--json", "--", process.execPath, "-e", "process.exit(0)"]);
+  assert.notEqual(invalidSeed.status, 0);
+  assert.match(invalidSeed.stderr, /--seed.*control characters/iu);
+  assert.equal(fs.existsSync(path.join(project, ".dove", "runs", "invalid-seed")), false, "invalid seed must not reserve a run directory");
+
   const successScript = path.join(project, "scripts", "success.mjs");
   writeScript(successScript, `process.stdout.write("success out\\n"); process.stderr.write("success err\\n"); process.exit(0);\n`);
+  const cleanHead = initializeGitSnapshot(project);
   const success = startRun(project, "success-a", [
     "--group", "compatible",
     "--metric-name", "score",
@@ -138,9 +214,13 @@ try {
     "--data", "fixture-v1",
     "--evaluator", "validator",
     "--resource-basis", "cpu-local",
+    "--seed", "seed-42",
     "--timeout-ms", "5000"
   ], [process.execPath, successScript, "--literal", "--not-a-dove-option"]);
   assert.equal(success.status, "started");
+  assert.deepEqual(success.seed, { declaration: "declared", value: "seed-42" });
+  assert.equal(success.commit, cleanHead);
+  assert.equal(success.dirty, false);
   assert.deepEqual(success.argv.slice(-3), [successScript, "--literal", "--not-a-dove-option"]);
   const successStatus = waitForTerminal(project, "success-a");
   assert.equal(successStatus.status, "succeeded");
@@ -150,11 +230,17 @@ try {
   const successEvents = assertJournal(project, "success-a");
   assert.deepEqual(successEvents.map((event) => event.type), ["run.started", "target.started", "run.terminal"]);
   assert.equal(successEvents[0].argv.includes("--not-a-dove-option"), true);
+  assert.deepEqual(successEvents[0].seed, { declaration: "declared", value: "seed-42" }, "run.started must preserve the explicitly supplied seed value without claiming target use");
+  assert.equal(successEvents[0].commit, cleanHead);
+  assert.equal(successEvents[0].dirty, false);
+  assertNoNewJournalDeprecatedRunFields(successEvents[0]);
 
   const statusJournal = runPath(project, "success-a", "run.jsonl");
   const beforeStatus = fileState(statusJournal);
   const singleStatus = jsonCli(["run", "status", "--project", project, "--id", "success-a", "--json"]);
   assert.equal(singleStatus.status, "succeeded");
+  assert.equal(singleStatus.commit, cleanHead);
+  assert.equal(singleStatus.dirty, false);
   assert.equal(singleStatus.timeoutTriggered, false);
   assert.equal(Object.hasOwn(singleStatus, "timeoutRequested"), false);
   assertFileStateEqual(fileState(statusJournal), beforeStatus, "status must be read-only");
@@ -168,6 +254,43 @@ try {
   assert.equal(terminalResume.status, "terminal");
   assert.equal(terminalResume.write, false);
   assertFileStateEqual(fileState(statusJournal), beforeResume, "terminal resume must be zero-write");
+
+  fs.writeFileSync(path.join(project, "tracked-dirty.txt"), "base\n");
+  const dirtyBaseHead = refreshGitSnapshot(project);
+  fs.appendFileSync(path.join(project, "tracked-dirty.txt"), "unstaged\n");
+  fs.writeFileSync(path.join(project, "staged-dirty.txt"), "staged\n");
+  git(project, ["add", "staged-dirty.txt"]);
+  fs.writeFileSync(path.join(project, "untracked-dirty.txt"), "untracked\n");
+  const dirtyRun = startRun(project, "dirty-environment", [], [process.execPath, successScript]);
+  assert.equal(dirtyRun.status, "started");
+  assert.deepEqual(dirtyRun.seed, { declaration: "not-declared", value: null });
+  assert.equal(dirtyRun.commit, dirtyBaseHead);
+  assert.equal(dirtyRun.dirty, true);
+  waitForTerminal(project, "dirty-environment");
+  const dirtyStarted = readStartedEvent(project, "dirty-environment");
+  assert.equal(dirtyStarted.commit, dirtyBaseHead);
+  assert.equal(dirtyStarted.dirty, true);
+  assertNoNewJournalDeprecatedRunFields(dirtyStarted, "dirty run.started");
+
+  const gitUnavailableRun = startRun(project, "git-unavailable", [], [process.execPath, successScript], { env: { ...process.env, PATH: "" } });
+  assert.equal(gitUnavailableRun.status, "started");
+  assert.equal(gitUnavailableRun.commit, null);
+  assert.equal(gitUnavailableRun.dirty, null);
+  waitForTerminal(project, "git-unavailable");
+
+  const captureErrorGit = captureRunGitFacts("bad\0project");
+  assert.deepEqual(captureErrorGit, { commit: null, dirty: null });
+
+  const nonGitProject = path.join(tempRoot, "non-git-project");
+  fs.mkdirSync(nonGitProject, { recursive: true });
+  fs.writeFileSync(path.join(nonGitProject, ".git"), "not-a-gitdir\n");
+  const nonGitInit = jsonCli(["init", "--project", nonGitProject, "--host", "claude", "--json"]);
+  assert.equal(nonGitInit.status, "initialized");
+  const nonGitRun = startRun(nonGitProject, "non-git-environment", [], [process.execPath, "-e", "process.exit(0)"]);
+  assert.equal(nonGitRun.status, "started");
+  assert.equal(nonGitRun.commit, null);
+  assert.equal(nonGitRun.dirty, null);
+  waitForTerminal(nonGitProject, "non-git-environment");
 
   const failScript = path.join(project, "scripts", "fail.mjs");
   writeScript(failScript, `process.stdout.write("fail out\\n"); process.stderr.write("fail err\\n"); process.exit(7);\n`);
@@ -261,9 +384,14 @@ try {
   assert.notEqual(duplicateFinalize.status, 0);
   assert.match(duplicateFinalize.stderr, /already finalized/iu);
   const compareCompatible = jsonCli(["run", "compare", "--project", project, "--group", "compatible", "--json"]);
-  assert.equal(compareCompatible.comparable, true);
+  assert.equal(compareCompatible.comparable, true, "Git commit/dirty differences must not affect metric comparability");
   assert.deepEqual(compareCompatible.ranking.map((item) => item.runId), ["success-b", "success-a"]);
   assert.equal(compareCompatible.ranking[1].deltaFromBest, 2);
+  for (const item of compareCompatible.ranking) {
+    const started = readStartedEvent(project, item.runId);
+    assert.equal(item.commit, started.commit, "ranking must preserve the run's commit fact");
+    assert.equal(item.dirty, started.dirty, "ranking must preserve the run's dirty fact");
+  }
   const ambiguousCompare = cli(["run", "compare", "--project", project, "--id", "success-a", "--group", "compatible", "--json"]);
   assert.notEqual(ambiguousCompare.status, 0);
   assert.match(ambiguousCompare.stderr, /(?:--id 不能和 --group|--group 不能和 --id) 同时使用|Use only one of --id or --group|cannot be combined/iu);
@@ -300,6 +428,17 @@ try {
     data: null,
     evaluator: null,
     resourceBasis: null,
+    environment: {
+      git: {
+        fullHead: dirtyBaseHead,
+        dirty: true,
+        stagedCount: 9,
+        unstagedCount: 8,
+        untrackedCount: 7,
+        porcelainStatusSha256: "a".repeat(64)
+      },
+      lockfiles: { fingerprints: [{ path: "package-lock.json", size: 1, sha256: "b".repeat(64) }] }
+    },
     platform: { platform: process.platform, arch: process.arch, node: process.version, release: "manual" },
     supervisorPid: missingPid,
     timeout: { requested: false, timeoutMs: null, killGraceMs: 5000, scope: "manual", note: "manual fixture" }
@@ -308,6 +447,11 @@ try {
   const reconciled = jsonCli(["run", "resume", "--project", project, "--id", "manual-interrupt", "--json"]);
   assert.equal(reconciled.status, "interrupted");
   assert.equal(reconciled.write, true);
+  assert.equal(reconciled.run.commit, dirtyBaseHead);
+  assert.equal(reconciled.run.dirty, true);
+  const compareOldRecord = jsonCli(["run", "compare", "--project", project, "--id", "manual-interrupt", "--json"]);
+  assert.equal(compareOldRecord.comparable, false);
+  assert.deepEqual(compareOldRecord.fields, ["state"]);
   const manualEvents = readJsonLines(path.join(manualDir, "run.jsonl"));
   assert.equal(manualEvents.length, beforeManual + 1);
   assert.equal(manualEvents.at(-1).type, "run.reconciled");

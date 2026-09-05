@@ -23,7 +23,7 @@ export function classifyProjectSetup(result) {
   if (adoption.state === "adoptable") return setup("adopt", "adoptable");
   if (integration.state === "drifted" && integration.manifest !== null) return setup("blocked", "drifted", "drifted");
   if (integration.state === "invalid") return setup("blocked", "invalid");
-  if (integration.state === "needs-sync") return setup("update", "needs-sync");
+  if (integration.state === "needs-sync") return setup("update", integration.skippedLocalEdits?.length > 0 ? "needs-sync-with-local-edits" : "needs-sync");
   if (integration.state === "current") return setup("current", "current");
   if (workspace.mode === "current" && workspace.healthy === true) return setup("init", "preserved-research");
   if (workspace.mode !== "absent") return setup("blocked", "unsupported-workspace");

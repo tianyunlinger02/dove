@@ -14,6 +14,7 @@ import {
   uninstallProjectIntegration,
   updateProjectIntegration
 } from "../src/core/project-installation.mjs";
+import { DOVE_CLAUDE_STATUS_LINE } from "../src/core/ambient-policy.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { inspectProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
@@ -40,6 +41,16 @@ function digest(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+}
+
+function semanticDigest(value) {
+  return crypto.createHash("sha256").update(canonicalJson(value)).digest("hex");
+}
+
 function makeAdoptableProject() {
   reset();
   fs.mkdirSync(path.join(fixture, ".git"));
@@ -57,7 +68,7 @@ function makeAdoptableProject() {
 reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude", "dsh"] });
 const initializedSettings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
-assert.deepEqual(initializedSettings.statusLine, { type: "command", command: 'dove hook statusline --project "$CLAUDE_PROJECT_DIR"' });
+assert.equal(Object.hasOwn(initializedSettings, "statusLine"), false);
 assert.equal(initializedSettings.permissions.deny.includes(WEB_FETCH_DENY_PERMISSION), true);
 const initializedMcp = JSON.parse(fs.readFileSync(path.join(fixture, ".mcp.json"), "utf8"));
 assert.deepEqual(initializedMcp.mcpServers[EXA_MCP_SERVER_NAME], EXA_MCP_FRAGMENT);
@@ -117,6 +128,32 @@ assert.equal(resolveProjectRootForInit(fixture), fixture);
 
 reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
+const exactStatusLineSettingsPath = path.join(fixture, ".claude", "settings.json");
+const exactStatusLineSettings = JSON.parse(fs.readFileSync(exactStatusLineSettingsPath, "utf8"));
+exactStatusLineSettings.statusLine = DOVE_CLAUDE_STATUS_LINE;
+fs.writeFileSync(exactStatusLineSettingsPath, `${JSON.stringify(exactStatusLineSettings, null, 2)}\n`);
+const exactStatusLineManifestPath = path.join(fixture, ".dove", "install", "manifest.json");
+const exactStatusLineManifest = JSON.parse(fs.readFileSync(exactStatusLineManifestPath, "utf8"));
+exactStatusLineManifest.managed.push({ path: ".claude/settings.json", kind: "json-fragment", selector: "/statusLine[dove-project-directory]", digest: semanticDigest(DOVE_CLAUDE_STATUS_LINE) });
+fs.writeFileSync(exactStatusLineManifestPath, `${JSON.stringify(exactStatusLineManifest, null, 2)}\n`);
+uninstallProjectIntegration(fixture, { confirmed: true });
+assert.equal(Object.hasOwn(JSON.parse(fs.readFileSync(exactStatusLineSettingsPath, "utf8")), "statusLine"), false);
+
+reset();
+initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
+const userStatusLineSettingsPath = path.join(fixture, ".claude", "settings.json");
+const userStatusLineSettings = JSON.parse(fs.readFileSync(userStatusLineSettingsPath, "utf8"));
+userStatusLineSettings.statusLine = { type: "command", command: "user-statusline" };
+fs.writeFileSync(userStatusLineSettingsPath, `${JSON.stringify(userStatusLineSettings, null, 2)}\n`);
+const userStatusLineManifestPath = path.join(fixture, ".dove", "install", "manifest.json");
+const userStatusLineManifest = JSON.parse(fs.readFileSync(userStatusLineManifestPath, "utf8"));
+userStatusLineManifest.managed.push({ path: ".claude/settings.json", kind: "json-fragment", selector: "/statusLine[dove-project-directory]", digest: semanticDigest(DOVE_CLAUDE_STATUS_LINE) });
+fs.writeFileSync(userStatusLineManifestPath, `${JSON.stringify(userStatusLineManifest, null, 2)}\n`);
+uninstallProjectIntegration(fixture, { confirmed: true });
+assert.deepEqual(JSON.parse(fs.readFileSync(userStatusLineSettingsPath, "utf8")).statusLine, { type: "command", command: "user-statusline" });
+
+reset();
+initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
 const stopSettingsPath = path.join(fixture, ".claude", "settings.json");
 const stopSettings = JSON.parse(fs.readFileSync(stopSettingsPath, "utf8"));
 stopSettings.hooks.Stop = [
@@ -157,14 +194,12 @@ const driftRun = path.join(fixture, ".dove", "runs", "drift-run", "run.jsonl");
 fs.mkdirSync(path.dirname(driftRun), { recursive: true });
 fs.writeFileSync(driftRun, "{\"schemaVersion\":\"dove.run.event.v1\",\"seq\":1,\"at\":\"2026-09-02T00:00:00.000Z\",\"type\":\"run.started\",\"runId\":\"drift-run\"}\n");
 const driftPreservedBefore = { research: digest(driftResearch), doctor: digest(driftDoctor), review: digest(driftReview), run: digest(driftRun) };
-assert.throws(
-  () => updateProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }),
-  /ownership drift/u
-);
+const explicitUpdateRepair = updateProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+assert.deepEqual(explicitUpdateRepair.replacedLocalEdits, [{ path: ".claude/agents/dove.md", selector: null }]);
+fs.appendFileSync(driftAgent, "drift\n");
 assert.throws(() => previewProjectUninstall(fixture), /ownership drift/u);
 const reinstallPreview = previewProjectCompleteReinstall(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
 assert(reinstallPreview.replacedPaths.includes(".claude/agents/dove.md"));
-assert(reinstallPreview.replacedPaths.includes(".claude/settings.json"));
 fs.appendFileSync(driftAgent, "after preview\n");
 assert.throws(
   () => completeReinstallProjectIntegration(fixture, {
@@ -183,7 +218,7 @@ completeReinstallProjectIntegration(fixture, {
   preview: refreshedPreview
 });
 const repairedSettings = JSON.parse(fs.readFileSync(driftSettings, "utf8"));
-assert.deepEqual(repairedSettings.statusLine, { type: "command", command: 'dove hook statusline --project "$CLAUDE_PROJECT_DIR"' });
+assert.deepEqual(repairedSettings.statusLine, { type: "command", command: "user-modified-dove-statusline" });
 assert.deepEqual(repairedSettings.enabledPlugins, { demo: true });
 assert.equal(fs.readFileSync(driftAgent, "utf8").includes("after preview"), false);
 assert.deepEqual({ research: digest(driftResearch), doctor: digest(driftDoctor), review: digest(driftReview), run: digest(driftRun) }, driftPreservedBefore);

@@ -162,18 +162,20 @@ function assertSemanticModeAvailable(command, sections, spec) {
 
 function sharedCapabilityReturnText(command) {
   const contract = skillContract(command);
-  const firstSection = Array.isArray(contract.semanticSections) ? contract.semanticSections[0] : null;
-  if (/Return to Dove's research judgment|Shared capability return/iu.test(firstSection?.title ?? "")) return semanticSectionText(firstSection);
-  const responsibility = contract.responsibilities.find((item) => /capability results?.*same Dove judgment|same Dove judgment.*capability results?|Return.*same Dove judgment|Return with what was inspected/iu.test(String(item)));
+  const returnWith = Array.isArray(contract.returnWith) ? contract.returnWith.join("\n") : "";
+  if (returnWith) return `Return with\n${returnWith}`;
+  const lastSection = Array.isArray(contract.semanticSections) ? contract.semanticSections.at(-1) : null;
+  if (/Return with|Return to Dove's research judgment|Shared capability return/iu.test(lastSection?.title ?? "")) return semanticSectionText(lastSection);
+  const responsibility = contract.responsibilities.find((item) => /Inspected evidence|Return with what was inspected|what was inspected/iu.test(String(item)));
   assert.ok(responsibility, `${command.id} needs a shared capability return responsibility`);
   return String(responsibility);
 }
 
 function assertSharedCapabilityReturnIsConcise(command) {
   const sharedReturn = sharedCapabilityReturnText(command);
-  assert.match(sharedReturn, /Return with|same Dove judgment|Dove's research judgment/iu, `${command.id} shared capability return must send work back to Dove judgment`);
-  assert.match(sharedReturn, /what was inspected|actually inspected|inspected or changed|changed/iu, `${command.id} shared capability return must preserve inspected-evidence semantics`);
-  assert.match(sharedReturn, /what changed|material decision.*changed|what remains unresolved|unresolved/iu, `${command.id} shared capability return must preserve decision-change semantics`);
+  assert.match(sharedReturn, /Return with|Dove's research judgment/iu, `${command.id} shared capability return must send work back to Dove judgment`);
+  assert.match(sharedReturn, /inspected evidence|what was inspected|actually inspected|inspected or changed|changed/iu, `${command.id} shared capability return must preserve inspected-evidence semantics`);
+  assert.match(sharedReturn, /material change|what changed|material decision.*changed|what remains unresolved|unresolved/iu, `${command.id} shared capability return must preserve decision-change semantics`);
   assert.match(sharedReturn, /next useful action|next feasible action|confirmed task (?:boundary|scope)/iu, `${command.id} shared capability return must preserve continuation semantics`);
   assert.ok(sharedReturn.length <= 700, `${command.id} shared capability return must stay concise`);
 }
@@ -232,7 +234,8 @@ function assertResearchCapabilitySemantics(command) {
   ]);
   assert.match(researchProgression, /confirmed or provisional mainline|Follow the confirmed or provisional mainline/iu);
   assert.match(researchProgression, /change the judgment|absorb the result|continue while it matters/isu);
-  assert.match(value, /no separate Auto|Do not expose Auto|default.*substantive rounds/isu);
+  assert.match(value, /separate autonomy Skill|default.*substantive rounds/isu);
+  assert.doesNotMatch(value, /Do not expose Auto|Auto as a Skill/iu);
 }
 
 function assertSourceCapabilitySemantics(command) {
@@ -242,6 +245,7 @@ function assertSourceCapabilitySemantics(command) {
   assertCapabilityPatterns(command, [
     { label: "external theory and related-work acquisition", patterns: [/external theory|related work|route changes that depend on external theory/isu] },
     { label: "source identity and claim-support checking", patterns: [/citation identity.*claim support|identity.*metadata.*supports?|verify identity.*metadata.*supports?/isu] },
+    { label: "bounded bibliography DOI identity checks without ledger", patterns: [/bounded bibliography DOI identity check|verify only the requested entries.*do not create a ledger|without.*ledger/isu] },
     { label: "identity and support as separate judgments", patterns: [/Separate citation identity from claim support|identity.*then whether inspected content supports/isu] },
     { label: "unavailable material stays explicit", patterns: [/unavailable.*missing|needed material is unavailable|If needed material is unavailable/isu] },
     { label: "inspected-material provenance", patterns: [/found.*retrieved.*inspected.*used|retrieved, inspected, and used|what was inspected/isu] },
@@ -264,7 +268,8 @@ function assertSourceCapabilitySemantics(command) {
     /comparable studies and data|studies and data are comparable/iu
   ]);
   assert.match(sourceWork.instruction, /discover|retrieve|read|verify/iu);
-  assert.match(sourceWork.instruction, /identity.*metadata.*whether inspected content supports|citation checks.*separate/isu);
+  assert.match(sourceWork.instruction, /identity.*metadata.*actual content.*source for a claim|citation checks.*claim support/isu);
+  assert.match(value, /bounded bibliography DOI identity checks?|requested entries.*ledger/isu);
   assert.match(sourceWork.instruction, /Ordinary paper finding.*single fact checks stay proportional|single fact checks stay proportional/isu);
   assert.doesNotMatch(value, /one source path|unavailable or unapproved|approved route|support route|source path|the other MCP/iu);
 }
@@ -288,7 +293,7 @@ function assertExperimentCapabilitySemantics(command) {
     { label: "execution validity before scientific evidence", patterns: [/anomalous.*before using them as evidence|unstable.*scientific evidence|check anomalous results before using them as evidence/isu] },
     { label: "execution-validity coverage", patterns: [/implementation.*data.*configuration.*environment.*randomness.*metrics.*analysis|implementation.*data shortcuts.*configuration drift.*baselines.*randomness.*metrics.*analysis|implementation.*data.*configuration.*baselines.*randomness.*metrics.*analysis|configuration.*data.*metrics.*actual code.*logs.*outputs/isu] },
     { label: "results grounded in actual run materials", patterns: [/methods.*configuration.*data.*metrics.*run counts.*result numbers.*actual code.*logs.*outputs|actual code.*logs.*outputs.*data files.*user material|run receipts/isu] },
-    { label: "Dove run receipt judgment boundary", patterns: [/dove run start\|status\|resume\|finalize\|compare|\.dove\/runs\/<id>|run receipts.*Experiment Markdown/isu] },
+    { label: "Dove run receipt judgment boundary", patterns: [/dove run start\|status\|resume\|finalize\|compare|\.dove\/runs\/|run receipts.*Experiment Markdown/isu] },
     { label: "observation interpretation separation", patterns: [/what was observed.*what it means.*why it matters.*what happens next|separate what was observed/isu] },
     { label: "scoped evidence", patterns: [/data.*scale.*settings.*implementation|conditions actually tested|evidence scope/isu] }
   ]);
@@ -303,7 +308,7 @@ function assertDraftCapabilitySemantics(command) {
   const artifactValidation = contractAction(command, "artifact-validation");
   assert.equal(artifactValidation?.readOnly, false, "Draft artifact validation may fix issues, so it must stay work-capable");
   assertCapabilityPatterns(command, [
-    { label: "evidence-grounded drafting", patterns: [/evidence needed for its material claims|available evidence|relevant material/iu] },
+    { label: "user-specified target and evidence-grounded drafting", patterns: [/user-specified manuscript|user specifies a manuscript|specified evidence|evidence needed for its material claims|available evidence|relevant material/iu] },
     { label: "facts not filled from memory", patterns: [/leave unchecked.*unknown|missing.*unknown|actual project or source material/isu] },
     { label: "claim standing preservation", patterns: [/certainty.*causality.*scope.*generality.*quantitative qualifiers.*novelty/isu] },
     { label: "claim changes explained before editing", patterns: [/say what changed.*before changing|state what changed.*why/isu] },
@@ -315,6 +320,7 @@ function assertDraftCapabilitySemantics(command) {
     { label: "higher-value action before claim narrowing", patterns: [/method.*source.*experiment.*figure|before merely weakening prose|before narrowing/isu] }
   ]);
   assert.match(artifactEditing, /target.*relevant material|relevant material.*draft|assess|revise/isu);
+  assert.match(semanticContractText(command), /without reading Claims merely because Draft was invoked|Claim note is directly relevant/iu);
   assert.match(artifactEditing, /authoritative source.*build or export path|real build or export path/isu);
 }
 
@@ -341,6 +347,7 @@ function assertFigureCapabilitySemantics(command) {
     { label: "brief-driven visual planning", patterns: [/figure brief|visual plan|target claim|evidence or mechanism job|manuscript (?:placement|location)/isu] },
     { label: "route choice across plot, editable diagram, image tools, and mixed media", patterns: [/real data.*reproducible code|editable.*(?:SVG|vector|source)|host image.*(?:generation|editing)|mixed raster.*(?:SVG|vector)/isu] },
     { label: "actual rendered inspection", patterns: [/open|view|actual rendered|realistic final (?:dimensions|size)|manuscript context/isu] },
+    { label: "data or logic to figure-caption-claim alignment", patterns: [/source data or mechanism logic.*visual encoding.*caption.*nearby text.*manuscript claim|source data or logic aligned.*actual rendered figure.*caption.*manuscript claim/isu] },
     { label: "targeted revision of figure and manuscript context", patterns: [/targeted changes|editable source|plotting code|caption|nearby (?:text|manuscript text)|export settings/isu] },
     { label: "editable final delivery", patterns: [/final figure|route-native editable source|later modification|plotting code|SVG|vector|layered|mixed raster/isu] },
     { label: "no invented scientific material", patterns: [/must not invent|do not invent/iu] }
@@ -350,7 +357,6 @@ function assertFigureCapabilitySemantics(command) {
 function assertReviewCapabilitySemantics(command) {
   const sections = assertSemanticSections(command, { min: 5 });
   assertSemanticSectionOrder(command, [
-    { label: "shared Dove judgment return", matchers: [/Return.*Dove.*research judgment|same Dove judgment|what was inspected.*what changed/isu] },
     { label: "author-side scientific self-check", matchers: [/author-side.*scientific self-check|scientific self-check.*author-side/isu] },
     { label: "conditional delivery review", matchers: [/delivery review|delivery readiness/iu] },
     { label: "isolated dove-review judgment", matchers: [/dove-review/iu, /isolated|persistent|recoverable/iu, /frozen|near-submission|handoff/iu] },
@@ -400,15 +406,25 @@ function assertReviewCapabilitySemantics(command) {
     /contribution|novelty|claims|evidence|method|limitations|writing clarity/isu,
     /citation identity.*claim support|claim support.*citation identity/isu,
     /anomalous results|execution scrutiny/iu,
-    /local paragraph|single figure|single-method review|requested scope/isu
+    /local paragraph|figure, citation, or method review|requested scope|do not force the full-paper four questions/isu
+  ]);
+  assertMatchesAll(value, "dove.review four-question and heading semantics", [
+    /four full-paper questions|ask four questions/iu,
+    /method answers? the (?:research )?question|method answer/iu,
+    /field judgment is correct|correct for the field/iu,
+    /venue fit|fit the target venue/iu,
+    /strongest reasonable objection|strongest.*objection/iu,
+    /Verdict.*Blocking issues.*Grounding basis.*Author-side next actions|Blocking issues.*Grounding basis/isu
   ]);
   assertMatchesAll(reviewHandoff?.instruction ?? "", "dove.review handoff", [
     /near-submission|highly complete/iu,
     /genuinely isolated|isolated.*reviewer context|reviewer context.*isolated/isu,
-    /real runtime|runtime paths|actual session id|recorded reviewer session/isu,
-    /resume or rerun.*whole-paper rounds.*same review id|same review id.*recorded reviewer session/isu,
+    /isolated, persistent, recoverable reviewer context|host provides|reviewer session/isu,
+    /resume or rerun.*whole-paper rounds.*same review id|same review id.*reviewer session/isu,
     /complete frozen material list|whole-paper|complete paper/isu,
     /only those listed materials/iu,
+    /author side.*obtained.*venue or literature material|venue or literature material.*included.*frozen handoff/isu,
+    /grounding is missing.*limit venue or literature conclusions|limit venue or literature conclusions.*listed materials/isu,
     /runtime is unavailable|host.*(?:provide|provides).*isolated/isu,
     /continue feasible author-side work without counting it as independent review/isu
   ]);
@@ -416,7 +432,7 @@ function assertReviewCapabilitySemantics(command) {
     /append.*faithfully|faithfully.*append|Preserve.*faithfully/isu,
     /actual text|actual `dove-review` return|user-pasted review/isu,
     /same review id and round when known|round.*when known/isu,
-    /real `\.dove\/reviews\/<id>\/rounds\/<round>\/report\.md` return|report\.md/isu,
+    /corresponding `\.dove\/reviews\/` round report|report\.md/isu,
     /do not revise author artifacts|without revising author artifacts/iu
   ]);
   assertMatchesNone(value, "dove.review", [
@@ -446,7 +462,7 @@ function assertRebuttalCapabilitySemantics(command) {
   ]);
   assert.match(rebuttalAction, /material finding|review/i);
   assert.match(rebuttalAction, /same review id and round when available|same review id|round when available/isu);
-  assert.match(rebuttalAction, /fresh `dove review rerun`|ordinary author-side revisions do not trigger a full re-review/isu);
+  assert.match(rebuttalAction, /Do not rerun review for cosmetic|use `dove review rerun` when substantive evidence|old recommendation no longer covers the current full version/isu);
   assert.match(rebuttalAction, /preserving accurate claim strength|claim strength|resolve, reduce, or honestly bound/isu);
   assert.doesNotMatch(contractText(command), /claim acceptance[^.]*as proof|reviewer controls Dove/iu);
 }
@@ -456,7 +472,7 @@ export function assertDoveAgentPersona() {
   assert.equal(DOVE_AGENT_DEFINITION.id, "dove");
   assert.equal(DOVE_AGENT_DEFINITION.publicName, "Dove");
   assert.equal(DOVE_AGENT_DEFINITION.title, "dove");
-  assert.match(DOVE_AGENT_DEFINITION.description, /one complete Dove research agent.*real research decisions|real research decisions.*one complete Dove research agent/iu);
+  assert.match(DOVE_AGENT_DEFINITION.description, /main research agent.*--agent dove|bounded independent subagent.*scoped research investigations/iu);
   assert.match(DOVE_AGENT_DEFINITION.responsibility, /real research decisions/iu);
   assert.match(DOVE_AGENT_DEFINITION.responsibility, /one complete Dove research agent|one complete research agent/iu);
   assert.deepEqual(DOVE_AGENT_SURFACES, {
@@ -512,6 +528,7 @@ export function assertSkillManifest() {
     assertCapabilitySharedJudgment(command);
     assertOrdinarySkillNoFullDoveReviewHandoff(command);
     assert.ok(contract.responsibilities.length > 0, `${label} needs Dove responsibilities`);
+    assert.ok(Array.isArray(contract.returnWith) && contract.returnWith.length > 0, `${label} needs a concise Return with footer`);
     assert.ok(contract.actions.length > 0, `${label} needs possible actions`);
     assert.ok(contract.boundaries.length > 0, `${label} needs side-effect boundaries`);
     assert.ok(Object.hasOwn(contract.hostGuidance, "common"), `${label} needs common host guidance`);

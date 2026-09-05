@@ -5,11 +5,10 @@ import { fileURLToPath } from "node:url";
 import { writeFileSetTransaction } from "../src/core/file-set-transaction.mjs";
 import {
   DOVE_CLAUDE_AMBIENT_RULE_PATH,
-  DOVE_CLAUDE_AMBIENT_SKILL_PATH,
-  renderClaudeAmbientRule,
-  renderClaudeAmbientSkill
+  renderClaudeAmbientRule
 } from "../src/core/ambient-policy.mjs";
 import { generatedDoveAgentEntries } from "../src/core/dove-agent-definition.mjs";
+import { DOVE_RESEARCH_SHARED_CONTRACT } from "../src/core/dove-research-contract.mjs";
 import {
   PAPER_SEARCH_SUPPORT_SKILL_PATH,
   renderPaperSearchSupportSkill
@@ -93,16 +92,30 @@ function renderSemanticSection(section) {
   return blocks.join("\n\n");
 }
 
+function renderReturnWith(contract) {
+  return renderListSection("Return with", contract.returnWith);
+}
+
+function withoutReturnWith(items, contract) {
+  const returns = new Set(contract.returnWith ?? []);
+  return (items ?? []).filter((item) => !returns.has(item));
+}
+
+function isReturnWithSection(section) {
+  return /^Return with$/iu.test(section?.title ?? "");
+}
+
 function renderSemanticCapabilityContract(command, hostId = null) {
   const contract = command.contract;
   const sections = [
     "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template.",
     `### What this is for\n\n${contract.purpose}`,
-    `### When it helps\n\n${contract.when}`,
+    `### When to use\n\n${contract.when}`,
     renderListSection("Scope and changes", contract.boundaries),
-    ...contract.semanticSections.map(renderSemanticSection),
+    ...contract.semanticSections.filter((section) => !isReturnWithSection(section)).map(renderSemanticSection),
     renderListSection("When Dove needs input", contract.clarification),
-    renderHostGuidance(contract, hostId)
+    renderHostGuidance(contract, hostId),
+    renderReturnWith(contract)
   ].filter(Boolean);
   return sections.join("\n\n");
 }
@@ -116,13 +129,14 @@ function renderCapabilityContract(command, hostId = null) {
   const sections = [
     "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template.",
     `### What this is for\n\n${contract.purpose}`,
-    `### When it helps\n\n${contract.when}`,
-    renderListSection("What Dove will examine", contract.responsibilities),
+    `### When to use\n\n${contract.when}`,
+    renderListSection("What Dove will examine", withoutReturnWith(contract.responsibilities, contract)),
     renderListSection("Scope and changes", contract.boundaries),
     Array.isArray(contract.actions) && contract.actions.length > 0 ? `### Ways Dove may proceed\n\n${contract.actions.map(renderAction).join("\n")}` : "",
     renderListSection("What this should not replace", contract.nonGoals),
     renderListSection("When Dove needs input", contract.clarification),
-    renderHostGuidance(contract, hostId)
+    renderHostGuidance(contract, hostId),
+    renderReturnWith(contract)
   ].filter(Boolean);
   return sections.join("\n\n");
 }
@@ -137,12 +151,19 @@ function renderExamples(command, hostId = null) {
   return examples.length > 0 ? `\n\n## Examples\n\n${examples.map((example) => `- \`${example}\``).join("\n")}` : "";
 }
 
+function renderArgumentBlock(hostId) {
+  if (hostId !== "claude") return "";
+  return "## Request\n\n$ARGUMENTS";
+}
+
 function renderBody(command, heading, hostId = null) {
   const purpose = command.summary;
+  const args = renderArgumentBlock(hostId);
   const examples = renderExamples(command, hostId);
   const contract = renderCapabilityContract(command, hostId);
   const guidance = renderGuidance(command);
-  return `# ${heading}\n\n${purpose}${examples}\n\n${contract}${guidance ? `\n\n${guidance}` : ""}\n`;
+  const shared = hostId === "dsh" ? `## Research judgment\n\n${DOVE_RESEARCH_SHARED_CONTRACT} Answer and stop for pure judgment or bounded requests; continue useful in-scope work when the user has confirmed a research goal.` : "";
+  return [`# ${heading}`, purpose, args, examples.trim(), shared, contract, guidance].filter(Boolean).join("\n\n") + "\n";
 }
 
 function renderFrontmatter(command, fields = {}) {
@@ -151,12 +172,15 @@ function renderFrontmatter(command, fields = {}) {
     lines.push(`name: ${fields.name}`);
   }
   lines.push(`description: ${yamlString(command.summary)}`);
+  if (fields.argumentHint) {
+    lines.push(`argument-hint: ${yamlString(fields.argumentHint)}`);
+  }
   lines.push("---", "");
   return lines.join("\n");
 }
 
 function renderMarkdownCommand(command, heading, hostId = null) {
-  return `${renderFrontmatter(command)}\n${renderBody(command, heading, hostId)}`;
+  return `${renderFrontmatter(command, { argumentHint: "optional request, artifact path, venue, constraint, or follow-up context" })}\n${renderBody(command, heading, hostId)}`;
 }
 
 function renderSkill(command, hostId = null) {
@@ -185,7 +209,6 @@ export function generatedAdapterEntries() {
 export function generatedClaudeAmbientProjectEntries() {
   return [
     { destinationPath: DOVE_CLAUDE_AMBIENT_RULE_PATH, relativePath: packageResourcePath("claude", DOVE_CLAUDE_AMBIENT_RULE_PATH), content: renderClaudeAmbientRule() },
-    { destinationPath: DOVE_CLAUDE_AMBIENT_SKILL_PATH, relativePath: packageResourcePath("claude", DOVE_CLAUDE_AMBIENT_SKILL_PATH), content: renderClaudeAmbientSkill() },
     { destinationPath: PAPER_SEARCH_SUPPORT_SKILL_PATH, relativePath: packageResourcePath("claude", PAPER_SEARCH_SUPPORT_SKILL_PATH), content: renderPaperSearchSupportSkill() },
     { destinationPath: EXA_WEB_SUPPORT_SKILL_PATH, relativePath: packageResourcePath("claude", EXA_WEB_SUPPORT_SKILL_PATH), content: renderExaWebSupportSkill() }
   ];

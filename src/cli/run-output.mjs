@@ -8,6 +8,17 @@ export function renderRunMetric(metric) {
   return `${terminalSafeText(metric.name)} ${terminalSafeText(metric.direction)}${metric.unit ? ` ${terminalSafeText(metric.unit)}` : ""}${value}`;
 }
 
+function renderRunSeed(seed) {
+  if (seed?.declaration === "declared" && typeof seed.value === "string") return terminalSafeText(seed.value);
+  return "未声明";
+}
+
+function renderGitFacts(result) {
+  const commit = typeof result?.commit === "string" && result.commit ? result.commit : "unavailable";
+  const dirty = result?.dirty === true ? "true" : result?.dirty === false ? "false" : "unavailable";
+  return `commit ${terminalSafeText(commit)}；dirty ${terminalSafeText(dirty)}`;
+}
+
 export function renderRunResult(result) {
   if (result.command === "start") {
     return [
@@ -19,6 +30,8 @@ export function renderRunResult(result) {
       `Supervisor PID：${terminalSafeText(result.supervisorPid)}`,
       `命令：${terminalSafeText(result.argv.join(" "))}`,
       `工作目录：${terminalSafeText(result.cwd)}`,
+      `seed（用户声明）：${renderRunSeed(result.seed)}`,
+      `Git：${renderGitFacts(result)}`,
       `日志：${terminalSafeText(result.paths.journalPath)}`,
       `stdout：${terminalSafeText(result.paths.stdoutPath)}`,
       `stderr：${terminalSafeText(result.paths.stderrPath)}`,
@@ -46,6 +59,8 @@ export function renderRunResult(result) {
       `退出码：${terminalSafeText(result.exitCode ?? "无")}`,
       `信号：${terminalSafeText(result.signal ?? "无")}`,
       `指标：${renderRunMetric(result.metric)}`,
+      `seed（用户声明）：${renderRunSeed(result.seed)}`,
+      `Git：${renderGitFacts(result)}`,
       `日志：${terminalSafeText(result.paths.journalPath)}`,
       `stdout：${terminalSafeText(result.paths.stdoutPath)}`,
       `stderr：${terminalSafeText(result.paths.stderrPath)}`,
@@ -81,7 +96,7 @@ export function renderRunResult(result) {
         "",
         "可比较：false",
         `字段：${terminalSafeText((result.fields ?? []).join(", ") || "无")}`,
-        "只比较 terminal 且 finalized，并且 metric、budget、data、evaluator、resource basis 完全一致的 runs。"
+        "只比较 terminal 且 finalized，并且 metric、budget、data、evaluator、resource basis 完全一致的 runs；Git commit/dirty 只是运行事实，不参与可比性或排名。"
       ].join("\n");
     }
     return [
@@ -89,6 +104,7 @@ export function renderRunResult(result) {
       "",
       "可比较：true",
       `指标：${renderRunMetric(result.basis.metric)}`,
+      "Git commit/dirty 只是运行事实，不参与可比性或排名。",
       "",
       ...result.ranking.map((item) => `${terminalSafeText(item.rank)}. ${terminalSafeText(item.runId)} 指标值 ${terminalSafeText(item.metricValue)}，与最佳差值 ${terminalSafeText(item.deltaFromBest)}`)
     ].join("\n");

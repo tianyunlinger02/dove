@@ -21,8 +21,7 @@ import {
   renderUninstallInventory,
   terminalColorEnabled
 } from "../src/cli/terminal-output.mjs";
-import { parseUserPromptSubmitPayload, userPromptSubmitOutput } from "../src/core/ambient-hook.mjs";
-import { parseSessionStartPayload, sessionStartOutput } from "../src/core/session-start-hook.mjs";
+import { parseSessionStartPayload, sessionStartFailureOutput, sessionStartOutput } from "../src/core/session-start-hook.mjs";
 import { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
 import { PROJECT_HOST_IDS } from "../src/core/host-registry.mjs";
 import { classifyPackageCompatibility, PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
@@ -62,6 +61,7 @@ function runCommonOptions(options) {
     project: projectOption(options) ?? process.cwd(),
     id: Array.isArray(options.id) ? undefined : options.id,
     group: options.group,
+    seed: options.seed,
     wallTime: options.wallTime,
     timeoutMs: options.timeoutMs,
     killGraceMs: options.killGraceMs,
@@ -378,21 +378,29 @@ try {
     const hookName = subcommand;
     if (projectOption(options) === undefined) throw new Error(`dove hook ${hookName} 需要 --project <dir>。`);
     const input = await readStdin();
+    if (hookName === "session-start") {
+      try {
+        const target = prepareHookProject(projectOption(options));
+        const payload = parseSessionStartPayload(input);
+        assertHookPayloadProject(payload, target);
+        const result = synchronizeProjectIntegrationOnly(target, PACKAGE_OPTIONS);
+        const output = sessionStartOutput(payload, result, { project: target });
+        if (output !== null) process.stdout.write(JSON.stringify(output));
+        process.exit(0);
+      } catch (error) {
+        const output = sessionStartFailureOutput(error);
+        process.stdout.write(JSON.stringify(output));
+        // Claude processes hook JSON only on exit 0. The systemMessage reports
+        // the failed sync; no further sync or research writes run after failure.
+        process.exit(0);
+      }
+    }
     const target = prepareHookProject(projectOption(options));
     if (hookName === "statusline") {
       process.stdout.write(`${target}\n`);
       process.exit(0);
     }
-    const payload = hookName === "session-start" ? parseSessionStartPayload(input) : parseUserPromptSubmitPayload(input);
-    assertHookPayloadProject(payload, target);
-    if (hookName === "session-start") {
-      sessionStartOutput(input);
-      synchronizeProjectIntegrationOnly(target, PACKAGE_OPTIONS);
-      process.exit(0);
-    }
-    const output = userPromptSubmitOutput(input);
-    if (output !== null) process.stdout.write(JSON.stringify(output));
-    process.exit(0);
+    throw new Error("dove hook only supports session-start and statusline.");
   }
 } catch (error) {
   operationalFailure(error, options);

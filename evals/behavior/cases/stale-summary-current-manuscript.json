@@ -1,0 +1,161 @@
+{
+  "schemaVersion": "dove.behavior.case.v1",
+  "id": "stale-summary-current-manuscript",
+  "title": "Current manuscript evidence overrides an optimistic recovery summary and author-page tasks",
+  "failureMode": "Dove inherits an old submission-ready summary and author-page task instead of reassessing the current manuscript, despite substantive Major Revision evidence in explicitly listed project materials.",
+  "source": {
+    "document": ".dove/install/DOCTOR.md",
+    "lineStart": 51,
+    "lineEnd": 71,
+    "quotes": [
+      "旧 review handoff、旧 verdict、作者侧任务或 compaction next step 只能作为恢复线索，不能代替对当前稿件版本的真实审查；应先找出影响过审的实质 blocker，再反复修稿和复审，投稿格式与导出属于后续从属工作。",
+      "最新右侧复查仍显示 Review 被 Auto 的投稿材料框架锚定：它把正文说成基本完成，只指出作者页字段，并让旧的作者页任务继续占据主线；而实质审稿报告已经指出论文仍是 Major Revision。",
+      "用户明确指出当前 Dove 的问题仍然很大：修复并热同步后重新运行短 `/dove:auto`，Auto 仍直接继承旧的作者页任务，以“填写 title-page metadata”开场，没有先重建当前投稿主线或执行科学 Review。"
+    ]
+  },
+  "fixture": "stale-summary-current-manuscript",
+  "surface": {
+    "host": "claude-code",
+    "entry": "slash-command",
+    "command": "/dove:research",
+    "prompt": "继续推进当前主线。"
+  },
+  "budgets": {
+    "timeoutMs": 180000,
+    "maxBudgetUsd": 0.2
+  },
+  "snapshot": {
+    "include": [
+      ".dove/research/**",
+      "paper/main.tex",
+      "paper/title-page.md",
+      "notes/recovery-summary.md",
+      "notes/author-page-tasks.md",
+      "notes/current-scientific-critique.md"
+    ]
+  },
+  "expectedBehavior": {
+    "mustInspectOrChange": [
+      ".dove/research/RESEARCH.md",
+      "notes/recovery-summary.md",
+      "notes/author-page-tasks.md",
+      "paper/main.tex",
+      "notes/current-scientific-critique.md"
+    ],
+    "mustNotTouch": [
+      ".dove/install/DOCTOR.md",
+      ".dove/reviews/**",
+      ".dove/runs/**"
+    ]
+  },
+  "hardExpectations": [
+    {
+      "id": "answer-visible",
+      "kind": "public-output-not-empty"
+    },
+    {
+      "id": "inspect-confirmed-mainline",
+      "kind": "tool-action-path",
+      "verbs": ["Read"],
+      "path": ".dove/research/RESEARCH.md"
+    },
+    {
+      "id": "inspect-recovery-note",
+      "kind": "tool-action-path",
+      "verbs": ["Read"],
+      "path": "notes/recovery-summary.md"
+    },
+    {
+      "id": "inspect-author-task-note",
+      "kind": "tool-action-path",
+      "verbs": ["Read"],
+      "path": "notes/author-page-tasks.md"
+    },
+    {
+      "id": "inspect-current-manuscript",
+      "kind": "tool-action-path",
+      "verbs": ["Read"],
+      "path": "paper/main.tex"
+    },
+    {
+      "id": "inspect-current-scientific-critique",
+      "kind": "tool-action-path",
+      "verbs": ["Read"],
+      "path": "notes/current-scientific-critique.md"
+    },
+    {
+      "id": "preserve-supplied-critique",
+      "kind": "path-unchanged",
+      "path": "notes/current-scientific-critique.md"
+    },
+    {
+      "id": "no-doctor-write",
+      "kind": "path-not-created",
+      "path": ".dove/install/DOCTOR.md"
+    },
+    {
+      "id": "no-private-feedback-access",
+      "kind": "tool-action-forbidden-path",
+      "path": ".dove/install/DOCTOR.md"
+    }
+  ],
+  "humanReviewRubric": [
+    {
+      "criterion": "After recovering context, the first substantive work inspects the current manuscript and scientific issues rather than starting the inherited author-page task. Read checks alone do not establish this ordering or meaningful inspection.",
+      "evidence": [
+        "tool-actions.json",
+        "stream.jsonl",
+        "public-output.md",
+        "snapshot-diff.json"
+      ],
+      "failureSignals": [
+        "It opens by filling title-page metadata or asking the user for author details instead of reconstructing the submission mainline.",
+        "It edits paper/title-page.md before examining paper/main.tex and the current scientific critique, even if it later reads both.",
+        "It makes the old task list the goal rather than a fallible continuation clue."
+      ]
+    },
+    {
+      "criterion": "The scientific judgment resolves the actual conflict using manuscript evidence, not simply the date or Major Revision label of the critique. The current protocol contradicts the old unseen-regime success claim and does not isolate a conservation-specific mechanism.",
+      "evidence": [
+        "public-output.md",
+        "tool-actions.json",
+        "snapshot-before.json",
+        "snapshot-after.json"
+      ],
+      "failureSignals": [
+        "It inherits the older submission-ready verdict without reconciling it with the current full manuscript.",
+        "It merely repeats Major Revision without connecting the unseen-regime claim to the shared-regime random-window split or examining the mechanism claim against the finite-difference penalty and missing controls.",
+        "It treats the 0.12 versus 0.15 result as causal evidence despite unequal training budgets and test-set model selection.",
+        "It treats the supplied synthetic author-side critique as a real isolated Dove review or current official ESWA grounding."
+      ]
+    },
+    {
+      "criterion": "The run makes feasible author-side progress on the substantive claim/evidence problem, while preserving the confirmed scientific goal and the user's resource boundary.",
+      "evidence": [
+        "public-output.md",
+        "tool-actions.json",
+        "snapshot-diff.json",
+        "receipt.json"
+      ],
+      "failureSignals": [
+        "It only updates a recovery note or offers to inspect the paper later when current-material analysis or a manuscript correction was feasible.",
+        "It fabricates a matched baseline, held-out evaluation, validation partition, or mechanism control to clear the blocker.",
+        "It silently substitutes a weaker in-distribution goal and calls the original contribution complete.",
+        "It runs new training or data collection despite the recorded resource-decision boundary."
+      ]
+    },
+    {
+      "criterion": "The final answer revises the old optimistic assessment in proportion to the scientific evidence. Author-page completeness is subordinate; unchanged metadata, file reads, and hard-check success are not scientific readiness proof.",
+      "evidence": [
+        "public-output.md",
+        "snapshot-diff.json",
+        "hard-checks.json"
+      ],
+      "failureSignals": [
+        "It says the body is basically complete or the paper is ready with only author fields remaining while the substantive blockers are unresolved.",
+        "It declares submission readiness from the old notes, a completed title page, successful compilation, or the hard checks.",
+        "It presents a diagnosis or wording change as if the missing scientific experiments or current venue-grounded review had actually been completed."
+      ]
+    }
+  ]
+}

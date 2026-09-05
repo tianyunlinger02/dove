@@ -18,8 +18,7 @@ const PACKAGE_DEFINES = {
 };
 const EXPECTED_OUTPUTS = [
   { entry: "src/core/index.mjs", output: "dist/index.mjs", shebang: false },
-  { entry: "bin/dove.mjs", output: "bin/dove-package.mjs", shebang: true },
-  { entry: "scripts/dove-user-prompt-submit.mjs", output: "scripts/dove-user-prompt-submit-package.mjs", shebang: true }
+  { entry: "bin/dove.mjs", output: "bin/dove-package.mjs", shebang: true }
 ];
 const NODE_EXTERNAL_IMPORT = /^(?:node:)?(?:assert|assert\/strict|async_hooks|buffer|child_process|crypto|events|fs|os|path|process|readline|stream|string_decoder|tty|url|util)$/u;
 const INQUIRER_INPUT = /^node_modules\/@inquirer\//u;

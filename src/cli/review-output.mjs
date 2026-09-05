@@ -2,6 +2,36 @@ function terminalSafeText(value) {
   return String(value ?? "").replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
 }
 
+function renderObservedMaterialFact(item) {
+  const observed = item?.observed ?? {};
+  if (observed.type === "file") return `observed file ${terminalSafeText(observed.size)} bytes`;
+  if (observed.type === "absent") return "observed absent";
+  if (observed.type === "symlink") return "observed symlink (not followed)";
+  if (observed.type === "directory") return "observed directory";
+  if (observed.type === "special") return "observed special file";
+  if (observed.type === "unsafe-path") return "unsafe stored material path";
+  if (observed.type === "invalid-path") return `invalid stored material path${observed.error ? `: ${terminalSafeText(observed.error)}` : ""}`;
+  if (observed.type === "unreadable" || observed.type === "unreadable-file") return `${terminalSafeText(observed.type)}${observed.error ? `: ${terminalSafeText(observed.error)}` : ""}`;
+  return terminalSafeText(observed.type ?? "unavailable");
+}
+
+function renderExpectedMaterialFact(item) {
+  const expected = item?.expected ?? {};
+  return `snapshot ${terminalSafeText(expected.size ?? "unknown")} bytes`;
+}
+
+function renderMaterialCurrentness(currentness, label = "当前轮次材料") {
+  const overall = terminalSafeText(currentness?.overall ?? "unavailable");
+  const items = Array.isArray(currentness?.items) ? currentness.items : [];
+  const lines = [`${label}：${overall}`];
+  for (const item of items) {
+    lines.push(`  - ${terminalSafeText(item.path ?? "未知路径")}：${terminalSafeText(item.status)}（${renderExpectedMaterialFact(item)}；${renderObservedMaterialFact(item)}）`);
+  }
+  if (currentness?.error) lines.push(`  - 材料版本检查失败：${terminalSafeText(currentness.error)}`);
+  else if (items.length === 0) lines.push("  - 无 frozen materials 可比较。");
+  return lines;
+}
+
 export function renderReviewResult(result) {
   if (result.command === "status" && Array.isArray(result.reviews)) {
     const lines = ["Dove review 状态", "", `项目：${terminalSafeText(result.project)}`];
@@ -10,6 +40,7 @@ export function renderReviewResult(result) {
     return lines.join("\n");
   }
   if (result.command === "status") {
+    const currentnessLines = renderMaterialCurrentness(result.materialCurrentness, "当前轮次材料版本关系");
     return [
       "Dove review 状态",
       "",
@@ -19,10 +50,15 @@ export function renderReviewResult(result) {
       `当前轮次：${terminalSafeText(result.currentRound)}`,
       `会话：${terminalSafeText(result.sessionId ?? "无")}`,
       "",
+      ...currentnessLines,
+      "",
+      "报告中的 verdict 是对应 frozen snapshot 的历史判断；status 不解析报告文字来猜 PASS/REVISE。",
+      "",
       ...(result.rounds ?? []).map((round) => {
         const latest = round.latestReportPath ?? round.reportPath;
         const canonical = latest === round.reportPath ? "" : `；原始报告保留在 ${terminalSafeText(round.reportPath)}`;
-        return `- 轮次 ${terminalSafeText(round.round)}：${terminalSafeText(round.status)}（${terminalSafeText(round.provenance)}），报告 ${terminalSafeText(latest)}${canonical}`;
+        const currentness = round.materialCurrentness?.overall ? `；材料 ${terminalSafeText(round.materialCurrentness.overall)}` : "";
+        return `- 轮次 ${terminalSafeText(round.round)}：${terminalSafeText(round.status)}（${terminalSafeText(round.provenance)}），报告 ${terminalSafeText(latest)}${canonical}${currentness}`;
       })
     ].join("\n");
   }

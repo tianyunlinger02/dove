@@ -14,11 +14,13 @@ import {
   normalizeRunGroup,
   normalizeRunId,
   normalizeRunMetricSpec,
+  normalizeRunProject,
+  normalizeRunSeed,
   reserveRunDirectory,
   runAbsolutePaths,
-  runPlatformRecord,
   summarizeRun
 } from "./run-record.mjs";
+import { captureRunGitFacts, normalizeRunGitFacts } from "./run-environment.mjs";
 
 const SUPERVISOR_ENTRY = "__dove-run-supervisor";
 const SUPERVISOR_READY_TIMEOUT_MS = 10000;
@@ -116,13 +118,17 @@ function normalizeStartPayload(raw) {
   const budget = normalizeRunBudget(raw.budget ?? {});
   const metric = normalizeRunMetricSpec(raw.metric ?? {});
   const basis = normalizeRunBasis(raw.basis ?? {});
+  const seed = plainObject(raw.seed)
+    ? normalizeRunSeed(raw.seed.declaration === "declared" ? raw.seed.value : null)
+    : normalizeRunSeed(raw.seed);
+  const git = normalizeRunGitFacts(raw);
   const group = normalizeRunGroup(raw.group);
-  return { runId, projectRoot, argv, budget, metric, basis, group };
+  return { runId, projectRoot, argv, budget, metric, basis, seed, commit: git.commit, dirty: git.dirty, group };
 }
 
 async function superviseTargetRun(rawPayload) {
   const payload = normalizeStartPayload(rawPayload);
-  const { projectRoot, runId, argv, budget, metric, basis, group } = payload;
+  const { projectRoot, runId, argv, budget, metric, basis, seed, commit, dirty, group } = payload;
   const paths = runAbsolutePaths(projectRoot, runId);
   let stdoutFd = null;
   let stderrFd = null;
@@ -161,7 +167,9 @@ async function superviseTargetRun(rawPayload) {
       data: basis.data,
       evaluator: basis.evaluator,
       resourceBasis: basis.resourceBasis,
-      platform: runPlatformRecord(),
+      seed,
+      commit,
+      dirty,
       supervisorPid: process.pid,
       timeout: {
         requested: budget.timeoutMs !== null,
@@ -170,7 +178,7 @@ async function superviseTargetRun(rawPayload) {
         ...scope
       }
     }, { operation: "start" });
-    await sendReady();
+    await sendReady({ commit, dirty });
 
     target = spawn(argv[0], argv.slice(1), {
       cwd: projectRoot,
@@ -416,8 +424,12 @@ export async function startDetachedRunSupervisor(options = {}) {
   const budget = normalizeRunBudget(options);
   const metric = normalizeRunMetricSpec(options);
   const basis = normalizeRunBasis(options);
+  const seed = normalizeRunSeed(options.seed);
   const group = normalizeRunGroup(options.group);
-  const reserved = reserveRunDirectory({ project: options.project, id: options.id ?? createRunId(), cwd: options.cwd, now: options.now });
+  const projectRoot = normalizeRunProject(options.project, { cwd: options.cwd });
+  const runId = normalizeRunId(options.id ?? createRunId({ now: options.now }));
+  const git = captureRunGitFacts(projectRoot);
+  const reserved = reserveRunDirectory({ project: projectRoot, id: runId, cwd: options.cwd, now: options.now });
   const payload = {
     mode: "start",
     projectRoot: reserved.projectRoot,
@@ -426,6 +438,9 @@ export async function startDetachedRunSupervisor(options = {}) {
     budget,
     metric,
     basis,
+    seed,
+    commit: git.commit,
+    dirty: git.dirty,
     group
   };
   const child = spawnSupervisor(options.executablePath, payload, { detached: true });
@@ -453,6 +468,9 @@ export async function startDetachedRunSupervisor(options = {}) {
     data: basis.data,
     evaluator: basis.evaluator,
     resourceBasis: basis.resourceBasis,
+    seed,
+    commit: ready.commit,
+    dirty: ready.dirty,
     paths: {
       runDirectory: reserved.paths.runDirectory,
       journalPath: reserved.paths.journalPath,

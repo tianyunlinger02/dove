@@ -12,8 +12,7 @@ const HOST_DEFINITIONS = [
       ".mcp.json",
       ".claude/settings.json",
       ".claude/rules/dove.md",
-      ".claude/agents/dove.md",
-      ".claude/skills/dove-intake/SKILL.md"
+      ".claude/agents/dove.md"
     ]
   },
   {

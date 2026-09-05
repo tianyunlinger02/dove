@@ -1,0 +1,5 @@
+$ python scripts/run_experiment.py --config configs/default.json
+Traceback (most recent call last):
+  File "scripts/run_experiment.py", line 8, in <module>
+    open("configs/default.json")
+FileNotFoundError: [Errno 2] No such file or directory: 'configs/default.json'

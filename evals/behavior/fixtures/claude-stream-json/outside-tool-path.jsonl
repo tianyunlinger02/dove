@@ -1,0 +1,2 @@
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_outside","name":"Read","input":{"file_path":"/etc/passwd"}}]}}
+{"type":"result","subtype":"success","total_cost_usd":0.0001,"result":"This fixture intentionally references an outside absolute path."}

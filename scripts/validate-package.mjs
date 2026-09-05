@@ -12,7 +12,7 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs"
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "../src/core/web-access-integration.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "hot-sync:validate", "uninstall:validate", "review-runtime:validate", "runs:validate", "package:validate", "check", "release:check"];
+const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "hot-sync:validate", "uninstall:validate", "review-runtime:validate", "runs:validate", "behavior:validate", "behavior:eval", "package:validate", "check", "release:check"];
 const PRODUCTION_DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "bundleDependencies", "bundledDependencies"];
 const REQUIRED_PACKAGE_KEYWORDS = ["research", "academic-writing", "experiments", "claude-code", "markdown", "cli"];
 const FORBIDDEN_PACKAGE_PATHS = [
@@ -314,9 +314,15 @@ assertLegalInventory();
 assertLockfile();
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "review-runtime:validate"), true);
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "runs:validate"), true);
+assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "behavior:validate"), true);
+assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "behavior:eval"), true);
 for (const script of REQUIRED_SCRIPTS) assert.equal(typeof packageJson.scripts?.[script], "string", `missing package script ${script}`);
+assert.match(packageJson.scripts.check, /npm run behavior:validate/u, "check must include deterministic behavior validation");
+assert.doesNotMatch(packageJson.scripts["release:check"], /behavior:eval/u, "release:check must not invoke the real behavior runner");
+assert.equal(packageJson.files.some((entry) => entry === "evals" || entry.startsWith("evals/")), false, "behavior eval corpus must not be packed");
 for (const script of FORBIDDEN_SCRIPTS) assert.equal(Object.hasOwn(packageJson.scripts ?? {}, script), false, `retired package script remains: ${script}`);
 for (const relativePath of FORBIDDEN_PACKAGE_PATHS) assert.equal(packageJson.files.includes(relativePath), false, `retired package file remains: ${relativePath}`);
+assert.equal(packageJson.files.some((entry) => /user-prompt-submit/iu.test(entry)), false, "package files manifest must not include retired prompt hook files");
 
 assert.deepEqual(COMMAND_SURFACES.map((surface) => surface.id), [
   "dove.research", "dove.status", "dove.source", "dove.experiment", "dove.draft",
@@ -329,9 +335,10 @@ assert.equal(packageExports.PACKAGE_NAME, packageJson.name);
 assert.equal(packageExports.PACKAGE_VERSION, packageJson.version);
 for (const retiredExport of ["exportResearch", "previewResearchExport"]) assert.equal(Object.hasOwn(packageExports, retiredExport), false, `retired package export remains: ${retiredExport}`);
 
-for (const bundlePath of ["dist/index.mjs", "bin/dove-package.mjs", "scripts/dove-user-prompt-submit-package.mjs"]) {
+for (const bundlePath of ["dist/index.mjs", "bin/dove-package.mjs"]) {
   const bundleText = fs.readFileSync(path.join(ROOT, bundlePath), "utf8");
   assert.doesNotMatch(bundleText, /src\/core\/research-export\.mjs|export-research|previewResearchExport|exportResearch|exportCommand/iu, `${bundlePath} must not contain retired legacy export runtime`);
+  assert.doesNotMatch(bundleText, /ambientContextForPrompt|isResearchRelatedWakeupPrompt|renderClaudeAmbientSkill|parseUserPromptSubmitPayload|userPromptSubmitOutput|DOVE_CLAUDE_AMBIENT_HOOK|DOVE_CLAUDE_AMBIENT_SKILL|\.claude\/skills\/dove-intake\/SKILL\.md/iu, `${bundlePath} must not contain retired UserPromptSubmit intake runtime`);
 }
 
 const cliVersion = spawnChecked(process.execPath, [path.join(ROOT, "bin", "dove-package.mjs"), "--version"], { cwd: ROOT });

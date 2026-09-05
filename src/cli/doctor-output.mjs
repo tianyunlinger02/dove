@@ -13,7 +13,8 @@ function projectLine(result, color) {
   if (migration === "conflicting-manifests") return `${terminalStyle("项目接入", "dim", { color })}  安装标记冲突`;
   if (result.adoption?.state === "adoptable") return `${terminalStyle("项目接入", "dim", { color })}  现有 Markdown 研究树可以通过 update 采用`;
   const state = result.projectIntegration?.state;
-  const text = state === "current" ? "当前" : state === "needs-sync" ? "需要更新" : state === "uninitialized" ? "尚未配置" : state === "drifted" ? "Dove 管理的配置已被修改" : "需要人工处理";
+  const skipped = result.projectIntegration?.skippedLocalEdits?.length ?? 0;
+  const text = state === "current" ? "当前" : state === "needs-sync" && skipped > 0 ? `需要更新；${skipped} 个 manifest-owned 本地编辑会由 SessionStart 跳过` : state === "needs-sync" ? "需要更新" : state === "uninitialized" ? "尚未配置" : state === "drifted" ? "Dove 管理的配置已被修改" : "需要人工处理";
   return `${terminalStyle("项目接入", "dim", { color })}  ${text}`;
 }
 

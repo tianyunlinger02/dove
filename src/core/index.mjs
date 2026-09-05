@@ -1,16 +1,12 @@
 export { PACKAGE_NAME } from "./package-metadata.mjs";
 export { ARTIFACT_PATHS, PACKAGE_VERSION } from "./schema.mjs";
 
-export { parseUserPromptSubmitPayload, userPromptSubmitOutput } from "./ambient-hook.mjs";
-export { parseSessionStartPayload, sessionStartOutput } from "./session-start-hook.mjs";
+export { parseSessionStartPayload, sessionStartFailureOutput, sessionStartOutput } from "./session-start-hook.mjs";
 export {
   DOVE_CLAUDE_SESSION_START_HOOK_COMMAND,
   DOVE_CLAUDE_STATUS_LINE,
   DOVE_CLAUDE_STATUS_LINE_COMMAND,
-  ambientContextForPrompt,
-  isHighConfidenceAmbientWorkPrompt,
-  renderClaudeAmbientRule,
-  renderClaudeAmbientSkill
+  renderClaudeAmbientRule
 } from "./ambient-policy.mjs";
 
 export {
@@ -69,7 +65,10 @@ export {
   DOVE_AGENT_PROPORTIONALITY,
   DOVE_AGENT_STOPPING,
   renderDoveAgentInstructions,
-  renderDoveAgentPersonaSection
+  renderDoveAgentPersonaSection,
+  renderDoveAuthorStanceSection,
+  renderDoveReviewerStanceSection,
+  renderDoveSharedResearchContractSection
 } from "./dove-agent-persona.mjs";
 export {
   COMMAND_SURFACES,
@@ -92,8 +91,8 @@ export {
 } from "./project-installation.mjs";
 export { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "./dove-lifecycle.mjs";
 export { inspectProjectDoctor } from "./project-doctor.mjs";
-export { DOVE_REVIEW_BACKEND_ID, runClaudeReviewBackend } from "./review-claude-backend.mjs";
-export { REVIEW_MATERIAL_DENY_PATTERNS, createReviewSnapshot, normalizeReviewMaterialList, snapshotDigest } from "./review-snapshot.mjs";
+export { DOVE_REVIEW_BACKEND_ID } from "./review-claude-backend.mjs";
+export { REVIEW_MATERIAL_DENY_PATTERNS, normalizeReviewMaterialList } from "./review-snapshot.mjs";
 export { assertReviewWorkspaceMatchesSnapshot, createReviewId, normalizeReviewId, prepareReviewWorkspace, resolveReviewStateRoot } from "./review-workspace.mjs";
 export { handoffReview, importReviewReturn, inspectReviewStatus, rerunReview, resumeReview, reviewStateLocation } from "./review-runtime.mjs";
 export {

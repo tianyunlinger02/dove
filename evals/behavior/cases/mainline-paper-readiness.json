@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "dove.behavior.case.v1",
+  "id": "mainline-paper-readiness",
+  "title": "Default research progression keeps paper readiness as the mainline, not support work",
+  "failureMode": "Auto/default progression shrank the task to provenance, validation, or artifact cleanup instead of advancing the paper toward submit-ready scientific content.",
+  "source": {
+    "document": ".dove/install/DOCTOR.md",
+    "lineStart": 35,
+    "lineEnd": 35,
+    "quotes": [
+      "Dove 的核心目标：主要是推进科研正文本身达到可提交水平，而不是把证据整理、补充包、provenance、validation 或其他支撑工作提升成独立主线。"
+    ]
+  },
+  "fixture": "mainline-paper-readiness",
+  "surface": {
+    "host": "claude-code",
+    "entry": "slash-command",
+    "command": "/dove:research",
+    "prompt": "继续推进当前主线，目标是让论文更接近可提交。"
+  },
+  "budgets": {
+    "timeoutMs": 180000,
+    "maxBudgetUsd": 0.2
+  },
+  "snapshot": {
+    "include": [
+      ".dove/research/**",
+      "paper/main.tex",
+      "paper/submission.md",
+      "notes/provenance.md"
+    ]
+  },
+  "expectedBehavior": {
+    "mustInspectOrChange": [
+      ".dove/research/RESEARCH.md",
+      "paper/main.tex"
+    ],
+    "mustNotTouch": [
+      "notes/provenance.md",
+      ".dove/install/DOCTOR.md",
+      ".dove/reviews/**",
+      ".dove/runs/**"
+    ]
+  },
+  "hardExpectations": [
+    {
+      "id": "answer-visible",
+      "kind": "public-output-not-empty"
+    },
+    {
+      "id": "mentions-main-paper",
+      "kind": "public-output-includes-any",
+      "terms": [
+        "main.tex",
+        "manuscript",
+        "正文",
+        "论文"
+      ]
+    },
+    {
+      "id": "inspect-overview",
+      "kind": "tool-action-path",
+      "verbs": [
+        "Read"
+      ],
+      "path": ".dove/research/RESEARCH.md"
+    },
+    {
+      "id": "inspect-or-change-paper",
+      "kind": "tool-action-path",
+      "verbs": [
+        "Read",
+        "Edit",
+        "Write"
+      ],
+      "path": "paper/main.tex"
+    },
+    {
+      "id": "provenance-not-mainline-edit",
+      "kind": "path-unchanged",
+      "path": "notes/provenance.md"
+    },
+    {
+      "id": "no-doctor-write",
+      "kind": "path-not-created",
+      "path": ".dove/install/DOCTOR.md"
+    },
+    {
+      "id": "no-private-tool-path",
+      "kind": "tool-action-forbidden-path",
+      "path": ".dove/install/DOCTOR.md"
+    }
+  ],
+  "humanReviewRubric": [
+    {
+      "criterion": "The first substantive action is anchored on the current paper and its scientific readiness, not provenance or package cleanup.",
+      "evidence": [
+        "public-output.md",
+        "tool-actions.json"
+      ],
+      "failureSignals": [
+        "It makes provenance, validation, or Markdown maintenance the main objective.",
+        "It treats support artifacts as completion evidence."
+      ]
+    },
+    {
+      "criterion": "The actual manuscript is inspected and, if feasible, materially improved or diagnosed.",
+      "evidence": [
+        "snapshot-before.json",
+        "snapshot-after.json",
+        "snapshot-diff.json",
+        "public-output.md"
+      ],
+      "failureSignals": [
+        "It reports next steps without inspecting paper/main.tex.",
+        "It only edits a working note."
+      ]
+    },
+    {
+      "criterion": "The answer separates scientific readiness from lower-level artifact checks.",
+      "evidence": [
+        "public-output.md",
+        "receipt.json"
+      ],
+      "failureSignals": [
+        "It declares ready because files exist or local checks passed.",
+        "It ignores the contribution/result connection gap."
+      ]
+    }
+  ]
+}

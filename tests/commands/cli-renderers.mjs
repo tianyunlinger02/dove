@@ -2,13 +2,15 @@ import assert from "node:assert/strict";
 
 import { CLI_COMMAND_SPECS, parseDoveCli } from "../../src/cli/command-parser.mjs";
 import { renderDoveHelp } from "../../src/cli/help-output.mjs";
+import { renderProjectIntegrationResult } from "../../src/cli/project-integration-output.mjs";
 import { renderReviewResult } from "../../src/cli/review-output.mjs";
 import { renderRunMetric, renderRunResult } from "../../src/cli/run-output.mjs";
+import { normalizeReviewId } from "../../src/core/review-workspace.mjs";
 
 function assertRuntimeCli() {
   assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "init"));
   assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "hook"));
-  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS.hook.subcommands), ["session-start", "user-prompt-submit", "statusline"], "hook subcommands must be formal parser subcommands");
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS.hook.subcommands), ["session-start", "statusline"], "hook subcommands must be formal parser subcommands");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "mcp"), false, "CLI must not expose the retired MCP server");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "migrate-research"), false, "CLI must not expose format migration");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "export-research"), false, "CLI must not expose the retired legacy export command");
@@ -39,22 +41,17 @@ function assertRuntimeCli() {
     options: { project: "/workspace", venue: "TestConf", material: ["paper/main.tex", "build/main.pdf"], id: "review-1", json: true },
     passthrough: []
   });
-  assert.deepEqual(assertParserShape(parseDoveCli(["hook", "user-prompt-submit", "--project=/workspace"])), {
-    command: "hook",
-    subcommand: "user-prompt-submit",
-    options: { project: "/workspace" },
-    passthrough: []
-  });
+  assertParserError(["hook", "user-prompt-submit", "--project=/workspace"], /hook 只接受这些子命令：session-start(?:，或| 或) statusline/iu, false);
   assert.deepEqual(assertParserShape(parseDoveCli(["init", "--host", "claude,dsh", "--host=dsh,claude", "--project=/workspace"])), {
     command: "init",
     subcommand: null,
     options: { host: ["claude", "dsh"], project: "/workspace" },
     passthrough: []
   });
-  assert.deepEqual(assertParserShape(parseDoveCli(["run", "start", "--project", "/workspace", "--id", "run-a", "--metric-name", "score", "--direction", "max", "--", "node", "script.mjs", "--flag", "--not-dove"])), {
+  assert.deepEqual(assertParserShape(parseDoveCli(["run", "start", "--project", "/workspace", "--id", "run-a", "--seed", "42", "--metric-name", "score", "--direction", "max", "--", "node", "script.mjs", "--flag", "--not-dove"])), {
     command: "run",
     subcommand: "start",
-    options: { project: "/workspace", id: "run-a", metricName: "score", direction: "max" },
+    options: { project: "/workspace", id: "run-a", seed: "42", metricName: "score", direction: "max" },
     passthrough: ["node", "script.mjs", "--flag", "--not-dove"]
   });
   assert.deepEqual(assertParserShape(parseDoveCli(["run", "start", "--project", "/workspace", "--", "node", "script.mjs", "--json", "--format", "json"])), {
@@ -80,16 +77,37 @@ function assertDoveCliHelpRenderer() {
   assert.match(output, /^dove\n/u);
   assert.match(output, /dove init \[--project <dir>\] \[--host <host>\.\.\.\] \[--json\|--format json\]/u);
   assert.match(output, /dove review handoff --project <dir> --venue <venue> --material <path>\.\.\./u);
-  assert.match(output, /dove run start --project <dir>.* -- <command> \[args\.\.\.\]/u);
+  assert.match(output, /dove run start --project <dir>.*--seed <short-text>.* -- <command> \[args\.\.\.\]/u);
   assert.match(output, /dove hook session-start --project <dir>/u);
+  assert.doesNotMatch(output, /dove hook user-prompt-submit/u);
   assert.match(output, /doctor、review、run 与 hook 等项目级命令/u);
   assert.match(output, /真正的科研推进仍在一个 Dove agent 中完成/u);
   assert.match(output, /研究记录是研究者维护的普通 Markdown/u);
-  assert.match(output, /Dove 不安装也不暴露 Stop hook/u);
+  assert.match(output, /Dove 只管理 SessionStart 项目 hook，不安装也不暴露 UserPromptSubmit 或 Stop hook/u);
   assert.doesNotMatch(output, /(^|[^A-Za-z0-9_])mcp([^A-Za-z0-9_]|$)|migrate-research|export-research|auto|paper-factory/iu);
 }
 
+function assertProjectIntegrationRenderer() {
+  const output = renderProjectIntegrationResult("update", {
+    status: "updated",
+    target: "/workspace/example-project",
+    hosts: ["claude"],
+    writtenPaths: [".claude/settings.json"],
+    removedPaths: [],
+    changedPaths: [".claude/settings.json"],
+    replacedLocalEdits: [{ path: `.claude/settings${String.fromCharCode(7)}.json`, selector: "/hooks/SessionStart[dove-session-start]" }]
+  }, { stream: { isTTY: false }, env: {} });
+  assert.match(output, /已覆盖 1 个 manifest-owned 本地编辑/u);
+  assert.match(output, /\.claude\/settings\?\.json#\/hooks\/SessionStart\[dove-session-start\]/u);
+  assert.match(output, /SessionStart 只会跳过这些本地编辑并提醒/u);
+}
+
 function assertReviewResultRenderer() {
+  assert.equal(normalizeReviewId("review-20260904-a1b2c3"), "review-20260904-a1b2c3");
+  for (const unsafeId of ["CON", "review.", "review-", "review/1", " review", ".."]) {
+    assert.throws(() => normalizeReviewId(unsafeId), /path-safe|must not use a reserved device name|must start and end/iu, `${unsafeId} must not be accepted as a review id`);
+  }
+
   const emptyStatus = renderReviewResult({ command: "status", project: "/workspace/example-project", reviews: [] });
   assert.match(emptyStatus, /Dove review 状态/u);
   assert.match(emptyStatus, /尚无 \.dove\/reviews\/\*\* 记录/u);
@@ -108,13 +126,42 @@ function assertReviewResultRenderer() {
     status: "completed",
     currentRound: 2,
     sessionId: null,
-    rounds: [{ round: 1, status: "completed", provenance: "runtime", reportPath: ".dove/reviews/review-1/rounds/1/report.md", latestReportPath: ".dove/reviews/review-1/rounds/1/report-imported.md" }]
+    materialCurrentness: {
+      overall: "changed",
+      items: [
+        { path: "paper/main.tex", status: "changed", expected: { size: 123, sha256: "a".repeat(64) }, observed: { exists: true, type: "file", size: 124, sha256: "b".repeat(64) } },
+        { path: "paper/link.tex", status: "changed", expected: { size: 123, sha256: "a".repeat(64) }, observed: { exists: true, type: "symlink" } }
+      ]
+    },
+    rounds: [{ round: 1, status: "completed", provenance: "runtime", reportPath: ".dove/reviews/review-1/rounds/1/report.md", latestReportPath: ".dove/reviews/review-1/rounds/1/report-imported.md", materialCurrentness: { overall: "missing", items: [] } }]
   });
   assert.match(detailedStatus, /审阅记录：review-1/u);
   assert.match(detailedStatus, /会话：无/u);
+  assert.match(detailedStatus, /当前轮次材料版本关系：changed/u);
+  assert.match(detailedStatus, /paper\/main\.tex：changed（snapshot 123 bytes；observed file 124 bytes）/u);
+  assert.match(detailedStatus, /paper\/link\.tex：changed（snapshot 123 bytes；observed symlink \(not followed\)）/u);
+  assert.match(detailedStatus, /verdict 是对应 frozen snapshot 的历史判断/u);
+  assert.match(detailedStatus, /不解析报告文字来猜 PASS\/REVISE/u);
   assert.doesNotMatch(detailedStatus, /^Review：|^Session：|^Backend：/mu);
   assert.match(detailedStatus, /轮次 1：completed（runtime），报告 \.dove\/reviews\/review-1\/rounds\/1\/report-imported\.md/u);
   assert.match(detailedStatus, /原始报告保留在 \.dove\/reviews\/review-1\/rounds\/1\/report\.md/u);
+  assert.match(detailedStatus, /材料 missing/u);
+
+  const unavailableStatus = renderReviewResult({
+    command: "status",
+    project: "/workspace/example-project",
+    reviewId: "review-1",
+    materialCurrentness: { overall: "unavailable", items: [], error: "ENOENT: snapshot" + String.fromCharCode(7) + ".json" },
+    rounds: []
+  });
+  assert.match(unavailableStatus, /材料版本检查失败：ENOENT: snapshot\?\.json/u);
+  assert.doesNotMatch(unavailableStatus, /无 frozen materials 可比较/u);
+  const noMaterialsStatus = renderReviewResult({
+    command: "status",
+    materialCurrentness: { overall: "unavailable", items: [] },
+    rounds: []
+  });
+  assert.match(noMaterialsStatus, /无 frozen materials 可比较/u);
 
   const handoff = renderReviewResult({
     command: "handoff",
@@ -173,9 +220,14 @@ function assertRunResultRenderer() {
     supervisorPid: 1234,
     argv: ["node", "script.mjs"],
     cwd: "/workspace/example-project",
+    seed: { declaration: "declared", value: "42" },
+    commit: "a".repeat(40),
+    dirty: false,
     paths: { journalPath: ".dove/runs/run-1/run.jsonl", stdoutPath: ".dove/runs/run-1/stdout.log", stderrPath: ".dove/runs/run-1/stderr.log" }
   });
   assert.match(start, /Dove run 已启动/u);
+  assert.match(start, /seed（用户声明）：42/u);
+  assert.match(start, /Git：commit [a-f0-9]{40}；dirty false/u);
   assert.match(start, /日志：\.dove\/runs\/run-1\/run\.jsonl/u);
   assert.doesNotMatch(start, /^Run：|^Journal：/mu);
   assert.match(start, /本地执行收据/u);
@@ -222,7 +274,9 @@ function assertRunResultRenderer() {
 
   const notComparable = renderRunResult({ command: "compare", comparable: false, fields: ["metric", "budget"] });
   assert.match(notComparable, /可比较：false/u);
+  assert.match(notComparable, /Git commit\/dirty 只是运行事实/u);
   assert.match(notComparable, /terminal 且 finalized/u);
+  assert.doesNotMatch(notComparable, /环境对比|environmentComparison/u);
 
   const comparable = renderRunResult({
     command: "compare",
@@ -282,6 +336,7 @@ export function assertCliParserAndRenderers() {
   assertRuntimeCli();
   assertCliParserAdditionalCases();
   assertDoveCliHelpRenderer();
+  assertProjectIntegrationRenderer();
   assertReviewResultRenderer();
   assertRunResultRenderer();
 }

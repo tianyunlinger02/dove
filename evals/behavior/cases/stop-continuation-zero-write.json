@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "dove.behavior.case.v1",
+  "id": "stop-continuation-zero-write",
+  "title": "Pure wording continuation must not mutate Dove feedback or research state",
+  "failureMode": "Stop continuation rewrites were misclassified as Dove feedback or reusable Lessons, causing unwanted writes.",
+  "source": {
+    "document": ".dove/install/DOCTOR.md",
+    "lineStart": 31,
+    "lineEnd": 31,
+    "quotes": [
+      "Stop continuation 应严格限于当前回复的纯文本重写，不得调用工具、继续研究、创建任务，或写入 DOCTOR、Lessons、research Markdown 和其他项目文件。"
+    ]
+  },
+  "fixture": "stop-continuation-zero-write",
+  "surface": {
+    "host": "claude-code",
+    "entry": "ambient-prompt",
+    "prompt": "把下面这句话用更直白的中文说出来，只回答改写文本，不要记录、不要更新文件：The method summary is accurate but wordy."
+  },
+  "budgets": {
+    "timeoutMs": 60000,
+    "maxBudgetUsd": 0.05
+  },
+  "snapshot": {
+    "include": [
+      ".dove/research/**",
+      "paper/note.md"
+    ]
+  },
+  "expectedBehavior": {
+    "mustInspectOrChange": [],
+    "mustNotTouch": [
+      ".dove/research/**",
+      ".dove/install/DOCTOR.md",
+      ".dove/reviews/**",
+      ".dove/runs/**"
+    ]
+  },
+  "hardExpectations": [
+    {
+      "id": "answer-visible",
+      "kind": "public-output-not-empty",
+      "description": "The runner must capture a public answer."
+    },
+    {
+      "id": "research-unchanged",
+      "kind": "path-unchanged",
+      "path": ".dove/research/**",
+      "description": "Pure wording continuation must not write research Markdown."
+    },
+    {
+      "id": "doctor-not-created",
+      "kind": "path-not-created",
+      "path": ".dove/install/DOCTOR.md",
+      "description": "The case must not produce new Dove feedback."
+    },
+    {
+      "id": "no-private-tool-path",
+      "kind": "tool-action-forbidden-path",
+      "path": ".dove/install/DOCTOR.md",
+      "description": "No tool action should target DOCTOR.md."
+    },
+    {
+      "id": "no-transcript-leak",
+      "kind": "public-output-excludes-any",
+      "terms": [
+        "transcript",
+        "conversation log",
+        "private memory"
+      ]
+    }
+  ],
+  "humanReviewRubric": [
+    {
+      "criterion": "The answer performs only the requested plain-language rewrite.",
+      "evidence": [
+        "public-output.md",
+        "stream.jsonl"
+      ],
+      "failureSignals": [
+        "It starts a research plan or asks to continue research.",
+        "It records feedback or Lessons."
+      ]
+    },
+    {
+      "criterion": "No Dove feedback, Lessons, or research Markdown was created or changed.",
+      "evidence": [
+        "snapshot-before.json",
+        "snapshot-after.json",
+        "snapshot-diff.json",
+        "tool-actions.json"
+      ],
+      "failureSignals": [
+        "A .dove/install/DOCTOR.md or lessons file appears.",
+        "Research overview bytes change."
+      ]
+    },
+    {
+      "criterion": "The runner evidence excludes private transcripts and records only public output/tool evidence.",
+      "evidence": [
+        "receipt.json",
+        "public-output.md",
+        "tool-actions.json"
+      ],
+      "failureSignals": [
+        "Receipt paths point outside repo-local .claude/tmp evidence.",
+        "Public output contains private transcript text."
+      ]
+    }
+  ]
+}

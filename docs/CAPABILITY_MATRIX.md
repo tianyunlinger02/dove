@@ -1,6 +1,6 @@
 # Capability matrix
 
-Dove has one research agent and nine optional entrances. Use the direct Dove agent when you want Dove to choose the next step; use `/dove:*` when you want to start from a specific capability.
+Dove has one research agent and nine flat optional entrances, with no Auto command. Ordinary Claude conversations share research judgment through the project rule. Use `claude --agent dove` for the author-side main session, or `/dove:*` for a specific capability. Bounded independent investigations may use a Dove subagent; work needing the full conversation, important user clarification, or ongoing mainline ownership stays in the main session.
 
 ## Nine capabilities
 
@@ -8,7 +8,7 @@ Dove has one research agent and nine optional entrances. Use the direct Dove age
 |---|---|---|---|
 | `dove.research` | Agent and command | Skill | Move a research goal forward and choose the next useful step. |
 | `dove.status` | Command | Skill | Read current research notes, open questions, and next priorities without writing. |
-| `dove.source` | Command | Skill | Find, read, check, and use papers, webpages, or other sources that matter to the question. |
+| `dove.source` | Command | Skill | Find, read, check, and use relevant sources, including requested bounded bibliography DOI identity checks. |
 | `dove.experiment` | Command | Skill | Design experiments, analyze existing results, record useful findings, or explicitly run diagnostics and experiments with local run receipts when useful. |
 | `dove.draft` | Command | Skill | Draft, assess, or revise manuscripts, responses, methods, results, and other project text from real evidence. |
 | `dove.figure` | Command | Skill | Gather materials, draw or revise figures, check them in manuscript context, and write captions. |
@@ -16,7 +16,7 @@ Dove has one research agent and nine optional entrances. Use the direct Dove age
 | `dove.rebuttal` | Command | Skill | Analyze review findings, write responses, and make requested evidence-backed revisions. |
 | `dove.lessons` | Command | Skill | Read or maintain reusable lessons that may improve current or future research judgment. |
 
-Claude Code receives the full Dove agent, commands, ambient context support, configured paper/web reading support, the `dove review ...` CLI handoff runtime, and the `dove run ...` local execution receipt helper. DSH receives project-local filesystem Skills only and no equivalent recoverable isolated Claude Code reviewer context.
+Claude Code receives the Dove agent, commands, shared rule, SessionStart integration sync and compact/resume facts card, configured paper/web reading support, the `dove review ...` CLI handoff runtime, and the `dove run ...` local execution receipt helper. DSH receives project-local filesystem Skills only and no equivalent recoverable isolated Claude Code reviewer context.
 
 ## Research Markdown
 
@@ -28,7 +28,7 @@ Dove records Markdown when the user asks, when a result changes the research dir
 
 Author-side self-check is Dove reviewing its own current work for scientific and delivery problems. It is useful but not independent external review.
 
-`dove-review` is the separate review path for near-submission papers. `dove review handoff` freezes the current complete paper and listed submission materials for an isolated Claude Code reviewer session, while `resume` continues the current frozen round, `rerun` creates a new complete-material round in the same session, and `import` preserves a user-provided return as imported. The returned review is preserved and treated as evidence for author-side response or revision.
+`dove-review` applies the same research judgment from an isolated reviewer position for near-submission papers. It reconstructs and challenges the contribution rather than inheriting the author's mainline. The four whole-paper questions and four Markdown headings are described in [Usage](USAGE.md#review). `dove review handoff` freezes the current complete paper and listed submission materials for an isolated Claude Code reviewer session with only those files and Read; author-side venue or literature grounding must be included in that frozen handoff when it matters. `status` compares the frozen material receipt with current project files read-only while public output reports paths, safe size/existence/type/error facts, and `current`, `changed`, `missing`, or `unavailable` without hash fields; `resume` continues the current frozen round, `rerun` creates a new complete-material round in the same session, and `import` preserves a user-provided return as imported. The returned review is preserved and treated as evidence for author-side response or revision.
 
 ## Completion
 

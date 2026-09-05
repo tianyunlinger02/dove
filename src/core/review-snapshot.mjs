@@ -6,6 +6,7 @@ import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 
 export const REVIEW_MATERIAL_DENY_PATTERNS = Object.freeze([
   /(?:^|\/)CLAUDE\.md$/u,
+  /(?:^|\/)\.git(?:\/|$)/u,
   /(?:^|\/)\.claude(?:\/|$)/u,
   /(?:^|\/)\.dsh(?:\/|$)/u,
   /(?:^|\/)\.mcp\.json$/u,

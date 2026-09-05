@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="240" viewBox="0 0 900 240">
+  <title>Architecture overview</title>
+  <rect width="900" height="240" fill="white"/>
+  <g font-size="5" fill="black">
+    <text x="10" y="20">tiny label 01: sensor path</text>
+    <text x="10" y="28">tiny label 02: latent constraint</text>
+    <text x="10" y="36">tiny label 03: prior penalty</text>
+    <text x="10" y="44">tiny label 04: reconstruction</text>
+    <text x="10" y="52">tiny label 05: heldout split</text>
+    <text x="10" y="60">tiny label 06: baseline drift</text>
+    <text x="10" y="68">tiny label 07: residual map</text>
+    <text x="10" y="76">tiny label 08: ablation?</text>
+  </g>
+  <rect x="250" y="30" width="580" height="160" fill="#eeeeff" stroke="#333"/>
+  <text x="270" y="115" font-size="10">Dense multi-panel content with tiny annotations; not enough detail for evidence at journal size.</text>
+</svg>

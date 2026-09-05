@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="white"/>
+  <text x="40" y="40" font-size="20">Result summary</text>
+  <circle cx="170" cy="170" r="80" fill="#aaccee"/>
+  <circle cx="430" cy="170" r="80" fill="#eeccaa"/>
+  <text x="120" y="175" font-size="14">ours</text>
+  <text x="385" y="175" font-size="14">baseline</text>
+  <text x="40" y="320" font-size="12">No axis, no metric, no uncertainty, and no link to the claimed mechanism.</text>
+</svg>

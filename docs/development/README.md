@@ -5,9 +5,10 @@
 ## 文档索引
 
 - [愿景与设计理念](VISION_AND_PRINCIPLES.md)：Dove 为什么存在，以及长期应坚持的少量原则。
-- [研究模型](RESEARCH_MODEL.md)：唯一完整的科研语义说明，包括持续研究、Mission、研究树、九个 Skills、作者上下文和 `dove-review`。
+- [研究模型](RESEARCH_MODEL.md)：完整科研语义，包括持续研究、Mission、研究树、九个平级能力、作者主会话、有界 subagent 和同一研究者的隔离审稿位置。
 - [产品需求](PRODUCT_REQUIREMENTS.md)：实现和公共文件必须满足的产品要求。
 - [最终期望](FINAL_EXPECTATIONS.md)：用户在真实使用中应观察到的结果。
+- [行为评估](../../evals/behavior/README.md)：合成案例、真实宿主调用、公开证据和人工判断；不随 npm 包发布。
 
 ## 使用方式
 

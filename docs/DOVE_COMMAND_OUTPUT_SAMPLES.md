@@ -13,7 +13,7 @@ Dove 已在此项目启用
 宿主  Claude Code
 
 ✓ Dove agent 与 9 个可选入口已安装
-✓ Claude 项目提示、状态栏与来源阅读支持已配置
+✓ Claude 项目提示与来源阅读支持已配置
 ✓ 最小研究入口 RESEARCH.md 已建立
 ✓ 项目集成记录已建立
 
@@ -26,7 +26,7 @@ Piped output should omit mascot art and ANSI styling while keeping the same huma
 
 ## Dove agent excerpt
 
-Installed Claude projects receive a Dove agent file. A short illustrative excerpt:
+Ordinary Claude conversations receive the shared research rule. `claude --agent dove` starts the author-side main session; a bounded independent investigation may use a Dove subagent, but work needing the full conversation, important user clarification, or ongoing mainline ownership stays in the main session. The installed agent file is generated from the canonical behavior; the following is illustrative, not a literal excerpt or proof of live behavior:
 
 ```markdown
 # Dove Agent
@@ -102,16 +102,33 @@ A `dove run` receipt records local execution facts before Dove interprets the re
 ```text
 Dove run 已启动
 
+项目：/workspace/example-project
 运行记录：run-20260903-a1b2c3d4
 状态：started
 Supervisor PID：12345
 命令：node scripts/diagnostic.mjs
+工作目录：/workspace/example-project
+seed（用户声明）：seed-42
+Git：commit 0123456789abcdef0123456789abcdef01234567；dirty false
 日志：.dove/runs/run-20260903-a1b2c3d4/run.jsonl
 stdout：.dove/runs/run-20260903-a1b2c3d4/stdout.log
 stderr：.dove/runs/run-20260903-a1b2c3d4/stderr.log
 ```
 
-`status` is read-only, `resume` never reruns a target, and `compare` returns `comparable: false` instead of ranking when run basis fields differ.
+`start` records an explicitly declared seed plus minimum Git facts: commit and dirty `true`/`false`/`null`, not an environment inventory. `status` is read-only and `resume` never reruns a target. `compare` ranks only compatible terminal finalized runs with matching metric, budget, data, evaluator, and resource basis; Git facts do not change comparability or ranking.
+
+## Compact/resume facts card
+
+This shape-only example matches the fields emitted by SessionStart after compact/resume; it is not evidence from a live project:
+
+```text
+Dove SessionStart facts (read-only). Latest Review (by updatedAt) and Run (by startedAt) are not the current research mainline.
+RESEARCH.md: exists=yes; mtime=2026-09-05T08:00:00.000Z
+Latest Review: id=review-20260902-a1b2c3d4; round=1; updatedAt=2026-09-05T08:10:00.000Z; material currentness=changed
+Latest Run: id=run-20260903-a1b2c3d4; startedAt=2026-09-05T08:20:00.000Z; status=succeeded; exit=0
+```
+
+Missing or unreadable facts remain `unavailable`. No research Markdown body, review report, stdout/stderr log, mainline summary, or next-step recommendation is included. Startup/clear emits no research card. Separate `systemMessage` notices may report skipped manifest-owned local edits or synchronization failures; explicit update replaces those local edits and reports the affected paths.
 
 ## Review output
 
@@ -127,7 +144,9 @@ Author-side self-check should be clear about its scope:
 建议：先补一段 related-work 定位，并做一个能区分机制解释与 baseline artifact 的诊断检查。
 ```
 
-A `dove-review` handoff result should point to the frozen materials and returned report rather than summarizing a private reviewer transcript.
+Isolated `dove-review` uses the same researcher in a reviewer position, not another persona. It asks whether the method answers the question, field judgment is correct, the paper fits the venue, and what strongest reasonable objection needs answering. Its requested Markdown headings are `Verdict`, `Blocking issues`, `Grounding basis`, and `Author-side next actions`; the runtime does not parse them as acceptance state.
+
+A `dove-review` handoff result should point to frozen materials and the actual report, not summarize a private transcript. Public human and CLI JSON results omit SHA fields; internal JSON receipts support byte comparisons only.
 
 ```text
 Dove review handoff 已完成
@@ -145,6 +164,16 @@ Dove review handoff 已完成
 - supplement/supplement.pdf (23456 bytes)
 
 Reviewer 只接收本轮冻结材料；不会读取私有 transcript。
+```
+
+A `dove review status --id <id>` result should show how the frozen snapshot relates to the current project without parsing the report as a verdict source.
+
+```text
+当前轮次材料版本关系：changed
+  - paper/main.tex：changed（snapshot 12345 bytes；observed file 12400 bytes）
+  - build/main.pdf：current（snapshot 45678 bytes；observed file 45678 bytes）
+
+报告中的 verdict 是对应 frozen snapshot 的历史判断；status 不解析报告文字来猜 PASS/REVISE。
 ```
 
 ## Error result

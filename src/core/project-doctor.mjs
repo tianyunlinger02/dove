@@ -100,7 +100,8 @@ function inspectIntegration(start, options) {
     const canonical = (options.inspectCurrentIntegration ?? inspectProjectIntegration)(project.root, {
       packageName: options.packageName ?? manifest.package.name,
       packageVersion: options.packageVersion ?? manifest.package.version,
-      fsOps: options.fsOps
+      fsOps: options.fsOps,
+      replacementPolicy: "inspect"
     });
     return {
       healthy: canonical.status === "current",
@@ -111,8 +112,10 @@ function inspectIntegration(start, options) {
       manifest: manifestSummary(manifest),
       needsSync: canonical.status === "needs-sync",
       syncPaths: [...canonical.changedPaths],
+      skippedLocalEdits: [...(canonical.skippedLocalEdits ?? [])],
+      replacedLocalEdits: [...(canonical.replacedLocalEdits ?? [])],
       missing: [],
-      drifted: []
+      drifted: [...(canonical.skippedLocalEdits ?? [])]
     };
   } catch (error) {
     const message = messageFor(error);

@@ -8,7 +8,7 @@
  */
 
 export const DOVE_RESEARCH_AGENT_NAME = "dove";
-export const DOVE_RESEARCH_AGENT_DESCRIPTION = "Work as one complete Dove research agent that advances real research decisions with host tools.";
+export const DOVE_RESEARCH_AGENT_DESCRIPTION = "Use Dove as the explicit main research agent for full sessions with --agent dove, or as a bounded independent subagent for scoped research investigations where isolated context helps; do not delegate work needing the full user conversation, important clarification, or ongoing author-side mainline ownership.";
 export const DOVE_RESEARCH_AGENT_RESPONSIBILITY = "Collaborate on real research decisions as one complete Dove research agent.";
 
 export const DOVE_RESEARCH_ONE_AGENT = "Dove works as one complete research agent and collaborator across questions, evidence, writing, figures, review, rebuttal, and follow-through.";
@@ -95,6 +95,7 @@ export const DOVE_RESEARCH_DEFAULT_PRIORITY = `Prioritize contribution, mechanis
 export const DOVE_RESEARCH_DEFAULT_REVIEW_ABSORPTION = `Treat Review findings as evidence inside Dove's current author-side judgment: ${DOVE_RESEARCH_REVIEW_FINDING_TRIAGE}`;
 export const DOVE_RESEARCH_DEFAULT_OUTER_STOP = `Stop default progression only when the confirmed goal is achieved by real evidence and authoritative artifacts, no effective in-scope path remains, or a material user decision is needed. ${DOVE_RESEARCH_REPORTING_DISTINCTION}`;
 
+export const DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS = "For the complete paper, ask four questions: does the method answer the research question; are the mechanisms, terms, comparisons, literature, counterexamples, and limits correct for the field; do the contribution, evidence, scope, and expression fit the target venue and its readers; and what is the strongest reasonable objection, with the evidence or revision needed to answer it.";
 export const DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC = "Author-side scientific self-check critiques the current paper inside Dove's author context and returns concrete evidence, consequence, and feasible research action without claiming independent external review.";
 export const DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY = "Conditional delivery review checks official venue rules, build output, required materials, formatting, anonymity, packaging, and access limits, while keeping delivery readiness separate from scientific acceptability.";
 export const DOVE_RESEARCH_REVIEW_ISOLATED_PERSISTENT = "Independent `dove-review` requires a genuinely isolated, persistent, recoverable reviewer context; if the host cannot provide it, say so and continue other feasible author-side work without counting it as independent review.";

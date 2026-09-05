@@ -4,7 +4,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 
 ## Agent 与 Skills
 
-- 用户面对一个 Dove research agent。
+- 用户面对一个 Dove research agent。普通 Claude rule 共享科研判断，`claude --agent dove` 启动作者主会话；有界独立科研调查可以使用 Dove subagent，需要完整对话、重要用户澄清或持续主线责任的工作不得委派。
 - 九个公开 Skills 保持为：`research`、`status`、`source`、`experiment`、`draft`、`figure`、`review`、`rebuttal`、`lessons`。
 - Skills 是同一个 Dove 的专项入口，不是不同人格、固定阶段或独立工作流。
 - 默认多轮推进属于 Dove 本身；不得新增 Auto Skill、Auto command、隐藏后台任务或无界队列。
@@ -24,14 +24,14 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - `.dove/research/**` 是普通 researcher-owned Markdown。
 - Fresh init 只创建最小 `RESEARCH.md`；Mission、Source、Experiment、Review、Claim 和 Lesson documents 按需出现。
 - 不得要求固定 headings、frontmatter、generated IDs、stored counts、research hashes、machine index 或数据库式记录。
-- `dove update`、SessionStart sync、reinstall 和 uninstall 必须保留现有 `.dove/research/**`、`.dove/reviews/**` 和 `.dove/runs/**` 内容；`UserPromptSubmit` 必须保持零写。
+- `dove update`、SessionStart sync、reinstall 和 uninstall 必须保留现有 `.dove/research/**`、`.dove/reviews/**` 和 `.dove/runs/**` 内容；当前资源不得安装 `UserPromptSubmit` 或替代每轮 hook，旧 manifest-owned Dove `UserPromptSubmit` 只能精确退休且不得触碰用户/Trellis 其他 prompt hooks。
 - 研究 Markdown 只在用户要求、重要结论/决策/优先级改变，或对保存证据和后续恢复确实有用时维护。Lessons 可按更宽的 reusable-value 标准维护。
 - 可在有恢复价值时使用普通 Markdown 相对链接和 project-relative artifact path 指向真实材料，但不得新增 link parser、backlink audit、一致性矩阵或数据库式一致性检查。
 
 ## Source 要求
 
 - Source 必须区分 material found、retrieved、inspected 和 used。
-- Citation identity 与 claim support 必须分开判断。
+- Citation identity 与 claim support 必须分开判断。允许用户指定条目的有界 bibliography DOI 核验；直接查询可用时优先于模糊标题匹配，不建立台账、缓存或 BibTeX parser。身份核验不等于读过全文或支持主张。
 - 复合主张应拆分，只保留来源实际支持的部分。
 - 普通来源检查应与问题成比例；显式 systematic review、meta-analysis、evidence grading 或 auditable synthesis 请求应使用适合领域的结构化方法。
 - Claude 项目中的搜索、论文阅读和网页阅读能力按 Installation 文档配置；缺失工具或权限时必须说明，并使用仍能帮助判断的可用材料。
@@ -61,21 +61,34 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - 全文或近投稿自检应检查方法是否回答问题、领域机制和文献是否正确、贡献与证据是否适合目标期刊或会议、最强的知情读者反对意见，以及引用支持、主张含义变化、未由材料支持的事实和异常结果的执行有效性。
 - `dove-review` 只能在存在真实隔离、持久、可恢复审稿上下文时作为独立外部评价路径使用。
 - `dove-review` 交接必须基于冻结的近投稿材料：当前完整论文、LaTeX 源、实际编译产物、实际投稿附录或补充材料，以及其他会随投稿提交的文件。
-- 每轮 `dove-review` 必须只提供当轮列出的冻结材料；旧 Review、作者私有对话和未列材料默认不可见。
+- 隔离审稿共享同一科研判断，但从审稿位置重建和质疑贡献，不继承作者主线，不替作者实施行动，不另设人格。
+- 每轮只提供所列冻结文件副本和 Read；没有联网、MCP、作者私有对话或未列文件访问。所需投稿规则和文献由作者侧先取得并列入交接，缺失则限定判断。同一会话可保留自身审稿历史，但不自动取得作者侧旧 Review 文件。
+- 全文审稿回答四问：方法回答问题、领域判断正确、贡献和证据适合目标 venue、最强合理反对意见及其所需证据或修订。返回采用 `Verdict`、`Blocking issues`、`Grounding basis`、`Author-side next actions` 四标题；不得解析成机器接受门槛。
+- Review SHA 只用于内部 JSON 字节核对；human、CLI JSON 和科研表达不暴露 SHA，不以哈希证明科学结论。
 - 导入返回审稿时必须忠实保存实际返回，不自动开始作者回应、修订、外部搜索或缩小主张。
 - Rebuttal 保持作者侧：分析意见，识别需要的证据、行动和修改，写回应并按请求修改稿件、图、补充材料、亮点或其他投稿文件。
 - 新引用必须分别检查来源身份和对主张的支持；新实验解释必须来自实际实验材料。
 
 ## 投稿与完成
 
-- 投稿论文默认以 LaTeX 源和实际编译产物为工作对象；只有目标期刊或会议官方不提供或不接受 LaTeX 时才采用其他格式。
+- 优先保持用户当前权威稿件格式，并遵守目标期刊或会议的实际要求；新稿仅在 venue 接受 LaTeX 时默认使用 LaTeX 源并检查实际编译产物，否则使用指定格式。
 - Dove 必须识别当前工作的源码、证据基础、构建链和最终交付物。
 - 投稿完成要求同一当前版本同时满足：作者侧根据完整研究判断论文科学上已经充分；`dove-review` 根据目标期刊或会议的真实标准判断科学上可以接受（当该路径是目标的一部分）；实际提交物满足交付要求。
 - 旧判断、局部任务完成、构建成功、格式完整、检查通过、安装事实或研究 Markdown 更新不能单独证明投稿就绪。
 
+## 集成、恢复与运行收据
+
+- 显式 update 覆盖有效 manifest-owned 集成的本地修改，并在人类输出及 `replacedLocalEdits` JSON 中提醒；不覆盖用户自有文件或无关配置。
+- SessionStart 跳过本地修改，继续其余安全同步，以 `systemMessage` 提醒；磁盘更新不等于当前会话重新加载。
+- `statusLine` 不再安装或管理，旧 helper 只留给用户组合脚本；退休时保留用户修改版本和无关配置。
+- compact/resume 只提供只读事实卡：`RESEARCH.md` 存在性与绝对 mtime；最新 Review 的 id、round、绝对 `updatedAt` 与材料 currentness；最新 Run 的 id、绝对 `startedAt`、status 与 exit。缺失或不可读保留 `unavailable`。不读研究 Markdown 正文、report 或 stdout/stderr logs，不推断主线；startup/clear 无研究卡。
+- Reviewer workspace 使用短路径，避免嵌入项目目录层级；路径本身不证明隔离行为。
+- Run 收据除命令、时间、结果、指标和比较依据外，只保留显式 seed 与 Git commit/dirty 最低事实，不扩展为环境分类清单。Git 不改变比较资格或排名；机器比较不替代科学可比性判断。
+- 预算是资源判断和运行比较依据，不是预付额度，也不自动成为运行时强制硬上限；实际执行仍遵守用户明确限制、权限和显式超时。
+
 ## 实现一致性
 
 - 公共文档、实现和生成文件必须与 [研究模型](RESEARCH_MODEL.md) 一致。
-- 普通提示的环境路由只为明确科研相关的非 slash 请求补充 Dove 上下文；不得选择 Skill、写文件、决定授权、继续、完成或主张范围。
+- 普通 Claude 会话通过项目 rule 共享科研判断，不通过每轮 hook 注入或分类。`UserPromptSubmit`、隐藏 intake 和其替代每轮 hook 均已退休；rule 不是授权机制，也不创建另一套研究状态。
 - `status` 必须只读。
 - 软件检查保护实现和发布行为；不得把检查结果表述为科学正确、研究完成、可复现性、接收、独立审稿或 Dove 研究质量证明。

@@ -1,12 +1,12 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { resolveInstalledProjectRoot } from "./project-root.mjs";
 import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
+import { normalizeRunGitFacts } from "./run-environment.mjs";
 
 export const RUN_EVENT_SCHEMA_VERSION = "dove.run.event.v1";
 export const RUNS_DIRECTORY_PATH = ARTIFACT_PATHS.runsDir;
@@ -25,6 +25,7 @@ const RUN_LOCK_OWNER_SCHEMA_VERSION = "dove.run.lock.v1";
 const RUN_LOCK_STALE_MS = 30_000;
 const RUN_LOCK_WAIT_MS = 2_000;
 const RUN_LOCK_RETRY_MS = 25;
+const RUN_SEED_MAX_LENGTH = 200;
 
 function plainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -434,6 +435,14 @@ export function normalizeRunBasis(options = {}) {
   };
 }
 
+export function normalizeRunSeed(value) {
+  if (typeof value === "string" && /[\x00-\x1f\x7f-\x9f]/u.test(value)) throw new Error("--seed must not contain control characters.");
+  const text = sanitizeOptionalText(value, "--seed", { max: RUN_SEED_MAX_LENGTH });
+  return text === null
+    ? { declaration: "not-declared", value: null }
+    : { declaration: "declared", value: text };
+}
+
 export function normalizeRunGroup(value) {
   return sanitizeOptionalText(value, "--group", { max: 200 });
 }
@@ -475,6 +484,37 @@ function startedEventFrom(events) {
   return events.find((event) => event.type === "run.started") ?? null;
 }
 
+function normalizeStartedSeed(started) {
+  try {
+    return normalizeRunSeed(plainObject(started.seed) && started.seed.declaration === "declared" ? started.seed.value : null);
+  } catch {
+    return normalizeRunSeed(null);
+  }
+}
+
+function normalizeStartedEventFacts(started, projectRoot) {
+  const legacyGit = plainObject(started?.environment?.git) ? started.environment.git : {};
+  const git = normalizeRunGitFacts({
+    commit: Object.hasOwn(started, "commit") ? started.commit : legacyGit.fullHead,
+    dirty: Object.hasOwn(started, "dirty") ? started.dirty : legacyGit.dirty
+  });
+  return {
+    group: started.group ?? null,
+    argv: Array.isArray(started.argv) ? [...started.argv] : [],
+    cwd: started.cwd ?? projectRoot,
+    budget: started.budget ?? { timeoutMs: null, killGraceMs: null },
+    metric: started.metric ?? { name: null, direction: null, unit: null },
+    data: started.data ?? null,
+    evaluator: started.evaluator ?? null,
+    resourceBasis: started.resourceBasis ?? null,
+    seed: normalizeStartedSeed(started),
+    commit: git.commit,
+    dirty: git.dirty,
+    supervisorPid: started.supervisorPid ?? null,
+    startedAt: started.at
+  };
+}
+
 function targetEventFrom(events) {
   return events.filter((event) => event.type === "target.started").at(-1) ?? null;
 }
@@ -486,12 +526,13 @@ function timeoutEventFrom(events) {
 function summarizeStatus(projectRoot, runId, events) {
   const started = startedEventFrom(events);
   if (!started) throw new Error(`Dove run ${runId} has no run.started event.`);
+  const startedFacts = normalizeStartedEventFacts(started, projectRoot);
   const target = targetEventFrom(events);
   const timeout = timeoutEventFrom(events);
   const terminal = terminalEventFrom(events);
   const reconciled = reconciledEventFrom(events);
   const finalized = finalizedEventFrom(events);
-  const supervisorObservation = observePid(started.supervisorPid);
+  const supervisorObservation = observePid(startedFacts.supervisorPid);
   const recordedTargetPid = target?.targetPid ?? terminal?.targetPid ?? reconciled?.targetPid ?? null;
   const targetObservation = observePid(recordedTargetPid);
   let status;
@@ -523,19 +564,22 @@ function summarizeStatus(projectRoot, runId, events) {
     outcome: terminal?.outcome ?? reconciled?.outcome ?? null,
     exitCode: terminal?.exitCode ?? reconciled?.exitCode ?? null,
     signal: terminal?.signal ?? reconciled?.signal ?? null,
-    group: started.group ?? null,
-    argv: Array.isArray(started.argv) ? [...started.argv] : [],
-    cwd: started.cwd ?? projectRoot,
-    budget: started.budget ?? { timeoutMs: null, killGraceMs: null },
-    metric: finalized?.metric ?? started.metric ?? { name: null, direction: null, unit: null },
-    startMetric: started.metric ?? { name: null, direction: null, unit: null },
-    data: started.data ?? null,
-    evaluator: started.evaluator ?? null,
-    resourceBasis: started.resourceBasis ?? null,
-    startedAt: started.at,
+    group: startedFacts.group,
+    argv: startedFacts.argv,
+    cwd: startedFacts.cwd,
+    budget: startedFacts.budget,
+    metric: finalized?.metric ?? startedFacts.metric,
+    startMetric: startedFacts.metric,
+    data: startedFacts.data,
+    evaluator: startedFacts.evaluator,
+    resourceBasis: startedFacts.resourceBasis,
+    seed: startedFacts.seed,
+    commit: startedFacts.commit,
+    dirty: startedFacts.dirty,
+    startedAt: startedFacts.startedAt,
     terminalAt: terminal?.at ?? reconciled?.at ?? null,
     finalizedAt: finalized?.at ?? null,
-    supervisorPid: started.supervisorPid ?? null,
+    supervisorPid: startedFacts.supervisorPid,
     targetPid: recordedTargetPid,
     pidObservation: {
       supervisor: supervisorObservation,
@@ -582,6 +626,48 @@ export function listRunSummaries(options = {}) {
     runs.push(summary);
   }
   return { command: "status", status: "ok", project: projectRoot, group, runs };
+}
+
+function readRunStartMetadata(projectRoot, runId, options = {}) {
+  const fsOps = options.fsOps ?? fs;
+  const paths = requireRunDirectory(projectRoot, runId, { fsOps });
+  assertRegularFile(fsOps, paths.absoluteJournalPath, "Dove run journal");
+  const fd = fsOps.openSync(paths.absoluteJournalPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0));
+  try {
+    if (!fsOps.fstatSync(fd).isFile()) throw new Error("Dove run journal must be a regular file.");
+    const chunks = [];
+    while (true) {
+      const buffer = Buffer.alloc(1024);
+      const count = fsOps.readSync(fd, buffer, 0, buffer.length, null);
+      if (count === 0) throw new Error("Dove run journal has no complete start event.");
+      const bytes = buffer.subarray(0, count);
+      const newline = bytes.indexOf(10);
+      chunks.push(newline === -1 ? bytes : bytes.subarray(0, newline));
+      if (newline === -1) continue;
+      const label = `${paths.journalPath}:1`;
+      const started = validateRunEvent(parseJsonWithoutDuplicateKeys(Buffer.concat(chunks).toString("utf8"), label), runId, 1, label);
+      if (started.type !== "run.started" || typeof started.at !== "string") throw new Error("Dove run journal must start with a timestamped run.started event.");
+      return { runId, startedAt: started.at };
+    }
+  } finally {
+    fsOps.closeSync(fd);
+  }
+}
+
+export function inspectLatestRunFacts(options = {}) {
+  const fsOps = options.fsOps ?? fs;
+  const projectRoot = normalizeRunProject(options.project, options);
+  let latest = null;
+  // Unknown start metadata makes selection unavailable; do not silently skip a
+  // candidate. Historical tails and PID observations are irrelevant to ordering.
+  for (const runId of runsRootEntries(projectRoot, { fsOps })) {
+    const started = readRunStartMetadata(projectRoot, runId, { fsOps });
+    if (!latest || started.startedAt > latest.startedAt) latest = started;
+  }
+  if (!latest) return null;
+  const summary = summarizeRun(projectRoot, latest.runId, { fsOps });
+  if (summary.startedAt !== latest.startedAt) throw new Error("Latest Dove run start changed while reading its summary.");
+  return { runId: summary.runId, startedAt: summary.startedAt, status: summary.status, exitCode: summary.exitCode };
 }
 
 export function inspectRunStatus(options = {}) {
@@ -688,7 +774,7 @@ export function compareRuns(options = {}) {
       project: projectRoot,
       group: options.group ?? null,
       runIds,
-      runs: summaries.map((summary) => ({ runId: summary.runId, status: summary.status, terminal: summary.terminal, finalized: summary.finalized, metric: summary.metric }))
+      runs: summaries.map((summary) => ({ runId: summary.runId, status: summary.status, terminal: summary.terminal, finalized: summary.finalized, metric: summary.metric, commit: summary.commit, dirty: summary.dirty }))
     };
   }
   const fields = mismatchFields(summaries);
@@ -701,7 +787,7 @@ export function compareRuns(options = {}) {
       project: projectRoot,
       group: options.group ?? null,
       runIds,
-      runs: summaries.map((summary) => ({ runId: summary.runId, basis: compareBasis(summary), metric: summary.metric, status: summary.status }))
+      runs: summaries.map((summary) => ({ runId: summary.runId, basis: compareBasis(summary), metric: summary.metric, status: summary.status, commit: summary.commit, dirty: summary.dirty }))
     };
   }
   const basis = compareBasis(summaries[0]);
@@ -716,18 +802,11 @@ export function compareRuns(options = {}) {
     runId: summary.runId,
     status: summary.status,
     metricValue: summary.metric.value,
+    commit: summary.commit,
+    dirty: summary.dirty,
     deltaFromBest: direction === "min" ? summary.metric.value - best : best - summary.metric.value,
     stdoutPath: summary.paths.stdoutPath,
     stderrPath: summary.paths.stderrPath
   }));
   return { command: "compare", status: "ok", comparable: true, fields: [], project: projectRoot, group: options.group ?? null, runIds, basis, ranking };
-}
-
-export function runPlatformRecord() {
-  return {
-    platform: process.platform,
-    arch: process.arch,
-    node: process.version,
-    release: os.release()
-  };
 }

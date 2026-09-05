@@ -1,0 +1,133 @@
+{
+  "schemaVersion": "dove.behavior.case.v1",
+  "id": "figure-quality-before-review",
+  "title": "Review treats figure quality as evidence, not existence or dimensions",
+  "failureMode": "Figure-aware runs opened images but accepted them on count, size, or vague appearance instead of checking evidence duty, caption consistency, and readability.",
+  "source": {
+    "document": ".dove/install/DOCTOR.md",
+    "lineStart": 65,
+    "lineEnd": 65,
+    "quotes": [
+      "Figure 和 Review 必须结合图在论文中的证据职责、稿件版面、图注及源数据作实质判断。"
+    ]
+  },
+  "fixture": "figure-quality-before-review",
+  "surface": {
+    "host": "claude-code",
+    "entry": "slash-command",
+    "command": "/dove:review",
+    "prompt": "审查当前稿件中的图是否足以支撑论文主张。不要只看文件是否存在或尺寸；请实际检查图、正文引用和图注之间的关系。"
+  },
+  "budgets": {
+    "timeoutMs": 180000,
+    "maxBudgetUsd": 0.2
+  },
+  "snapshot": {
+    "include": [
+      ".dove/research/**",
+      "paper/main.tex",
+      "figures/panel-dense.svg"
+    ]
+  },
+  "expectedBehavior": {
+    "mustInspectOrChange": [
+      "paper/main.tex",
+      "figures/panel-dense.svg"
+    ],
+    "mustNotTouch": [
+      ".dove/install/DOCTOR.md",
+      ".dove/reviews/**",
+      ".dove/runs/**"
+    ]
+  },
+  "hardExpectations": [
+    {
+      "id": "answer-visible",
+      "kind": "public-output-not-empty"
+    },
+    {
+      "id": "mentions-figure-substance",
+      "kind": "public-output-includes-any",
+      "terms": [
+        "caption",
+        "图注",
+        "readability",
+        "unreadable",
+        "evidence",
+        "证据"
+      ]
+    },
+    {
+      "id": "no-count-only-pass",
+      "kind": "public-output-excludes-any",
+      "terms": [
+        "figures exist so",
+        "尺寸正常所以",
+        "数量正确",
+        "all figures are clear"
+      ]
+    },
+    {
+      "id": "inspect-manuscript",
+      "kind": "tool-action-path",
+      "verbs": [
+        "Read"
+      ],
+      "path": "paper/main.tex"
+    },
+    {
+      "id": "inspect-figure-file",
+      "kind": "tool-action-path",
+      "verbs": [
+        "Read"
+      ],
+      "path": "figures/panel-dense.svg"
+    },
+    {
+      "id": "doctor-not-created",
+      "kind": "path-not-created",
+      "path": ".dove/install/DOCTOR.md"
+    },
+    {
+      "id": "no-private-tool-path",
+      "kind": "tool-action-forbidden-path",
+      "path": ".dove/install/DOCTOR.md"
+    }
+  ],
+  "humanReviewRubric": [
+    {
+      "criterion": "The critique relates the figure to the manuscript claim and caption, not just file presence.",
+      "evidence": [
+        "public-output.md",
+        "tool-actions.json"
+      ],
+      "failureSignals": [
+        "It says the figure exists and is therefore acceptable.",
+        "It ignores the caption/title mismatch."
+      ]
+    },
+    {
+      "criterion": "Readability and journal-scale presentation are treated as scientific evidence risks.",
+      "evidence": [
+        "public-output.md",
+        "stream.jsonl"
+      ],
+      "failureSignals": [
+        "It misses tiny-label/readability risks.",
+        "It does not connect figure issues to reviewer confusion."
+      ]
+    },
+    {
+      "criterion": "The run does not mutate private Dove state or claim scientific acceptance from hard checks.",
+      "evidence": [
+        "snapshot-diff.json",
+        "receipt.json",
+        "hard-checks.json"
+      ],
+      "failureSignals": [
+        "DOCTOR.md is created.",
+        "Hard checks are described as scientific proof."
+      ]
+    }
+  ]
+}

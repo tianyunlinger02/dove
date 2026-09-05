@@ -17,7 +17,7 @@ Research meaning is not a runtime type system. Ordinary Markdown must not acquir
 - CLI parsing defines the supported command and option inventory, including `dove review handoff|status|resume|rerun|import` and `dove run start|status|resume|finalize|compare`.
 - Project installation and file-transaction modules enforce contained software writes and conflict handling.
 - The canonical Dove agent definition and Skill workflow sources define workflow inventory for adapter generation.
-- Build scripts define the library, CLI, and hook bundles.
+- Build scripts define the library and CLI bundles.
 - Review runtime modules define the explicit `.dove/reviews/**` record shape, material-copy boundary, reviewer workspace location, backend provenance, and session-id handling.
 - Run runtime modules define the explicit `.dove/runs/**` JSONL journal, stdout/stderr log paths, supervisor writer boundary, target spawn boundary, one ordinary terminal event, missing-terminal reconcile/finalize events, and comparison compatibility rules.
 - Legacy research-data detection is read-only: old data remains in place and Dove does not automatically convert, delete, or use it through a runtime fallback.
@@ -35,13 +35,23 @@ No research MCP definitions or Research Format schema belong in the Dove 3 contr
 - Shared configuration preserves unrelated fields.
 - Managed-resource digests detect changed installation bytes without becoming public research evidence.
 - File-set changes verify preconditions and avoid partial promotion.
-- Isolated review handoff accepts only canonical project-relative regular non-symlink material files, rejects private Dove/Claude/settings/research paths, copies only listed files, and records path, size, and SHA-256.
-- Run ids are path-safe, run directories are atomically reserved, target argv is passed without a shell, status is read-only, resume never reruns, finalize appends one scalar metric only after terminal completion, and compare ranks only compatible terminal finalized runs.
+- Isolated review handoff accepts only canonical project-relative regular non-symlink material files, rejects private Dove/Claude/settings/research paths, copies only listed files, keeps internal path, size, and SHA-256 receipts, and exposes public review results without hash fields.
+- Run ids are path-safe, run directories are atomically reserved, target argv is passed without a shell, new journals record only explicit seed plus Git commit/dirty facts beyond command, time, result, metric, budget, and basis fields, status is read-only, resume never reruns, finalize appends one scalar metric only after terminal completion, and compare ranks only compatible terminal finalized runs by metric, budget, data, evaluator, and resource basis.
 - Generated adapters match the nine-Skill and Dove-agent canonical sources.
-- Package output contains exactly the declared library, CLI, and hook runtime bundles.
-- Hook parsing distinguishes `SessionStart` and `UserPromptSubmit`; lifecycle sync validates the exact initialized project before writes, and retired exact Dove-owned Stop fragments are removed without rewriting user-owned Stop settings.
+- Package output contains exactly the declared library and CLI runtime bundles.
+- Hook parsing accepts `SessionStart` plus the retained `statusline` helper and rejects `UserPromptSubmit`; lifecycle sync validates the exact initialized project before writes, and retired exact Dove-owned `UserPromptSubmit` and Stop fragments are removed without rewriting user-owned prompt or Stop settings.
 - Old legacy research data is reported in place rather than converted, deleted, or treated as current runtime research state.
 - Complete Reinstall requires an explicit confirmed destructive plan whose default is No.
+
+## Minimal runtime facts
+
+- Ordinary Claude uses the shared rule; `--agent dove` owns the author-side main session. A Dove subagent is suitable for bounded independent research, not full-conversation work, important clarification, or ongoing mainline ownership.
+- Explicit update replaces valid manifest-owned local edits with human and JSON notices. SessionStart skips them, continues safe resources, and emits `systemMessage`; unowned conflicts and unsafe transaction preconditions remain blocking.
+- Compact/resume exposes only `RESEARCH.md` existence/absolute mtime, latest Review id/round/absolute `updatedAt`/currentness, and latest Run id/absolute `startedAt`/status/exit. Unknown facts stay `unavailable`. No Markdown body, review report, stdout/stderr log, inferred mainline, or next-action payload belongs in this card. Startup/clear emits no research card.
+- Review human and CLI JSON projections omit SHA fields; internal JSON receipts and internal runtime metadata are not public research evidence. Use short reviewer workspace paths without relaxing containment or session checks.
+- Run Git is only commit plus dirty `true`/`false`/`null`; seed is an explicit declaration, not proof the target used it. Do not add status counts, porcelain receipts, lockfile fingerprints, or platform/environment taxonomies. Git does not affect comparability or ranking.
+- Budget metadata is a comparison basis, not prepayment or an automatically enforced spending cap. Explicit user limits and timeout controls still apply.
+- `statusLine` is not installed or managed. The old helper is only for user-owned composition scripts; `UserPromptSubmit` and intake have no replacement per-prompt hook.
 
 ## Research Markdown Boundary
 

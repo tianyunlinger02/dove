@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","cwd":"/workspace","session_id":"fake-session"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will inspect the current manuscript."},{"type":"tool_use","id":"toolu_read","name":"Read","input":{"file_path":"/workspace/paper/main.tex"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_bash","name":"Bash","input":{"command":"python scripts/check.py paper/main.tex figures/result.svg"}}]}}
+{"type":"result","subtype":"success","total_cost_usd":0.0123,"result":"Inspected paper/main.tex and figures/result.svg without reading private transcripts."}

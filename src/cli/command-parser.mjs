@@ -8,7 +8,7 @@ const reviewOptions = [projectOption, value("--venue"), value("--material", { re
 const runMetricOptions = [value("--metric-name"), value("--direction", { choices: ["min", "max"] }), value("--metric-unit")];
 const runBasisOptions = [value("--data"), value("--evaluator"), value("--resource-basis")];
 const runBudgetOptions = [value("--wall-time"), value("--timeout-ms"), value("--kill-grace-ms")];
-const runStartOptions = [projectOption, value("--id"), value("--group"), ...runBudgetOptions, ...runMetricOptions, ...runBasisOptions, ...outputOptions];
+const runStartOptions = [projectOption, value("--id"), value("--group"), value("--seed"), ...runBudgetOptions, ...runMetricOptions, ...runBasisOptions, ...outputOptions];
 const runStatusOptions = [projectOption, value("--id", { conflictsWith: ["--group"] }), value("--group", { conflictsWith: ["--id"] }), ...outputOptions];
 const runResumeOptions = [projectOption, value("--id"), ...outputOptions];
 const runFinalizeOptions = [projectOption, value("--id"), ...runMetricOptions, value("--metric-value"), value("--decision"), value("--note"), ...outputOptions];
@@ -49,7 +49,6 @@ export const CLI_COMMAND_SPECS = Object.freeze({
   hook: command([], {
     subcommands: {
       "session-start": command([projectOption]),
-      "user-prompt-submit": command([projectOption]),
       statusline: command([projectOption])
     }
   })
