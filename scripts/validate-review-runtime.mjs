@@ -188,6 +188,25 @@ assert.match(input, /Your available tool is Read/u);
 assert.match(input, /private conversation/iu);
 assert.match(input, /transcripts/iu);
 assert.match(input, /do not include enough venue rules or literature grounding/iu);
+// Inspect what the fake backend actually receives, not just exported prompt
+// constants. This is prompt plumbing evidence, not a model-behavior evaluation.
+for (const pattern of [
+  /Before committing to or materially changing[^\\n]*central experiment/iu,
+  /core proposition[^.\\n]*theory or mechanism[^.\\n]*proportionate/iu,
+  /simple alternatives[^.\\n]*assumptions[^.\\n]*distinguishing predictions or failure conditions/iu,
+  /derivation[^.\\n]*counterexamples[^.\\n]*or small exploratory diagnostics[^.\\n]*as needed/iu,
+  /as needed to (?:choose or revise|change)[^.\\n]*method[^.\\n]*baseline[^.\\n]*metric[^.\\n]*investment decision/iu,
+  /problem[^\\n]*contribution[^\\n]*data and evaluation validity[^\\n]*statistical identification[^\\n]*execution[^\\n]*recovery/iu,
+  /Reuse checked evidence[^\\n]*conditions still hold/iu,
+  /comparison that cannot identify the contribution/iu,
+  /passing checks[^.\\n]*alone are not research progress/iu,
+  /(?:Valid execution|performance gain)[^.\\n]*alone does not establish[^.\\n]*evaluation validity[^.\\n]*scientific mechanism/iu,
+  /only to judging the frozen materials[^\\n]*recommending author-side work/iu,
+  /Do not establish missing grounding through new research[^\\n]*run diagnostics[^\\n]*execute experiments[^\\n]*author revisions/iu,
+  /read-only and limited to the listed frozen materials/iu,
+  /instead of fetching or inferring it/iu
+]) assert.match(input, pattern);
+assert.doesNotMatch(input, /^## Author stance$|After delegation|synthesizes decisive evidence|perform the feasible next in-scope step|Maintain Dove research Markdown/mu);
 
 const allowed = new Set();
 for (const match of input.matchAll(/^- (.+?) \\(\\d+ bytes, sha256 [a-f0-9]{64}\\)$/gmu)) allowed.add(match[1]);

@@ -8,14 +8,25 @@ function softwareLine(result, color) {
 }
 
 function projectLine(result, color) {
+  const manifest = result.projectIntegration?.manifest ?? result.migrationInstallation?.manifest;
+  const version = manifest?.package?.version;
+  const recordedVersion = typeof version === "string" && version.trim() ? version : "未知";
+  const label = `${terminalStyle("项目接入", "dim", { color })}  manifest 版本 ${recordedVersion}；`;
   const migration = result.migrationInstallation?.state;
-  if (migration === "valid-legacy") return `${terminalStyle("项目接入", "dim", { color })}  旧版安装标记不在当前采用范围`;
-  if (migration === "conflicting-manifests") return `${terminalStyle("项目接入", "dim", { color })}  安装标记冲突`;
-  if (result.adoption?.state === "adoptable") return `${terminalStyle("项目接入", "dim", { color })}  现有 Markdown 研究树可以通过 update 采用`;
+  if (migration === "valid-legacy") return `${label}旧版安装标记不在当前采用范围`;
+  if (migration === "conflicting-manifests") return `${label}安装标记冲突`;
+  if (result.adoption?.state === "adoptable") return `${label}现有 Markdown 研究树可以通过 update 采用`;
   const state = result.projectIntegration?.state;
   const skipped = result.projectIntegration?.skippedLocalEdits?.length ?? 0;
   const text = state === "current" ? "当前" : state === "needs-sync" && skipped > 0 ? `需要更新；${skipped} 个 manifest-owned 本地编辑会由 SessionStart 跳过` : state === "needs-sync" ? "需要更新" : state === "uninitialized" ? "尚未配置" : state === "drifted" ? "Dove 管理的配置已被修改" : "需要人工处理";
-  return `${terminalStyle("项目接入", "dim", { color })}  ${text}`;
+  const syncCount = result.projectIntegration?.syncPaths?.length ?? 0;
+  return `${label}${text}${syncCount > 0 ? `；${syncCount} 个待同步路径` : ""}`;
+}
+
+function retiredHookLines(result) {
+  const paths = result.projectIntegration?.retiredHooks?.matchedPaths ?? [];
+  if (paths.length === 0) return [];
+  return [`退役 Hook 残留（只读）  ${paths.join("、")}；仅精确旧项，不代表自定义或全局配置已清理。`];
 }
 
 function researchLine(result, color) {
@@ -37,7 +48,9 @@ export function recommendedDoveAction(result) {
       update: "更新 Dove 管理的项目接入；不会重写、补齐或规范化 .dove/research/**。",
       init: "为当前项目启用 Dove 接入。",
       reinstall: "重新安装会在明确确认后仅刷新项目接入，不会重写或删改 .dove/research/** 与 DOCTOR.md。",
-      inspect: "查看 JSON 诊断并处理不明确状态；旧版研究数据会原地保留，Dove 不会自动转换或删除。"
+      inspect: result.projectIntegration?.retiredHooks?.matchedPaths?.length > 0
+        ? "核对 JSON 诊断中的退役 Hook 路径；精确匹配仅报告残留，不自动清理或扩大删除 ownership。"
+        : "查看 JSON 诊断并处理不明确状态；旧版研究数据会原地保留，Dove 不会自动转换或删除。"
     };
     return { ...first, message: messages[first.kind] ?? "按提示处理当前 Dove 状态。" };
   }
@@ -58,6 +71,7 @@ export function renderDoveDoctor(result, options = {}) {
     "",
     softwareLine(result, color),
     projectLine(result, color),
+    ...retiredHookLines(result),
     researchLine(result, color),
     "外层可读不等于研究内容正确、完整或经过独立审查。",
     "",

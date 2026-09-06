@@ -335,25 +335,14 @@ def get_check_context(repo_root: str, task_dir: str) -> str:
     """
     context_parts = []
 
-    # 1. Read check.jsonl (or fallback to spec.jsonl + hardcoded check files)
+    # 1. Read check.jsonl (or fallback to spec.jsonl)
     check_entries = read_jsonl_entries(repo_root, f"{task_dir}/check.jsonl")
 
     if check_entries:
         for file_path, content in check_entries:
             context_parts.append(f"=== {file_path} ===\n{content}")
     else:
-        # Fallback: use hardcoded check files + spec.jsonl
-        check_files = [
-            (".claude/commands/trellis/finish-work.md", "Finish work checklist"),
-            (".claude/commands/trellis/check-cross-layer.md", "Cross-layer check spec"),
-            (".claude/commands/trellis/check.md", "Code quality check spec"),
-        ]
-        for file_path, description in check_files:
-            content = read_file_content(repo_root, file_path)
-            if content:
-                context_parts.append(f"=== {file_path} ({description}) ===\n{content}")
-
-        # Add spec.jsonl
+        # Fallback: use spec.jsonl
         spec_entries = read_jsonl_entries(repo_root, f"{task_dir}/spec.jsonl")
         for file_path, content in spec_entries:
             context_parts.append(f"=== {file_path} (Dev spec) ===\n{content}")
@@ -374,38 +363,18 @@ def get_finish_context(repo_root: str, task_dir: str) -> str:
 
     Read order:
     1. All files in finish.jsonl (if exists)
-    2. Fallback to finish-work.md only (lightweight final check)
-    3. update-spec.md (for active spec sync)
-    4. prd.md (for verifying requirements are met)
+    2. prd.md (for verifying requirements are met)
     """
     context_parts = []
 
-    # 1. Try finish.jsonl first
+    # 1. Read finish.jsonl
     finish_entries = read_jsonl_entries(repo_root, f"{task_dir}/finish.jsonl")
 
     if finish_entries:
         for file_path, content in finish_entries:
             context_parts.append(f"=== {file_path} ===\n{content}")
-    else:
-        # Fallback: only finish-work.md (lightweight)
-        finish_work = read_file_content(
-            repo_root, ".claude/commands/trellis/finish-work.md"
-        )
-        if finish_work:
-            context_parts.append(
-                f"=== .claude/commands/trellis/finish-work.md (Finish checklist) ===\n{finish_work}"
-            )
 
-    # 2. Spec update process (for active spec sync)
-    update_spec = read_file_content(
-        repo_root, ".claude/commands/trellis/update-spec.md"
-    )
-    if update_spec:
-        context_parts.append(
-            f"=== .claude/commands/trellis/update-spec.md (Spec update process) ===\n{update_spec}"
-        )
-
-    # 3. Requirements document (for verifying requirements are met)
+    # 2. Requirements document (for verifying requirements are met)
     prd_content = read_file_content(repo_root, f"{task_dir}/prd.md")
     if prd_content:
         context_parts.append(
@@ -425,26 +394,17 @@ def get_debug_context(repo_root: str, task_dir: str) -> str:
     """
     context_parts = []
 
-    # 1. Read debug.jsonl (or fallback to spec.jsonl + hardcoded check files)
+    # 1. Read debug.jsonl (or fallback to spec.jsonl)
     debug_entries = read_jsonl_entries(repo_root, f"{task_dir}/debug.jsonl")
 
     if debug_entries:
         for file_path, content in debug_entries:
             context_parts.append(f"=== {file_path} ===\n{content}")
     else:
-        # Fallback: use spec.jsonl + hardcoded check files
+        # Fallback: use spec.jsonl
         spec_entries = read_jsonl_entries(repo_root, f"{task_dir}/spec.jsonl")
         for file_path, content in spec_entries:
             context_parts.append(f"=== {file_path} (Dev spec) ===\n{content}")
-
-        check_files = [
-            (".claude/commands/trellis/check.md", "Code quality check spec"),
-            (".claude/commands/trellis/check-cross-layer.md", "Cross-layer check spec"),
-        ]
-        for file_path, description in check_files:
-            content = read_file_content(repo_root, file_path)
-            if content:
-                context_parts.append(f"=== {file_path} ({description}) ===\n{content}")
 
     # 2. Codex review output (if exists)
     codex_output = read_file_content(repo_root, f"{task_dir}/codex-review-output.txt")
@@ -491,77 +451,33 @@ All the information you need has been prepared for you:
 
 
 def build_check_prompt(original_prompt: str, context: str) -> str:
-    """Build complete prompt for Check"""
+    """Build task materials for the check phase."""
     return f"""# Check Agent Task
 
-You are the Check Agent in the Multi-Agent Pipeline (code and cross-layer checker).
+Phase: check.
 
 ## Your Context
 
-All check specs and dev specs you need:
-
 {context}
-
----
 
 ## Your Task
 
-{original_prompt}
-
----
-
-## Workflow
-
-1. **Get changes** - Run `git diff --name-only` and `git diff` to get code changes
-2. **Check against specs** - Check item by item against specs above
-3. **Self-fix** - Fix issues directly, don't just report
-4. **Run verification** - Run project's lint and typecheck commands
-
-## Important Constraints
-
-- Fix issues yourself, don't just report
-- Must execute complete checklist in check specs
-- Pay special attention to impact radius analysis (L1-L5)"""
+{original_prompt}"""
 
 
 def build_finish_prompt(original_prompt: str, context: str) -> str:
-    """Build complete prompt for Finish (final check before PR)"""
+    """Build task materials for the finish phase."""
     return f"""# Finish Agent Task
 
-You are performing the final check before creating a PR.
+Phase: finish (final verification, necessary spec sync only; report code issues).
 
 ## Your Context
 
-Finish checklist and requirements:
-
 {context}
-
----
 
 ## Your Task
 
-{original_prompt}
-
----
-
-## Workflow
-
-1. **Review changes** - Run `git diff --name-only` to see all changed files
-2. **Verify requirements** - Check each requirement in prd.md is implemented
-3. **Spec sync** - Analyze whether changes introduce new patterns, contracts, or conventions
-   - If new pattern/convention found: read target spec file → update it → update index.md if needed
-   - If infra/cross-layer change: follow the 7-section mandatory template from update-spec.md
-   - If pure code fix with no new patterns: skip this step
-4. **Run final checks** - Execute lint and typecheck
-5. **Confirm ready** - Ensure code is ready for PR
-
-## Important Constraints
-
-- You MAY update spec files when gaps are detected (use update-spec.md as guide)
-- MUST read the target spec file BEFORE editing (avoid duplicating existing content)
-- Do NOT update specs for trivial changes (typos, formatting, obvious fixes)
-- If critical CODE issues found, report them clearly (fix specs, not code)
-- Verify all acceptance criteria in prd.md are met"""
+{original_prompt}"""
 
 
 def build_debug_prompt(original_prompt: str, context: str) -> str:

@@ -139,11 +139,15 @@ dove doctor
 
 Doctor is read-only and reports separate static dimensions rather than collapsing them into one package check:
 
-- **user CLI** — whether the source or installed Dove runtime files are present;
-- **project integration** — whether `.dove/install/manifest.json` and package-managed project files are valid and current; and
+- **user CLI** — the current program's package version and whether its runtime files are present;
+- **project integration** — the project integration package version recorded in `.dove/install/manifest.json`, separately from the validity and currentness of managed resources, paths needing sync, and local edits SessionStart would skip; a missing recorded version stays unknown, not filled from the program version; and
 - **research state** — whether ordinary `.dove/research/` Markdown is present, missing, malformed, or legacy.
 
-Doctor does not probe live Claude readiness, MCP approval or connectivity, hosted Exa availability, runtime reviewer behavior, or scientific correctness. Legacy runtime copied into project `bin/`, `dist/`, `mcp/`, or `scripts/` locations is preserved in place; Dove no longer exposes an automatic export, migration, deletion, or runtime fallback path for that data.
+Matching program and manifest package versions do not establish matching resource bytes. Resource inspection still uses the managed inventory and comparisons among recorded, current project, and packaged digests; these are internal software facts, not research evidence.
+
+Doctor reports only retired Dove `Stop` / `UserPromptSubmit` remnants actually identified by the existing exact-match ownership rules, with a traceable location and reason. This is not a comprehensive scan of custom hooks: user-rewritten or unattributable entries are not certified clean. Inspection does not remove entries, expand lifecycle deletion authority, or scan user/global settings; the ownership and local-edit protections above still apply.
+
+The current session's actual loaded resources remain unknown to the CLI, even after a successful disk sync. Doctor does not probe live Claude readiness, MCP approval or connectivity, hosted Exa availability, runtime reviewer behavior, or scientific correctness; healthy disk integration does not show that scientific judgment occurred. Legacy runtime copied into project `bin/`, `dist/`, `mcp/`, or `scripts/` locations is preserved in place; Dove no longer exposes an automatic export, migration, deletion, or runtime fallback path for that data.
 
 ## Managed versus user-owned files
 

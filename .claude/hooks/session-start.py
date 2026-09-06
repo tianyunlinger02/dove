@@ -10,7 +10,6 @@ warnings.filterwarnings("ignore")
 
 import json
 import os
-import subprocess
 import sys
 from io import StringIO
 from pathlib import Path
@@ -37,32 +36,6 @@ def read_file(path: Path, fallback: str = "") -> str:
         return path.read_text(encoding="utf-8")
     except (FileNotFoundError, PermissionError):
         return fallback
-
-
-def run_script(script_path: Path) -> str:
-    try:
-        if script_path.suffix == ".py":
-            # Add PYTHONIOENCODING to force UTF-8 in subprocess
-            env = os.environ.copy()
-            env["PYTHONIOENCODING"] = "utf-8"
-            cmd = [sys.executable, "-W", "ignore", str(script_path)]
-        else:
-            env = os.environ
-            cmd = [str(script_path)]
-
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=5,
-            cwd=script_path.parent.parent.parent,
-            env=env,
-        )
-        return result.stdout if result.returncode == 0 else "No context available"
-    except (subprocess.TimeoutExpired, FileNotFoundError, PermissionError):
-        return "No context available"
 
 
 def _normalize_task_ref(task_ref: str) -> str:
@@ -95,52 +68,33 @@ def _resolve_task_dir(trellis_dir: Path, task_ref: str) -> Path:
 
 
 def _get_task_status(trellis_dir: Path) -> str:
-    """Check current task status and return structured status string."""
+    """Report the current task's recorded facts without prescribing workflow."""
     current_task_file = trellis_dir / ".current-task"
     if not current_task_file.is_file():
-        return "Status: NO ACTIVE TASK\nNext: Describe what you want to work on"
-
-    task_ref = _normalize_task_ref(current_task_file.read_text(encoding="utf-8").strip())
+        return "No current Trellis task."
+    try:
+        task_ref = _normalize_task_ref(current_task_file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError):
+        return "Current Trellis task pointer is unreadable."
     if not task_ref:
-        return "Status: NO ACTIVE TASK\nNext: Describe what you want to work on"
+        return "No current Trellis task."
 
-    # Resolve task directory
     task_dir = _resolve_task_dir(trellis_dir, task_ref)
     if not task_dir.is_dir():
-        return f"Status: STALE POINTER\nTask: {task_ref}\nNext: Task directory not found. Run: python3 ./.trellis/scripts/task.py finish"
+        return f"Task: {task_ref}\nTask directory not found (stale pointer)."
 
-    # Read task.json
-    task_json_path = task_dir / "task.json"
-    task_data = {}
-    if task_json_path.is_file():
-        try:
-            task_data = json.loads(task_json_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, PermissionError):
-            pass
+    try:
+        task_data = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return f"Task: {task_ref}\nRecorded metadata is unavailable or invalid."
+    if not isinstance(task_data, dict):
+        return f"Task: {task_ref}\nRecorded metadata is not an object."
 
-    task_title = task_data.get("title", task_ref)
-    task_status = task_data.get("status", "unknown")
-
-    if task_status == "completed":
-        return f"Status: COMPLETED\nTask: {task_title}\nNext: Archive with `python3 ./.trellis/scripts/task.py archive {task_dir.name}` or start a new task"
-
-    # Check if context is configured (jsonl files exist and non-empty)
-    has_context = False
-    for jsonl_name in ("implement.jsonl", "check.jsonl", "spec.jsonl"):
-        jsonl_path = task_dir / jsonl_name
-        if jsonl_path.is_file() and jsonl_path.stat().st_size > 0:
-            has_context = True
-            break
-
-    has_prd = (task_dir / "prd.md").is_file()
-
-    if not has_prd:
-        return f"Status: NOT READY\nTask: {task_title}\nMissing: prd.md not created\nNext: Write PRD, then research → init-context → start"
-
-    if not has_context:
-        return f"Status: NOT READY\nTask: {task_title}\nMissing: Context not configured (no jsonl files)\nNext: Complete Phase 2 (research → init-context → start) before implementing"
-
-    return f"Status: READY\nTask: {task_title}\nNext: Continue with implement or check"
+    title = task_data.get("title")
+    status = task_data.get("status")
+    title = title if isinstance(title, str) and title.strip() else "unknown"
+    status = status if isinstance(status, str) and status.strip() else "unknown"
+    return f"Task: {task_ref}\nTitle: {title}\nRecorded status: {status}"
 
 
 def _load_trellis_config(trellis_dir: Path) -> tuple:
@@ -339,18 +293,14 @@ Read and follow all instructions below carefully.
     if legacy_warning:
         output.write(f"<migration-warning>\n{legacy_warning}\n</migration-warning>\n\n")
 
-    output.write("<current-state>\n")
-    context_script = trellis_dir / "scripts" / "get_context.py"
-    output.write(run_script(context_script))
-    output.write("\n</current-state>\n\n")
+    output.write(f"<task-status>\n{_get_task_status(trellis_dir)}\n</task-status>\n\n")
 
     output.write("<workflow>\n")
     output.write(_build_workflow_toc(trellis_dir / "workflow.md"))
     output.write("\n</workflow>\n\n")
 
     output.write("<guidelines>\n")
-    output.write("**Note**: The guidelines below are index files — they list available guideline documents and their locations.\n")
-    output.write("During actual development, you MUST read the specific guideline files listed in each index's Pre-Development Checklist.\n\n")
+    output.write("Use these indexes to read only the guidelines relevant to the requested change.\n\n")
 
     spec_dir = trellis_dir / "spec"
     if spec_dir.is_dir():
@@ -389,14 +339,9 @@ Read and follow all instructions below carefully.
 
     output.write("</guidelines>\n\n")
 
-    # Check task status and inject structured tag
-    task_status = _get_task_status(trellis_dir)
-    output.write(f"<task-status>\n{task_status}\n</task-status>\n\n")
-
     output.write("""<ready>
-Context loaded. Workflow index, project state, and guidelines are already injected above — do NOT re-read them.
-Wait for the user's first message, then handle it following the workflow guide.
-If there is an active task, ask whether to continue it.
+Handle the user's current request; the recorded task is context, not an instruction to resume it.
+Read relevant details on demand without re-reading the injected indexes. Ask only when a conflict or ambiguity changes the work.
 </ready>""")
 
     result = {

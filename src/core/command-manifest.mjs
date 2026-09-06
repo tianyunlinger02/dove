@@ -1,14 +1,12 @@
 import {
   DOVE_RESEARCH_ACTUAL_MATERIAL_FACT_BOUNDARY,
   DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY,
-  DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW,
   DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF,
   DOVE_RESEARCH_ADVANCE,
   DOVE_RESEARCH_FIGURE_CAPABILITY_BOUNDARY,
   DOVE_RESEARCH_FIGURE_EVIDENCE_BOUNDARY,
   DOVE_RESEARCH_FRAME,
   DOVE_RESEARCH_MAINTENANCE_TRIGGER,
-  DOVE_RESEARCH_MANUSCRIPT_REVIEW_BOUNDARY,
   DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY,
   DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
   DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS,
@@ -59,7 +57,6 @@ export const HOST_ADAPTER_POLICY = Object.freeze({
 });
 
 const RESEARCH_FRAME = DOVE_RESEARCH_FRAME;
-const RESEARCH_ROUTE_GROUNDING = `${DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW} When external knowledge can change a route or key design judgment, inspect targeted theory or related work and compare serious alternatives before recommending it; reuse sufficient material already inspected.`;
 const RESEARCH_ADVANCE = DOVE_RESEARCH_ADVANCE;
 const RESEARCH_MAINTENANCE_TRIGGER = DOVE_RESEARCH_MAINTENANCE_TRIGGER;
 
@@ -174,15 +171,13 @@ function contract(slug) {
     when: "Use for a clear research goal or project request. Dove continues across substantive rounds by default.",
     responsibilities: [
       DOVE_RESEARCH_DEFAULT_AUTONOMY,
-      "When framing is open, expose the real phenomenon, assumptions, intended claim, evaluation target, and result that would change the next action.",
-      "Compare serious routes by mechanism, assumptions, predictions, failure conditions, and inspected evidence; replenish ideas from contradictions, adjacent mechanisms, source gaps, and negative or near-miss results.",
-      "Use small diagnostics, source checks, experiments, or artifact inspections when they can distinguish routes before larger work."
+      "When framing is open, expose the real phenomenon, intended claim, evaluation target, and result that would change the next action; replenish serious routes from contradictions, adjacent mechanisms, and negative or near-miss results."
     ],
     actions: [
       readArea("missions", "the research goal"),
       relevantLessons,
       action("project-exploration", `Inspect the project materials and external context needed to understand the question. ${RESEARCH_FRAME}`, { readOnly: true }),
-      action("research-progression", `${RESEARCH_ROUTE_GROUNDING} Follow the confirmed or provisional mainline. Choose the action most likely to change the judgment, perform it with permitted host tools, absorb the result, and continue while it matters. ${RESEARCH_ADVANCE} For a submission goal, use Review to establish the current whole-paper judgment before declaring completion. ${DOVE_RESEARCH_REVIEW_DUAL_COMPLETION}`),
+      action("research-progression", `${RESEARCH_ADVANCE} For a submission goal, use Review to establish the current whole-paper judgment before declaring completion.`),
       maintainArea("missions", "When the maintenance trigger is met, update or create a naturally named Mission document for the substantive work, evidence, decisions, failures, and continuation context.")
     ],
     boundaries: [
@@ -255,23 +250,25 @@ function contract(slug) {
     when: "Use for experiment design, execution, analysis of existing results, retrospective recording, or when empirical work is the material way to resolve a contribution or evidence deficiency.",
     responsibilities: [
       "Follow the actual request: design-only, execution, existing-result analysis, and retrospective recording are different tasks.",
-      "Make experiments claim-driven: name the problem, key uncertainty, strongest alternative explanation, minimum sufficient evidence, and how positive, negative, or ambiguous outcomes would change the judgment.",
-      "If the central basis is missing, inspect actual project material, relevant sources, or a smallest low-risk diagnostic before designing a substitute experiment.",
-      "Before using `dove run start|status|resume|finalize|compare` for local execution receipts, state what judgment the run can change, what metric or observation will decide it, what remains outside the run receipt, and that the corresponding `.dove/runs/` run journal is an execution receipt while stdout/stderr paths are actual materials to inspect rather than a replacement for scientific explanation or evidence of research progress by itself.",
-      "Treat small empirical diagnostics as Experiment work, keep conclusions within tested data, scale, settings, and implementation, and check anomalous results before using them as evidence."
+      "Make experiments claim-driven: name the real problem, key uncertainty, primary prediction, strongest alternative explanation, minimum sufficient evidence, and how positive, negative, or ambiguous outcomes would change the judgment.",
+      "Trace the evaluation chain from input through each method's actual output, the basis it is compared against, what the metric measures, and the final between-method comparison. When a reference is used, establish its applicability to the target object and granularity; justify any proxy or method's own output used as an evaluation basis, not merely the file's existence.",
+      "Explain how failed, missing, invalid, or excluded outputs enter results and denominators, without silently retaining only the successful intersection or automatically assigning every failure zero. Where applicable, align the same evaluation units for paired comparisons, inspect differences and uncertainty, and account for sample dependence. Protect final-test independence when training, tuning, calibration, or method selection occurs.",
+      "Judge ablations from actual code, configuration, and outputs: beyond the named component, did information access, preprocessing, training budget, numerical scale, edit magnitude, or postprocessing also change? Distinguish the full implementation winning, a component's gain under the given control, and support for a scientific mechanism. If controls cannot identify the core contribution, repair the minimum necessary comparison or explicitly limit the conclusion; more runs do not repair identification, though authorized useful exploration may continue.",
+      "Use `dove run start|status|resume|finalize|compare` when local execution tracking helps; state the judgment and metric or observation it can inform and what remains outside the receipt. The `.dove/runs/` journal and stdout/stderr are execution materials, not scientific explanation or research progress by themselves."
     ],
     actions: [
       readArea("experiments", "the experiment"),
       relevantLessons,
-      action("experiment-design", `For new design, ${RESEARCH_ROUTE_GROUNDING} Design the experiment around the real problem, key uncertainty, route decision, primary prediction, strongest alternative, minimum sufficient evidence, and how different outcomes would change the judgment. If the central basis is missing, inspect actual project material, relevant sources, or a smallest low-risk diagnostic before committing to central design. For design-only work, stop with an executable plan without execution. Analyze existing results directly; label retrospective recording retrospective rather than inventing prior design.`),
+      action("experiment-design", "For new design, establish the claim-driven comparison and evaluation chain above. If the central basis is missing, pause central design and inspect actual project material or relevant sources rather than inventing a substitute experiment. Check new data, methods, evaluation chains, or decision-relevant gaps using existing code, samples, and outputs where sufficient; run a smallest representative low-risk diagnostic only when necessary and authorized. Small samples check chain semantics and implementation, not population-level statistical sufficiency. For design-only work, trace materials read-only and deliver an executable plan with unverified parts, without running diagnostics or experiments. Analyze existing results directly; label retrospective recording retrospective rather than inventing prior design."),
       updateResearchDocuments("Only for newly authorized central execution that needs recording, select the relevant Experiment document or a naturally named new one and save the prospective plan there before execution begins: what it tests, the prediction and strongest alternative, the procedure, and how results will be judged. Keep this same document for the later actual results. Design-only work, existing-result analysis, retrospective recording, and exploratory diagnostics do not require a new document merely to proceed.", {
         persistWhen: `new central execution is requested and permitted, and ${RESEARCH_MAINTENANCE_TRIGGER}`
       }),
-      action("experiment-execution", `Execute only when requested and permitted, or inspect existing results when analysis is requested. For Dove-managed local executions, use the corresponding \`.dove/runs/\` run journal and its stdout/stderr paths as inspected execution materials rather than invented run summaries; the receipt does not replace Experiment Markdown explanation. State methods, configuration, data, metrics, run counts, and result numbers from actual code, logs, outputs, data files, user material, or run receipts. For negative, near-miss, anomalous, unusually strong, or hard-to-reproduce results, compare expected and actual behavior and check implementation, data and preprocessing, configuration and environment, baselines, randomness, metrics, and analysis before using them as evidence. For newly executed central work that needed recording, execute only after the prospective plan has been saved, then append the actual procedure, result, interpretation-changing deviation, evidence scope, and route update to that same Experiment document. For existing-result analysis or retrospective work, record only when useful and do not imply a prior plan existed; ordinary scientific explanation belongs in Experiment Markdown when recording is needed, not only in the run receipt. Separate what was observed, what it means, why it matters, and what happens next.`),
+      action("experiment-execution", "Execute only when requested and permitted, or inspect existing results when analysis is requested. State methods, configuration, data, metrics, run counts, and result numbers from actual code, logs, outputs, data files, user material, or run receipts. Interpret results against the evaluation chain and actual control differences above, checking decision-relevant anomalies before treating them as evidence. For newly executed central work that needed recording, execute only after the prospective plan has been successfully saved, then append the actual procedure, result, interpretation-changing deviation, evidence scope, and route update to that same Experiment document. For existing-result analysis or retrospective work, record only when useful and do not imply a prior plan existed; run receipts do not replace this scientific explanation. Separate what was observed, what it means, why it matters, and what happens next."),
       maintainArea("experiments", "When the maintenance trigger is met, record the experiment, diagnostic, result, failure, evidence scope, route decision, and useful project-relative logs, data, output, the corresponding `.dove/runs/` run journal, figure, or code paths in the relevant Experiment document, linking affected Claim, Source, or Figure context only when useful for recovery.")
     ],
     boundaries: [
-      "Design-only work stops before central execution; high-cost, destructive, outward-facing, or resource-heavy experiments still require explicit user direction and permission.",
+      "Design-only work does not authorize diagnostic or experiment execution; high-cost, destructive, outward-facing, or resource-heavy experiments still require explicit user direction and permission.",
+      "Apply reference, pairing, and data-split reasoning only where it fits the study; do not impose ground truth, paired designs, or train/test splits on no-ground-truth, non-paired, or purely theoretical work.",
       `Maintain Dove research Markdown only when ${RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
@@ -337,18 +334,15 @@ function contract(slug) {
   });
   if (slug === "review") {
     const reviewContextReadAction = readArea("reviews", "the review work");
-    const reviewGroundingAction = action("review-grounding", "For whole-paper author-side self-check or `dove-review` handoff preparation, inspect the current full paper and the venue or literature context that can change the judgment. Use current official venue sources for formal requirements and inspected relevant published work for scientific positioning and evidence norms; published practice does not replace official rules. Distinguish material merely found from material retrieved, inspected, and used. Import, context inspection, or bounded local review does not trigger venue or paper search by itself.", { readOnly: true });
+    const reviewGroundingAction = action("review-grounding", "For whole-paper author-side self-check or `dove-review` handoff preparation, inspect the current full paper and the venue or literature context that can change the judgment. Use current official venue sources for formal requirements and inspected relevant published work for novelty, positioning, evidence norms, experiment presentation, and reader expectations; published practice does not replace official rules. Distinguish material merely found from material retrieved, inspected, and used. Import, context inspection, or bounded local review does not trigger venue or paper search by itself.", { readOnly: true });
     const reviewerPerspectiveAction = action("reviewer-perspective-work", `${DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS} Also check citation identity, claim support, changes in claim strength, unsupported facts, and anomalous results when relevant. For local paragraph, figure, citation, or method review, stay inside the requested scope and do not force the full-paper four questions or start an independent handoff. Return concrete findings with evidence, consequence, useful response, and delivery readiness kept separate.`, { readOnly: true });
-    const deliveryReviewAction = action("delivery-review", "When delivery review is requested or genuinely limiting, inspect official venue requirements, current build output, required materials, formatting, anonymity, packaging, and access limits. Report delivery readiness separately from scientific acceptability.", { readOnly: true });
-    const reviewHandoffAction = action("dove-review-handoff", `${DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF} Before starting the handoff, the author side must have obtained and inspected any venue or literature material needed for the intended judgment and included it in the frozen handoff. Preserve the purpose, target venue, complete frozen material list, reviewer prompt, known host limits, and returned report location in the Review context. Give the reviewer only those listed materials, with Read-only access and no web, MCP, private author conversations, or unlisted files. Use an isolated, persistent, recoverable reviewer context when the host provides one; resume or rerun later whole-paper rounds for the same review id and reviewer session. If grounding is missing, the reviewer should limit venue or literature conclusions to the listed materials; if the runtime is unavailable, say so and continue feasible author-side work without counting it as independent review.`);
+    const deliveryReviewAction = action("delivery-review", "When delivery review is requested or genuinely limiting, inspect the actual venue-facing package against those requirements and report remaining delivery gaps.", { readOnly: true });
+    const reviewHandoffAction = action("dove-review-handoff", `${DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF} Include the grounding inspected above for the intended frozen-material judgment. Preserve the purpose, target venue, complete frozen material list, reviewer prompt, known host limits, and returned report location in the Review context. Give the reviewer only those listed materials, with Read-only access and no web, MCP, private author conversations, or unlisted files. Use an isolated, persistent, recoverable reviewer context when the host provides one; resume or rerun later whole-paper rounds for the same review id and reviewer session. If grounding is missing, the reviewer should limit venue or literature conclusions to the listed materials; if the runtime is unavailable, say so and continue feasible author-side work without counting it as independent review.`);
     const reviewMaintenanceAction = maintainArea("reviews", "When the user supplies a `dove-review` return, user-pasted review opinion, clarification, rebuttal exchange, or asks to preserve self-check or handoff context, append the actual text faithfully to the corresponding Review document and associate it with the same review id and round when known. When useful for recovery, link the corresponding `.dove/reviews/` round report, frozen materials, and affected Claim, Experiment, Figure, Source, or manuscript locations. Do not revise author artifacts, start a new review, rewrite the return, or add author interpretation unless asked.");
     const semanticSections = [
       {
         title: "Author-side scientific self-check",
         purpose: DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
-        responsibilities: [
-          DOVE_RESEARCH_MANUSCRIPT_REVIEW_BOUNDARY
-        ],
         actions: [
           reviewGroundingAction,
           reviewerPerspectiveAction
@@ -362,9 +356,6 @@ function contract(slug) {
         purpose: DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY,
         actions: [
           deliveryReviewAction
-        ],
-        boundaries: [
-          "Delivery readiness is separate from scientific acceptability."
         ]
       },
       {

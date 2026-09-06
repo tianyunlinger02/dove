@@ -142,6 +142,140 @@ function treeSnapshot(root) {
   return entries;
 }
 
+function assertDoctorReadOnly(root, cliPath = path.join(ROOT, "bin", "dove.mjs")) {
+  const before = treeSnapshot(root);
+  const invoke = (args) => spawnSync(process.execPath, [cliPath, "doctor", "--project", root, ...args], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: { ...process.env, NO_COLOR: "1" }
+  });
+  const json = invoke(["--json"]);
+  const human = invoke([]);
+  assert.equal(json.stderr, "");
+  assert.equal(human.stderr, "");
+  const result = JSON.parse(json.stdout);
+  assert.equal(json.status, result.staticChecksPassed ? 0 : 1);
+  assert.equal(human.status, json.status);
+  assert.deepEqual(treeSnapshot(root), before, "human and JSON Doctor must preserve all fixture bytes, paths, and mtimes");
+  assert.match(human.stdout, /软件\s+Dove/u);
+  assert.equal(human.stdout.includes(`Dove ${result.userCli.package.version}`), true);
+  const recordedVersion = result.projectIntegration.manifest?.package.version;
+  assert.equal(human.stdout.includes(`项目接入  manifest 版本 ${recordedVersion ?? "未知"}；`), true);
+  assert.match(human.stdout, /静态检查/u);
+  assert.match(human.stdout, /不验证当前会话加载/u);
+  assert.match(human.stdout, /不等于研究内容正确/u);
+  assert.doesNotMatch(json.stdout, /"(?:digest|sha256)"|[a-f0-9]{64}/u);
+  const matchedPaths = result.projectIntegration.retiredHooks?.matchedPaths ?? [];
+  for (const target of matchedPaths) assert.equal(human.stdout.includes(target), true);
+  if (matchedPaths.length > 0) {
+    assert.match(human.stdout, /残留（只读）.*仅精确旧项，不代表自定义或全局配置已清理/u);
+  } else {
+    assert.doesNotMatch(human.stdout, /退役 Hook|未匹配旧项|已清理/u);
+  }
+  assert.doesNotMatch(json.stdout, /"unrecognizedPaths"/u);
+  return { ...result, human: human.stdout };
+}
+
+function validateDoctorVersions(root, cliPath) {
+  const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);
+  const manifest = readJson(manifestPath);
+  const current = assertDoctorReadOnly(root, cliPath);
+  assert.equal(current.projectIntegration.state, "current");
+  assert.deepEqual(current.projectIntegration.retiredHooks, { matchedPaths: [] });
+
+  const missingVersion = structuredClone(manifest);
+  delete missingVersion.package.version;
+  writeJson(manifestPath, missingVersion);
+  const missing = assertDoctorReadOnly(root, cliPath);
+  assert.equal(missing.staticChecksPassed, false);
+  assert.equal(missing.projectIntegration.manifest, null);
+  assert.match(missing.human, /项目接入\s+manifest 版本 未知/u);
+
+  const resourcePath = ".claude/agents/dove.md";
+  const original = fs.readFileSync(path.join(root, resourcePath));
+  const oldContent = "Synthetic older managed agent resource at the same package version.\n";
+  const oldManifest = structuredClone(manifest);
+  oldManifest.managed.find((entry) => entry.path === resourcePath).digest = crypto.createHash("sha256").update(oldContent).digest("hex");
+  writeJson(manifestPath, oldManifest);
+  writeFile(root, resourcePath, oldContent);
+  const sameVersion = assertDoctorReadOnly(root, cliPath);
+  assert.equal(sameVersion.projectIntegration.manifest.package.version, sameVersion.userCli.package.version);
+  assert.equal(sameVersion.projectIntegration.state, "needs-sync", "same package version must not suppress managed resource differences");
+  assert.equal(sameVersion.projectIntegration.syncPaths.includes(resourcePath), true);
+  assert.deepEqual(sameVersion.projectIntegration.skippedLocalEdits, []);
+  assert.match(sameVersion.human, /需要更新.*待同步路径/u);
+
+  writeFile(root, resourcePath, `${oldContent}User modification.\n`);
+  const locallyEdited = assertDoctorReadOnly(root, cliPath);
+  assert.equal(locallyEdited.projectIntegration.state, "needs-sync");
+  assert.deepEqual(locallyEdited.projectIntegration.skippedLocalEdits, [{ path: resourcePath, selector: null }]);
+  assert.deepEqual(locallyEdited.projectIntegration.replacedLocalEdits, []);
+  assert.equal(locallyEdited.projectIntegration.syncPaths.includes(resourcePath), false);
+  assert.match(locallyEdited.human, /本地编辑.*SessionStart 跳过/u);
+
+  writeFile(root, resourcePath, original);
+  const staleManifest = assertDoctorReadOnly(root, cliPath);
+  assert.equal(staleManifest.projectIntegration.state, "needs-sync", "canonical disk bytes do not make stale managed manifest entries current");
+  assert.deepEqual(staleManifest.projectIntegration.syncPaths, [INSTALLATION_MANIFEST_PATH]);
+  assert.deepEqual(staleManifest.projectIntegration.skippedLocalEdits, []);
+  writeJson(manifestPath, manifest);
+}
+
+function validateDoctorRetiredHooks(root, cliPath) {
+  const settingsPath = path.join(root, ".claude/settings.json");
+  const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);
+  const settings = readJson(settingsPath);
+  const manifest = readJson(manifestPath);
+  const exactStop = { hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] };
+  const exactPrompt = { hooks: [{ type: "command", command: 'node "$CLAUDE_PROJECT_DIR/scripts/dove-user-prompt-submit-package.mjs"', timeout: 10 }] };
+  const customStop = { hooks: [{ ...exactStop.hooks[0], timeout: 11 }] };
+  const customPrompt = { hooks: [{ ...exactPrompt.hooks[0], command: `${exactPrompt.hooks[0].command} && user-local-edit` }] };
+  const withMatcher = { ...exactStop, matcher: "" };
+  const withExtraHook = { hooks: [...exactPrompt.hooks, { type: "command", command: "user-owned-hook" }] };
+  const oldSettings = structuredClone(settings);
+  oldSettings.hooks.Stop = [customStop, exactStop, withMatcher];
+  oldSettings.hooks.UserPromptSubmit = [exactPrompt, customPrompt, withExtraHook];
+  const oldManifest = structuredClone(manifest);
+  oldManifest.managed.push({
+    path: ".claude/settings.json", kind: "json-fragment",
+    selector: "/hooks/UserPromptSubmit[dove-user-prompt-submit]", digest: semanticDigest(exactPrompt)
+  });
+  writeJson(settingsPath, oldSettings);
+  writeJson(manifestPath, oldManifest);
+  const exact = assertDoctorReadOnly(root, cliPath);
+  assert.equal(exact.projectIntegration.state, "needs-sync");
+  assert.deepEqual(exact.projectIntegration.retiredHooks, {
+    matchedPaths: [".claude/settings.json#/hooks/Stop/1", ".claude/settings.json#/hooks/UserPromptSubmit/0"]
+  });
+  synchronizeProjectIntegrationOnly(root, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  const after = readJson(settingsPath);
+  assert.deepEqual(after.hooks.Stop, [customStop, withMatcher]);
+  assert.deepEqual(after.hooks.UserPromptSubmit, [customPrompt, withExtraHook]);
+  const preserved = assertDoctorReadOnly(root, cliPath);
+  assert.deepEqual(preserved.projectIntegration.retiredHooks, { matchedPaths: [] });
+
+  const nonArray = structuredClone(settings);
+  nonArray.hooks.Stop = customStop;
+  nonArray.hooks.UserPromptSubmit = "user-owned-prompt";
+  writeJson(settingsPath, nonArray);
+  writeJson(manifestPath, oldManifest);
+  const nonArrayResult = assertDoctorReadOnly(root, cliPath);
+  assert.deepEqual(nonArrayResult.projectIntegration.retiredHooks, { matchedPaths: [] });
+
+  const unowned = structuredClone(settings);
+  unowned.hooks.UserPromptSubmit = [exactPrompt];
+  writeJson(settingsPath, unowned);
+  writeJson(manifestPath, manifest);
+  const unownedResult = assertDoctorReadOnly(root, cliPath);
+  assert.equal(unownedResult.projectIntegration.state, "current", "managed resource currentness is separate from unowned residual hooks");
+  assert.deepEqual(unownedResult.projectIntegration.retiredHooks.matchedPaths, [".claude/settings.json#/hooks/UserPromptSubmit/0"]);
+  assert.deepEqual(unownedResult.actions, [{ kind: "inspect", command: "dove doctor --json" }]);
+  const beforeSync = treeSnapshot(root);
+  synchronizeProjectIntegrationOnly(root, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  assert.deepEqual(treeSnapshot(root), beforeSync, "diagnostic recognition must not grant ownership to delete an unowned prompt hook");
+  writeJson(settingsPath, settings);
+}
+
 // Preload the real CLI process so even swallowed read errors fail validation.
 // No contents of research Markdown, reports, logs, or historical materials are
 // needed to select metadata and check the latest round's listed material.
@@ -634,6 +768,10 @@ try {
     })
   });
   writeJson(combinedManifestPath, combinedManifest);
+  const combinedDoctor = assertDoctorReadOnly(combinedHookRoot);
+  assert.deepEqual(combinedDoctor.projectIntegration.retiredHooks.matchedPaths, [
+    ".claude/settings.json#/hooks/Stop/0", ".claude/settings.json#/hooks/UserPromptSubmit/0"
+  ]);
   synchronizeProjectIntegrationOnly(combinedHookRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
   const combinedAfter = readJson(combinedSettingsPath);
   assert.equal(combinedAfter.hooks.UserPromptSubmit.length, 1);
@@ -658,6 +796,9 @@ try {
   stopManifest.package.version = "2.9.0";
   stopManifest.managed.find((entry) => entry.selector === "/hooks/SessionStart[dove-session-start]").digest = semanticDigest(oldStopSettings.hooks.SessionStart.find((entry) => entry.hooks?.some((hook) => hook.command?.includes("dove hook session-start"))));
   writeJson(path.join(stopRoot, INSTALLATION_MANIFEST_PATH), stopManifest);
+  const oldVersionDoctor = assertDoctorReadOnly(stopRoot);
+  assert.equal(oldVersionDoctor.projectIntegration.manifest.package.version, "2.9.0");
+  assert.deepEqual(oldVersionDoctor.projectIntegration.retiredHooks.matchedPaths, [".claude/settings.json#/hooks/Stop/1"]);
   synchronizeProjectIntegrationOnly(stopRoot, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
   const cleanedStopSettings = readJson(stopSettingsPath);
   assert.equal(cleanedStopSettings.hooks.Stop.length, 1);
@@ -828,9 +969,13 @@ try {
     const factsRoot = makeProject();
     roots.push(factsRoot);
     validateSessionFacts(factsRoot, path.join(ROOT, "bin", entrypoint));
+    const doctorRoot = makeProject();
+    roots.push(doctorRoot);
+    validateDoctorVersions(doctorRoot, path.join(ROOT, "bin", entrypoint));
+    validateDoctorRetiredHooks(doctorRoot, path.join(ROOT, "bin", entrypoint));
   }
 
-  console.log(JSON.stringify({ status: "passed", sessionFactsCli: cliEntrypoints }, null, 2));
+  console.log(JSON.stringify({ status: "passed", sessionFactsCli: cliEntrypoints, doctorCli: cliEntrypoints }, null, 2));
 } finally {
   for (const root of roots.reverse()) fs.rmSync(root, { recursive: true, force: true });
 }

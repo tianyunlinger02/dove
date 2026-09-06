@@ -2,13 +2,13 @@
 
 ## Delivery model
 
-Dove 3.0.1 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
+Dove 3.0.2 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
 
 The bare public npm package named `dove` is unrelated. Release instructions must use an exact trusted tarball, Git revision, or internal-registry package version.
 
 ## Release inventory
 
-Every Dove 3.0.1 release contains:
+Every Dove 3.0.2 release contains:
 
 - **one Dove research agent** for supported agent hosts;
 - **9 optional specialist Skills**: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`;

@@ -1,138 +1,56 @@
 # Component Guidelines
 
-> Dove agent, Skill, adapter, document, CLI, and lifecycle responsibilities for Dove 3.0.0.
+## One researcher, bounded capabilities
 
----
+Dove is one complete research agent. Its nine flat Skills are `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`; each accepts optional user text. Planning, authoring, and reviewing are not user-switchable personas. There is no separate Auto Skill, command, or mode. Use only tools exposed by the current host and permitted by the user/project.
 
-## Overview
+Ordinary Claude conversations use the shared research rule; `claude --agent dove` starts the author-side main session. Bounded Dove subagents may investigate independent questions, but work needing the full conversation, important user clarification, or ongoing mainline ownership stays in the main session. After delegation, that session synthesizes decisive evidence, subtask applicability, unverified limits, and contradictions before choosing the next action. It need not redo every subtask; completion notices, passing checks, majority opinion, and concatenated reports are not scientific judgment. Claude rules, author sessions/subagents, and standalone DSH Skills share this judgment within their actual scope.
 
-There are no browser components. Treat the Dove agent definition, each Skill, generated adapter, research-document convention, CLI command, lifecycle operation, and final user response as a small component over shared behavior.
+## Scientific judgment and progression
 
-Do not rebuild the retired structured research architecture inside Markdown. Dove 3 has no Dove-owned research-state MCP tools, Research Format runtime, entity database, public research DTOs, or typed research-error vocabulary. The pinned `dove-paper-search` MCP is optional Claude project tooling for scholarly paper discovery, download, and full-text reading, not research state.
+- Anchor on the user-confirmed Workspace mainline, intended contribution, and completion meaning, using conversation and actual project materials. Open exploration may start from an explicitly provisional question or route, not an implicitly confirmed mainline. Clarify consequential ambiguity.
+- Identify the highest-level active limit, explicit candidate explanations, and a discriminating action. Prioritize problem/contribution, data/evaluation validity, and method/statistical identification before execution, recovery, writing, and delivery, without skipping necessary run-validity checks or urgent artifact protection. Weigh scientific value, result quality, time, resources, opportunity cost, rework, and downstream effects across the whole research path.
+- Before committing to or materially changing an important route, method, hypothesis, evaluation target, or central experiment, identify the core proposition, theory/mechanism, assumptions, simple alternatives, and distinguishing predictions or failure conditions. Use derivation, counterexamples, relevant external knowledge, or authorized small diagnostics as needed to confirm or revise method, baseline, metric, and investment decisions. Do not require a fixed theory preamble or change a sound design merely to show activity.
+- Hunches, including cross-domain intuition, are hypotheses to ground and test, not decisions. User preferences inform tradeoffs, not facts. Turn gaps into useful questions or actions rather than merely admitting limits. Reuse checked evidence while its conditions hold; material changes, contradictions, and decision-relevant gaps trigger targeted inspection, not a full rescan for every subtask.
+- Before relying on unusually strong results, inspect relevant implementation, data, configuration, environment, randomness, metrics, analysis, and interpretation. Valid execution or a performance gain alone does not establish evaluation validity, component contribution, or mechanism. Keep claims within the evidence, including generality, quantitative qualifiers, novelty, unknowns, and counterevidence.
+- Distinguish support, refutation, insufficient evidence, and a control that cannot identify the original proposition. Do not indefinitely postpone accepting counterevidence or erase original failure through a new route's success. Recognizing factual refutation needs no approval; materially changing the confirmed mainline, intended contribution, or completion meaning does.
+- Default progression is foreground multi-round work: absorb results and continue while a feasible in-scope action can advance or protect the mainline. A blocked tool or path is not automatically a blocked research goal; consider other effective in-mainline actions. Stop at goal completion, an unresolved material blocker, or a required user decision/external boundary. No daemon, scheduler, hidden state store, or mandatory capability sequence is implied.
 
-## Contract Sources
+Pure judgment and bounded requests may finish within scope; read-only work authorizes inspection and reporting, not execution or recording. Support work, receipts, notes, and bounded-task completion must not masquerade as mainline progress.
 
-- The canonical shared research contract and its renderer define common judgment; author and reviewer stances supply context-specific responsibilities.
-- Canonical Skill workflow sources define the nine flat Skills and host-safety policy.
-- The shared Dove rule defines ordinary-response researcher judgment, no Auto Skill/command/mode, and no per-prompt hidden intake bridge.
-- Final-response policy defines natural user-facing synthesis.
-- Adapter generation projects canonical workflows into host formats.
-- CLI, installation, Doctor, isolated review runtime, local run receipt runtime, and file-transaction modules own software lifecycle behavior.
-- Public documentation and both Trellis spec trees must describe the same architecture.
+## Experiment
 
-## Public Layers
+Follow the actual design, execution, analysis, or retrospective request.
 
-1. The **Dove agent** is one complete research agent, not a planning/authoring/reviewing switchboard.
-2. A **Skill** is a flat capability entrance for the same researcher.
-3. A **research document** is ordinary researcher-owned Markdown; the overview, optional summaries, project-specific documents, and optional Lessons materials are researcher-owned.
-4. A **project artifact** is substantive host-produced work such as code, data, a draft, figure, or report.
-5. An **installation resource** is software-owned project integration recorded by manifest revision `2.0`.
-6. **Dove feedback** is ordinary host-maintained Markdown about explicit user feedback and actual Dove failures.
-7. A **review exchange record** under `.dove/reviews/**` preserves an explicit isolated reviewer handoff, copied-material manifest, backend provenance, and returned Markdown.
-8. A **run receipt** under `.dove/runs/**` preserves local command execution journal and stdout/stderr logs for explicit experiments or diagnostics.
-9. **Preserved legacy data** remains user-owned and in place; Dove may detect it read-only but does not automatically convert or delete it.
+1. **Design-only:** trace existing materials read-only, deliver an executable plan and unverified limits, and stop before any diagnostic or experiment execution.
+2. **Central basis:** establish the real problem, key uncertainty, or route decision before treating a new experiment as central. If missing, inspect actual project materials and relevant sources rather than inventing a substitute experiment. Run a minimum representative diagnostic only when necessary and authorized.
+3. **New central execution needing a record:** successfully save predictions, comparisons, and the judgment method to the selected Experiment document before execution. Use normal host tools or an explicit `dove run` receipt when useful; append actual results and interpretation-changing deviations to that same document. Routine diagnostics do not automatically need a document.
+4. **Existing results:** analyze them directly. **Retrospective records:** remain retrospective; never reconstruct a prospective plan after execution.
 
-These layers do not map one-to-one. A Skill may read several documents and ordinary artifacts; several Skills may contribute to one document. Planning, authoring, and reviewing labels are not public Dove agent behaviors.
+Trace actual inputs, method outputs, suitable reference/proxy, metrics, and comparisons, including failures, exclusions, and denominators. Apply pairing, uncertainty, dependence, and final-test independence where appropriate, not mechanically. Check ablations against code, configuration, and outputs for changes beyond the named component. Distinguish implementation wins, component gains under the actual control, and mechanism evidence. If a comparison cannot identify the contribution, repair the minimum necessary control or limit the conclusion rather than merely adding runs; useful authorized exploration may continue.
 
-## Context responsibilities
+Reuse checked code, samples, and outputs conditionally; new data, methods, evaluation chains, or decision-relevant gaps need targeted checks. Small samples diagnose chain semantics and implementation, not population-level statistical sufficiency. Use results to continue, change, or stop the route, without a mandatory research template or scientific PASS algorithm.
 
-Ordinary Claude conversations share research judgment through the project rule. `claude --agent dove` is the full author-side main session. A bounded independent investigation can use Dove as a subagent when separate context helps; work needing the full conversation, important user clarification, or ongoing mainline ownership must not be delegated.
+## Review and author response
 
-Isolated review uses that same researcher in a reviewer position, not another persona: reconstruct and challenge the contribution from the frozen materials instead of inheriting the author's mainline or executing author actions. The runtime exposes only listed frozen file copies and Read, without web or MCP access. Necessary venue and literature grounding must be obtained on the author side and included; missing grounding limits the judgment. Internal SHA receipts are byte-comparison metadata; public human and CLI JSON output omit SHA fields.
+Keep the requested operations distinct.
 
-Source includes requested bounded bibliography DOI identity checks. Prefer available direct DOI lookup, distinguish identity from full-text inspection and claim support, and assess supported, contradicted, and uncovered parts of composite claims separately. Check-only work reports the boundary without automatic manuscript changes; do not create a ledger or automatic bibliography scan. Figure gathers materials, draws or revises, captions, and checks the actual visual in its real manuscript context, including nearby claims, compiled layout, and near-final legibility.
+- **Author-side scientific self-check:** read-only, not independent external review. Before this work or isolated handoff preparation, establish decision-relevant grounding from current official venue requirements and a small discriminating set of actually inspected published work for novelty, positioning, evidence norms, presentation, and readers. Distinguish found, retrieved, inspected, and used material; published practice does not replace official rules, and no fixed paper count is required.
+- **Whole-paper judgment:** ask whether the method answers the research question; whether field judgment is correct; whether contribution, evidence, scope, and expression fit the venue/readers; and what strongest reasonable objection needs which evidence or revision. A local paragraph, figure, citation, or method review need not expand into full-paper review.
+- **Conditional delivery review:** check format, build, file validity, required materials, author fields, figure embedding, and submission constraints. Delivery facts neither prove nor delimit scientific acceptability.
+- **Isolated `dove-review`:** use a genuinely isolated, persistent, recoverable Claude Code context when available. Freeze the current full paper, authoritative source in its existing format, actual built/exported output, submission appendices/supplements, other venue-facing files, target venue, and necessary grounding. Record handoff purpose, exact listed scope, limits, and prompt before the exchange.
+- **Reviewer boundary:** the same researcher reconstructs and challenges the contribution from that round's listed frozen copies, rather than inheriting the author's mainline. Tools are Read-only, with no web, MCP, shell, diagnostics, experiments, or author revisions. The author supplies needed venue/literature grounding; missing grounding limits judgment. Do not supply author-side old Reviews, private transcript, settings, `CLAUDE.md`, hidden notes, or unlisted files. Resumed reviewers retain their own earlier review history but reread the whole current version, not just a diff. Ask the four whole-paper questions and return Markdown under `Verdict`, `Blocking issues`, `Grounding basis`, and `Author-side next actions`, not parsed acceptance state.
+- **Import and inspection:** faithfully preserve the actual user-obtained return with imported provenance, without claiming runtime authorship. Import does not automatically trigger search, response, or revision. Inspection only reads/reports existing context; it creates no document or handoff.
 
-## Skill Contract
+Add author interpretation only when requested; substantive response and revision remain Rebuttal work. Findings inform judgment rather than directly triggering rewrites or claim narrowing. Try feasible high-level author-side action first; narrow only when evidence or a real boundary requires it. Preserve actual reviewer returns separately from author handling. Only real runtime session IDs and reports may be recorded; a role label, local session, receipt, or self-check does not certify independence.
 
-- Public Skills remain flat: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`.
-- Every Skill accepts optional user text and uses the same Dove agent behavior with host file, coding, execution, writing, figure, and research tools that the current host exposes and current user/project permissions allow.
-- Applicable entrypoints share the mainline anchor, highest-level active limit, explicit candidate explanations, whole-path action tradeoffs, and material-progress judgment. Before committing to or materially changing a route, method, hypothesis, evaluation target, or central experiment, establish a proportionate theory or mechanism basis with assumptions, testable predictions, failure conditions, and alternatives. Inspect targeted external knowledge when it can change the decision; derivation and explicitly exploratory diagnostics may establish missing foundations. Sound existing foundations and routine local work do not require a repeated theory workflow.
-- Ordinary Claude rules, Dove author sessions/subagents, and DSH use the same shared judgment and relevant author responsibilities. Pure judgment, Status, and bounded scope remain bounded; isolated reviewers assess only frozen materials and do not carry out author investigation or execution.
-- Bounded Skills do not create a document merely because they were invoked, and bounded-task completion must not masquerade as Workspace mainline progress.
-- `research` advances a confirmed goal through Dove's default multi-round progression; open exploration may begin from an explicitly labeled provisional question or route, and there is no separate Auto Skill, command, or mode.
-- Ordinary host routing never selects a separate Auto Skill, command, or mode; Dove installs no hidden intake or replacement per-prompt hook.
-- Status is read-only and treats a missing overview or broken link as a natural document fact.
-- Experiment follows the actual request: a central experiment first serves a real problem, key uncertainty, or route decision; when that basis is missing, Dove pauses central design and inspects actual project material, relevant sources, or a smallest low-risk diagnostic instead of inventing a substitute experiment or merely stopping at the gap. Design-only work stops before execution, existing results are analyzed directly, retrospective records remain retrospective, and newly executed work writes a prospective plan before appending actual results to the same Experiment document when recording is needed.
-- Review follows one requested operation: author-side scientific self-check, conditional delivery review, `dove-review` handoff, faithful returned-review import, or context inspection. Author-side scientific self-check is read-only; conditional delivery review checks venue-facing package facts without deciding scientific acceptability; `dove-review` uses a genuinely isolated persistent and recoverable Claude Code context when the runtime is available, with frozen near-submission listed materials copied into the isolated workspace.
-- Draft, Figure, Rebuttal, and substantive analysis create or revise ordinary project artifacts.
-- Adapters are thin generated projections and contain no direct research service dependency, shell research fallback, or duplicate document schema.
+## Other capability boundaries
 
-## Research Document Contract
+- **Status:** strictly read-only; a missing overview or broken link is an ordinary document fact, not a repair trigger.
+- **Source:** requested bounded bibliography DOI identity checks prefer available direct lookup. Identity, full-text inspection, and claim support are separate judgments; assess supported, contradicted, and uncovered parts of composite claims separately. Check-only work does not automatically edit a manuscript, scan the bibliography, or create a ledger.
+- **Figure:** gather materials, draw or revise, caption, and inspect the actual visual in its real manuscript context, including nearby claims, compiled layout, and near-final legibility, not just source or a standalone preview.
+- **Draft and submission:** preserve the user's authoritative manuscript format and actual venue requirements. New manuscripts default to LaTeX only when accepted by the venue, with actual compiled-output inspection; otherwise use the required format. Judge the whole paper and required materials, distinguish a promising core from submit-ready work, and revise optimistic judgments contradicted by broader evidence or grounded Review.
 
-- `.dove/research/RESEARCH.md` is the concise overview and navigation document, not a machine index.
-- Each research directory may have one human-maintained summary when useful: `MISSIONS.md`, `EXPERIMENTS.md`, `SOURCES.md`, `REVIEWS.md`, `CLAIMS.md`, or `lessons/LESSONS.md`.
-- Lessons materials are optional researcher-owned advisory documents, not package-owned defaults.
-- Other research files, including preserved legacy or user-owned Lessons files, are researcher-owned and use human-readable names, useful prose, and ordinary links inside the corresponding directories.
-- Missions may preserve bounded goals, substantive work, current conclusions, decisions, and next branches in a natural structure.
-- Sources may preserve citation details and what was actually inspected and learned.
-- Claims remain appropriately scoped prose, tables, or dedicated documents when useful; there is no Claim store.
-- Do not require fixed headings, frontmatter, generated IDs, enums, hashes, an index file shape, or stored counts.
+A user-confirmed submission-completion goal requires author-side scientific sufficiency, a current independent `dove-review` scientific-acceptability recommendation for the same complete version, and actual delivery readiness. Unavailable runtime leaves the requirement unmet, not waived. A bounded local task does not become a submission-completion goal.
 
-## Experiment Component
-
-Follow the actual experiment request:
-
-1. for design-only work, produce an executable plan and stop before execution;
-2. before treating a new experiment as central, establish the real problem, key uncertainty, or route decision it should resolve; if that basis is missing, pause central experiment design and inspect the actual project material, relevant sources, or smallest low-risk diagnostic needed to investigate the problem rather than inventing a substitute experiment or stopping at the missing basis;
-3. for authorized new central execution that needs recording, save the prediction, comparisons, and judgment method to the selected Experiment document before execution, execute with normal host tools or an explicit `dove run` receipt when local command tracking helps, and append the actual result and any interpretation-changing deviation to that same document; routine diagnostics do not automatically require a document;
-4. for analysis of existing results, work directly from those results; and
-5. for retrospective recording, keep the record retrospective rather than reconstructing a prospective plan.
-
-Use the result to continue, change, or stop the route.
-
-## Review Component
-
-Follow the requested Review operation:
-
-1. before author-side scientific self-check or `dove-review` handoff preparation, establish the external review context that can change the judgment: use current official venue sources for applicable formal requirements and inspect a small, discriminating set of relevant published work for novelty, positioning, evidence norms, experiment presentation, and reader expectations; distinguish material merely found from material retrieved, inspected, and actually used, and do not replace official rules with published practice or require a fixed paper count or checklist;
-2. for whole-paper author-side scientific self-check, test whether the method answers the research question, whether the field judgment is correct, whether the contribution, evidence, scope, and expression fit the target venue and readers, and what the strongest reasonable objection is plus what evidence or revision would answer it; local paragraph, figure, citation, or method review does not force these full-paper questions;
-3. for conditional delivery review, check venue-facing package facts such as format, build, file validity, required materials, author fields, figure embedding, and submission-specific constraints without treating delivery facts as proof or truncation of scientific acceptability;
-4. for `dove-review` handoff preparation, assemble a frozen handoff with the current full paper, authoritative source in its existing format and actual built or exported output, actual submission appendices or supplements, and other venue-facing files that would accompany submission, identify the target venue, then invoke `dove review handoff --project <dir> --venue <venue> --material <path>...` when the Claude Code runtime is available;
-5. for each independent runtime round, keep the Reviewer read-only and scoped to the explicit frozen listed materials copied for that round; author-side old Reviews, private transcript, settings, `CLAUDE.md`, unlisted materials, and hidden notes are not supplied; a resumed reviewer session retains its own earlier review history, and the reviewer re-reads the whole current version rather than a diff, asks the same four full-paper questions, and returns Markdown under `Verdict`, `Blocking issues`, `Grounding basis`, and `Author-side next actions` without requiring runtime parsing;
-6. for import, locate the corresponding Review context and preserve the actual user-obtained Markdown faithfully with imported provenance, without claiming it was generated by the runtime reviewer or triggering external search merely because Review was invoked; and
-7. for inspection, read and report existing Review context without creating a new document, handoff, or unnecessary external search.
-
-Do not automatically mix author response or revision into import. Add author interpretation only when requested; substantive response and changes remain Rebuttal work. Review findings are evidence that the author side naturally absorbs when relevant, not direct rewrite or claim-narrowing triggers and not a fixed pipeline: if a feasible high-level author-side action exists, do that first; narrow only when evidence or a real boundary requires it. Changing the confirmed mainline, contribution, or completion meaning belongs to the user. Dove does not package a native user-switchable reviewing role or certify `dove-review`; it may invoke only a genuinely isolated persistent and recoverable `dove-review` context under the frozen handoff boundary, records only real runtime session IDs and reports, and never treats author-side scientific self-check as independent external review.
-
-## Dove Agent Behavior
-
-- Start from the real research question, current mainline, external context, user need, key uncertainty, and decision that matters.
-- Use hunches and first impressions as hypotheses, not decisions, and treat user preferences as tradeoff signals rather than rigid rules.
-- Bring research drive: do not stop at admitting limits; turn gaps into sharp hypotheses, discriminating evidence to seek, or concrete next moves that advance the mainline while keeping exploration aimed rather than diffuse.
-- Treat contribution, mechanism, novelty, and positioning above method, evidence, experiment analysis, baselines, and failure analysis; those above argument, writing, and figures; delivery last.
-- Act from evidence, task risk, user preference, and the research mainline without rushing into aggressive execution or over-defending.
-- Do not let lower-level artifacts or bounded-task completion simulate higher-level research progress.
-- For submission readiness, preserve the user's current authoritative manuscript format and follow actual venue requirements. For a new manuscript, default to LaTeX source when the venue accepts it and inspect the actual compiled output; otherwise use the required format. Distinguish a promising scientific core from an actually submit-ready manuscript, judge the whole paper and required materials against the venue, and revise earlier optimistic judgments when broader evidence or grounded Review contradicts them.
-
-A user-confirmed submission-completion goal requires author-side scientific sufficiency, a current independent `dove-review` scientific-acceptability recommendation for the same complete version, and actual delivery readiness. Runtime unavailability does not waive that standard; finishing a local task does not expand its scope into submission completion.
-
-Passing checks, receiving a review, or writing a conclusion does not establish scientific correctness, completion, acceptance, or independence.
-
-## Project Integration and Doctor
-
-Claude Code and DeepSeek Harness are the supported project initialization paths. Claude Code receives the complete integration; DSH receives project-local filesystem Skills only and no Claude permissions or MCP projection. Generated files remain canonical projections, not a readiness guarantee.
-
-Project initialization creates software integration and `.dove/install/manifest.json` in one transaction, adding the minimal researcher-owned `RESEARCH.md` bootstrap only when the research directory is absent. Existing research directories remain untouched, even without an overview; output must not claim an overview was created when it was not. Research paths are not manifest-managed resources. Claude integration also declares only `.mcp.json#/mcpServers/dove-paper-search` for scholarly paper discovery, download, and full-text reading, `.mcp.json#/mcpServers/exa` for ordinary webpage bodies, documentation pages, venue pages, and known URLs, a project-scoped `permissions.deny` entry for built-in `WebFetch`, and hidden Claude guidance Skills for pinned `dove-paper-search` and hosted Exa use. Built-in `WebSearch` remains available for search discovery. Dove does not install its runtime, write credentials, approve project trust, or provide CLI/shell/`curl`/fetch-script substitutions for web retrieval. Optional ordinary `DOCTOR.md` feedback about Dove itself remains under `.dove/install/`; there is no Doctor JSON state, issue lifecycle, research telemetry, or scientific health score. Installation hashes protect managed bytes only.
-
-Project update refreshes package-managed integration and preserves existing `.dove/research/**`, `.dove/reviews/**`, and `.dove/runs/**`; it does not create missing summaries, complete navigation, replace Lessons, or delete retired researcher-visible materials, review records, run receipts, or old legacy research data. SessionStart sync follows the same integration-only preservation boundary, while current resources install no `UserPromptSubmit`. Update, uninstall, and SessionStart refresh remove only exact old manifest-owned Dove `UserPromptSubmit` and Stop hook array entries while preserving user-owned or non-array prompt and Stop settings. Complete Reinstall rebuilds package-managed integration while preserving `.dove/research/**`, `.dove/reviews/**`, `.dove/runs/**`, `.dove/install/DOCTOR.md`, and ordinary project files.
-
-## Review Checklist
-
-- Are Dove agent, Skill, adapter, document, project artifact, installation resource, Dove feedback, run receipt, and archive terms used correctly?
-- Does the host perform substantive work rather than only document maintenance?
-- Is Status strictly read-only and tolerant of absent or broken navigation?
-- Is there no Auto Skill, command, mode, hidden intake, or replacement per-prompt hook; and does default progression preserve the user-confirmed Workspace mainline while keeping open-exploration questions or routes explicitly provisional and avoiding promotion of subordinate support work into the research direction?
-- Does the same Experiment document contain plan and actual result in the correct order?
-- Does Review ground author-side scientific self-check and `dove-review` handoff preparation in applicable current official venue requirements and actually inspected relevant published work, while keeping import, inspection, and author handling boundaries intact?
-- Is any `dove-review` handoff frozen, isolated, whole-paper, and free of independence claims?
-- Does research Markdown remain natural rather than becoming a disguised schema?
-- Are lifecycle, legacy-data preservation, reinstall, and ordinary-file boundaries preserved?
-- Are the two Trellis spec trees byte-identical?
-
-## Stable Markdown and project file boundaries
-
-- Research Markdown has no format or schema version. Future organization changes use ordinary host file operations to rename, move, relink, or consolidate substantive content; they do not create a migration framework or runtime fallback.
-- Requested artifacts such as drafts, figures, experiment documents, and revisions are created or modified when the task requires them. Additional Dove research Markdown is maintained only when the user explicitly asks to record, update, or save it, when results clearly change the research mainline, conclusion, decision, or priority, or when preserving the work's evidence and continuation context is genuinely useful.
-- Dove project file operations use cross-platform Node path containment, ordinary-file and symbolic-link checks, same-directory temporary writes, expected-state rechecks, and transactional rollback; they do not require Linux `/proc` features.
-- Complete Reinstall displays the current deletion and replacement paths, defaults to No, and after confirmation rereads the project and executes the current plan.
-- `DOCTOR.md` is ordinary host-maintained Dove feedback, without JSON projection, issue lifecycle, or CLI ownership.
+Document maintenance and Lessons ownership belong in [State Management](./state-management.md); software evidence limits belong in [Quality Guidelines](./quality-guidelines.md). Final user responses default to natural Chinese unless another language or format is requested.

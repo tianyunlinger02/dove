@@ -185,6 +185,7 @@ export function inspectProjectIntegration(start, options = {}) {
     changedPaths: prepared.entries.map((entry) => entry.relativePath),
     skippedLocalEdits: [...prepared.skippedLocalEdits],
     replacedLocalEdits: [...prepared.replacedLocalEdits],
+    retiredHooks: prepared.retiredHooks,
     manifest: prepared.currentManifest
   };
 }

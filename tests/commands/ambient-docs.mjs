@@ -25,7 +25,7 @@ import {
   WEB_FETCH_DENY_PERMISSION
 } from "../../src/core/web-access-integration.mjs";
 import { generatedAdapterEntries, generatedClaudeAmbientProjectEntries } from "../../scripts/generate-command-adapters.mjs";
-import { ROOT, assertDoveAgentSurfaceSemantics } from "./common.mjs";
+import { ROOT, assertDoveAgentSurfaceSemantics, assertSemanticDeletionsRejected } from "./common.mjs";
 
 const EXPECTED_AMBIENT_PATHS = [
   ".claude/rules/dove.md",
@@ -33,36 +33,53 @@ const EXPECTED_AMBIENT_PATHS = [
   EXA_WEB_SUPPORT_SKILL_PATH
 ];
 
-function assertSharedResearchJudgment(value, label) {
+export function assertSharedResearchJudgment(value, label) {
   for (const pattern of [
-    /Before committing to or materially changing.*direction, method, hypothesis, evaluation target, or central experiment.*(?:theory|mechanism) grounding proportionate to the decision/isu,
-    /assumptions.*applicability.*testable predictions.*failure conditions.*alternative explanations/isu,
-    /When external knowledge can change the judgment.*inspect.*targeted theory or related work.*grounded recommendation/isu,
-    /If grounding is insufficient.*targeted reading, derivation, or explicitly exploratory diagnostics.*hypotheses and routes may remain provisional/isu,
-    /Reuse sufficient inspected grounding rather than repeatedly searching literature/iu,
-    /debugging and local operations do not require a full theory review/iu,
-    /contribution, mechanism, novelty, and positioning.*method validity.*evidence quality.*argument, writing, and figures.*delivery last/isu,
-    /highest-level active limitation.*trace it to.*method, evidence, experiment, analysis, source, figure, argument, or artifact.*change that judgment/isu,
+    /Before committing to or materially changing[^\n]*direction[^\n]*method[^\n]*evaluation target[^\n]*central experiment/iu,
+    /core proposition[^.\n]*theory or mechanism[^.\n]*proportionate/iu,
+    /simple alternatives[^.\n]*assumptions[^.\n]*applicability[^.\n]*inspected evidence/iu,
+    /distinguish\w* predictions or failure conditions/iu,
+    /derivation[^.\n]*counterexamples[^.\n]*or small exploratory diagnostics[^.\n]*as needed/iu,
+    /as needed to (?:choose or revise|change)[^.\n]*method[^.\n]*baseline[^.\n]*metric[^.\n]*investment decision/iu,
+    /inspect targeted theory or related work[^.\n]*when it can (?:inform|change)[^.\n]*decision/iu,
+    /insufficiently grounded routes[^.\n]*provisional/iu,
+    /routine local work[^.\n]*no fixed theory preamble/iu,
+    /Prioritize[^\n]*problem[^\n]*contribution[^\n]*data and evaluation validity[^\n]*method and statistical identification[^\n]*execution[^\n]*recovery[^\n]*delivery/iu,
+    /highest-level active limitation[^\n]*without skipping necessary run-validity checks[^\n]*urgent protection[^\n]*artifact/iu,
+    /Reuse checked evidence[^\n]*conditions still hold/iu,
+    /inspect only material changes, contradictions, or decision-changing gaps[^\n]*not the whole project again for each agent/iu,
     /scientific value.*result quality.*time.*resources.*opportunity cost.*rework risk.*downstream effects.*whole research path/isu,
-    /small discriminating diagnostic or source check.*decide between routes before larger work/iu,
-    /Before treating unstable, irreproducible, anomalously bad, or unusually strong results as evidence.*inspect the implementation, data, configuration, environment, randomness, metrics, analysis scripts, and interpretation/isu,
-    /Citation identity, full-text inspection, and support for a claim are separate judgments/iu,
+    /Before treating[^.\n]*unusually strong results as evidence[^.\n]*(?:check|inspect)[^.\n]*implementation[^.\n]*data[^.\n]*configuration[^.\n]*environment[^.\n]*randomness[^.\n]*metrics[^.\n]*analysis[^.\n]*interpretation/iu,
+    /(?:Valid execution|performance gain)[^.\n]*alone does not establish[^.\n]*evaluation validity[^.\n]*component's contribution[^.\n]*scientific mechanism/iu,
+    /Citation identity[^.\n]*full-text inspection[^.\n]*claim support[^.\n]*separate judgments/iu,
+    /(?:files|passing checks)[^.\n]*alone are not research progress/iu,
     /claim strength within the evidence.*generality, quantitative qualifiers, and novelty/isu,
-    /include material counterevidence rather than selecting only supportive results/iu,
-    /Recheck earlier summaries.*against current materials.*rather than treating them as proof.*revise optimistic judgments.*broader evidence or grounded Review contradicts them/isu,
+    /state unknowns[^.\n]*include counterevidence/iu,
+    /summaries, notes, and verdicts[^\n]*context, not proof/iu,
+    /revise optimistic judgments[^\n]*current evidence contradicts/iu,
+    /distinguish support, contradiction, insufficient evidence[^\n]*comparison that cannot identify the contribution/iu,
+    /user decisions can change the goal, not the facts/iu,
     /Answer and stop for pure judgment or bounded requests.*only exposed, permitted host tools/isu
   ]) assert.match(value, pattern, `${label}: shared judgment boundary ${pattern}`);
   assert.doesNotMatch(value, /always (?:search|retrieve|review) (?:the )?literature|(?:complete|exhaustive) theory review before (?:any|every) (?:action|diagnostic)/iu, `${label}: theory must not become an execution gate`);
 }
 
-function assertSharedAuthorStance(value, label) {
+export function assertSharedAuthorStance(value, label) {
   for (const pattern of [
     /user-confirmed Workspace mainline, intended contribution.*completion meaning.*material change to that anchor belongs to the user/isu,
     /direction is open.*clearly provisional research question or route/isu,
     /active confirmed research context.*feasible next in-scope step.*continue while an effective mainline action remains/isu,
     /Read-only requests authorize inspection and reporting, not execution or recording/iu,
-    /Before narrowing a contribution, first try any feasible in-mainline.*(?:method|experiment).*could support it.*only when inspected evidence or a real limit requires it/isu,
-    /user confirmation.*changes the confirmed mainline or completion meaning/iu,
+    /After delegation[^\n]*main session[^\n]*full user context[^\n]*synthesizes decisive evidence/iu,
+    /subtask applicability[^.\n]*unverified limits[^.\n]*resolves contradictions[^.\n]*(?:chooses|decides)[^.\n]*(?:next action|what comes next)/iu,
+    /without redoing every subtask/iu,
+    /agent completion[^.\n]*majority opinion[^.\n]*concatenated reports[^.\n]*not scientific judgment/iu,
+    /Bounded Dove subagents[^.\n]*investigate[^.\n]*question[^.\n]*not own[^.\n]*mainline or important user communication/iu,
+    /feasible discriminating follow-up[^\n]*resolve uncertainty[^\n]*rather than merely weakening prose/iu,
+    /do not indefinitely postpone accepting counterevidence/iu,
+    /new route[^.\n]*does not erase[^.\n]*failure[^.\n]*original proposition/iu,
+    /factual negative judgment[^.\n]*does not await[^.\n]*user approval/iu,
+    /material change[^\n]*confirmed mainline[^\n]*intended contribution[^\n]*completion meaning does/iu,
     /limits on actions, not automatic limits on the research mainline.*one path is blocked.*other effective in-mainline paths before calling the research blocked/isu,
     /user-confirmed submission-completion goal.*author-side scientific sufficiency.*current independent `dove-review`.*same full version.*real delivery readiness/isu,
     /Unavailable isolated review leaves that requirement unmet, not waived/iu,
@@ -165,8 +182,21 @@ export function assertPackagedAgentPolicy() {
 
   const reviewer = renderDoveReviewerStanceSection();
   const prompt = `${renderDoveSharedResearchContractSection()}\n\n${reviewer}`;
-  assert.match(prompt, /grounding proportionate to the decision/iu);
-  assert.match(prompt, /Before treating.*unusually strong results as evidence/iu);
+  assertReviewerPrompt(prompt, "Shared judgment + reviewer stance");
+  assertSemanticDeletionsRejected(prompt, "Reviewer prompt", assertReviewerPrompt, [
+    /core proposition/iu,
+    /comparison that cannot identify the contribution/iu,
+    /only to judging the frozen materials/iu,
+    /Do not establish missing grounding through new research/iu,
+    /read-only and limited to the listed frozen materials/iu,
+    /instead of fetching or inferring it/iu,
+    /not only a diff/iu,
+    /within its requested scope/iu
+  ]);
+}
+
+function assertReviewerPrompt(prompt, label) {
+  assertSharedResearchJudgment(prompt, label);
   for (const pattern of [
     /shared theory, validity, and action-selection principles only to judging the frozen materials and recommending author-side work/iu,
     /Do not establish missing grounding through new research, run diagnostics, execute experiments, or perform author revisions/iu,
@@ -178,8 +208,9 @@ export function assertPackagedAgentPolicy() {
     /does the method answer the research question.*correct for the field.*fit the target venue.*strongest reasonable objection/isu,
     /Keep a bounded local review within its requested scope/iu,
     /Verdict, Blocking issues, Grounding basis, and Author-side next actions/iu
-  ]) assert.match(reviewer, pattern);
-  assert.doesNotMatch(prompt, /^## Author stance$|first try any feasible in-mainline|perform the feasible next in-scope step|Maintain Dove research Markdown/mu);
+  ]) assert.match(prompt, pattern, `${label}: reviewer boundary ${pattern}`);
+  assert.doesNotMatch(prompt, /^## Author stance$|After delegation|synthesizes decisive evidence|first try any feasible in-mainline|perform the feasible next in-scope step|Maintain Dove research Markdown/mu);
+
 }
 
 export function assertPublicDocumentationBoundaries() {

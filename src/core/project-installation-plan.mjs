@@ -138,6 +138,18 @@ function exactRetiredDoveUserPromptSubmitHook(entry) {
     && hook.timeout === 10;
 }
 
+function inspectRetiredHooks(settings) {
+  const matchedPaths = [];
+  for (const [eventName, matches] of [["Stop", exactLegacyDoveStopHook], ["UserPromptSubmit", exactRetiredDoveUserPromptSubmitHook]]) {
+    const entries = settings.hooks?.[eventName];
+    if (!Array.isArray(entries)) continue;
+    for (const [index, entry] of entries.entries()) {
+      if (matches(entry)) matchedPaths.push(`${DOVE_CLAUDE_SETTINGS_PATH}#/hooks/${eventName}/${index}`);
+    }
+  }
+  return { matchedPaths };
+}
+
 function hookCommandMarkers(eventName) {
   if (eventName === "SessionStart") return ["dove hook session-start"];
   throw new Error(`Unsupported Dove Claude hook event: ${eventName}.`);
@@ -369,6 +381,10 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
   const skipDrift = shouldSkipLocalEdit(options);
   const observed = inspectRegularProjectFile(root, relativePath, fsOps);
   const original = parseSharedJson(observed, relativePath);
+  // Diagnostic paths describe the original disk state, not planned cleanup or ownership.
+  const retiredHooks = relativePath === DOVE_CLAUDE_SETTINGS_PATH && options.replacementPolicy === "inspect"
+    ? inspectRetiredHooks(original)
+    : null;
   const desiredByKey = new Map(desiredEntries.map((entry) => [managedKey(entry), entry]));
   const oldByKey = new Map(oldEntries.map((entry) => [managedKey(entry), entry]));
   const skippedLocalEdits = [];
@@ -491,7 +507,7 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
   }
 
   if (canonicalJson(next) === canonicalJson(original)) {
-    return { entry: null, changed, skippedLocalEdits, replacedLocalEdits, retainedManaged, omittedManagedKeys };
+    return { entry: null, changed, skippedLocalEdits, replacedLocalEdits, retainedManaged, omittedManagedKeys, retiredHooks };
   }
   const resource = desiredEntries[0] ?? oldEntries[0];
   return {
@@ -502,7 +518,8 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
     skippedLocalEdits,
     replacedLocalEdits,
     retainedManaged,
-    omittedManagedKeys
+    omittedManagedKeys,
+    retiredHooks
   };
 }
 
@@ -527,6 +544,7 @@ export function preparePlan({ root, hosts, packageName, packageVersion, now, fsO
   const desiredByKey = new Map(desiredResources.map((entry) => [managedKey(entry), entry]));
   const entries = [];
   let resourcesChanged = false;
+  let retiredHooks = null;
   const sharedPaths = [...new Set([
     ...desiredResources.filter((entry) => entry.kind === "json-fragment").map((entry) => entry.path),
     ...(manifest?.managed ?? []).filter((entry) => entry.kind === "json-fragment").map((entry) => entry.path),
@@ -542,6 +560,7 @@ export function preparePlan({ root, hosts, packageName, packageVersion, now, fsO
       fsOps,
       { adopt, replacementPolicy }
     );
+    if (planned.retiredHooks) retiredHooks = planned.retiredHooks;
     if (planned.entry) entries.push(planned.entry);
     if (planned.changed) resourcesChanged = true;
     for (const item of planned.skippedLocalEdits ?? []) skippedLocalEdits.push(item);
@@ -584,5 +603,5 @@ export function preparePlan({ root, hosts, packageName, packageVersion, now, fsO
     const observed = inspectRegularProjectFile(root, INSTALLATION_MANIFEST_PATH, fsOps);
     entries.push(transactionWrite(root, { path: INSTALLATION_MANIFEST_PATH }, serializeProjectInstallationManifest(nextManifest, { hostIds: PROJECT_HOST_IDS }), observed));
   }
-  return { entries, manifest: nextManifest, manifestChanged, skippedLocalEdits, replacedLocalEdits };
+  return { entries, manifest: nextManifest, manifestChanged, skippedLocalEdits, replacedLocalEdits, retiredHooks };
 }

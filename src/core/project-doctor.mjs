@@ -114,6 +114,7 @@ function inspectIntegration(start, options) {
       syncPaths: [...canonical.changedPaths],
       skippedLocalEdits: [...(canonical.skippedLocalEdits ?? [])],
       replacedLocalEdits: [...(canonical.replacedLocalEdits ?? [])],
+      retiredHooks: canonical.retiredHooks ?? null,
       missing: [],
       drifted: [...(canonical.skippedLocalEdits ?? [])]
     };
@@ -199,6 +200,9 @@ function actionsFor(result) {
   else if (!adoptReady && result.projectIntegration.state === "needs-sync") actions.push({ kind: "update", command: "dove update" });
   else if (!adoptReady && result.setup.mode === "reinstall" && result.projectIntegration.state !== "current") actions.push({ kind: "reinstall", command: "dove reinstall" });
   else if (!adoptReady && result.setup.mode === "blocked") actions.push({ kind: "inspect", command: "dove doctor --json" });
+  if (actions.length === 0 && result.projectIntegration.retiredHooks?.matchedPaths.length > 0) {
+    actions.push({ kind: "inspect", command: "dove doctor --json" });
+  }
   return actions;
 }
 

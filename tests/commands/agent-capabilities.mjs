@@ -230,11 +230,11 @@ function assertResearchCapabilitySemantics(command) {
     { label: "problem formation details", patterns: [/real phenomenon|assumptions|intended claim|evaluation target|real research question/iu] },
     { label: "confirmed or provisional mainline anchoring", patterns: [/confirmed.*mainline|provisional.*(?:question|route)|confirmed or provisional mainline/isu] },
     { label: "inventive search", patterns: [/inventive lenses|literature|adjacent|contradictions|negative or near-miss results|serious routes/isu] },
-    { label: "discriminating evidence work", patterns: [/small diagnostics|diagnostic experiments?|source checks|experiments|artifact inspections|distinguish routes|change the judgment/isu] },
-    { label: "result absorption before continuation", patterns: [/absorb.*result|absorbing each material result|absorb each result|what it changes/isu] }
+    { label: "discriminating evidence work", patterns: [/discriminating action|small diagnostics|diagnostic experiments?|source checks|artifact inspections/iu] },
+    { label: "result absorption before continuation", patterns: [/reassess.*proposition.*result.*continue|absorb.*result|what it changes/isu] }
   ]);
   assert.match(researchProgression, /confirmed or provisional mainline|Follow the confirmed or provisional mainline/iu);
-  assert.match(researchProgression, /change the judgment|absorb the result|continue while it matters/isu);
+  assert.match(researchProgression, /reassess[^.\n]*original proposition[^.\n]*result[^.\n]*continue/iu);
   assert.match(value, /separate autonomy Skill|default.*substantive rounds/isu);
   assert.doesNotMatch(value, /Do not expose Auto|Auto as a Skill/iu);
 }
@@ -275,7 +275,35 @@ function assertSourceCapabilitySemantics(command) {
   assert.doesNotMatch(value, /one source path|unavailable or unapproved|approved route|support route|source path|the other MCP/iu);
 }
 
+// Experiment owns these checks; neither ambient theory nor the shared author
+// stance can stand in for an actual evaluation chain and identifiable controls.
+export function assertExperimentScientificEvaluation(value, label) {
+  assertMatchesAll(value, label, [
+    /claim-driven[^\n]*real problem[^\n]*key uncertainty[^\n]*primary prediction[^\n]*strongest (?:simple )?alternative[^\n]*minimum sufficient evidence/iu,
+    /evaluation chain[^\n]*input[^\n]*each method's actual output[^\n]*basis[^\n]*compared against[^\n]*metric measures[^\n]*between-method comparison/iu,
+    /reference[^\n]*applicability[^\n]*target object and granularity/iu,
+    /justify[^\n]*proxy[^\n]*method's own output[^\n]*evaluation basis[^\n]*not merely[^\n]*file's existence/iu,
+    /failed, missing, invalid, or excluded outputs[^\n]*results and denominators/iu,
+    /without silently retaining only the successful intersection[^\n]*or automatically assigning every failure zero/iu,
+    /Where applicable[^\n]*same evaluation units[^\n]*paired comparisons[^\n]*differences and uncertainty[^\n]*sample dependence/iu,
+    /Protect final-test independence[^\n]*training[^\n]*tuning[^\n]*calibration[^\n]*method selection/iu,
+    /ablations[^\n]*actual code, configuration, and outputs[^\n]*beyond the named component/iu,
+    /information access[^\n]*preprocessing[^\n]*training budget[^\n]*numerical scale[^\n]*edit magnitude[^\n]*postprocessing[^\n]*also change/iu,
+    /Distinguish[^\n]*full implementation winning[^\n]*component's gain under the given control[^\n]*support for a scientific mechanism/iu,
+    /controls cannot identify the core contribution[^\n]*repair the minimum necessary comparison or explicitly limit the conclusion/iu,
+    /more runs do not repair identification[^\n]*authorized useful exploration may continue/iu,
+    /new data, methods, evaluation chains, or decision-relevant gaps[^\n]*existing code, samples, and outputs where sufficient/iu,
+    /diagnostic only when necessary and authorized/iu,
+    /Small samples[^\n]*chain semantics and implementation[^\n]*not population-level statistical sufficiency/iu,
+    /design-only[^\n]*trace materials read-only[^\n]*plan with unverified parts[^\n]*without running diagnostics or experiments/iu,
+    /reference, pairing, and data-split reasoning only where it fits/iu,
+    /do not impose[^\n]*ground truth[^\n]*paired designs[^\n]*train\/test splits[^\n]*no-ground-truth[^\n]*non-paired[^\n]*purely theoretical/iu,
+    /Interpret results[^\n]*evaluation chain[^\n]*actual control differences[^\n]*anomalies before treating them as evidence/iu
+  ]);
+}
+
 function assertExperimentCapabilitySemantics(command) {
+  assertExperimentScientificEvaluation(semanticContractText(command), "Experiment capability");
   const designInstruction = contractAction(command, "experiment-design")?.instruction ?? "";
   const executionInstruction = contractAction(command, "experiment-execution")?.instruction ?? "";
   const interpretationInstruction = contractAction(command, "experiment-interpretation")?.instruction ?? "";
@@ -288,10 +316,10 @@ function assertExperimentCapabilitySemantics(command) {
   ]);
   assertCapabilityPatterns(command, [
     { label: "distinct experiment request modes", patterns: [/design-only|execution|analysis of existing results|retrospective/iu] },
-    { label: "central experiment basis", patterns: [/real problem.*key uncertainty.*route decision|problem.*key uncertainty.*strongest alternative/isu] },
-    { label: "diagnostic path when basis is missing", patterns: [/actual project material.*relevant sources.*smallest low-risk diagnostic|central basis is missing.*inspect actual project material/isu] },
+    { label: "central experiment basis", patterns: [/real problem.*key uncertainty.*route decision|problem.*key uncertainty.*strongest (?:simple )?alternative/isu] },
+    { label: "investigate missing central basis", patterns: [/central basis is missing.*pause central design.*inspect actual project material/isu] },
     { label: "claim-driven discrimination", patterns: [/natural-language named prediction|primary prediction|minimum sufficient evidence|positive, negative, or ambiguous outcomes/iu] },
-    { label: "execution validity before scientific evidence", patterns: [/anomalous.*before using them as evidence|unstable.*scientific evidence|check anomalous results before using them as evidence/isu] },
+    { label: "execution validity before scientific evidence", patterns: [/anomal(?:ous|ies).*before (?:using|treating) them as evidence|unstable.*scientific evidence/isu] },
     { label: "execution-validity coverage", patterns: [/implementation.*data.*configuration.*environment.*randomness.*metrics.*analysis|implementation.*data shortcuts.*configuration drift.*baselines.*randomness.*metrics.*analysis|implementation.*data.*configuration.*baselines.*randomness.*metrics.*analysis|configuration.*data.*metrics.*actual code.*logs.*outputs/isu] },
     { label: "results grounded in actual run materials", patterns: [/methods.*configuration.*data.*metrics.*run counts.*result numbers.*actual code.*logs.*outputs|actual code.*logs.*outputs.*data files.*user material|run receipts/isu] },
     { label: "Dove run receipt judgment boundary", patterns: [/dove run start\|status\|resume\|finalize\|compare|\.dove\/runs\/|run receipts.*Experiment Markdown/isu] },
@@ -317,12 +345,12 @@ function assertExperimentCapabilitySemantics(command) {
   assertMatchesAll(executionInstruction, "execution must consume the saved plan", [
     /execute only after.*prospective plan.*saved.*then append.*same Experiment document/iu,
     /existing-result analysis or retrospective.*do not imply a prior plan existed/iu,
-    /data and preprocessing.*configuration and environment.*baselines.*randomness.*metrics.*analysis.*before using.*evidence/iu
+    /evaluation chain.*actual control differences.*anomalies before treating.*evidence/iu
   ]);
-  assert.match(designInstruction, /real problem|key uncertainty|route decision|primary prediction|strongest alternative|minimum sufficient evidence/iu);
+  assert.match(designInstruction, /claim-driven comparison.*evaluation chain/iu);
   assert.match(executionInstruction, /Execute only when requested and permitted|when requested and permitted/iu);
   assert.match(`${executionInstruction}\n${interpretationInstruction}`, /actual code|logs|outputs|data files|configuration|metrics/iu);
-  assert.match(`${executionInstruction}\n${interpretationInstruction}`, /anomalous|unstable|hard-to-reproduce|scientific evidence|expected and actual/iu);
+  assert.match(`${executionInstruction}\n${interpretationInstruction}`, /anomal(?:ous|ies)|unstable|hard-to-reproduce|scientific evidence|expected and actual/iu);
 }
 
 function assertDraftCapabilitySemantics(command) {
@@ -449,7 +477,8 @@ function assertReviewCapabilitySemantics(command) {
     /resume or rerun.*whole-paper rounds.*same review id|same review id.*reviewer session/isu,
     /complete frozen material list|whole-paper|complete paper/isu,
     /only those listed materials/iu,
-    /Before starting.*author side.*obtained and inspected.*venue or literature material.*included.*frozen handoff/isu,
+    /author-retrieved venue or literature grounding[^.\n]*frozen-material judgment/iu,
+    /Include[^.\n]*grounding inspected above[^.\n]*frozen-material judgment/iu,
     /grounding is missing.*limit venue or literature conclusions|limit venue or literature conclusions.*listed materials/isu,
     /runtime is unavailable|host.*(?:provide|provides).*isolated/isu,
     /continue feasible author-side work without counting it as independent review/isu
@@ -621,7 +650,6 @@ export function assertSkillManifest() {
   assert.match(experiment.summary, /advance(?:s)? a research decision/iu);
   assert.match(experiment.contract.when, /contribution or evidence deficiency/iu);
   assertExperimentCapabilitySemantics(experiment);
-  assert.doesNotMatch(contractText(experiment), /denominator accounting|supports and cannot establish|actual provenance/iu);
 
   const draft = COMMAND_SURFACE_BY_ID["dove.draft"];
   assert.match(draft.contract.when, /expression, argument, or an authoritative delivery artifact is the limiting deficiency/iu);

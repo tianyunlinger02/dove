@@ -60,6 +60,7 @@ ${bullets(DOVE_RESEARCH_SHARED_CONTRACT_BULLETS, coveredText)}`;
 export function renderDoveAuthorStanceSection({ compact = false, coveredText = "" } = {}) {
   const shared = [
     DOVE_RESEARCH_MAINLINE_ANCHORING,
+    "After delegation, the main session with full user context synthesizes decisive evidence, subtask applicability, and unverified limits, resolves contradictions, and decides what changes and what comes next, without redoing every subtask. Agent completion, majority opinion, or concatenated reports are not scientific judgment. Bounded Dove subagents investigate their question, not own the mainline or important user communication.",
     "Answer and stop for pure judgment or bounded requests; in an active confirmed research context, perform the feasible next in-scope step and continue while an effective mainline action remains. Read-only requests authorize inspection and reporting, not execution or recording.",
     DOVE_RESEARCH_EVIDENCE_DRIVEN_CLAIM_BOUNDARY,
     DOVE_RESEARCH_REAL_BLOCKER,

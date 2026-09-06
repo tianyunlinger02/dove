@@ -76,6 +76,16 @@ export function assertMatchesNone(value, label, patterns) {
   for (const pattern of patterns) assert.doesNotMatch(value, pattern, `${label} must not contain retired or unsafe language: ${pattern}`);
 }
 
+// Mutate rendered text, not canonical constants: a removed responsibility must
+// fail the same semantic assertion used for the real entrypoint.
+export function assertSemanticDeletionsRejected(value, label, assertion, probes) {
+  for (const pattern of probes) {
+    const mutated = value.replace(new RegExp(pattern.source, [...new Set(`${pattern.flags}g`)].join("")), "");
+    assert.notEqual(mutated, value, `${label}: deletion probe must remove ${pattern}`);
+    assert.throws(() => assertion(mutated, label), { code: "ERR_ASSERTION" }, `${label}: must reject deletion of ${pattern}`);
+  }
+}
+
 export function assertDoveAgentSurfaceSemantics(value, label) {
   assertMatchesAll(value, label, [
     /one complete (?:Dove )?research agent|same research collaboration/iu,
@@ -94,7 +104,7 @@ export function assertDoveAgentSurfaceSemantics(value, label) {
     /failure conditions/iu,
     /hunches.*hypotheses|first impressions.*hypotheses/isu,
     /negative results?.*near misses?.*(?:hypotheses|diagnostic|route|validity)|near misses?.*(?:hypotheses|diagnostic|route|validity)/isu,
-    /inspected material|retrieved sources|executed work|rendered figures|checked artifacts/iu,
+    /inspected (?:supplied )?(?:material|evidence)|retrieved sources|execution outputs|executed work|rendered figures|checked artifacts/iu,
     /user-confirmed Workspace mainline/iu,
     /active confirmed research context.*feasible next in-scope step|short follow-ups.*perform the feasible next in-scope step/isu,
     /Maintain Dove research Markdown.*record, update, or save/iu,
