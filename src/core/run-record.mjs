@@ -26,6 +26,7 @@ const RUN_LOCK_STALE_MS = 30_000;
 const RUN_LOCK_WAIT_MS = 2_000;
 const RUN_LOCK_RETRY_MS = 25;
 const RUN_SEED_MAX_LENGTH = 200;
+const RUN_TIMER_MAX_MS = 2_147_483_647;
 
 function plainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -403,18 +404,20 @@ export function parseWallTime(value) {
   const unit = (match[2] ?? "ms").toLowerCase();
   const multiplier = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 }[unit];
   const milliseconds = amount * multiplier;
-  if (!Number.isSafeInteger(milliseconds) || milliseconds <= 0) throw new Error("--wall-time is too large.");
+  if (!Number.isSafeInteger(milliseconds) || milliseconds > RUN_TIMER_MAX_MS) throw new Error(`--wall-time must be at most ${RUN_TIMER_MAX_MS}ms (Node.js timer limit).`);
   return milliseconds;
 }
 
 export function normalizeRunBudget(options = {}) {
   const timeoutMsFromNumber = positiveIntegerOrNull(options.timeoutMs, "--timeout-ms");
+  if (timeoutMsFromNumber > RUN_TIMER_MAX_MS) throw new Error(`--timeout-ms must be at most ${RUN_TIMER_MAX_MS}ms (Node.js timer limit).`);
   const timeoutMsFromWallTime = parseWallTime(options.wallTime);
   if (timeoutMsFromNumber !== null && timeoutMsFromWallTime !== null) throw new Error("Use only one of --timeout-ms or --wall-time for a Dove run.");
   const timeoutMs = timeoutMsFromNumber ?? timeoutMsFromWallTime;
   const killGraceMs = options.killGraceMs === undefined || options.killGraceMs === null || options.killGraceMs === ""
     ? 5000
     : nonNegativeInteger(options.killGraceMs, "--kill-grace-ms");
+  if (killGraceMs > RUN_TIMER_MAX_MS) throw new Error(`--kill-grace-ms must be at most ${RUN_TIMER_MAX_MS}ms (Node.js timer limit).`);
   return { timeoutMs, killGraceMs };
 }
 
@@ -797,16 +800,19 @@ export function compareRuns(options = {}) {
     return delta || left.runId.localeCompare(right.runId);
   });
   const best = ranked[0].metric.value;
-  const ranking = ranked.map((summary, index) => ({
-    rank: index + 1,
-    runId: summary.runId,
-    status: summary.status,
-    metricValue: summary.metric.value,
-    commit: summary.commit,
-    dirty: summary.dirty,
-    deltaFromBest: direction === "min" ? summary.metric.value - best : best - summary.metric.value,
-    stdoutPath: summary.paths.stdoutPath,
-    stderrPath: summary.paths.stderrPath
-  }));
+  const ranking = ranked.map((summary, index) => {
+    const delta = direction === "min" ? summary.metric.value - best : best - summary.metric.value;
+    return {
+      rank: index + 1,
+      runId: summary.runId,
+      status: summary.status,
+      metricValue: summary.metric.value,
+      commit: summary.commit,
+      dirty: summary.dirty,
+      deltaFromBest: Number.isFinite(delta) ? delta : null,
+      stdoutPath: summary.paths.stdoutPath,
+      stderrPath: summary.paths.stderrPath
+    };
+  });
   return { command: "compare", status: "ok", comparable: true, fields: [], project: projectRoot, group: options.group ?? null, runIds, basis, ranking };
 }

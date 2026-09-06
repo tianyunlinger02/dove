@@ -12,7 +12,7 @@ import { inspectProjectRoot, resolveProjectRootForSetup } from "./project-root.m
 import { classifyProjectSetup } from "./project-setup-classification.mjs";
 
 const MODULE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_PACKAGE_ROOT = path.resolve(MODULE_DIRECTORY, "../..");
+const DEFAULT_PACKAGE_ROOT = path.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path.basename(MODULE_DIRECTORY)) ? ".." : "../..");
 
 function messageFor(error) {
   return error instanceof Error ? error.message : String(error);

@@ -8,7 +8,7 @@ import {
   renderClaudeAmbientRule
 } from "../src/core/ambient-policy.mjs";
 import { generatedDoveAgentEntries } from "../src/core/dove-agent-definition.mjs";
-import { DOVE_RESEARCH_SHARED_CONTRACT } from "../src/core/dove-research-contract.mjs";
+import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "../src/core/dove-agent-persona.mjs";
 import {
   PAPER_SEARCH_SUPPORT_SKILL_PATH,
   renderPaperSearchSupportSkill
@@ -69,11 +69,6 @@ function renderHostGuidance(contract, hostId) {
     ...(hostId ? hostGuidance[hostId] ?? [] : [])
   ]);
   return renderListSection("Using host tools", values);
-}
-
-function renderSemanticItems(title, items, renderer = renderBullets) {
-  const values = Array.isArray(items) ? items.filter(Boolean) : [];
-  return values.length > 0 ? `#### ${title}\n\n${renderer(values)}` : "";
 }
 
 function renderSemanticSection(section) {
@@ -162,7 +157,11 @@ function renderBody(command, heading, hostId = null) {
   const examples = renderExamples(command, hostId);
   const contract = renderCapabilityContract(command, hostId);
   const guidance = renderGuidance(command);
-  const shared = hostId === "dsh" ? `## Research judgment\n\n${DOVE_RESEARCH_SHARED_CONTRACT} Answer and stop for pure judgment or bounded requests; continue useful in-scope work when the user has confirmed a research goal.` : "";
+  const shared = hostId === "dsh" ? [
+    renderDoveSharedResearchContractSection({ compact: true, coveredText: contract }),
+    command.id === "dove.status" ? "For Status, use these principles only to inspect and report; do not execute research actions or maintain documents."
+      : renderDoveAuthorStanceSection({ compact: true, coveredText: contract })
+  ].join("\n\n") : "";
   return [`# ${heading}`, purpose, args, examples.trim(), shared, contract, guidance].filter(Boolean).join("\n\n") + "\n";
 }
 

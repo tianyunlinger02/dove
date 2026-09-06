@@ -14,6 +14,10 @@ import {
   SUPPORTED_HARD_EXPECTATION_KINDS,
   behaviorEvalShapeExamples,
   createFixtureCliLauncher,
+  parseArgs,
+  invokeClaude,
+  executionResult,
+  materializedSnapshotInclude,
   parseEvidence,
   evaluateHardExpectation,
   assertReceiptRecordShape,
@@ -95,6 +99,14 @@ function listCaseFiles() {
 
 function assertBehaviorFeedbackSource(source) {
   assert.equal(isObject(source), true, "source must be an object");
+  if (source.kind === "user-feedback-excerpt") {
+    assert.equal(source.document, "current-user-request", "user feedback must identify the supplied request, not an invented DOCTOR location");
+    assertStringArray(source.quotes, "source.quotes", { minLength: 1 });
+    assertTrimmedNonEmptyString(source.context, "source.context");
+    assert.equal(Object.hasOwn(source, "lineStart") || Object.hasOwn(source, "lineEnd"), false, "user excerpts have no invented document line numbers");
+    return;
+  }
+  assert.equal(source.kind, undefined, "unknown feedback source kind");
   assert.equal(source.document, ".dove/install/DOCTOR.md", "source.document must cite the feedback document path without reading repository-local project state");
   assert.equal(Number.isInteger(source.lineStart), true, "source.lineStart must be an integer");
   assert.equal(Number.isInteger(source.lineEnd), true, "source.lineEnd must be an integer");
@@ -150,7 +162,10 @@ function assertBudgets(testCase) {
 function assertSnapshot(testCase) {
   assert.equal(isObject(testCase.snapshot), true, "snapshot must be an object");
   assertStringArray(testCase.snapshot.include, "snapshot.include", { minLength: 1 });
-  for (const spec of testCase.snapshot.include) assertPathSpec(spec, `snapshot.include ${spec}`);
+  for (const spec of testCase.snapshot.include) {
+    // Public review exchange records may be captured as file facts, never host transcripts.
+    assertPathSpec(spec, `snapshot.include ${spec}`, { allowPrivateForbiddenPath: spec === ".dove/reviews/**" });
+  }
 }
 
 function expectationPath(expectation) {
@@ -178,7 +193,7 @@ function assertHardExpectations(testCase, fixtureRoot) {
     const spec = expectationPath(expectation);
     if (spec !== null) {
       assertPathSpec(spec, `hardExpectations[${index}].path`, { allowPrivateForbiddenPath: expectation.kind === "tool-action-forbidden-path" || expectation.kind === "path-not-created" });
-      if (["path-changed", "path-unchanged", "tool-action-path"].includes(expectation.kind)) {
+      if (["path-changed", "path-unchanged"].includes(expectation.kind)) {
         assert.equal(fixturePathExists(fixtureRoot, spec), true, `hard expectation ${expectation.id} must point at an existing fixture path: ${spec}`);
       }
     }
@@ -190,7 +205,7 @@ function assertHardExpectations(testCase, fixtureRoot) {
         assert.ok(expectation.minMatches >= 1 && expectation.minMatches <= expectation.terms.length, `hardExpectations[${index}].minMatches must be feasible`);
       }
     }
-    if (expectation.kind === "tool-action-path") {
+    if (expectation.kind === "tool-action-path" && expectation.verbs !== undefined) {
       assertStringArray(expectation.verbs, `hardExpectations[${index}].verbs`, { minLength: 1 });
       for (const verb of expectation.verbs) assert.match(verb, /^[A-Za-z][A-Za-z0-9_:-]*$/u, `tool verb must be stable: ${verb}`);
     }
@@ -251,7 +266,7 @@ function assertCase(testCase, file) {
 
 test("behavior case corpus is schema-valid, sourced, safe, and reviewable", () => {
   const files = listCaseFiles();
-  assert.ok(files.length >= 8 && files.length <= 10, "behavior eval corpus should contain about eight sourced cases from DOCTOR.md for task #201");
+  assert.ok(files.length >= 9 && files.length <= 12, "keep the existing corpus and the three bounded execution, Source, and Figure extensions");
   const ids = new Set();
   const fixtureIds = new Set();
   for (const file of files) {
@@ -293,9 +308,7 @@ test("receipt paths accept separate short workspace and evidence roots", () => {
 });
 
 test("fixture CLI launcher selects current source and preserves quoted paths and arguments", (t) => {
-  const scratchParent = path.join(ROOT, ".claude", "tmp");
-  fs.mkdirSync(scratchParent, { recursive: true });
-  const scratch = fs.mkdtempSync(path.join(scratchParent, "behavior-cli-"));
+  const scratch = fs.mkdtempSync(path.join(ROOT, "evals", "behavior", ".scratch-cli-"));
   t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
   const originalPath = process.env.PATH;
   const launcher = createFixtureCliLauncher(scratch);
@@ -501,6 +514,147 @@ test("outside tool paths fail workspace-boundary hard checks", () => {
   });
   assert.equal(relativeEscape.passed, false);
   assert.deepEqual(relativeEscape.evidence.outside, [{ action: 1, path: "../outside.md" }]);
+});
+
+test("path checks reject similarly named files and never equate SVG source with raster evidence", () => {
+  const evidence = parseEvidence(JSON.stringify({ type: "assistant", message: { role: "assistant", content: [
+    { type: "tool_use", name: "Read", input: { file_path: "/workspace/paper/main.tex.bak" } },
+    { type: "tool_use", name: "Bash", input: { command: "python scripts/check.py paper/main.tex figures/result.svg" } }
+  ] } }), "/workspace");
+  const expectation = { id: "paper", kind: "tool-action-path", path: "paper/main.tex" };
+  assert.equal(evaluateHardExpectation(expectation, { toolActions: { actions: evidence.toolActions.actions.slice(0, 1) } }).passed, false);
+  assert.equal(evaluateHardExpectation(expectation, { toolActions: evidence.toolActions }).passed, true);
+  assert.equal(evaluateHardExpectation({ ...expectation, kind: "tool-action-forbidden-path" }, { toolActions: { actions: evidence.toolActions.actions.slice(0, 1) } }).passed, true);
+
+  const action = (index, name, referencedPath) => ({ index, name, referencedPaths: [referencedPath] });
+  assert.equal(evaluateHardExpectation(expectation, { toolActions: { actions: [action(1, "OtherHostTool", "paper/main.tex")] } }).passed, true, "path observations need not mandate a host tool");
+
+  const raster = { id: "raster-reference", kind: "tool-action-path", path: "figures/result.png" };
+  assert.equal(evaluateHardExpectation(raster, { toolActions: { actions: [action(1, "Read", "figures/result.svg")] } }).passed, false, "SVG source reading is not a raster observation");
+});
+
+test("CLI options reach the actual offline spawn and public outcome without initialization", (t) => {
+  const scratch = fs.mkdtempSync(path.join(ROOT, "evals", "behavior", ".scratch-spawn-"));
+  t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
+  const launcher = createFixtureCliLauncher(scratch);
+  const fakeCli = path.join(ROOT, "evals", "behavior", "fake-claude-cli.mjs");
+  const testCase = readJson(path.join(CASES_ROOT, "pure-judgment-answer-and-stop.json"));
+  const originalPath = process.env.PATH;
+  for (const [model, expectedStatus] of [
+    ["fake-success", "completed"], ["fake-stream-error", "failed"], ["fake-budget-stop", "failed"],
+    ["fake-over-budget", "failed"], ["fake-permission-denial", "failed"], ["fake-incomplete", "incomplete"]
+  ]) {
+    const options = parseArgs(["--case", testCase.id, "--attempts=2", "--model", model, "--permission-mode", "acceptEdits", "--claude-command", fakeCli, "--max-budget-usd=0.002"]);
+    assert.equal(options.runReal, false, "the test invokes only the fake spawn seam, not runOneAttempt/init");
+    assert.deepEqual(options.caseIds, [testCase.id]);
+    assert.equal(options.attempts, 2);
+    const invoked = invokeClaude(testCase, options, scratch, launcher);
+    assert.equal(invoked.result.status, 0, invoked.result.stderr);
+    assert.equal(invoked.maxBudgetUsd, 0.002);
+    const evidence = parseEvidence(invoked.result.stdout, scratch);
+    const init = evidence.streamRecords[0];
+    assert.deepEqual(init.argv, invoked.argv);
+    assert.equal(init.input, `${testCase.surface.command}\n\n${testCase.surface.prompt}\n`);
+    assert.equal(init.cwd, scratch);
+    assert.equal(init.evalFlag, "1");
+    assert.equal(init.childPath, `${path.dirname(launcher)}${path.delimiter}${originalPath ?? ""}`);
+    assert.equal(process.env.PATH, originalPath);
+    const outcome = executionResult(invoked.result, evidence.streamRecords, invoked.durationMs, invoked.maxBudgetUsd);
+    assert.equal(outcome.status, expectedStatus, model);
+    assert.equal(outcome.observedCostUsd, model === "fake-incomplete" ? null : model === "fake-over-budget" ? 0.003 : 0.001, "nested per-model cost cannot overwrite the total");
+    assert.equal(outcome.budgetExceeded, model === "fake-incomplete" ? null : model === "fake-over-budget");
+    assert.equal(outcome.permissionDenials.length, model === "fake-permission-denial" ? 1 : 0);
+    const { receipt } = behaviorEvalShapeExamples();
+    receipt.result = outcome;
+    assertReceiptRecordShape(receipt);
+    assert.equal(evaluateHardExpectation({ id: "read", kind: "tool-action-path", path: "paper/main.tex" }, { toolActions: evidence.toolActions }).passed, true);
+  }
+  for (const override of [null, 1]) {
+    const options = parseArgs(["--claude-command", fakeCli, "--permission-mode", "acceptEdits", "--model", "fake-success"]);
+    options.maxBudgetUsd = override;
+    const invoked = invokeClaude(testCase, options, scratch, launcher);
+    assert.equal(invoked.maxBudgetUsd, testCase.budgets.maxBudgetUsd, "an override cannot increase the case cap");
+  }
+  const ambient = { ...testCase, surface: { host: "claude-code", entry: "ambient-prompt", prompt: "Answer and stop." } };
+  const options = parseArgs(["--claude-command", fakeCli, "--permission-mode", "acceptEdits", "--model", "fake-success"]);
+  assert.equal(parseEvidence(invokeClaude(ambient, options, scratch, launcher).result.stdout, scratch).streamRecords[0].input, "Answer and stop.\n");
+  const missing = invokeClaude(testCase, { ...options, claudeCommand: path.join(scratch, "missing-cli") }, scratch, launcher);
+  assert.equal(executionResult(missing.result, [], missing.durationMs, missing.maxBudgetUsd).status, "failed");
+  assert.throws(() => parseArgs(["--permission-mode=bypassPermissions"]), /refuses bypass/u);
+  assert.throws(() => parseArgs(["--max-budget-usd=0"]), /must be positive/u);
+  assert.throws(() => parseArgs(["--attempts=0"]), /integer/u);
+});
+
+test("execution evidence preserves stream failures, unknown cost, and interruption facts", () => {
+  const spawned = { status: 0, signal: null, stderr: "" };
+  const success = { type: "result", subtype: "success", total_cost_usd: 0.01 };
+  const records = [
+    { type: "user", message: { content: [{ type: "tool_result", total_cost_usd: 99 }] } },
+    success,
+    { type: "result", parent_tool_use_id: "child", subtype: "error_during_execution", total_cost_usd: 99 }
+  ];
+  assert.equal(executionResult(spawned, records, 1, 0.02).status, "completed");
+  assert.equal(executionResult(spawned, records, 1, 0.02).observedCostUsd, 0.01);
+  for (const total_cost_usd of [undefined, null, -1, "0.01", Infinity]) {
+    assert.equal(executionResult(spawned, [{ ...success, total_cost_usd }], 1, 0.02).observedCostUsd, null);
+  }
+  assert.equal(executionResult(spawned, [{ ...success, is_error: true }], 1, 0.02).status, "failed");
+  const errors = ["Synthetic failure"];
+  assert.deepEqual(executionResult(spawned, [{ ...success, errors }], 1, 0.02).streamErrors, errors);
+  assert.equal(executionResult(spawned, [{ ...success, errors }], 1, 0.02).status, "failed");
+  assert.equal(executionResult(spawned, [], 1, 0.02).status, "incomplete");
+  const timeout = executionResult({ status: null, signal: "SIGTERM", error: { code: "ETIMEDOUT", message: "Timed out" } }, [success], 1, 0.02);
+  assert.equal(timeout.status, "timed-out");
+  assert.equal(timeout.timedOut, true);
+  const killed = executionResult({ status: null, signal: "SIGTERM" }, [success], 1, 0.02);
+  assert.equal(killed.status, "failed");
+  assert.equal(killed.timedOut, false, "SIGTERM alone does not prove timeout");
+  assert.equal(executionResult({ ...spawned, error: { code: "ENOBUFS", message: "Buffer full" } }, [success], 1, 0.02).status, "failed");
+});
+
+test("all declared expected paths are captured without inventing automatic behavior gates", () => {
+  for (const file of listCaseFiles()) {
+    const testCase = readJson(path.join(CASES_ROOT, file));
+    const include = materializedSnapshotInclude(testCase);
+    for (const spec of [...testCase.snapshot.include, ...testCase.expectedBehavior.mustInspectOrChange, ...testCase.expectedBehavior.mustNotTouch]) {
+      assert.ok(include.includes(spec), `${testCase.id}: missing snapshot capture for ${spec}`);
+    }
+    for (const expectation of testCase.hardExpectations) {
+      if (expectation.path) assert.ok(include.includes(expectation.path));
+    }
+  }
+});
+
+test("central execution fixture captures arbitrary prospective bytes before computing and never writes the plan", (t) => {
+  const scratch = fs.mkdtempSync(path.join(ROOT, "evals", "behavior", ".scratch-central-"));
+  t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(scratch, "scripts"));
+  fs.copyFileSync(path.join(FIXTURES_ROOT, "central-execution-plan-append", "scripts", "central_probe.py"), path.join(scratch, "scripts", "central_probe.py"));
+  const argv = ["-B", path.join(scratch, "scripts", "central_probe.py"), "--record", "notes/central-experiment.md"];
+  const missingPlan = spawnSync("python3", argv, { cwd: scratch, encoding: "utf8", timeout: 30000 });
+  assert.equal(missingPlan.error, undefined, "the offline fixture requires an existing Python 3 interpreter, not an install");
+  assert.notEqual(missingPlan.status, 0);
+  assert.equal(fs.existsSync(path.join(scratch, "results")), false, "no output is synthesized when the prospective file is absent");
+  const record = path.join(scratch, "notes", "central-experiment.md");
+  fs.mkdirSync(path.dirname(record));
+  const plan = "Compare matched estimators on the supplied synthetic system.\nJudge the MSE contrast, not real-data generalization.\nNo fixed headings or schema.\n";
+  fs.writeFileSync(record, plan);
+  const result = spawnSync("python3", argv, { cwd: scratch, encoding: "utf8", timeout: 30000 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(path.join(scratch, "results", "plan-before.txt"), "utf8"), plan);
+  assert.equal(fs.readFileSync(record, "utf8"), plan, "the experiment program cannot retrospectively rewrite or append its own prospective plan");
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.record, "notes/central-experiment.md");
+  assert.deepEqual(readJson(path.join(scratch, "results", "probe.json")), payload);
+  assert.ok(Object.values(payload.mean_squared_error).every((value) => Number.isFinite(value) && value >= 0));
+  assert.equal(fs.existsSync(path.join(scratch, ".dove")), false, "the fixture program writes no research/installation/run ledger");
+});
+
+test("known user feedback excerpts need no fabricated DOCTOR citation or ledger", () => {
+  const source = { kind: "user-feedback-excerpt", document: "current-user-request", quotes: ["审查整个dove有没有这种写了但实际都是缺口的，有的话都修了"], context: "Source compound-support coverage comes from the approved audit plan, not a user-reported research event or historical DOCTOR incident." };
+  assertBehaviorFeedbackSource(source);
+  assert.throws(() => assertBehaviorFeedbackSource({ ...source, lineStart: 1 }), /invented document line/u);
+  assert.throws(() => assertBehaviorFeedbackSource({ ...source, kind: "invented" }), /unknown feedback source/u);
 });
 
 test("package scripts expose deterministic validate without releasing the corpus", () => {

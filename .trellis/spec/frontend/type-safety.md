@@ -94,7 +94,7 @@ Protect these through canonical workflow order, generated-resource validation, r
 
 ## Version and Lifecycle Boundaries
 
-- Package release: `3.0.0`.
+- Package release: `3.0.1`.
 - Installation manifest revision: `2.0`.
 - Legacy JSON research state: preserved in place and detected read-only.
 - Runtime research source: ordinary Markdown only.

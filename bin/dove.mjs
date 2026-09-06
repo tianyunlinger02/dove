@@ -348,7 +348,7 @@ try {
       throw new Error("dove review 只接受 handoff、status、resume、rerun 或 import。");
     }
     writeReviewResult(result, options);
-    process.exit(0);
+    process.exit(subcommand !== "status" && result.status === "failed" ? 1 : 0);
   }
 
   if (command === "run") {

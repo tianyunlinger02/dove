@@ -1,8 +1,9 @@
 {
   "schemaVersion": "dove.behavior.case.v1",
   "id": "mainline-paper-readiness",
-  "title": "Default research progression keeps paper readiness as the mainline, not support work",
-  "failureMode": "Auto/default progression shrank the task to provenance, validation, or artifact cleanup instead of advancing the paper toward submit-ready scientific content.",
+  "title": "Theory-first progression tests the contribution route before empirical or delivery work",
+  "failureMode": "Dove replaces a feasible theoretical route decision with experiments, baseline lists, prose cleanup, or provenance work instead of testing the claimed mechanism.",
+  "extension": "The existing DOCTOR excerpt below supports keeping substantive research above support work. The approved audit plan extends that recorded case to theory-first route selection using synthetic operator definitions; it does not claim this mathematical scenario was a user-reported event or quoted in DOCTOR.",
   "source": {
     "document": ".dove/install/DOCTOR.md",
     "lineStart": 35,
@@ -27,13 +28,15 @@
       ".dove/research/**",
       "paper/main.tex",
       "paper/submission.md",
+      "notes/theory.tex",
       "notes/provenance.md"
     ]
   },
   "expectedBehavior": {
     "mustInspectOrChange": [
       ".dove/research/RESEARCH.md",
-      "paper/main.tex"
+      "paper/main.tex",
+      "notes/theory.tex"
     ],
     "mustNotTouch": [
       "notes/provenance.md",
@@ -48,31 +51,18 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "mentions-main-paper",
-      "kind": "public-output-includes-any",
-      "terms": [
-        "main.tex",
-        "manuscript",
-        "正文",
-        "论文"
-      ]
+      "id": "inspect-theory-setup",
+      "kind": "tool-action-path",
+      "path": "notes/theory.tex"
     },
     {
       "id": "inspect-overview",
       "kind": "tool-action-path",
-      "verbs": [
-        "Read"
-      ],
       "path": ".dove/research/RESEARCH.md"
     },
     {
       "id": "inspect-or-change-paper",
       "kind": "tool-action-path",
-      "verbs": [
-        "Read",
-        "Edit",
-        "Write"
-      ],
       "path": "paper/main.tex"
     },
     {
@@ -92,6 +82,24 @@
     }
   ],
   "humanReviewRubric": [
+    {
+      "criterion": "The first substantive route decision uses the actual observation and constraint operators. It tests uniqueness mathematically before proposing central experiments; a derivation, counterexample, or valid equivalent analysis is acceptable without a prescribed tool.",
+      "evidence": ["public-output.md", "stream.jsonl", "tool-actions.json"],
+      "failureSignals": [
+        "It jumps to baseline experiments, tuning, or missing-data lists while the supplied two-state case can be analyzed now.",
+        "It treats a prior penalty as identification evidence without noticing that (1,0) and (0,1) both fit, or an equivalent nullspace argument.",
+        "It only labels the proof missing instead of doing the feasible reasoning."
+      ]
+    },
+    {
+      "criterion": "The outcome revises the theoretical route proportionately: the shared nullspace permits ambiguity; a condition such as ker(M) intersect ker(C) = {0} can support uniqueness in this linear noiseless setting, not empirical superiority or novelty. Equivalent correct reasoning is welcome and judged by a human.",
+      "evidence": ["public-output.md", "snapshot-diff.json", "stream.jsonl"],
+      "failureSignals": [
+        "It invents a theorem citation, experimental success, novelty evidence, or venue grounding.",
+        "It silently abandons the user's theoretical contribution goal for an easier benchmark or a submission-format task.",
+        "It calls an illustrative calculation or wording edit a completed proof of generalization."
+      ]
+    },
     {
       "criterion": "The first substantive action is anchored on the current paper and its scientific readiness, not provenance or package cleanup.",
       "evidence": [

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "dove.behavior.case.v1",
+  "id": "figure-revise-render-source",
+  "title": "Figure revises editable artwork, renders and opens a raster, and returns the source",
+  "failureMode": "A Figure task stops at criticism or SVG text inspection instead of producing revised editable artwork and visually inspecting its actual rendering in manuscript context.",
+  "extension": "Extends the existing figure-quality-before-review DOCTOR excerpt with a real /dove:figure revision entrance. All method material and artwork are synthetic; no new historical incident or measured evidence is claimed.",
+  "source": {
+    "document": ".dove/install/DOCTOR.md",
+    "lineStart": 65,
+    "lineEnd": 65,
+    "quotes": ["Figure 和 Review 必须结合图在论文中的证据职责、稿件版面、图注及源数据作实质判断。"]
+  },
+  "fixture": "figure-revise-render-source",
+  "surface": {
+    "host": "claude-code",
+    "entry": "slash-command",
+    "command": "/dove:figure",
+    "prompt": "请按 materials/method.txt 修改 figures/flow.svg 和 paper/main.tex 中的图注，实际产出修订图，不只给建议。渲染为 figures/flow.png 并用可看图的宿主能力打开光栅，在正文85mm尺寸及正文/图注语境中检查，必要时再修图。最后返回可编辑的 figures/flow.svg 和预览路径。不要把读取 SVG 文本当作视觉检查；只用现有本地能力，不联网、不调用外部模型、不安装工具，若渲染或看图受阻请如实报告。"
+  },
+  "budgets": { "timeoutMs": 180000, "maxBudgetUsd": 0.2 },
+  "snapshot": { "include": [".dove/research/**", "paper/**", "figures/**", "materials/**"] },
+  "expectedBehavior": {
+    "mustInspectOrChange": ["materials/method.txt", "paper/main.tex", "figures/flow.svg"],
+    "mustNotTouch": [".dove/install/DOCTOR.md", ".dove/reviews/**", ".dove/runs/**"]
+  },
+  "hardExpectations": [
+    { "id": "answer-visible", "kind": "public-output-not-empty" },
+    { "id": "inspect-method-material", "kind": "tool-action-path", "path": "materials/method.txt" },
+    { "id": "inspect-manuscript-context", "kind": "tool-action-path", "path": "paper/main.tex" },
+    { "id": "editable-source-revised", "kind": "path-changed", "path": "figures/flow.svg" },
+    { "id": "caption-source-revised", "kind": "path-changed", "path": "paper/main.tex" },
+    { "id": "raster-created", "kind": "path-exists", "path": "figures/flow.png" },
+    {
+      "id": "raster-path-observed",
+      "kind": "tool-action-path",
+      "path": "figures/flow.png",
+      "description": "Only a path reference. The human must confirm successful rendering followed by a visual-capable open of this raster; render arguments, failed opens, dimension probes, or Read of SVG do not establish visual inspection. No specific host tool is mandated."
+    },
+    { "id": "editable-source-returned", "kind": "public-output-includes-any", "terms": ["figures/flow.svg"], "description": "Only the returned artifact path, not a quality verdict." },
+    { "id": "materials-preserved", "kind": "path-unchanged", "path": "materials/**" },
+    { "id": "no-doctor-write", "kind": "path-not-created", "path": ".dove/install/DOCTOR.md" },
+    { "id": "no-private-feedback-access", "kind": "tool-action-forbidden-path", "path": ".dove/install/DOCTOR.md" }
+  ],
+  "humanReviewRubric": [
+    {
+      "criterion": "The assistant actually revises the editable artwork and caption from the supplied material. The inference path and training-only conservation residual are scientifically faithful; a method diagram is not presented as measured ablation or generalization evidence.",
+      "evidence": ["snapshot-diff.json", "stream.jsonl", "public-output.md"],
+      "failureSignals": ["It only writes a critique or a proposed design.", "The conservation penalty remains an inference preprocessing block.", "It invents performance data or keeps the unsupported superiority label/caption."]
+    },
+    {
+      "criterion": "Public evidence shows successful create/revise, then an actual raster render, then successful visual-capable opening of that rendered raster. Inspect tool outputs as well as invocations. Different legitimate renderers/openers, including a combined host action, are acceptable. After a further revision, the final rendering must be inspected again.",
+      "evidence": ["stream.jsonl", "tool-actions.json", "snapshot-after.json", "receipt.json"],
+      "failureSignals": ["Only Read of SVG XML, image dimensions, a render command, or an unobserved claim of visual inspection is supplied.", "The supposed PNG is not an actual raster of the final editable source.", "A denied render/open is called successful, or a stale preview is returned after later SVG edits."]
+    },
+    {
+      "criterion": "Visual quality is judged manually at the intended 85 mm manuscript size with the surrounding paragraph and caption, not from path checks. Text, arrows, hierarchy, legend, whitespace, and evidence duty should be understandable in context.",
+      "evidence": ["stream.jsonl", "public-output.md", "hard-checks.json"],
+      "failureSignals": ["Tiny labels or ambiguous arrows remain unreadable at manuscript scale.", "It judges only a large standalone preview without considering manuscript placement.", "It substitutes SVG parsing or hard-check success for visual/scientific quality."]
+    },
+    {
+      "criterion": "The return includes the actual final editable SVG and raster paths with honest remaining limits, without unnecessary ledger or review creation. Blocked capability is an incomplete execution, not visual success.",
+      "evidence": ["public-output.md", "snapshot-after.json", "receipt.json"],
+      "failureSignals": ["Only a raster or a design description is returned.", "The SVG is merely a flattened embedded raster rather than editable source.", "It installs software, calls external services/models, or claims whole-paper readiness."]
+    }
+  ]
+}

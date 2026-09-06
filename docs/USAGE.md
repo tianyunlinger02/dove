@@ -39,7 +39,7 @@ Dove uses only tools the current host exposes and the project permits. Claude pr
 
 ## Research Markdown
 
-Research context lives under `.dove/research/` as ordinary Markdown. Fresh initialization creates only `RESEARCH.md`. Mission, Source, Experiment, Review, Claim, and Lesson documents appear when useful, not merely because a Skill ran.
+Research context lives under `.dove/research/` as ordinary Markdown. Initialization creates only `RESEARCH.md` when the research directory is absent. If that directory already exists, it stays untouched even when the overview is missing. Mission, Source, Experiment, Review, Claim, and Lesson documents appear when useful, not merely because a Skill ran.
 
 Record the research direction, important conclusions, inspected evidence, experiment plans and results, review exchanges, or reusable Lessons when the user asks, a material judgment changes, or the notes have real evidence or continuation value. Use ordinary relative links and readable project-relative artifact paths when they help a future reader recover the work. There are no required headings, generated IDs, frontmatter, link parsers, backlink audits, or research databases.
 
@@ -50,6 +50,8 @@ Update, SessionStart sync, reinstall, and uninstall preserve existing `.dove/res
 ### Research
 
 Use `/dove:research` for “advance this goal.” Dove chooses source work, analysis, experiment, coding, drafting, figures, review handling, or another useful action. It stops when the goal is reached, real investigation finds no effective in-scope path, or the next step needs a user decision or outside permission/limit. Open exploration remains explicitly provisional until the user confirms the direction.
+
+Before committing to or materially changing a route, method, hypothesis, evaluation target, or central experiment, establish a proportionate theory or mechanism basis: assumptions, testable predictions, failure conditions, and serious alternatives. Inspect targeted theory or related work when it can change the decision. Missing foundations can call for derivation or explicitly exploratory diagnostics, not a demand for complete theory before any action; routine work with sound existing foundations need not repeat the process.
 
 ### Status
 
@@ -65,7 +67,7 @@ Missing or unreadable facts stay `unavailable`. The card does not read research 
 
 ### Source
 
-Use `/dove:source` to turn external material into research judgment. Material found, identity-verified, retrieved, inspected, and used are different things. Citation identity is separate from support for a claim.
+Use `/dove:source` to turn external material into research judgment. Material found, identity-verified, retrieved, inspected, and used are different things. Citation identity is separate from support for a claim. For a composite claim, distinguish supported, contradicted, and uncovered parts; support for one part is not support for the whole. A check-only request reports that boundary without automatically editing the manuscript.
 
 When a DOI matters and direct lookup is exposed and permitted, check it before fuzzy title search. Compare DOI, title, authors, year, and venue or version; report verified, conflict, not-found, or unknown. A requested **bounded bibliography DOI identity check** is within Source's scope: check only the selected entries. Metadata verification does not establish full-text inspection or claim support. Keep checks transient unless they change a manuscript citation, research judgment, or useful continuation context; do not build a ledger, cache, or BibTeX parser.
 
@@ -93,7 +95,7 @@ dove run compare --project <dir> --group <name>
 
 Ordinary completion writes one `run.terminal`. `status` is read-only. `resume` never reruns: it reports terminal, live, or orphaned observations, and records interrupted reconciliation only when neither supervisor nor target is observable and the terminal event is missing. `finalize` appends one scalar metric after terminal completion, with an optional decision or note. `compare` ranks only terminal finalized runs with matching metric, budget, data, evaluator, and resource basis; otherwise it reports `comparable: false` and mismatched fields. Git commit/dirty do not affect comparability or ranking. Receipt compatibility is not a scientific comparability or reproducibility guarantee.
 
-Budget metadata describes the comparison basis, not prepaid resources or an automatically enforced spending cap. Actual work still respects explicit user limits, permissions, and timeout controls. POSIX timeouts signal the target process group and only cover same-group descendants; Windows termination is direct-child best effort.
+Budget metadata describes the comparison basis, not prepaid resources or an automatically enforced spending cap. Actual work still respects explicit user limits, permissions, and timeout controls. POSIX timeouts signal the target process group and retain the grace-period SIGKILL escalation when a same-group descendant survives its leader; they do not cover descendants that leave that group. Windows termination is direct-child best effort. Timeout and kill-grace values, including converted `--wall-time`, cannot exceed 2147483647 milliseconds; larger values are rejected before a Run is created.
 
 ### Draft
 
@@ -116,11 +118,11 @@ Use `/dove:review` for author-side scientific self-check, delivery review, `dove
 
 The requested return has four Markdown headings: `Verdict`, `Blocking issues`, `Grounding basis`, and `Author-side next actions`. These guide the review; the runtime does not parse them into an acceptance gate. Local paragraph, figure, citation, or method review stays within its requested scope.
 
-For a near-submission paper, use `dove review handoff --project <dir> --venue <venue> --material <path>...` with the current complete paper, authoritative source, actual compiled output, supplements, and other submission materials. The runtime copies only listed files into an isolated Claude Code workspace and exposes Read only. It provides no web/MCP access or author private conversation. Obtain necessary venue rules and literature on the author side and include them explicitly; missing grounding limits the review rather than permitting unlisted retrieval.
+For a near-submission paper, use `dove review handoff --project <dir> --venue <venue> --material <path>...` with the current complete paper, authoritative source in its existing format, actual built or exported output, supplements, and other submission materials. The runtime copies only listed files into an isolated Claude Code workspace and exposes Read only. It provides no web/MCP access or author private conversation. Obtain necessary venue rules and literature on the author side and include them explicitly; missing grounding limits the review rather than permitting unlisted retrieval.
 
-`resume` continues the current frozen round. `rerun --material <path>...` reviews a new complete snapshot in the same reviewer session after substantive changes. That session retains its own earlier review history; it does not gain access to author-side Review files or other unlisted project files. `import --file <report.md>` preserves a supplied return as imported provenance, not a runtime-generated review.
+`resume` continues the current frozen round. `rerun --material <path>...` reviews a new complete snapshot in the same reviewer session after substantive changes. Workspaces and mutation locks are project-scoped, so different projects may use the same review id without replacing each other's materials. A recorded workspace must match its project-scoped location; old unscoped or mismatched locations are rejected, not moved or silently reused. That session retains its own earlier review history; it does not gain access to author-side Review files or other unlisted project files. `import --file <report.md>` preserves a supplied return as imported provenance, not a runtime-generated review.
 
-`dove review status --id <id>` compares snapshot receipts with current project files read-only. Public human and CLI JSON results report paths, safe size/existence/type/error facts, and `current`, `changed`, `missing`, or `unavailable`, without SHA fields or interpreting report verdict text. Hashes are internal byte-comparison metadata, not research evidence. Current material bytes alone do not establish a current scientific verdict.
+`dove review status --id <id>` compares snapshot receipts with current project files read-only. Public human and CLI JSON results report paths, safe size/existence/type/error facts, and `current`, `changed`, `missing`, or `unavailable`, without SHA fields or interpreting report verdict text. Hashes are internal byte-comparison metadata, not research evidence. Current material bytes alone do not establish a current scientific verdict. Failed handoff/resume/rerun execution reports failure and exits nonzero; a successful read-only status query still exits zero when the stored review failed. A negative scientific recommendation is not a runtime failure.
 
 Preserve the actual return. Author-side analysis treats findings as evidence, not automatic orders to rewrite, narrow claims, or declare failure. A session id, a prompt, or a software check alone does not prove reviewer independence or external acceptance.
 
@@ -134,7 +136,7 @@ Use `/dove:lessons` for reusable advice that may improve current or future work.
 
 ## Submission readiness
 
-Submission work starts from the user's current authoritative manuscript and the venue's actual format requirements. For new manuscripts, LaTeX source and actual compiled output are the default only when the venue accepts LaTeX. Readiness depends on the current complete paper, evidence, figures, required review, and real delivery requirements together. A build pass, old review, generated file, or Markdown update alone is not readiness.
+Submission work starts from the user's current authoritative manuscript and the venue's actual format requirements. For new manuscripts, LaTeX source and actual compiled output are the default only when the venue accepts LaTeX. For a user-confirmed submission-completion goal, the same current complete version needs author-side scientific sufficiency, a current `dove-review` scientific-acceptability recommendation, and real delivery readiness. An unavailable independent-review runtime leaves that requirement unmet, not waived. Finishing a local review, figure edit, or polish request does not expand it into submission completion. A build pass, old review, generated file, or Markdown update alone is not readiness.
 
 ## Maintenance commands
 

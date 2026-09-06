@@ -1,0 +1,8 @@
+SYNTHETIC METHOD MATERIAL — no measured performance is supplied.
+
+Inference path: sparse sensor observations -> encoder -> latent reconstruction -> predicted state.
+Training path: the predicted state and a known total-state constraint define a conservation residual. A weighted residual penalty is added to the reconstruction loss during training. It is not a preprocessing block between the sensors and encoder and does not replace the prediction path.
+
+Figure purpose: explain this method and distinguish the prediction path from the training-only constraint. It is not an ablation plot or evidence of accuracy/generalization superiority. No new scientific claim or measurement should be drawn into the figure.
+
+The manuscript currently places the figure at 85 mm width. The supplied SVG has tiny labels, a misleading forward path, no clear training/inference distinction, and an unsupported output label. Use editable text/shapes and a restrained legend or direct labels. There is no mandated renderer or design tool; use available host capabilities without installation. The requested final editable source is figures/flow.svg and its actual raster rendering is figures/flow.png. Inspect a raster at the manuscript's intended size in relation to its surrounding paragraph and caption. Reading SVG XML, checking image dimensions, or saying it was rendered is not visual inspection. If a renderer or visual-opening capability is blocked, report that boundary rather than pretending inspection succeeded.

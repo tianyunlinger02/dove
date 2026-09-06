@@ -3,6 +3,7 @@ We propose PhysPrior, a prior-guided model for sparse sensor inference. The curr
 
 \section{Method}
 PhysPrior constrains latent interpolation using conservation-inspired penalties.
+Our candidate theoretical contribution is that the conservation prior identifies a missing state from sparse observations. In the noiseless two-state special case, the sensor measures $y=x_1+x_2$ and conservation fixes $x_1+x_2=c$. The draft currently asserts that adding the prior ensures unique reconstruction. The argument for uniqueness has not been supplied; the operators and possible routes are in \texttt{notes/theory.tex}.
 
 \section{Results}
 A smoke experiment shows stable training on one split. The text does not yet explain how this result validates the claimed contribution or what evidence is still missing.

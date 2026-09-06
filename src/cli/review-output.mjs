@@ -62,7 +62,7 @@ export function renderReviewResult(result) {
       })
     ].join("\n");
   }
-  const heading = {
+  const heading = result.status === "failed" ? "Dove review 运行失败；未生成本次 reviewer 报告" : {
     handoff: "Dove review handoff 已完成",
     resume: "Dove review 已恢复并更新当前轮次",
     rerun: "Dove review 已在同一 reviewer session 中开始新的完整轮次",

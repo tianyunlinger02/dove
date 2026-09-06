@@ -341,8 +341,13 @@ function casePrompt(testCase) {
   return `${command}${testCase.surface.prompt}\n`;
 }
 
-function materializedSnapshotInclude(testCase) {
-  const include = new Set(testCase.snapshot.include);
+export function materializedSnapshotInclude(testCase) {
+  // Capture declared boundaries even when they are human-reviewed rather than hard gates.
+  const include = new Set([
+    ...testCase.snapshot.include,
+    ...testCase.expectedBehavior.mustInspectOrChange,
+    ...testCase.expectedBehavior.mustNotTouch
+  ]);
   for (const expectation of testCase.hardExpectations) {
     if (typeof expectation.path === "string" && isSafeProjectRelativePathSpec(expectation.path)) include.add(expectation.path);
   }
@@ -350,8 +355,7 @@ function materializedSnapshotInclude(testCase) {
 }
 
 function actionReferencesPath(action, spec) {
-  const base = pathSpecBase(spec);
-  return action.referencedPaths.some((referencedPath) => matchesPathSpec(referencedPath, spec) || referencedPath.includes(base));
+  return action.referencedPaths.some((referencedPath) => matchesPathSpec(referencedPath, spec));
 }
 
 function publicOutputIncludesAny(publicOutput, terms = []) {
@@ -570,7 +574,7 @@ function addCaseIds(options, rawValue) {
   options.caseIds.push(...values);
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const options = {
     runReal: false,
     list: false,
@@ -641,21 +645,54 @@ function runInit(workspaceRoot) {
   return { status: result.status === 0 ? "initialized" : "failed", exitCode: result.status, signal: result.signal, error: result.error?.message ?? null, stderr: result.stderr ?? "" };
 }
 
-function parseObservedCostUsd(streamRecords) {
-  let cost = null;
-  function visit(value) {
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-      return;
+export function executionResult(result, streamRecords, durationMs, maxBudgetUsd) {
+  const terminalRecords = streamRecords.filter((record) => isObject(record) && record.type === "result" && record.parent_tool_use_id == null);
+  const terminal = terminalRecords.at(-1);
+  // Only the main CLI result owns session cost. Model usage and tool payloads are not totals.
+  const cost = terminal?.total_cost_usd;
+  const observedCostUsd = typeof cost === "number" && Number.isFinite(cost) && cost >= 0 ? cost : null;
+  const budgetExceeded = observedCostUsd === null ? null : observedCostUsd > maxBudgetUsd;
+  const streamFailed = terminalRecords.some((record) => record.is_error === true || record.subtype !== "success" || (Array.isArray(record.errors) && record.errors.length > 0));
+  const permissionDenials = terminalRecords.flatMap((record) => Array.isArray(record.permission_denials) ? record.permission_denials : []);
+  const timedOut = result.error?.code === "ETIMEDOUT";
+  const stderr = result.stderr ?? "";
+  return {
+    status: timedOut ? "timed-out"
+      : result.error || result.status !== 0 || result.signal || streamFailed || permissionDenials.length > 0 || budgetExceeded === true ? "failed"
+        : !terminal ? "incomplete" : "completed",
+    exitCode: result.status,
+    signal: result.signal,
+    timedOut,
+    durationMs,
+    observedCostUsd,
+    budgetExceeded,
+    resultSubtype: terminal?.subtype ?? null,
+    streamErrors: terminalRecords.flatMap((record) => Array.isArray(record.errors) ? record.errors : []),
+    permissionDenials,
+    stderr: { bytes: Buffer.byteLength(stderr), sha256: sha256(stderr) },
+    error: result.error?.message ?? null
+  };
+}
+
+export function invokeClaude(testCase, options, workspaceRoot, fixtureCliPath) {
+  const maxBudgetUsd = effectiveMaxBudgetUsd(testCase, options);
+  const argv = ["--print", "--verbose", "--output-format", "stream-json", "--input-format", "text", "--permission-mode", options.permissionMode, "--max-budget-usd", String(maxBudgetUsd)];
+  if (options.model) argv.push("--model", options.model);
+  const startedMs = Date.now();
+  const result = spawnSync(options.claudeCommand, argv, {
+    cwd: workspaceRoot,
+    input: casePrompt(testCase),
+    encoding: "utf8",
+    timeout: testCase.budgets.timeoutMs,
+    maxBuffer: 64 * 1024 * 1024,
+    env: {
+      ...process.env,
+      NO_COLOR: "1",
+      DOVE_BEHAVIOR_EVAL: "1",
+      PATH: `${path.dirname(fixtureCliPath)}${path.delimiter}${process.env.PATH ?? ""}`
     }
-    if (!isObject(value)) return;
-    for (const [key, nested] of Object.entries(value)) {
-      if (/^(?:total_)?cost_usd$|costUSD|totalCostUsd/u.test(key) && typeof nested === "number" && Number.isFinite(nested)) cost = nested;
-      else visit(nested);
-    }
-  }
-  visit(streamRecords);
-  return cost;
+  });
+  return { argv, maxBudgetUsd, result, durationMs: Date.now() - startedMs };
 }
 
 function runOneAttempt(testCase, attempt, options) {
@@ -681,26 +718,7 @@ function runOneAttempt(testCase, attempt, options) {
   assertSnapshotRecordShape(before);
   writeJson(path.join(runRoot, "snapshot-before.json"), before);
 
-  const prompt = casePrompt(testCase);
-  const actualMaxBudgetUsd = effectiveMaxBudgetUsd(testCase, options);
-  const argv = ["--print", "--verbose", "--output-format", "stream-json", "--input-format", "text", "--permission-mode", options.permissionMode, "--max-budget-usd", String(actualMaxBudgetUsd)];
-  if (options.model) argv.push("--model", options.model);
-  const timeoutMs = testCase.budgets.timeoutMs;
-  const startedMs = Date.now();
-  const result = spawnSync(options.claudeCommand, argv, {
-    cwd: workspaceRoot,
-    input: prompt,
-    encoding: "utf8",
-    timeout: timeoutMs,
-    maxBuffer: 64 * 1024 * 1024,
-    env: {
-      ...process.env,
-      NO_COLOR: "1",
-      DOVE_BEHAVIOR_EVAL: "1",
-      PATH: `${path.dirname(fixtureCliPath)}${path.delimiter}${process.env.PATH ?? ""}`
-    }
-  });
-  const durationMs = Date.now() - startedMs;
+  const { argv, maxBudgetUsd: actualMaxBudgetUsd, result, durationMs } = invokeClaude(testCase, options, workspaceRoot, fixtureCliPath);
   const stdout = result.stdout ?? "";
   const stderr = result.stderr ?? "";
   writeText(path.join(runRoot, "stream.jsonl"), stdout);
@@ -720,8 +738,7 @@ function runOneAttempt(testCase, attempt, options) {
   const hardChecks = evaluateHardExpectations(testCase, { before, after, publicOutput: evidence.publicText, toolActions: evidence.toolActions, workspaceRoot });
   writeJson(path.join(runRoot, "hard-checks.json"), hardChecks);
 
-  const observedCostUsd = parseObservedCostUsd(evidence.streamRecords);
-  const budgetExceeded = observedCostUsd === null ? null : observedCostUsd > actualMaxBudgetUsd;
+  const outcome = executionResult(result, evidence.streamRecords, durationMs, actualMaxBudgetUsd);
   const completedAt = utcNow();
   const receipt = createReceiptRecord({
     runId,
@@ -754,17 +771,7 @@ function runOneAttempt(testCase, attempt, options) {
     init: { git: gitInit, dove: init },
     budgetOverrideMaxBudgetUsd: options.maxBudgetUsd,
     effectiveMaxBudgetUsd: actualMaxBudgetUsd,
-    result: {
-      status: result.status === 0 ? "completed" : (result.error?.code === "ETIMEDOUT" ? "timed-out" : "failed"),
-      exitCode: result.status,
-      signal: result.signal,
-      timedOut: result.error?.code === "ETIMEDOUT" || result.signal === "SIGTERM",
-      durationMs,
-      observedCostUsd,
-      budgetExceeded,
-      stderr: { bytes: Buffer.byteLength(stderr), sha256: sha256(stderr) },
-      error: result.error?.message ?? null
-    },
+    result: outcome,
     hardChecks
   });
   assertReceiptRecordShape(receipt);

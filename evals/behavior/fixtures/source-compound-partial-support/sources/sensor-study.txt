@@ -1,0 +1,16 @@
+LOCAL SYNTHETIC STUDY REPORT — behavior-evaluation material, not a real publication.
+No DOI, external venue, author identity, or independently retrieved source is claimed.
+
+Question
+Does a conservation-penalized reconstruction estimator improve prediction error over an unconstrained estimator within the sampled operating regime?
+
+Method and protocol
+Both estimators used the same observations, training budget, and fixed validation protocol. All training, validation, and test samples came from operating regime R1. The evaluation used held-out trajectories within R1, not a held-out operating regime. The conservation term penalized departures from the known total state. The unconstrained estimator did not use that term.
+
+Measured outcome
+On the held-out R1 trajectories, the unconstrained estimator had mean absolute reconstruction error 0.18 and the penalized estimator had 0.14 (same units and evaluator). These are the only supplied aggregate measurements. Neither repeated-seed uncertainty nor a between-regime test was performed.
+
+Scope and open explanations
+The observations show lower reported reconstruction error in this particular within-regime comparison. They do not test transfer to R2 or any other operating regime. A generic shrinkage or smoothness control was not evaluated, so conservation-specific causal attribution remains unresolved. The report does not compare all prior work or establish novelty.
+
+End of the supplied study report. No additional full text or supplement is implied.

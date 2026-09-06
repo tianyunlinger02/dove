@@ -21,18 +21,20 @@ Validators and real interface checks establish bounded software evidence only. T
 These are validation requirements, not statements that live behavior has passed.
 
 - Ordinary Claude rule, `claude --agent dove` author main session, and bounded independent Dove subagent share one researcher identity. Full-conversation work, important clarification, and ongoing mainline ownership stay in the main session.
+- Verify proportionate theory-before-commitment, whole-path action tradeoffs, and anomalous-result validity at the final applicable Claude rule/agent and DSH Skill entrypoints, not only exported constants. Diagnostics and bounded requests stay bounded; reviewer text must not acquire author execution duties.
 - Isolated review uses a reviewer position, not the author's mainline. Check four whole-paper questions and the Markdown headings `Verdict`, `Blocking issues`, `Grounding basis`, and `Author-side next actions`, without parsing an acceptance gate. Runtime access stays frozen-file/Read-only, and human/CLI JSON projections omit SHA.
 - Explicit update replaces valid manifest-owned local edits with a notice; SessionStart skips them, syncs the remaining safe resources, and emits `systemMessage`. Unrelated configuration remains unchanged.
 - Compact/resume emits only absolute-time `RESEARCH.md`, latest Review, and latest Run facts as specified in Hook Guidelines. It does not read research Markdown bodies, reports, or stdout/stderr logs or infer the mainline. Startup/clear emits no research card.
 - `UserPromptSubmit` and intake remain retired with no per-prompt replacement; `statusLine` is not installed or managed, while the old helper remains available for user-owned composition scripts.
 - Run preserves minimal seed/commit/dirty facts without status counts, porcelain receipts, lockfile fingerprints, or environment taxonomies. Git does not affect compare eligibility or ranking; budget metadata is not prepayment or an automatic hard spending cap.
-- Source allows requested bounded bibliography DOI checks without a ledger. Figure checks its rendered output in the real manuscript context, not only a standalone preview. Reviewer workspace paths stay short and contained.
+- Source allows requested bounded bibliography DOI checks without a ledger and separates supported, contradicted, and uncovered parts of composite claims. Central execution that needs recording saves its plan before running and appends actual results to the same document. Figure checks its rendered output in the real manuscript context, not only a standalone preview or SVG source read. Reviewer workspace paths stay short, contained, and distinct across projects with the same Review id.
+- Existing authoritative manuscript formats are preserved through Draft and Review handoff. Submission completion requires a current independent whole-version recommendation as well as author sufficiency and delivery readiness; unavailable runtime does not waive it, and bounded local work does not imply a submission-completion goal.
 
 Install/sync and dogfood only in the user-approved `paper-template` workspace unless the user explicitly approves another location. Do not turn budget-limited or interrupted live cases into passes. Distinguish raw evidence, parser output, manual review, software checks, and scientific outcomes; do not claim all behavior passed from lower-level checks.
 
 ## What Validation Should Protect
 
-- the public release is Dove `3.0.0` with one Dove research agent and nine flat Skills;
+- the public release is Dove `3.0.1` with one Dove research agent and nine flat Skills;
 - canonical Dove behavior, Skill workflows, and generated host adapters do not drift, including the nine-capability shared mainline anchor, highest-level active limit, explicit candidate explanations, discriminating action choice, material-progress judgment, and research drive that turns gaps into hypotheses, discriminating evidence, or concrete next moves;
 - generated adapters remain projections rather than readiness claims;
 - Claude Code and DeepSeek Harness remain the supported project initialization paths; Claude receives the complete integration, while DSH receives project-local filesystem Skills only;

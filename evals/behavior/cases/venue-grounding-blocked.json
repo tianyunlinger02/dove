@@ -47,34 +47,8 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "states-grounding-boundary",
-      "kind": "public-output-includes-any",
-      "terms": [
-        "无法",
-        "unavailable",
-        "未访问",
-        "not grounded",
-        "不能给出",
-        "boundary"
-      ]
-    },
-    {
-      "id": "no-false-ready-claim",
-      "kind": "public-output-excludes-any",
-      "terms": [
-        "主要 blocker 已经解决",
-        "ready to submit now",
-        "already submission-ready",
-        "grounded pass",
-        "可以直接投稿"
-      ]
-    },
-    {
       "id": "inspect-manuscript",
       "kind": "tool-action-path",
-      "verbs": [
-        "Read"
-      ],
       "path": "paper/main.tex"
     },
     {

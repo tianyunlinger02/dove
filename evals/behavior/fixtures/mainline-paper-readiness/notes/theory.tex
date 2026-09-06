@@ -1,0 +1,10 @@
+% Synthetic mathematical working material for the behavior fixture, not a published source.
+\section{Candidate route and known setup}
+Let $x=(x_1,x_2)^T\in\mathbb{R}^2$, $M=[1\;1]$, and $C=[1\;1]$.
+We observe $Mx=y$ and impose $Cx=c$. Consider the consistent case $y=c=1$.
+The reconstruction objective is $\|Mx-y\|_2^2+\lambda\|Cx-c\|_2^2$, with $\lambda>0$.
+
+Two candidate explanations need separating: the conservation penalty removes an observational ambiguity, or it merely suppresses constraint violations while leaving that ambiguity unchanged.
+The current draft's uniqueness assertion has no proof. A proposed general route is to state conditions on $M$ and $C$ for uniqueness among states satisfying the constraint; the noisy case and any claim about generalization remain separate open questions.
+
+No external theorem, measured performance, novelty check, or publication acceptance is supplied by this working note. New training cannot replace deciding what this special case logically permits.

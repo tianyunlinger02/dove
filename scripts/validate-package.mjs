@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { COMMAND_SURFACES, MANAGED_PACKAGE_PATHS, PACKAGE_LEGAL_PATHS } from "../src/core/command-manifest.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
@@ -308,6 +308,63 @@ function assertPtyBareMenuExit(installedBin, projectRoot) {
   return smoke;
 }
 
+function assertDoctorRuntime(core, project, packageRoot) {
+  const before = snapshotDirectory(project);
+  const doctor = core.inspectProjectDoctor(project);
+  assert.equal(doctor.userCli.package.root, packageRoot, "public Doctor defaults to its own package, not its parent or the target project");
+  assert.equal(doctor.userCli.healthy, true);
+  assert.deepEqual(doctor.userCli.missing, []);
+  assert.equal(doctor.userCli.executable.path, path.join(packageRoot, "bin/dove-package.mjs"));
+  assert.deepEqual(snapshotDirectory(project), before, "Doctor must remain read-only");
+}
+
+async function assertTemporaryPublicLibrary() {
+  const { build } = await import("esbuild");
+  const source = await import("../src/core/index.mjs");
+  const scratch = path.join(ROOT, ".claude", "tmp", "dove-wiring-audit");
+  fs.mkdirSync(scratch, { recursive: true });
+  const tempRoot = fs.mkdtempSync(path.join(scratch, "library-"));
+  try {
+    const packageRoot = path.join(tempRoot, "package");
+    const project = path.join(tempRoot, "project");
+    fs.mkdirSync(path.join(packageRoot, "bin"), { recursive: true });
+    fs.mkdirSync(path.join(project, ".git"), { recursive: true });
+    fs.writeFileSync(path.join(project, "paper.tex"), "Synthetic Doctor target.\n");
+    fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: packageJson.name, type: "module", exports: packageJson.exports }));
+    const executable = path.join(packageRoot, "bin/dove-package.mjs");
+    fs.writeFileSync(executable, "// Synthetic CLI presence fixture; never executed.\n");
+    const outfile = path.join(packageRoot, "dist/index.mjs");
+    await build({
+      absWorkingDir: ROOT, entryPoints: ["src/core/index.mjs"], outfile,
+      bundle: true, platform: "node", target: "node22", format: "esm", external: ["node:*"],
+      define: { __DOVE_PACKAGE_NAME__: JSON.stringify(PACKAGE_NAME), __DOVE_PACKAGE_VERSION__: JSON.stringify(PACKAGE_VERSION) },
+      logLevel: "silent"
+    });
+    const library = await import(pathToFileURL(outfile).href);
+    assertDoctorRuntime(source, project, ROOT);
+    assertDoctorRuntime(library, project, packageRoot);
+    const exported = spawnChecked(process.execPath, ["--input-type=module", "-e", `import { inspectProjectDoctor } from "dove"; console.log(JSON.stringify(inspectProjectDoctor(${JSON.stringify(project)}).userCli));`], { cwd: packageRoot });
+    assert.deepEqual(JSON.parse(exported.stdout), library.inspectProjectDoctor(project).userCli, "package exports must reach the tested public library without installation");
+    const override = library.inspectProjectDoctor(project, { packageRoot: ROOT }).userCli;
+    assert.equal(override.package.root, ROOT);
+    assert.equal(override.healthy, true);
+    fs.renameSync(executable, `${executable}.absent`);
+    const missing = library.inspectProjectDoctor(project).userCli;
+    assert.equal(missing.package.root, packageRoot);
+    assert.equal(missing.healthy, false, "a genuinely missing runtime must still be reported");
+    assert.deepEqual(missing.missing, ["bin/dove-package.mjs"]);
+    assert.equal(missing.executable.healthy, false);
+    console.log(JSON.stringify({ status: "passed", scope: "source and temporary public library Doctor", packageExport: true, installed: false }, null, 2));
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+}
+
+if (process.argv.includes("--library-only")) {
+  await assertTemporaryPublicLibrary();
+  process.exit(0);
+}
+
 assertBuildCurrent();
 assertPackageMetadata();
 assertLegalInventory();
@@ -355,6 +412,9 @@ try {
   assertInstalledCli(installedBin, installRoot);
   const syntheticProject = path.join(tempRoot, "synthetic-project");
   const smoke = assertPtyBareMenuExit(installedBin, syntheticProject);
+  assertDoctorRuntime(packageExports, syntheticProject, ROOT);
+  const installedRoot = path.join(installRoot, "node_modules", packageJson.name);
+  assertDoctorRuntime(await import(pathToFileURL(path.join(installedRoot, "dist/index.mjs")).href), syntheticProject, installedRoot);
   console.log(JSON.stringify({ status: "passed", packed: pack.filename, installedVersion: packageJson.version, ptyBareMenuExit: { exitCode: smoke.exitCode, zeroProjectWrites: true } }, null, 2));
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });

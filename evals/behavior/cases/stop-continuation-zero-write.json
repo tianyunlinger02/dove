@@ -59,15 +59,6 @@
       "kind": "tool-action-forbidden-path",
       "path": ".dove/install/DOCTOR.md",
       "description": "No tool action should target DOCTOR.md."
-    },
-    {
-      "id": "no-transcript-leak",
-      "kind": "public-output-excludes-any",
-      "terms": [
-        "transcript",
-        "conversation log",
-        "private memory"
-      ]
     }
   ],
   "humanReviewRubric": [

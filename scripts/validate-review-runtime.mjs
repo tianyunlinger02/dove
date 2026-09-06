@@ -7,13 +7,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { initializeProjectIntegration } from "../src/core/project-installation.mjs";
+import { createProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
+import { reviewWorkspaceName } from "../src/core/review-workspace.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import * as publicCore from "../src/core/index.mjs";
-import * as bundledCore from "../dist/index.mjs";
 
+const SOURCE_ONLY = process.argv.includes("--source-only");
+const coreEntries = [["source", publicCore]];
+if (!SOURCE_ONLY) coreEntries.push(["bundle", await import("../dist/index.mjs")]);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SCRATCH_ROOT = path.join(ROOT, ".dove-dev", "tmp");
+const SCRATCH_ROOT = path.join(ROOT, ".claude", "tmp", "dove-wiring-audit");
 fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
 
 function writeJson(filePath, value) {
@@ -136,8 +139,9 @@ function cliReview(args, env, options = {}) {
 }
 
 function jsonCli(args, env, options = {}) {
-  const result = cliReview(args, env, options);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const { expectedStatus = 0, ...spawnOptions } = options;
+  const result = cliReview(args, env, spawnOptions);
+  assert.equal(result.status, expectedStatus, result.stderr || result.stdout);
   assert.equal(result.stderr, "");
   const value = JSON.parse(result.stdout);
   assertNoPublicHashFields(value, args.join(" "));
@@ -209,11 +213,15 @@ if (process.env.DOVE_FAKE_CLAUDE_FAIL === "1") {
   process.stderr.write("fake reviewer backend failed after validating argv and material workspace\\n");
   process.exit(17);
 }
-if (process.env.DOVE_FAKE_LOG) fs.appendFileSync(process.env.DOVE_FAKE_LOG, JSON.stringify({ mode, sessionId, cwd: process.cwd(), allowed: [...allowed].sort() }) + "\\n");
+const sessionPath = path.join(process.env.DOVE_FAKE_SESSION_ROOT, sessionId + ".json");
+if (mode === "--session-id") fs.writeFileSync(sessionPath, JSON.stringify({ cwd: process.cwd() }), { flag: "wx" });
+else assert.equal(JSON.parse(fs.readFileSync(sessionPath, "utf8")).cwd, process.cwd(), "resumed session must keep its workspace");
+const materialBytes = Object.fromEntries(actual.map((file) => [file, fs.readFileSync(path.join(process.cwd(), file)).toString("hex")]));
+if (process.env.DOVE_FAKE_LOG) fs.appendFileSync(process.env.DOVE_FAKE_LOG, JSON.stringify({ mode, sessionId, cwd: process.cwd(), allowed: [...allowed].sort(), materialBytes }) + "\\n");
 process.stdout.write(JSON.stringify({
   type: "result",
   session_id: process.env.DOVE_FAKE_BAD_SESSION === "1" ? sessionId + "-wrong" : sessionId,
-  result: "## Verdict\\n\\nThe fake reviewer read only the listed materials and returns a bounded scientific judgment.\\n\\n## Blocking issues\\n\\nNo synthetic blocking issue.\\n\\n## Grounding basis\\n\\nOnly the copied frozen materials were inspected.\\n\\n## Author-side next actions\\n\\nUse author-side judgment for any revision."
+  result: process.env.DOVE_FAKE_REPORT ?? "## Verdict\\n\\nThe fake reviewer read only the listed materials and returns a bounded scientific judgment.\\n\\n## Blocking issues\\n\\nNo synthetic blocking issue.\\n\\n## Grounding basis\\n\\nOnly the copied frozen materials were inspected.\\n\\n## Author-side next actions\\n\\nUse author-side judgment for any revision."
 }));
 `, "utf8");
   fs.chmodSync(fakePath, 0o755);
@@ -225,7 +233,10 @@ function makeProject(tempRoot, name) {
   fs.mkdirSync(path.join(project, ".git"));
   fs.writeFileSync(path.join(project, ".git", "config"), "[core]\n\trepositoryformatversion = 0\n");
   fs.writeFileSync(path.join(project, "package.json"), "{}\n");
-  initializeProjectIntegration(project, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"], now: "2026-09-02T00:00:00.000Z" });
+  // Synthetic runtime fixture only: do not install or synchronize host resources.
+  writeJson(path.join(project, ".dove/install/manifest.json"), createProjectInstallationManifest({
+    package: { name: PACKAGE_NAME, version: PACKAGE_VERSION }, hosts: ["claude"], now: "2026-09-02T00:00:00.000Z"
+  }, { hostIds: ["claude"] }));
   writeFile(project, "paper/main.tex", "\\section{Main} Initial manuscript.\n");
   writeFile(project, "paper/result.pdf", "%PDF fake current build\n");
   writeFile(project, "paper/private-note.md", "author-only note must not be copied\n");
@@ -240,8 +251,10 @@ const tempRoot = fs.mkdtempSync(path.join(SCRATCH_ROOT, "dove-review-runtime-"))
 const stateRoot = path.join(tempRoot, "state", "reviews");
 const fakeClaude = path.join(tempRoot, "fake-claude.mjs");
 const fakeLog = path.join(tempRoot, "fake-claude.jsonl");
-const env = { ...process.env, DOVE_CLAUDE_COMMAND: fakeClaude, DOVE_REVIEW_STATE_ROOT: stateRoot, DOVE_FAKE_LOG: fakeLog };
+const sessionRoot = path.join(tempRoot, "sessions");
+const env = { ...process.env, DOVE_CLAUDE_COMMAND: fakeClaude, DOVE_REVIEW_STATE_ROOT: stateRoot, DOVE_FAKE_LOG: fakeLog, DOVE_FAKE_SESSION_ROOT: sessionRoot };
 try {
+  fs.mkdirSync(sessionRoot);
   writeFakeClaude(fakeClaude);
   const project = makeProject(tempRoot, "project");
   const reviewId = "review-validation";
@@ -280,7 +293,7 @@ try {
   assert.equal(backend1.argv.includes("--session-id"), true);
   assert.equal(backend1.argv.includes("--resume"), false);
 
-  const copied1 = listFiles(path.join(stateRoot, reviewId));
+  const copied1 = listFiles(handoff.workspaceRoot);
   assert.deepEqual(copied1, ["paper/main.tex", "paper/result.pdf"]);
   assert.equal(copied1.includes("paper/private-note.md"), false);
   assert.equal(copied1.includes("CLAUDE.md"), false);
@@ -377,7 +390,7 @@ try {
   assert.equal(rerun.round, 2);
   assert.equal(rerun.sessionId, handoff.sessionId);
   assert.deepEqual(rerun.materials.map((item) => item.path), ["paper/main.tex", "paper/supplement.tex"]);
-  assert.deepEqual(listFiles(path.join(stateRoot, reviewId)), ["paper/main.tex", "paper/supplement.tex"]);
+  assert.deepEqual(listFiles(handoff.workspaceRoot), ["paper/main.tex", "paper/supplement.tex"]);
   const backend2 = readJson(path.join(project, ".dove", "reviews", reviewId, "rounds", "2", "backend.json"));
   assert.equal(backend2.argv.includes("--resume"), true);
   assert.equal(backend2.requestedSessionId, handoff.sessionId);
@@ -421,7 +434,7 @@ try {
     "--id", reviewId,
     "--material", "paper/failure-round.tex",
     "--json"
-  ], { ...env, DOVE_FAKE_CLAUDE_FAIL: "1" });
+  ], { ...env, DOVE_FAKE_CLAUDE_FAIL: "1" }, { expectedStatus: 1 });
   assert.equal(failedRerun.command, "rerun");
   assert.equal(failedRerun.status, "failed");
   assert.equal(failedRerun.round, 4);
@@ -433,7 +446,7 @@ try {
   assert.equal(failedRerunBackend.status, "failed");
   assert.equal(failedRerunBackend.requestedSessionId, handoff.sessionId);
   assert.equal(Object.hasOwn(failedRerunBackend, "sessionId"), false);
-  assert.deepEqual(listFiles(path.join(stateRoot, reviewId)), ["paper/failure-round.tex"]);
+  assert.deepEqual(listFiles(handoff.workspaceRoot), ["paper/failure-round.tex"]);
   assertReviewStatusReadOnly(project, env, ["review", "status", "--project", project, "--id", reviewId, "--json"], (value) => {
     assert.equal(value.currentRound, 4);
     assert.equal(value.materialCurrentness.overall, "current");
@@ -509,7 +522,7 @@ try {
     "--id", "review-failure",
     "--material", "paper/main.tex",
     "--json"
-  ], { ...env, DOVE_FAKE_CLAUDE_FAIL: "1" });
+  ], { ...env, DOVE_FAKE_CLAUDE_FAIL: "1" }, { expectedStatus: 1 });
   assert.equal(failed.command, "handoff");
   assert.equal(failed.status, "failed");
   assert.equal(failed.sessionId, null);
@@ -528,7 +541,150 @@ try {
   assert.equal(invocations[1].sessionId, invocations[0].sessionId);
   assert.equal(invocations[2].sessionId, invocations[0].sessionId);
 
-  for (const [label, core] of [["source", publicCore], ["bundle", bundledCore]]) {
+  const orphanId = "unclaimed-workspace";
+  const orphanRoot = path.join(stateRoot, reviewWorkspaceName(orphanId, { projectRoot: project }));
+  writeFile(orphanRoot, "keep.txt", "Existing workspace must not be adopted by a new handoff.\n");
+  const orphanBefore = directoryObservationDigest(orphanRoot);
+  const orphanHandoff = cliReview(["review", "handoff", "--project", project, "--id", orphanId, "--material", "paper/main.tex", "--json"], env);
+  assert.notEqual(orphanHandoff.status, 0);
+  assert.match(orphanHandoff.stderr, /workspace already exists without this review's recorded session/u);
+  assertDigestEqual(directoryObservationDigest(orphanRoot), orphanBefore, "handoff must not overwrite a workspace without its record");
+  assert.equal(fs.existsSync(path.join(project, ".dove/reviews", orphanId)), false);
+
+  // Two real source CLI projects share an id and state root, never a workspace or lock.
+  const projectA = makeProject(tempRoot, `a/${"long-project-parent-".repeat(8)}/project`);
+  const projectB = makeProject(tempRoot, "b/project");
+  const sharedId = "same-review";
+  const argsFor = (operation, target, materials = []) => ["review", operation, "--project", target, "--id", sharedId, ...materials.flatMap((material) => ["--material", material]), "--json"];
+  writeFile(projectA, "paper/main.tex", "Project A frozen version one.\n");
+  writeFile(projectB, "paper/main.tex", "Project B frozen version one.\n");
+  const firstA = jsonCli(argsFor("handoff", projectA, ["paper/main.tex"]), env);
+  assert.equal(firstA.status, "completed");
+  const workspaceA = directoryObservationDigest(firstA.workspaceRoot);
+  const recordsA = directoryObservationDigest(path.join(projectA, ".dove/reviews"));
+  const lockA = path.join(stateRoot, ".locks", `${reviewWorkspaceName(sharedId, { projectRoot: projectA })}.lock`);
+  fs.mkdirSync(lockA);
+  let firstB;
+  try {
+    firstB = jsonCli(argsFor("handoff", projectB, ["paper/main.tex"]), env);
+    assert.equal(firstB.status, "completed", "project A's lock must not block project B");
+    const lockedA = cliReview(argsFor("resume", projectA), env);
+    assert.notEqual(lockedA.status, 0);
+    assert.match(lockedA.stderr, /active operation or stale runtime lock/u);
+  } finally {
+    fs.rmdirSync(lockA);
+  }
+  assertDigestEqual(directoryObservationDigest(firstA.workspaceRoot), workspaceA, "B handoff must not replace A materials");
+  assertDigestEqual(directoryObservationDigest(path.join(projectA, ".dove/reviews")), recordsA, "B handoff and A lock rejection must not change A records");
+  assert.notEqual(firstB.workspaceRoot, firstA.workspaceRoot);
+  assert.notEqual(firstB.sessionId, firstA.sessionId);
+  for (const first of [firstA, firstB]) {
+    assert.equal(path.dirname(first.workspaceRoot), stateRoot);
+    assert.match(path.basename(first.workspaceRoot), /^r-[a-f0-9]{20}$/u, "workspace suffix stays short even for deep project paths");
+  }
+  const workspaceB = directoryObservationDigest(firstB.workspaceRoot);
+  for (const [target, first] of [[projectA, firstA], [projectB, firstB]]) {
+    const continued = jsonCli(argsFor("resume", target), env);
+    assert.equal(continued.status, "completed");
+    assert.equal(continued.sessionId, first.sessionId);
+    assert.equal(continued.workspaceRoot, first.workspaceRoot);
+  }
+  const recordsB = directoryObservationDigest(path.join(projectB, ".dove/reviews"));
+  writeFile(projectA, "paper/main.tex", "Project A revised full version.\n");
+  const nextA = jsonCli(argsFor("rerun", projectA, ["paper/main.tex"]), env);
+  assert.equal(nextA.status, "completed");
+  assert.equal(nextA.round, 2);
+  assert.equal(nextA.sessionId, firstA.sessionId);
+  assert.equal(nextA.workspaceRoot, firstA.workspaceRoot);
+  assertDigestEqual(directoryObservationDigest(firstB.workspaceRoot), workspaceB, "A rerun must not change B materials");
+  assertDigestEqual(directoryObservationDigest(path.join(projectB, ".dove/reviews")), recordsB, "A rerun must not change B records");
+  const lastB = jsonCli(argsFor("resume", projectB), env);
+  assert.equal(lastB.status, "completed");
+  assert.equal(lastB.sessionId, firstB.sessionId);
+  assert.equal(lastB.workspaceRoot, firstB.workspaceRoot);
+  const sharedInvocations = fs.readFileSync(fakeLog, "utf8").trim().split("\n").map(JSON.parse).filter((item) => [firstA.sessionId, firstB.sessionId].includes(item.sessionId));
+  assert.deepEqual(sharedInvocations.filter((item) => item.sessionId === firstA.sessionId).map((item) => item.materialBytes["paper/main.tex"]), ["Project A frozen version one.\n", "Project A frozen version one.\n", "Project A revised full version.\n"].map((text) => Buffer.from(text).toString("hex")));
+  assert.ok(sharedInvocations.filter((item) => item.sessionId === firstB.sessionId).every((item) => item.cwd === firstB.workspaceRoot && item.materialBytes["paper/main.tex"] === Buffer.from("Project B frozen version one.\n").toString("hex")));
+
+  const beforeRollbackA = directoryObservationDigest(firstA.workspaceRoot);
+  const beforeRollbackB = directoryObservationDigest(firstB.workspaceRoot);
+  const recordBeforeRollback = fs.readFileSync(path.join(projectA, ".dove/reviews", sharedId, "review.json"));
+  writeFile(projectA, "paper/main.tex", "A revision whose record transaction will fail.\n");
+  let injectedFailure = false;
+  assert.throws(() => publicCore.rerunReview({
+    project: projectA, id: sharedId, materials: ["paper/main.tex"], stateRoot, env,
+    fsOps: {
+      ...fs,
+      mkdirSync(target, ...args) {
+        if (!injectedFailure && String(target).startsWith(path.join(projectA, ".dove/reviews/.transactions"))) {
+          injectedFailure = true;
+          throw new Error("injected review transaction failure");
+        }
+        return fs.mkdirSync(target, ...args);
+      }
+    }
+  }), /injected review transaction failure/u);
+  assert.equal(injectedFailure, true);
+  assertDigestEqual(directoryObservationDigest(firstA.workspaceRoot), beforeRollbackA, "failed rerun must restore the project-keyed workspace");
+  assertDigestEqual(directoryObservationDigest(firstB.workspaceRoot), beforeRollbackB, "A rollback must not touch B workspace");
+  assert.deepEqual(fs.readFileSync(path.join(projectA, ".dove/reviews", sharedId, "review.json")), recordBeforeRollback);
+  assert.equal(jsonCli(argsFor("resume", projectA), env).status, "completed", "restored frozen workspace must remain resumable");
+  assert.equal(fs.readdirSync(stateRoot).some((entry) => entry.includes(".previous-") || entry.includes(".staging-")), false);
+
+  const failedResume = jsonCli(argsFor("resume", projectA), { ...env, DOVE_FAKE_CLAUDE_FAIL: "1" }, { expectedStatus: 1 });
+  assert.equal(failedResume.status, "failed");
+  assert.equal(failedResume.sessionId, firstA.sessionId);
+  assertReviewStatusReadOnly(projectA, env, argsFor("status", projectA), (status) => assert.equal(status.status, "failed"));
+  const humanFailure = cliReview(argsFor("resume", projectA).filter((arg) => arg !== "--json"), { ...env, DOVE_FAKE_CLAUDE_FAIL: "1" });
+  assert.equal(humanFailure.status, 1);
+  assert.equal(humanFailure.stderr, "");
+  assert.match(humanFailure.stdout, /运行失败/u);
+  assert.doesNotMatch(humanFailure.stdout, /已完成|已恢复并更新/u);
+  const negativeVerdict = "## Verdict\n\nReject this synthetic paper: the central claim is unsupported.\n\n## Blocking issues\n\nMissing decisive evidence.\n\n## Grounding basis\n\nCopied material only.\n\n## Author-side next actions\n\nInvestigate the claim.\n";
+  const negativeReturn = jsonCli(argsFor("resume", projectA), { ...env, DOVE_FAKE_REPORT: negativeVerdict });
+  assert.equal(negativeReturn.status, "completed", "a negative scientific verdict is not a runtime failure");
+  assert.equal(fs.readFileSync(path.join(projectA, negativeReturn.latestReportPath), "utf8"), negativeVerdict);
+
+  // Old shared-id cwd receipts cannot prove ownership. Fail closed, without path discovery or migration.
+  const legacyProject = makeProject(tempRoot, "recorded-workspace");
+  const legacyId = "existing-session";
+  const legacyOptions = { project: legacyProject, id: legacyId, materials: ["paper/main.tex"], stateRoot, env };
+  const legacyFirst = publicCore.handoffReview(legacyOptions);
+  const legacyPeer = publicCore.handoffReview({ ...legacyOptions, project: projectB });
+  assert.equal(legacyFirst.status, "completed");
+  assert.equal(legacyPeer.status, "completed");
+  const legacyRoot = path.join(stateRoot, legacyId);
+  fs.renameSync(legacyFirst.workspaceRoot, legacyRoot);
+  for (const [target, first] of [[legacyProject, legacyFirst], [projectB, legacyPeer]]) {
+    const backendPath = path.join(target, first.backendPath);
+    writeJson(backendPath, { ...readJson(backendPath), cwd: legacyRoot });
+    writeJson(path.join(sessionRoot, `${first.sessionId}.json`), { cwd: legacyRoot });
+  }
+  const legacyBefore = directoryObservationDigest(legacyRoot);
+  const peerBefore = directoryObservationDigest(legacyPeer.workspaceRoot);
+  const callsBeforeLegacy = fs.readFileSync(fakeLog, "utf8");
+  for (const target of [legacyProject, projectB]) {
+    const options = { ...legacyOptions, project: target };
+    const recordsBefore = directoryObservationDigest(path.join(target, ".dove/reviews", legacyId));
+    assert.throws(() => publicCore.rerunReview(options), /Start a new review id/u);
+    assertDigestEqual(directoryObservationDigest(path.join(target, ".dove/reviews", legacyId)), recordsBefore, "unowned rerun must not write a round");
+    const resumed = publicCore.resumeReview(options);
+    assert.equal(resumed.status, "failed");
+    assert.match(readJson(path.join(target, resumed.latestBackendPath)).error, /Start a new review id/u);
+  }
+  assert.equal(fs.readFileSync(fakeLog, "utf8"), callsBeforeLegacy, "unowned old sessions must not launch a reviewer or rediscover a new workspace");
+  assertDigestEqual(directoryObservationDigest(legacyRoot), legacyBefore, "neither old project may replace the shared-id workspace");
+  assertDigestEqual(directoryObservationDigest(legacyPeer.workspaceRoot), peerBefore, "recorded cwd must not silently fall back to the computed workspace");
+  const fresh = publicCore.handoffReview({ ...legacyOptions, id: "fresh-owned-session" });
+  assert.equal(fresh.status, "completed");
+  assert.notEqual(fresh.workspaceRoot, legacyRoot);
+  const freshBackendPath = path.join(legacyProject, fresh.backendPath);
+  writeJson(freshBackendPath, { ...readJson(freshBackendPath), cwd: firstA.workspaceRoot });
+  const foreignBefore = directoryObservationDigest(firstA.workspaceRoot);
+  assert.throws(() => publicCore.rerunReview({ ...legacyOptions, id: fresh.reviewId }), /recorded workspace must belong to this project/u);
+  assertDigestEqual(directoryObservationDigest(firstA.workspaceRoot), foreignBefore, "a foreign project's recorded cwd must not authorize replacement");
+
+  for (const [label, core] of coreEntries) {
     for (const internal of ["createReviewSnapshot", "snapshotDigest", "runClaudeReviewBackend"]) {
       assert.equal(Object.hasOwn(core, internal), false, `${label} must keep raw hash receipt helpers internal`);
     }
@@ -580,7 +736,7 @@ try {
     assert.deepEqual(missingSnapshotStatus.materialCurrentness, missingSnapshotStatus.rounds[0].materialCurrentness);
     assertNoPublicHashFields(core.resumeReview(options));
     assertNoPublicHashFields(core.rerunReview(options));
-    const workspaceFile = path.join(stateRoot, id, "paper", "main.tex");
+    const workspaceFile = path.join(first.workspaceRoot, "paper", "main.tex");
     const frozenBytes = fs.readFileSync(workspaceFile);
     const changedBytes = Buffer.from(frozenBytes);
     changedBytes[0] ^= 1;
@@ -615,7 +771,7 @@ try {
     assertNoPublicHashFields(listed);
     assert.equal(listed.reviews.find((review) => review.reviewId === id).venue, null);
     assertReviewStatusReadOnly(project, env, ["review", "status", "--project", project, "--id", id, "--json"], (value) => assert.equal(value.venue, null));
-    for (const executable of ["dove.mjs", "dove-package.mjs"]) {
+    for (const executable of SOURCE_ONLY ? ["dove.mjs"] : ["dove.mjs", "dove-package.mjs"]) {
       const human = spawnSync(process.execPath, [path.join(ROOT, "bin", executable), "review", "status", "--project", project, "--id", id], { cwd: ROOT, encoding: "utf8", env });
       assert.equal(human.status, 0, human.stderr);
       assert.doesNotMatch(human.stdout, /internal-only-receipt|sha256|reportSha256|[a-f0-9]{64}/u);

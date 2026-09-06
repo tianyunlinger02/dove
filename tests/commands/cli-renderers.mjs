@@ -41,6 +41,18 @@ function assertRuntimeCli() {
     options: { project: "/workspace", venue: "TestConf", material: ["paper/main.tex", "build/main.pdf"], id: "review-1", json: true },
     passthrough: []
   });
+  for (const subcommand of ["handoff", "rerun"]) {
+    assert.equal(CLI_COMMAND_SPECS.review.subcommands[subcommand].options.some((option) => option.name === "--file"), false);
+    for (const fileOption of [["--file", "return.md"], ["--file=return.md"]]) {
+      assertParserError(["review", subcommand, "--project=/workspace", "--json", ...fileOption], /Dove 不支持这个参数：--file/u, true);
+    }
+  }
+  assert.deepEqual(assertParserShape(parseDoveCli(["review", "import", "--project=/workspace", "--id", "review-1", "--file=return.md", "--venue", "TestConf", "--material", "paper/main.tex"])), {
+    command: "review",
+    subcommand: "import",
+    options: { project: "/workspace", id: "review-1", file: "return.md", venue: "TestConf", material: ["paper/main.tex"] },
+    passthrough: []
+  });
   assertParserError(["hook", "user-prompt-submit", "--project=/workspace"], /hook 只接受这些子命令：session-start(?:，或| 或) statusline/iu, false);
   assert.deepEqual(assertParserShape(parseDoveCli(["init", "--host", "claude,dsh", "--host=dsh,claude", "--project=/workspace"])), {
     command: "init",
@@ -100,6 +112,25 @@ function assertProjectIntegrationRenderer() {
   assert.match(output, /已覆盖 1 个 manifest-owned 本地编辑/u);
   assert.match(output, /\.claude\/settings\?\.json#\/hooks\/SessionStart\[dove-session-start\]/u);
   assert.match(output, /SessionStart 只会跳过这些本地编辑并提醒/u);
+
+  const initializedResult = {
+    status: "initialized",
+    target: "/workspace/example-project",
+    hosts: ["claude"],
+    removedPaths: [],
+    changedPaths: []
+  };
+  const createdOverview = renderProjectIntegrationResult("init", {
+    ...initializedResult,
+    writtenPaths: [".dove/research/RESEARCH.md", ".dove/install/manifest.json"]
+  }, { stream: { isTTY: false }, env: {} });
+  assert.match(createdOverview, /最小研究入口 RESEARCH\.md 已建立/u);
+  const preservedResearch = renderProjectIntegrationResult("init", {
+    ...initializedResult,
+    writtenPaths: [".dove/install/manifest.json"]
+  }, { stream: { isTTY: false }, env: {} });
+  assert.match(preservedResearch, /现有研究目录保持不变，未创建或补写研究文档/u);
+  assert.doesNotMatch(preservedResearch, /研究入口(?: RESEARCH\.md)?已建立|研究入口 RESEARCH\.md 已建立/u);
 }
 
 function assertReviewResultRenderer() {
@@ -179,6 +210,26 @@ function assertReviewResultRenderer() {
   assert.match(handoff, /paper\/main\.tex \(123 bytes\)/u);
   assert.match(handoff, /paper\/unsafe\?\.tex \(bad\? bytes\)/u);
   assert.match(handoff, /Reviewer 只接收本轮冻结材料/u);
+
+  for (const command of ["handoff", "resume", "rerun"]) {
+    const failed = renderReviewResult({
+      command,
+      status: "failed",
+      project: "/workspace/example-project",
+      reviewId: "review-1",
+      round: 1,
+      provenance: "runtime",
+      materials: []
+    });
+    assert.match(failed, /^Dove review 运行失败；未生成本次 reviewer 报告/u);
+    assert.match(failed, /状态：failed/u);
+    assert.doesNotMatch(failed, /handoff 已完成|已恢复并更新|已在同一 reviewer session 中开始/u);
+  }
+  const failedStatus = renderReviewResult({ command: "status", status: "failed", reviewId: "review-1", rounds: [] });
+  assert.match(failedStatus, /^Dove review 状态/u);
+  assert.doesNotMatch(failedStatus, /运行失败；未生成本次/u);
+  const completedNegativeReview = renderReviewResult({ command: "handoff", status: "completed", report: "## Verdict\nREVISE", materials: [] });
+  assert.match(completedNegativeReview, /^Dove review handoff 已完成/u);
 
   const imported = renderReviewResult({
     command: "import",

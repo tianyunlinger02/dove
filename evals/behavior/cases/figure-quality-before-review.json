@@ -46,42 +46,15 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "mentions-figure-substance",
-      "kind": "public-output-includes-any",
-      "terms": [
-        "caption",
-        "图注",
-        "readability",
-        "unreadable",
-        "evidence",
-        "证据"
-      ]
-    },
-    {
-      "id": "no-count-only-pass",
-      "kind": "public-output-excludes-any",
-      "terms": [
-        "figures exist so",
-        "尺寸正常所以",
-        "数量正确",
-        "all figures are clear"
-      ]
-    },
-    {
       "id": "inspect-manuscript",
       "kind": "tool-action-path",
-      "verbs": [
-        "Read"
-      ],
       "path": "paper/main.tex"
     },
     {
-      "id": "inspect-figure-file",
+      "id": "inspect-editable-figure-source",
       "kind": "tool-action-path",
-      "verbs": [
-        "Read"
-      ],
-      "path": "figures/panel-dense.svg"
+      "path": "figures/panel-dense.svg",
+      "description": "Source-path observation only. Reading SVG XML does not establish visual inspection or figure quality; actual raster rendering/opening must be established from public results during human review."
     },
     {
       "id": "doctor-not-created",
@@ -107,7 +80,7 @@
       ]
     },
     {
-      "criterion": "Readability and journal-scale presentation are treated as scientific evidence risks.",
+      "criterion": "Readability and journal-scale presentation are judged from a successfully rendered raster opened with visual-capable host tooling in manuscript context. SVG text inspection can diagnose source problems but cannot establish visual quality; a blocked render/open remains an explicit limitation.",
       "evidence": [
         "public-output.md",
         "stream.jsonl"

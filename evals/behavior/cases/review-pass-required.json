@@ -25,6 +25,7 @@
   "snapshot": {
     "include": [
       ".dove/research/**",
+      ".dove/reviews/**",
       "paper/main.tex",
       "reviews/old-review.md"
     ]
@@ -37,7 +38,6 @@
     "mustNotTouch": [
       "reviews/old-review.md",
       ".dove/install/DOCTOR.md",
-      ".dove/reviews/**",
       ".dove/runs/**"
     ]
   },
@@ -47,32 +47,8 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "mentions-current-review-boundary",
-      "kind": "public-output-includes-any",
-      "terms": [
-        "current review",
-        "当前稿件",
-        "实际 Review",
-        "旧 review",
-        "stale"
-      ]
-    },
-    {
-      "id": "no-false-ready-claim",
-      "kind": "public-output-excludes-any",
-      "terms": [
-        "ready to submit now",
-        "already submission-ready",
-        "可以直接投稿",
-        "已经 ready"
-      ]
-    },
-    {
       "id": "inspect-current-manuscript",
       "kind": "tool-action-path",
-      "verbs": [
-        "Read"
-      ],
       "path": "paper/main.tex"
     },
     {

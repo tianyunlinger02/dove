@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="240" viewBox="0 0 900 240">
+  <title>Initial synthetic method sketch, needs revision</title>
+  <rect width="900" height="240" fill="white"/>
+  <g fill="#eee" stroke="black">
+    <rect x="10" y="60" width="150" height="50"/>
+    <rect x="200" y="60" width="150" height="50"/>
+    <rect x="390" y="60" width="150" height="50"/>
+    <rect x="580" y="60" width="280" height="50"/>
+  </g>
+  <g font-family="sans-serif" font-size="5" fill="black">
+    <text x="20" y="86">Sparse sensor observations</text>
+    <text x="210" y="86">Conservation penalty</text>
+    <text x="400" y="86">Encoder</text>
+    <text x="590" y="86">Guaranteed better unseen-regime reconstruction</text>
+  </g>
+  <path d="M160 85 H200 M350 85 H390 M540 85 H580" stroke="black"/>
+</svg>

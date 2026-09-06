@@ -45,32 +45,8 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "chooses-an-option",
-      "kind": "public-output-includes-any",
-      "terms": [
-        "Option A",
-        "A 更",
-        "A is safer",
-        "regularizer"
-      ]
-    },
-    {
-      "id": "no-follow-through-offer",
-      "kind": "public-output-excludes-any",
-      "terms": [
-        "I will now",
-        "接下来我会",
-        "要不要我继续",
-        "if you want, I can",
-        "next step is to run"
-      ]
-    },
-    {
       "id": "inspect-framing-source",
       "kind": "tool-action-path",
-      "verbs": [
-        "Read"
-      ],
       "path": "paper/main.tex"
     },
     {

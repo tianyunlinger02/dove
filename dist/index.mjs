@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.0.0" : null;
+var injectedVersion = true ? "3.0.1" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -669,12 +669,21 @@ function ensureRealDirectory(directoryPath, options = {}) {
   if (finalStat.isSymbolicLink() || !finalStat.isDirectory()) throw new Error(`${label} must be a real directory: ${resolved}`);
   return realpathNative2(fsOps, resolved);
 }
+function reviewWorkspaceName(reviewId, options = {}) {
+  const projectRoot = realpathNative2(options.fsOps ?? fs4, path4.resolve(options.projectRoot));
+  return `r-${sha2563(JSON.stringify([projectRoot, normalizeReviewId(reviewId)])).slice(0, 20)}`;
+}
 function reviewWorkspaceLocation(reviewId, options = {}) {
   const id = normalizeReviewId(reviewId);
   const fsOps = options.fsOps ?? fs4;
   const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
-  return { id, stateRoot, stateRootFs, workspaceRoot: stateRootFs.displayPath(id) };
+  const name = reviewWorkspaceName(id, options);
+  const workspaceRoot = options.workspaceRoot ?? stateRootFs.displayPath(name);
+  if (workspaceRoot !== stateRootFs.displayPath(name)) {
+    throw new Error("Dove review recorded workspace must belong to this project and review inside the selected state root. Start a new review id; the existing workspace is left untouched.");
+  }
+  return { id, name, stateRoot, stateRootFs, workspaceRoot };
 }
 function writeMaterialFiles(root, files, fsOps) {
   const anchor = openRootedFilesystem(root, { fsOps });
@@ -688,28 +697,29 @@ function writeMaterialFiles(root, files, fsOps) {
 function prepareReviewWorkspace(options = {}) {
   const fsOps = options.fsOps ?? fs4;
   if (!Array.isArray(options.files)) throw new Error("Dove review workspace files must be an array.");
-  const { id, stateRoot, stateRootFs, workspaceRoot } = reviewWorkspaceLocation(options.reviewId, options);
-  const stagingName = `.${id}.staging-${crypto3.randomUUID()}`;
-  const backupName = `.${id}.previous-${crypto3.randomUUID()}`;
+  const { id, name, stateRoot, stateRootFs, workspaceRoot } = reviewWorkspaceLocation(options.reviewId, options);
+  const stagingName = `.${name}.staging-${crypto3.randomUUID()}`;
+  const backupName = `.${name}.previous-${crypto3.randomUUID()}`;
   let backupCreated = false;
   let promoted = false;
   stateRootFs.mkdir(stagingName, { mode: 448 });
   const stagingRoot = stateRootFs.displayPath(stagingName);
   try {
     writeMaterialFiles(stagingRoot, options.files, fsOps);
-    const existing = stateRootFs.tryLstat(id);
+    const existing = stateRootFs.tryLstat(name);
     if (existing !== null) {
+      if (!options.workspaceRoot) throw new Error(`Dove review workspace already exists without this review's recorded session: ${workspaceRoot}`);
       if (existing.isSymbolicLink() || !existing.isDirectory()) throw new Error(`Dove review workspace must be a real directory: ${workspaceRoot}`);
-      stateRootFs.rename(id, backupName);
+      stateRootFs.rename(name, backupName);
       backupCreated = true;
     }
     try {
-      stateRootFs.rename(stagingName, id);
+      stateRootFs.rename(stagingName, name);
       promoted = true;
     } catch (promoteError) {
-      if (backupCreated && !stateRootFs.exists(id) && stateRootFs.exists(backupName)) {
+      if (backupCreated && !stateRootFs.exists(name) && stateRootFs.exists(backupName)) {
         try {
-          stateRootFs.rename(backupName, id);
+          stateRootFs.rename(backupName, name);
         } catch (restoreError) {
           throw new Error(`Dove review workspace replacement failed and the previous workspace could not be restored: ${errorMessage(promoteError)}; restore: ${errorMessage(restoreError)}`, { cause: promoteError });
         }
@@ -730,7 +740,7 @@ function prepareReviewWorkspace(options = {}) {
     } catch {
     }
     try {
-      if (backupCreated && !stateRootFs.exists(id) && stateRootFs.exists(backupName)) stateRootFs.rename(backupName, id);
+      if (backupCreated && !stateRootFs.exists(name) && stateRootFs.exists(backupName)) stateRootFs.rename(backupName, name);
     } catch (restoreError) {
       throw new Error(`Dove review workspace preparation failed and the previous workspace could not be restored: ${errorMessage(error)}; restore: ${errorMessage(restoreError)}`, { cause: error });
     }
@@ -768,15 +778,14 @@ function finalizePreparedReviewWorkspace(workspace, options = {}) {
 function restorePreparedReviewWorkspace(workspace, options = {}) {
   if (!workspace?.reviewId) return;
   const fsOps = options.fsOps ?? fs4;
-  const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
-  const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
-  const current = stateRootFs.tryLstat(workspace.reviewId);
+  const { name, stateRootFs } = reviewWorkspaceLocation(workspace.reviewId, { ...options, fsOps, workspaceRoot: workspace.workspaceRoot });
+  const current = stateRootFs.tryLstat(name);
   if (current !== null) {
-    if (current.isSymbolicLink() || !current.isDirectory()) throw new Error(`Dove review workspace must be a real directory before restoring the previous workspace: ${workspace.reviewId}`);
-    stateRootFs.remove(workspace.reviewId, { recursive: true, force: true });
+    if (current.isSymbolicLink() || !current.isDirectory()) throw new Error(`Dove review workspace must be a real directory before restoring the previous workspace: ${workspace.workspaceRoot}`);
+    stateRootFs.remove(name, { recursive: true, force: true });
   }
   if (!workspace.previousWorkspaceBackupName) return;
-  stateRootFs.rename(workspace.previousWorkspaceBackupName, workspace.reviewId);
+  stateRootFs.rename(workspace.previousWorkspaceBackupName, name);
 }
 function assertReviewWorkspaceMatchesSnapshot(options = {}) {
   const fsOps = options.fsOps ?? fs4;
@@ -1550,7 +1559,7 @@ var DOVE_RESEARCH_ROUTABLE_SKILL_INVENTORY_TEXT = "research, status, source, exp
 var DOVE_RESEARCH_FLAT_SKILL_SENTENCE = `Its nine Skills \u2014 ${DOVE_RESEARCH_SKILL_INVENTORY_TEXT} \u2014 are flat entrances into the same research collaboration, used only when they help the current decision.`;
 var DOVE_RESEARCH_DEFAULT_AUTONOMY = "For a confirmed research goal, Dove advances by default through multiple substantive rounds: choose the best feasible mainline action, absorb what it changes, then continue until the goal is achieved, no effective in-scope path remains, or a material user decision is needed.";
 var DOVE_RESEARCH_MAINLINE_ANCHORING = "Keep the user-confirmed Workspace mainline, intended contribution, key claim or route decision, and completion meaning as the anchor; evidence may change the route inside it, but a material change to that anchor belongs to the user. When direction is open, start with a clearly provisional research question or route and refine it through evidence.";
-var DOVE_RESEARCH_HIGHEST_MATERIAL_UNRESOLVED_DEFICIENCY = "Identify the uncertainty that most limits the paper spine or mainline judgment, then trace it to the method, evidence, experiment, analysis, source, figure, argument, or artifact question that can change that judgment.";
+var DOVE_RESEARCH_HIGHEST_MATERIAL_UNRESOLVED_DEFICIENCY = "Identify the highest-level active limitation on the paper spine or mainline judgment, then trace it to the method, evidence, experiment, analysis, source, figure, argument, or artifact question that can change that judgment.";
 var DOVE_RESEARCH_SERIOUS_CANDIDATE_EXPLANATIONS = "When the question or route is open, compare materially different explanations or approaches by mechanism, assumptions, applicability, inspected evidence, predictions, and failure conditions instead of accepting the first suggestion.";
 var DOVE_RESEARCH_DISCRIMINATING_ACTION = "Choose the feasible action that best separates serious candidates, changes the limiting judgment, tests a key claim, confirms a real blocker, or protects the authoritative artifact; prefer a small diagnostic experiment, theoretical analysis, source check, or artifact inspection when it can decide the route before larger work.";
 var DOVE_RESEARCH_OVERALL_BEST_ACTION = "Choose by expected scientific value, result quality, time, resources, opportunity cost, rework risk, and downstream effects, optimizing the whole research path rather than immediate convenience.";
@@ -1566,15 +1575,7 @@ var DOVE_RESEARCH_REVIEW_FINDING_TRIAGE = "Treat Review findings as scientific e
 var DOVE_RESEARCH_REPORTING_DISTINCTION = "For material results, separate what was observed, what it means, why it matters, and what happens next.";
 var DOVE_RESEARCH_JUDGMENT_ACTION_DISTINCTION = "Let the scientific judgment choose the action: contribution, mechanism, novelty, and positioning name what is at stake; when that still depends on method, evidence, experiment, analysis, source, or figure work, do the discriminating work before expressing or narrowing the claim.";
 var DOVE_RESEARCH_CURRENT_EVIDENCE_REASSESSMENT = `Judge claims by what was found, accessed, retrieved, inspected, used, executed, verified, contradicted, or remains missing or hypothetical. ${DOVE_RESEARCH_ACTUAL_MATERIAL_FACT_BOUNDARY} Treat notes, prior verdicts, review returns, summaries, and earlier claim scopes as context to recheck, not proof.`;
-var DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW = "Before proposing or changing a research goal, task, route, hypothesis, or evaluation target, anchor it in the confirmed mainline or a clearly provisional research question and current evidence. State assumptions, applicability, predictions, and failure conditions; when external knowledge can change the judgment, inspect targeted theory or related work and compare serious alternatives rather than dumping a bibliography.";
-var DOVE_RESEARCH_SHARED_CONTRACT_BULLETS = Object.freeze([
-  "Start from the real research question, user need, key uncertainty, current or provisional route, and decision that matters.",
-  "Compare serious mechanisms or approaches by assumptions, applicability, predictions, inspected evidence, and failure conditions.",
-  "Use claim-driven experiments or diagnostics when they can distinguish the strongest alternatives, and check anomalous results before using them as evidence.",
-  "State facts from inspected material, keep conclusions within the tested or read conditions, and preserve claim strength unless evidence or the user changes it.",
-  "Absorb each material result into the route, paper spine, claim scope, or next action before continuing."
-]);
-var DOVE_RESEARCH_SHARED_CONTRACT = DOVE_RESEARCH_SHARED_CONTRACT_BULLETS.join(" ");
+var DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW = "Before committing to or materially changing a research direction, method, hypothesis, evaluation target, or central experiment, establish theory or mechanism grounding proportionate to the decision. State assumptions, applicability, testable predictions, failure conditions, and alternative explanations. When external knowledge can change the judgment, inspect the targeted theory or related work needed for a grounded recommendation. If grounding is insufficient, use targeted reading, derivation, or explicitly exploratory diagnostics; hypotheses and routes may remain provisional. Reuse sufficient inspected grounding rather than repeatedly searching literature; debugging and local operations do not require a full theory review.";
 var DOVE_RESEARCH_FRAME = `Start from the real research question, current or provisional route, external context, user need, key uncertainty, paper spine, and decision that matters. When the route is open, use literature, adjacent ideas, mathematics, physical reasoning, analogies, and project evidence to generate and test serious alternatives.`;
 var DOVE_RESEARCH_HUNCH = "Use hunches and first impressions as hypotheses, not decisions; treat user preferences as tradeoff signals and turn both into discriminating questions or actions.";
 var DOVE_RESEARCH_CURIOSITY = "Bring research drive: turn gaps, negative results, and near misses into sharp hypotheses, discriminating evidence to seek, or concrete next moves that advance the mainline.";
@@ -1625,9 +1626,9 @@ var DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS = "For the complete paper, ask four ques
 var DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC = "Author-side scientific self-check critiques the current paper inside Dove's author context and returns concrete evidence, consequence, and feasible research action without claiming independent external review.";
 var DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY = "Conditional delivery review checks official venue rules, build output, required materials, formatting, anonymity, packaging, and access limits, while keeping delivery readiness separate from scientific acceptability.";
 var DOVE_RESEARCH_REVIEW_ISOLATED_PERSISTENT = "Independent `dove-review` requires a genuinely isolated, persistent, recoverable reviewer context; if the host cannot provide it, say so and continue other feasible author-side work without counting it as independent review.";
-var DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF = "Start `dove-review` only from a frozen near-submission handoff: current complete paper, authoritative LaTeX source and compiled output, actual appendices or supplements, target venue, and other real venue-facing files.";
+var DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF = "Start `dove-review` only from a frozen near-submission handoff: current complete paper, authoritative manuscript source in its existing format and actual submission output, actual appendices or supplements, target venue, and other real venue-facing files. Include the compiled output for LaTeX and any author-retrieved venue or literature grounding needed for frozen-material judgment.";
 var DOVE_RESEARCH_REVIEW_RETURN_PROVENANCE = "Preserve an actual reviewer return faithfully together with the known reviewer context, review round, target venue, and materials reviewed; mark user-pasted or unverifiable returns as such.";
-var DOVE_RESEARCH_REVIEW_DUAL_COMPLETION = "Submission completion needs author-side scientific sufficiency, a current `dove-review` scientific-acceptability recommendation for the same full version, and real delivery readiness.";
+var DOVE_RESEARCH_REVIEW_DUAL_COMPLETION = "For a user-confirmed submission-completion goal, completion needs author-side scientific sufficiency, a current independent `dove-review` scientific-acceptability recommendation for the same full version, and real delivery readiness. Unavailable isolated review leaves that requirement unmet, not waived. A bounded local review, edit, figure, or other task can finish without becoming a submission-completion goal.";
 var DOVE_RESEARCH_REVIEW_NEGATIVE_CONTINUITY = `When \`dove-review\` raises objections, ${DOVE_RESEARCH_REVIEW_FINDING_TRIAGE} After substantive change, return to the same isolated reviewer context and review the complete paper again.`;
 var DOVE_RESEARCH_REVIEW_VERSION_CURRENCY = "Author-side and `dove-review` judgments apply only to the current complete manuscript and submitted materials; after substantive changes, earlier recommendations are historical evidence.";
 var DOVE_RESEARCH_REVIEW_ANTI_GAMING = "Do not seek passage by cosmetic-only changes, selective evidence, hiding counterevidence, unjustified narrowing, diff-only review, or restarting the reviewer context to avoid prior objections.";
@@ -1640,12 +1641,26 @@ var DOVE_RESEARCH_FIGURE_EVIDENCE_BOUNDARY = "Judge a figure by whether it expre
 var DOVE_RESEARCH_FIGURE_CAPABILITY_BOUNDARY = "When figure work is useful, plan, create, revise, render, open, inspect, caption, and deliver the actual visual with suitable host tools and editable sources; quantitative plots use real data and reproducible code, diagrams preserve route-native editable structure, generated or edited images use exposed host image tools when appropriate, and mixed raster plus SVG/vector work remains modifiable.";
 var DOVE_RESEARCH_MANUSCRIPT_REVIEW_LOOP = `Use Review findings to choose the next useful action on the same submission-readiness mainline. ${DOVE_RESEARCH_REVIEW_FINDING_TRIAGE}`;
 var DOVE_RESEARCH_DEFAULT_REVIEW_RESPONSE = `For author-side self-check, judge the actual manuscript against material results and scholarly context, then return concrete findings, consequence, and useful response. ${DOVE_RESEARCH_REPORTING_DISTINCTION}`;
-var DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY = `For manuscript work, identify the authoritative source and build path; use LaTeX by default when the venue supports it, verify compiled output, keep scholarly evidence distinct from venue-facing materials, and propagate authorized changes through the real source.`;
+var DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY = "For manuscript work, preserve the user's current authoritative manuscript format, identify its source and build or export path, and follow actual venue requirements. Only for a new manuscript, default to LaTeX when the venue accepts it; otherwise use the required format. Inspect the actual submission output, including compiled output for LaTeX, keep scholarly evidence distinct from venue-facing materials, and propagate authorized changes through the authoritative source.";
 var DOVE_RESEARCH_WHOLE_MANUSCRIPT_READINESS_BOUNDARY = `Before calling a manuscript submission-ready, judge the latest manuscript, evidence, and required materials against the target venue. ${DOVE_RESEARCH_SUBSTANTIVE_PROGRESS_TEST}`;
 var DOVE_RESEARCH_SUPPORT_SUBORDINATION_BOUNDARY = `Treat evidence checking, engineering, supplementary material, and research Markdown as support unless they change what the reader is told or what must be delivered. ${DOVE_RESEARCH_REPORTING_DISTINCTION}`;
 var DOVE_RESEARCH_DEFAULT_NOT_MECHANICAL_SKILLS = "Use Dove's capabilities and host tools only when they materially improve the next action.";
 var DOVE_RESEARCH_DEFAULT_CYCLE = `Track the mainline, current evidence, authoritative artifact, limiting deficiency, chosen action, actual result, and reassessment as judgment context. ${DOVE_RESEARCH_SUBSTANTIVE_PROGRESS_TEST}`;
 var DOVE_RESEARCH_DEFAULT_REPORTING_BOUNDARY = `At checkpoints and final response, ${DOVE_RESEARCH_REPORTING_DISTINCTION} Revise optimistic verdicts when broader evidence or grounded Review contradicts them.`;
+var DOVE_RESEARCH_SHARED_CONTRACT_BULLETS = Object.freeze([
+  DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW,
+  DOVE_RESEARCH_DEFAULT_PRIORITY,
+  "Compare serious mechanisms or approaches by assumptions, applicability, predictions, inspected evidence, and failure conditions; prefer a small discriminating diagnostic or source check when it can decide between routes before larger work.",
+  DOVE_RESEARCH_OVERALL_BEST_ACTION,
+  "Treat inspected material, retrieved sources, executed work, rendered figures, and checked artifacts as evidence; notes, files, or checks alone are not research progress.",
+  "Keep facts grounded in inspected materials and state unknowns as unknown; include material counterevidence rather than selecting only supportive results. Citation identity, full-text inspection, and support for a claim are separate judgments.",
+  "Keep claim strength within the evidence; preserve certainty, causality, scope, generality, quantitative qualifiers, and novelty unless inspected evidence or the user's decision changes them, and explain any change.",
+  DOVE_RESEARCH_EXECUTION_VALIDITY_BOUNDARY,
+  "Recheck earlier summaries, notes, and verdicts against current materials rather than treating them as proof; revise optimistic judgments when broader evidence or grounded Review contradicts them.",
+  "Absorb each material result into the route, paper spine, claim scope, or next action before continuing.",
+  "Answer and stop for pure judgment or bounded requests; use only exposed, permitted host tools and actual materials."
+]);
+var DOVE_RESEARCH_SHARED_CONTRACT = DOVE_RESEARCH_SHARED_CONTRACT_BULLETS.join(" ");
 
 // src/core/dove-agent-persona.mjs
 var DOVE_AGENT_NAME = DOVE_RESEARCH_AGENT_NAME;
@@ -1659,10 +1674,13 @@ var DOVE_AGENT_STOPPING = DOVE_RESEARCH_STOPPING;
 var DOVE_AGENT_PERSONA_BULLETS = DOVE_RESEARCH_PERSONA_BULLETS;
 var DOVE_AGENT_CAPSULE_BULLETS = DOVE_RESEARCH_CAPSULE_BULLETS;
 var DOVE_AGENT_DIRECT_JUDGMENT = DOVE_RESEARCH_DIRECT_JUDGMENT;
-function bullets(items) {
-  return items.map((item) => `- ${item}`).join("\n");
+function bullets(items, coveredText = "") {
+  return items.filter((item) => !coveredText.includes(item)).map((item) => `- ${item}`).join("\n");
 }
-function renderDoveSharedResearchContractSection() {
+function renderDoveSharedResearchContractSection({ compact = false, coveredText = "" } = {}) {
+  if (compact) return `## Research judgment
+
+${bullets(DOVE_RESEARCH_SHARED_CONTRACT_BULLETS, coveredText)}`;
   return `## Shared researcher judgment
 
 ${DOVE_RESEARCH_ONE_AGENT} ${DOVE_RESEARCH_FLAT_SKILL_SENTENCE}
@@ -1675,24 +1693,28 @@ ${DOVE_RESEARCH_HUNCH} ${DOVE_RESEARCH_CURIOSITY}
 
 ### Evidence and action
 
-- Treat inspected material, retrieved sources, executed work, rendered figures, and checked artifacts as evidence; notes, files, or checks alone are not research progress.
-- Keep facts grounded in inspected materials and state unknowns as unknown. Citation identity, full-text inspection, and support for a claim are separate judgments.
-- Keep claim strength within the evidence; preserve certainty, causality, scope, and novelty unless inspected evidence or the user's decision changes them, and explain any change.
-- For negative results or near misses, first check the implementation, measurement, and experimental assumptions, then turn a valid signal into a hypothesis or diagnostic.
-- Recheck earlier summaries, notes, and verdicts against current materials rather than treating them as proof.
-- Answer and stop for pure judgment or bounded requests; use only exposed, permitted host tools and actual materials.`;
+${bullets(DOVE_RESEARCH_SHARED_CONTRACT_BULLETS, coveredText)}`;
 }
-function renderDoveAuthorStanceSection() {
+function renderDoveAuthorStanceSection({ compact = false, coveredText = "" } = {}) {
+  const shared = [
+    DOVE_RESEARCH_MAINLINE_ANCHORING,
+    "Answer and stop for pure judgment or bounded requests; in an active confirmed research context, perform the feasible next in-scope step and continue while an effective mainline action remains. Read-only requests authorize inspection and reporting, not execution or recording.",
+    DOVE_RESEARCH_EVIDENCE_DRIVEN_CLAIM_BOUNDARY,
+    DOVE_RESEARCH_REAL_BLOCKER,
+    DOVE_RESEARCH_REVIEW_DUAL_COMPLETION
+  ];
+  if (!compact) shared.push(
+    `Maintain Dove research Markdown when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`,
+    "Author-side Review is Dove's own scientific self-check; independent `dove-review` exists only when a real isolated persistent reviewer context judges the current frozen handoff, and its findings inform Dove's author-side judgment and response."
+  );
   return `## Author stance
 
-- Preserve the user-confirmed Workspace mainline, intended contribution, key route decision, and completion meaning; bring material changes to the user instead of switching silently.
-- Answer and stop for pure judgment or bounded requests; in an active confirmed research context, perform the feasible next in-scope step and continue while an effective mainline action remains.
-- Maintain Dove research Markdown when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.
-- Author-side Review is Dove's own scientific self-check; independent \`dove-review\` exists only when a real isolated persistent reviewer context judges the current frozen handoff, and its findings inform Dove's author-side judgment and response.`;
+${bullets(shared, coveredText)}`;
 }
 function renderDoveReviewerStanceSection() {
   return `## Reviewer stance
 
+- Apply shared theory, validity, and action-selection principles only to judging the frozen materials and recommending author-side work. Do not establish missing grounding through new research, run diagnostics, execute experiments, or perform author revisions; missing evidence limits the judgment.
 - Review the complete current manuscript or submission represented by the frozen materials, not only a diff or the author's preferred issue list.
 - Reconstruct and challenge the contribution from the frozen materials; do not inherit or endorse the author's mainline. Judge against the target venue's standards, and recommend author actions without carrying them out.
 - ${DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS} Keep a bounded local review within its requested scope.
@@ -2006,6 +2028,18 @@ function assertCurrentRoundCanUseRuntime(record) {
   if (current.provenance !== "runtime") throw new Error(`Dove review ${record.id} current round is ${current.provenance}; import another return or start a new runtime review id instead of resuming runtime continuity from imported material.`);
   return current;
 }
+function recordedWorkspaceRoot(projectRoot, record, options = {}) {
+  if (record.projectRoot !== projectRoot) throw new Error("Dove review record belongs to a different project.");
+  const round = record.rounds.find((item) => item.provenance === "runtime" && item.sessionId === record.session.sessionId);
+  if (!round) throw new Error("Dove review session has no recorded runtime workspace.");
+  const anchor = openRootedFilesystem(projectRoot, { fsOps: options.fsOps ?? fs8 });
+  const backendPath = roundPaths(record.id, round.round).backend;
+  const backend = parseJsonWithoutDuplicateKeys(anchor.readFile(backendPath).toString("utf8"), backendPath);
+  if (backend?.sessionId !== record.session.sessionId || typeof backend.cwd !== "string" || !backend.cwd) {
+    throw new Error("Dove review backend is missing the workspace for its recorded session.");
+  }
+  return backend.cwd;
+}
 function stateRootOptions(options = {}) {
   return {
     fsOps: options.fsOps ?? fs8,
@@ -2035,7 +2069,7 @@ function acquireReviewMutationLock(reviewId, options = {}) {
   const stateRoot = resolveReviewStateRoot(stateRootOptions(options));
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   const lockRoot = ensureLockRoot(stateRootFs);
-  const lockPath = `${lockRoot}/${normalizeReviewId(reviewId)}.lock`;
+  const lockPath = `${lockRoot}/${reviewWorkspaceName(reviewId, options)}.lock`;
   try {
     stateRootFs.mkdir(lockPath, { mode: 448 });
   } catch (error) {
@@ -2277,7 +2311,7 @@ function resumeReview(options = {}) {
     let workspace;
     let outcome;
     try {
-      workspace = assertReviewWorkspaceMatchesSnapshot({ reviewId, snapshot, ...stateRootOptions({ ...options, projectRoot }) });
+      workspace = assertReviewWorkspaceMatchesSnapshot({ reviewId, snapshot, ...stateRootOptions({ ...options, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) });
       const prompt = promptForRound({ operation: "resume", reviewId, round, venue: record.venue, snapshot });
       outcome = runClaudeReviewBackend({
         workspaceRoot: workspace.workspaceRoot,
@@ -2307,7 +2341,7 @@ function rerunReview(options = {}) {
     const createdAt = exactIsoTimestamp5(options.now ?? /* @__PURE__ */ new Date());
     const venue = options.venue ?? record.venue ?? null;
     const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round, venue, materials: options.materials, now: createdAt, fsOps });
-    const workspaceOptions = stateRootOptions({ ...options, projectRoot });
+    const workspaceOptions = { ...stateRootOptions({ ...options, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) };
     const workspace = prepareReviewWorkspace({ reviewId, files, keepPreviousWorkspaceBackup: true, ...workspaceOptions });
     const prompt = promptForRound({ operation: "rerun", reviewId, round, venue, snapshot });
     let outcome;
@@ -2559,6 +2593,7 @@ var RUN_STDERR_FILE = "stderr.log";
 var RUN_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$/u;
 var WINDOWS_RESERVED_NAMES2 = /* @__PURE__ */ new Set(["CON", "PRN", "AUX", "NUL", ...Array.from({ length: 9 }, (_, index) => `COM${index + 1}`), ...Array.from({ length: 9 }, (_, index) => `LPT${index + 1}`)]);
 var RUN_SEED_MAX_LENGTH = 200;
+var RUN_TIMER_MAX_MS = 2147483647;
 function plainObject2(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -2762,15 +2797,17 @@ function parseWallTime(value) {
   const unit = (match[2] ?? "ms").toLowerCase();
   const multiplier = { ms: 1, s: 1e3, m: 6e4, h: 36e5 }[unit];
   const milliseconds = amount * multiplier;
-  if (!Number.isSafeInteger(milliseconds) || milliseconds <= 0) throw new Error("--wall-time is too large.");
+  if (!Number.isSafeInteger(milliseconds) || milliseconds > RUN_TIMER_MAX_MS) throw new Error(`--wall-time must be at most ${RUN_TIMER_MAX_MS}ms (Node.js timer limit).`);
   return milliseconds;
 }
 function normalizeRunBudget(options = {}) {
   const timeoutMsFromNumber = positiveIntegerOrNull(options.timeoutMs, "--timeout-ms");
+  if (timeoutMsFromNumber > RUN_TIMER_MAX_MS) throw new Error(`--timeout-ms must be at most ${RUN_TIMER_MAX_MS}ms (Node.js timer limit).`);
   const timeoutMsFromWallTime = parseWallTime(options.wallTime);
   if (timeoutMsFromNumber !== null && timeoutMsFromWallTime !== null) throw new Error("Use only one of --timeout-ms or --wall-time for a Dove run.");
   const timeoutMs = timeoutMsFromNumber ?? timeoutMsFromWallTime;
   const killGraceMs = options.killGraceMs === void 0 || options.killGraceMs === null || options.killGraceMs === "" ? 5e3 : nonNegativeInteger(options.killGraceMs, "--kill-grace-ms");
+  if (killGraceMs > RUN_TIMER_MAX_MS) throw new Error(`--kill-grace-ms must be at most ${RUN_TIMER_MAX_MS}ms (Node.js timer limit).`);
   return { timeoutMs, killGraceMs };
 }
 function normalizeRunMetricSpec(options = {}) {
@@ -3051,17 +3088,20 @@ function compareRuns(options = {}) {
     return delta || left.runId.localeCompare(right.runId);
   });
   const best = ranked[0].metric.value;
-  const ranking = ranked.map((summary, index) => ({
-    rank: index + 1,
-    runId: summary.runId,
-    status: summary.status,
-    metricValue: summary.metric.value,
-    commit: summary.commit,
-    dirty: summary.dirty,
-    deltaFromBest: direction === "min" ? summary.metric.value - best : best - summary.metric.value,
-    stdoutPath: summary.paths.stdoutPath,
-    stderrPath: summary.paths.stderrPath
-  }));
+  const ranking = ranked.map((summary, index) => {
+    const delta = direction === "min" ? summary.metric.value - best : best - summary.metric.value;
+    return {
+      rank: index + 1,
+      runId: summary.runId,
+      status: summary.status,
+      metricValue: summary.metric.value,
+      commit: summary.commit,
+      dirty: summary.dirty,
+      deltaFromBest: Number.isFinite(delta) ? delta : null,
+      stdoutPath: summary.paths.stdoutPath,
+      stderrPath: summary.paths.stderrPath
+    };
+  });
   return { command: "compare", status: "ok", comparable: true, fields: [], project: projectRoot, group: options.group ?? null, runIds, basis, ranking };
 }
 
@@ -3226,7 +3266,9 @@ ${USER_RESPONSE_POLICY.join("\n")}
 
 ${renderDoveSharedResearchContractSection()}
 
-Apply this judgment to research requests in the current conversation; answer, clarify, or use a Dove capability when useful. For a confirmed research goal, carry out the next feasible in-scope action, absorb its result, and continue while meaningful work remains. Ask when ambiguity or a change to the confirmed goal needs the user's decision.
+${renderDoveAuthorStanceSection()}
+
+Apply this judgment to research requests in the current conversation; answer, clarify, or use a Dove capability when useful. Ask when ambiguity would change the next useful action.
 
 For web work, use the current project's real paper and webpage reading tools when available and permitted; search snippets can guide discovery, but do not replace unretrieved paper or webpage content with shell, \`curl\`, or ad hoc fetch substitutes.
 
@@ -3774,6 +3816,7 @@ var HOST_ADAPTER_POLICY = Object.freeze({
   privacy: Object.freeze({ exposePrivateProtocol: false })
 });
 var RESEARCH_FRAME = DOVE_RESEARCH_FRAME;
+var RESEARCH_ROUTE_GROUNDING = `${DOVE_RESEARCH_GOAL_TASK_THEORY_REVIEW} When external knowledge can change a route or key design judgment, inspect targeted theory or related work and compare serious alternatives before recommending it; reuse sufficient material already inspected.`;
 var RESEARCH_ADVANCE = DOVE_RESEARCH_ADVANCE;
 var RESEARCH_MAINTENANCE_TRIGGER = DOVE_RESEARCH_MAINTENANCE_TRIGGER;
 var commonClarification = [DOVE_RESEARCH_CLARIFICATION];
@@ -3844,7 +3887,6 @@ var SHARED_RESEARCH_JUDGMENT_TITLE = "Return with";
 var SHARED_RESEARCH_JUDGMENT_RESPONSIBILITIES = Object.freeze([
   "Inspected evidence, material change, unresolved limits, and the next useful action."
 ]);
-var REVIEW_HANDOFF_LISTED_MATERIALS_BOUNDARY = "For each `dove-review` round, provide only the frozen near-submission materials listed for that round: normally the complete paper, actual submission appendices or supplements, authoritative LaTeX source and compiled output, author-side retrieved venue or literature grounding, and other files that will accompany the submission. Code, raw experiment outputs, working figure materials, internal research notes, private author conversations, earlier reviews, and earlier handoffs remain outside the reviewer context unless the current list explicitly includes them.";
 function sharedResearchJudgmentSection() {
   return {
     title: SHARED_RESEARCH_JUDGMENT_TITLE,
@@ -3881,7 +3923,7 @@ function contract(slug) {
       readArea("missions", "the research goal"),
       relevantLessons,
       action("project-exploration", `Inspect the project materials and external context needed to understand the question. ${RESEARCH_FRAME}`, { readOnly: true }),
-      action("research-progression", `Follow the confirmed or provisional mainline. Choose the action most likely to change the judgment, perform it with permitted host tools, absorb the result, and continue while it matters. ${RESEARCH_ADVANCE}`),
+      action("research-progression", `${RESEARCH_ROUTE_GROUNDING} Follow the confirmed or provisional mainline. Choose the action most likely to change the judgment, perform it with permitted host tools, absorb the result, and continue while it matters. ${RESEARCH_ADVANCE} For a submission goal, use Review to establish the current whole-paper judgment before declaring completion. ${DOVE_RESEARCH_REVIEW_DUAL_COMPLETION}`),
       maintainArea("missions", "When the maintenance trigger is met, update or create a naturally named Mission document for the substantive work, evidence, decisions, failures, and continuation context.")
     ],
     boundaries: [
@@ -3907,7 +3949,7 @@ function contract(slug) {
       "Treat missing overviews, summaries, or links as ordinary document facts."
     ],
     actions: [
-      readResearchDocuments("Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Report the current mainline, substantive progress, active problems, decisions, and next priorities. If an overview, summary, or link is absent, say so naturally and do not modify files."),
+      readResearchDocuments("Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Report the current mainline, substantive progress, active problems, decisions, and next priorities, without inferring the mainline from the latest Review or Run receipt alone. If an overview, summary, or link is absent, say so naturally and do not modify files."),
       relevantLessons
     ],
     boundaries: [
@@ -3931,7 +3973,7 @@ function contract(slug) {
     actions: [
       readArea("sources", "the source question"),
       relevantLessons,
-      action("source-research", `Discover, retrieve when available, read, and verify external material with permitted host tools. ${DOVE_RESEARCH_ACTUAL_MATERIAL_FACT_BOUNDARY} For citation checks, verify identity and metadata first, using direct DOI lookup before fuzzy title search when available. A failed lookup is unknown, not permission to recreate retrieval through shell tools. Metadata identity is not full-text inspection or claim support; inspect actual content before using the source for a claim. For explicit systematic work, use the structured method stated above; ordinary paper finding, related-work scans, and single fact checks stay proportional. If needed material is unavailable, say what is missing and continue with any other material that can still inform the question.`),
+      action("source-research", `Discover, retrieve when available, read, and verify external material with permitted host tools. ${DOVE_RESEARCH_ACTUAL_MATERIAL_FACT_BOUNDARY} For citation checks, verify identity and metadata first, using direct DOI lookup before fuzzy title search when available. A failed lookup is unknown, not permission to recreate retrieval through shell tools. Metadata identity is not full-text inspection or claim support; inspect actual content before using the source for a claim. Split compound claims into their material parts and report each as supported, contradicted, or uncovered by the inspected content, with the passage or evidence and its limits. Partial support is not support for the whole sentence; recommend only the supported wording without automatically editing the manuscript. For explicit systematic work, use the structured method stated above; ordinary paper finding, related-work scans, and single fact checks stay proportional. If needed material is unavailable, say what is missing and continue with any other material that can still inform the question.`),
       maintainArea("sources", "When a used source deserves durable context, create or update a naturally named source note with the citation or URL, what was inspected and learned, and, when useful for recovery, ordinary links to the Claim, Experiment, Figure artifact, or manuscript location that the inspected source actually supports or challenges.")
     ],
     boundaries: [
@@ -3962,8 +4004,11 @@ function contract(slug) {
     actions: [
       readArea("experiments", "the experiment"),
       relevantLessons,
-      action("experiment-design", "Design the experiment around the real problem, key uncertainty, route decision, primary prediction, strongest alternative, minimum sufficient evidence, and how different outcomes would change the judgment. For design-only work, stop with an executable plan. For retrospective recording, label the record retrospective."),
-      action("experiment-execution", `Execute only when requested and permitted, or inspect existing results when analysis is requested. For Dove-managed local executions, use the corresponding \`.dove/runs/\` run journal and its stdout/stderr paths as inspected execution materials rather than invented run summaries; the receipt does not replace Experiment Markdown explanation. State methods, configuration, data, metrics, run counts, and result numbers from actual code, logs, outputs, data files, user material, or run receipts. For negative, near-miss, anomalous, unusually strong, or hard-to-reproduce results, compare expected and actual behavior and check implementation, data, configuration, baselines, randomness, metrics, and analysis before using them as evidence. When recording is needed, append the actual procedure, result, interpretation-changing deviation, evidence scope, and route update to the same Experiment document used for the plan; ordinary scientific explanation still belongs in Experiment Markdown, not only in the run receipt. Separate what was observed, what it means, why it matters, and what happens next.`),
+      action("experiment-design", `For new design, ${RESEARCH_ROUTE_GROUNDING} Design the experiment around the real problem, key uncertainty, route decision, primary prediction, strongest alternative, minimum sufficient evidence, and how different outcomes would change the judgment. If the central basis is missing, inspect actual project material, relevant sources, or a smallest low-risk diagnostic before committing to central design. For design-only work, stop with an executable plan without execution. Analyze existing results directly; label retrospective recording retrospective rather than inventing prior design.`),
+      updateResearchDocuments("Only for newly authorized central execution that needs recording, select the relevant Experiment document or a naturally named new one and save the prospective plan there before execution begins: what it tests, the prediction and strongest alternative, the procedure, and how results will be judged. Keep this same document for the later actual results. Design-only work, existing-result analysis, retrospective recording, and exploratory diagnostics do not require a new document merely to proceed.", {
+        persistWhen: `new central execution is requested and permitted, and ${RESEARCH_MAINTENANCE_TRIGGER}`
+      }),
+      action("experiment-execution", `Execute only when requested and permitted, or inspect existing results when analysis is requested. For Dove-managed local executions, use the corresponding \`.dove/runs/\` run journal and its stdout/stderr paths as inspected execution materials rather than invented run summaries; the receipt does not replace Experiment Markdown explanation. State methods, configuration, data, metrics, run counts, and result numbers from actual code, logs, outputs, data files, user material, or run receipts. For negative, near-miss, anomalous, unusually strong, or hard-to-reproduce results, compare expected and actual behavior and check implementation, data and preprocessing, configuration and environment, baselines, randomness, metrics, and analysis before using them as evidence. For newly executed central work that needed recording, execute only after the prospective plan has been saved, then append the actual procedure, result, interpretation-changing deviation, evidence scope, and route update to that same Experiment document. For existing-result analysis or retrospective work, record only when useful and do not imply a prior plan existed; ordinary scientific explanation belongs in Experiment Markdown when recording is needed, not only in the run receipt. Separate what was observed, what it means, why it matters, and what happens next.`),
       maintainArea("experiments", "When the maintenance trigger is met, record the experiment, diagnostic, result, failure, evidence scope, route decision, and useful project-relative logs, data, output, the corresponding `.dove/runs/` run journal, figure, or code paths in the relevant Experiment document, linking affected Claim, Source, or Figure context only when useful for recovery.")
     ],
     boundaries: [
@@ -3989,7 +4034,7 @@ function contract(slug) {
     actions: [
       readResearchDocuments("When an existing Claim note is directly relevant to the user-specified draft or material claim, read `.dove/research/RESEARCH.md`, then `.dove/research/claims/CLAIMS.md`, then only directly relevant linked details. Otherwise work from the target artifact and specified evidence without reading Claims merely because Draft was invoked."),
       relevantLessons,
-      action("artifact-editing", "Read the target and relevant material, then draft, assess, create, or revise the ordinary artifact when the deliverable requires it. For manuscript work, edit the authoritative source and propagate through the real build or export path before claiming the artifact is current."),
+      action("artifact-editing", `Read the target and relevant material, then draft, assess, create, or revise the ordinary artifact when the deliverable requires it. ${DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY} Propagate authorized edits through the real build or export path and inspect the actual output before claiming the artifact is current; assessment-only requests return findings without edits.`),
       action("artifact-validation", "Run the checks needed for the requested artifact, fix in-scope issues, and report remaining material issues, scope limits, or user choices."),
       maintainArea("claims", "Create or revise a naturally named Claim document only when an important research claim needs durable treatment; when useful for recovery, link supporting or challenging Source, Experiment, Figure, and manuscript locations without copying evidence into a claim store.")
     ],
@@ -4015,10 +4060,10 @@ function contract(slug) {
       readResearchDocuments("When existing Dove research context would materially help the figure, read the overview and directly relevant Mission, Experiment, Claim, manuscript, or prior figure context; otherwise use the user's materials and data."),
       relevantLessons,
       action("figure-planning", "Create a compact Figure brief and visual plan from inspected context: target claim, audience, evidence or mechanism job, real data or source visuals, chosen route, panel/story layout, manuscript location, final dimensions, caption and nearby-text role, and expected editable source. For planning-only or assessment-only requests, report the plan or findings without creating files.", { readOnly: true }),
-      action("figure-creation", "For creation, choose the route that fits the task: plot quantitative figures from real data with reproducible code; draw editable structure or mechanism diagrams in route-native SVG/vector/source form; use exposed host image generation or editing only when an illustrative image is the right route and permitted; or combine raster panels with SVG/vector labels, layout, and annotations. Render the actual figure, keep scratch renders in a repository-local workspace such as `.claude/tmp/` unless directed otherwise, and do not invent data, results, or method details."),
+      action("figure-creation", "For creation, choose the route that fits the task: plot quantitative figures from real data with reproducible code; draw editable structure or mechanism diagrams in route-native SVG/vector/source form; use exposed host image generation or editing only when an illustrative image is the right route and permitted; or combine raster panels with SVG/vector labels, layout, and annotations. Render the actual figure and write its caption from the inspected data or mechanism logic, explaining panels, encodings, and relevant limits without overstating the claim. Keep scratch renders in a repository-local workspace such as `.claude/tmp/` unless directed otherwise, and do not invent data, results, or method details."),
       action("figure-inspection", "Open or view the actual rendered figure, not just filenames or thumbnails, at realistic final dimensions and in manuscript context when available. Check the chain from source data or mechanism logic to visual encoding, rendered panels, labels, units, legends, caption, nearby text, layout fit, and manuscript claim; flag mismatches rather than treating figure existence or size as success.", { readOnly: true }),
       action("figure-revision", "For revision, make targeted changes to the editable source, plotting code, SVG/vector structure, raster edits, labels, layout, annotations, caption, nearby manuscript text, or export settings; rerender and inspect the updated figure before delivery."),
-      action("figure-delivery", "Deliver the final figure file together with the route-native editable source, such as plotting code and data reference, SVG/vector source, layered or editable image source, or the mixed raster plus SVG/vector composition that allows later modification."),
+      action("figure-delivery", "Deliver the final figure file and caption together with the route-native editable source, such as plotting code and data reference, SVG/vector source, layered or editable image source, or the mixed raster plus SVG/vector composition that allows later modification."),
       updateResearchDocuments("When useful for recovery, use ordinary Markdown links and readable project-relative artifact paths to link the rendered figure, route-native editable source, plot code and data, or source visual from the relevant Mission, Experiment, or Claim. Keep these as human-readable notes, not a structured figure store. Update summaries only for material synthesis or priority changes.")
     ],
     boundaries: [
@@ -4033,18 +4078,17 @@ function contract(slug) {
   });
   if (slug === "review") {
     const reviewContextReadAction = readArea("reviews", "the review work");
-    const reviewGroundingAction = action("review-grounding", "For whole-paper author-side self-check or `dove-review` handoff preparation, inspect the current full paper and the venue or literature context that can change the judgment. Distinguish material merely found from material retrieved, inspected, and used. Import, context inspection, or bounded local review does not trigger venue or paper search by itself.", { readOnly: true });
-    const reviewerPerspectiveAction = action("reviewer-perspective-work", "For whole-paper review, ask whether the method answers the research question, whether the field judgment is correct, whether the paper fits the venue, and what the strongest reasonable objection is plus the evidence or revision needed to answer it. For local paragraph, figure, citation, or method review, stay inside the requested scope and do not force the full-paper four questions. Return concrete findings with evidence, consequence, useful response, and delivery readiness kept separate.", { readOnly: true });
+    const reviewGroundingAction = action("review-grounding", "For whole-paper author-side self-check or `dove-review` handoff preparation, inspect the current full paper and the venue or literature context that can change the judgment. Use current official venue sources for formal requirements and inspected relevant published work for scientific positioning and evidence norms; published practice does not replace official rules. Distinguish material merely found from material retrieved, inspected, and used. Import, context inspection, or bounded local review does not trigger venue or paper search by itself.", { readOnly: true });
+    const reviewerPerspectiveAction = action("reviewer-perspective-work", `${DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS} Also check citation identity, claim support, changes in claim strength, unsupported facts, and anomalous results when relevant. For local paragraph, figure, citation, or method review, stay inside the requested scope and do not force the full-paper four questions or start an independent handoff. Return concrete findings with evidence, consequence, useful response, and delivery readiness kept separate.`, { readOnly: true });
     const deliveryReviewAction = action("delivery-review", "When delivery review is requested or genuinely limiting, inspect official venue requirements, current build output, required materials, formatting, anonymity, packaging, and access limits. Report delivery readiness separately from scientific acceptability.", { readOnly: true });
-    const reviewHandoffAction = action("dove-review-handoff", "Start `dove-review` only for a highly complete near-submission paper after the author side has obtained any venue or literature material needed for the intended judgment and included it in the frozen handoff. Preserve the purpose, target venue, complete frozen material list, reviewer prompt, known host limits, and returned report location in the Review context. Give the reviewer only those listed materials. Use an isolated, persistent, recoverable reviewer context when the host provides one; resume or rerun later whole-paper rounds for the same review id and reviewer session. If grounding is missing, the reviewer should limit venue or literature conclusions to the listed materials; if the runtime is unavailable, say so and continue feasible author-side work without counting it as independent review.");
+    const reviewHandoffAction = action("dove-review-handoff", `${DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF} Before starting the handoff, the author side must have obtained and inspected any venue or literature material needed for the intended judgment and included it in the frozen handoff. Preserve the purpose, target venue, complete frozen material list, reviewer prompt, known host limits, and returned report location in the Review context. Give the reviewer only those listed materials, with Read-only access and no web, MCP, private author conversations, or unlisted files. Use an isolated, persistent, recoverable reviewer context when the host provides one; resume or rerun later whole-paper rounds for the same review id and reviewer session. If grounding is missing, the reviewer should limit venue or literature conclusions to the listed materials; if the runtime is unavailable, say so and continue feasible author-side work without counting it as independent review.`);
     const reviewMaintenanceAction = maintainArea("reviews", "When the user supplies a `dove-review` return, user-pasted review opinion, clarification, rebuttal exchange, or asks to preserve self-check or handoff context, append the actual text faithfully to the corresponding Review document and associate it with the same review id and round when known. When useful for recovery, link the corresponding `.dove/reviews/` round report, frozen materials, and affected Claim, Experiment, Figure, Source, or manuscript locations. Do not revise author artifacts, start a new review, rewrite the return, or add author interpretation unless asked.");
     const semanticSections = [
       {
         title: "Author-side scientific self-check",
         purpose: DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
         responsibilities: [
-          DOVE_RESEARCH_MANUSCRIPT_REVIEW_BOUNDARY,
-          `${DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS} Also check citation identity, claim support, changes in claim strength, unsupported facts, and anomalous results when relevant. For local review, stay inside the requested scope and do not force the full-paper four questions.`
+          DOVE_RESEARCH_MANUSCRIPT_REVIEW_BOUNDARY
         ],
         actions: [
           reviewGroundingAction,
@@ -4069,7 +4113,7 @@ function contract(slug) {
         purpose: DOVE_RESEARCH_REVIEW_DUAL_COMPLETION,
         responsibilities: [
           DOVE_RESEARCH_REVIEW_ISOLATED_PERSISTENT,
-          "Each isolated runtime round reviews the whole current frozen paper with the four full-paper questions: method answers the question, field judgment is correct, venue fit is sufficient, and strongest reasonable objection plus evidence or revision needed to answer it. The reviewer returns Markdown under Verdict, Blocking issues, Grounding basis, and Author-side next actions.",
+          "Each isolated runtime round reviews the whole current frozen paper, not only a diff, with the same four full-paper questions above. The reviewer returns Markdown under Verdict, Blocking issues, Grounding basis, and Author-side next actions.",
           DOVE_RESEARCH_REVIEW_NEGATIVE_CONTINUITY,
           DOVE_RESEARCH_REVIEW_VERSION_CURRENCY,
           DOVE_RESEARCH_REVIEW_RETURN_PROVENANCE
@@ -4078,7 +4122,7 @@ function contract(slug) {
           reviewHandoffAction
         ],
         boundaries: [
-          REVIEW_HANDOFF_LISTED_MATERIALS_BOUNDARY,
+          "Earlier author-side Reviews, handoffs, code, raw outputs, and working figures are not supplied automatically; a resumed reviewer context retains its own review history. Do not restart it to avoid prior objections.",
           DOVE_RESEARCH_REVIEW_NO_INDEPENDENT_STATUS_CLAIM
         ]
       },
@@ -4126,8 +4170,8 @@ function contract(slug) {
     actions: [
       readArea("reviews", "the relevant returned review"),
       relevantLessons,
-      action("rebuttal-and-revision", "Read the Review document, same review id and round when available, the reviewed material list, current material state, and actual artifacts. For each material finding, identify the source, experiment, method, analysis, expression, figure, or venue-fit problem; then draft the response and make requested revisions that resolve, reduce, or honestly bound it while preserving accurate claim strength and professional author voice. Do not rerun review for cosmetic or response-only edits; use `dove review rerun` when substantive evidence, claim scope, method, figure, result interpretation, venue-facing materials, or completion judgment changed enough that the old recommendation no longer covers the current full version."),
-      action("artifact-validation", "Check that each response and requested revision addresses a real finding; fix in-scope issues or report remaining material limits and user choices."),
+      action("rebuttal-and-revision", "Read the Review document, same review id and round when available, the reviewed material list, current material state, and actual artifacts. For each material finding, identify the source, experiment, method, analysis, expression, figure, or venue-fit problem. For new citations, verify identity and inspected-content support through Source; for new results, inspect actual Experiment materials before using them in the response. Then draft the response and make requested revisions that resolve, reduce, or honestly bound it while preserving accurate claim strength and professional author voice. Do not rerun review for cosmetic or response-only edits; use `dove review rerun` when substantive evidence, claim scope, method, figure, result interpretation, venue-facing materials, or completion judgment changed enough that the old recommendation no longer covers the current full version."),
+      action("artifact-validation", `Check that each response and requested revision addresses a real finding. ${DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY} Propagate requested revisions through the real build or export path and inspect the output before claiming the revised artifact is current; fix in-scope issues or report remaining material limits and user choices.`),
       maintainArea("reviews", "When worth preserving, append the author response, requested revisions, resulting decisions, unresolved issues, and follow-up to the same Review document or directly affected research document, and, when useful for recovery, link the originating Review return plus any newly used Source, Experiment, Figure, or ordinary artifact paths.")
     ],
     boundaries: [
@@ -4435,9 +4479,10 @@ function renderBody(command, heading, hostId = null) {
   const examples = renderExamples(command, hostId);
   const contract2 = renderCapabilityContract(command, hostId);
   const guidance = renderGuidance(command);
-  const shared = hostId === "dsh" ? `## Research judgment
-
-${DOVE_RESEARCH_SHARED_CONTRACT} Answer and stop for pure judgment or bounded requests; continue useful in-scope work when the user has confirmed a research goal.` : "";
+  const shared = hostId === "dsh" ? [
+    renderDoveSharedResearchContractSection({ compact: true, coveredText: contract2 }),
+    command.id === "dove.status" ? "For Status, use these principles only to inspect and report; do not execute research actions or maintain documents." : renderDoveAuthorStanceSection({ compact: true, coveredText: contract2 })
+  ].join("\n\n") : "";
   return [`# ${heading}`, purpose, args, examples.trim(), shared, contract2, guidance].filter(Boolean).join("\n\n") + "\n";
 }
 function renderFrontmatter(command, fields = {}) {
@@ -5614,7 +5659,7 @@ function classifyProjectSetup(result) {
 
 // src/core/project-doctor.mjs
 var MODULE_DIRECTORY = path17.dirname(fileURLToPath3(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path17.resolve(MODULE_DIRECTORY, "../..");
+var DEFAULT_PACKAGE_ROOT = path17.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path17.basename(MODULE_DIRECTORY)) ? ".." : "../..");
 function messageFor2(error) {
   return error instanceof Error ? error.message : String(error);
 }

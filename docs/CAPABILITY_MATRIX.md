@@ -18,6 +18,8 @@ Dove has one research agent and nine flat optional entrances, with no Auto comma
 
 Claude Code receives the Dove agent, commands, shared rule, SessionStart integration sync and compact/resume facts card, configured paper/web reading support, the `dove review ...` CLI handoff runtime, and the `dove run ...` local execution receipt helper. DSH receives project-local filesystem Skills only and no equivalent recoverable isolated Claude Code reviewer context.
 
+Important route, method, hypothesis, evaluation, and central-experiment decisions use proportionate theory or mechanism grounding before commitment; exploratory diagnostics can establish missing foundations. Source separates supported, contradicted, and uncovered parts of composite claims. Central execution that needs recording saves a plan before running and appends results to the same document. Draft and Review preserve the current authoritative manuscript format.
+
 ## Research Markdown
 
 Research context is ordinary Markdown under `.dove/research/`. Fresh initialization creates only `RESEARCH.md`. Mission, Source, Experiment, Review, Claim, and Lesson documents are optional and appear when useful.
@@ -32,4 +34,4 @@ Author-side self-check is Dove reviewing its own current work for scientific and
 
 ## Completion
 
-A bounded request may finish locally. A larger research goal is complete only when the goal has been achieved, no effective in-scope path remains after real investigation, or the next step needs the user's decision or an outside permission/limit.
+A bounded request may finish locally. A larger research goal is complete only when it has been achieved. Real investigation finding no effective in-scope path, or a next step needing the user's decision or an outside permission/limit, can stop progression without completing that goal. For a user-confirmed submission-completion goal, the same current complete version needs author-side scientific sufficiency, a current independent `dove-review` scientific-acceptability recommendation, and actual delivery readiness.

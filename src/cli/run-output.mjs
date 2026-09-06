@@ -106,7 +106,7 @@ export function renderRunResult(result) {
       `指标：${renderRunMetric(result.basis.metric)}`,
       "Git commit/dirty 只是运行事实，不参与可比性或排名。",
       "",
-      ...result.ranking.map((item) => `${terminalSafeText(item.rank)}. ${terminalSafeText(item.runId)} 指标值 ${terminalSafeText(item.metricValue)}，与最佳差值 ${terminalSafeText(item.deltaFromBest)}`)
+      ...result.ranking.map((item) => `${terminalSafeText(item.rank)}. ${terminalSafeText(item.runId)} 指标值 ${terminalSafeText(item.metricValue)}，与最佳差值 ${terminalSafeText(item.deltaFromBest ?? "unavailable")}`)
     ].join("\n");
   }
   return JSON.stringify(result, null, 2);

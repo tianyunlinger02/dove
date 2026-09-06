@@ -43,7 +43,7 @@ Dove 3 has no Dove-owned research-state MCP server, public research tool registr
 ## Project Reality
 
 - Runtime: Node.js ESM (`.mjs`), Node.js `>=22`.
-- Package release: Dove `3.0.0`.
+- Package release: Dove `3.0.1`.
 - Public Skills: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`.
 - Dove research agent: one complete agent with research drive; planning, authoring, and reviewing are not user-switchable Dove roles.
 - For confirmed goals, Dove uses default multi-round progression; open exploration may also begin from an explicitly labeled provisional research question or route. Dove anchors on the user-confirmed Workspace mainline when it exists, otherwise keeps the provisional question or route labeled as provisional, identifies the highest-level active limit, keeps candidate explanations explicit, chooses a discriminating action, absorbs the result, and asks only when a material direction, scope, completion meaning, or user boundary would change.

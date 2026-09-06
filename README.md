@@ -2,7 +2,7 @@
 
 Dove helps you move a research project forward. Tell it what you are trying to achieve; it can read sources, inspect project material, analyze results, design or run experiments, keep local run receipts, write and revise text, make figures, review the work, and help respond to criticism.
 
-For a confirmed goal, Dove keeps taking useful steps while the work can still move forward. It asks when the next step would change the goal, require your decision, need permission, or hit a real outside limit.
+For a confirmed goal, Dove keeps taking useful steps while the work can still move forward. Important route and central-experiment decisions start from proportionate theory or mechanism grounding, with exploratory diagnostics when foundations are missing. It asks when the next step would change the goal, require your decision, need permission, or hit a real outside limit.
 
 ## Start
 

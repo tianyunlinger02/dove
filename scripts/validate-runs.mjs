@@ -8,10 +8,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { captureRunGitFacts, normalizeRunGitFacts } from "../src/core/run-environment.mjs";
-import { inspectRunStatus, normalizeRunSeed } from "../src/core/run-record.mjs";
+import { compareRuns, inspectRunStatus, normalizeRunBudget, normalizeRunSeed, parseWallTime } from "../src/core/run-record.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SCRATCH_ROOT = path.join(ROOT, ".dove-dev", "tmp");
+const SCRATCH_ROOT = path.join(ROOT, ".claude", "tmp");
 fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
 
 function cli(args, options = {}) {
@@ -183,6 +183,234 @@ function finalize(project, runId, metricValue, extra = []) {
   return jsonCli(["run", "finalize", "--project", project, "--id", runId, "--metric-value", String(metricValue), ...extra, "--json"]);
 }
 
+function waitForCondition(check, label, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (check()) return;
+    sleep(25);
+  }
+  throw new Error(`Timed out waiting for ${label}`);
+}
+
+function processRunning(pid) {
+  const result = spawnSync("ps", ["-p", String(pid), "-o", "stat="], { encoding: "utf8" });
+  if (result.status === 1 && result.stdout.trim() === "") return false;
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  // A terminated orphan may briefly remain a zombie until its adopter reaps it.
+  return !result.stdout.trim().startsWith("Z");
+}
+
+function validateRunTimeouts(project) {
+  const maxDelay = 2_147_483_647;
+  assert.deepEqual(normalizeRunBudget(), { timeoutMs: null, killGraceMs: 5000 });
+  assert.deepEqual(normalizeRunBudget({ timeoutMs: 1, killGraceMs: 0 }), { timeoutMs: 1, killGraceMs: 0 });
+  assert.deepEqual(normalizeRunBudget({ timeoutMs: maxDelay, killGraceMs: maxDelay }), { timeoutMs: maxDelay, killGraceMs: maxDelay });
+  assert.equal(parseWallTime(`${maxDelay}ms`), maxDelay);
+  assert.throws(() => normalizeRunBudget({ timeoutMs: maxDelay + 1 }), /--timeout-ms.*2147483647/u);
+  assert.throws(() => normalizeRunBudget({ killGraceMs: maxDelay + 1 }), /--kill-grace-ms.*2147483647/u);
+  assert.throws(() => parseWallTime(`${maxDelay + 1}ms`), /--wall-time.*2147483647/u);
+
+  for (const [index, [flag, value]] of [
+    ["--timeout-ms", "2147483648"],
+    ["--kill-grace-ms", "2147483648"],
+    ["--wall-time", "2147483648ms"],
+    ["--wall-time", "2147484s"],
+    ["--wall-time", "35792m"],
+    ["--wall-time", "597h"]
+  ].entries()) {
+    const id = `invalid-timer-${index}`;
+    const runsRoot = path.join(project, ".dove", "runs");
+    const before = fs.existsSync(runsRoot) ? fs.readdirSync(runsRoot) : null;
+    const marker = path.join(project, `${id}.executed`);
+    const result = cli(["run", "start", "--project", project, "--id", id, flag, value, "--json", "--", process.execPath, "-e", `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'unexpected')`]);
+    assert.notEqual(result.status, 0, `${flag} ${value} must be rejected`);
+    assert.equal(result.stdout, "");
+    const failure = JSON.parse(result.stderr);
+    assert.equal(failure.status, "blocked");
+    assert.ok(failure.message.includes(flag), failure.message);
+    assert.match(failure.message, /2147483647.*Node\.js timer limit/u);
+    assert.equal(fs.existsSync(marker), false, "invalid duration must not execute the target");
+    assert.deepEqual(fs.existsSync(runsRoot) ? fs.readdirSync(runsRoot) : null, before, "invalid duration must not create a Run or runs root");
+  }
+
+  for (const flag of ["--timeout-ms", "--wall-time"]) {
+    const id = flag === "--timeout-ms" ? "max-timeout" : "max-wall-time";
+    const started = startRun(project, id, [flag, String(maxDelay), "--kill-grace-ms", String(maxDelay)], [process.execPath, "-e", "setTimeout(() => process.exit(0), 150)"]);
+    assert.deepEqual(started.budget, { timeoutMs: maxDelay, killGraceMs: maxDelay });
+    const status = waitForTerminal(project, id);
+    assert.equal(status.status, "succeeded");
+    assert.equal(status.timeoutTriggered, false);
+    assert.deepEqual(status.budget, started.budget);
+    const events = assertJournal(project, id);
+    assert.deepEqual(events.map((event) => event.type), ["run.started", "target.started", "run.terminal"]);
+    assert.deepEqual(events[0].budget, started.budget);
+  }
+
+  for (const [id, argv, expectedStatus, exitCode] of [
+    ["timer-normal-failure", [process.execPath, "-e", "process.exit(7)"], "failed", 7],
+    ["timer-launch-failure", [path.join(project, "missing-timeout-command")], "launch-failed", null]
+  ]) {
+    startRun(project, id, ["--timeout-ms", "1000"], argv);
+    const status = waitForTerminal(project, id);
+    assert.equal(status.status, expectedStatus);
+    assert.equal(status.exitCode, exitCode);
+    assert.equal(status.timeoutTriggered, false);
+    assertJournal(project, id);
+  }
+
+  if (process.platform === "win32") {
+    startRun(project, "timeout-direct-child", ["--timeout-ms", "500", "--kill-grace-ms", "100"], [process.execPath, "-e", "setInterval(() => {}, 1000)"]);
+    assert.equal(waitForTerminal(project, "timeout-direct-child").status, "timed-out");
+    const events = assertJournal(project, "timeout-direct-child");
+    assert.equal(events[0].timeout.scope, "direct-child-best-effort");
+    assert.equal(events.find((event) => event.type === "target.started").targetProcessGroup, null);
+    return;
+  }
+
+  for (const [id, leaderIgnoresTerm, withChild, graceMs] of [
+    ["timeout-leader-exits", false, true, 1000],
+    ["timeout-leader-ignores", true, true, 100],
+    ["timeout-zero-grace", false, true, 0],
+    ["timeout-group-gone", false, false, maxDelay]
+  ]) {
+    const childMarker = path.join(project, `${id}.child`);
+    const termMarker = path.join(project, `${id}.term`);
+    const heartbeat = path.join(project, `${id}.heartbeat`);
+    const script = path.join(project, `${id}.mjs`);
+    const childCode = `const fs = require('node:fs'); process.on('SIGTERM', () => {}); fs.writeFileSync(${JSON.stringify(childMarker)}, String(process.pid)); setInterval(() => fs.appendFileSync(${JSON.stringify(heartbeat)}, '.'), 25); setTimeout(() => process.exit(0), 15000);`;
+    writeScript(script, `
+      import fs from 'node:fs';
+      import { spawn } from 'node:child_process';
+      process.on('SIGTERM', () => { fs.writeFileSync(${JSON.stringify(termMarker)}, 'TERM'); ${leaderIgnoresTerm ? "" : "process.exit(0);"} });
+      ${withChild ? `spawn(process.execPath, ['-e', ${JSON.stringify(childCode)}], { stdio: 'ignore' });` : ""}
+      setInterval(() => {}, 1000);
+      setTimeout(() => process.exit(0), 15000);
+    `);
+    const started = startRun(project, id, ["--wall-time", "1200ms", "--kill-grace-ms", String(graceMs)], [process.execPath, script]);
+    let targetPid = null;
+    let childPid = null;
+    try {
+      waitForCondition(() => {
+        targetPid = readJsonLines(runPath(project, id, "run.jsonl")).find((event) => event.type === "target.started")?.targetPid ?? null;
+        return targetPid !== null;
+      }, `${id} target start`);
+      if (withChild) {
+        waitForCondition(() => fs.existsSync(childMarker) && fs.existsSync(heartbeat), `${id} child readiness`);
+        childPid = Number(fs.readFileSync(childMarker, "utf8"));
+        const pgid = spawnSync("ps", ["-p", String(childPid), "-o", "pgid="], { encoding: "utf8" });
+        assert.equal(pgid.status, 0, pgid.stderr);
+        assert.equal(Number(pgid.stdout.trim()), targetPid, "test child must remain in the target's process group");
+      }
+      if (id === "timeout-leader-exits") {
+        waitForCondition(() => fs.existsSync(termMarker) && !processRunning(targetPid), "leader TERM exit");
+        const duringGrace = jsonCli(["run", "status", "--project", project, "--id", id, "--json"]);
+        assert.equal(duringGrace.terminal, false, "leader exit must not declare terminal while group escalation is pending");
+        assert.equal(duringGrace.timeoutTriggered, true);
+        assert.equal(processRunning(childPid), true, "child must survive SIGTERM to exercise escalation");
+        const bytes = fs.statSync(heartbeat).size;
+        sleep(100);
+        assert.ok(fs.statSync(heartbeat).size > bytes, "child must continue work during grace");
+        const before = fileState(runPath(project, id, "run.jsonl"));
+        const resumed = jsonCli(["run", "resume", "--project", project, "--id", id, "--json"]);
+        assert.equal(resumed.status, "active");
+        assert.equal(resumed.write, false);
+        assertFileStateEqual(fileState(runPath(project, id, "run.jsonl")), before, "resume during grace");
+      }
+      const status = waitForTerminal(project, id);
+      assert.equal(status.status, "timed-out");
+      assert.equal(status.timeoutTriggered, true);
+      if (!leaderIgnoresTerm && graceMs > 0) assert.equal(status.exitCode, 0, "receipt must retain leader TERM-handler exit code");
+      waitForCondition(() => !processRunning(targetPid) && !processRunning(started.supervisorPid) && (!withChild || !processRunning(childPid)), `${id} processes to stop`);
+      const events = assertJournal(project, id);
+      assert.equal(events[0].timeout.scope, "process-group");
+      assert.deepEqual(events[0].budget, { timeoutMs: 1200, killGraceMs: graceMs });
+      assert.deepEqual(events.map((event) => event.type), ["run.started", "target.started", "timeout.requested", ...(withChild ? ["timeout.escalated"] : []), "run.terminal"]);
+      if (withChild) {
+        const escalation = events.find((event) => event.type === "timeout.escalated");
+        assert.equal(escalation.secondSignal.ok, true);
+        assert.equal(escalation.targetProcessGroup, targetPid);
+        const requested = events.find((event) => event.type === "timeout.requested");
+        assert.ok(Date.parse(escalation.at) - Date.parse(requested.at) >= graceMs - 20, "grace must not collapse to a 1ms timer");
+        const bytes = fs.statSync(heartbeat).size;
+        sleep(100);
+        assert.equal(fs.statSync(heartbeat).size, bytes, "no child work after escalation");
+      }
+      const journal = runPath(project, id, "run.jsonl");
+      const before = fileState(journal);
+      const human = cli(["run", "status", "--project", project, "--id", id]);
+      assert.equal(human.status, 0, human.stderr);
+      assert.match(human.stdout, /状态：timed-out/u);
+      assert.match(human.stdout, /生命周期：terminal/u);
+      assert.equal(jsonCli(["run", "resume", "--project", project, "--id", id, "--json"]).write, false);
+      assertFileStateEqual(fileState(journal), before, "terminal status and resume must be read-only");
+    } finally {
+      // Only this fixture's recorded group and supervisor are eligible for cleanup.
+      targetPid ??= readJsonLines(runPath(project, id, "run.jsonl")).find((event) => event.type === "target.started")?.targetPid;
+      if (childPid === null && fs.existsSync(childMarker)) childPid = Number(fs.readFileSync(childMarker, "utf8"));
+      if (targetPid && (processRunning(targetPid) || (childPid && processRunning(childPid)))) {
+        try { process.kill(-targetPid, "SIGKILL"); } catch {}
+      }
+      if (processRunning(started.supervisorPid)) {
+        try { process.kill(started.supervisorPid, "SIGKILL"); } catch {}
+      }
+    }
+  }
+}
+
+function validateRunComparisonDeltas(project) {
+  for (const direction of ["min", "max"]) {
+    const group = `extreme-${direction}`;
+    const metrics = { negative: -1e308, zero: 0, positive: 1e308, "positive-tie": 1e308 };
+    for (const [label, metricValue] of Object.entries(metrics)) {
+      const id = `${group}-${label}`;
+      startRun(project, id, ["--group", group, "--metric-name", "score", "--direction", direction, "--timeout-ms", "1000"], [process.execPath, "-e", "process.exit(0)"]);
+      assert.equal(waitForTerminal(project, id).status, "succeeded");
+      assert.equal(finalize(project, id, metricValue).event.metric.value, metricValue, "finite metrics must remain accepted");
+      const events = assertJournal(project, id);
+      assert.equal(events.at(-1).type, "run.finalized");
+      assert.equal(events.at(-1).metric.value, metricValue);
+    }
+    const before = Object.keys(metrics).map((label) => fileState(runPath(project, `${group}-${label}`, "run.jsonl")));
+    const direct = compareRuns({ project, group });
+    const result = jsonCli(["run", "compare", "--project", project, "--group", group, "--json"]);
+    assert.equal(result.comparable, true);
+    assert.deepEqual(direct.ranking, result.ranking, "core must return explicit null, not Infinity silently serialized as null");
+    const labels = direction === "min" ? ["negative", "zero", "positive", "positive-tie"] : ["positive", "positive-tie", "zero", "negative"];
+    assert.deepEqual(result.ranking.map((item) => item.runId), labels.map((label) => `${group}-${label}`));
+    assert.deepEqual(result.ranking.map((item) => item.rank), [1, 2, 3, 4]);
+    assert.deepEqual(result.ranking.map((item) => item.metricValue), labels.map((label) => metrics[label]));
+    assert.deepEqual(result.ranking.map((item) => item.deltaFromBest), direction === "min" ? [0, 1e308, null, null] : [0, 0, 1e308, null]);
+    const human = cli(["run", "compare", "--project", project, "--group", group]);
+    assert.equal(human.status, 0, human.stderr);
+    assert.equal(human.stderr, "");
+    assert.doesNotMatch(human.stdout, /Infinity|NaN/u);
+    for (const item of result.ranking) {
+      assert.ok(human.stdout.includes(`${item.rank}. ${item.runId} 指标值 ${item.metricValue}，与最佳差值 ${item.deltaFromBest ?? "unavailable"}`), human.stdout);
+    }
+    Object.keys(metrics).forEach((label, index) => assertFileStateEqual(fileState(runPath(project, `${group}-${label}`, "run.jsonl")), before[index], "compare must not mutate receipts"));
+  }
+}
+
+// Focused source-CLI checks need neither installation nor Git fixture commits.
+const comparisonsOnly = process.argv.includes("--comparisons-only");
+if (process.argv.includes("--timeouts-only") || comparisonsOnly) {
+  const project = fs.mkdtempSync(path.join(SCRATCH_ROOT, comparisonsOnly ? "dove-run-comparisons-" : "dove-run-timeouts-"));
+  try {
+    const at = new Date().toISOString();
+    fs.mkdirSync(path.join(project, ".dove", "install"), { recursive: true });
+    fs.writeFileSync(path.join(project, ".dove", "install", "manifest.json"), JSON.stringify({
+      revision: "2.0", package: { name: "dove", version: "3.0.0" }, runtime: { mode: "user-cli" },
+      hosts: ["claude"], managed: [], createdAt: at, updatedAt: at
+    }));
+    if (comparisonsOnly) validateRunComparisonDeltas(project);
+    else validateRunTimeouts(project);
+    console.log(JSON.stringify({ status: "passed", scope: comparisonsOnly ? "run comparison deltas (source CLI)" : "run timeouts (source CLI)", platform: process.platform }, null, 2));
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+  process.exit(0);
+}
+
 const tempRoot = fs.mkdtempSync(path.join(SCRATCH_ROOT, "dove-runs-"));
 const cleanupProcessGroups = [];
 try {
@@ -191,6 +419,8 @@ try {
   fs.mkdirSync(path.join(project, ".git"));
   const init = jsonCli(["init", "--project", project, "--host", "claude", "--json"]);
   assert.equal(init.status, "initialized");
+  validateRunTimeouts(project);
+  validateRunComparisonDeltas(project);
   fs.writeFileSync(path.join(project, "package-lock.json"), "{\"lockfileVersion\":3}\n");
 
   const invalidStart = cli(["run", "start", "--project", project, "--id", "invalid-start", "--metric-name", "score", "--direction", "mean", "--json", "--", process.execPath, "-e", "process.exit(0)"]);

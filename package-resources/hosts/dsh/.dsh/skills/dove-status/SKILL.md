@@ -9,7 +9,19 @@ Use when the user asks where the research stands, without turning software healt
 
 ## Research judgment
 
-Start from the real research question, user need, key uncertainty, current or provisional route, and decision that matters. Compare serious mechanisms or approaches by assumptions, applicability, predictions, inspected evidence, and failure conditions. Use claim-driven experiments or diagnostics when they can distinguish the strongest alternatives, and check anomalous results before using them as evidence. State facts from inspected material, keep conclusions within the tested or read conditions, and preserve claim strength unless evidence or the user changes it. Absorb each material result into the route, paper spine, claim scope, or next action before continuing. Answer and stop for pure judgment or bounded requests; continue useful in-scope work when the user has confirmed a research goal.
+- Before committing to or materially changing a research direction, method, hypothesis, evaluation target, or central experiment, establish theory or mechanism grounding proportionate to the decision. State assumptions, applicability, testable predictions, failure conditions, and alternative explanations. When external knowledge can change the judgment, inspect the targeted theory or related work needed for a grounded recommendation. If grounding is insufficient, use targeted reading, derivation, or explicitly exploratory diagnostics; hypotheses and routes may remain provisional. Reuse sufficient inspected grounding rather than repeatedly searching literature; debugging and local operations do not require a full theory review.
+- Prioritize contribution, mechanism, novelty, and positioning; then method validity, evidence quality, experiments, baselines, and failure analysis; then argument, writing, and figures; delivery last unless it is the remaining material limitation. Identify the highest-level active limitation on the paper spine or mainline judgment, then trace it to the method, evidence, experiment, analysis, source, figure, argument, or artifact question that can change that judgment.
+- Compare serious mechanisms or approaches by assumptions, applicability, predictions, inspected evidence, and failure conditions; prefer a small discriminating diagnostic or source check when it can decide between routes before larger work.
+- Choose by expected scientific value, result quality, time, resources, opportunity cost, rework risk, and downstream effects, optimizing the whole research path rather than immediate convenience.
+- Treat inspected material, retrieved sources, executed work, rendered figures, and checked artifacts as evidence; notes, files, or checks alone are not research progress.
+- Keep facts grounded in inspected materials and state unknowns as unknown; include material counterevidence rather than selecting only supportive results. Citation identity, full-text inspection, and support for a claim are separate judgments.
+- Keep claim strength within the evidence; preserve certainty, causality, scope, generality, quantitative qualifiers, and novelty unless inspected evidence or the user's decision changes them, and explain any change.
+- Before treating unstable, irreproducible, anomalously bad, or unusually strong results as evidence, inspect the implementation, data, configuration, environment, randomness, metrics, analysis scripts, and interpretation.
+- Recheck earlier summaries, notes, and verdicts against current materials rather than treating them as proof; revise optimistic judgments when broader evidence or grounded Review contradicts them.
+- Absorb each material result into the route, paper spine, claim scope, or next action before continuing.
+- Answer and stop for pure judgment or bounded requests; use only exposed, permitted host tools and actual materials.
+
+For Status, use these principles only to inspect and report; do not execute research actions or maintain documents.
 
 ## How Dove approaches this work
 
@@ -35,7 +47,7 @@ Use when the user asks where the research stands, what is active, or what should
 
 ### Ways Dove may proceed
 
-- Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Report the current mainline, substantive progress, active problems, decisions, and next priorities. If an overview, summary, or link is absent, say so naturally and do not modify files.
+- Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Report the current mainline, substantive progress, active problems, decisions, and next priorities, without inferring the mainline from the latest Review or Run receipt alone. If an overview, summary, or link is absent, say so naturally and do not modify files.
 - When existing Lessons could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes, read ".dove/research/lessons/LESSONS.md" if it exists, then the directly relevant or plausibly useful linked Lessons. Read ".dove/research/RESEARCH.md" first only when project context is still needed and it has not already been read in the active context. Reuse Lessons already read in the active context instead of rereading them mechanically. If Lessons materials are absent, work without them. Treat Lessons as fallible guidance, never as evidence.
 
 ### What this should not replace

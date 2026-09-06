@@ -107,12 +107,24 @@ export function ensureRealDirectory(directoryPath, options = {}) {
   return realpathNative(fsOps, resolved);
 }
 
+export function reviewWorkspaceName(reviewId, options = {}) {
+  const projectRoot = realpathNative(options.fsOps ?? fs, path.resolve(options.projectRoot));
+  return `r-${sha256(JSON.stringify([projectRoot, normalizeReviewId(reviewId)])).slice(0, 20)}`;
+}
+
 function reviewWorkspaceLocation(reviewId, options = {}) {
   const id = normalizeReviewId(reviewId);
   const fsOps = options.fsOps ?? fs;
   const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
-  return { id, stateRoot, stateRootFs, workspaceRoot: stateRootFs.displayPath(id) };
+  const name = reviewWorkspaceName(id, options);
+  const workspaceRoot = options.workspaceRoot ?? stateRootFs.displayPath(name);
+  // Preserve the recorded session location only when its project-scoped key matches.
+  // Unnamespaced workspaces have no provable owner; never adopt or replace them.
+  if (workspaceRoot !== stateRootFs.displayPath(name)) {
+    throw new Error("Dove review recorded workspace must belong to this project and review inside the selected state root. Start a new review id; the existing workspace is left untouched.");
+  }
+  return { id, name, stateRoot, stateRootFs, workspaceRoot };
 }
 
 function writeMaterialFiles(root, files, fsOps) {
@@ -128,27 +140,28 @@ function writeMaterialFiles(root, files, fsOps) {
 export function prepareReviewWorkspace(options = {}) {
   const fsOps = options.fsOps ?? fs;
   if (!Array.isArray(options.files)) throw new Error("Dove review workspace files must be an array.");
-  const { id, stateRoot, stateRootFs, workspaceRoot } = reviewWorkspaceLocation(options.reviewId, options);
-  const stagingName = `.${id}.staging-${crypto.randomUUID()}`;
-  const backupName = `.${id}.previous-${crypto.randomUUID()}`;
+  const { id, name, stateRoot, stateRootFs, workspaceRoot } = reviewWorkspaceLocation(options.reviewId, options);
+  const stagingName = `.${name}.staging-${crypto.randomUUID()}`;
+  const backupName = `.${name}.previous-${crypto.randomUUID()}`;
   let backupCreated = false;
   let promoted = false;
   stateRootFs.mkdir(stagingName, { mode: 0o700 });
   const stagingRoot = stateRootFs.displayPath(stagingName);
   try {
     writeMaterialFiles(stagingRoot, options.files, fsOps);
-    const existing = stateRootFs.tryLstat(id);
+    const existing = stateRootFs.tryLstat(name);
     if (existing !== null) {
+      if (!options.workspaceRoot) throw new Error(`Dove review workspace already exists without this review's recorded session: ${workspaceRoot}`);
       if (existing.isSymbolicLink() || !existing.isDirectory()) throw new Error(`Dove review workspace must be a real directory: ${workspaceRoot}`);
-      stateRootFs.rename(id, backupName);
+      stateRootFs.rename(name, backupName);
       backupCreated = true;
     }
     try {
-      stateRootFs.rename(stagingName, id);
+      stateRootFs.rename(stagingName, name);
       promoted = true;
     } catch (promoteError) {
-      if (backupCreated && !stateRootFs.exists(id) && stateRootFs.exists(backupName)) {
-        try { stateRootFs.rename(backupName, id); } catch (restoreError) {
+      if (backupCreated && !stateRootFs.exists(name) && stateRootFs.exists(backupName)) {
+        try { stateRootFs.rename(backupName, name); } catch (restoreError) {
           throw new Error(`Dove review workspace replacement failed and the previous workspace could not be restored: ${errorMessage(promoteError)}; restore: ${errorMessage(restoreError)}`, { cause: promoteError });
         }
       }
@@ -170,7 +183,7 @@ export function prepareReviewWorkspace(options = {}) {
       // The original error is more actionable; stale staging cleanup is best-effort.
     }
     try {
-      if (backupCreated && !stateRootFs.exists(id) && stateRootFs.exists(backupName)) stateRootFs.rename(backupName, id);
+      if (backupCreated && !stateRootFs.exists(name) && stateRootFs.exists(backupName)) stateRootFs.rename(backupName, name);
     } catch (restoreError) {
       throw new Error(`Dove review workspace preparation failed and the previous workspace could not be restored: ${errorMessage(error)}; restore: ${errorMessage(restoreError)}`, { cause: error });
     }
@@ -213,15 +226,14 @@ export function finalizePreparedReviewWorkspace(workspace, options = {}) {
 export function restorePreparedReviewWorkspace(workspace, options = {}) {
   if (!workspace?.reviewId) return;
   const fsOps = options.fsOps ?? fs;
-  const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
-  const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
-  const current = stateRootFs.tryLstat(workspace.reviewId);
+  const { name, stateRootFs } = reviewWorkspaceLocation(workspace.reviewId, { ...options, fsOps, workspaceRoot: workspace.workspaceRoot });
+  const current = stateRootFs.tryLstat(name);
   if (current !== null) {
-    if (current.isSymbolicLink() || !current.isDirectory()) throw new Error(`Dove review workspace must be a real directory before restoring the previous workspace: ${workspace.reviewId}`);
-    stateRootFs.remove(workspace.reviewId, { recursive: true, force: true });
+    if (current.isSymbolicLink() || !current.isDirectory()) throw new Error(`Dove review workspace must be a real directory before restoring the previous workspace: ${workspace.workspaceRoot}`);
+    stateRootFs.remove(name, { recursive: true, force: true });
   }
   if (!workspace.previousWorkspaceBackupName) return;
-  stateRootFs.rename(workspace.previousWorkspaceBackupName, workspace.reviewId);
+  stateRootFs.rename(workspace.previousWorkspaceBackupName, name);
 }
 
 export function assertReviewWorkspaceMatchesSnapshot(options = {}) {

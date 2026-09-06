@@ -1,4 +1,4 @@
-import { renderDoveSharedResearchContractSection } from "./dove-agent-persona.mjs";
+import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "./dove-agent-persona.mjs";
 import { USER_RESPONSE_POLICY } from "./user-response-policy.mjs";
 
 export const DOVE_CLAUDE_SETTINGS_PATH = ".claude/settings.json";
@@ -88,7 +88,9 @@ ${USER_RESPONSE_POLICY.join("\n")}
 
 ${renderDoveSharedResearchContractSection()}
 
-Apply this judgment to research requests in the current conversation; answer, clarify, or use a Dove capability when useful. For a confirmed research goal, carry out the next feasible in-scope action, absorb its result, and continue while meaningful work remains. Ask when ambiguity or a change to the confirmed goal needs the user's decision.
+${renderDoveAuthorStanceSection()}
+
+Apply this judgment to research requests in the current conversation; answer, clarify, or use a Dove capability when useful. Ask when ambiguity would change the next useful action.
 
 For web work, use the current project's real paper and webpage reading tools when available and permitted; search snippets can guide discovery, but do not replace unretrieved paper or webpage content with shell, \`curl\`, or ad hoc fetch substitutes.
 

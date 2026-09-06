@@ -26,23 +26,6 @@ function resultHosts(result) {
   return result.hosts ?? result.projectIntegration?.manifest?.hosts ?? [];
 }
 
-function setupCompleteLines(result, color) {
-  const hosts = resultHosts(result);
-  const hasClaude = hosts.includes("claude");
-  const lines = ["", terminalStyle("项目配置完成", "bold", { color }), "", "✓ Dove 项目集成已是当前版本"];
-  if (hasClaude) {
-    lines.push("✓ Dove agent 与 9 个可选专项入口已安装", "✓ Claude Code 自然语言入口、Prompt Hook、WebFetch 禁用和按需 MCP 已配置");
-  }
-  if (hosts.includes("dsh")) lines.push("✓ DSH 项目级 filesystem Skills 已安装");
-  lines.push("✓ 最小研究入口 RESEARCH.md 已建立", "", "默认研究文档是可维护的 Markdown 入口，不代表科研主线、结论或任务已经完成。", "");
-  if (hasClaude) {
-    lines.push("论文工具需要本机已有 uvx，并在 Claude Code 首次使用时由你批准；Dove 未安装依赖、写入凭据或替你批准。", "", `${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code`, "进入后直接提出科研请求；/dove:* 只是可选专项快捷入口。");
-  } else {
-    lines.push(`${terminalStyle("下一步", "bold", { color })}  在 DSH 中使用项目级 Dove filesystem Skills；DSH 不提供 Claude slash 命令、Hooks 或 MCP 声明。`);
-  }
-  return lines.join("\n");
-}
-
 function lifecycleTarget(result, fallback) {
   return result?.target ?? fallback;
 }
@@ -190,9 +173,9 @@ export async function runInteractiveDoveSetup(options) {
     }
     if (action === "init") {
       const hosts = await selectHosts(promptCheckbox, DEFAULT_INITIALIZABLE_HOSTS);
-      await initialize(setupTarget, { hosts });
+      const result = await initialize(setupTarget, { hosts });
       const current = await inspect(setupTarget);
-      stream.write(`${setupCompleteLines(current, color)}\n`);
+      stream.write(`\n${renderProjectIntegrationResult("init", result, { stream, env })}\n`);
       return { status: "initialized", action: "init", result: current };
     }
     if (action === "adopt") {

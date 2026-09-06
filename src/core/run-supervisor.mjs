@@ -137,6 +137,7 @@ async function superviseTargetRun(rawPayload) {
   let graceTimer = null;
   let timedOut = false;
   let terminalWritten = false;
+  let closedTarget = null;
   let readySent = false;
 
   async function sendReady(extra = {}) {
@@ -151,6 +152,24 @@ async function superviseTargetRun(rawPayload) {
     closeFd(stdoutFd);
     closeFd(stderrFd);
     process.exit(status);
+  }
+
+  function finishClosedTarget() {
+    if (terminalWritten || closedTarget === null) return;
+    if (graceTimer !== null) {
+      // A closed POSIX leader does not imply its process group has exited.
+      // Keep the referenced grace timer unless that group is no longer observed.
+      if (process.platform !== "win32" && signalTargetGroup(target.pid, 0).error !== "not-observed") return;
+      clearTimeout(graceTimer);
+      graceTimer = null;
+    }
+    terminalWritten = true;
+    try {
+      appendTerminalEvent(projectRoot, runId, closedTarget, { source: "target-close", targetPid: target.pid });
+      finish(0);
+    } catch {
+      finish(1);
+    }
   }
 
   try {
@@ -217,6 +236,7 @@ async function superviseTargetRun(rawPayload) {
             }, { operation: "timeout" });
           } catch {}
           const kill = () => {
+            graceTimer = null;
             const secondSignal = signalTargetGroup(target.pid, "SIGKILL");
             try {
               appendRunEvent(projectRoot, runId, "timeout.escalated", {
@@ -229,6 +249,7 @@ async function superviseTargetRun(rawPayload) {
                 termination: scope
               }, { operation: "timeout-escalated" });
             } catch {}
+            finishClosedTarget();
           };
           if (budget.killGraceMs === 0) kill();
           else graceTimer = setTimeout(kill, budget.killGraceMs);
@@ -259,15 +280,8 @@ async function superviseTargetRun(rawPayload) {
     });
 
     target.once("close", (code, signal) => {
-      if (terminalWritten) return;
-      terminalWritten = true;
-      const terminal = terminalPayloadForClose(code, signal, timedOut);
-      try {
-        appendTerminalEvent(projectRoot, runId, terminal, { source: "target-close", targetPid: target.pid });
-        finish(0);
-      } catch {
-        finish(1);
-      }
+      closedTarget = terminalPayloadForClose(code, signal, timedOut);
+      finishClosedTarget();
     });
     await new Promise(() => {});
   } catch (error) {

@@ -4,7 +4,7 @@ const boolean = (name, options = {}) => ({ name, kind: "boolean", key: optionKey
 const projectOption = value("--project");
 const hostOption = value("--host", { repeatable: true, commaSeparated: true, dedupe: true, choices: ["claude", "dsh"] });
 const outputOptions = [boolean("--json", { conflictsWith: ["--format"] }), value("--format", { choices: ["json"], conflictsWith: ["--json"] })];
-const reviewOptions = [projectOption, value("--venue"), value("--material", { repeatable: true }), value("--id"), value("--file"), ...outputOptions];
+const reviewOptions = [projectOption, value("--venue"), value("--material", { repeatable: true }), value("--id"), ...outputOptions];
 const runMetricOptions = [value("--metric-name"), value("--direction", { choices: ["min", "max"] }), value("--metric-unit")];
 const runBasisOptions = [value("--data"), value("--evaluator"), value("--resource-basis")];
 const runBudgetOptions = [value("--wall-time"), value("--timeout-ms"), value("--kill-grace-ms")];
@@ -34,7 +34,7 @@ export const CLI_COMMAND_SPECS = Object.freeze({
       status: command([projectOption, value("--id"), ...outputOptions]),
       resume: command([projectOption, value("--id"), ...outputOptions]),
       rerun: command(reviewOptions),
-      import: command(reviewOptions)
+      import: command([...reviewOptions, value("--file")])
     }
   }),
   run: command([], {

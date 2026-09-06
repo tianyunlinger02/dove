@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { DOVE_REVIEW_BACKEND_ID, runClaudeReviewBackend } from "./review-claude-backend.mjs";
 import { REVIEW_MATERIAL_DENY_PATTERNS, createReviewSnapshot } from "./review-snapshot.mjs";
-import { assertReviewWorkspaceMatchesSnapshot, createReviewId, finalizePreparedReviewWorkspace, normalizeReviewId, prepareReviewWorkspace, resolveReviewStateRoot, restorePreparedReviewWorkspace } from "./review-workspace.mjs";
+import { assertReviewWorkspaceMatchesSnapshot, createReviewId, finalizePreparedReviewWorkspace, normalizeReviewId, prepareReviewWorkspace, resolveReviewStateRoot, restorePreparedReviewWorkspace, reviewWorkspaceName } from "./review-workspace.mjs";
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
 import { resolveInstalledProjectRoot } from "./project-root.mjs";
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
@@ -340,6 +340,19 @@ function assertCurrentRoundCanUseRuntime(record) {
   return current;
 }
 
+function recordedWorkspaceRoot(projectRoot, record, options = {}) {
+  if (record.projectRoot !== projectRoot) throw new Error("Dove review record belongs to a different project.");
+  const round = record.rounds.find((item) => item.provenance === "runtime" && item.sessionId === record.session.sessionId);
+  if (!round) throw new Error("Dove review session has no recorded runtime workspace.");
+  const anchor = openRootedFilesystem(projectRoot, { fsOps: options.fsOps ?? fs });
+  const backendPath = roundPaths(record.id, round.round).backend;
+  const backend = parseJsonWithoutDuplicateKeys(anchor.readFile(backendPath).toString("utf8"), backendPath);
+  if (backend?.sessionId !== record.session.sessionId || typeof backend.cwd !== "string" || !backend.cwd) {
+    throw new Error("Dove review backend is missing the workspace for its recorded session.");
+  }
+  return backend.cwd;
+}
+
 function stateRootOptions(options = {}) {
   return {
     fsOps: options.fsOps ?? fs,
@@ -371,7 +384,7 @@ function acquireReviewMutationLock(reviewId, options = {}) {
   const stateRoot = resolveReviewStateRoot(stateRootOptions(options));
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   const lockRoot = ensureLockRoot(stateRootFs);
-  const lockPath = `${lockRoot}/${normalizeReviewId(reviewId)}.lock`;
+  const lockPath = `${lockRoot}/${reviewWorkspaceName(reviewId, options)}.lock`;
   try {
     stateRootFs.mkdir(lockPath, { mode: 0o700 });
   } catch (error) {
@@ -632,7 +645,7 @@ export function resumeReview(options = {}) {
     let workspace;
     let outcome;
     try {
-      workspace = assertReviewWorkspaceMatchesSnapshot({ reviewId, snapshot, ...stateRootOptions({ ...options, projectRoot }) });
+      workspace = assertReviewWorkspaceMatchesSnapshot({ reviewId, snapshot, ...stateRootOptions({ ...options, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) });
       const prompt = promptForRound({ operation: "resume", reviewId, round, venue: record.venue, snapshot });
       outcome = runClaudeReviewBackend({
         workspaceRoot: workspace.workspaceRoot,
@@ -663,7 +676,7 @@ export function rerunReview(options = {}) {
     const createdAt = exactIsoTimestamp(options.now ?? new Date());
     const venue = options.venue ?? record.venue ?? null;
     const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round, venue, materials: options.materials, now: createdAt, fsOps });
-    const workspaceOptions = stateRootOptions({ ...options, projectRoot });
+    const workspaceOptions = { ...stateRootOptions({ ...options, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) };
     const workspace = prepareReviewWorkspace({ reviewId, files, keepPreviousWorkspaceBackup: true, ...workspaceOptions });
     const prompt = promptForRound({ operation: "rerun", reviewId, round, venue, snapshot });
     let outcome;

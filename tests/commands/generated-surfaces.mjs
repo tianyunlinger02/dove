@@ -65,8 +65,246 @@ function assertGeneratedSurfaceUsesCurrentRenderer(entry) {
 
 function assertRenderedActions(entry) {
   const label = generatedSurfaceLabel(entry);
+  let previousIndex = -1;
   for (const item of contractActions(entry.command)) {
-    assert.ok(entry.content.includes(item.instruction), `${label} must render ${entry.command.id} action instruction without exposing its internal capability id`);
+    const index = entry.content.indexOf(item.instruction);
+    assert.ok(index > previousIndex, `${label} must render ${entry.command.id} actions in order without exposing internal capability ids`);
+    previousIndex = index;
+  }
+}
+
+function renderedSection(value, title) {
+  const heading = `### ${title}\n\n`;
+  const start = value.indexOf(heading);
+  assert.ok(start >= 0, `rendered instructions need section ${title}`);
+  const end = value.indexOf("\n### ", start + heading.length);
+  return value.slice(start + heading.length, end < 0 ? undefined : end);
+}
+
+function assertInstruction(value, locator, patterns, label) {
+  const matches = value.split("\n").filter((line) => line.startsWith("- ") && locator.test(line));
+  assert.equal(matches.length, 1, `${label} needs one actionable instruction matching ${locator}`);
+  for (const pattern of patterns) assert.match(matches[0], pattern, `${label} must preserve ${pattern}`);
+  return matches[0];
+}
+
+function assertRouteGrounding(value, label) {
+  for (const pattern of [
+    /Before (?:committing|proposing|changing).*theory or mechanism grounding.*proportionate/iu,
+    /assumptions.*applicability.*predictions.*failure conditions.*alternative explanations/iu,
+    /insufficient.*targeted reading.*derivation.*exploratory diagnostics.*provisional/iu,
+    /external knowledge.*change.*judgment.*inspect targeted theory or related work.*compare.*before recommending/iu,
+    /Reuse sufficient inspected grounding.*debugging and local operations do not require a full theory review/iu
+  ]) assert.match(value, pattern, `${label} needs proportionate grounding before commitment, not a theory-completeness prerequisite`);
+}
+
+function assertSubmissionCompletion(value, label) {
+  for (const pattern of [
+    /submission-completion goal.*completion needs author-side scientific sufficiency.*current independent `dove-review`.*same full version.*real delivery readiness/iu,
+    /Unavailable isolated review.*requirement unmet, not waived/iu,
+    /bounded local review.*can finish without becoming a submission-completion goal/iu
+  ]) assert.match(value, pattern, `${label} must keep current independent full review mandatory for submission, not for bounded work`);
+}
+
+function assertAuthoritativeManuscript(value, label) {
+  for (const pattern of [
+    /preserve.*current authoritative manuscript format/iu,
+    /identify.*source.*build or export path.*actual venue requirements/iu,
+    /Only for a new manuscript.*default to LaTeX when the venue accepts it.*otherwise.*required format/iu,
+    /Inspect.*actual submission output.*compiled output for LaTeX/iu,
+    /propagate.*(?:changes|revisions|edits).*authoritative source/iu
+  ]) assert.match(value, pattern, `${label} must preserve the actual authoritative manuscript, not impose LaTeX`);
+}
+
+// These checks inspect final host instructions independently of manifest string
+// identity. They protect textual behavior and ordering, not model execution.
+export function assertRenderedCapabilityWiring(entry) {
+  const label = generatedSurfaceLabel(entry);
+  const value = entry.content;
+  const actions = entry.command.id === "dove.review" ? value : renderedSection(value, "Ways Dove may proceed");
+  switch (entry.command.id) {
+    case "dove.research": {
+      const progression = assertInstruction(actions, /Follow the confirmed or provisional mainline/iu, [
+        /perform.*permitted host tools.*absorb the result.*continue/iu,
+        /submission goal.*Review.*current whole-paper judgment.*before declaring completion/iu
+      ], label);
+      assertRouteGrounding(progression, label);
+      assertSubmissionCompletion(progression, label);
+      break;
+    }
+    case "dove.status":
+      assertInstruction(actions, /Read `\.dove\/research\/RESEARCH\.md`/u, [
+        /only.*summaries and linked details needed/iu,
+        /visible conversation.*necessary current project materials.*distinguish live work from durable research notes/iu,
+        /conflicts or stale notes.*without silently reconciling/iu,
+        /without inferring the mainline from the latest Review or Run receipt alone/iu,
+        /absent.*say so naturally.*do not modify files/iu
+      ], label);
+      break;
+    case "dove.source":
+      assertInstruction(actions, /Discover, retrieve/iu, [
+        /verify identity and metadata first.*direct DOI lookup before fuzzy title search/iu,
+        /failed lookup is unknown/iu,
+        /Metadata identity is not full-text inspection or claim support.*inspect actual content before using.*claim/iu,
+        /Split compound claims.*material parts.*report each as supported, contradicted, or uncovered.*inspected content.*passage or evidence.*limits/iu,
+        /Partial support is not support for the whole sentence/iu,
+        /recommend only the supported wording without automatically editing the manuscript/iu,
+        /explicit systematic work.*ordinary paper finding.*single fact checks stay proportional/iu,
+        /unavailable.*say what is missing.*continue.*other material/iu
+      ], label);
+      break;
+    case "dove.experiment": {
+      const design = assertInstruction(actions, /For new design/iu, [
+        /real problem.*key uncertainty.*prediction.*strongest alternative.*minimum sufficient evidence/iu,
+        /central basis is missing.*inspect actual project material.*smallest low-risk diagnostic.*before.*central design/iu,
+        /design-only.*stop.*plan without execution/iu,
+        /Analyze existing results directly.*retrospective.*rather than inventing prior design/iu
+      ], label);
+      assertRouteGrounding(design, label);
+      const plan = assertInstruction(actions, /Only for newly authorized central execution/iu, [
+        /central execution that needs recording.*select.*Experiment document.*save the prospective plan there before execution begins/iu,
+        /what it tests.*prediction.*alternative.*procedure.*results.*judged/iu,
+        /same document.*later actual results/iu,
+        /Design-only.*existing-result analysis.*retrospective.*exploratory diagnostics do not require a new document/iu
+      ], label);
+      const execution = assertInstruction(actions, /Execute only when requested and permitted/iu, [
+        /methods, configuration, data, metrics, run counts, and result numbers from actual code, logs, outputs/iu,
+        /data and preprocessing.*configuration and environment.*baselines.*randomness.*metrics.*analysis before using them as evidence/iu,
+        /execute only after the prospective plan has been saved, then append.*actual procedure, result.*deviation.*evidence scope.*same Experiment document/iu,
+        /existing-result analysis or retrospective.*do not imply a prior plan existed/iu,
+        /what was observed.*what it means.*why it matters.*what happens next/iu
+      ], label);
+      assertTextOrder(actions, design, plan, `${label} design then prospective save`);
+      assertTextOrder(actions, plan, execution, `${label} prospective save then execution and append`);
+      break;
+    }
+    case "dove.draft": {
+      const edit = assertInstruction(actions, /Read the target and relevant material/iu, [
+        /Propagate authorized edits.*real build or export path.*inspect.*actual output before claiming.*current/iu,
+        /assessment-only.*findings without edits/iu
+      ], label);
+      assertAuthoritativeManuscript(edit, label);
+      assert.match(value, /Preserve certainty, causality, scope, generality, quantitative qualifiers, and novelty.*say what changed before changing the text/iu, `${label} must explain claim changes before editing`);
+      break;
+    }
+    case "dove.figure": {
+      const plan = assertInstruction(actions, /Create a compact Figure brief/iu, [/planning-only or assessment-only.*without creating files/iu], label);
+      const creation = assertInstruction(actions, /For creation, choose/iu, [
+        /plot quantitative figures from real data with reproducible code.*editable.*SVG.*exposed host image/iu,
+        /Render the actual figure and write its caption from the inspected data or mechanism logic/iu,
+        /do not invent data, results, or method details/iu
+      ], label);
+      const inspection = assertInstruction(actions, /Open or view the actual rendered figure/iu, [
+        /not just filenames or thumbnails.*realistic final dimensions.*manuscript context/iu,
+        /source data or mechanism logic.*visual encoding.*rendered panels.*caption.*nearby text.*layout fit.*manuscript claim/iu
+      ], label);
+      const revision = assertInstruction(actions, /For revision, make targeted changes/iu, [/rerender and inspect.*before delivery/iu], label);
+      const delivery = assertInstruction(actions, /Deliver the final figure file/iu, [/caption.*route-native editable source.*later modification/iu], label);
+      for (const [first, second] of [[plan, creation], [creation, inspection], [inspection, revision], [revision, delivery]]) assertTextOrder(actions, first, second, label);
+      break;
+    }
+    case "dove.review": {
+      const selfCheck = renderedSection(value, "Author-side scientific self-check");
+      const grounding = assertInstruction(selfCheck, /For whole-paper author-side self-check/iu, [
+        /official venue sources.*formal requirements.*inspected relevant published work/iu,
+        /published practice does not replace official rules/iu,
+        /Import, context inspection, or bounded local review does not trigger.*search by itself/iu
+      ], label);
+      const questions = assertInstruction(selfCheck, /For the complete paper, ask four questions/iu, [
+        /method answer the research question/iu,
+        /mechanisms, terms, comparisons, literature, counterexamples, and limits correct for the field/iu,
+        /contribution, evidence, scope, and expression fit the target venue and its readers/iu,
+        /strongest reasonable objection.*evidence or revision needed to answer it/iu,
+        /citation identity.*claim support.*claim strength.*unsupported facts.*anomalous results/iu,
+        /local paragraph, figure, citation, or method review.*requested scope.*do not force.*or start an independent handoff/iu
+      ], label);
+      assertTextOrder(selfCheck, grounding, questions, `${label} grounding before full-paper judgment`);
+      assert.equal((value.match(/ask four questions:/gu) ?? []).length, 1, `${label} must define all four questions only once`);
+      const independent = renderedSection(value, "Independent `dove-review`");
+      assert.match(independent, /whole current frozen paper, not only a diff.*same four full-paper questions above/iu);
+      assertSubmissionCompletion(independent, label);
+      assert.match(independent, /Verdict.*Blocking issues.*Grounding basis.*Author-side next actions/iu);
+      assertInstruction(independent, /Start `dove-review` only from/iu, [
+        /current complete paper.*authoritative manuscript source in its existing format and actual submission output.*appendices or supplements.*target venue/iu,
+        /compiled output for LaTeX/iu,
+        /Before starting the handoff.*author side.*obtained and inspected.*venue or literature material.*included.*frozen handoff/iu,
+        /only those listed materials.*Read-only access.*no web, MCP, private author conversations, or unlisted files/iu,
+        /isolated, persistent, recoverable reviewer context.*resume or rerun.*whole-paper rounds.*same review id and reviewer session/iu,
+        /grounding is missing.*limit venue or literature conclusions.*runtime is unavailable.*without counting it as independent review/iu
+      ], label);
+      assert.doesNotMatch(independent, /authoritative LaTeX source and compiled output/iu, `${label} must not require LaTeX for every handoff`);
+      assert.match(independent, /Do not restart it to avoid prior objections/iu);
+      const returned = renderedSection(value, "Returned review or existing context");
+      assertInstruction(returned, /When the user supplies a `dove-review` return/iu, [
+        /append the actual text faithfully.*same review id and round when known/iu,
+        /Do not revise author artifacts, start a new review, rewrite the return, or add author interpretation unless asked/iu
+      ], label);
+      assert.match(returned, /Import and inspection do not automatically begin author response, revision, venue search, paper search, or a new handoff/iu);
+      assert.match(renderedSection(value, "Delivery readiness"), /When delivery review is requested or genuinely limiting.*official venue requirements.*delivery readiness separately from scientific acceptability/iu);
+      break;
+    }
+    case "dove.rebuttal": {
+      assertInstruction(actions, /Read the Review document/iu, [
+        /same review id and round.*reviewed material list.*current material state.*actual artifacts/iu,
+        /each material finding.*source, experiment, method, analysis, expression, figure, or venue-fit problem.*requested revisions/iu,
+        /new citations.*identity and inspected-content support through Source.*new results.*actual Experiment materials before using them.*Then draft the response/iu,
+        /Do not rerun review for cosmetic or response-only edits.*rerun.*substantive evidence.*old recommendation no longer covers the current full version/iu
+      ], label);
+      const validation = assertInstruction(actions, /Check that each response and requested revision/iu, [
+        /Propagate requested revisions.*build or export path.*inspect the output before claiming.*current/iu
+      ], label);
+      assertAuthoritativeManuscript(validation, label);
+      assert.match(value, /Compare original claim, reviewer interpretation, planned response, and revised claim.*certainty, causality, scope, quantitative qualifiers, novelty, and contribution do not change silently/iu);
+      assert.match(value, /Do not overwrite original returns|do not overwrite original returns/iu);
+      break;
+    }
+    case "dove.lessons":
+      assertInstruction(actions, /Read "\.dove\/research\/lessons\/LESSONS\.md"/u, [
+        /directly relevant or plausibly useful/iu,
+        /Reuse Lessons already read in the active context/iu,
+        /Do not create or modify files during reading.*do not treat Lessons as evidence/iu
+      ], label);
+      assertInstruction(actions, /When an experience/iu, [
+        /inspire current or subsequent work.*improve judgment.*expand the candidate space.*prevent repeated mistakes/iu,
+        /preserve.*reusable insight and relevant conditions.*narrowest suitable researcher-owned Lessons document/iu,
+        /Avoid recording routine progress, transient status/iu,
+        /Do not create lesson IDs, frontmatter, an application ledger, or treat Lessons as evidence/iu
+      ], label);
+      break;
+    default:
+      assert.fail(`${label} needs an explicit capability wiring audit`);
+  }
+}
+
+function assertWiringRejectsRegressions(entries) {
+  const regressions = [
+    ["dove.research", "before recommending it", "after recommending it"],
+    ["dove.source", "Partial support is not support for the whole sentence", "Partial support is support for the whole sentence"],
+    ["dove.experiment", "save the prospective plan there before execution begins", "save the prospective plan there after execution finishes"],
+    ["dove.experiment", "then append the actual procedure", "then replace the plan with the actual procedure"],
+    ["dove.draft", "Only for a new manuscript", "For every existing manuscript"],
+    ["dove.figure", "Render the actual figure and write its caption", "Render the actual figure without writing its caption"],
+    ["dove.review", "current independent `dove-review`", "historical author-side review"],
+    ["dove.review", "same four full-paper questions above", "only the venue-fit question"],
+    ["dove.review", "or start an independent handoff", "and start an independent handoff"],
+    ["dove.rebuttal", "inspect the output before claiming", "claim without inspecting the output"],
+    ["dove.status", "do not modify files", "repair the files"],
+    ["dove.lessons", "do not treat Lessons as evidence", "treat Lessons as evidence"]
+  ];
+  for (const entry of entries) {
+    for (const [id, before, after] of regressions.filter(([id]) => id === entry.command.id)) {
+      const content = entry.content.replaceAll(before, after);
+      assert.notEqual(content, entry.content, `${entry.hostId} ${id} regression probe must alter the instruction`);
+      assert.throws(() => assertRenderedCapabilityWiring({ ...entry, content }), { code: "ERR_ASSERTION" }, `${entry.hostId} ${id} must reject ${after}`);
+    }
+    if (entry.command.id === "dove.experiment") {
+      const lines = entry.content.split("\n");
+      const plan = lines.findIndex((line) => /^- Only for newly authorized central execution/u.test(line));
+      const execution = lines.findIndex((line) => /^- Execute only when requested and permitted/u.test(line));
+      assert.ok(plan >= 0 && execution > plan);
+      [lines[plan], lines[execution]] = [lines[execution], lines[plan]];
+      assert.throws(() => assertRenderedCapabilityWiring({ ...entry, content: lines.join("\n") }), { code: "ERR_ASSERTION" }, `${entry.hostId} must reject execution before prospective persistence even when every keyword remains`);
+    }
   }
 }
 
@@ -200,6 +438,7 @@ export function assertGeneratedAdapters() {
   const agentEntries = generatedDoveAgentEntries();
   assert.equal(entries.length, COMMAND_SURFACES.length * PROJECT_HOST_IDS.length);
   assertGeneratedSurfaceLinkMaintenanceSemantics(entries);
+  assertWiringRejectsRegressions(entries);
   assertUnique(entries.map((entry) => entry.relativePath), "Generated adapter paths");
   assertUnique(agentEntries.map((entry) => entry.relativePath), "Generated Dove agent paths");
   assert.deepEqual(agentEntries.map((entry) => entry.relativePath), [".claude/agents/dove.md"]);
@@ -226,6 +465,7 @@ export function assertGeneratedAdapters() {
     assert.match(entry.content, /### Using host tools\n\n/u);
     assertGeneratedSurfaceUsesCurrentRenderer(entry);
     assertRenderedActions(entry);
+    assertRenderedCapabilityWiring(entry);
 
     if (Array.isArray(contract.semanticSections) && contract.semanticSections.length > 0) {
       assertRenderedSemanticSectionOrder(entry);

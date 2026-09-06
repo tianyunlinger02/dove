@@ -5,6 +5,7 @@ import path from "node:path";
 import { renderProjectIntegrationResult } from "../../src/cli/project-integration-output.mjs";
 import { renderDoveHome } from "../../src/cli/terminal-output.mjs";
 import { renderClaudeDoveAgent } from "../../src/core/dove-agent-definition.mjs";
+import { renderDoveReviewerStanceSection, renderDoveSharedResearchContractSection } from "../../src/core/dove-agent-persona.mjs";
 import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
 import {
   RESEARCH_DEFAULT_DIRECTORY_PATHS,
@@ -23,7 +24,7 @@ import {
   EXA_WEB_SUPPORT_SKILL_PATH,
   WEB_FETCH_DENY_PERMISSION
 } from "../../src/core/web-access-integration.mjs";
-import { generatedClaudeAmbientProjectEntries } from "../../scripts/generate-command-adapters.mjs";
+import { generatedAdapterEntries, generatedClaudeAmbientProjectEntries } from "../../scripts/generate-command-adapters.mjs";
 import { ROOT, assertDoveAgentSurfaceSemantics } from "./common.mjs";
 
 const EXPECTED_AMBIENT_PATHS = [
@@ -31,6 +32,43 @@ const EXPECTED_AMBIENT_PATHS = [
   PAPER_SEARCH_SUPPORT_SKILL_PATH,
   EXA_WEB_SUPPORT_SKILL_PATH
 ];
+
+function assertSharedResearchJudgment(value, label) {
+  for (const pattern of [
+    /Before committing to or materially changing.*direction, method, hypothesis, evaluation target, or central experiment.*(?:theory|mechanism) grounding proportionate to the decision/isu,
+    /assumptions.*applicability.*testable predictions.*failure conditions.*alternative explanations/isu,
+    /When external knowledge can change the judgment.*inspect.*targeted theory or related work.*grounded recommendation/isu,
+    /If grounding is insufficient.*targeted reading, derivation, or explicitly exploratory diagnostics.*hypotheses and routes may remain provisional/isu,
+    /Reuse sufficient inspected grounding rather than repeatedly searching literature/iu,
+    /debugging and local operations do not require a full theory review/iu,
+    /contribution, mechanism, novelty, and positioning.*method validity.*evidence quality.*argument, writing, and figures.*delivery last/isu,
+    /highest-level active limitation.*trace it to.*method, evidence, experiment, analysis, source, figure, argument, or artifact.*change that judgment/isu,
+    /scientific value.*result quality.*time.*resources.*opportunity cost.*rework risk.*downstream effects.*whole research path/isu,
+    /small discriminating diagnostic or source check.*decide between routes before larger work/iu,
+    /Before treating unstable, irreproducible, anomalously bad, or unusually strong results as evidence.*inspect the implementation, data, configuration, environment, randomness, metrics, analysis scripts, and interpretation/isu,
+    /Citation identity, full-text inspection, and support for a claim are separate judgments/iu,
+    /claim strength within the evidence.*generality, quantitative qualifiers, and novelty/isu,
+    /include material counterevidence rather than selecting only supportive results/iu,
+    /Recheck earlier summaries.*against current materials.*rather than treating them as proof.*revise optimistic judgments.*broader evidence or grounded Review contradicts them/isu,
+    /Answer and stop for pure judgment or bounded requests.*only exposed, permitted host tools/isu
+  ]) assert.match(value, pattern, `${label}: shared judgment boundary ${pattern}`);
+  assert.doesNotMatch(value, /always (?:search|retrieve|review) (?:the )?literature|(?:complete|exhaustive) theory review before (?:any|every) (?:action|diagnostic)/iu, `${label}: theory must not become an execution gate`);
+}
+
+function assertSharedAuthorStance(value, label) {
+  for (const pattern of [
+    /user-confirmed Workspace mainline, intended contribution.*completion meaning.*material change to that anchor belongs to the user/isu,
+    /direction is open.*clearly provisional research question or route/isu,
+    /active confirmed research context.*feasible next in-scope step.*continue while an effective mainline action remains/isu,
+    /Read-only requests authorize inspection and reporting, not execution or recording/iu,
+    /Before narrowing a contribution, first try any feasible in-mainline.*(?:method|experiment).*could support it.*only when inspected evidence or a real limit requires it/isu,
+    /user confirmation.*changes the confirmed mainline or completion meaning/iu,
+    /limits on actions, not automatic limits on the research mainline.*one path is blocked.*other effective in-mainline paths before calling the research blocked/isu,
+    /user-confirmed submission-completion goal.*author-side scientific sufficiency.*current independent `dove-review`.*same full version.*real delivery readiness/isu,
+    /Unavailable isolated review leaves that requirement unmet, not waived/iu,
+    /bounded local review, edit, figure, or other task can finish without becoming a submission-completion goal/iu
+  ]) assert.match(value, pattern, `${label}: author boundary ${pattern}`);
+}
 
 export function assertAmbientRouting() {
   const entries = generatedClaudeAmbientProjectEntries();
@@ -44,12 +82,10 @@ export function assertAmbientRouting() {
   assert.match(rule, /nine Skills.*(?:same research collaboration|current decision|optional specialist methods)|optional specialist capabilities/isu);
   assert.match(rule, /research requests in the current conversation/iu);
   assert.match(rule, /answer, clarify, or use a Dove capability when useful/iu);
-  assert.match(rule, /Ask when ambiguity or a change to the confirmed goal needs the user's decision/iu);
-  assert.match(rule, /Answer and stop for pure judgment or bounded requests/iu);
-  assert.match(rule, /confirmed research goal.*carry out the next feasible in-scope action.*continue/isu);
-  assert.match(rule, /Citation identity, full-text inspection, and support for a claim are separate judgments/iu);
-  assert.match(rule, /claim strength within the evidence/iu);
-  assert.match(rule, /Recheck earlier summaries.*against current materials/iu);
+  assert.match(rule, /Ask when ambiguity would change the next useful action/iu);
+  assertSharedResearchJudgment(rule, "Ordinary Claude rule");
+  assertSharedAuthorStance(rule, "Ordinary Claude rule");
+  assert.equal((rule.match(/^## Author stance$/gmu) ?? []).length, 1, "Ordinary Claude uses one shared author section");
   assert.match(rule, /real paper and webpage reading tools/iu);
   assert.match(rule, /search snippets can guide discovery/iu);
   assert.match(rule, /do not replace unretrieved paper or webpage content with shell, `curl`, or ad hoc fetch substitutes/iu);
@@ -96,14 +132,54 @@ export function assertAmbientRouting() {
     type: "http"
   });
   assert.equal(WEB_FETCH_DENY_PERMISSION, "WebFetch");
+
+  for (const entry of generatedAdapterEntries()) {
+    if (entry.hostId === "claude") {
+      assert.doesNotMatch(entry.content, /^## (?:Shared researcher judgment|Author stance)$/mu, "Claude commands must not duplicate the ambient sections");
+      continue;
+    }
+    assertSharedResearchJudgment(entry.content, `${entry.command.id} DSH projection`);
+    assert.doesNotMatch(entry.content, /\.claude\/rules|claude --agent|ambient rule/iu, "DSH must not depend on Claude-only researcher context");
+    assert.equal((entry.content.match(/^## Research judgment$/gmu) ?? []).length, 1, "DSH uses one compact shared section");
+    assert.equal((entry.content.match(/Before committing to or materially changing/gu) ?? []).length, 1, "DSH must not repeat theory text already supplied by a capability");
+    if (entry.command.id === "dove.status") {
+      assert.match(entry.content, /For Status.*only to inspect and report.*do not execute research actions or maintain documents/isu);
+      assert.doesNotMatch(entry.content, /^## Author stance$|first try any feasible in-mainline|perform the feasible next in-scope step|Maintain Dove research Markdown/mu, "Status must not receive author execution or maintenance duties");
+    } else {
+      assertSharedAuthorStance(entry.content, `${entry.command.id} DSH projection`);
+      const authorSection = entry.content.split("## Author stance\n")[1].split(/\n## /u)[0];
+      assert.doesNotMatch(authorSection, /Maintain Dove research Markdown|Author-side Review is Dove's own/iu, "Compact author context leaves specialist recording and review operations to the capability");
+    }
+  }
 }
 
 export function assertPackagedAgentPolicy() {
   const agentText = renderClaudeDoveAgent();
   assert.ok(USER_RESPONSE_POLICY.length > 0);
   assertDoveAgentSurfaceSemantics(agentText, "Packaged Dove agent");
+  assertSharedResearchJudgment(agentText, "Explicit and bounded Dove agent");
+  assertSharedAuthorStance(agentText, "Explicit and bounded Dove agent");
+  assert.match(agentText, /explicit main research agent.*--agent dove.*bounded independent subagent.*do not delegate work needing the full user conversation, important clarification, or ongoing author-side mainline ownership/isu);
   assert.doesNotMatch(agentText, /actual Skill call to `dove:review`|latest material state receives a current Review `PASS`|Review gate/iu);
   assert.doesNotMatch(agentText, /Keep three primary roles distinct|Planner frames|Builder\/Author performs|Reviewer returns/iu);
+
+  const reviewer = renderDoveReviewerStanceSection();
+  const prompt = `${renderDoveSharedResearchContractSection()}\n\n${reviewer}`;
+  assert.match(prompt, /grounding proportionate to the decision/iu);
+  assert.match(prompt, /Before treating.*unusually strong results as evidence/iu);
+  for (const pattern of [
+    /shared theory, validity, and action-selection principles only to judging the frozen materials and recommending author-side work/iu,
+    /Do not establish missing grounding through new research, run diagnostics, execute experiments, or perform author revisions/iu,
+    /Reconstruct and challenge the contribution from the frozen materials.*do not inherit or endorse the author's mainline/isu,
+    /read-only and limited to the listed frozen materials/iu,
+    /Do not use.*web tools, shell commands, Edit, Write, Bash, MCP, or any unlisted path/isu,
+    /not include enough venue rules or literature grounding.*judgment is limited instead of fetching or inferring it/isu,
+    /complete current manuscript.*not only a diff/isu,
+    /does the method answer the research question.*correct for the field.*fit the target venue.*strongest reasonable objection/isu,
+    /Keep a bounded local review within its requested scope/iu,
+    /Verdict, Blocking issues, Grounding basis, and Author-side next actions/iu
+  ]) assert.match(reviewer, pattern);
+  assert.doesNotMatch(prompt, /^## Author stance$|first try any feasible in-mainline|perform the feasible next in-scope step|Maintain Dove research Markdown/mu);
 }
 
 export function assertPublicDocumentationBoundaries() {

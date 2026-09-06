@@ -12,7 +12,7 @@ export async function assertInteractiveHostSelection() {
   assert.deepEqual(REGISTERED_PROJECT_HOST_IDS, EXPECTED_HOST_IDS);
   assert.deepEqual(DEFAULT_INITIALIZABLE_HOSTS, ["claude"]);
 
-  for (const selectedHosts of [["claude"], ["dsh"], ["claude", "dsh"]]) {
+  for (const { selectedHosts, bootstrap } of [["claude"], ["dsh"], ["claude", "dsh"]].flatMap((selectedHosts) => [true, false].map((bootstrap) => ({ selectedHosts, bootstrap })))) {
     const target = "/workspace/example-project";
     let inspectionCount = 0;
     let initializeCall = null;
@@ -37,6 +37,7 @@ export async function assertInteractiveHostSelection() {
       },
       initialize: async (receivedTarget, lifecycleOptions) => {
         initializeCall = { target: receivedTarget, lifecycleOptions };
+        return { status: "initialized", target: receivedTarget, hosts: lifecycleOptions.hosts, writtenPaths: bootstrap ? [".dove/research/RESEARCH.md"] : [] };
       },
       promptSelect: async () => "init",
       promptCheckbox: async (config) => {
@@ -56,7 +57,16 @@ export async function assertInteractiveHostSelection() {
       value: hostId,
       checked: DEFAULT_INITIALIZABLE_HOSTS.includes(hostId)
     })));
-    assert.match(output.join(""), /项目配置完成/u);
+    const text = output.join("");
+    assert.match(text, /Dove 已在此项目启用/u);
+    assert.doesNotMatch(text, /Prompt Hook/u);
+    if (bootstrap) assert.match(text, /RESEARCH\.md 已建立/u);
+    else {
+      assert.match(text, /现有研究目录保持不变/u);
+      assert.doesNotMatch(text, /RESEARCH\.md 已建立/u);
+    }
+    if (selectedHosts.includes("claude")) assert.match(text, /SessionStart hook/u);
+    else assert.doesNotMatch(text, /WebFetch 禁用|Exa MCP/u);
   }
 }
 

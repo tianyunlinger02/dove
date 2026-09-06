@@ -49,41 +49,13 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "classifies-config-failure",
-      "kind": "public-output-includes-any",
-      "terms": [
-        "configuration",
-        "config",
-        "missing config",
-        "FileNotFoundError",
-        "配置",
-        "程序失败"
-      ]
-    },
-    {
-      "id": "no-scientific-negative-result",
-      "kind": "public-output-excludes-any",
-      "terms": [
-        "physics prior failed scientifically",
-        "method is disproven",
-        "科研负结果已经成立",
-        "假设被证伪"
-      ]
-    },
-    {
       "id": "inspect-failure-log",
       "kind": "tool-action-path",
-      "verbs": [
-        "Read"
-      ],
       "path": "results/failed-run.log"
     },
     {
       "id": "inspect-runner-script",
       "kind": "tool-action-path",
-      "verbs": [
-        "Read"
-      ],
       "path": "scripts/run_experiment.py"
     },
     {

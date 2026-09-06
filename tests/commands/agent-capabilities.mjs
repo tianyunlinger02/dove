@@ -22,6 +22,7 @@ import {
   generatedDoveAgentEntries,
   renderClaudeDoveAgent
 } from "../../src/core/dove-agent-definition.mjs";
+import { DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS } from "../../src/core/dove-research-contract.mjs";
 import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "../../src/core/web-access-integration.mjs";
 import {
@@ -297,6 +298,27 @@ function assertExperimentCapabilitySemantics(command) {
     { label: "observation interpretation separation", patterns: [/what was observed.*what it means.*why it matters.*what happens next|separate what was observed/isu] },
     { label: "scoped evidence", patterns: [/data.*scale.*settings.*implementation|conditions actually tested|evidence scope/isu] }
   ]);
+  const actions = contractActions(command);
+  const designIndex = actions.findIndex((item) => item.capability === "experiment-design");
+  const executionIndex = actions.findIndex((item) => item.capability === "experiment-execution");
+  const planIndex = actions.findIndex((item) => item.capability === "research-document-maintenance" && /save.*prospective plan/iu.test(item.instruction));
+  assert.ok(planIndex > designIndex && planIndex < executionIndex, "Experiment must expose a prospective save action between design and execution, not only a post-run note");
+  const plan = actions[planIndex];
+  assert.equal(plan.readOnly, false);
+  assert.equal(plan.persistencePolicy, "standard-research");
+  assertMatchesAll(plan.persistWhen, "prospective plan trigger", [/new central execution.*requested and permitted/iu, /record, update, or save/iu, /continuation context.*useful/iu]);
+  assertMatchesAll(plan.instruction, "prospective save action", [
+    /Only for newly authorized central execution.*needs recording/iu,
+    /select.*Experiment document.*save.*prospective plan.*before execution/iu,
+    /what it tests.*prediction.*alternative.*procedure.*results.*judged/iu,
+    /same document.*later actual results/iu,
+    /Design-only.*existing-result analysis.*retrospective.*diagnostics.*do not require a new document/iu
+  ]);
+  assertMatchesAll(executionInstruction, "execution must consume the saved plan", [
+    /execute only after.*prospective plan.*saved.*then append.*same Experiment document/iu,
+    /existing-result analysis or retrospective.*do not imply a prior plan existed/iu,
+    /data and preprocessing.*configuration and environment.*baselines.*randomness.*metrics.*analysis.*before using.*evidence/iu
+  ]);
   assert.match(designInstruction, /real problem|key uncertainty|route decision|primary prediction|strongest alternative|minimum sufficient evidence/iu);
   assert.match(executionInstruction, /Execute only when requested and permitted|when requested and permitted/iu);
   assert.match(`${executionInstruction}\n${interpretationInstruction}`, /actual code|logs|outputs|data files|configuration|metrics/iu);
@@ -392,6 +414,10 @@ function assertReviewCapabilitySemantics(command) {
     { label: "Context Inspection", matchers: [/context inspection|inspect(?: existing)? review context|existing Review context/iu] }
   ]) assertSemanticModeAvailable(command, sections, mode);
 
+  assert.ok(reviewerWork.instruction.includes(DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS), "Review action must use the canonical four questions");
+  const rendered = renderCommandAdapter("claude", command);
+  assert.equal(rendered.split(DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS).length - 1, 1, "Review must render one canonical four-question definition, not divergent copies");
+  assert.match(rendered, /same four full-paper questions above/iu, "Independent Review must reuse the complete definition rather than a shortened version");
   const value = semanticContractText(command);
   assertMatchesAll(value, "dove.review", [
     /official venue sources|related work|scholarly context|published work/isu,
@@ -423,7 +449,7 @@ function assertReviewCapabilitySemantics(command) {
     /resume or rerun.*whole-paper rounds.*same review id|same review id.*reviewer session/isu,
     /complete frozen material list|whole-paper|complete paper/isu,
     /only those listed materials/iu,
-    /author side.*obtained.*venue or literature material|venue or literature material.*included.*frozen handoff/isu,
+    /Before starting.*author side.*obtained and inspected.*venue or literature material.*included.*frozen handoff/isu,
     /grounding is missing.*limit venue or literature conclusions|limit venue or literature conclusions.*listed materials/isu,
     /runtime is unavailable|host.*(?:provide|provides).*isolated/isu,
     /continue feasible author-side work without counting it as independent review/isu
