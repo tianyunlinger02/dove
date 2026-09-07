@@ -17,7 +17,7 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template.
+These are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.
 
 ### What this is for
 
@@ -37,7 +37,7 @@ Use when review can improve the paper, delivery facts matter, a near-submission 
 Author-side scientific self-check critiques the current paper inside Dove's author context and returns concrete evidence, consequence, and feasible research action without claiming independent external review.
 
 - For whole-paper author-side self-check or `dove-review` handoff preparation, inspect the current full paper and the venue or literature context that can change the judgment. Use current official venue sources for formal requirements and inspected relevant published work for novelty, positioning, evidence norms, experiment presentation, and reader expectations; published practice does not replace official rules. Distinguish material merely found from material retrieved, inspected, and used. Import, context inspection, or bounded local review does not trigger venue or paper search by itself.
-- For the complete paper, ask four questions: does the method answer the research question; are the mechanisms, terms, comparisons, literature, counterexamples, and limits correct for the field; do the contribution, evidence, scope, and expression fit the target venue and its readers; and what is the strongest reasonable objection, with the evidence or revision needed to answer it. Also check citation identity, claim support, changes in claim strength, unsupported facts, and anomalous results when relevant. For local paragraph, figure, citation, or method review, stay inside the requested scope and do not force the full-paper four questions or start an independent handoff. Return concrete findings with evidence, consequence, useful response, and delivery readiness kept separate.
+- For the complete paper, ask four questions: does the method answer the research question; are the mechanisms, terms, comparisons, literature, counterexamples, and limits correct for the field; do the contribution, evidence, scope, and expression fit the target venue and its readers; and what is the strongest reasonable objection, with the evidence or revision needed to answer it. Also check citation identity, claim support, changes in claim strength, unsupported facts, and anomalous results when relevant. For local paragraph, figure, citation, or method review, stay inside the requested scope and do not force the full-paper four questions or start an independent handoff. Return concrete findings with evidence, consequence, useful response, and delivery readiness kept separate. Classify impact as ‘核心问题’ (constrains the core goal), ‘分支问题’ (constrains affected dependent work), or ‘局部问题’ (local quality); state evidence sufficiency separately rather than equating missing evidence with refutation or repair effort with severity.
 - Author-side self-check critiques and advises; later changes remain Dove author-side work.
 
 ### Delivery readiness
@@ -70,7 +70,7 @@ Import a returned review, preserve a user-pasted opinion, or inspect existing Re
 
 ### When Dove needs input
 
-- Ask only when ambiguity in intent, target artifact, evaluation criteria, scope, or a key tradeoff would change the next useful action. If active research context implies a feasible follow-up, do that next step rather than merely suggesting it.
+- Ask only when ambiguity in intent, target artifact, evaluation criteria, scope, or a key tradeoff cannot be resolved from available context or reasonable in-scope defaults that leave the core research judgment unchanged and would materially change the next useful action. If active research context implies a feasible follow-up, do that next step rather than merely suggesting it.
 
 ### Using host tools
 
@@ -80,4 +80,4 @@ Import a returned review, preserve a user-pasted opinion, or inspect existing Re
 
 ### Return with
 
-- Inspected evidence, material change, unresolved limits, and the next useful action.
+- Inspected evidence, material change, and unresolved limits; include the next useful action only when it helps the current request.

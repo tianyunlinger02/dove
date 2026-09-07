@@ -46,6 +46,7 @@ import {
   skillContract,
   text
 } from "./common.mjs";
+import { assertUserResponsePolicy } from "./ambient-docs.mjs";
 
 const RETIRED_RESEARCH_MODEL_PHRASES = Object.freeze([
   "layer enum",
@@ -177,7 +178,7 @@ function assertSharedCapabilityReturnIsConcise(command) {
   assert.match(sharedReturn, /Return with|Dove's research judgment/iu, `${command.id} shared capability return must send work back to Dove judgment`);
   assert.match(sharedReturn, /inspected evidence|what was inspected|actually inspected|inspected or changed|changed/iu, `${command.id} shared capability return must preserve inspected-evidence semantics`);
   assert.match(sharedReturn, /material change|what changed|material decision.*changed|what remains unresolved|unresolved/iu, `${command.id} shared capability return must preserve decision-change semantics`);
-  assert.match(sharedReturn, /next useful action|next feasible action|confirmed task (?:boundary|scope)/iu, `${command.id} shared capability return must preserve continuation semantics`);
+  assert.match(sharedReturn, /next (?:useful|feasible) action[^.\n]*only when[^.\n]*(?:helps|useful|relevant)/iu, `${command.id} return should explain a useful next action, not force a closing suggestion`);
   assert.ok(sharedReturn.length <= 700, `${command.id} shared capability return must stay concise`);
 }
 
@@ -211,6 +212,76 @@ function assertCapabilityPatterns(command, groups) {
   for (const group of groups) {
     assert.ok(group.patterns.some((pattern) => pattern.test(value)), `${command.id} must preserve ${group.label}`);
   }
+}
+
+// Capability levels describe different objects, not a shared promotion ladder.
+// Reuse these checks for the manifest and the actual rendered capability body.
+export function assertCapabilityLevels(value, id, label = id) {
+  const patterns = {
+    "dove.research": [
+      /level 1[^.\n]*problem lead[^.\n]*level 2[^.\n]*concrete candidate[^.\n]*level 3[^.\n]*argument.ready[^.\n]*level 4[^.\n]*evidence.supported/iu,
+      /key gap[^.\n]*current level[^.\n]*rather than automatically promoting/iu,
+      /argument.ready[^.\n]*authorized validation[^.\n]*without prior successful experiments/iu,
+      /novelty[^.\n]*N0–N4[^.\n]*theory[^.\n]*T0–T4[^.\n]*only when[^.\n]*(?:user|project).provided definitions[^.\n]*available[^.\n]*actually been inspected/iu,
+      /apply them separately[^.\n]*not[^.\n]*combined score[^.\n]*global admission threshold/iu,
+      /otherwise[^.\n]*shared research maturity[^.\n]*plain.language novelty[^.\n]*theory[^.\n]*without inventing numbered definitions/iu
+    ],
+    "dove.status": [
+      /(?:state|report)[^.\n]*level only when existing materials support[^.\n]*basis[^.\n]*unknowns/iu,
+      /(?:otherwise|insufficient)[^.\n]*level undetermined/iu,
+      /(?:do not|never) start validation[^.\n]*maintain documents[^.\n]*(?:missing level|evidence gap)/iu
+    ],
+    "dove.source": [
+      /found leads[^.\n]*verified citation identity[^.\n]*inspected relevant full text[^.\n]*checked a specific claim/iu,
+      /retrieval alone[^.\n]*not inspection/iu,
+      /claim verification[^.\n]*support[^.\n]*contradiction[^.\n]*insufficient coverage[^.\n]*not necessarily support/iu,
+      /nearby work[^.\n]*problem[^.\n]*inputs\/outputs[^.\n]*assumptions[^.\n]*mechanism[^.\n]*claim[^.\n]*same granularity/iu,
+      /subtract covered contributions[^.\n]*reassess[^.\n]*remaining difference[^.\n]*independence[^.\n]*value/iu,
+      /unchecked full text[^.\n]*does not establish absence of overlap/iu,
+      /stop searching[^.\n]*retrieval[^.\n]*not change[^.\n]*decision/iu
+    ],
+    "dove.experiment": [
+      /specified design[^.\n]*working execution chain[^.\n]*valid comparison[^.\n]*support for the particular claim/iu,
+      /valid negative result[^.\n]*complete the experiment[^.\n]*without supporting[^.\n]*claim/iu,
+      /do not[^.\n]*pursuing positive results[^.\n]*higher label/iu,
+      /before expanding investment[^.\n]*upper bound[^.\n]*attainability[^.\n]*evaluation reliability[^.\n]*minimum worthwhile benefit/iu,
+      /(?:existing material|authorized validation)/iu
+    ],
+    "dove.draft": [
+      /argument outline[^.\n]*complete draft[^.\n]*evidence.aligned manuscript[^.\n]*actual delivery requirements/iu,
+      /writing completeness[^.\n]*independent of scientific maturity/iu,
+      /common assumptions[^.\n]*limits together[^.\n]*rather than repeating/iu,
+      /core gaps constrain[^.\n]*conclusions/iu,
+      /local wording task[^.\n]*local[^\n]*without restarting research/iu
+    ],
+    "dove.figure": [
+      /visual plan[^.\n]*rendered visual[^.\n]*materials and meaning checked[^.\n]*checked in the final use context/iu,
+      /standalone preview[^.\n]*does not establish final.context readiness/iu,
+      /materials around each figure or panel[^.\n]*evidence or mechanism job/iu,
+      /distinguish schematic explanation from data evidence/iu,
+      /local figure edits[^.\n]*do not trigger[^.\n]*whole.project audit/iu
+    ],
+    "dove.review": [
+      /核心问题[^.\n]*core goal[^.\n]*分支问题[^.\n]*affected dependent work[^.\n]*局部问题[^.\n]*local quality/u,
+      /evidence sufficiency separately[^.\n]*rather than equating missing evidence with refutation/iu,
+      /rather than equating[^.\n]*repair effort with severity/iu
+    ],
+    "dove.rebuttal": [
+      /finding understood[^.\n]*response path grounded[^.\n]*needed revisions implemented[^.\n]*effect checked/iu,
+      /(?:group|merge)[^.\n]*same root cause[^.\n]*definition[^.\n]*mechanism[^.\n]*evidence[^.\n]*expression gaps/iu,
+      /(?:preserve|preserving)[^.\n]*coverage of each material finding/iu,
+      /written response[^.\n]*does not establish[^.\n]*issue is resolved/iu,
+      /author self.check[^.\n]*does not mean reviewer acceptance/iu
+    ],
+    "dove.lessons": [
+      /tentative lesson[^.\n]*grounded lesson[^.\n]*lesson tested through reuse under stated conditions/iu,
+      /repeated citation alone[^.\n]*does not strengthen/iu,
+      /reusable insight[^.\n]*basis[^.\n]*conditions[^.\n]*counterexamples[^.\n]*limits/iu,
+      /optional researcher.owned advisory documents[^.\n]*not package.owned defaults/iu
+    ]
+  }[id];
+  assert.ok(patterns, `${label} needs capability-specific level semantics`);
+  assertMatchesAll(value, label, patterns);
 }
 
 function assertResearchCapabilitySemantics(command) {
@@ -247,7 +318,7 @@ function assertSourceCapabilitySemantics(command) {
     { label: "external theory and related-work acquisition", patterns: [/external theory|related work|route changes that depend on external theory/isu] },
     { label: "source identity and claim-support checking", patterns: [/citation identity.*claim support|identity.*metadata.*supports?|verify identity.*metadata.*supports?/isu] },
     { label: "bounded bibliography DOI identity checks without ledger", patterns: [/bounded bibliography DOI identity check|verify only the requested entries.*do not create a ledger|without.*ledger/isu] },
-    { label: "identity and support as separate judgments", patterns: [/Separate citation identity from claim support|identity.*then whether inspected content supports/isu] },
+    { label: "identity and support as separate judgments", patterns: [/metadata identity[^.\n]*not full.text inspection or claim support/iu] },
     { label: "unavailable material stays explicit", patterns: [/unavailable.*missing|needed material is unavailable|If needed material is unavailable/isu] },
     { label: "inspected-material provenance", patterns: [/found.*retrieved.*inspected.*used|retrieved, inspected, and used|what was inspected/isu] },
     { label: "literature as research opportunity", patterns: [/consensus|contradictions|transferable mechanisms|research opportunities/iu] },
@@ -547,7 +618,7 @@ export function assertDoveAgentPersona() {
   assert.match(DOVE_AGENT_STOPPING, /pause for the user|materially change the work/iu);
   assert.ok(DOVE_AGENT_PERSONA_BULLETS.length >= 5, "Dove persona must remain substantive without becoming a workflow checklist");
   assert.match(DOVE_AGENT_DIRECT_JUDGMENT, /weigh current evidence, task risk, user preference, and the research mainline/iu);
-  assert.match(DOVE_AGENT_DIRECT_JUDGMENT, /useful next move.*stop before unrequested execution or recording/iu);
+  assert.match(DOVE_AGENT_DIRECT_JUDGMENT, /judgment[^.\n]*when useful[^.\n]*next move[^.\n]*stop before unrequested execution or recording/iu);
 
   for (const textValue of [renderDoveAgentInstructions(), renderClaudeDoveAgent()]) {
     assertDoveAgentSurfaceSemantics(textValue, "Dove agent surface");
@@ -581,6 +652,7 @@ export function assertSkillManifest() {
     const contract = skillContract(command);
     assertSharedCapabilityReturnIsConcise(command);
     assertCapabilitySharedJudgment(command);
+    assertCapabilityLevels(semanticContractText(command), command.id);
     assertOrdinarySkillNoFullDoveReviewHandoff(command);
     assert.ok(contract.responsibilities.length > 0, `${label} needs Dove responsibilities`);
     assert.ok(Array.isArray(contract.returnWith) && contract.returnWith.length > 0, `${label} needs a concise Return with footer`);
@@ -611,6 +683,8 @@ export function assertSkillManifest() {
       if (item.capability === "lesson-reading") {
         assert.match(item.instruction, /Read "\.dove\/research\/RESEARCH\.md" first only when project context is still needed and it has not already been read in the active context/iu, `${label} lesson reading must not reread the project overview`);
         assert.match(item.instruction, /Reuse Lessons already read in the active context instead of rereading them mechanically/iu, `${label} lesson reading must reuse active-context Lessons`);
+        assert.match(item.instruction, /Lessons materials[^.\n]*absent[^.\n]*work without them/iu, `${label} must remain usable without Lessons`);
+        assert.match(item.instruction, /fallible guidance[^.\n]*never as evidence/iu, `${label} Lessons must not certify current claims`);
       }
 
       assert.equal(item.tool, undefined, `${label} must not impersonate an MCP call`);
@@ -633,6 +707,7 @@ export function assertSkillManifest() {
   assert.doesNotMatch(serialized, /SQLite|vector database|hidden state service|hidden runtime/iu, "Skills must not prescribe a replacement database or hidden runtime");
   assert.doesNotMatch(serialized, /Review gate|Auto-gate|contribution score|return `PASS`|return `REVISE`|verdictEnum|strictImportSchema|same-context independent|same context independent/iu, "Skills must not recreate review gates, scoring states, schemas, enums, or same-context pseudo-independence");
   assert.doesNotMatch(serialized, /fixed closing synthesis|numbered steps/iu, "Skills must not preserve retired fixed-synthesis or numbered-step language");
+  assert.doesNotMatch(serialized, /"(?:maturityLevel|researchLevel|impactLevel|noveltyScore|theoryScore|promotionRule|acceptanceGate)"\s*:/u, "Natural-language levels must not become runtime fields or automatic gates");
 
   const research = COMMAND_SURFACE_BY_ID["dove.research"];
   assertResearchCapabilitySemantics(research);
@@ -694,5 +769,5 @@ export function assertHostPolicy() {
   assert.deepEqual(HOST_ADAPTER_POLICY.privacy, { exposePrivateProtocol: false });
   assert.equal("adapterBullets" in HOST_ADAPTER_POLICY, false, "Skill adapters should rely on their capability contract rather than repeat the full Dove agent capsule");
 
-  assert.deepEqual(USER_RESPONSE_POLICY, ["Follow the user's requested language and format."]);
+  assertUserResponsePolicy(USER_RESPONSE_POLICY.join("\n"), "Canonical user response policy");
 }

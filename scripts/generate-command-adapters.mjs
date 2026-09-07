@@ -9,6 +9,7 @@ import {
 } from "../src/core/ambient-policy.mjs";
 import { generatedDoveAgentEntries } from "../src/core/dove-agent-definition.mjs";
 import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "../src/core/dove-agent-persona.mjs";
+import { USER_RESPONSE_POLICY } from "../src/core/user-response-policy.mjs";
 import {
   PAPER_SEARCH_SUPPORT_SKILL_PATH,
   renderPaperSearchSupportSkill
@@ -103,7 +104,7 @@ function isReturnWithSection(section) {
 function renderSemanticCapabilityContract(command, hostId = null) {
   const contract = command.contract;
   const sections = [
-    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template.",
+    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.",
     `### What this is for\n\n${contract.purpose}`,
     `### When to use\n\n${contract.when}`,
     renderListSection("Scope and changes", contract.boundaries),
@@ -122,7 +123,7 @@ function renderCapabilityContract(command, hostId = null) {
     return renderSemanticCapabilityContract(command, hostId);
   }
   const sections = [
-    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template.",
+    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.",
     `### What this is for\n\n${contract.purpose}`,
     `### When to use\n\n${contract.when}`,
     renderListSection("What Dove will examine", withoutReturnWith(contract.responsibilities, contract)),
@@ -157,10 +158,13 @@ function renderBody(command, heading, hostId = null) {
   const examples = renderExamples(command, hostId);
   const contract = renderCapabilityContract(command, hostId);
   const guidance = renderGuidance(command);
+  const responsePolicy = hostId === "dsh" ? USER_RESPONSE_POLICY.join("\n") : "";
+  const coveredText = [responsePolicy, contract].filter(Boolean).join("\n\n");
   const shared = hostId === "dsh" ? [
-    renderDoveSharedResearchContractSection({ compact: true, coveredText: contract }),
+    responsePolicy,
+    renderDoveSharedResearchContractSection({ compact: true, coveredText }),
     command.id === "dove.status" ? "For Status, use these principles only to inspect and report; do not execute research actions or maintain documents."
-      : renderDoveAuthorStanceSection({ compact: true, coveredText: contract })
+      : renderDoveAuthorStanceSection({ compact: true, coveredText })
   ].join("\n\n") : "";
   return [`# ${heading}`, purpose, args, examples.trim(), shared, contract, guidance].filter(Boolean).join("\n\n") + "\n";
 }

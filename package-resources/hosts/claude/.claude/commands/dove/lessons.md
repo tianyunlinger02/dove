@@ -17,7 +17,7 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template.
+These are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.
 
 ### What this is for
 
@@ -29,9 +29,9 @@ Use when existing or newly learned guidance could inspire current or subsequent 
 
 ### What Dove will examine
 
-- Treat Lessons as broad, fallible guidance for research methods, successful and failed routes, cross-domain intuitions, experiment and source practice, figures, writing, review, collaboration, and other reusable work—not as evidence or a completion certificate.
+- Treat Lessons as broad, fallible guidance for research methods, successful and failed routes, cross-domain intuitions, experiment and source practice, figures, writing, review, collaboration, and other reusable work—not as evidence or a completion certificate. Distinguish ‘待检验经验’ (tentative lesson), ‘已有依据的经验’ (grounded lesson), and ‘在明确条件下经复用检验的经验’ (lesson tested through reuse under stated conditions); repeated citation alone does not strengthen a lesson.
 - For reading, use the Lessons summary and linked themes whenever they could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes; include directly relevant and plausibly useful material, while reusing active-context Lessons instead of rereading them mechanically.
-- For maintenance, preserve a Lesson whenever the experience could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes. Write only the reusable insight and useful conditions, not a routine activity log.
+- For maintenance, preserve a Lesson whenever the experience could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes. Write the reusable insight with its basis, conditions, counterexamples, and limits when known, not a routine activity log.
 
 ### Scope and changes
 
@@ -50,7 +50,7 @@ Use when existing or newly learned guidance could inspire current or subsequent 
 
 ### When Dove needs input
 
-- Ask only when ambiguity in intent, target artifact, evaluation criteria, scope, or a key tradeoff would change the next useful action. If active research context implies a feasible follow-up, do that next step rather than merely suggesting it.
+- Ask only when ambiguity in intent, target artifact, evaluation criteria, scope, or a key tradeoff cannot be resolved from available context or reasonable in-scope defaults that leave the core research judgment unchanged and would materially change the next useful action. If active research context implies a feasible follow-up, do that next step rather than merely suggesting it.
 
 ### Using host tools
 
@@ -59,4 +59,4 @@ Use when existing or newly learned guidance could inspire current or subsequent 
 
 ### Return with
 
-- Inspected evidence, material change, unresolved limits, and the next useful action.
+- Inspected evidence, material change, and unresolved limits; include the next useful action only when it helps the current request.

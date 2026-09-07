@@ -33,8 +33,9 @@ import {
   skillContract
 } from "./common.mjs";
 
-import { assertSharedAuthorStance, assertSharedResearchJudgment } from "./ambient-docs.mjs";
-import { assertExperimentScientificEvaluation } from "./agent-capabilities.mjs";
+import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
+import { assertSharedAuthorStance, assertSharedResearchJudgment, assertUserResponsePolicy } from "./ambient-docs.mjs";
+import { assertCapabilityLevels, assertExperimentScientificEvaluation } from "./agent-capabilities.mjs";
 
 const AMBIGUOUS_ROUTE_TERM_PATTERNS = Object.freeze([
   { label: "approved route", pattern: /\bapproved route\b/iu },
@@ -105,9 +106,66 @@ export function assertFinalEntrypointWiring() {
       : [["DSH standalone Skill", ""]];
     for (const [context, prefix] of contexts) {
       const label = `${context} ${entry.command.id}`;
+      // No Lesson file is read or injected: these final host instructions alone
+      // must carry the standing judgment, communication, and bounded duties.
       const value = [prefix, entry.content].filter(Boolean).join("\n\n");
+      assertRenderedCapabilityWiring(entry);
+      assertUserResponsePolicy(value, label);
+      for (const instruction of USER_RESPONSE_POLICY) {
+        assert.ok(value.includes(instruction), `${label}: canonical communication policy must be reachable without Lessons`);
+        assert.equal(entry.content.includes(instruction), entry.hostId === "dsh", `${label}: Claude commands inherit policy; DSH Skills carry it directly`);
+      }
+      assertSemanticDeletionsRejected(value, label, assertUserResponsePolicy, [
+        /natural Chinese/iu,
+        /take precedence/iu,
+        /then the evidence/iu,
+        /plain language/iu,
+        /foreign terms/iu,
+        /internal terminology/iu,
+        /Report substantive progress/iu,
+        /End naturally/iu,
+        /not as a fixed closing suggestion/iu
+      ]);
       assertSharedResearchJudgment(value, label);
       assertSemanticDeletionsRejected(value, label, assertSharedResearchJudgment, [
+        /problem lead/iu,
+        /concrete candidate/iu,
+        /argument-ready/iu,
+        /evidence-supported/iu,
+        /matching actual evidence/iu,
+        /effects may remain untested/iu,
+        /basis, scope, and decisive gap/iu,
+        /rise or fall with evidence/iu,
+        /not a project score/iu,
+        /automatic promotion/iu,
+        /mandatory stages/iu,
+        /reporting template/iu,
+        /generality or submission acceptance/iu,
+        /core \(threatens the main goal\)/iu,
+        /branch \(affects a dependent route or claim\)/iu,
+        /local \(affects bounded quality\)/iu,
+        /separately from evidence strength and repair effort/iu,
+        /decision-sized units/iu,
+        /retaining dependencies/iu,
+        /same granularity/iu,
+        /subtract(?:ing)? covered contributions/iu,
+        /reassess the remaining difference/iu,
+        /Stop decomposing/iu,
+        /Clarify undefined objects/iu,
+        /design missing mechanisms/iu,
+        /validate unknown effects/iu,
+        /Simple mechanisms/iu,
+        /not a main method by sunk cost/iu,
+        /does not automatically refute/iu,
+        /restrictions still govern execution/iu,
+        /Early authorized diagnostics need not await Level 3/iu,
+        /frozen protocol/iu,
+        /does not establish the scientific validity/iu,
+        /Stop investigating/iu,
+        /would not change the next action/iu,
+        /nonblocking unknowns/iu,
+        /limits dependent work and claims/iu,
+        /not every independent action/iu,
         /Before committing to or materially changing/iu,
         /core proposition/iu,
         /simple alternatives/iu,
@@ -144,6 +202,42 @@ export function assertFinalEntrypointWiring() {
           /unverified limits/iu,
           /resolves contradictions/iu,
           /without redoing every subtask/iu,
+          /decisive objections/iu,
+          /change dependent investment and claims/iu,
+          /answer them with inspected evidence/iu,
+          /unresolved objections retain that force/iu,
+          /later decisions and reports/iu,
+          /reasonable defaults/iu,
+          /low-cost, reversible in-scope choices/iu,
+          /do not change the core research judgment/iu,
+          /Before expanding cost, dependencies, or claim strength/iu,
+          /premise most likely to cause broad rework/iu,
+          /feedback-sized increment/iu,
+          /absorb its result, then expand/iu,
+          /neither check every small step/iu,
+          /nor wait for every scientific premise/iu,
+          /trace affected dependencies/iu,
+          /shared cause within the minimum complete scope/iu,
+          /retain still-valid work and negative evidence/iu,
+          /rather than restart everything or defend sunk cost/iu,
+          /one authoritative contract/iu,
+          /producers, consumers, validation, and presentation/iu,
+          /complete needed migrations/iu,
+          /without redundant compatibility or shadow paths/iu,
+          /Do not hide errors/iu,
+          /swallowed failures/iu,
+          /truncation/iu,
+          /completion levels separately/iu,
+          /focused checks/iu,
+          /integration/iu,
+          /real execution/iu,
+          /formal output/iu,
+          /read-back/iu,
+          /actual downstream use/iu,
+          /cannot stand in for a later one or for scientific support/iu,
+          /without requiring every bounded task to reach production readiness/iu,
+          /Distinguish changing the method, evaluation, and research goal/iu,
+          /mentioning another direction is not authorization/iu,
           /majority opinion/iu,
           /not scientific judgment/iu,
           /not own the mainline or important user communication/iu,
@@ -180,6 +274,8 @@ function assertAuthoritativeManuscript(value, label) {
 export function assertRenderedCapabilityWiring(entry) {
   const label = generatedSurfaceLabel(entry);
   const value = entry.content;
+  const capability = value.slice(value.indexOf("## How Dove approaches this work"));
+  assertCapabilityLevels(capability, entry.command.id, label);
   const actions = entry.command.id === "dove.review" ? value : renderedSection(value, "Ways Dove may proceed");
   switch (entry.command.id) {
     case "dove.research": {
@@ -195,7 +291,7 @@ export function assertRenderedCapabilityWiring(entry) {
         /only.*summaries and linked details needed/iu,
         /visible conversation.*necessary current project materials.*distinguish live work from durable research notes/iu,
         /conflicts or stale notes.*without silently reconciling/iu,
-        /without inferring the mainline from the latest Review or Run receipt alone/iu,
+        /(?:do not infer|without inferring)[^.\n]*mainline[^.\n]*latest Review or Run receipt alone/iu,
         /absent.*say so naturally.*do not modify files/iu
       ], label);
       break;
@@ -234,7 +330,8 @@ export function assertRenderedCapabilityWiring(entry) {
         /Interpret results[^\n]*evaluation chain[^\n]*actual control differences[^\n]*anomalies before treating them as evidence/iu,
         /execute only after[^\n]*prospective plan[^\n]*successfully saved[^\n]*then append[^\n]*actual procedure, result[^\n]*deviation[^\n]*evidence scope[^\n]*same Experiment document/iu,
         /existing-result analysis or retrospective.*do not imply a prior plan existed/iu,
-        /what was observed.*what it means.*why it matters.*what happens next/iu
+        /what was observed[^.\n]*what it means[^.\n]*why it matters/iu,
+        /(?:explain|report)[^.\n]*follow.up[^.\n]*only when useful/iu
       ], label);
       assertTextOrder(actions, design, plan, `${label} design then prospective save`);
       assertTextOrder(actions, plan, execution, `${label} prospective save then execution and append`);
@@ -346,6 +443,17 @@ export function assertRenderedCapabilityWiring(entry) {
 }
 
 function assertWiringRejectsRegressions(entries) {
+  const levelDeletions = {
+    "dove.research": [/problem lead/iu, /concrete candidate/iu, /argument-ready/iu, /evidence-supported/iu, /rather than automatically promoting/iu, /without prior successful experiments/iu, /only when/iu, /actually been inspected/iu, /apply them separately/iu, /without inventing numbered definitions/iu],
+    "dove.status": [/only when existing materials support it/iu, /basis and important unknowns/iu, /level undetermined/iu, /do not start validation/iu],
+    "dove.source": [/found leads/iu, /verified citation identity/iu, /inspected relevant full text/iu, /checked a specific claim/iu, /not necessarily support/iu, /remaining difference's independence/iu, /does not establish absence of overlap/iu, /stop searching/iu],
+    "dove.experiment": [/specified design/iu, /working execution chain/iu, /valid comparison/iu, /support for the particular claim/iu, /valid negative result/iu, /without supporting the proposed claim/iu, /do not keep pursuing positive results/iu, /upper bound/iu, /attainability/iu, /evaluation reliability/iu, /minimum worthwhile benefit/iu],
+    "dove.draft": [/argument outline/iu, /complete draft/iu, /evidence-aligned manuscript/iu, /actual delivery requirements/iu, /independent of scientific maturity/iu, /core gaps constrain/iu, /without restarting research/iu],
+    "dove.figure": [/visual plan/iu, /rendered visual/iu, /materials and meaning checked/iu, /checked in the final use context/iu, /does not establish final-context readiness/iu, /schematic explanation/iu, /do not trigger a whole-project audit/iu],
+    "dove.review": [/核心问题/u, /分支问题/u, /局部问题/u, /evidence sufficiency separately/iu, /rather than equating/iu],
+    "dove.rebuttal": [/finding understood/iu, /response path grounded/iu, /needed revisions implemented/iu, /effect checked/iu, /same root cause/iu, /coverage of each material finding/iu, /does not establish that the issue is resolved/iu, /does not mean reviewer acceptance/iu],
+    "dove.lessons": [/tentative lesson/iu, /grounded lesson/iu, /tested through reuse under stated conditions/iu, /repeated citation alone/iu, /counterexamples/iu, /not package-owned defaults/iu]
+  };
   const regressions = [
     ["dove.research", "reassess the original proposition against the result", "accept the completed subtask as success"],
     ["dove.source", "Partial support is not support for the whole sentence", "Partial support is support for the whole sentence"],
@@ -362,6 +470,8 @@ function assertWiringRejectsRegressions(entries) {
     ["dove.lessons", "do not treat Lessons as evidence", "treat Lessons as evidence"]
   ];
   for (const entry of entries) {
+    assertSemanticDeletionsRejected(entry.content, generatedSurfaceLabel(entry),
+      (content) => assertRenderedCapabilityWiring({ ...entry, content }), levelDeletions[entry.command.id]);
     for (const [id, before, after] of regressions.filter(([id]) => id === entry.command.id)) {
       const content = entry.content.replaceAll(before, after);
       assert.notEqual(content, entry.content, `${entry.hostId} ${id} regression probe must alter the instruction`);

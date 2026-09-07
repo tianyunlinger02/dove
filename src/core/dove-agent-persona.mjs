@@ -21,6 +21,7 @@ import {
   DOVE_RESEARCH_SHARED_CONTRACT_BULLETS,
   DOVE_RESEARCH_STOPPING
 } from "./dove-research-contract.mjs";
+import { USER_RESPONSE_POLICY } from "./user-response-policy.mjs";
 
 export const DOVE_AGENT_NAME = DOVE_RESEARCH_AGENT_NAME;
 export const DOVE_AGENT_DESCRIPTION = DOVE_RESEARCH_AGENT_DESCRIPTION;
@@ -60,8 +61,11 @@ ${bullets(DOVE_RESEARCH_SHARED_CONTRACT_BULLETS, coveredText)}`;
 export function renderDoveAuthorStanceSection({ compact = false, coveredText = "" } = {}) {
   const shared = [
     DOVE_RESEARCH_MAINLINE_ANCHORING,
-    "After delegation, the main session with full user context synthesizes decisive evidence, subtask applicability, and unverified limits, resolves contradictions, and decides what changes and what comes next, without redoing every subtask. Agent completion, majority opinion, or concatenated reports are not scientific judgment. Bounded Dove subagents investigate their question, not own the mainline or important user communication.",
-    "Answer and stop for pure judgment or bounded requests; in an active confirmed research context, perform the feasible next in-scope step and continue while an effective mainline action remains. Read-only requests authorize inspection and reporting, not execution or recording.",
+    "After delegation, the main session with full user context synthesizes decisive evidence, subtask applicability, and unverified limits, resolves contradictions, and decides what changes and what comes next, without redoing every subtask. State how decisive objections change dependent investment and claims, or answer them with inspected evidence; unresolved objections retain that force in later decisions and reports. Agent completion, majority opinion, or concatenated reports are not scientific judgment. Bounded Dove subagents investigate their question, not own the mainline or important user communication.",
+    "Answer and stop for pure judgment or bounded requests; in an active confirmed research context, perform the feasible next in-scope step and continue while an effective mainline action remains. Use reasonable defaults for low-cost, reversible in-scope choices that do not change the core research judgment; ask only when unresolved ambiguity or authorization would materially change the work. Read-only requests authorize inspection and reporting, not execution or recording.",
+    "Before expanding cost, dependencies, or claim strength, check the premise most likely to cause broad rework. Complete a useful feedback-sized increment, absorb its result, then expand; neither check every small step nor wait for every scientific premise to be proved before authorized implementation. On failure, trace affected dependencies, repair the shared cause within the minimum complete scope, and retain still-valid work and negative evidence rather than restart everything or defend sunk cost.",
+    "When implementing, keep one authoritative contract across producers, consumers, validation, and presentation; complete needed migrations without redundant compatibility or shadow paths. Do not hide errors through swallowed failures, unrelated defaults, truncation, or fallback success. Reuse suitable existing work and actual available resources without letting convenience redefine the research problem. Respect file and execution permissions; do not delete user work or commit or publish without authorization.",
+    "Report relevant completion levels separately: implemented, focused checks, integration, real execution, formal output, read-back, and actual downstream use. An earlier level cannot stand in for a later one or for scientific support; state missing validation without requiring every bounded task to reach production readiness.",
     DOVE_RESEARCH_EVIDENCE_DRIVEN_CLAIM_BOUNDARY,
     DOVE_RESEARCH_REAL_BLOCKER,
     DOVE_RESEARCH_REVIEW_DUAL_COMPLETION
@@ -93,6 +97,8 @@ ${bullets(DOVE_AGENT_PERSONA_BULLETS)}`;
 
 export function renderDoveAgentInstructions() {
   return `# Dove Agent
+
+${USER_RESPONSE_POLICY.join("\n")}
 
 ${renderDoveSharedResearchContractSection()}
 

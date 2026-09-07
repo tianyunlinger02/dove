@@ -17,7 +17,7 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template.
+These are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.
 
 ### What this is for
 
@@ -30,16 +30,16 @@ Use when the user asks where the research stands, what is active, or what should
 ### What Dove will examine
 
 - Read only enough context to answer the status question.
-- Report current mainline, substantive progress, active problems, decisions, and next priorities as ordinary document facts.
+- Report the current goal, substantive progress, active problems, and decisions. State the relevant object's named level only when existing materials support it, with its basis and important unknowns; otherwise leave the level undetermined. Mention next priorities when relevant to the question.
 - Treat missing overviews, summaries, or links as ordinary document facts.
 
 ### Scope and changes
 
-- For Status, only inspect and report.
+- For Status, only inspect and report; do not start validation or maintain documents to fill a missing level or evidence gap.
 
 ### Ways Dove may proceed
 
-- Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Report the current mainline, substantive progress, active problems, decisions, and next priorities, without inferring the mainline from the latest Review or Run receipt alone. If an overview, summary, or link is absent, say so naturally and do not modify files.
+- Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Do not infer the mainline from the latest Review or Run receipt alone. If an overview, summary, or link is absent, say so naturally and do not modify files.
 - When existing Lessons could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes, read ".dove/research/lessons/LESSONS.md" if it exists, then the directly relevant or plausibly useful linked Lessons. Read ".dove/research/RESEARCH.md" first only when project context is still needed and it has not already been read in the active context. Reuse Lessons already read in the active context instead of rereading them mechanically. If Lessons materials are absent, work without them. Treat Lessons as fallible guidance, never as evidence.
 
 ### What this should not replace
@@ -54,4 +54,4 @@ Use when the user asks where the research stands, what is active, or what should
 
 ### Return with
 
-- Inspected evidence, material change, unresolved limits, and the next useful action.
+- Inspected evidence, material change, and unresolved limits; include the next useful action only when it helps the current request.

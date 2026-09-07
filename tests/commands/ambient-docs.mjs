@@ -33,15 +33,63 @@ const EXPECTED_AMBIENT_PATHS = [
   EXA_WEB_SUPPORT_SKILL_PATH
 ];
 
+export function assertUserResponsePolicy(value, label) {
+  for (const pattern of [
+    /(?:default|normally)[^.\n]*natural Chinese|natural Chinese[^.\n]*default/iu,
+    /(?:explicit|requested)[^.\n]*(?:language|format)[^.\n]*(?:precedence|priority|override|first)|(?:follow|honor|respect)[^.\n]*(?:requested|explicit)[^.\n]*language[^.\n]*format/iu,
+    /(?:judgment|conclusion|answer)[^.\n]*(?:before|then|first)[^.\n]*(?:evidence|basis|reason)/iu,
+    /(?:plain|everyday) language[^.\n]*(?:complex|concept)|(?:complex|concept)[^.\n]*(?:plain|everyday) language/iu,
+    /(?:foreign|technical|English) terms?[^.\n]*(?:Chinese|first)|(?:Chinese|first)[^.\n]*(?:foreign|technical|English) terms?/iu,
+    /(?:avoid|minimize|less|reduce)[^.\n]*(?:internal|jargon)/iu,
+    /(?:report|communicate|describe)[^.\n]*(?:substantive|material|actual) (?:research )?progress[^.\n]*user[^.\n]*goal[^.\n]*not[^.\n]*transcript/iu,
+    /(?:close|end|stop|finish)[^.\n]*naturally|natural (?:close|ending)/iu,
+    /(?:not|no|without)[^.\n]*(?:fixed|mandatory|routine|every)[^.\n]*(?:next|suggestion|recommendation|closing)/iu
+  ]) assert.match(value, pattern, `${label}: communication boundary ${pattern}`);
+}
+
+export function assertResearchMaturity(value, label) {
+  for (const pattern of [
+    /level 1[^;\n]*problem (?:lead|clue)[^;\n]*(?:phenomenon|gap)[^;\n]*(?:unclear|not yet|not fully)/iu,
+    /level 2[^;\n]*concrete candidate[^;\n]*(?:question|problem)[^;\n]*method[^;\n]*mechanism[^;\n]*feasibility[^;\n]*gap/iu,
+    /level 3[^;\n]*argument.ready[^;\n]*value[^;\n]*mechanism[^;\n]*conditions[^;\n]*validation[^;\n]*(?:grounded|basis)/iu,
+    /effects[^.\n]*(?:may|can)[^.\n]*(?:untested|unverified)/iu,
+    /level 4[^;\n]*evidence.supported[^;\n]*(?:matching|matched) actual evidence[^;\n]*claim[^;\n]*scope/iu,
+    /core[^;\n]*(?:main|core) goal[^;\n]*branch[^;\n]*dependent (?:route|claim)[^;\n]*local[^;\n]*(?:bounded|local) quality/iu,
+    /(?:impact|severity)[^.\n]*separat[^.\n]*evidence strength[^.\n]*repair effort/iu,
+    /distinguish[^.\n]*(?:contradiction|refutation)[^.\n]*insufficient evidence/iu,
+    /maturity[^.\n]*value[^.\n]*novelty[^.\n]*evidence (?:standing|support)[^.\n]*separate/iu,
+    /(?:specific|scoped)[^.\n]*(?:question|goal)[^.\n]*candidate[^.\n]*claim/iu,
+    /(?:report|state)[^.\n]*level[^.\n]*basis[^.\n]*scope[^.\n]*gap[^.\n]*route[^.\n]*investment[^.\n]*completion/iu,
+    /branches[^.\n]*(?:differ|different)/iu,
+    /levels?[^.\n]*rise[^.\n]*fall[^.\n]*evidence/iu,
+    /(?:not|no|without)[^.\n]*automatic promotion/iu,
+    /(?:not|no|without)[^.\n]*(?:project|total|combined) score/iu,
+    /(?:not|no|without)[^.\n]*mandatory stages[^.\n]*(?:reporting template|fixed table)/iu,
+    /level 4[^.\n]*(?:not|neither)[^.\n]*generality[^.\n]*submission acceptance/iu
+  ]) assert.match(value, pattern, `${label}: scoped maturity boundary ${pattern}`);
+}
+
 export function assertSharedResearchJudgment(value, label) {
+  assertResearchMaturity(value, label);
   for (const pattern of [
     /Before committing to or materially changing[^\n]*direction[^\n]*method[^\n]*evaluation target[^\n]*central experiment/iu,
     /core proposition[^.\n]*theory or mechanism[^.\n]*proportionate/iu,
     /simple alternatives[^.\n]*assumptions[^.\n]*applicability[^.\n]*inspected evidence/iu,
     /distinguish\w* predictions or failure conditions/iu,
-    /derivation[^.\n]*counterexamples[^.\n]*or small exploratory diagnostics[^.\n]*as needed/iu,
+    /derivation[^.\n]*counterexamples[^.\n]*(?:permitted|authorized) exploratory diagnostics[^.\n]*as needed/iu,
     /as needed to (?:choose or revise|change)[^.\n]*method[^.\n]*baseline[^.\n]*metric[^.\n]*investment decision/iu,
-    /inspect targeted theory or related work[^.\n]*when it can (?:inform|change)[^.\n]*decision/iu,
+    /inspect[^.\n]*theory[^.\n]*(?:related|near.neighbor|contrary) work[^.\n]*when it can (?:inform|change)[^.\n]*decision/iu,
+    /(?:decompose|split)[^.\n]*mainline[^.\n]*(?:candidates|subgoals)[^.\n]*(?:decision.sized|work) units/iu,
+    /(?:retain|preserv)[^.\n]*dependencies[^.\n]*(?:whole|overall) mechanism[^.\n]*final value/iu,
+    /same granularity[^.\n]*inputs[^.\n]*outputs[^.\n]*assumptions[^.\n]*mechanisms[^.\n]*claims/iu,
+    /subtract[^.\n]*covered contributions[^.\n]*reassess[^.\n]*remaining difference[^.\n]*value/iu,
+    /stop decomposing[^.\n]*decision[^.\n]*clear/iu,
+    /clarify[^.\n]*undefined objects[^.\n]*design[^.\n]*missing mechanisms[^.\n]*validate[^.\n]*unknown effects/iu,
+    /simple mechanisms[^.\n]*(?:important|valuable) contributions/iu,
+    /diagnostic prototype[^.\n]*not[^.\n]*main method[^.\n]*sunk cost/iu,
+    /failure[^.\n]*does not automatically refute[^.\n]*higher.level hypothesis/iu,
+    /(?:design.only|topic.selection)[^.\n]*restrictions[^.\n]*(?:govern|constrain)[^.\n]*execution/iu,
+    /(?:early|exploratory) authorized diagnostics[^.\n]*need not await level 3/iu,
     /insufficiently grounded routes[^.\n]*provisional/iu,
     /routine local work[^.\n]*no fixed theory preamble/iu,
     /Prioritize[^\n]*problem[^\n]*contribution[^\n]*data and evaluation validity[^\n]*method and statistical identification[^\n]*execution[^\n]*recovery[^\n]*delivery/iu,
@@ -51,6 +99,10 @@ export function assertSharedResearchJudgment(value, label) {
     /scientific value.*result quality.*time.*resources.*opportunity cost.*rework risk.*downstream effects.*whole research path/isu,
     /Before treating[^.\n]*unusually strong results as evidence[^.\n]*(?:check|inspect)[^.\n]*implementation[^.\n]*data[^.\n]*configuration[^.\n]*environment[^.\n]*randomness[^.\n]*metrics[^.\n]*analysis[^.\n]*interpretation/iu,
     /(?:Valid execution|performance gain)[^.\n]*alone does not establish[^.\n]*evaluation validity[^.\n]*component's contribution[^.\n]*scientific mechanism/iu,
+    /frozen protocol[^.\n]*(?:fix|freez)[^.\n]*comparison rules[^.\n]*(?:not|does not)[^.\n]*scientific validity[^.\n]*metric[^.\n]*budget[^.\n]*method/iu,
+    /stop investigating[^.\n]*(?:inspection|investigation)[^.\n]*(?:not|no longer)[^.\n]*change[^.\n]*next action/iu,
+    /(?:retain|keep)[^.\n]*nonblocking unknowns[^.\n]*without[^.\n]*(?:reopen|reinvestigat)/iu,
+    /unresolved gap[^.\n]*limits dependent work[^.\n]*claims[^.\n]*not every independent action/iu,
     /Citation identity[^.\n]*full-text inspection[^.\n]*claim support[^.\n]*separate judgments/iu,
     /(?:files|passing checks)[^.\n]*alone are not research progress/iu,
     /claim strength within the evidence.*generality, quantitative qualifiers, and novelty/isu,
@@ -73,6 +125,22 @@ export function assertSharedAuthorStance(value, label) {
     /After delegation[^\n]*main session[^\n]*full user context[^\n]*synthesizes decisive evidence/iu,
     /subtask applicability[^.\n]*unverified limits[^.\n]*resolves contradictions[^.\n]*(?:chooses|decides)[^.\n]*(?:next action|what comes next)/iu,
     /without redoing every subtask/iu,
+    /(?:decisive|key|critical) objections[^.\n]*change dependent investment[^.\n]*claims[^.\n]*(?:answer|rebut)[^.\n]*inspected evidence/iu,
+    /unresolved objections[^.\n]*(?:retain|limit|constrain)[^.\n]*later decisions[^.\n]*reports/iu,
+    /reasonable defaults[^.\n]*low.cost[^.\n]*reversible[^.\n]*in.scope choices[^.\n]*do not change the core research judgment/iu,
+    /before expanding[^.\n]*cost[^.\n]*dependencies[^.\n]*claim strength[^.\n]*check[^.\n]*premise[^.\n]*rework/iu,
+    /(?:useful|valuable) feedback.sized increment[^.\n]*absorb[^.\n]*result[^.\n]*then expand/iu,
+    /neither check every small step[^.\n]*nor wait[^.\n]*every scientific premise[^.\n]*before authorized implementation/iu,
+    /failure[^.\n]*trace affected dependencies[^.\n]*repair[^.\n]*shared cause[^.\n]*minimum complete scope/iu,
+    /retain still.valid work[^.\n]*negative evidence[^.\n]*rather than restart everything[^.\n]*sunk cost/iu,
+    /(?:when|if) implementing[^.\n]*one authoritative contract[^.\n]*producers[^.\n]*consumers[^.\n]*validation[^.\n]*presentation/iu,
+    /(?:complete|perform)[^.\n]*(?:needed|necessary) migrations[^.\n]*without redundant[^.\n]*(?:compatibility|shadow) paths/iu,
+    /(?:not|never) hide errors[^.\n]*swallowed failures[^.\n]*defaults[^.\n]*truncation/iu,
+    /(?:report|state)[^.\n]*completion levels separately[^.\n]*implemented[^.\n]*focused checks[^.\n]*integration[^.\n]*real execution[^.\n]*formal output[^.\n]*read.back[^.\n]*actual downstream use/iu,
+    /earlier level[^.\n]*cannot stand in[^.\n]*later one[^.\n]*scientific support/iu,
+    /missing validation[^.\n]*without requiring every bounded task[^.\n]*production readiness/iu,
+    /distinguish changing[^.\n]*method[^.\n]*evaluation[^.\n]*research goal/iu,
+    /mentioning another direction[^.\n]*not authorization[^.\n]*adopt/iu,
     /agent completion[^.\n]*majority opinion[^.\n]*concatenated reports[^.\n]*not scientific judgment/iu,
     /Bounded Dove subagents[^.\n]*investigate[^.\n]*question[^.\n]*not own[^.\n]*mainline or important user communication/iu,
     /feasible discriminating follow-up[^\n]*resolve uncertainty[^\n]*rather than merely weakening prose/iu,
@@ -99,9 +167,11 @@ export function assertAmbientRouting() {
   assert.match(rule, /nine Skills.*(?:same research collaboration|current decision|optional specialist methods)|optional specialist capabilities/isu);
   assert.match(rule, /research requests in the current conversation/iu);
   assert.match(rule, /answer, clarify, or use a Dove capability when useful/iu);
-  assert.match(rule, /Ask when ambiguity would change the next useful action/iu);
+  assert.match(rule, /ask only when unresolved ambiguity or authorization[^.\n]*materially change/iu);
   assertSharedResearchJudgment(rule, "Ordinary Claude rule");
   assertSharedAuthorStance(rule, "Ordinary Claude rule");
+  assertUserResponsePolicy(rule, "Ordinary Claude rule");
+  for (const instruction of USER_RESPONSE_POLICY) assert.ok(rule.includes(instruction), "Claude rule must use the canonical communication policy");
   assert.equal((rule.match(/^## Author stance$/gmu) ?? []).length, 1, "Ordinary Claude uses one shared author section");
   assert.match(rule, /real paper and webpage reading tools/iu);
   assert.match(rule, /search snippets can guide discovery/iu);
@@ -158,7 +228,8 @@ export function assertAmbientRouting() {
     assertSharedResearchJudgment(entry.content, `${entry.command.id} DSH projection`);
     assert.doesNotMatch(entry.content, /\.claude\/rules|claude --agent|ambient rule/iu, "DSH must not depend on Claude-only researcher context");
     assert.equal((entry.content.match(/^## Research judgment$/gmu) ?? []).length, 1, "DSH uses one compact shared section");
-    assert.equal((entry.content.match(/Before committing to or materially changing/gu) ?? []).length, 1, "DSH must not repeat theory text already supplied by a capability");
+    assertUserResponsePolicy(entry.content, `${entry.command.id} DSH projection`);
+    for (const instruction of USER_RESPONSE_POLICY) assert.ok(entry.content.includes(instruction), "DSH must use the canonical communication policy");
     if (entry.command.id === "dove.status") {
       assert.match(entry.content, /For Status.*only to inspect and report.*do not execute research actions or maintain documents/isu);
       assert.doesNotMatch(entry.content, /^## Author stance$|first try any feasible in-mainline|perform the feasible next in-scope step|Maintain Dove research Markdown/mu, "Status must not receive author execution or maintenance duties");
@@ -176,6 +247,8 @@ export function assertPackagedAgentPolicy() {
   assertDoveAgentSurfaceSemantics(agentText, "Packaged Dove agent");
   assertSharedResearchJudgment(agentText, "Explicit and bounded Dove agent");
   assertSharedAuthorStance(agentText, "Explicit and bounded Dove agent");
+  assertUserResponsePolicy(agentText, "Explicit and bounded Dove agent");
+  for (const instruction of USER_RESPONSE_POLICY) assert.ok(agentText.includes(instruction), "Dove agent must use the canonical communication policy");
   assert.match(agentText, /explicit main research agent.*--agent dove.*bounded independent subagent.*do not delegate work needing the full user conversation, important clarification, or ongoing author-side mainline ownership/isu);
   assert.doesNotMatch(agentText, /actual Skill call to `dove:review`|latest material state receives a current Review `PASS`|Review gate/iu);
   assert.doesNotMatch(agentText, /Keep three primary roles distinct|Planner frames|Builder\/Author performs|Reviewer returns/iu);
@@ -209,7 +282,8 @@ function assertReviewerPrompt(prompt, label) {
     /Keep a bounded local review within its requested scope/iu,
     /Verdict, Blocking issues, Grounding basis, and Author-side next actions/iu
   ]) assert.match(prompt, pattern, `${label}: reviewer boundary ${pattern}`);
-  assert.doesNotMatch(prompt, /^## Author stance$|After delegation|synthesizes decisive evidence|first try any feasible in-mainline|perform the feasible next in-scope step|Maintain Dove research Markdown/mu);
+  assert.doesNotMatch(prompt, /^## Author stance$|After delegation|synthesizes decisive evidence|first try any feasible in-mainline|perform the feasible next in-scope step|Maintain Dove research Markdown|feedback-sized increment|When implementing|Report relevant completion levels/mu);
+  assert.doesNotMatch(prompt, /(?:read|load|consult|fetch)[^.\n]*Lessons|\.dove\/research\/lessons\//iu, `${label}: frozen review must not acquire Lessons-reading duties`);
 
 }
 

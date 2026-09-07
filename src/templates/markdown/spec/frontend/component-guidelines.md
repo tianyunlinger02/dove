@@ -16,6 +16,12 @@ Ordinary Claude conversations use the shared research rule; `claude --agent dove
 - Distinguish support, refutation, insufficient evidence, and a control that cannot identify the original proposition. Do not indefinitely postpone accepting counterevidence or erase original failure through a new route's success. Recognizing factual refutation needs no approval; materially changing the confirmed mainline, intended contribution, or completion meaning does.
 - Default progression is foreground multi-round work: absorb results and continue while a feasible in-scope action can advance or protect the mainline. A blocked tool or path is not automatically a blocked research goal; consider other effective in-mainline actions. Stop at goal completion, an unresolved material blocker, or a required user decision/external boundary. No daemon, scheduler, hidden state store, or mandatory capability sequence is implied.
 
+Decompose mainline goals into candidates and comparable, testable work units without losing their mechanism, value, or dependencies. Compare candidates and nearest work at the same granularity; subtract covered contributions and reassess the remainder's independent value. Separate unclear definitions, missing mechanisms, and unknown effects: they need clarification, design/derivation, and suitable validation respectively. Simple methods can matter; sunk diagnostic prototypes are not automatically main methods, and small-model failure does not automatically refute a higher-level hypothesis.
+
+Use scoped, evidence-grounded judgments, not a required pipeline: **problem lead** (worth investigating, not yet clear), **concrete candidate** (specific route with key gaps), **argument-ready** (value, mechanism, conditions, and validation path reasonably grounded; effects may be untested), and **evidence-supported** (the stated claim supported within explicit bounds). Argument-ready work may enter authorized validation without prior successful experiments; useful early authorized diagnostics need not await this level. Evidence-supported does not mean general validity or submission acceptance. Keep value, novelty, maturity, evidence, and cost separate. Use original N0–N4/T0–T4 definitions only when useful and project-provided definitions are readable and inspected; otherwise judge in plain language without guessing numbers. N1 means highly covered, not a recommendation above N0. Do not generalize project-specific thresholds. **Core**, **branch**, and **local** issues constrain the central goal, affected dependencies, and local quality respectively; report evidential sufficiency separately from impact or repair effort. Important route, investment, and completion judgments name scope, basis, and gaps; local operations need no labels or records. No runtime levels, automatic promotion, total score, or scientific PASS follows. Full explanation belongs in `docs/development/RESEARCH_MODEL.md`.
+
+Complete low-cost reversible in-scope choices that do not change core research judgment directly. Before expanding cost, dependencies, or claims, check the premise most likely to invalidate substantial work; absorb useful feedback before expanding, without checkpoints for every step. Stop repeated investigation when it cannot change the next action. Carry decisive delegated/Review objections into author decisions: change dependent work or explain non-adoption with inspected evidence. Unresolved core objections continue to constrain investment and claims; repair shared causes while preserving valid branches and negative results. Protocol freezing establishes fixed comparison rules, not scientific validity. A design-only or topic-selection prohibition on execution remains binding within its scope, not a global experimental ban.
+
 Pure judgment and bounded requests may finish within scope; read-only work authorizes inspection and reporting, not execution or recording. Support work, receipts, notes, and bounded-task completion must not masquerade as mainline progress.
 
 ## Experiment
@@ -44,6 +50,22 @@ Keep the requested operations distinct.
 
 Add author interpretation only when requested; substantive response and revision remain Rebuttal work. Findings inform judgment rather than directly triggering rewrites or claim narrowing. Try feasible high-level author-side action first; narrow only when evidence or a real boundary requires it. Preserve actual reviewer returns separately from author handling. Only real runtime session IDs and reports may be recorded; a role label, local session, receipt, or self-check does not certify independence.
 
+## Capability-specific depth
+
+These are scoped judgments, not mandatory steps or a universal evidence ranking. Different branches can differ or be reassessed; required evidence follows the claim, not the level number.
+
+| Skill | Concrete distinctions |
+|---|---|
+| Research | Problem lead; concrete candidate; argument-ready; evidence-supported. Address the decisive gap, using N/T separately when useful. |
+| Status | Report only levels grounded in existing materials, with basis and unknowns; otherwise leave the level undetermined, without verification or maintenance. |
+| Source | Lead found; identity verified; relevant full text inspected; specific claim checked. A check may support, contradict, or leave a claim uncovered; unchecked full text is not no overlap. Stop searches that cannot change the decision. |
+| Experiment | Design specified; chain executed; comparison valid; corresponding claim supported. A valid completed experiment may be negative. Before scaling, check relevant upper bounds, reachability, evaluation reliability, or minimum meaningful benefit. |
+| Draft | Argument outline; complete draft; evidence-consistent manuscript; actual delivery requirements met. Writing completion and scientific maturity are independent; consolidate shared caveats without hiding core gaps or restarting research for local edits. |
+| Figure | Expression plan; visual generated; materials and meaning checked; final use context checked. Separate schematic explanation from data evidence; keep local edits local. |
+| Review | Core, branch, or local impact, with evidence sufficiency and actual frozen/local scope; not automatic acceptance or added reviewer authority. |
+| Rebuttal | Concern understood; response path grounded; necessary revisions implemented; effect checked. Merge same-root concerns; distinguish definition, mechanism, evidence, and expression gaps. A written reply is not resolution; author self-check is not reviewer acceptance. |
+| Lessons | Untested advice; grounded advice; advice checked through reuse under explicit conditions. Retain conditions, counterexamples, and limits; repeated citation does not promote advice. |
+
 ## Other capability boundaries
 
 - **Status:** strictly read-only; a missing overview or broken link is an ordinary document fact, not a repair trigger.
@@ -53,4 +75,4 @@ Add author interpretation only when requested; substantive response and revision
 
 A user-confirmed submission-completion goal requires author-side scientific sufficiency, a current independent `dove-review` scientific-acceptability recommendation for the same complete version, and actual delivery readiness. Unavailable runtime leaves the requirement unmet, not waived. A bounded local task does not become a submission-completion goal.
 
-Document maintenance and Lessons ownership belong in [State Management](./state-management.md); software evidence limits belong in [Quality Guidelines](./quality-guidelines.md). Final user responses default to natural Chinese unless another language or format is requested.
+Document maintenance and optional, researcher-owned Lessons belong in [State Management](./state-management.md); implementation verification and software evidence limits belong in [Quality Guidelines](./quality-guidelines.md). Core judgment must not depend on loading Lessons, and reviewer permissions remain unchanged. Final responses default to natural Chinese unless another language or format is requested: judgment first, plain explanation before jargon, substantive progress and actual verification depth, with next steps only when useful rather than a mandatory ending.

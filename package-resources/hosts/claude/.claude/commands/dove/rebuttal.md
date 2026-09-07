@@ -17,7 +17,7 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template.
+These are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.
 
 ### What this is for
 
@@ -29,8 +29,8 @@ Use when the user requests rebuttal, response, revision, or follow-up work from 
 
 ### What Dove will examine
 
-- Analyze each material finding against actual evidence, decide whether to accept, rebut, qualify, or investigate it, and revise artifacts when that is the useful response.
-- Name the deficiency, needed evidence, research action, and manuscript or rebuttal response for each material finding.
+- Group findings with the same root cause, locate definition, mechanism, evidence, or expression gaps, and analyze them against actual evidence. Decide whether to accept, rebut, qualify, or investigate, naming the needed evidence, research action, and manuscript or rebuttal response while preserving coverage of each material finding.
+- Distinguish ‘意见已理解’ (finding understood), ‘回应路径有依据’ (response path grounded), ‘必要修订已落实’ (needed revisions implemented), and ‘效果已核查’ (effect checked). A written response does not establish that the issue is resolved, and author self-check does not mean reviewer acceptance.
 - Compare original claim, reviewer interpretation, planned response, and revised claim so certainty, causality, scope, quantitative qualifiers, novelty, and contribution do not change silently.
 - Use Source for new citations and Experiment for new results; leave unchecked source content, project facts, methods, results, and field facts unconfirmed.
 - When fixable deficiencies are in scope, improve evidence, analysis, manuscript text, figures, captions, tables, supplements, highlights, or venue-facing files—not just response tone. Treat a review as current only for the same complete manuscript and listed materials; after substantive evidence, claim, method, figure, or venue-facing changes, decide whether a fresh `dove review rerun` is needed before relying on the old recommendation.
@@ -55,7 +55,7 @@ Use when the user requests rebuttal, response, revision, or follow-up work from 
 
 ### When Dove needs input
 
-- Ask only when ambiguity in intent, target artifact, evaluation criteria, scope, or a key tradeoff would change the next useful action. If active research context implies a feasible follow-up, do that next step rather than merely suggesting it.
+- Ask only when ambiguity in intent, target artifact, evaluation criteria, scope, or a key tradeoff cannot be resolved from available context or reasonable in-scope defaults that leave the core research judgment unchanged and would materially change the next useful action. If active research context implies a feasible follow-up, do that next step rather than merely suggesting it.
 
 ### Using host tools
 
@@ -64,4 +64,4 @@ Use when the user requests rebuttal, response, revision, or follow-up work from 
 
 ### Return with
 
-- Inspected evidence, material change, unresolved limits, and the next useful action.
+- Inspected evidence, material change, and unresolved limits; include the next useful action only when it helps the current request.

@@ -136,7 +136,7 @@ function sectionItems(sections, field) {
 
 const SHARED_RESEARCH_JUDGMENT_TITLE = "Return with";
 const SHARED_RESEARCH_JUDGMENT_RESPONSIBILITIES = Object.freeze([
-  "Inspected evidence, material change, unresolved limits, and the next useful action."
+  "Inspected evidence, material change, and unresolved limits; include the next useful action only when it helps the current request."
 ]);
 
 function sharedResearchJudgmentSection() {
@@ -171,7 +171,8 @@ function contract(slug) {
     when: "Use for a clear research goal or project request. Dove continues across substantive rounds by default.",
     responsibilities: [
       DOVE_RESEARCH_DEFAULT_AUTONOMY,
-      "When framing is open, expose the real phenomenon, intended claim, evaluation target, and result that would change the next action; replenish serious routes from contradictions, adjacent mechanisms, and negative or near-miss results."
+      "When framing is open, expose the real phenomenon, intended claim, evaluation target, and result that would change the next action; replenish serious routes from contradictions, adjacent mechanisms, and negative or near-miss results.",
+      "Use the shared research maturity levels for the current candidate or claim: Level 1 — problem lead (问题线索), Level 2 — concrete candidate (具体候选), Level 3 — argument-ready (论证就绪), Level 4 — evidence-supported (证据支持). Address the key gap at the current level rather than automatically promoting completed work; argument-ready work may enter authorized validation without prior successful experiments. Use novelty (N0–N4) and theory (T0–T4) labels only when user- or project-provided definitions are available to read and have actually been inspected; apply them separately, not as a combined score or global admission threshold. Otherwise use shared research maturity and plain-language novelty and theory judgments without inventing numbered definitions."
     ],
     actions: [
       readArea("missions", "the research goal"),
@@ -199,15 +200,15 @@ function contract(slug) {
     when: "Use when the user asks where the research stands, what is active, or what should be considered next.",
     responsibilities: [
       "Read only enough context to answer the status question.",
-      "Report current mainline, substantive progress, active problems, decisions, and next priorities as ordinary document facts.",
+      "Report the current goal, substantive progress, active problems, and decisions. State the relevant object's named level only when existing materials support it, with its basis and important unknowns; otherwise leave the level undetermined. Mention next priorities when relevant to the question.",
       "Treat missing overviews, summaries, or links as ordinary document facts."
     ],
     actions: [
-      readResearchDocuments("Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Report the current mainline, substantive progress, active problems, decisions, and next priorities, without inferring the mainline from the latest Review or Run receipt alone. If an overview, summary, or link is absent, say so naturally and do not modify files."),
+      readResearchDocuments("Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Do not infer the mainline from the latest Review or Run receipt alone. If an overview, summary, or link is absent, say so naturally and do not modify files."),
       relevantLessons
     ],
     boundaries: [
-      "For Status, only inspect and report."
+      "For Status, only inspect and report; do not start validation or maintain documents to fill a missing level or evidence gap."
     ],
     nonGoals: [
       "Do not use Status as a sync, Doctor, migration, or research-document maintenance command.",
@@ -219,9 +220,9 @@ function contract(slug) {
     purpose: "Find, retrieve when possible, read, verify, and document sources that can change the research judgment.",
     when: "Use for source discovery, reading, comparison, verification, bounded bibliography DOI identity checks, source-backed positioning, or route changes that depend on external theory or related work.",
     responsibilities: [
-      "Start from the user's source question and current project need, not a fixed tool order or paper count.",
-      "Separate citation identity from claim support, and distinguish material merely found, identity-verified, retrieved, inspected, and used. When a DOI matters and direct lookup is available, check it before fuzzy title matching; compare DOI, title, authors, year, and venue or version, then report verified, conflict, not-found, or unknown. For a bounded bibliography DOI identity check, verify only the requested entries and do not create a ledger.",
-      "Extract consensus, contradictions, assumptions, missing controls, transferable mechanisms, and research opportunities from inspected material.",
+      "Start from the user's source question and current project need, not a fixed tool order or paper count; stop searching when further retrieval would not change the decision or answer the bounded question.",
+      "Distinguish ‘发现线索’ (found leads), ‘身份核实’ (verified citation identity), ‘相关全文检查’ (inspected relevant full text), and ‘具体主张核实’ (checked a specific claim). Retrieval alone is not inspection; completed claim verification can find support, contradiction, or insufficient coverage, not necessarily support. When a DOI matters and direct lookup is available, check it before fuzzy title matching; compare DOI, title, authors, year, and venue or version, then report verified, conflict, not-found, or unknown. For a bounded bibliography DOI identity check, verify only the requested entries and do not create a ledger.",
+      "Extract consensus, contradictions, assumptions, missing controls, transferable mechanisms, and research opportunities from inspected material. Compare nearby work's problem, inputs/outputs, assumptions, mechanism, and claim at the same granularity; subtract covered contributions and reassess the remaining difference's independence and value. Unchecked full text does not establish absence of overlap.",
       "For explicit systematic review, meta-analysis, evidence grading, or auditable synthesis, use a suitable structured question, search scope, eligibility criteria, PRISMA-style tracking, risk-of-bias and evidence-certainty judgments when applicable, and pool effects only when studies and data are comparable."
     ],
     actions: [
@@ -250,7 +251,8 @@ function contract(slug) {
     when: "Use for experiment design, execution, analysis of existing results, retrospective recording, or when empirical work is the material way to resolve a contribution or evidence deficiency.",
     responsibilities: [
       "Follow the actual request: design-only, execution, existing-result analysis, and retrospective recording are different tasks.",
-      "Make experiments claim-driven: name the real problem, key uncertainty, primary prediction, strongest alternative explanation, minimum sufficient evidence, and how positive, negative, or ambiguous outcomes would change the judgment.",
+      "Make experiments claim-driven: name the real problem, key uncertainty, primary prediction, strongest alternative explanation, minimum sufficient evidence, and how positive, negative, or ambiguous outcomes would change the judgment. Before expanding investment, check the decision-relevant upper bound, attainability, evaluation reliability, or minimum worthwhile benefit using existing material or authorized validation.",
+      "Distinguish ‘方案明确’ (specified design), ‘链路跑通’ (working execution chain), ‘比较有效’ (valid comparison), and ‘对应主张获得支持’ (support for the particular claim). A valid negative result can complete the experiment without supporting the proposed claim; do not keep pursuing positive results merely to reach a higher label.",
       "Trace the evaluation chain from input through each method's actual output, the basis it is compared against, what the metric measures, and the final between-method comparison. When a reference is used, establish its applicability to the target object and granularity; justify any proxy or method's own output used as an evaluation basis, not merely the file's existence.",
       "Explain how failed, missing, invalid, or excluded outputs enter results and denominators, without silently retaining only the successful intersection or automatically assigning every failure zero. Where applicable, align the same evaluation units for paired comparisons, inspect differences and uncertainty, and account for sample dependence. Protect final-test independence when training, tuning, calibration, or method selection occurs.",
       "Judge ablations from actual code, configuration, and outputs: beyond the named component, did information access, preprocessing, training budget, numerical scale, edit magnitude, or postprocessing also change? Distinguish the full implementation winning, a component's gain under the given control, and support for a scientific mechanism. If controls cannot identify the core contribution, repair the minimum necessary comparison or explicitly limit the conclusion; more runs do not repair identification, though authorized useful exploration may continue.",
@@ -263,7 +265,7 @@ function contract(slug) {
       updateResearchDocuments("Only for newly authorized central execution that needs recording, select the relevant Experiment document or a naturally named new one and save the prospective plan there before execution begins: what it tests, the prediction and strongest alternative, the procedure, and how results will be judged. Keep this same document for the later actual results. Design-only work, existing-result analysis, retrospective recording, and exploratory diagnostics do not require a new document merely to proceed.", {
         persistWhen: `new central execution is requested and permitted, and ${RESEARCH_MAINTENANCE_TRIGGER}`
       }),
-      action("experiment-execution", "Execute only when requested and permitted, or inspect existing results when analysis is requested. State methods, configuration, data, metrics, run counts, and result numbers from actual code, logs, outputs, data files, user material, or run receipts. Interpret results against the evaluation chain and actual control differences above, checking decision-relevant anomalies before treating them as evidence. For newly executed central work that needed recording, execute only after the prospective plan has been successfully saved, then append the actual procedure, result, interpretation-changing deviation, evidence scope, and route update to that same Experiment document. For existing-result analysis or retrospective work, record only when useful and do not imply a prior plan existed; run receipts do not replace this scientific explanation. Separate what was observed, what it means, why it matters, and what happens next."),
+      action("experiment-execution", "Execute only when requested and permitted, or inspect existing results when analysis is requested. State methods, configuration, data, metrics, run counts, and result numbers from actual code, logs, outputs, data files, user material, or run receipts. Interpret results against the evaluation chain and actual control differences above, checking decision-relevant anomalies before treating them as evidence. For newly executed central work that needed recording, execute only after the prospective plan has been successfully saved, then append the actual procedure, result, interpretation-changing deviation, evidence scope, and route update to that same Experiment document. For existing-result analysis or retrospective work, record only when useful and do not imply a prior plan existed; run receipts do not replace this scientific explanation. Separate what was observed, what it means, and why it matters; explain follow-up only when useful."),
       maintainArea("experiments", "When the maintenance trigger is met, record the experiment, diagnostic, result, failure, evidence scope, route decision, and useful project-relative logs, data, output, the corresponding `.dove/runs/` run journal, figure, or code paths in the relevant Experiment document, linking affected Claim, Source, or Figure context only when useful for recovery.")
     ],
     boundaries: [
@@ -283,9 +285,10 @@ function contract(slug) {
     responsibilities: [
       "Prioritize the user-specified manuscript or artifact and the evidence needed for its material claims; leave unchecked methods, results, citations, samples, data, and field facts unknown.",
       "Preserve certainty, causality, scope, generality, quantitative qualifiers, and novelty unless evidence or the user changes them; say what changed before changing the text.",
-      "Build or repair the paper spine: problem → gap → insight/mechanism → method → evidence → claim → limitation → reader takeaway.",
+      "Distinguish ‘论证提纲’ (argument outline), ‘完整草稿’ (complete draft), ‘证据一致的稿件’ (evidence-aligned manuscript), and ‘满足实际交付要求的稿件’ (manuscript meeting actual delivery requirements); writing completeness is independent of scientific maturity.",
+      "Build or repair the paper spine: problem → gap → insight/mechanism → method → evidence → claim → limitation → reader takeaway. State common assumptions and limits together rather than repeating them throughout; core gaps constrain the conclusions.",
       "Use reliable author samples only for stable style cues such as rhythm, paragraphing, hedging, transitions, reporting verbs, and citation integration; keep accuracy and venue norms above voice imitation.",
-      "If the intended contribution still needs method, source, experiment, figure, artifact propagation, or argument work, do that before merely weakening prose."
+      "For contribution-level drafting, address in-scope method, source, experiment, figure, artifact propagation, or argument gaps before merely weakening prose. A local wording task stays local; flag a material claim issue without restarting research."
     ],
     actions: [
       readResearchDocuments("When an existing Claim note is directly relevant to the user-specified draft or material claim, read `.dove/research/RESEARCH.md`, then `.dove/research/claims/CLAIMS.md`, then only directly relevant linked details. Otherwise work from the target artifact and specified evidence without reading Claims merely because Draft was invoked."),
@@ -309,7 +312,8 @@ function contract(slug) {
     responsibilities: [
       DOVE_RESEARCH_FIGURE_EVIDENCE_BOUNDARY,
       DOVE_RESEARCH_FIGURE_CAPABILITY_BOUNDARY,
-      "Make the figure serve a clear evidence or mechanism job: comparison, process, failure mode, causal story, or contribution, and keep source data or logic aligned with the actual rendered figure, caption, nearby text, and manuscript claim.",
+      "Distinguish ‘表达方案’ (visual plan), ‘已生成视觉’ (rendered visual), ‘材料与含义已核查’ (materials and meaning checked), and ‘最终使用环境已核查’ (checked in the final use context). A standalone preview does not establish final-context readiness.",
+      "Organize materials around each figure or panel's evidence or mechanism job: comparison, process, failure mode, causal story, or contribution. Distinguish schematic explanation from data evidence, and keep source data or logic aligned with the actual rendered figure, caption, nearby text, and manuscript claim; local figure edits do not trigger a whole-project audit.",
       "Start from a compact Figure brief and visual plan: target claim, audience, evidence or mechanism job, real materials, panel/story structure, route choice, manuscript placement, final dimensions, caption role, and editable-source route."
     ],
     actions: [
@@ -335,7 +339,7 @@ function contract(slug) {
   if (slug === "review") {
     const reviewContextReadAction = readArea("reviews", "the review work");
     const reviewGroundingAction = action("review-grounding", "For whole-paper author-side self-check or `dove-review` handoff preparation, inspect the current full paper and the venue or literature context that can change the judgment. Use current official venue sources for formal requirements and inspected relevant published work for novelty, positioning, evidence norms, experiment presentation, and reader expectations; published practice does not replace official rules. Distinguish material merely found from material retrieved, inspected, and used. Import, context inspection, or bounded local review does not trigger venue or paper search by itself.", { readOnly: true });
-    const reviewerPerspectiveAction = action("reviewer-perspective-work", `${DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS} Also check citation identity, claim support, changes in claim strength, unsupported facts, and anomalous results when relevant. For local paragraph, figure, citation, or method review, stay inside the requested scope and do not force the full-paper four questions or start an independent handoff. Return concrete findings with evidence, consequence, useful response, and delivery readiness kept separate.`, { readOnly: true });
+    const reviewerPerspectiveAction = action("reviewer-perspective-work", `${DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS} Also check citation identity, claim support, changes in claim strength, unsupported facts, and anomalous results when relevant. For local paragraph, figure, citation, or method review, stay inside the requested scope and do not force the full-paper four questions or start an independent handoff. Return concrete findings with evidence, consequence, useful response, and delivery readiness kept separate. Classify impact as ‘核心问题’ (constrains the core goal), ‘分支问题’ (constrains affected dependent work), or ‘局部问题’ (local quality); state evidence sufficiency separately rather than equating missing evidence with refutation or repair effort with severity.`, { readOnly: true });
     const deliveryReviewAction = action("delivery-review", "When delivery review is requested or genuinely limiting, inspect the actual venue-facing package against those requirements and report remaining delivery gaps.", { readOnly: true });
     const reviewHandoffAction = action("dove-review-handoff", `${DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF} Include the grounding inspected above for the intended frozen-material judgment. Preserve the purpose, target venue, complete frozen material list, reviewer prompt, known host limits, and returned report location in the Review context. Give the reviewer only those listed materials, with Read-only access and no web, MCP, private author conversations, or unlisted files. Use an isolated, persistent, recoverable reviewer context when the host provides one; resume or rerun later whole-paper rounds for the same review id and reviewer session. If grounding is missing, the reviewer should limit venue or literature conclusions to the listed materials; if the runtime is unavailable, say so and continue feasible author-side work without counting it as independent review.`);
     const reviewMaintenanceAction = maintainArea("reviews", "When the user supplies a `dove-review` return, user-pasted review opinion, clarification, rebuttal exchange, or asks to preserve self-check or handoff context, append the actual text faithfully to the corresponding Review document and associate it with the same review id and round when known. When useful for recovery, link the corresponding `.dove/reviews/` round report, frozen materials, and affected Claim, Experiment, Figure, Source, or manuscript locations. Do not revise author artifacts, start a new review, rewrite the return, or add author interpretation unless asked.");
@@ -411,8 +415,8 @@ function contract(slug) {
     purpose: "Analyze review findings, draft author-side responses, and make requested evidence-backed revisions.",
     when: "Use when the user requests rebuttal, response, revision, or follow-up work from review findings.",
     responsibilities: [
-      "Analyze each material finding against actual evidence, decide whether to accept, rebut, qualify, or investigate it, and revise artifacts when that is the useful response.",
-      "Name the deficiency, needed evidence, research action, and manuscript or rebuttal response for each material finding.",
+      "Group findings with the same root cause, locate definition, mechanism, evidence, or expression gaps, and analyze them against actual evidence. Decide whether to accept, rebut, qualify, or investigate, naming the needed evidence, research action, and manuscript or rebuttal response while preserving coverage of each material finding.",
+      "Distinguish ‘意见已理解’ (finding understood), ‘回应路径有依据’ (response path grounded), ‘必要修订已落实’ (needed revisions implemented), and ‘效果已核查’ (effect checked). A written response does not establish that the issue is resolved, and author self-check does not mean reviewer acceptance.",
       "Compare original claim, reviewer interpretation, planned response, and revised claim so certainty, causality, scope, quantitative qualifiers, novelty, and contribution do not change silently.",
       "Use Source for new citations and Experiment for new results; leave unchecked source content, project facts, methods, results, and field facts unconfirmed.",
       "When fixable deficiencies are in scope, improve evidence, analysis, manuscript text, figures, captions, tables, supplements, highlights, or venue-facing files—not just response tone. Treat a review as current only for the same complete manuscript and listed materials; after substantive evidence, claim, method, figure, or venue-facing changes, decide whether a fresh `dove review rerun` is needed before relying on the old recommendation."
@@ -437,9 +441,9 @@ function contract(slug) {
     purpose: "Read or maintain researcher-owned Lessons that can improve current or subsequent work.",
     when: `Use when existing or newly learned guidance ${LESSONS_VALUE_STANDARD}, including when the user asks to inspect, remember, reflect on, or preserve Lessons.`,
     responsibilities: [
-      "Treat Lessons as broad, fallible guidance for research methods, successful and failed routes, cross-domain intuitions, experiment and source practice, figures, writing, review, collaboration, and other reusable work—not as evidence or a completion certificate.",
+      "Treat Lessons as broad, fallible guidance for research methods, successful and failed routes, cross-domain intuitions, experiment and source practice, figures, writing, review, collaboration, and other reusable work—not as evidence or a completion certificate. Distinguish ‘待检验经验’ (tentative lesson), ‘已有依据的经验’ (grounded lesson), and ‘在明确条件下经复用检验的经验’ (lesson tested through reuse under stated conditions); repeated citation alone does not strengthen a lesson.",
       `For reading, use the Lessons summary and linked themes whenever they ${LESSONS_VALUE_STANDARD}; include directly relevant and plausibly useful material, while reusing active-context Lessons instead of rereading them mechanically.`,
-      `For maintenance, preserve a Lesson whenever the experience ${LESSONS_VALUE_STANDARD}. Write only the reusable insight and useful conditions, not a routine activity log.`
+      `For maintenance, preserve a Lesson whenever the experience ${LESSONS_VALUE_STANDARD}. Write the reusable insight with its basis, conditions, counterexamples, and limits when known, not a routine activity log.`
     ],
     actions: [
       readResearchDocuments(`Read ".dove/research/lessons/LESSONS.md" if it exists, then linked Lessons that are directly relevant or plausibly useful because they ${LESSONS_VALUE_STANDARD}. Read ".dove/research/RESEARCH.md" first only when project context is still needed and it has not already been read in the active context. Reuse Lessons already read in the active context instead of rereading them mechanically. If no Lessons summary or useful linked Lesson exists, report that naturally and continue from the available context. Do not create or modify files during reading and do not treat Lessons as evidence.`),
