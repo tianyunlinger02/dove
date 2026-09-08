@@ -30,7 +30,7 @@ Use when the user asks where the research stands, what is active, or what should
 ### What Dove will examine
 
 - Read only enough context to answer the status question.
-- Report the current goal, substantive progress, active problems, and decisions. Use existing materials to judge relevant substantive quality, evidence confidence, and current-purpose satisfaction; otherwise leave the rating undetermined. Distinguish scientific progress from enabling engineering and delivery facts, explaining what understanding, capability, or decision actually changed. A concise evaluation table may expose tradeoffs and unknowns without treating completed checks as high quality. Mention next priorities when relevant to the question.
+- Report the confirmed mainline, any provisional candidate, visible scientific-task identity changes and authorization basis, the entering proposition's current disposition, substantive progress, active problems, and decisions. Use existing materials to judge relevant substantive quality, evidence confidence, and current-purpose satisfaction; otherwise leave the rating undetermined. Distinguish scientific progress from enabling engineering and delivery facts, explaining what understanding, capability, or decision actually changed. A concise evaluation table may expose tradeoffs and unknowns without treating completed checks as high quality. Mention next priorities when relevant to the question.
 - Treat missing overviews, summaries, or links as ordinary document facts.
 
 ### Scope and changes
@@ -39,7 +39,7 @@ Use when the user asks where the research stands, what is active, or what should
 
 ### Ways Dove may proceed
 
-- Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Do not infer the mainline from the latest Review or Run receipt alone. If an overview, summary, or link is absent, say so naturally and do not modify files.
+- Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Report a candidate as confirmed mainline only when the visible context or research materials contain that decision; do not infer promotion or task continuity from the latest code, Review, Run receipt, project name, or asset lineage alone. If an overview, summary, link, identity comparison, or authorization basis is absent, say so naturally and do not modify files or run validation to manufacture it.
 - When existing Lessons could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes, read ".dove/research/lessons/LESSONS.md" if it exists, then the directly relevant or plausibly useful linked Lessons. Read ".dove/research/RESEARCH.md" first only when project context is still needed and it has not already been read in the active context. Reuse Lessons already read in the active context instead of rereading them mechanically. If Lessons materials are absent, work without them. Treat Lessons as fallible guidance, never as evidence.
 
 ### What this should not replace

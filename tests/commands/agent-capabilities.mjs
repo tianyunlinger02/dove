@@ -48,7 +48,10 @@ import {
 } from "./common.mjs";
 import { assertUserResponsePolicy } from "./ambient-docs.mjs";
 
-const { DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS } = researchContract;
+const {
+  DOVE_RESEARCH_REVIEW_ANTI_GAMING,
+  DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS
+} = researchContract;
 
 const RETIRED_RESEARCH_MODEL_PHRASES = Object.freeze([
   "layer enum",
@@ -330,6 +333,21 @@ function assertResearchCapabilitySemantics(command) {
   ]);
   assert.match(researchProgression, /confirmed or provisional mainline|Follow the confirmed or provisional mainline/iu);
   assert.match(researchProgression, /reassess[^.\n]*original proposition[^.\n]*result[^.\n]*continue/iu);
+  assertMatchesAll(value, "dove.research task transition", [
+    /Mission document[^.\n]*substantive work[^.\n]*evidence[^.\n]*decisions[^.\n]*failures[^.\n]*continuation context/iu,
+    /Preserve the problem, proposition, and task scope that motivated entry/iu,
+    /changed identity elements[^.\n]*provisional[^.\n]*authorized mainline/iu,
+    /do not rewrite an earlier Mission[^.\n]*do not require a new file or fixed task.identity template/iu,
+    /still.valid assets|valid code|negative (?:evidence|findings|results)/iu
+  ]);
+  assertMatchesAll(researchProgression, "dove.research progression task identity", [
+    /Carry the entering proposition through each material result/iu,
+    /unresolved, supported, refuted, or bounded/iu,
+    /surviving component[^.\n]*materially different problem/iu,
+    /keep the original conclusion visible/iu,
+    /existing authorization while provisional/iu,
+    /user's decision before adopting[^.\n]*different confirmed mainline[^.\n]*contribution[^.\n]*completion meaning/iu
+  ]);
   assert.match(value, /separate autonomy Skill|default.*substantive rounds/isu);
   assert.doesNotMatch(value, /Do not expose Auto|Auto as a Skill/iu);
 }
@@ -394,7 +412,13 @@ export function assertExperimentScientificEvaluation(value, label) {
     /design-only[^\n]*trace materials read-only[^\n]*plan with unverified parts[^\n]*without running diagnostics or experiments/iu,
     /reference, pairing, and data-split reasoning only where it fits/iu,
     /do not impose[^\n]*ground truth[^\n]*paired designs[^\n]*train\/test splits[^\n]*no-ground-truth[^\n]*non-paired[^\n]*purely theoretical/iu,
-    /Interpret results[^\n]*evaluation chain[^\n]*actual control differences[^\n]*anomalies before treating them as evidence/iu
+    /Interpret results[^\n]*evaluation chain[^\n]*actual control differences[^\n]*anomalies before treating them as evidence/iu,
+    /real (?:research )?goal[^.\n]*actual output[^.\n]*baseline[^.\n]*reference[^.\n]*proxy[^.\n]*success condition/iu,
+    /correct(?:ing|ion|ed)[^.\n]*(?:metric|measurement)[^.\n]*same (?:real )?(?:goal|target)[^.\n]*(?:normal|in.task) (?:correction|repair)/iu,
+    /correct(?:ing|ion)[^.\n]*baseline[^.\n]*same (?:real )?(?:goal|target)[^.\n]*(?:faithful|normal|in.task)[^.\n]*(?:correction|repair)/iu,
+    /changing[^.\n]*target output[^.\n]*proxy goal[^.\n]*(?:scientific.task identity|identity judgment|task change)/iu,
+    /preserv(?:e|ing)[^.\n]*original comparison[^.\n]*(?:explain|basis|reason|rationale)[^.\n]*(?:correction|change|revision)/iu,
+    /more runs[^.\n]*(?:do not|cannot)[^.\n]*(?:repair|fix)[^.\n]*(?:target|real.goal)[^.\n]*mismatch/iu
   ]);
 }
 
@@ -539,8 +563,10 @@ function assertReviewCapabilitySemantics(command) {
   ]) assertSemanticModeAvailable(command, sections, mode);
 
   assert.ok(reviewerWork.instruction.includes(DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS), "Review action must use the canonical four questions");
+  assert.ok(semanticContractText(command).includes(DOVE_RESEARCH_REVIEW_ANTI_GAMING), "Review contract must use the canonical anti-gaming rule");
   const rendered = renderCommandAdapter("claude", command);
   assert.equal(rendered.split(DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS).length - 1, 1, "Review must render one canonical four-question definition, not divergent copies");
+  assert.equal(rendered.split(DOVE_RESEARCH_REVIEW_ANTI_GAMING).length - 1, 1, "Review must render one canonical anti-gaming definition, not divergent copies");
   assert.match(rendered, /same four full-paper questions above/iu, "Independent Review must reuse the complete definition rather than a shortened version");
   const value = semanticContractText(command);
   assertMatchesAll(value, "dove.review", [
@@ -556,7 +582,10 @@ function assertReviewCapabilitySemantics(command) {
     /contribution|novelty|claims|evidence|method|limitations|writing clarity/isu,
     /citation identity.*claim support|claim support.*citation identity/isu,
     /anomalous results|execution scrutiny/iu,
-    /local paragraph|figure, citation, or method review|requested scope|do not force the full-paper four questions/isu
+    /local paragraph|figure, citation, or method review|requested scope|do not force the full-paper four questions/isu,
+    /cosmetic.only changes[^.\n]*selective evidence[^.\n]*hiding counterevidence[^.\n]*unjustified narrowing[^.\n]*diff.only review[^.\n]*restarting the reviewer context/iu,
+    /favorable judgment[^.\n]*current task and claims only[^.\n]*neither erases an earlier proposition's failure[^.\n]*nor authorizes a different author.side mainline/iu,
+    /current paper[^.\n]*silently replaced an earlier problem[^.\n]*output[^.\n]*baseline[^.\n]*real goal[^.\n]*contribution[^.\n]*success condition/iu
   ]);
   assertMatchesAll(value, "dove.review four-question and heading semantics", [
     /four full-paper questions|ask four questions/iu,
@@ -600,7 +629,7 @@ function assertRebuttalCapabilitySemantics(command) {
   assert.equal(artifactValidation?.readOnly, false, "Rebuttal artifact validation may fix issues, so it must stay work-capable");
   assertCapabilityPatterns(command, [
     { label: "author-side review response", patterns: [/author-side Dove work|current-Dove author-side work|author-side response|rebuttal/iu] },
-    { label: "finding-to-deficiency analysis", patterns: [/scientific deficiency|needed evidence|research action|source, experiment, method, analysis, expression, figure, or venue-fit problem/isu] },
+    { label: "finding-to-deficiency analysis", patterns: [/scientific deficiency|needed evidence|research action|source, experiment, method, analysis, expression, figure, venue-fit, or scientific-task identity problem/isu] },
     { label: "claim-standing comparison", patterns: [/original claim.*reviewer interpretation.*planned response.*revised claim|compare.*claim.*reviewer interpretation/isu] },
     { label: "no silent strengthening or weakening", patterns: [/does not silently strengthen or weaken|neither strengthening nor weakening happens silently|silently|Preserve certainty/isu] },
     { label: "claim-standing dimensions", patterns: [/certainty.*causality.*scope.*quantitative qualifiers.*novelty|claim strength/isu] },
@@ -615,6 +644,12 @@ function assertRebuttalCapabilitySemantics(command) {
   assert.match(rebuttalAction, /same review id and round when available|same review id|round when available/isu);
   assert.match(rebuttalAction, /Do not rerun review for cosmetic|use `dove review rerun` when substantive evidence|old recommendation no longer covers the current full version/isu);
   assert.match(rebuttalAction, /preserving accurate claim strength|claim strength|resolve, reduce, or honestly bound/isu);
+  assertMatchesAll(semanticContractText(command), "dove.rebuttal task identity", [
+    /Reviewer objections[^.\n]*do not automatically authorize[^.\n]*succession of easier tasks/iu,
+    /preserve the original proposition's disposition[^.\n]*independently judge[^.\n]*materially different candidate[^.\n]*mainline promotion/iu,
+    /Do not chase acceptance[^.\n]*cosmetic.only changes[^.\n]*selective evidence[^.\n]*hidden counterevidence[^.\n]*unjustified narrowing[^.\n]*unacknowledged task changes/iu,
+    /warranted response[^.\n]*materially changes[^.\n]*confirmed mainline[^.\n]*intended contribution[^.\n]*completion meaning[^.\n]*old proposition's conclusion[^.\n]*independently assess[^.\n]*user's decision/iu
+  ]);
   assert.doesNotMatch(contractText(command), /claim acceptance[^.]*as proof|reviewer controls Dove/iu);
 }
 
@@ -746,6 +781,14 @@ export function assertSkillManifest() {
   assert.match(contractText(status), /overview|summary|link/iu);
   assert.match(contractText(status), /absent|missing|ordinary document facts|say so naturally/iu);
   assert.match(contractText(status), /only inspect and report|without writes|do not modify files/iu);
+  assertMatchesAll(semanticContractText(status), "dove.status task identity", [
+    /confirmed mainline/iu,
+    /provisional (?:candidate|branch|route)/iu,
+    /identity (?:change|difference)|task (?:change|continuity)/iu,
+    /authorization (?:basis|status)|user (?:authorization|decision)/iu,
+    /do not[^.\n]*(?:validate|execute|investigate)[^.\n]*(?:identity|comparison)|only inspect and report/iu,
+    /do not infer[^.\n]*(?:promotion|task continuity)[^.\n]*latest code, Review, Run receipt/iu
+  ]);
 
   const experiment = COMMAND_SURFACE_BY_ID["dove.experiment"];
   assert.match(experiment.summary, /advance(?:s)? a research decision/iu);

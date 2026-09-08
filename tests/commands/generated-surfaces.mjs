@@ -27,6 +27,7 @@ import {
   ROOT,
   actionCapabilities,
   assertDoveAgentSurfaceSemantics,
+  assertMatchesAll,
   assertSemanticDeletionsRejected,
   assertUnique,
   contractActions,
@@ -34,7 +35,14 @@ import {
 } from "./common.mjs";
 
 import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
-import { assertResearchQualityDeletions, assertSharedAuthorStance, assertSharedResearchJudgment, assertUserResponsePolicy } from "./ambient-docs.mjs";
+import {
+  assertPropositionTransition,
+  assertResearchQualityDeletions,
+  assertResearchTaskIdentity,
+  assertSharedAuthorStance,
+  assertSharedResearchJudgment,
+  assertUserResponsePolicy
+} from "./ambient-docs.mjs";
 import { assertCapabilityJudgment, assertExperimentScientificEvaluation } from "./agent-capabilities.mjs";
 
 const AMBIGUOUS_ROUTE_TERM_PATTERNS = Object.freeze([
@@ -127,6 +135,44 @@ export function assertFinalEntrypointWiring() {
         /not as a fixed closing suggestion/iu
       ]);
       assertSharedResearchJudgment(value, label);
+      assertSemanticDeletionsRejected(value, label, assertResearchTaskIdentity, [
+        /actual problem or phenomenon/iu,
+        /target objects\/population and regime/iu,
+        /inputs and permitted information/iu,
+        /output or estimand/iu,
+        /baseline\/reference/iu,
+        /real-world goal and any proxy relationship/iu,
+        /core proposition and intended contribution/iu,
+        /success conditions/iu,
+        /confirmed completion meaning/iu,
+        /asset continuity, not scientific task continuity/iu,
+        /grounded relationship/iu,
+        /task change, not success/iu,
+        /targeted identity comparison/iu,
+        /cumulative local changes/iu,
+        /Reuse still-applicable evidence/iu,
+        /do not recheck the whole task/iu,
+        /not a required schema, table, ID, or per-round record/iu
+      ]);
+      assertSemanticDeletionsRejected(value, label, assertPropositionTransition, [
+        /proposition that motivated the work/iu,
+        /scientific proposition unresolved/iu,
+        /constrains its dependencies/iu,
+        /support, refute, or bound/iu,
+        /without waiting for approval/iu,
+        /valid code, data, evidence, and negative findings/iu,
+        /not let a surviving component/iu,
+        /provisional candidate/iu,
+        /preserve the original conclusion/iu,
+        /independently reassess/iu,
+        /Investigation permission is not mainline-change permission/iu,
+        /requires the user's decision/iu,
+        /without repeatedly requesting the same decision/iu,
+        /success of the old proposition/iu,
+        /no inherited success, admission, or completion/iu,
+        /not deleting assets/iu,
+        /assigning unknowns zero/iu
+      ]);
       assertResearchQualityDeletions(value, label);
       assertSemanticDeletionsRejected(value, label, assertSharedResearchJudgment, [
         /not how much searching/iu,
@@ -354,19 +400,41 @@ export function assertRenderedCapabilityWiring(entry) {
   const actions = entry.command.id === "dove.review" ? value : renderedSection(value, "Ways Dove may proceed");
   switch (entry.command.id) {
     case "dove.research": {
+      assertMatchesAll(capability, label, [
+        /surviving component[^.\n]*local metric gain[^.\n]*provisional[^.\n]*scientific task identity[^.\n]*independent quality[^.\n]*joint conditions[^.\n]*serious alternatives[^.\n]*promotion/iu,
+        /Normal corrections[^.\n]*real problem[^.\n]*output[^.\n]*contribution[^.\n]*completion meaning[^.\n]*do not require renewed mainline approval/iu
+      ]);
       assertInstruction(actions, /Follow the confirmed or provisional mainline/iu, [
         /choose[^\n]*discriminating action[^\n]*perform[^\n]*permitted host tools[^\n]*reassess[^\n]*continue/iu,
         /reassess[^.\n]*original proposition[^.\n]*result[^.\n]*continue/iu,
+        /surviving component[^.\n]*materially different problem[^.\n]*original conclusion visible/iu,
+        /existing authorization while provisional[^.\n]*user's decision before adopting[^.\n]*different confirmed mainline[^.\n]*contribution[^.\n]*completion meaning/iu,
         /submission goal.*Review.*current whole-paper judgment.*before declaring completion/iu
+      ], label);
+      assertInstruction(actions, /naturally named Mission document/iu, [
+        /Preserve the problem, proposition, and task scope that motivated entry/iu,
+        /append actual results, corrections/iu,
+        /changed identity elements/iu,
+        /provisional[^.\n]*authorized mainline|authorized[^.\n]*provisional/iu,
+        /still.valid assets|counterevidence/iu,
+        /Do not rewrite an earlier Mission/iu,
+        /do not require a new file or fixed task.identity template/iu
       ], label);
       break;
     }
     case "dove.status":
+      assertMatchesAll(capability, label, [
+        /Report the confirmed mainline, any provisional candidate/iu,
+        /scientific.task identity changes and authorization basis/iu,
+        /entering proposition's current disposition/iu
+      ]);
       assertInstruction(actions, /Read `\.dove\/research\/RESEARCH\.md`/u, [
         /only.*summaries and linked details needed/iu,
         /visible conversation.*necessary current project materials.*distinguish live work from durable research notes/iu,
         /conflicts or stale notes.*without silently reconciling/iu,
-        /(?:do not infer|without inferring)[^.\n]*mainline[^.\n]*latest Review or Run receipt alone/iu,
+        /candidate as confirmed mainline only when[^.\n]*(?:visible context|research materials)[^.\n]*decision/iu,
+        /do not infer[^.\n]*(?:promotion|task continuity)[^.\n]*latest code, Review, Run receipt[^.\n]*project name[^.\n]*asset lineage/iu,
+        /identity comparison[^.\n]*authorization basis[^.\n]*absent[^.\n]*do not modify files or run validation to manufacture it/iu,
         /absent.*say so naturally.*do not modify files/iu
       ], label);
       break;
@@ -385,6 +453,14 @@ export function assertRenderedCapabilityWiring(entry) {
     case "dove.experiment": {
       const capability = value.slice(value.indexOf("## How Dove approaches this work"));
       assertExperimentScientificEvaluation(capability, label);
+      assertMatchesAll(capability, label, [
+        /real (?:research )?goal[^.\n]*actual output[^.\n]*baseline[^.\n]*reference[^.\n]*proxy[^.\n]*success condition/iu,
+        /correct(?:ing|ion|ed)[^.\n]*(?:metric|measurement)[^.\n]*same (?:real )?(?:goal|target)[^.\n]*(?:normal|in.task) (?:correction|repair)/iu,
+        /correct(?:ing|ion)[^.\n]*baseline[^.\n]*same (?:real )?(?:goal|target)[^.\n]*(?:faithful|normal|in.task)[^.\n]*(?:correction|repair)/iu,
+        /changing[^.\n]*target output[^.\n]*proxy goal[^.\n]*(?:scientific.task identity|identity judgment|task change)/iu,
+        /preserv(?:e|ing)[^.\n]*original comparison[^.\n]*(?:explain|basis|reason|rationale)[^.\n]*(?:correction|change|revision)/iu,
+        /more runs[^.\n]*(?:do not|cannot)[^.\n]*(?:repair|fix)[^.\n]*(?:target|real.goal)[^.\n]*mismatch/iu
+      ]);
       const design = assertInstruction(actions, /For new design/iu, [
         /claim-driven comparison and evaluation chain/iu,
         /central basis is missing[^\n]*pause central design[^\n]*inspect actual project material or relevant sources[^\n]*rather than inventing/iu,
@@ -456,6 +532,10 @@ export function assertRenderedCapabilityWiring(entry) {
       assert.equal((value.match(/ask four questions:/gu) ?? []).length, 1, `${label} must define all four questions only once`);
       const independent = renderedSection(value, "Independent `dove-review`");
       assert.match(independent, /whole current frozen paper, not only a diff.*same four full-paper questions above/iu);
+      assertMatchesAll(value, label, [
+        /cosmetic.only changes[^.\n]*selective evidence[^.\n]*hiding counterevidence[^.\n]*unjustified narrowing[^.\n]*diff.only review[^.\n]*restarting the reviewer context/iu,
+        /favorable judgment[^.\n]*current task and claims only[^.\n]*neither erases an earlier proposition's failure[^.\n]*nor authorizes a different author.side mainline/iu
+      ]);
       assertSubmissionCompletion(independent, label);
       assert.match(independent, /Verdict.*Blocking issues.*Grounding basis.*Author-side next actions/iu);
       const handoff = assertInstruction(independent, /Start `dove-review` only from/iu, [
@@ -487,7 +567,7 @@ export function assertRenderedCapabilityWiring(entry) {
     case "dove.rebuttal": {
       assertInstruction(actions, /Read the Review document/iu, [
         /same review id and round.*reviewed material list.*current material state.*actual artifacts/iu,
-        /each material finding.*source, experiment, method, analysis, expression, figure, or venue-fit problem.*requested revisions/iu,
+        /each material finding.*source, experiment, method, analysis, expression, figure, venue-fit, or scientific-task identity problem.*requested revisions/iu,
         /new citations.*identity and inspected-content support through Source.*new results.*actual Experiment materials before using them.*Then draft the response/iu,
         /Do not rerun review for cosmetic or response-only edits.*rerun.*substantive evidence.*old recommendation no longer covers the current full version/iu
       ], label);
@@ -495,7 +575,13 @@ export function assertRenderedCapabilityWiring(entry) {
         /Propagate requested revisions.*build or export path.*inspect the output before claiming.*current/iu
       ], label);
       assertAuthoritativeManuscript(validation, label);
-      assert.match(value, /Compare original claim, reviewer interpretation, planned response, and revised claim.*certainty, causality, scope, quantitative qualifiers, novelty, and contribution do not change silently/iu);
+      assert.match(value, /Compare original claim, reviewer interpretation, planned response, and revised claim.*certainty, causality, scope, quantitative qualifiers, novelty, contribution, problem, output, baseline, real goal, proxy, and success meaning do not change silently/iu);
+      assertMatchesAll(value, label, [
+        /Reviewer objections[^.\n]*do not automatically authorize[^.\n]*succession of easier tasks/iu,
+        /preserve the original proposition's disposition[^.\n]*independently judge[^.\n]*materially different candidate[^.\n]*mainline promotion/iu,
+        /Do not chase acceptance[^.\n]*cosmetic.only changes[^.\n]*selective evidence[^.\n]*hidden counterevidence[^.\n]*unjustified narrowing[^.\n]*unacknowledged task changes/iu,
+        /warranted response[^.\n]*materially changes[^.\n]*confirmed mainline[^.\n]*intended contribution[^.\n]*completion meaning[^.\n]*old proposition's conclusion[^.\n]*independently assess[^.\n]*user's decision/iu
+      ]);
       assert.match(value, /Do not overwrite original returns|do not overwrite original returns/iu);
       break;
     }
@@ -519,14 +605,14 @@ export function assertRenderedCapabilityWiring(entry) {
 
 function assertWiringRejectsRegressions(entries) {
   const judgmentDeletions = {
-    "dove.research": [/shared substantive quality criteria/iu, /evidence confidence/iu, /current-purpose satisfaction stated separately/iu, /not how much literature/iu, /remains incremental/iu, /joint conditions/iu, /overall tradeoffs/iu, /evaluation table when useful/iu, /only when/iu, /actually been inspected/iu, /preserve their meanings/iu, /not a combined score or global admission threshold/iu, /N1 coverage/iu, /N4 search standing/iu, /does not mean foundational innovation/iu, /do not convert/iu, /require duplicate ratings/iu],
-    "dove.status": [/existing materials/iu, /evidence confidence/iu, /current-purpose satisfaction/iu, /rating undetermined/iu, /enabling engineering/iu, /without treating completed checks as high quality/iu, /engineering receipts/iu, /do not start validation/iu],
+    "dove.research": [/shared substantive quality criteria/iu, /evidence confidence/iu, /current-purpose satisfaction stated separately/iu, /not how much literature/iu, /remains incremental/iu, /joint conditions/iu, /overall tradeoffs/iu, /evaluation table when useful/iu, /only when/iu, /actually been inspected/iu, /preserve their meanings/iu, /not a combined score or global admission threshold/iu, /N1 coverage/iu, /N4 search standing/iu, /does not mean foundational innovation/iu, /do not convert/iu, /require duplicate ratings/iu, /surviving (?:component|branch)/iu, /existing authorization while provisional/iu, /scientific task identity, independent quality/iu, /independent[^.\n]*(?:quality|problem value)/iu, /authorization|user's decision/iu, /original proposition[^.\n]*(?:result|conclusion)/iu, /do not[^.\n]*(?:rewrite|revise)[^.\n]*(?:Mission|old)/iu],
+    "dove.status": [/existing materials/iu, /evidence confidence/iu, /current-purpose satisfaction/iu, /rating undetermined/iu, /enabling engineering/iu, /without treating completed checks as high quality/iu, /engineering receipts/iu, /do not start validation/iu, /Report the confirmed mainline, any provisional candidate/iu, /scientific-task identity changes and authorization basis/iu, /entering proposition's current disposition/iu],
     "dove.source": [/found leads/iu, /verified citation identity/iu, /inspected relevant full text/iu, /checked a specific claim/iu, /source-use facts, not novelty grades/iu, /remaining substantive contribution/iu, /search depth informing confidence/iu, /not necessarily support/iu, /remaining difference's independence/iu, /does not establish absence of overlap/iu, /stop searching/iu],
-    "dove.experiment": [/specified design/iu, /working execution chain/iu, /work facts, not quality grades/iu, /evaluation validity/iu, /establish, refute, or bound/iu, /valid negative result/iu, /without supporting the proposed method/iu, /nonsignificant/iu, /not run completion as scientific success/iu, /joint conditions/iu, /upper bounds/iu, /attainability/iu, /evaluation reliability/iu, /minimum worthwhile benefit/iu, /no single successful check/iu],
+    "dove.experiment": [/specified design/iu, /working execution chain/iu, /work facts, not quality grades/iu, /evaluation validity/iu, /establish, refute, or bound/iu, /valid negative result/iu, /without supporting the proposed method/iu, /nonsignificant/iu, /not run completion as scientific success/iu, /joint conditions/iu, /upper bounds/iu, /attainability/iu, /evaluation reliability/iu, /minimum worthwhile benefit/iu, /no single successful check/iu, /real (?:research )?goal/iu, /actual output/iu, /normal in-task repair/iu, /changing the target output/iu, /task identity|identity comparison/iu, /original comparison/iu, /target mismatch|goal mismatch|target misalignment/iu],
     "dove.draft": [/outline/iu, /complete draft/iu, /evidence check/iu, /actual delivery/iu, /work facts, not scientific quality grades/iu, /misleading, weak/iu, /independent of contribution and evidence strength/iu, /unsupported central claim/iu, /not establish stronger facts/iu, /core gaps constrain/iu, /without restarting research/iu],
     "dove.figure": [/visual plan/iu, /rendered visual/iu, /materials and meaning checked/iu, /final use context/iu, /work facts, not quality grades/iu, /judge accuracy/iu, /misleading encoding remains poor after inspection/iu, /preserve nearby claims and evidence/iu, /does not establish final-context readiness/iu, /schematic explanation/iu, /do not trigger a whole-project audit/iu],
-    "dove.review": [/核心问题/u, /分支问题/u, /局部问题/u, /evidence sufficiency separately/iu, /rather than equating/iu, /reasoned objections/iu, /cited evidence/iu, /not new empirical evidence or automatic proof/iu],
-    "dove.rebuttal": [/finding understood/iu, /response path grounded/iu, /needed revisions implemented/iu, /effect checked/iu, /processing facts, not resolution grades/iu, /resolved, reduced, or still limiting/iu, /without new scientific defects/iu, /shared-cause redesign/iu, /rather than defaulting to the smallest reply/iu, /same root cause/iu, /coverage of each material finding/iu, /does not establish that the issue is resolved/iu, /does not mean reviewer acceptance/iu],
+    "dove.review": [/核心问题/u, /分支问题/u, /局部问题/u, /evidence sufficiency separately/iu, /rather than equating/iu, /reasoned objections/iu, /cited evidence/iu, /not new empirical evidence or automatic proof/iu, /cosmetic-only changes/iu, /selective evidence/iu, /hiding counterevidence/iu, /unjustified narrowing/iu, /diff-only review/iu, /restarting the reviewer context/iu, /favorable judgment applies to the current task and claims only/iu],
+    "dove.rebuttal": [/finding understood/iu, /response path grounded/iu, /needed revisions implemented/iu, /effect checked/iu, /processing facts, not resolution grades/iu, /resolved, reduced, or still limiting/iu, /without new scientific defects/iu, /shared-cause redesign/iu, /rather than defaulting to the smallest reply/iu, /same root cause/iu, /coverage of each material finding/iu, /does not establish that the issue is resolved/iu, /does not mean reviewer acceptance/iu, /do not automatically authorize a succession of easier tasks/iu, /original proposition's disposition/iu, /unacknowledged task changes/iu, /obtain the user's decision before adopting it/iu],
     "dove.lessons": [/tentative, grounded/iu, /tested through reuse under stated conditions/iu, /evidence facts, not grades of usefulness/iu, /transfer value/iu, /reuse may refute advice/iu, /repeated citation, recording, or application alone/iu, /does not improve a lesson or establish scientific progress/iu, /counterexamples/iu, /not package-owned defaults/iu]
   };
   const regressions = [

@@ -104,7 +104,7 @@ const QUALITY_DIMENSIONS = [
 
 export function assertResearchQuality(value, label) {
   for (const [dimension, levels] of QUALITY_DIMENSIONS) {
-    const line = value.split("\n").find((item) => dimension.test(item.split(/\s[—–]\s/u)[0]));
+    const line = value.split("\n").find((item) => /\s[—–]\s/u.test(item) && dimension.test(item.split(/\s[—–]\s/u)[0]));
     assert.ok(line, `${label}: reachable quality dimension ${dimension}`);
     const clauses = line.split(/\s[—–]\s/u).slice(1).join(" — ").split(";");
     for (const [level, criterion] of levels) {
@@ -157,8 +157,50 @@ export function assertResearchQualityDeletions(value, label) {
     QUALITY_DIMENSIONS.flatMap(([, levels]) => levels.map(([, criterion]) => criterion)));
 }
 
+export function assertResearchTaskIdentity(value, label) {
+  for (const pattern of [
+    /scientific task continuity[^.\n]*actual problem or phenomenon[^.\n]*target objects\/population and regime[^.\n]*inputs and permitted information[^.\n]*output or estimand/iu,
+    /constraints[^.\n]*baseline\/reference[^.\n]*real.world goal[^.\n]*proxy relationship[^.\n]*core proposition[^.\n]*intended contribution[^.\n]*success conditions[^.\n]*completion meaning/iu,
+    /Compare only the items relevant[^.\n]*current decision[^.\n]*stayed fixed[^.\n]*materially changed/iu,
+    /project, paper, repository, module, dataset, and code lineage[^.\n]*asset continuity, not scientific task continuity/iu,
+    /asset continuity[^.\n]*not[^.\n]*inherited value[^.\n]*novelty[^.\n]*admission[^.\n]*completion/iu,
+    /proxy supports the real goal only through a grounded relationship/iu,
+    /silently making an easier proxy, output, or success criterion the goal[^.\n]*task change, not success/iu,
+    /targeted identity comparison[^.\n]*decisive support\/refutation[^.\n]*promoting a surviving component[^.\n]*expanding major investment/iu,
+    /outputs, goals, baselines, proxies, contribution, or completion meaning change/iu,
+    /cumulative local changes[^.\n]*changed the task[^.\n]*current materials conflict/iu,
+    /Reuse still.applicable evidence[^.\n]*do not recheck the whole task[^.\n]*ordinary repeat runs[^.\n]*equivalent implementations[^.\n]*unrelated refactors/iu,
+    /low.cost reversible choices[^.\n]*leave the core judgment unchanged/iu,
+    /natural.language judgment[^.\n]*not a required schema, table, ID, or per.round record/iu
+  ]) assert.match(value, pattern, `${label}: scientific task identity boundary ${pattern}`);
+}
+
+export function assertPropositionTransition(value, label) {
+  for (const pattern of [
+    /After a material result[^.\n]*first judge[^.\n]*proposition that motivated the work/iu,
+    /implementation or comparison failure[^.\n]*scientific proposition unresolved/iu,
+    /local mechanism result[^.\n]*constrains its dependencies/iu,
+    /matching evidence[^.\n]*support, refute, or bound the core proposition/iu,
+    /Accept factual negative conclusions without waiting for approval/iu,
+    /state affected claims and investment/iu,
+    /Preserve valid code, data, evidence, and negative findings as assets/iu,
+    /do not let[^.\n]*surviving component[^.\n]*local metric gain[^.\n]*review request[^.\n]*reusable implementation[^.\n]*automatically become the main method[^.\n]*restore the original claim/iu,
+    /provisional candidate[^.\n]*authorized, proportionate investigation/iu,
+    /Before promoting[^.\n]*intended contribution or confirmed mainline[^.\n]*compare its task identity[^.\n]*preserve the original conclusion/iu,
+    /independently reassess[^.\n]*problem value[^.\n]*novelty[^.\n]*mechanism\/method[^.\n]*data\/evaluation[^.\n]*feasibility[^.\n]*resources[^.\n]*joint conditions/iu,
+    /compare serious alternatives/iu,
+    /Investigation permission is not mainline.change permission/iu,
+    /material change[^.\n]*confirmed mainline[^.\n]*intended contribution[^.\n]*completion meaning[^.\n]*requires the user's decision/iu,
+    /Once authorized[^.\n]*continue the new mainline[^.\n]*without repeatedly requesting the same decision/iu,
+    /never rewriting its success as success of the old proposition/iu,
+    /no inherited success, admission, or completion[^.\n]*not deleting assets[^.\n]*discarding evidence[^.\n]*assigning unknowns zero[^.\n]*blocking useful early investigation/iu
+  ]) assert.match(value, pattern, `${label}: proposition transition boundary ${pattern}`);
+}
+
 export function assertSharedResearchJudgment(value, label) {
   assertResearchQuality(value, label);
+  assertResearchTaskIdentity(value, label);
+  assertPropositionTransition(value, label);
   for (const pattern of [
     /core[^;\n]*main goal[^;\n]*branch[^;\n]*dependent route or claim[^;\n]*local[^;\n]*bounded quality/iu,
     /separately from evidence strength and repair effort/iu,
@@ -271,6 +313,13 @@ export function assertSharedAuthorStance(value, label) {
     /do not indefinitely postpone accepting counterevidence/iu,
     /new route[^.\n]*does not erase[^.\n]*failure[^.\n]*original proposition/iu,
     /factual negative judgment[^.\n]*does not await[^.\n]*user approval/iu,
+    /surviving component[^.\n]*asset or provisional candidate[^.\n]*not an automatic mainline/iu,
+    /code continuity[^.\n]*does not establish scientific task continuity/iu,
+    /normal in.task corrections[^.\n]*authorized provisional investigation[^.\n]*without repeatedly seeking approval/iu,
+    /accepting factual refutation[^.\n]*no approval/iu,
+    /adopting a materially different confirmed mainline[^.\n]*contribution[^.\n]*completion meaning[^.\n]*does/iu,
+    /cosmetic.only changes[^.\n]*selective evidence[^.\n]*hiding counterevidence[^.\n]*unjustified narrowing[^.\n]*diff.only review[^.\n]*restarting the reviewer context/iu,
+    /favorable review recommendation[^.\n]*cannot turn success on a different task into success of the original proposition/iu,
     /material change[^\n]*confirmed mainline[^\n]*intended contribution[^\n]*completion meaning does/iu,
     /limits on actions, not automatic limits on the research mainline.*one path is blocked.*other effective in-mainline paths before calling the research blocked/isu,
     /user-confirmed submission-completion goal.*author-side scientific sufficiency.*current independent `dove-review`.*same full version.*real delivery readiness/isu,
@@ -386,8 +435,14 @@ export function assertPackagedAgentPolicy() {
     /only to judging the frozen materials/iu,
     /Do not establish missing grounding through new research/iu,
     /read-only and limited to the listed frozen materials/iu,
-    /instead of fetching or inferring it/iu,
+    /instead of fetching, inferring, or obtaining unlisted context/iu,
     /not only a diff/iu,
+    /cosmetic-only changes/iu,
+    /selective evidence/iu,
+    /hiding counterevidence/iu,
+    /unjustified narrowing/iu,
+    /restarting the reviewer context/iu,
+    /does not rewrite failure of an earlier proposition/iu,
     /within its requested scope/iu
   ]);
 }
@@ -400,8 +455,11 @@ function assertReviewerPrompt(prompt, label) {
     /Reconstruct and challenge the contribution from the frozen materials.*do not inherit or endorse the author's mainline/isu,
     /read-only and limited to the listed frozen materials/iu,
     /Do not use.*web tools, shell commands, Edit, Write, Bash, MCP, or any unlisted path/isu,
-    /not include enough venue rules or literature grounding.*judgment is limited instead of fetching or inferring it/isu,
+    /not include enough venue rules, literature grounding, or task.identity material[^.\n]*judgment is limited instead of fetching, inferring, or obtaining unlisted context/iu,
+    /listed materials[^.\n]*do not include[^.\n]*task.identity material[^.\n]*judgment is limited[^.\n]*instead of fetching, inferring, or obtaining unlisted context/iu,
     /complete current manuscript.*not only a diff/isu,
+    /cosmetic.only changes[^.\n]*selective evidence[^.\n]*hiding counterevidence[^.\n]*unjustified narrowing[^.\n]*diff.only review[^.\n]*restarting the reviewer context/iu,
+    /favorable recommendation[^.\n]*current frozen task and claims[^.\n]*does not rewrite failure[^.\n]*earlier proposition[^.\n]*authorize a different author.side mainline/iu,
     /does the method answer the research question.*correct for the field.*fit the target venue.*strongest reasonable objection/isu,
     /Keep a bounded local review within its requested scope/iu,
     /Verdict, Blocking issues, Grounding basis, and Author-side next actions/iu
