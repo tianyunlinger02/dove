@@ -22,7 +22,7 @@ import {
   generatedDoveAgentEntries,
   renderClaudeDoveAgent
 } from "../../src/core/dove-agent-definition.mjs";
-import { DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS } from "../../src/core/dove-research-contract.mjs";
+import * as researchContract from "../../src/core/dove-research-contract.mjs";
 import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "../../src/core/web-access-integration.mjs";
 import {
@@ -48,9 +48,10 @@ import {
 } from "./common.mjs";
 import { assertUserResponsePolicy } from "./ambient-docs.mjs";
 
+const { DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS } = researchContract;
+
 const RETIRED_RESEARCH_MODEL_PHRASES = Object.freeze([
   "layer enum",
-  "contribution score",
   "state machine",
   "fixed pipeline",
   "runtime controller",
@@ -214,25 +215,34 @@ function assertCapabilityPatterns(command, groups) {
   }
 }
 
-// Capability levels describe different objects, not a shared promotion ladder.
-// Reuse these checks for the manifest and the actual rendered capability body.
-export function assertCapabilityLevels(value, id, label = id) {
+// Capabilities apply substantive judgment; completed operations remain evidence
+// facts. Reuse these checks for the manifest and the rendered capability body.
+export function assertCapabilityJudgment(value, id, label = id) {
   const patterns = {
     "dove.research": [
-      /level 1[^.\n]*problem lead[^.\n]*level 2[^.\n]*concrete candidate[^.\n]*level 3[^.\n]*argument.ready[^.\n]*level 4[^.\n]*evidence.supported/iu,
-      /key gap[^.\n]*current level[^.\n]*rather than automatically promoting/iu,
-      /argument.ready[^.\n]*authorized validation[^.\n]*without prior successful experiments/iu,
+      /shared substantive quality criteria[^.\n]*problems[^.\n]*candidates[^.\n]*claims[^.\n]*components/iu,
+      /evidence confidence[^.\n]*current.purpose satisfaction[^.\n]*separately/iu,
+      /novel[^.\n]*remaining contribution[^.\n]*not how much literature/iu,
+      /well.investigated incremental idea[^.\n]*remains incremental/iu,
+      /route and investment decisions[^.\n]*joint conditions[^.\n]*overall tradeoffs[^.\n]*evaluation table[^.\n]*useful/iu,
       /novelty[^.\n]*N0–N4[^.\n]*theory[^.\n]*T0–T4[^.\n]*only when[^.\n]*(?:user|project).provided definitions[^.\n]*available[^.\n]*actually been inspected/iu,
-      /apply them separately[^.\n]*not[^.\n]*combined score[^.\n]*global admission threshold/iu,
-      /otherwise[^.\n]*shared research maturity[^.\n]*plain.language novelty[^.\n]*theory[^.\n]*without inventing numbered definitions/iu
+      /preserve their meanings[^.\n]*not a combined score or global admission threshold/iu,
+      /N1 coverage[^.\n]*not an improvement over N0/iu,
+      /N4 search standing[^.\n]*does not mean foundational innovation/iu,
+      /do not convert[^.\n]*shared quality grades[^.\n]*require duplicate ratings/iu
     ],
     "dove.status": [
-      /(?:state|report)[^.\n]*level only when existing materials support[^.\n]*basis[^.\n]*unknowns/iu,
-      /(?:otherwise|insufficient)[^.\n]*level undetermined/iu,
+      /existing materials[^.\n]*substantive quality[^.\n]*evidence confidence[^.\n]*current.purpose satisfaction/iu,
+      /otherwise[^.\n]*rating undetermined/iu,
+      /distinguish scientific progress[^.\n]*enabling engineering[^.\n]*delivery facts/iu,
+      /evaluation table[^.\n]*tradeoffs and unknowns[^.\n]*without treating completed checks as high quality/iu,
+      /do not treat[^.\n]*checks[^.\n]*run receipts[^.\n]*engineering receipts[^.\n]*navigation as scientific progress/iu,
       /(?:do not|never) start validation[^.\n]*maintain documents[^.\n]*(?:missing level|evidence gap)/iu
     ],
     "dove.source": [
       /found leads[^.\n]*verified citation identity[^.\n]*inspected relevant full text[^.\n]*checked a specific claim/iu,
+      /source.use facts, not novelty grades/iu,
+      /novelty[^.\n]*remaining substantive contribution[^.\n]*search depth[^.\n]*confidence/iu,
       /retrieval alone[^.\n]*not inspection/iu,
       /claim verification[^.\n]*support[^.\n]*contradiction[^.\n]*insufficient coverage[^.\n]*not necessarily support/iu,
       /nearby work[^.\n]*problem[^.\n]*inputs\/outputs[^.\n]*assumptions[^.\n]*mechanism[^.\n]*claim[^.\n]*same granularity/iu,
@@ -241,21 +251,30 @@ export function assertCapabilityLevels(value, id, label = id) {
       /stop searching[^.\n]*retrieval[^.\n]*not change[^.\n]*decision/iu
     ],
     "dove.experiment": [
-      /specified design[^.\n]*working execution chain[^.\n]*valid comparison[^.\n]*support for the particular claim/iu,
-      /valid negative result[^.\n]*complete the experiment[^.\n]*without supporting[^.\n]*claim/iu,
-      /do not[^.\n]*pursuing positive results[^.\n]*higher label/iu,
-      /before expanding investment[^.\n]*upper bound[^.\n]*attainability[^.\n]*evaluation reliability[^.\n]*minimum worthwhile benefit/iu,
+      /specified design[^.\n]*working execution chain[^.\n]*work facts, not quality grades/iu,
+      /evaluation validity[^.\n]*establish, refute, or bound[^.\n]*particular claim/iu,
+      /valid negative result[^.\n]*complete an experiment[^.\n]*advance knowledge[^.\n]*without supporting[^.\n]*method/iu,
+      /nonsignificant[^.\n]*do not establish no effect/iu,
+      /what was learned[^.\n]*decision it changes[^.\n]*not run completion as scientific success/iu,
+      /before expanding investment[^.\n]*joint conditions[^.\n]*upper bounds[^.\n]*attainability[^.\n]*evaluation reliability, and minimum worthwhile benefit/iu,
+      /no single successful check[^.\n]*scaling[^.\n]*scientific uncertainty/iu,
       /(?:existing material|authorized validation)/iu
     ],
     "dove.draft": [
-      /argument outline[^.\n]*complete draft[^.\n]*evidence.aligned manuscript[^.\n]*actual delivery requirements/iu,
-      /writing completeness[^.\n]*independent of scientific maturity/iu,
+      /outline[^.\n]*complete draft[^.\n]*evidence check[^.\n]*actual delivery[^.\n]*work facts, not scientific quality grades/iu,
+      /expression[^.\n]*misleading[^.\n]*weak[^.\n]*accurate and usable[^.\n]*compelling/iu,
+      /writing completeness[^.\n]*independent of contribution and evidence strength/iu,
+      /polished manuscript[^.\n]*unsupported central claim/iu,
+      /user decisions[^.\n]*goal or expression[^.\n]*not establish stronger facts/iu,
       /common assumptions[^.\n]*limits together[^.\n]*rather than repeating/iu,
       /core gaps constrain[^.\n]*conclusions/iu,
       /local wording task[^.\n]*local[^\n]*without restarting research/iu
     ],
     "dove.figure": [
-      /visual plan[^.\n]*rendered visual[^.\n]*materials and meaning checked[^.\n]*checked in the final use context/iu,
+      /visual plan[^.\n]*rendered visual[^.\n]*materials and meaning checked[^.\n]*final use context[^.\n]*work facts, not quality grades/iu,
+      /judge accuracy[^.\n]*clarity[^.\n]*insight[^.\n]*actual usability/iu,
+      /misleading encoding[^.\n]*remains poor after inspection/iu,
+      /substantive revisions[^.\n]*preserve nearby claims and evidence[^.\n]*not merely improve appearance/iu,
       /standalone preview[^.\n]*does not establish final.context readiness/iu,
       /materials around each figure or panel[^.\n]*evidence or mechanism job/iu,
       /distinguish schematic explanation from data evidence/iu,
@@ -264,23 +283,28 @@ export function assertCapabilityLevels(value, id, label = id) {
     "dove.review": [
       /核心问题[^.\n]*core goal[^.\n]*分支问题[^.\n]*affected dependent work[^.\n]*局部问题[^.\n]*local quality/u,
       /evidence sufficiency separately[^.\n]*rather than equating missing evidence with refutation/iu,
-      /rather than equating[^.\n]*repair effort with severity/iu
+      /rather than equating[^.\n]*repair effort with severity/iu,
+      /reasoned objections[^.\n]*cited evidence[^.\n]*not new empirical evidence or automatic proof/iu
     ],
     "dove.rebuttal": [
-      /finding understood[^.\n]*response path grounded[^.\n]*needed revisions implemented[^.\n]*effect checked/iu,
+      /finding understood[^.\n]*response path grounded[^.\n]*needed revisions implemented[^.\n]*effect checked[^.\n]*processing facts, not resolution grades/iu,
+      /concern[^.\n]*resolved, reduced, or still limiting[^.\n]*whole argument[^.\n]*without new scientific defects/iu,
+      /compare local repair[^.\n]*shared.cause redesign[^.\n]*alternative routes[^.\n]*further evidence[^.\n]*rather than defaulting[^.\n]*smallest reply/iu,
       /(?:group|merge)[^.\n]*same root cause[^.\n]*definition[^.\n]*mechanism[^.\n]*evidence[^.\n]*expression gaps/iu,
       /(?:preserve|preserving)[^.\n]*coverage of each material finding/iu,
       /written response[^.\n]*does not establish[^.\n]*issue is resolved/iu,
       /author self.check[^.\n]*does not mean reviewer acceptance/iu
     ],
     "dove.lessons": [
-      /tentative lesson[^.\n]*grounded lesson[^.\n]*lesson tested through reuse under stated conditions/iu,
-      /repeated citation alone[^.\n]*does not strengthen/iu,
+      /tentative, grounded, or tested through reuse under stated conditions[^.\n]*evidence facts, not grades of usefulness/iu,
+      /validity[^.\n]*conditions[^.\n]*counterexamples[^.\n]*transfer value/iu,
+      /reuse may refute advice rather than strengthen it/iu,
+      /repeated citation[^.\n]*recording[^.\n]*application alone[^.\n]*does not improve[^.\n]*lesson[^.\n]*scientific progress/iu,
       /reusable insight[^.\n]*basis[^.\n]*conditions[^.\n]*counterexamples[^.\n]*limits/iu,
       /optional researcher.owned advisory documents[^.\n]*not package.owned defaults/iu
     ]
   }[id];
-  assert.ok(patterns, `${label} needs capability-specific level semantics`);
+  assert.ok(patterns, `${label} needs capability-specific substantive judgment`);
   assertMatchesAll(value, label, patterns);
 }
 
@@ -361,8 +385,9 @@ export function assertExperimentScientificEvaluation(value, label) {
     /ablations[^\n]*actual code, configuration, and outputs[^\n]*beyond the named component/iu,
     /information access[^\n]*preprocessing[^\n]*training budget[^\n]*numerical scale[^\n]*edit magnitude[^\n]*postprocessing[^\n]*also change/iu,
     /Distinguish[^\n]*full implementation winning[^\n]*component's gain under the given control[^\n]*support for a scientific mechanism/iu,
-    /controls cannot identify the core contribution[^\n]*repair the minimum necessary comparison or explicitly limit the conclusion/iu,
-    /more runs do not repair identification[^\n]*authorized useful exploration may continue/iu,
+    /controls cannot identify the core contribution[^.\n]*compare[^.\n]*repair[^.\n]*evaluation redesign[^.\n]*identifiable alternative mechanism or route[^.\n]*stopping the branch/iu,
+    /more runs do not repair identification/iu,
+    /current conclusion within actual evidence[^.\n]*overall.best authorized action[^.\n]*rather than defaulting to minimal controls or claim narrowing/iu,
     /new data, methods, evaluation chains, or decision-relevant gaps[^\n]*existing code, samples, and outputs where sufficient/iu,
     /diagnostic only when necessary and authorized/iu,
     /Small samples[^\n]*chain semantics and implementation[^\n]*not population-level statistical sufficiency/iu,
@@ -622,7 +647,7 @@ export function assertDoveAgentPersona() {
 
   for (const textValue of [renderDoveAgentInstructions(), renderClaudeDoveAgent()]) {
     assertDoveAgentSurfaceSemantics(textValue, "Dove agent surface");
-    assert.doesNotMatch(textValue, /PICOS|PRISMA|risk-of-bias|GRADE|meta-analysis/iu, "Dove agent surface must leave systematic-review details to Source");
+    assert.doesNotMatch(textValue, /\b(?:PICOS|PRISMA|risk-of-bias|GRADE|meta-analysis)\b/iu, "Dove agent surface must leave systematic-review details to Source");
     assert.doesNotMatch(textValue, /exact project-relative frozen material list|review round.*target venue.*frozen material scope|whole current version.*not only a diff/isu, "Dove agent surface must leave detailed review handoff and provenance to the Review Skill");
     assert.doesNotMatch(textValue, /actual Skill call to `dove:review`|latest material state receives a current Review `PASS`|Review gate/iu);
     assert.doesNotMatch(textValue, /planner.*builder.*reviewer.*three roles|user-switchable.*planner|Planner.*Builder\/Author.*Reviewer/isu);
@@ -634,6 +659,7 @@ export function assertDoveAgentPersona() {
 }
 
 export function assertSkillManifest() {
+  assert.equal(Object.hasOwn(researchContract, "DOVE_RESEARCH_MATURITY"), false, "Retired research maturity must not survive as a compatibility export");
   assert.deepEqual(COMMAND_SURFACES.map((command) => command.id), EXPECTED_SKILL_IDS, "Dove flat Skill manifest drifted");
   assert.deepEqual(Object.keys(COMMAND_SURFACE_BY_ID), EXPECTED_SKILL_IDS, "Skill lookup must match the ordered public manifest");
   assert.deepEqual(PROJECT_HOST_IDS, EXPECTED_HOST_IDS, "Generated Skill hosts drifted");
@@ -652,7 +678,7 @@ export function assertSkillManifest() {
     const contract = skillContract(command);
     assertSharedCapabilityReturnIsConcise(command);
     assertCapabilitySharedJudgment(command);
-    assertCapabilityLevels(semanticContractText(command), command.id);
+    assertCapabilityJudgment(semanticContractText(command), command.id);
     assertOrdinarySkillNoFullDoveReviewHandoff(command);
     assert.ok(contract.responsibilities.length > 0, `${label} needs Dove responsibilities`);
     assert.ok(Array.isArray(contract.returnWith) && contract.returnWith.length > 0, `${label} needs a concise Return with footer`);
@@ -705,7 +731,7 @@ export function assertSkillManifest() {
   assert.doesNotMatch(serialized, /workflow"|"modes"|"steps"|Internal workflow|research-synthesis/iu, "Skills must not retain the retired sequential workflow rendering model");
   assert.doesNotMatch(serialized, /query_dove|manage_dove|MCP tool|semantic ID|Workspace record|Mission ID/iu, "Skills must not retain the research database contract");
   assert.doesNotMatch(serialized, /SQLite|vector database|hidden state service|hidden runtime/iu, "Skills must not prescribe a replacement database or hidden runtime");
-  assert.doesNotMatch(serialized, /Review gate|Auto-gate|contribution score|return `PASS`|return `REVISE`|verdictEnum|strictImportSchema|same-context independent|same context independent/iu, "Skills must not recreate review gates, scoring states, schemas, enums, or same-context pseudo-independence");
+  assert.doesNotMatch(serialized, /Review gate|Auto-gate|(?:runtime|automatic) contribution scor(?:e|ing)|return `PASS`|return `REVISE`|verdictEnum|strictImportSchema|same-context independent|same context independent/iu, "Skills must not recreate review gates, runtime scoring states, schemas, enums, or same-context pseudo-independence");
   assert.doesNotMatch(serialized, /fixed closing synthesis|numbered steps/iu, "Skills must not preserve retired fixed-synthesis or numbered-step language");
   assert.doesNotMatch(serialized, /"(?:maturityLevel|researchLevel|impactLevel|noveltyScore|theoryScore|promotionRule|acceptanceGate)"\s*:/u, "Natural-language levels must not become runtime fields or automatic gates");
 

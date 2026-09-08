@@ -104,7 +104,7 @@ function isReturnWithSection(section) {
 function renderSemanticCapabilityContract(command, hostId = null) {
   const contract = command.contract;
   const sections = [
-    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.",
+    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.",
     `### What this is for\n\n${contract.purpose}`,
     `### When to use\n\n${contract.when}`,
     renderListSection("Scope and changes", contract.boundaries),
@@ -123,7 +123,7 @@ function renderCapabilityContract(command, hostId = null) {
     return renderSemanticCapabilityContract(command, hostId);
   }
   const sections = [
-    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.",
+    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.",
     `### What this is for\n\n${contract.purpose}`,
     `### When to use\n\n${contract.when}`,
     renderListSection("What Dove will examine", withoutReturnWith(contract.responsibilities, contract)),

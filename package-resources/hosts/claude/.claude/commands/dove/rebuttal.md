@@ -17,7 +17,7 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.
+These are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.
 
 ### What this is for
 
@@ -30,7 +30,7 @@ Use when the user requests rebuttal, response, revision, or follow-up work from 
 ### What Dove will examine
 
 - Group findings with the same root cause, locate definition, mechanism, evidence, or expression gaps, and analyze them against actual evidence. Decide whether to accept, rebut, qualify, or investigate, naming the needed evidence, research action, and manuscript or rebuttal response while preserving coverage of each material finding.
-- Distinguish ‘意见已理解’ (finding understood), ‘回应路径有依据’ (response path grounded), ‘必要修订已落实’ (needed revisions implemented), and ‘效果已核查’ (effect checked). A written response does not establish that the issue is resolved, and author self-check does not mean reviewer acceptance.
+- Finding understood, response path grounded, needed revisions implemented, and effect checked are processing facts, not resolution grades. Judge whether the underlying concern is resolved, reduced, or still limiting, and whether the response improves the whole argument without new scientific defects. Compare local repair, shared-cause redesign, alternative routes, or further evidence when appropriate rather than defaulting to the smallest reply. A written response does not establish that the issue is resolved, and author self-check does not mean reviewer acceptance.
 - Compare original claim, reviewer interpretation, planned response, and revised claim so certainty, causality, scope, quantitative qualifiers, novelty, and contribution do not change silently.
 - Use Source for new citations and Experiment for new results; leave unchecked source content, project facts, methods, results, and field facts unconfirmed.
 - When fixable deficiencies are in scope, improve evidence, analysis, manuscript text, figures, captions, tables, supplements, highlights, or venue-facing files—not just response tone. Treat a review as current only for the same complete manuscript and listed materials; after substantive evidence, claim, method, figure, or venue-facing changes, decide whether a fresh `dove review rerun` is needed before relying on the old recommendation.

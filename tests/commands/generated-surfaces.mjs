@@ -34,8 +34,8 @@ import {
 } from "./common.mjs";
 
 import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
-import { assertSharedAuthorStance, assertSharedResearchJudgment, assertUserResponsePolicy } from "./ambient-docs.mjs";
-import { assertCapabilityLevels, assertExperimentScientificEvaluation } from "./agent-capabilities.mjs";
+import { assertResearchQualityDeletions, assertSharedAuthorStance, assertSharedResearchJudgment, assertUserResponsePolicy } from "./ambient-docs.mjs";
+import { assertCapabilityJudgment, assertExperimentScientificEvaluation } from "./agent-capabilities.mjs";
 
 const AMBIGUOUS_ROUTE_TERM_PATTERNS = Object.freeze([
   { label: "approved route", pattern: /\bapproved route\b/iu },
@@ -127,20 +127,89 @@ export function assertFinalEntrypointWiring() {
         /not as a fixed closing suggestion/iu
       ]);
       assertSharedResearchJudgment(value, label);
+      assertResearchQualityDeletions(value, label);
       assertSemanticDeletionsRejected(value, label, assertSharedResearchJudgment, [
-        /problem lead/iu,
-        /concrete candidate/iu,
-        /argument-ready/iu,
-        /evidence-supported/iu,
-        /matching actual evidence/iu,
-        /effects may remain untested/iu,
-        /basis, scope, and decisive gap/iu,
-        /rise or fall with evidence/iu,
-        /not a project score/iu,
-        /automatic promotion/iu,
-        /mandatory stages/iu,
-        /reporting template/iu,
-        /generality or submission acceptance/iu,
+        /not how much searching/iu,
+        /evidence and confidence/iu,
+        /current purpose is satisfied/iu,
+        /work-completion facts/iu,
+        /reference and scope/iu,
+        /provisional ratings/iu,
+        /intervals/iu,
+        /not low quality or zero/iu,
+        /not applicable needs a reason/iu,
+        /does not make that component high quality/iu,
+        /without improving the (?:refuted|rejected) method/iu,
+        /not novelty magnitude/iu,
+        /exhaustive search can confirm no novelty/iu,
+        /not compensated by depth/iu,
+        /evidence facts, not quality ratings/iu,
+        /nonsignificant/iu,
+        /do not determine evidence value/iu,
+        /not scientific acceptance/iu,
+        /ordinary Markdown evaluation table/iu,
+        /rating and reason/iu,
+        /current-purpose satisfaction/iu,
+        /not a mandatory template or per-step report/iu,
+        /units, denominators/iu,
+        /separate predictions from measurements/iu,
+        /auxiliary scoring is allowed/iu,
+        /grounded scales/iu,
+        /justified task-specific weights/iu,
+        /sensitivity to reasonable weights/iu,
+        /do not average ordinal levels/iu,
+        /success\/acceptance probabilities/iu,
+        /unknown, failed, and not applicable/iu,
+        /renormalize weights/iu,
+        /manufacture success/iu,
+        /preserved original comparison/iu,
+        /automatic scientific PASS/iu,
+        /investigation needs plausible value/iu,
+        /concrete mechanism/iu,
+        /key feasibility, and resources/iu,
+        /trustworthy execution/iu,
+        /valid evaluation, fair identification/iu,
+        /uncertainty that scale can resolve/iu,
+        /matching theoretical\/statistical scope/iu,
+        /same-version independent review/iu,
+        /non-compensable necessary conditions/iu,
+        /high scores cannot offset/iu,
+        /decisive leakage/iu,
+        /theoretical contradiction/iu,
+        /unavailable necessary resources/iu,
+        /insufficient necessary value/iu,
+        /coverage of the claimed independent contribution/iu,
+        /neither an average rating nor an arbitrary lowest dimension/iu,
+        /need not satisfy full-implementation conditions/iu,
+        /not all useful action/iu,
+        /important incremental work/iu,
+        /whether the route remains worth pursuing/iu,
+        /alternative mechanism\/route/iu,
+        /stopping ineffective investment/iu,
+        /cross-dimension changes/iu,
+        /targeted reassessment/iu,
+        /lost necessary capabilities/iu,
+        /future options/iu,
+        /do not require every step to be Pareto-improving/iu,
+        /temporary regression/iu,
+        /reason, boundary, and evidence for reassessment/iu,
+        /not an indefinitely deferred promise/iu,
+        /does not automatically require rollback/iu,
+        /not a claimed mathematical global optimum/iu,
+        /distinguish scientific progress, enabling engineering work, and expression\/delivery progress/iu,
+        /justified understanding/iu,
+        /target research capability or result/iu,
+        /valid reference/iu,
+        /engineering capability, not the research effect/iu,
+        /unknown without suitable execution evidence/iu,
+        /theoretical guarantees require matching proof and conditions/iu,
+        /inference or choice changed/iu,
+        /near miss counts only for what it actually teaches/iu,
+        /do not by themselves establish/iu,
+        /complete a bounded request/iu,
+        /without claiming scientific support/iu,
+        /do not force an immediate scientific result/iu,
+        /repeated support work substitute/iu,
         /core \(threatens the main goal\)/iu,
         /branch \(affects a dependent route or claim\)/iu,
         /local \(affects bounded quality\)/iu,
@@ -158,7 +227,6 @@ export function assertFinalEntrypointWiring() {
         /not a main method by sunk cost/iu,
         /does not automatically refute/iu,
         /restrictions still govern execution/iu,
-        /Early authorized diagnostics need not await Level 3/iu,
         /frozen protocol/iu,
         /does not establish the scientific validity/iu,
         /Stop investigating/iu,
@@ -211,13 +279,18 @@ export function assertFinalEntrypointWiring() {
           /low-cost, reversible in-scope choices/iu,
           /do not change the core research judgment/iu,
           /Before expanding cost, dependencies, or claim strength/iu,
-          /premise most likely to cause broad rework/iu,
-          /feedback-sized increment/iu,
-          /absorb its result, then expand/iu,
+          /joint conditions needed for that investment/iu,
+          /not just whether implementation succeeded/iu,
+          /proportionate scope of work/iu,
+          /absorb its overall result before expanding/iu,
           /neither check every small step/iu,
           /nor wait for every scientific premise/iu,
           /trace affected dependencies/iu,
-          /shared cause within the minimum complete scope/iu,
+          /shared-cause redesign/iu,
+          /alternative route, further evidence, or stopping/iu,
+          /do not default to minimal patches/iu,
+          /unrelated refactoring/iu,
+          /without substituting one for another/iu,
           /retain still-valid work and negative evidence/iu,
           /rather than restart everything or defend sunk cost/iu,
           /one authoritative contract/iu,
@@ -227,7 +300,8 @@ export function assertFinalEntrypointWiring() {
           /Do not hide errors/iu,
           /swallowed failures/iu,
           /truncation/iu,
-          /completion levels separately/iu,
+          /completion facts separately/iu,
+          /not substantive quality grades/iu,
           /focused checks/iu,
           /integration/iu,
           /real execution/iu,
@@ -275,7 +349,8 @@ export function assertRenderedCapabilityWiring(entry) {
   const label = generatedSurfaceLabel(entry);
   const value = entry.content;
   const capability = value.slice(value.indexOf("## How Dove approaches this work"));
-  assertCapabilityLevels(capability, entry.command.id, label);
+  assert.match(capability, /quality grades[^.\n]*substantive merit[^.\n]*evidence confidence and completed work[^.\n]*separate[^.\n]*not stages[^.\n]*promote quality/iu, `${label}: the renderer must not turn capability work into a quality ladder`);
+  assertCapabilityJudgment(capability, entry.command.id, label);
   const actions = entry.command.id === "dove.review" ? value : renderedSection(value, "Ways Dove may proceed");
   switch (entry.command.id) {
     case "dove.research": {
@@ -443,16 +518,16 @@ export function assertRenderedCapabilityWiring(entry) {
 }
 
 function assertWiringRejectsRegressions(entries) {
-  const levelDeletions = {
-    "dove.research": [/problem lead/iu, /concrete candidate/iu, /argument-ready/iu, /evidence-supported/iu, /rather than automatically promoting/iu, /without prior successful experiments/iu, /only when/iu, /actually been inspected/iu, /apply them separately/iu, /without inventing numbered definitions/iu],
-    "dove.status": [/only when existing materials support it/iu, /basis and important unknowns/iu, /level undetermined/iu, /do not start validation/iu],
-    "dove.source": [/found leads/iu, /verified citation identity/iu, /inspected relevant full text/iu, /checked a specific claim/iu, /not necessarily support/iu, /remaining difference's independence/iu, /does not establish absence of overlap/iu, /stop searching/iu],
-    "dove.experiment": [/specified design/iu, /working execution chain/iu, /valid comparison/iu, /support for the particular claim/iu, /valid negative result/iu, /without supporting the proposed claim/iu, /do not keep pursuing positive results/iu, /upper bound/iu, /attainability/iu, /evaluation reliability/iu, /minimum worthwhile benefit/iu],
-    "dove.draft": [/argument outline/iu, /complete draft/iu, /evidence-aligned manuscript/iu, /actual delivery requirements/iu, /independent of scientific maturity/iu, /core gaps constrain/iu, /without restarting research/iu],
-    "dove.figure": [/visual plan/iu, /rendered visual/iu, /materials and meaning checked/iu, /checked in the final use context/iu, /does not establish final-context readiness/iu, /schematic explanation/iu, /do not trigger a whole-project audit/iu],
-    "dove.review": [/核心问题/u, /分支问题/u, /局部问题/u, /evidence sufficiency separately/iu, /rather than equating/iu],
-    "dove.rebuttal": [/finding understood/iu, /response path grounded/iu, /needed revisions implemented/iu, /effect checked/iu, /same root cause/iu, /coverage of each material finding/iu, /does not establish that the issue is resolved/iu, /does not mean reviewer acceptance/iu],
-    "dove.lessons": [/tentative lesson/iu, /grounded lesson/iu, /tested through reuse under stated conditions/iu, /repeated citation alone/iu, /counterexamples/iu, /not package-owned defaults/iu]
+  const judgmentDeletions = {
+    "dove.research": [/shared substantive quality criteria/iu, /evidence confidence/iu, /current-purpose satisfaction stated separately/iu, /not how much literature/iu, /remains incremental/iu, /joint conditions/iu, /overall tradeoffs/iu, /evaluation table when useful/iu, /only when/iu, /actually been inspected/iu, /preserve their meanings/iu, /not a combined score or global admission threshold/iu, /N1 coverage/iu, /N4 search standing/iu, /does not mean foundational innovation/iu, /do not convert/iu, /require duplicate ratings/iu],
+    "dove.status": [/existing materials/iu, /evidence confidence/iu, /current-purpose satisfaction/iu, /rating undetermined/iu, /enabling engineering/iu, /without treating completed checks as high quality/iu, /engineering receipts/iu, /do not start validation/iu],
+    "dove.source": [/found leads/iu, /verified citation identity/iu, /inspected relevant full text/iu, /checked a specific claim/iu, /source-use facts, not novelty grades/iu, /remaining substantive contribution/iu, /search depth informing confidence/iu, /not necessarily support/iu, /remaining difference's independence/iu, /does not establish absence of overlap/iu, /stop searching/iu],
+    "dove.experiment": [/specified design/iu, /working execution chain/iu, /work facts, not quality grades/iu, /evaluation validity/iu, /establish, refute, or bound/iu, /valid negative result/iu, /without supporting the proposed method/iu, /nonsignificant/iu, /not run completion as scientific success/iu, /joint conditions/iu, /upper bounds/iu, /attainability/iu, /evaluation reliability/iu, /minimum worthwhile benefit/iu, /no single successful check/iu],
+    "dove.draft": [/outline/iu, /complete draft/iu, /evidence check/iu, /actual delivery/iu, /work facts, not scientific quality grades/iu, /misleading, weak/iu, /independent of contribution and evidence strength/iu, /unsupported central claim/iu, /not establish stronger facts/iu, /core gaps constrain/iu, /without restarting research/iu],
+    "dove.figure": [/visual plan/iu, /rendered visual/iu, /materials and meaning checked/iu, /final use context/iu, /work facts, not quality grades/iu, /judge accuracy/iu, /misleading encoding remains poor after inspection/iu, /preserve nearby claims and evidence/iu, /does not establish final-context readiness/iu, /schematic explanation/iu, /do not trigger a whole-project audit/iu],
+    "dove.review": [/核心问题/u, /分支问题/u, /局部问题/u, /evidence sufficiency separately/iu, /rather than equating/iu, /reasoned objections/iu, /cited evidence/iu, /not new empirical evidence or automatic proof/iu],
+    "dove.rebuttal": [/finding understood/iu, /response path grounded/iu, /needed revisions implemented/iu, /effect checked/iu, /processing facts, not resolution grades/iu, /resolved, reduced, or still limiting/iu, /without new scientific defects/iu, /shared-cause redesign/iu, /rather than defaulting to the smallest reply/iu, /same root cause/iu, /coverage of each material finding/iu, /does not establish that the issue is resolved/iu, /does not mean reviewer acceptance/iu],
+    "dove.lessons": [/tentative, grounded/iu, /tested through reuse under stated conditions/iu, /evidence facts, not grades of usefulness/iu, /transfer value/iu, /reuse may refute advice/iu, /repeated citation, recording, or application alone/iu, /does not improve a lesson or establish scientific progress/iu, /counterexamples/iu, /not package-owned defaults/iu]
   };
   const regressions = [
     ["dove.research", "reassess the original proposition against the result", "accept the completed subtask as success"],
@@ -471,7 +546,12 @@ function assertWiringRejectsRegressions(entries) {
   ];
   for (const entry of entries) {
     assertSemanticDeletionsRejected(entry.content, generatedSurfaceLabel(entry),
-      (content) => assertRenderedCapabilityWiring({ ...entry, content }), levelDeletions[entry.command.id]);
+      (content) => assertRenderedCapabilityWiring({ ...entry, content }), [
+        /substantive merit/iu,
+        /evidence confidence and completed work/iu,
+        /not stages that automatically promote quality/iu,
+        ...judgmentDeletions[entry.command.id]
+      ]);
     for (const [id, before, after] of regressions.filter(([id]) => id === entry.command.id)) {
       const content = entry.content.replaceAll(before, after);
       assert.notEqual(content, entry.content, `${entry.hostId} ${id} regression probe must alter the instruction`);
@@ -495,9 +575,13 @@ function assertWiringRejectsRegressions(entries) {
           /numerical scale/iu,
           /edit magnitude/iu,
           /component's gain under the given control/iu,
-          /repair the minimum necessary comparison or explicitly limit the conclusion/iu,
+          /evaluation redesign/iu,
+          /identifiable alternative mechanism or route/iu,
+          /stopping the branch/iu,
           /more runs do not repair identification/iu,
-          /authorized useful exploration may continue/iu,
+          /current conclusion within actual evidence/iu,
+          /overall-best authorized action/iu,
+          /rather than defaulting to minimal controls or claim narrowing/iu,
           /only when necessary and authorized/iu,
           /not population-level statistical sufficiency/iu,
           /without running diagnostics or experiments/iu,
@@ -654,7 +738,7 @@ export function assertGeneratedAdapters() {
     assertGeneratedSurfaceUsesCurrentRenderer(entry);
     assert.match(entry.content, /# Dove Agent/u);
     assertDoveAgentSurfaceSemantics(entry.content, "Generated Dove agent");
-    assert.doesNotMatch(entry.content, /PICOS|PRISMA|risk-of-bias|GRADE|meta-analysis/iu, "Generated Dove agent must leave systematic-review details to Source");
+    assert.doesNotMatch(entry.content, /\b(?:PICOS|PRISMA|risk-of-bias|GRADE|meta-analysis)\b/iu, "Generated Dove agent must leave systematic-review details to Source");
     assert.doesNotMatch(entry.relativePath, /dove-(?:planner|builder|reviewer|reader|referee)|dove-(?:reviewer|reader|referee)/u);
     assert.doesNotMatch(entry.content, /three primary roles|Planner.*Builder\/Author.*Reviewer|user-switchable.*(?:reader|referee)/isu);
   }

@@ -17,7 +17,7 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.
+These are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.
 
 ### What this is for
 
@@ -52,7 +52,7 @@ For a user-confirmed submission-completion goal, completion needs author-side sc
 
 - Independent `dove-review` requires a genuinely isolated, persistent, recoverable reviewer context; if the host cannot provide it, say so and continue other feasible author-side work without counting it as independent review.
 - Each isolated runtime round reviews the whole current frozen paper, not only a diff, with the same four full-paper questions above. The reviewer returns Markdown under Verdict, Blocking issues, Grounding basis, and Author-side next actions.
-- When `dove-review` raises objections, Treat Review findings as scientific evidence to analyze: diagnose the underlying deficiency, then act, rebut with inspected evidence, honestly bound on a real limit, or defer only because another mainline action is more material. After substantive change, return to the same isolated reviewer context and review the complete paper again.
+- When `dove-review` raises objections, Treat Review findings as reasoned objections to assess against their cited evidence, not new empirical evidence or automatic proof: diagnose the underlying deficiency, then act, rebut with inspected evidence, honestly bound on a real limit, or defer only because another mainline action is more material. After substantive change, return to the same isolated reviewer context and review the complete paper again.
 - Author-side and `dove-review` judgments apply only to the current complete manuscript and submitted materials; after substantive changes, earlier recommendations are historical evidence.
 - Preserve an actual reviewer return faithfully together with the known reviewer context, review round, target venue, and materials reviewed; mark user-pasted or unverifiable returns as such.
 - Start `dove-review` only from a frozen near-submission handoff: current complete paper, authoritative manuscript source in its existing format and actual submission output, actual appendices or supplements, target venue, and other real venue-facing files. Include the compiled output for LaTeX and any author-retrieved venue or literature grounding needed for frozen-material judgment. Include the grounding inspected above for the intended frozen-material judgment. Preserve the purpose, target venue, complete frozen material list, reviewer prompt, known host limits, and returned report location in the Review context. Give the reviewer only those listed materials, with Read-only access and no web, MCP, private author conversations, or unlisted files. Use an isolated, persistent, recoverable reviewer context when the host provides one; resume or rerun later whole-paper rounds for the same review id and reviewer session. If grounding is missing, the reviewer should limit venue or literature conclusions to the listed materials; if the runtime is unavailable, say so and continue feasible author-side work without counting it as independent review.

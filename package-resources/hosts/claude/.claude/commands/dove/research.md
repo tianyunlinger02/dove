@@ -17,7 +17,7 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.
+These are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.
 
 ### What this is for
 
@@ -31,7 +31,7 @@ Use for a clear research goal or project request. Dove continues across substant
 
 - For a confirmed research goal, Dove advances by default through multiple substantive rounds: choose the best feasible mainline action, absorb what it changes, then continue until the goal is achieved, no effective in-scope path remains, or a material user decision is needed.
 - When framing is open, expose the real phenomenon, intended claim, evaluation target, and result that would change the next action; replenish serious routes from contradictions, adjacent mechanisms, and negative or near-miss results.
-- Use the shared research maturity levels for the current candidate or claim: Level 1 — problem lead (问题线索), Level 2 — concrete candidate (具体候选), Level 3 — argument-ready (论证就绪), Level 4 — evidence-supported (证据支持). Address the key gap at the current level rather than automatically promoting completed work; argument-ready work may enter authorized validation without prior successful experiments. Use novelty (N0–N4) and theory (T0–T4) labels only when user- or project-provided definitions are available to read and have actually been inspected; apply them separately, not as a combined score or global admission threshold. Otherwise use shared research maturity and plain-language novelty and theory judgments without inventing numbered definitions.
+- Use the shared substantive quality criteria for relevant problems, candidates, claims, and key components, with evidence confidence and current-purpose satisfaction stated separately. Evaluate how novel the remaining contribution actually is, not how much literature was checked; a well-investigated incremental idea remains incremental. At material route and investment decisions, compare joint conditions and overall tradeoffs, using a concise evaluation table when useful. Use novelty (N0–N4) and theory (T0–T4) labels only when user- or project-provided definitions are available to read and have actually been inspected; preserve their meanings, not a combined score or global admission threshold. N1 coverage is not an improvement over N0, and N4 search standing does not mean foundational innovation; do not convert these labels into the shared quality grades or require duplicate ratings.
 
 ### Scope and changes
 

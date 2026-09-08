@@ -17,7 +17,7 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.
+These are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.
 
 ### What this is for
 
@@ -30,7 +30,7 @@ Use when the user asks where the research stands, what is active, or what should
 ### What Dove will examine
 
 - Read only enough context to answer the status question.
-- Report the current goal, substantive progress, active problems, and decisions. State the relevant object's named level only when existing materials support it, with its basis and important unknowns; otherwise leave the level undetermined. Mention next priorities when relevant to the question.
+- Report the current goal, substantive progress, active problems, and decisions. Use existing materials to judge relevant substantive quality, evidence confidence, and current-purpose satisfaction; otherwise leave the rating undetermined. Distinguish scientific progress from enabling engineering and delivery facts, explaining what understanding, capability, or decision actually changed. A concise evaluation table may expose tradeoffs and unknowns without treating completed checks as high quality. Mention next priorities when relevant to the question.
 - Treat missing overviews, summaries, or links as ordinary document facts.
 
 ### Scope and changes

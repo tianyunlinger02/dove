@@ -47,31 +47,153 @@ export function assertUserResponsePolicy(value, label) {
   ]) assert.match(value, pattern, `${label}: communication boundary ${pattern}`);
 }
 
-export function assertResearchMaturity(value, label) {
+// Independent semantic anchors, not copies of the canonical prose. Each level
+// needs its own substantive criterion; headings or work-completion labels alone
+// must not pass. Semicolon clauses keep a neighboring level from supplying it.
+const QUALITY_DIMENSIONS = [
+  [/Problem value/iu, [
+    [/limited\/insufficient/iu, /even success[^;]*little[^;]*(?:knowledge|benefit)[^;]*alternatives/iu],
+    [/local/iu, /real benefit[^;]*bounded need/iu],
+    [/important/iu, /consequential bottleneck[^;]*severe failure[^;]*knowledge gap/iu],
+    [/broad\/foundational/iu, /shared capabilities[^;]*understanding[^;]*class of problems/iu]
+  ]],
+  [/Novelty/iu, [
+    [/no substantive novelty/iu, /core content[^;]*covered[^;]*remainder[^;]*equivalent/iu],
+    [/incremental/iu, /genuine[^;]*limited extension[^;]*existing principle/iu],
+    [/independent contribution/iu, /distinct mechanism[^;]*subtracting covered contributions[^;]*not[^;]*assembly/iu],
+    [/significant innovation/iu, /changes[^;]*solution principle[^;]*revises[^;]*understanding/iu],
+    [/foundational innovation/iu, /framework or principle[^;]*class of new[^;]*(?:methods|predictions)/iu]
+  ]],
+  [/Mechanism and theory quality/iu, [
+    [/unsupported\/flawed/iu, /circularity[^;]*contradiction[^;]*gap[^;]*cannot support/iu],
+    [/limited but coherent/iu, /local relationship[^;]*explicit conditions[^;]*limited[^;]*predictions/iu],
+    [/strong\/nontrivial/iu, /sound relationship[^;]*meaningful effects[^;]*failure boundaries[^;]*alternatives/iu],
+    [/deep\/generalizing/iu, /unifying explanation[^;]*fundamental relationship[^;]*predictions beyond/iu]
+  ]],
+  [/Method quality and feasibility/iu, [
+    [/unsuitable\/infeasible/iu, /necessary capability[^;]*unavailable[^;]*worthwhile benefit[^;]*upper bound/iu],
+    [/limited/iu, /explicit restrictions[^;]*capability[^;]*cost[^;]*robustness gaps/iu],
+    [/fit for purpose/iu, /targets the problem[^;]*necessary capabilities[^;]*proportionate benefit/iu],
+    [/strong\/adaptable/iu, /overall advantage[^;]*alternatives[^;]*important variations[^;]*complexity/iu]
+  ]],
+  [/Data and evaluation quality/iu, [
+    [/invalid for purpose/iu, /leakage[^;]*target mismatch[^;]*confounding[^;]*judgment/iu],
+    [/diagnostic only/iu, /bounded information[^;]*lacks[^;]*independence[^;]*identification/iu],
+    [/fit for judgment/iu, /valid target measurement[^;]*fair comparisons[^;]*controlled[^;]*uncertainty/iu],
+    [/strongly discriminating/iu, /separates[^;]*explanations[^;]*heterogeneity[^;]*failure boundaries/iu]
+  ]],
+  [/Implementation quality/iu, [
+    [/unusable\/incorrect/iu, /necessary behavior[^;]*missing[^;]*wrong[^;]*downstream[^;]*silently fails/iu],
+    [/restricted/iu, /explicit limits[^;]*correctness[^;]*reliability[^;]*integration gaps/iu],
+    [/reliable for purpose/iu, /contracts[^;]*downstream behavior[^;]*correct[^;]*failures visible/iu],
+    [/robust\/evolvable/iu, /reliability[^;]*boundaries and changes[^;]*ownership[^;]*maintenance complexity/iu]
+  ]],
+  [/Experiment and evidence value/iu, [
+    [/uninformative\/invalid for the claim/iu, /cannot support[^;]*inference[^;]*confounded[^;]*non.discriminating/iu],
+    [/limited leads/iu, /changes[^;]*understanding[^;]*main inference uncertain/iu],
+    [/establishes a scoped conclusion/iu, /evidence supports, refutes, or bounds[^;]*claim[^;]*effect size[^;]*uncertainty/iu],
+    [/strong\/deep insight/iu, /constraining evidence[^;]*alternatives[^;]*mechanisms[^;]*boundaries/iu]
+  ]],
+  [/Expression and delivery quality/iu, [
+    [/misleading\/unusable/iu, /claims conflict with evidence[^;]*content[^;]*missing[^;]*intended use/iu],
+    [/understandable but weak/iu, /core[^;]*discernible[^;]*reasoning[^;]*usability[^;]*deficient/iu],
+    [/accurate\/clear\/usable/iu, /question[^;]*contribution[^;]*evidence[^;]*limitations[^;]*output align/iu],
+    [/compelling\/efficient/iu, /accurate[^;]*key insight[^;]*strong objections[^;]*reader effort/iu]
+  ]]
+];
+
+export function assertResearchQuality(value, label) {
+  for (const [dimension, levels] of QUALITY_DIMENSIONS) {
+    const line = value.split("\n").find((item) => dimension.test(item.split(/\s[—–]\s/u)[0]));
+    assert.ok(line, `${label}: reachable quality dimension ${dimension}`);
+    const clauses = line.split(/\s[—–]\s/u).slice(1).join(" — ").split(";");
+    for (const [level, criterion] of levels) {
+      const clause = clauses.find((item) => level.test(item.split(":")[0]));
+      assert.ok(clause, `${label}: ${dimension} needs level ${level}`);
+      assert.match(clause.slice(clause.indexOf(":") + 1), criterion, `${label}: ${dimension} ${level} needs substantive merit, not activity depth`);
+    }
+  }
   for (const pattern of [
-    /level 1[^;\n]*problem (?:lead|clue)[^;\n]*(?:phenomenon|gap)[^;\n]*(?:unclear|not yet|not fully)/iu,
-    /level 2[^;\n]*concrete candidate[^;\n]*(?:question|problem)[^;\n]*method[^;\n]*mechanism[^;\n]*feasibility[^;\n]*gap/iu,
-    /level 3[^;\n]*argument.ready[^;\n]*value[^;\n]*mechanism[^;\n]*conditions[^;\n]*validation[^;\n]*(?:grounded|basis)/iu,
-    /effects[^.\n]*(?:may|can)[^.\n]*(?:untested|unverified)/iu,
-    /level 4[^;\n]*evidence.supported[^;\n]*(?:matching|matched) actual evidence[^;\n]*claim[^;\n]*scope/iu,
-    /core[^;\n]*(?:main|core) goal[^;\n]*branch[^;\n]*dependent (?:route|claim)[^;\n]*local[^;\n]*(?:bounded|local) quality/iu,
-    /(?:impact|severity)[^.\n]*separat[^.\n]*evidence strength[^.\n]*repair effort/iu,
-    /distinguish[^.\n]*(?:contradiction|refutation)[^.\n]*insufficient evidence/iu,
-    /maturity[^.\n]*value[^.\n]*novelty[^.\n]*evidence (?:standing|support)[^.\n]*separate/iu,
-    /(?:specific|scoped)[^.\n]*(?:question|goal)[^.\n]*candidate[^.\n]*claim/iu,
-    /(?:report|state)[^.\n]*level[^.\n]*basis[^.\n]*scope[^.\n]*gap[^.\n]*route[^.\n]*investment[^.\n]*completion/iu,
-    /branches[^.\n]*(?:differ|different)/iu,
-    /levels?[^.\n]*rise[^.\n]*fall[^.\n]*evidence/iu,
-    /(?:not|no|without)[^.\n]*automatic promotion/iu,
-    /(?:not|no|without)[^.\n]*(?:project|total|combined) score/iu,
-    /(?:not|no|without)[^.\n]*mandatory stages[^.\n]*(?:reporting template|fixed table)/iu,
-    /level 4[^.\n]*(?:not|neither)[^.\n]*generality[^.\n]*submission acceptance/iu
-  ]) assert.match(value, pattern, `${label}: scoped maturity boundary ${pattern}`);
+    /substantive quality[^.\n]*not how much[^.\n]*searching[^.\n]*checking[^.\n]*completed/iu,
+    /separately state[^.\n]*evidence and confidence[^.\n]*current purpose[^.\n]*work.completion facts/iu,
+    /inspected evidence[^.\n]*reference and scope/iu,
+    /qualify[^.\n]*predictions[^.\n]*provisional ratings[^.\n]*intervals/iu,
+    /unknown[^.\n]*not[^.\n]*low quality or zero/iu,
+    /not applicable[^.\n]*reason/iu,
+    /investigating an invalid component[^.\n]*does not[^.\n]*high quality/iu,
+    /negative result[^.\n]*advance knowledge[^.\n]*without improving[^.\n]*method/iu,
+    /reassess affected ratings[^.\n]*scope[^.\n]*versions[^.\n]*dependencies/iu,
+    /local requests[^.\n]*relevant dimensions[^.\n]*not every level/iu,
+    /search coverage[^.\n]*full.text inspection[^.\n]*confidence, not novelty magnitude/iu,
+    /exhaustive search[^.\n]*no novelty/iu,
+    /correctness and applicability[^.\n]*necessary[^.\n]*not compensated by depth/iu,
+    /empirical effectiveness[^.\n]*unknown without suitable execution evidence/iu,
+    /theoretical guarantees[^.\n]*matching proof and conditions/iu,
+    /test completion and file existence[^.\n]*evidence facts, not quality ratings/iu,
+    /nonsignificant[^.\n]*does not establish no effect/iu,
+    /run count[^.\n]*positive results[^.\n]*records[^.\n]*do not determine evidence value/iu,
+    /delivery readiness[^.\n]*not scientific acceptance/iu,
+    /ordinary Markdown evaluation table[^:\n]*useful/iu,
+    /scoped object\/dimension[^.\n]*rating and reason[^.\n]*measurements[^.\n]*confidence\/unknowns[^.\n]*current.purpose[^.\n]*overall impact/iu,
+    /criterion[^.\n]*rather than only a number/iu,
+    /not a mandatory template or per.step report/iu,
+    /measurements[^.\n]*units[^.\n]*denominators[^.\n]*protocol[^.\n]*reference[^.\n]*uncertainty/iu,
+    /separate predictions from measurements/iu,
+    /auxiliary scoring[^.\n]*allowed[^.\n]*grounded scales[^.\n]*justified[^.\n]*weights[^.\n]*uncertainty/iu,
+    /sensitivity[^.\n]*reasonable weights[^.\n]*change the choice/iu,
+    /do not average ordinal levels[^.\n]*percentages[^.\n]*success\/acceptance probabilities/iu,
+    /unknown, failed, and not applicable[^.\n]*distinct/iu,
+    /do not[^.\n]*drop missing dimensions[^.\n]*renormalize weights/iu,
+    /do not change thresholds[^.\n]*weights[^.\n]*sample subsets[^.\n]*goal definitions[^.\n]*manufacture success/iu,
+    /justified revisions[^.\n]*basis[^.\n]*preserved original comparison[^.\n]*authorization[^.\n]*final.test/iu,
+    /no runtime rating state[^.\n]*automatic scientific PASS[^.\n]*forced research document/iu
+  ]) assert.match(value, pattern, `${label}: substantive quality boundary ${pattern}`);
+  assert.doesNotMatch(value, /DOVE_RESEARCH_MATURITY|level [1-4][^;\n]*(?:problem lead|concrete candidate|argument.ready|evidence.supported)/iu, `${label}: retired universal ladder must not remain`);
+  assert.doesNotMatch(value, /(?:do not|never|no) (?:use |provide )?(?:evaluation tables|auxiliary scor(?:es|ing)|project scores)\b/iu, `${label}: do not prohibit grounded tables or auxiliary scoring`);
+}
+
+export function assertResearchQualityDeletions(value, label) {
+  assertSemanticDeletionsRejected(value, label, assertResearchQuality,
+    QUALITY_DIMENSIONS.flatMap(([, levels]) => levels.map(([, criterion]) => criterion)));
 }
 
 export function assertSharedResearchJudgment(value, label) {
-  assertResearchMaturity(value, label);
+  assertResearchQuality(value, label);
   for (const pattern of [
+    /core[^;\n]*main goal[^;\n]*branch[^;\n]*dependent route or claim[^;\n]*local[^;\n]*bounded quality/iu,
+    /separately from evidence strength and repair effort/iu,
+    /joint conditions[^.\n]*current decision/iu,
+    /investigation needs[^;\n]*plausible value[^;\n]*proportionate[^;\n]*informative evidence/iu,
+    /full implementation or major development[^;\n]*problem value[^;\n]*contribution\/positioning[^;\n]*concrete mechanism[^;\n]*feasibility, and resources/iu,
+    /scaling formal experiments[^;\n]*trustworthy execution[^;\n]*valid evaluation[^;\n]*fair identification, and[^;\n]*uncertainty[^;\n]*scale can resolve/iu,
+    /core conclusion[^;\n]*evidence sufficient[^;\n]*claim[^;\n]*alternatives and counterevidence[^;\n]*matching theoretical\/statistical scope/iu,
+    /submission completion[^.\n]*scientific sufficiency[^.\n]*accurate expression[^.\n]*delivery readiness, and[^.\n]*same.version independent review/iu,
+    /non.compensable necessary conditions[^.\n]*negotiable objectives/iu,
+    /high scores cannot offset[^.\n]*leakage[^.\n]*invalid evaluation[^.\n]*theoretical contradiction[^.\n]*unavailable necessary resources[^.\n]*insufficient necessary value[^.\n]*coverage[^.\n]*independent contribution/iu,
+    /neither an average rating nor an arbitrary lowest dimension[^.\n]*project/iu,
+    /authorized diagnostics[^.\n]*need not satisfy full.implementation conditions/iu,
+    /failed prerequisite[^.\n]*dependent investment, not all useful action/iu,
+    /important incremental work[^.\n]*preferable[^.\n]*low.value radical idea/iu,
+    /before defaulting[^.\n]*local fix[^.\n]*whether the route remains worth pursuing/iu,
+    /compare[^.\n]*complete repair[^.\n]*shared.cause redesign[^.\n]*alternative mechanism\/route[^.\n]*discriminating evidence[^.\n]*stopping/iu,
+    /substantive result[^.\n]*overall consequences/iu,
+    /cross.dimension changes[^.\n]*counterevidence[^.\n]*expansion[^.\n]*repeated patches[^.\n]*targeted reassessment[^.\n]*not[^.\n]*every tool action/iu,
+    /gains against lost necessary capabilities[^.\n]*cost[^.\n]*coverage[^.\n]*knowledge[^.\n]*future options/iu,
+    /do not require every step[^.\n]*Pareto.improving/iu,
+    /temporary regression[^.\n]*knowledge[^.\n]*later capability[^.\n]*reason, boundary, and evidence for reassessment/iu,
+    /not an indefinitely deferred promise/iu,
+    /no metric gain[^.\n]*does not automatically require rollback/iu,
+    /best defensible path[^.\n]*evidence and constraints[^.\n]*not[^.\n]*mathematical global optimum/iu,
+    /distinguish scientific progress, enabling engineering work, and expression\/delivery progress/iu,
+    /scientific progress[^.\n]*justified understanding[^.\n]*target research capability or result[^.\n]*valid reference[^.\n]*defensible research decision/iu,
+    /enabling a pipeline to run[^.\n]*engineering capability, not the research effect/iu,
+    /explain[^.\n]*evidence[^.\n]*inference or choice changed/iu,
+    /near miss[^.\n]*only[^.\n]*actually teaches/iu,
+    /coding, search, passing checks[^.\n]*successful runs[^.\n]*frozen protocols[^.\n]*do not by themselves establish[^.\n]*novelty[^.\n]*valid evidence[^.\n]*scientific goal attainment/iu,
+    /enabling and delivery work[^.\n]*necessary[^.\n]*complete a bounded request/iu,
+    /report that value without claiming scientific support/iu,
+    /do not force[^.\n]*immediate scientific result[^.\n]*every useful engineering action/iu,
+    /repeated support work[^.\n]*substitute[^.\n]*scientific bottleneck/iu,
     /Before committing to or materially changing[^\n]*direction[^\n]*method[^\n]*evaluation target[^\n]*central experiment/iu,
     /core proposition[^.\n]*theory or mechanism[^.\n]*proportionate/iu,
     /simple alternatives[^.\n]*assumptions[^.\n]*applicability[^.\n]*inspected evidence/iu,
@@ -89,7 +211,6 @@ export function assertSharedResearchJudgment(value, label) {
     /diagnostic prototype[^.\n]*not[^.\n]*main method[^.\n]*sunk cost/iu,
     /failure[^.\n]*does not automatically refute[^.\n]*higher.level hypothesis/iu,
     /(?:design.only|topic.selection)[^.\n]*restrictions[^.\n]*(?:govern|constrain)[^.\n]*execution/iu,
-    /(?:early|exploratory) authorized diagnostics[^.\n]*need not await level 3/iu,
     /insufficiently grounded routes[^.\n]*provisional/iu,
     /routine local work[^.\n]*no fixed theory preamble/iu,
     /Prioritize[^\n]*problem[^\n]*contribution[^\n]*data and evaluation validity[^\n]*method and statistical identification[^\n]*execution[^\n]*recovery[^\n]*delivery/iu,
@@ -128,16 +249,19 @@ export function assertSharedAuthorStance(value, label) {
     /(?:decisive|key|critical) objections[^.\n]*change dependent investment[^.\n]*claims[^.\n]*(?:answer|rebut)[^.\n]*inspected evidence/iu,
     /unresolved objections[^.\n]*(?:retain|limit|constrain)[^.\n]*later decisions[^.\n]*reports/iu,
     /reasonable defaults[^.\n]*low.cost[^.\n]*reversible[^.\n]*in.scope choices[^.\n]*do not change the core research judgment/iu,
-    /before expanding[^.\n]*cost[^.\n]*dependencies[^.\n]*claim strength[^.\n]*check[^.\n]*premise[^.\n]*rework/iu,
-    /(?:useful|valuable) feedback.sized increment[^.\n]*absorb[^.\n]*result[^.\n]*then expand/iu,
-    /neither check every small step[^.\n]*nor wait[^.\n]*every scientific premise[^.\n]*before authorized implementation/iu,
-    /failure[^.\n]*trace affected dependencies[^.\n]*repair[^.\n]*shared cause[^.\n]*minimum complete scope/iu,
+    /before expanding[^.\n]*cost[^.\n]*dependencies[^.\n]*claim strength[^.\n]*joint conditions[^.\n]*not just[^.\n]*implementation succeeded/iu,
+    /proportionate scope of work[^.\n]*absorb[^.\n]*overall result[^.\n]*before expanding/iu,
+    /neither check every small step[^.\n]*nor wait[^.\n]*every scientific premise[^.\n]*before authorized investigation/iu,
+    /failure[^.\n]*trace affected dependencies[^.\n]*complete repair[^.\n]*shared.cause redesign[^.\n]*alternative route[^.\n]*further evidence[^.\n]*stopping/iu,
+    /do not default to minimal patches[^.\n]*unrelated refactoring/iu,
+    /report[^.\n]*scientific judgment changed[^.\n]*engineering capability[^.\n]*delivery requirement[^.\n]*without substituting/iu,
     /retain still.valid work[^.\n]*negative evidence[^.\n]*rather than restart everything[^.\n]*sunk cost/iu,
     /(?:when|if) implementing[^.\n]*one authoritative contract[^.\n]*producers[^.\n]*consumers[^.\n]*validation[^.\n]*presentation/iu,
     /(?:complete|perform)[^.\n]*(?:needed|necessary) migrations[^.\n]*without redundant[^.\n]*(?:compatibility|shadow) paths/iu,
     /(?:not|never) hide errors[^.\n]*swallowed failures[^.\n]*defaults[^.\n]*truncation/iu,
-    /(?:report|state)[^.\n]*completion levels separately[^.\n]*implemented[^.\n]*focused checks[^.\n]*integration[^.\n]*real execution[^.\n]*formal output[^.\n]*read.back[^.\n]*actual downstream use/iu,
-    /earlier level[^.\n]*cannot stand in[^.\n]*later one[^.\n]*scientific support/iu,
+    /(?:report|state)[^.\n]*completion facts separately[^.\n]*implemented[^.\n]*focused checks[^.\n]*integration[^.\n]*real execution[^.\n]*formal output[^.\n]*read.back[^.\n]*actual downstream use/iu,
+    /earlier fact[^.\n]*cannot stand in[^.\n]*later one[^.\n]*scientific support/iu,
+    /work and validation performed, not substantive quality grades/iu,
     /missing validation[^.\n]*without requiring every bounded task[^.\n]*production readiness/iu,
     /distinguish changing[^.\n]*method[^.\n]*evaluation[^.\n]*research goal/iu,
     /mentioning another direction[^.\n]*not authorization[^.\n]*adopt/iu,
@@ -282,7 +406,7 @@ function assertReviewerPrompt(prompt, label) {
     /Keep a bounded local review within its requested scope/iu,
     /Verdict, Blocking issues, Grounding basis, and Author-side next actions/iu
   ]) assert.match(prompt, pattern, `${label}: reviewer boundary ${pattern}`);
-  assert.doesNotMatch(prompt, /^## Author stance$|After delegation|synthesizes decisive evidence|first try any feasible in-mainline|perform the feasible next in-scope step|Maintain Dove research Markdown|feedback-sized increment|When implementing|Report relevant completion levels/mu);
+  assert.doesNotMatch(prompt, /^## Author stance$|After delegation|synthesizes decisive evidence|first try any feasible in-mainline|perform the feasible next in-scope step|Maintain Dove research Markdown|proportionate scope of work|When implementing|Report relevant completion facts/mu);
   assert.doesNotMatch(prompt, /(?:read|load|consult|fetch)[^.\n]*Lessons|\.dove\/research\/lessons\//iu, `${label}: frozen review must not acquire Lessons-reading duties`);
 
 }
@@ -437,4 +561,11 @@ export function assertTrellisSpecMirrors() {
   const templateNames = fs.readdirSync(templateDir).filter((name) => name.endsWith(".md")).sort();
   assert.deepEqual(templateNames, sourceNames);
   for (const name of sourceNames) assert.ok(fs.readFileSync(path.join(templateDir, name)).equals(fs.readFileSync(path.join(sourceDir, name))), name);
+  const component = fs.readFileSync(path.join(sourceDir, "component-guidelines.md"), "utf8");
+  const exclusion = component.match(/(?:Do not|Never) (?:supply|provide)[^\n]*private transcripts[^\n]*/iu)?.[0]?.split(/\.\s/u)[0];
+  assert.ok(exclusion, "component guidance must exclude private author materials from independent review");
+  for (const pattern of [/author.side old Reviews/iu, /settings/iu, /CLAUDE\.md/iu, /hidden notes/iu, /unlisted files/iu]) {
+    assert.match(exclusion, pattern, `review material exclusion ${pattern}`);
+  }
+  assert.doesNotMatch(exclusion, /by default|normally|unless/iu, "private-material exclusions must not become optional defaults");
 }

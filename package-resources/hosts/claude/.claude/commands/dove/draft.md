@@ -17,7 +17,7 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.
+These are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.
 
 ### What this is for
 
@@ -30,8 +30,8 @@ Use when the user specifies a manuscript, section, claim-bearing artifact, draft
 ### What Dove will examine
 
 - Prioritize the user-specified manuscript or artifact and the evidence needed for its material claims; leave unchecked methods, results, citations, samples, data, and field facts unknown.
-- Preserve certainty, causality, scope, generality, quantitative qualifiers, and novelty unless evidence or the user changes them; say what changed before changing the text.
-- Distinguish ‘论证提纲’ (argument outline), ‘完整草稿’ (complete draft), ‘证据一致的稿件’ (evidence-aligned manuscript), and ‘满足实际交付要求的稿件’ (manuscript meeting actual delivery requirements); writing completeness is independent of scientific maturity.
+- Preserve certainty, causality, scope, generality, quantitative qualifiers, and novelty unless inspected evidence changes the judgment; user decisions can change the requested goal or expression, not establish stronger facts. Say what changed before changing the text.
+- An outline, complete draft, evidence check, and actual delivery are work facts, not scientific quality grades. Judge whether the expression is misleading, weak, accurate and usable, or compelling under the shared criteria; writing completeness is independent of contribution and evidence strength. A polished manuscript can still contain an unsupported central claim. Check how substantive edits affect the whole argument without treating every local edit as a new research task.
 - Build or repair the paper spine: problem → gap → insight/mechanism → method → evidence → claim → limitation → reader takeaway. State common assumptions and limits together rather than repeating them throughout; core gaps constrain the conclusions.
 - Use reliable author samples only for stable style cues such as rhythm, paragraphing, hedging, transitions, reporting verbs, and citation integration; keep accuracy and venue norms above voice imitation.
 - For contribution-level drafting, address in-scope method, source, experiment, figure, artifact propagation, or argument gaps before merely weakening prose. A local wording task stays local; flag a material claim issue without restarting research.

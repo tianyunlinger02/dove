@@ -17,7 +17,7 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template. Named levels describe the relevant object's scope and evidence, not mandatory stages to complete.
+These are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.
 
 ### What this is for
 
@@ -30,7 +30,7 @@ Use for source discovery, reading, comparison, verification, bounded bibliograph
 ### What Dove will examine
 
 - Start from the user's source question and current project need, not a fixed tool order or paper count; stop searching when further retrieval would not change the decision or answer the bounded question.
-- Distinguish ‘发现线索’ (found leads), ‘身份核实’ (verified citation identity), ‘相关全文检查’ (inspected relevant full text), and ‘具体主张核实’ (checked a specific claim). Retrieval alone is not inspection; completed claim verification can find support, contradiction, or insufficient coverage, not necessarily support. When a DOI matters and direct lookup is available, check it before fuzzy title matching; compare DOI, title, authors, year, and venue or version, then report verified, conflict, not-found, or unknown. For a bounded bibliography DOI identity check, verify only the requested entries and do not create a ledger.
+- Distinguish ‘发现线索’ (found leads), ‘身份核实’ (verified citation identity), ‘相关全文检查’ (inspected relevant full text), and ‘具体主张核实’ (checked a specific claim). These are source-use facts, not novelty grades; judge novelty by the remaining substantive contribution, with search depth informing confidence. Retrieval alone is not inspection; completed claim verification can find support, contradiction, or insufficient coverage, not necessarily support. When a DOI matters and direct lookup is available, check it before fuzzy title matching; compare DOI, title, authors, year, and venue or version, then report verified, conflict, not-found, or unknown. For a bounded bibliography DOI identity check, verify only the requested entries and do not create a ledger.
 - Extract consensus, contradictions, assumptions, missing controls, transferable mechanisms, and research opportunities from inspected material. Compare nearby work's problem, inputs/outputs, assumptions, mechanism, and claim at the same granularity; subtract covered contributions and reassess the remaining difference's independence and value. Unchecked full text does not establish absence of overlap.
 - For explicit systematic review, meta-analysis, evidence grading, or auditable synthesis, use a suitable structured question, search scope, eligibility criteria, PRISMA-style tracking, risk-of-bias and evidence-certainty judgments when applicable, and pool effects only when studies and data are comparable.
 
