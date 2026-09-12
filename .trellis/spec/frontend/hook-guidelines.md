@@ -29,7 +29,7 @@ Missing/unreadable facts stay `unavailable`. Startup/clear emits no research car
 ## Read-only status line
 
 - When a Claude project has no existing `statusLine`, install the manifest-owned command `dove hook statusline --project "$CLAUDE_PROJECT_DIR"`. A pre-existing user or Trellis line remains unchanged and unowned; an empty slot may be filled by a later explicit update.
-- Consume only Claude Code's native status payload: model display name, total context capacity, remaining-context percentage, and current-session duration. Read the Git branch from the explicit project root with a bounded no-shell command. Missing facts are omitted rather than represented as zero.
+- Preserve the explicit absolute project path. Consume only Claude Code's native status payload for model display name, total context capacity, remaining-context percentage, and current-session duration, and read the Git branch from that project root with a bounded no-shell command. Missing host facts are omitted rather than represented as zero.
 - Keep the renderer fast, single-line, read-only, offline, and free of research Markdown, Review, Run, transcript, or durable timer access. Git branch is an active work branch, not a confirmed scientific mainline; session duration is not cumulative research effort.
 - Doctor inspects managed drift read-only. Explicit update/reinstall may restore an edited manifest-owned line and report it; host removal/uninstall removes an unchanged owned line while preserving a user-modified one.
 

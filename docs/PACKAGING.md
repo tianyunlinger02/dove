@@ -2,13 +2,13 @@
 
 ## Delivery model
 
-Dove 3.0.6 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
+Dove 3.0.7 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
 
 The bare public npm package named `dove` is unrelated. Release instructions must use an exact trusted tarball, Git revision, or internal-registry package version.
 
 ## Release inventory
 
-Every Dove 3.0.6 release contains:
+Every Dove 3.0.7 release contains:
 
 - **one Dove research agent** for supported agent hosts;
 - **9 optional specialist Skills**: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`;
@@ -92,7 +92,7 @@ Bare `dove` is the interactive lifecycle front door. It classifies the project, 
 - `run start|status|resume|finalize|compare` records explicit `.dove/runs/<id>/run.jsonl`, `stdout.log`, and `stderr.log` receipts. `start` launches a detached supervisor that directly spawns the target command from the project root without a shell, records command, timing, outcome, metric, budget, and basis, plus an explicitly declared seed and minimum Git commit/dirty facts rather than an environment inventory. Git facts do not affect comparison eligibility or ranking. `status` is read-only; `resume` never reruns work; `finalize` appends one scalar metric after terminal completion; `compare` ranks only compatible terminal finalized runs by metric, budget, data, evaluator, and resource basis.
 - `hook session-start` inspects package-managed integration read-only. Non-current integration may prompt explicit `dove update`; unsupported state is blocked rather than migrated or reconstructed.
 - Only compact/resume receives a read-only facts card: `RESEARCH.md` existence and absolute mtime; latest Review id, round, absolute `updatedAt`, and material currentness; latest Run id, absolute `startedAt`, status, and exit code. It reads metadata and run journals, and checks the latest review round's listed material bytes for currentness; it does not read research Markdown bodies, reports, or stdout/stderr logs or infer the mainline. Startup/clear receives no research card. Missing or unreadable facts remain `unavailable`.
-- `hook` supports read-only `session-start` inspection and the managed `statusline` renderer. The renderer consumes Claude Code's native model, context-capacity, remaining-context and current-session-duration fields, reads the Git branch without a shell, and accesses no research records. It does not expose `user-prompt-submit`.
+- `hook` supports read-only `session-start` inspection and the managed `statusline` renderer. The renderer preserves the explicit absolute project path, consumes Claude Code's native model, context-capacity, remaining-context and current-session-duration fields, reads the Git branch without a shell, and accesses no research records. It does not expose `user-prompt-submit`.
 - SessionStart never writes files or configuration, cleans up legacy/unknown state, or invokes update or Complete Reinstall. Startup/clear without warnings returns no output. Inspection does not reload same-session host context.
 - Stop is not a managed lifecycle hook and does not perform synchronization, research continuation, tool calls, or writes.
 

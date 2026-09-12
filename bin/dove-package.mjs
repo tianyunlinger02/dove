@@ -15896,7 +15896,7 @@ import fs5 from "node:fs";
 import path8 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.0.6" : null;
+var injectedVersion = true ? "3.0.7" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -18106,11 +18106,13 @@ function renderDoveStatusLine(input, options2 = {}) {
   const remainingValue = nonNegativeNumber(payload.context_window?.remaining_percentage);
   const remaining = remainingValue === null ? null : Math.min(100, Math.round(remainingValue));
   const duration = formatSessionDuration(payload.cost?.total_duration_ms);
+  const project = oneLine(options2.projectRoot);
   const branch = Object.hasOwn(options2, "branch") ? oneLine(options2.branch) : inspectGitBranch(options2.projectRoot, options2);
   const parts = [];
   if (model) parts.push(capacity && !CAPACITY_IN_MODEL_NAME.test(model) ? `${model} (${capacity})` : model);
   else if (capacity) parts.push(`ctx ${capacity}`);
   if (remaining !== null) parts.push(`ctx ${remaining}%`);
+  if (project) parts.push(project);
   if (branch) parts.push(branch);
   if (duration) parts.push(duration);
   return parts.length > 0 ? parts.join(STATUS_SEPARATOR) : "Dove";

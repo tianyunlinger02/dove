@@ -105,7 +105,7 @@ Dove 的作者上下文在论文准备过程中可以进行作者侧科学自检
 
 以上边界不收紧合法记录维护，不要求把每项有用支撑变成科学贡献，也不否认有依据的负结果价值。支撑工作是否值得做，与它是否已经改变科学认识分开判断。
 
-用户显式 update 会覆盖 manifest-owned 集成中的本地修改并提醒；SessionStart 完全只读，只检查并按需以 `systemMessage` 提示显式 update，不同步任何资源、写配置或清理旧状态，也不重载当前会话。Doctor 的集成状态仅为 `uninitialized`、`current`、`needs-update`、`blocked`；没有 adoption、旧 manifest migration 或 hot-sync 成功路径，未知文件保留。两者不改研究记录。Claude 项目没有既有 `statusLine` 时，Dove 安装只读显示，使用宿主模型、总上下文容量、剩余上下文比例、Git 分支和当前 Claude 会话时长；不读取科研记录，不把分支或时长伪装成科学主线或累计科研工时。既有用户/Trellis line 不接管；没有 `UserPromptSubmit`、隐藏 intake 或替代每轮 hook。
+用户显式 update 会覆盖 manifest-owned 集成中的本地修改并提醒；SessionStart 完全只读，只检查并按需以 `systemMessage` 提示显式 update，不同步任何资源、写配置或清理旧状态，也不重载当前会话。Doctor 的集成状态仅为 `uninitialized`、`current`、`needs-update`、`blocked`；没有 adoption、旧 manifest migration 或 hot-sync 成功路径，未知文件保留。两者不改研究记录。Claude 项目没有既有 `statusLine` 时，Dove 安装只读显示，保留绝对项目路径，并使用宿主模型、总上下文容量、剩余上下文比例、Git 分支和当前 Claude 会话时长；不读取科研记录，不把分支或时长伪装成科学主线或累计科研工时。既有用户/Trellis line 不接管；没有 `UserPromptSubmit`、隐藏 intake 或替代每轮 hook。
 
 compact/resume 只提供事实卡：`RESEARCH.md` 是否存在及绝对修改时间；最新 Review 的 id、round、绝对更新时间和材料 currentness；最新 Run 的 id、绝对开始时间、status 和 exit。不读取研究 Markdown 正文、report 或 stdout/stderr logs，不猜主线；startup/clear 无研究卡。卡片帮助定位记录，不恢复科研判断。
 

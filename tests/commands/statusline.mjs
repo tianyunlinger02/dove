@@ -19,8 +19,12 @@ export function assertDoveStatusLineRenderer() {
     cost: { total_duration_ms: ((54 * 60) + 34) * 60_000 }
   };
   assert.equal(
-    renderDoveStatusLine(payload, { branch: "dove-mission-handoff-search" }),
-    "gpt-5.6-sol(high) (272K) · ctx 24% · dove-mission-handoff-search · 54h34m"
+    renderDoveStatusLine(payload, {
+      projectRoot: "/home/nvme01/paper_factory",
+      branch: "dove-mission-handoff-search"
+    }),
+    "gpt-5.6-sol(high) (272K) · ctx 24% · /home/nvme01/paper_factory · " +
+      "dove-mission-handoff-search · 54h34m"
   );
   assert.equal(renderDoveStatusLine({
     model: { display_name: "Opus 4.8 (1M context)" },
