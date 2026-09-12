@@ -8,7 +8,9 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { captureRunGitFacts, normalizeRunGitFacts } from "../src/core/run-environment.mjs";
-import { compareRuns, inspectRunStatus, normalizeRunBudget, normalizeRunSeed, parseWallTime } from "../src/core/run-record.mjs";
+import { appendFinalizedRun, appendRunEvent, compareRuns, inspectRunStatus, normalizeRunBudget, normalizeRunSeed, parseWallTime } from "../src/core/run-record.mjs";
+import { resumeRun } from "../src/core/run-supervisor.mjs";
+import * as publicCore from "../src/core/index.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCRATCH_ROOT = path.join(ROOT, ".claude", "tmp");
@@ -267,26 +269,32 @@ function validateRunTimeouts(project) {
     return;
   }
 
-  for (const [id, leaderIgnoresTerm, withChild, graceMs] of [
+  for (const [id, leaderIgnoresTerm, withChild, graceMs, earlyExit = false, naturalEnd = false] of [
     ["timeout-leader-exits", false, true, 1000],
     ["timeout-leader-ignores", true, true, 100],
     ["timeout-zero-grace", false, true, 0],
-    ["timeout-group-gone", false, false, maxDelay]
+    ["timeout-group-gone", false, false, maxDelay],
+    ["early-leader-natural", false, true, 100, true, true],
+    ["early-leader-deadline", false, true, 1000, true],
+    ["early-leader-zero-grace", false, true, 0, true]
   ]) {
+    const timeoutMs = earlyExit ? 4000 : 1200;
     const childMarker = path.join(project, `${id}.child`);
     const termMarker = path.join(project, `${id}.term`);
     const heartbeat = path.join(project, `${id}.heartbeat`);
+    const releaseMarker = path.join(project, `${id}.release`);
     const script = path.join(project, `${id}.mjs`);
-    const childCode = `const fs = require('node:fs'); process.on('SIGTERM', () => {}); fs.writeFileSync(${JSON.stringify(childMarker)}, String(process.pid)); setInterval(() => fs.appendFileSync(${JSON.stringify(heartbeat)}, '.'), 25); setTimeout(() => process.exit(0), 15000);`;
+    const childCode = `const fs = require('node:fs'); process.on('SIGTERM', () => {}); fs.writeFileSync(${JSON.stringify(childMarker)}, String(process.pid)); setInterval(() => { if (fs.existsSync(${JSON.stringify(releaseMarker)})) process.exit(0); fs.appendFileSync(${JSON.stringify(heartbeat)}, '.'); }, 25); setTimeout(() => process.exit(0), 15000);`;
     writeScript(script, `
       import fs from 'node:fs';
       import { spawn } from 'node:child_process';
       process.on('SIGTERM', () => { fs.writeFileSync(${JSON.stringify(termMarker)}, 'TERM'); ${leaderIgnoresTerm ? "" : "process.exit(0);"} });
       ${withChild ? `spawn(process.execPath, ['-e', ${JSON.stringify(childCode)}], { stdio: 'ignore' });` : ""}
+      ${earlyExit ? `setInterval(() => { if (fs.existsSync(${JSON.stringify(childMarker)})) process.exit(0); }, 10);` : ""}
       setInterval(() => {}, 1000);
       setTimeout(() => process.exit(0), 15000);
     `);
-    const started = startRun(project, id, ["--wall-time", "1200ms", "--kill-grace-ms", String(graceMs)], [process.execPath, script]);
+    const started = startRun(project, id, ["--wall-time", `${timeoutMs}ms`, "--kill-grace-ms", String(graceMs)], [process.execPath, script]);
     let targetPid = null;
     let childPid = null;
     try {
@@ -301,8 +309,28 @@ function validateRunTimeouts(project) {
         assert.equal(pgid.status, 0, pgid.stderr);
         assert.equal(Number(pgid.stdout.trim()), targetPid, "test child must remain in the target's process group");
       }
-      if (id === "timeout-leader-exits") {
-        waitForCondition(() => fs.existsSync(termMarker) && !processRunning(targetPid), "leader TERM exit");
+      if (earlyExit) {
+        waitForCondition(() => !processRunning(targetPid), `${id} leader exit before deadline`);
+        const pending = jsonCli(["run", "status", "--project", project, "--id", id, "--json"]);
+        assert.equal(pending.terminal, false, "early leader exit must not finalize a still-observed group");
+        assert.equal(pending.timeoutTriggered, false, "fixture must close its leader before the deadline");
+        assert.equal(processRunning(started.supervisorPid), true, "group wait must keep the supervisor alive");
+        assertJournal(project, id, { allowNoTerminal: true });
+        const before = fileState(runPath(project, id, "run.jsonl"));
+        const resumed = jsonCli(["run", "resume", "--project", project, "--id", id, "--json"]);
+        assert.equal(resumed.status, "active");
+        assert.equal(resumed.write, false);
+        assertFileStateEqual(fileState(runPath(project, id, "run.jsonl")), before, "resume before deadline");
+        const bytes = fs.statSync(heartbeat).size;
+        sleep(150);
+        assert.ok(fs.statSync(heartbeat).size > bytes, "child must continue work after early leader close");
+        if (naturalEnd) {
+          fs.writeFileSync(releaseMarker, "finish");
+          waitForCondition(() => !processRunning(childPid), `${id} natural child exit`);
+        }
+      }
+      if (id === "timeout-leader-exits" || (earlyExit && !naturalEnd && graceMs > 0)) {
+        waitForCondition(() => readJsonLines(runPath(project, id, "run.jsonl")).some((event) => event.type === "timeout.requested") && !processRunning(targetPid), "leader closed during timeout grace");
         const duringGrace = jsonCli(["run", "status", "--project", project, "--id", id, "--json"]);
         assert.equal(duringGrace.terminal, false, "leader exit must not declare terminal while group escalation is pending");
         assert.equal(duringGrace.timeoutTriggered, true);
@@ -317,15 +345,38 @@ function validateRunTimeouts(project) {
         assertFileStateEqual(fileState(runPath(project, id, "run.jsonl")), before, "resume during grace");
       }
       const status = waitForTerminal(project, id);
-      assert.equal(status.status, "timed-out");
-      assert.equal(status.timeoutTriggered, true);
-      if (!leaderIgnoresTerm && graceMs > 0) assert.equal(status.exitCode, 0, "receipt must retain leader TERM-handler exit code");
-      waitForCondition(() => !processRunning(targetPid) && !processRunning(started.supervisorPid) && (!withChild || !processRunning(childPid)), `${id} processes to stop`);
       const events = assertJournal(project, id);
+      const timedOut = !naturalEnd || status.timeoutTriggered;
+      assert.equal(status.status, timedOut ? "timed-out" : "succeeded");
+      assert.equal(status.timeoutTriggered, timedOut);
+      assert.equal(events.at(-1).outcome, status.status, "terminal event must use the current timeout state");
+      assert.equal(events.at(-1).timedOut, timedOut);
+      if (naturalEnd && !timedOut) {
+        const spawned = events.find((event) => event.type === "target.started");
+        assert.ok(Date.parse(events.at(-1).at) - Date.parse(spawned.at) < timeoutMs - 200, "natural completion must cancel the deadline, not merely finalize when it fires");
+      }
+      if (earlyExit || (!leaderIgnoresTerm && graceMs > 0)) assert.equal(status.exitCode, 0, "receipt must retain the leader's exit code, not its cached outcome");
+      if (earlyExit) {
+        assert.equal(status.signal, null);
+        if (timedOut) {
+          const requested = events.find((event) => event.type === "timeout.requested");
+          const spawned = events.find((event) => event.type === "target.started");
+          assert.ok(Date.parse(requested.at) - Date.parse(spawned.at) >= timeoutMs - 20, "early leader close must preserve the original deadline");
+        }
+      }
+      if (naturalEnd && timedOut) {
+        // Signal 0 cannot distinguish an unreaped orphan from a working child.
+        // Only accept this bounded conservative timeout if the dead fixture was
+        // still observable when TERM was requested; do not claim natural success.
+        assert.equal(processRunning(childPid), false);
+        assert.equal(events.find((event) => event.type === "timeout.requested").firstSignal.ok, true);
+        console.log("early-leader-natural: exited child remained observable (zombie); conservative deadline exercised, natural group disappearance not verified");
+      }
+      waitForCondition(() => !processRunning(targetPid) && !processRunning(started.supervisorPid) && (!withChild || !processRunning(childPid)), `${id} processes to stop`);
       assert.equal(events[0].timeout.scope, "process-group");
-      assert.deepEqual(events[0].budget, { timeoutMs: 1200, killGraceMs: graceMs });
-      assert.deepEqual(events.map((event) => event.type), ["run.started", "target.started", "timeout.requested", ...(withChild ? ["timeout.escalated"] : []), "run.terminal"]);
-      if (withChild) {
+      assert.deepEqual(events[0].budget, { timeoutMs, killGraceMs: graceMs });
+      assert.deepEqual(events.map((event) => event.type), ["run.started", "target.started", ...(timedOut ? ["timeout.requested", ...(withChild ? ["timeout.escalated"] : [])] : []), "run.terminal"]);
+      if (withChild && timedOut) {
         const escalation = events.find((event) => event.type === "timeout.escalated");
         assert.equal(escalation.secondSignal.ok, true);
         assert.equal(escalation.targetProcessGroup, targetPid);
@@ -339,7 +390,7 @@ function validateRunTimeouts(project) {
       const before = fileState(journal);
       const human = cli(["run", "status", "--project", project, "--id", id]);
       assert.equal(human.status, 0, human.stderr);
-      assert.match(human.stdout, /状态：timed-out/u);
+      assert.ok(human.stdout.includes(`状态：${status.status}`), human.stdout);
       assert.match(human.stdout, /生命周期：terminal/u);
       assert.equal(jsonCli(["run", "resume", "--project", project, "--id", id, "--json"]).write, false);
       assertFileStateEqual(fileState(journal), before, "terminal status and resume must be read-only");
@@ -391,20 +442,132 @@ function validateRunComparisonDeltas(project) {
   }
 }
 
+async function validateRunReceipts(project) {
+  assert.equal(publicCore.appendFinalizedRun, appendFinalizedRun);
+  assert.equal(Object.hasOwn(publicCore, "finalizeRunWithSupervisor"), false);
+  const fixture = (id, supervisorPid = null, targetPid = null) => {
+    const events = [{
+      schemaVersion: "dove.run.event.v1", seq: 1, at: "2026-09-02T00:00:00.000Z",
+      type: "run.started", runId: id, argv: ["never-execute-this-fixture"], cwd: project,
+      supervisorPid, metric: { name: "score", direction: "max", unit: null }
+    }];
+    if (targetPid) events.push({ schemaVersion: "dove.run.event.v1", seq: 2, at: "2026-09-02T00:00:01.000Z", type: "target.started", runId: id, targetPid });
+    return writeManualRunJournal(project, id, events);
+  };
+  fixture("direct-reconcile");
+  const reconciled = resumeRun({ project, id: "direct-reconcile" });
+  assert.equal(reconciled.write, true);
+  assert.equal(readJsonLines(runPath(project, "direct-reconcile", "run.jsonl")).at(-1).reconcilerPid, process.pid, "resume appends in its caller without any executable path");
+  assert.equal(resumeRun({ project, id: "direct-reconcile" }).write, false);
+  const finalized = publicCore.appendFinalizedRun(project, "direct-reconcile", { metricValue: 1 });
+  assert.equal(finalized.event.metric.value, 1);
+  assert.throws(() => appendFinalizedRun(project, "direct-reconcile", { metricValue: 2 }), /already finalized/u);
+  assert.equal(fs.existsSync(runPath(project, "direct-reconcile", ".journal.lock")), false, "precondition failure releases lock");
+  fixture("not-terminal");
+  assert.throws(() => appendFinalizedRun(project, "not-terminal", { metricValue: 1 }), /requires a terminal run/u);
+  assert.equal(fs.existsSync(runPath(project, "not-terminal", ".journal.lock")), false);
+
+  for (const [id, supervisor, target, status] of [["observed-supervisor", process.pid, null, "active"], ["observed-target", null, process.pid, "orphaned"]]) {
+    fixture(id, supervisor, target);
+    const before = fs.readFileSync(runPath(project, id, "run.jsonl"));
+    const result = resumeRun({ project, id });
+    assert.equal(result.status, status);
+    assert.equal(result.write, false);
+    assert.deepEqual(fs.readFileSync(runPath(project, id, "run.jsonl")), before);
+  }
+
+  fixture("append-error");
+  assert.throws(() => appendRunEvent(project, "append-error", "test.event", {}, {
+    fsOps: { ...fs, appendFileSync() { throw new Error("injected journal append failure"); } }
+  }), /injected journal append failure/u);
+  assert.equal(fs.existsSync(runPath(project, "append-error", ".journal.lock")), false, "I/O failure releases lock");
+  let attempts = 0;
+  appendRunEvent(project, "append-error", "test.retry", {}, {
+    fsOps: {
+      ...fs,
+      mkdirSync(target, ...args) {
+        if (target === runPath(project, "append-error", ".journal.lock") && attempts++ < 2) throw Object.assign(new Error("busy"), { code: "EEXIST" });
+        return fs.mkdirSync(target, ...args);
+      },
+      appendFileSync(target, ...args) {
+        assert.deepEqual(fs.readdirSync(runPath(project, "append-error", ".journal.lock")), [], "lock has no owner receipt");
+        return fs.appendFileSync(target, ...args);
+      }
+    }
+  });
+  assert.equal(attempts, 3, "brief contention retries before append");
+
+  for (const withOwner of [false, true]) {
+    const id = withOwner ? "leftover-owner-lock" : "leftover-empty-lock";
+    fixture(id);
+    const lockPath = runPath(project, id, ".journal.lock");
+    fs.mkdirSync(lockPath);
+    if (withOwner) fs.writeFileSync(path.join(lockPath, "owner.json"), '{"pid":null,"token":"old"}');
+    fs.utimesSync(lockPath, new Date(0), new Date(0));
+    const before = fs.readFileSync(runPath(project, id, "run.jsonl"));
+    const started = Date.now();
+    const result = cli(["run", "resume", "--project", project, "--id", id, "--json"]);
+    assert.notEqual(result.status, 0);
+    assert.ok(JSON.parse(result.stderr).message.includes(lockPath));
+    assert.match(result.stderr, /does not recover locks automatically/u);
+    assert.ok(Date.now() - started < 10000, "lock retry must be bounded");
+    assert.deepEqual(fs.readFileSync(runPath(project, id, "run.jsonl")), before);
+    assert.equal(fs.existsSync(lockPath), true, "leftover locks are never auto-recovered");
+    assert.deepEqual(fs.readdirSync(lockPath), withOwner ? ["owner.json"] : []);
+  }
+
+  fixture("concurrent-finalize");
+  resumeRun({ project, id: "concurrent-finalize" });
+  const contenders = await Promise.all([1, 2].map((value) => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [path.join(ROOT, "bin/dove.mjs"), "run", "finalize", "--project", project, "--id", "concurrent-finalize", "--metric-value", String(value), "--json"], { cwd: project, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ code, stdout, stderr }));
+  })));
+  assert.deepEqual(contenders.map((item) => item.code).sort(), [0, 1]);
+  assert.match(contenders.find((item) => item.code === 1).stderr, /already finalized/u);
+  const events = readJsonLines(runPath(project, "concurrent-finalize", "run.jsonl"));
+  assert.equal(events.filter((event) => event.type === "run.finalized").length, 1);
+  assert.deepEqual(events.map((event) => event.seq), [1, 2, 3]);
+
+  for (const mode of ["reconcile", "finalize"]) {
+    const result = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [path.join(ROOT, "bin/dove.mjs"), "__dove-run-supervisor"], { cwd: project, stdio: ["ignore", "ignore", "ignore", "ipc"] });
+      let failure;
+      child.on("message", (message) => {
+        if (message.type === "awaiting-config") child.send({ type: "config", payload: { mode } });
+        if (message.type === "failed") failure = message;
+      });
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, failure }));
+    });
+    assert.equal(result.code, 1);
+    assert.match(result.failure.error, /only supports start/u);
+  }
+}
+
 // Focused source-CLI checks need neither installation nor Git fixture commits.
 const comparisonsOnly = process.argv.includes("--comparisons-only");
-if (process.argv.includes("--timeouts-only") || comparisonsOnly) {
+const receiptsOnly = process.argv.includes("--receipts-only");
+if (process.argv.includes("--timeouts-only") || comparisonsOnly || receiptsOnly) {
   const project = fs.mkdtempSync(path.join(SCRATCH_ROOT, comparisonsOnly ? "dove-run-comparisons-" : "dove-run-timeouts-"));
   try {
+    // Stop Git discovery at the synthetic fixture, without creating commits or
+    // letting run metadata inspect the enclosing developer working tree.
+    fs.mkdirSync(path.join(project, ".git"));
     const at = new Date().toISOString();
     fs.mkdirSync(path.join(project, ".dove", "install"), { recursive: true });
     fs.writeFileSync(path.join(project, ".dove", "install", "manifest.json"), JSON.stringify({
       revision: "2.0", package: { name: "dove", version: "3.0.0" }, runtime: { mode: "user-cli" },
       hosts: ["claude"], managed: [], createdAt: at, updatedAt: at
     }));
-    if (comparisonsOnly) validateRunComparisonDeltas(project);
+    if (receiptsOnly) await validateRunReceipts(project);
+    else if (comparisonsOnly) validateRunComparisonDeltas(project);
     else validateRunTimeouts(project);
-    console.log(JSON.stringify({ status: "passed", scope: comparisonsOnly ? "run comparison deltas (source CLI)" : "run timeouts (source CLI)", platform: process.platform }, null, 2));
+    console.log(JSON.stringify({ status: "passed", scope: receiptsOnly ? "run journal receipts (source CLI)" : comparisonsOnly ? "run comparison deltas (source CLI)" : "run timeouts (source CLI)", platform: process.platform }, null, 2));
   } finally {
     fs.rmSync(project, { recursive: true, force: true });
   }
@@ -419,6 +582,7 @@ try {
   fs.mkdirSync(path.join(project, ".git"));
   const init = jsonCli(["init", "--project", project, "--host", "claude", "--json"]);
   assert.equal(init.status, "initialized");
+  await validateRunReceipts(project);
   validateRunTimeouts(project);
   validateRunComparisonDeltas(project);
   fs.writeFileSync(path.join(project, "package-lock.json"), "{\"lockfileVersion\":3}\n");
@@ -763,9 +927,10 @@ try {
   const staleLock = path.join(staleLockDir, ".journal.lock");
   fs.mkdirSync(staleLock, { mode: 0o700 });
   fs.writeFileSync(path.join(staleLock, "owner.json"), `${JSON.stringify({ schemaVersion: "dove.run.lock.v1", runId: "manual-stale-lock", pid: findUnobservedPid(), token: "stale", createdAt: "2026-09-02T00:00:00.000Z", operation: "manual-fixture" })}\n`, { mode: 0o600 });
-  const staleReconciled = jsonCli(["run", "resume", "--project", project, "--id", "manual-stale-lock", "--json"]);
-  assert.equal(staleReconciled.status, "interrupted");
-  assert.equal(fs.existsSync(staleLock), false, "stale journal lock must be removed after safe owner check");
+  const staleReconciled = cli(["run", "resume", "--project", project, "--id", "manual-stale-lock", "--json"]);
+  assert.notEqual(staleReconciled.status, 0);
+  assert.ok(JSON.parse(staleReconciled.stderr).message.includes(staleLock));
+  assert.equal(fs.existsSync(staleLock), true, "leftover journal lock is reported, not recovered");
 
   const liveLockDir = writeManualRunJournal(project, "manual-live-lock", [{
     schemaVersion: "dove.run.event.v1",
@@ -790,7 +955,8 @@ try {
   fs.writeFileSync(path.join(liveLock, "owner.json"), `${JSON.stringify({ schemaVersion: "dove.run.lock.v1", runId: "manual-live-lock", pid: process.pid, token: "live", createdAt: new Date().toISOString(), operation: "manual-fixture" })}\n`, { mode: 0o600 });
   const liveLocked = cli(["run", "resume", "--project", project, "--id", "manual-live-lock", "--json"]);
   assert.notEqual(liveLocked.status, 0);
-  assert.match(liveLocked.stderr, /active journal writer lock|observable pid/iu);
+  assert.match(liveLocked.stderr, /journal writer lock remains occupied/iu);
+  assert.ok(JSON.parse(liveLocked.stderr).message.includes(liveLock));
   assert.equal(fs.existsSync(liveLock), true, "observable live journal lock must not be deleted");
   fs.rmSync(liveLock, { recursive: true, force: true });
 

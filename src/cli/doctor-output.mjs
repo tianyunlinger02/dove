@@ -8,19 +8,15 @@ function softwareLine(result, color) {
 }
 
 function projectLine(result, color) {
-  const manifest = result.projectIntegration?.manifest ?? result.migrationInstallation?.manifest;
+  const manifest = result.projectIntegration?.manifest;
   const version = manifest?.package?.version;
   const recordedVersion = typeof version === "string" && version.trim() ? version : "未知";
   const label = `${terminalStyle("项目接入", "dim", { color })}  manifest 版本 ${recordedVersion}；`;
-  const migration = result.migrationInstallation?.state;
-  if (migration === "valid-legacy") return `${label}旧版安装标记不在当前采用范围`;
-  if (migration === "conflicting-manifests") return `${label}安装标记冲突`;
-  if (result.adoption?.state === "adoptable") return `${label}现有 Markdown 研究树可以通过 update 采用`;
   const state = result.projectIntegration?.state;
   const skipped = result.projectIntegration?.skippedLocalEdits?.length ?? 0;
-  const text = state === "current" ? "当前" : state === "needs-sync" && skipped > 0 ? `需要更新；${skipped} 个 manifest-owned 本地编辑会由 SessionStart 跳过` : state === "needs-sync" ? "需要更新" : state === "uninitialized" ? "尚未配置" : state === "drifted" ? "Dove 管理的配置已被修改" : "需要人工处理";
-  const syncCount = result.projectIntegration?.syncPaths?.length ?? 0;
-  return `${label}${text}${syncCount > 0 ? `；${syncCount} 个待同步路径` : ""}`;
+  const text = state === "current" ? "当前" : state === "needs-update" && skipped > 0 ? `需要更新；${skipped} 个 manifest-owned 本地编辑可由显式 dove update 替换` : state === "needs-update" ? "需要更新" : state === "uninitialized" ? "尚未配置" : "需要人工处理";
+  const updateCount = result.projectIntegration?.updatePaths?.length ?? 0;
+  return `${label}${text}${updateCount > 0 ? `；${updateCount} 个待更新路径` : ""}`;
 }
 
 function retiredHookLines(result) {

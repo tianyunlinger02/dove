@@ -26,7 +26,7 @@ Dove 能说清“代码、数据和仓库仍连续，但科学任务已经改变
 
 ## 用户得到实质质量评价，而不是工作完成分
 
-完整的逐级判据与假设性判例见[研究模型](./RESEARCH_MODEL.md)。评价主体是研究对象在当前范围与参照下有多好，不是做了多少搜索、测试或核查：
+完整的逐级判据与假设性判例见[研究模型](./RESEARCH_MODEL.md)。宿主常驻短核心，完整包托管 reference 位于 `.dove/install/RESEARCH_QUALITY.md`，不是 Lessons 或研究证据。Dove 在实质评级、重要路线选择、扩大开发或实验投入、核心结论与投稿完成判断前，以及决定性反证、任务身份变化或跨维权衡可能改变决策时主动读取。应用相关判据和联合条件，复用已读指导，不每步全表重审；不可读时说明限制，不编等级。隔离 reviewer 只获得运行时另供的 `.dove-package/RESEARCH_QUALITY.md`，不据此扩大材料或工具权限。评价主体是研究对象在当前范围与参照下有多好，不是做了多少搜索、测试或核查：
 
 | 维度 | 实质等级，从低到高 |
 |---|---|
@@ -105,10 +105,12 @@ Dove 的作者上下文在论文准备过程中可以进行作者侧科学自检
 
 以上边界不收紧合法记录维护，不要求把每项有用支撑变成科学贡献，也不否认有依据的负结果价值。支撑工作是否值得做，与它是否已经改变科学认识分开判断。
 
-用户显式 update 会覆盖 manifest-owned 集成中的本地修改并提醒；SessionStart 则跳过这些修改、继续同步其余安全资源，以 `systemMessage` 提醒。两者不改研究记录。Dove 不安装或管理 `statusLine`，旧 helper 只留给用户组合脚本；没有 `UserPromptSubmit`、隐藏 intake 或替代每轮 hook。
+用户显式 update 会覆盖 manifest-owned 集成中的本地修改并提醒；SessionStart 完全只读，只检查并按需以 `systemMessage` 提示显式 update，不同步任何资源、写配置或清理旧状态，也不重载当前会话。Doctor 的集成状态仅为 `uninitialized`、`current`、`needs-update`、`blocked`；没有 adoption、旧 manifest migration 或 hot-sync 成功路径，未知文件保留。两者不改研究记录。Claude 项目没有既有 `statusLine` 时，Dove 安装只读显示，使用宿主模型、总上下文容量、剩余上下文比例、Git 分支和当前 Claude 会话时长；不读取科研记录，不把分支或时长伪装成科学主线或累计科研工时。既有用户/Trellis line 不接管；没有 `UserPromptSubmit`、隐藏 intake 或替代每轮 hook。
 
 compact/resume 只提供事实卡：`RESEARCH.md` 是否存在及绝对修改时间；最新 Review 的 id、round、绝对更新时间和材料 currentness；最新 Run 的 id、绝对开始时间、status 和 exit。不读取研究 Markdown 正文、report 或 stdout/stderr logs，不猜主线；startup/clear 无研究卡。卡片帮助定位记录，不恢复科研判断。
 
 Run 收据保留命令、时间、结果、指标和比较依据，以及用户声明的 seed、Git commit 和 dirty 最低事实，不变成环境清单。Git 不改变比较资格或排名；机器比较也不替代科学可比性判断。Source 可以完成用户指定条目的有界 bibliography DOI 核验，但元数据核验不代表读过全文或支持主张。
 
-开发检查应清楚区分源内容、生成文件、软件测试、用户级安装、当前会话加载、真实任务行为和科研目标改善。较低层检查不能替代较高层结论。
+Review 调用前保存冻结轮次和待完成交换；外部调用后的保存失败不能伪装成会话历史回滚，resume 使用原请求会话及相同材料，匹配返回才确认连续性，不承诺找回未保存答复。Run 只在 start 使用 supervisor，resume 不重跑，finalize 只追加 terminal 后的标量；目录锁只作有界串行化，遗留锁报告路径，不按 PID 或年龄自动回收。文件事务处理捕获的失败，恢复失败时保留备份和绝对路径，不承诺崩溃恢复或外部副作用回滚。
+
+权限拒绝独立报告为运行事实；若其他获准路径完成了任务，不仅因曾拒绝一个工具就判整个任务失败；缺失工件、失败进程、未完成判断仍如实保留。开发检查应清楚区分源内容、生成文件、软件测试、用户级安装、当前会话加载、真实任务行为和科研目标改善。较低层检查不能替代较高层结论。

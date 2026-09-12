@@ -95,8 +95,9 @@ function assertDoveCliHelpRenderer() {
   assert.match(output, /doctor、review、run 与 hook 等项目级命令/u);
   assert.match(output, /真正的科研推进仍在一个 Dove agent 中完成/u);
   assert.match(output, /研究记录是研究者维护的普通 Markdown/u);
-  assert.match(output, /Dove 只管理 SessionStart 项目 hook，不安装也不暴露 UserPromptSubmit 或 Stop hook/u);
-  assert.doesNotMatch(output, /(^|[^A-Za-z0-9_])mcp([^A-Za-z0-9_]|$)|migrate-research|export-research|auto|paper-factory/iu);
+  assert.match(output, /Claude 接入管理只读 SessionStart hook，并在没有现有用户配置时安装只读 statusLine/u);
+  assert.match(output, /不安装也不暴露 UserPromptSubmit 或 Stop hook/u);
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "review", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
 }
 
 function assertProjectIntegrationRenderer() {
@@ -111,7 +112,7 @@ function assertProjectIntegrationRenderer() {
   }, { stream: { isTTY: false }, env: {} });
   assert.match(output, /已覆盖 1 个 manifest-owned 本地编辑/u);
   assert.match(output, /\.claude\/settings\?\.json#\/hooks\/SessionStart\[dove-session-start\]/u);
-  assert.match(output, /SessionStart 只会跳过这些本地编辑并提醒/u);
+  assert.match(output, /SessionStart 完全只读，不会修改这些本地编辑/u);
 
   const initializedResult = {
     status: "initialized",

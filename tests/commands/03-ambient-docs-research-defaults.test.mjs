@@ -2,6 +2,7 @@ import test from "node:test";
 
 import {
   assertAmbientRouting,
+  assertQualityReference,
   assertPackagedAgentPolicy,
   assertPublicDocumentationBoundaries,
   assertResearchDefaultsOwnership,
@@ -31,4 +32,8 @@ test("research defaults preserve researcher ownership", () => {
 
 test("Trellis frontend specs match installed Markdown templates", () => {
   assertTrellisSpecMirrors();
+});
+
+test("short research core keeps full quality guidance in the canonical reference", () => {
+  assertQualityReference();
 });

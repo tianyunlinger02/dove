@@ -30,8 +30,8 @@ Read-only requests and Status do not authorize maintenance.
 ## Lifecycle preservation
 
 - `init` creates integration and its manifest transactionally. It adds only the minimal researcher-owned `RESEARCH.md` bootstrap when the research directory is absent. Existing research trees remain untouched even without an overview; output must report whether a bootstrap was actually written.
-- `update`, product SessionStart sync, `reinstall`, and `uninstall` preserve existing `.dove/research/**`, `.dove/reviews/**`, `.dove/runs/**`, `.dove/install/DOCTOR.md`, and ordinary project files. They do not create missing summaries, complete navigation, replace Lessons, or delete retired researcher-visible material. Reinstall rebuilds only package-managed integration.
-- Legacy research data is detected read-only and left in place: no automatic conversion, deletion, normalization, or fallback reader. This is distinct from supported installation-manifest migration.
+- `update`, read-only product SessionStart, `reinstall`, and `uninstall` preserve existing `.dove/research/**`, `.dove/reviews/**`, `.dove/runs/**`, `.dove/install/DOCTOR.md`, and ordinary project files. They do not create missing summaries, complete navigation, replace Lessons, or delete retired researcher-visible material. Reinstall rebuilds only package-managed integration.
+- Legacy research data is detected read-only and left in place: no automatic conversion, deletion, normalization, or fallback reader. Unsupported installation manifests are blocked; there is no migration success path.
 - `doctor` is a read-only software/readability diagnostic, not research repair or a scientific health score. Missing optional summaries are not corruption.
 
 Host fragment retirement and SessionStart behavior belong in [Hook Guidelines](./hook-guidelines.md). Replacement conflicts, confirmation, containment, and transactions belong in [Type Safety](./type-safety.md).

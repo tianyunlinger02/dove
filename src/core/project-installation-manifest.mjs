@@ -2,12 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ARTIFACT_PATHS } from "./schema.mjs";
-import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 
 export const INSTALLATION_MANIFEST_PATH = ARTIFACT_PATHS.installationManifest;
 export const LEGACY_INSTALLATION_MANIFEST_PATH = ".dove-install/manifest.json";
 export const INSTALLATION_MANIFEST_REVISION = "2.0";
-export const PREVIOUS_INSTALLATION_MANIFEST_REVISION = "1.0";
 
 const MANIFEST_FIELDS = new Set(["revision", "package", "runtime", "hosts", "managed", "createdAt", "updatedAt"]);
 const PACKAGE_FIELDS = new Set(["name", "version"]);
@@ -58,7 +56,7 @@ function canonicalProjectRelativePath(value, label) {
   if (normalized !== value || normalized === "." || normalized === ".." || normalized.startsWith("../") || value.includes("//") || value.endsWith("/")) {
     throw new Error(`${label} must be one canonical project-relative path: ${value}`);
   }
-  if (value === ".dove" || value.startsWith(".dove/")) {
+  if ((value === ".dove" || value.startsWith(".dove/")) && value !== ".dove/install/RESEARCH_QUALITY.md") {
     throw new Error(`${label} must not manage Dove research or installation state: ${value}`);
   }
   return value;
@@ -87,6 +85,9 @@ function validateManagedEntry(entry, index) {
   const label = `Project installation manifest managed[${index}]`;
   assertFields(entry, MANAGED_FIELDS, label);
   canonicalProjectRelativePath(entry.path, `${label}.path`);
+  if (entry.path === ".dove/install/RESEARCH_QUALITY.md" && (entry.kind !== "exclusive-file" || entry.selector !== null)) {
+    throw new Error(`${label} must own RESEARCH_QUALITY.md as one exclusive file.`);
+  }
   if (!MANAGED_KINDS.has(entry.kind)) throw new Error(`${label}.kind is unsupported: ${entry.kind}.`);
   if (entry.kind === "exclusive-file") {
     if (entry.selector !== null) throw new Error(`${label}.selector must be null for exclusive-file ownership.`);
@@ -214,71 +215,15 @@ function inspectManifestFile(root, fsOps, manifestRelativePath) {
 
 export function readProjectInstallationManifest(root, options = {}) {
   const fsOps = options.fsOps ?? fs;
+  const doveStat = lstatOrNull(fsOps, path.join(root, ".dove"));
+  if (doveStat && (doveStat.isSymbolicLink() || !doveStat.isDirectory())) throw new Error("Dove installation parent .dove must be a real directory.");
+  if (lstatOrNull(fsOps, path.join(root, ".dove-install")) !== null) throw new Error("Dove found unsupported legacy installation state; resolve it explicitly without automatic migration or cleanup.");
   const manifestPath = inspectManifestFile(root, fsOps, INSTALLATION_MANIFEST_PATH);
   try {
-    const parsed = parseJsonWithoutDuplicateKeys(fsOps.readFileSync(manifestPath, "utf8"), "Dove project installation manifest");
+    const parsed = JSON.parse(fsOps.readFileSync(manifestPath, "utf8"));
     validateProjectInstallationManifest(parsed, options);
     return parsed;
   } catch (error) {
     throw new Error(`Invalid Dove project installation manifest at ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
-  }
-}
-
-function validatePreviousManagedEntry(entry, index) {
-  const label = `Dove 1.0 installation manifest managed[${index}]`;
-  assertPlainObject(entry, label);
-  const kind = entry.kind ?? entry.mode;
-  const normalized = { path: entry.path, kind, selector: entry.selector ?? null, digest: entry.digest };
-  validateManagedEntry(normalized, index);
-  return normalized;
-}
-
-function normalizePreviousManifest(value, manifestPath, options) {
-  assertPlainObject(value, "Dove 1.0 installation manifest");
-  const recognizedRevision = value.revision === PREVIOUS_INSTALLATION_MANIFEST_REVISION;
-  const recognizedReleasedShape = value.schemaVersion === 1
-    && value.integrationVersion === 4
-    && value.ownershipVersion === 4
-    && value.runtime?.protocolVersion === 3;
-  if (!recognizedRevision && !recognizedReleasedShape) {
-    throw new Error(`Dove migration accepts only installation revision ${PREVIOUS_INSTALLATION_MANIFEST_REVISION}.`);
-  }
-  const allowedHosts = normalizeAllowedHosts(options);
-  assertPlainObject(value.package, "Dove 1.0 installation manifest package");
-  nonEmptyString(value.package.name, "Dove 1.0 installation manifest package.name");
-  nonEmptyString(value.package.version, "Dove 1.0 installation manifest package.version");
-  if (!SEMVER.test(value.package.version)) throw new Error("Dove 1.0 installation manifest package.version must be a semantic version.");
-  if (value.runtime?.mode !== "user-cli") throw new Error("Dove 1.0 installation manifest runtime.mode must be user-cli.");
-  validateHosts(value.hosts, allowedHosts);
-  if (!Array.isArray(value.managed)) throw new Error("Dove 1.0 installation manifest managed must be an array.");
-  const managed = value.managed.map(validatePreviousManagedEntry);
-  if (new Set(managed.map(managedKey)).size !== managed.length) throw new Error("Dove 1.0 installation manifest managed entries must be unique.");
-  const createdAt = exactIsoTimestamp(value.createdAt, "Dove 1.0 installation manifest createdAt");
-  const updatedAt = exactIsoTimestamp(value.updatedAt, "Dove 1.0 installation manifest updatedAt");
-  if (Date.parse(updatedAt) < Date.parse(createdAt)) throw new Error("Dove 1.0 installation manifest updatedAt must not precede createdAt.");
-  return {
-    revision: PREVIOUS_INSTALLATION_MANIFEST_REVISION,
-    package: { name: value.package.name, version: value.package.version },
-    runtime: { mode: "user-cli" },
-    hosts: [...value.hosts],
-    managed,
-    createdAt,
-    updatedAt,
-    sourcePath: manifestPath
-  };
-}
-
-export function readProjectInstallationManifestForMigration(root, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  const relativePath = options.manifestPath ?? INSTALLATION_MANIFEST_PATH;
-  if (![INSTALLATION_MANIFEST_PATH, LEGACY_INSTALLATION_MANIFEST_PATH].includes(relativePath)) {
-    throw new Error(`Unsupported Dove installation migration manifest path: ${relativePath}.`);
-  }
-  const manifestPath = inspectManifestFile(root, fsOps, relativePath);
-  try {
-    const parsed = parseJsonWithoutDuplicateKeys(fsOps.readFileSync(manifestPath, "utf8"), "Dove 1.0 installation manifest");
-    return normalizePreviousManifest(parsed, relativePath, options);
-  } catch (error) {
-    throw new Error(`Invalid Dove 1.0 installation manifest at ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
   }
 }

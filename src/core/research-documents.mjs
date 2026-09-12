@@ -3,7 +3,6 @@ import path from "node:path";
 
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 import { RESEARCH_DEFAULT_PATHS } from "./research-defaults.mjs";
-import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 
 const V2_FORMAT_PATH = ".dove/format.json";
 const V2_FORMAT = "dove-research-v2";
@@ -85,10 +84,7 @@ export function inspectResearchDocuments(root, options = {}) {
         if (format.isSymbolicLink() || !format.isFile()) {
           throw new Error(`${V2_FORMAT_PATH} must be a regular file without symbolic links.`);
         }
-        const marker = parseJsonWithoutDuplicateKeys(
-          new TextDecoder("utf-8", { fatal: true }).decode(anchor.readFile(V2_FORMAT_PATH)),
-          V2_FORMAT_PATH
-        );
+        const marker = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(anchor.readFile(V2_FORMAT_PATH)));
         if (marker?.format === V2_FORMAT && Object.keys(marker).length === 1) {
           return emptyResult("previous-research-format", { legacyDataPolicy: "Old legacy research data is left in place; Dove does not automatically convert or delete it." });
         }

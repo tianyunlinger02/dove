@@ -1,8 +1,6 @@
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 
-import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
-
 export const DOVE_REVIEW_BACKEND_ID = "claude-code";
 
 const BASE_CLAUDE_ARGS = Object.freeze([
@@ -16,10 +14,6 @@ const BASE_CLAUDE_ARGS = Object.freeze([
   "--print",
   "--output-format", "json"
 ]);
-
-function sha256(content) {
-  return crypto.createHash("sha256").update(content).digest("hex");
-}
 
 function exactIsoTimestamp(value = new Date()) {
   const timestamp = value instanceof Date ? value.toISOString() : value;
@@ -36,7 +30,7 @@ function commandFromOptions(options = {}) {
 function parseClaudeJson(stdout) {
   const text = String(stdout ?? "").trim();
   if (!text) throw new Error("Claude Code returned no JSON output.");
-  const value = parseJsonWithoutDuplicateKeys(text, "Claude Code JSON output");
+  const value = JSON.parse(text);
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Claude Code JSON output must be an object.");
   return value;
 }
@@ -87,7 +81,6 @@ export function runClaudeReviewBackend(options = {}) {
     cwd: options.workspaceRoot,
     startedAt,
     completedAt,
-    promptSha256: sha256(Buffer.from(String(options.prompt ?? ""), "utf8")),
     requestedSessionId,
     resumed,
     exitStatus: spawned.status ?? null,
@@ -105,6 +98,7 @@ export function runClaudeReviewBackend(options = {}) {
 
   try {
     const payload = parseClaudeJson(spawned.stdout);
+    if (payload.is_error === true) throw new Error(typeof payload.result === "string" ? payload.result : "Claude Code returned a reviewer session error.");
     const sessionId = validateSessionId(payload, requestedSessionId);
     const report = reportFromPayload(payload);
     return {
@@ -114,9 +108,7 @@ export function runClaudeReviewBackend(options = {}) {
       backend: {
         ...baseRecord,
         status: "completed",
-        sessionId,
-        resultSha256: sha256(Buffer.from(report, "utf8")),
-        claudeJsonFields: Object.keys(payload).sort()
+        sessionId
       }
     };
   } catch (error) {

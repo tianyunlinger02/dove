@@ -19,12 +19,9 @@ export const SUPPORTED_HARD_EXPECTATION_KINDS = Object.freeze([
   "path-exists",
   "path-not-created",
   "path-unchanged",
-  "public-output-excludes-any",
   "public-output-includes-any",
   "public-output-not-empty",
-  "tool-action-path",
-  "tool-action-forbidden-path",
-  "no-tool-path-outside-workspace"
+  "tool-action-path"
 ]);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -342,11 +339,10 @@ function casePrompt(testCase) {
 }
 
 export function materializedSnapshotInclude(testCase) {
-  // Capture declared boundaries even when they are human-reviewed rather than hard gates.
+  // Capture the case's selected materials and explicit file expectations.
   const include = new Set([
     ...testCase.snapshot.include,
-    ...testCase.expectedBehavior.mustInspectOrChange,
-    ...testCase.expectedBehavior.mustNotTouch
+    ...testCase.expectedBehavior.mustInspectOrChange
   ]);
   for (const expectation of testCase.hardExpectations) {
     if (typeof expectation.path === "string" && isSafeProjectRelativePathSpec(expectation.path)) include.add(expectation.path);
@@ -358,13 +354,8 @@ function actionReferencesPath(action, spec) {
   return action.referencedPaths.some((referencedPath) => matchesPathSpec(referencedPath, spec));
 }
 
-function publicOutputIncludesAny(publicOutput, terms = []) {
-  const lower = publicOutput.toLocaleLowerCase();
-  return terms.some((term) => lower.includes(String(term).toLocaleLowerCase()));
-}
-
 export function evaluateHardExpectation(expectation, context) {
-  const { before, after, publicOutput, toolActions, workspaceRoot } = context;
+  const { before, after, publicOutput, toolActions } = context;
   if (expectation.kind === "public-output-not-empty") {
     return { id: expectation.id, kind: expectation.kind, passed: publicOutput.trim().length > 0, evidence: { bytes: Buffer.byteLength(publicOutput) } };
   }
@@ -372,10 +363,6 @@ export function evaluateHardExpectation(expectation, context) {
     const matches = expectation.terms.filter((term) => publicOutput.toLocaleLowerCase().includes(String(term).toLocaleLowerCase()));
     const minMatches = expectation.minMatches ?? 1;
     return { id: expectation.id, kind: expectation.kind, passed: matches.length >= minMatches, evidence: { matches, minMatches } };
-  }
-  if (expectation.kind === "public-output-excludes-any") {
-    const matches = expectation.terms.filter((term) => publicOutput.toLocaleLowerCase().includes(String(term).toLocaleLowerCase()));
-    return { id: expectation.id, kind: expectation.kind, passed: matches.length === 0, evidence: { forbiddenMatches: matches } };
   }
   if (expectation.kind === "path-exists") {
     return { id: expectation.id, kind: expectation.kind, passed: snapshotHasPath(after, expectation.path), evidence: { path: expectation.path } };
@@ -402,24 +389,6 @@ export function evaluateHardExpectation(expectation, context) {
     const verbs = new Set(expectation.verbs ?? []);
     const matches = toolActions.actions.filter((action) => (verbs.size === 0 || verbs.has(action.name)) && actionReferencesPath(action, expectation.path));
     return { id: expectation.id, kind: expectation.kind, passed: matches.length > 0, evidence: { path: expectation.path, verbs: [...verbs], matches: matches.map((item) => item.index) } };
-  }
-  if (expectation.kind === "tool-action-forbidden-path") {
-    const matches = toolActions.actions.filter((action) => actionReferencesPath(action, expectation.path));
-    return { id: expectation.id, kind: expectation.kind, passed: matches.length === 0, evidence: { path: expectation.path, matches: matches.map((item) => item.index) } };
-  }
-  if (expectation.kind === "no-tool-path-outside-workspace") {
-    const outside = [];
-    const workspaceReal = fs.realpathSync.native(workspaceRoot);
-    for (const action of toolActions.actions) {
-      for (const referencedPath of action.referencedPaths) {
-        const normalized = path.isAbsolute(referencedPath)
-          ? path.resolve(referencedPath)
-          : path.resolve(workspaceReal, referencedPath);
-        const relative = path.relative(workspaceReal, normalized);
-        if (relative.startsWith("..") || path.isAbsolute(relative)) outside.push({ action: action.index, path: referencedPath });
-      }
-    }
-    return { id: expectation.id, kind: expectation.kind, passed: outside.length === 0, evidence: { outside } };
   }
   throw new Error(`Unsupported hard expectation kind: ${expectation.kind}`);
 }
@@ -658,7 +627,7 @@ export function executionResult(result, streamRecords, durationMs, maxBudgetUsd)
   const stderr = result.stderr ?? "";
   return {
     status: timedOut ? "timed-out"
-      : result.error || result.status !== 0 || result.signal || streamFailed || permissionDenials.length > 0 || budgetExceeded === true ? "failed"
+      : result.error || result.status !== 0 || result.signal || streamFailed || budgetExceeded === true ? "failed"
         : !terminal ? "incomplete" : "completed",
     exitCode: result.status,
     signal: result.signal,

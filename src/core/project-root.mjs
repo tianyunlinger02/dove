@@ -48,23 +48,27 @@ function lstatOrNull(fsOps, targetPath) {
   }
 }
 
-function preservedDoctorOnly(directoryPath, directoryStat, fsOps) {
+function preservedInstallationDirectory(directoryPath, directoryStat, fsOps) {
   if (directoryStat === null) return false;
   if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) return false;
   const children = fsOps.readdirSync(directoryPath).map(String).sort();
-  if (children.length !== 1 || children[0] !== "DOCTOR.md") return false;
+  if (children.length > 1 || (children.length === 1 && children[0] !== "DOCTOR.md")) return false;
+  if (children.length === 0) return true;
   const doctorStat = lstatOrNull(fsOps, path.join(directoryPath, "DOCTOR.md"));
   return doctorStat?.isFile() === true && !doctorStat.isSymbolicLink();
 }
 
 function installationStateAt(root, options) {
   const fsOps = options.fsOps ?? fs;
+  const doveStat = lstatOrNull(fsOps, path.join(root, ".dove"));
+  if (doveStat && (doveStat.isSymbolicLink() || !doveStat.isDirectory())) throw new Error(`Dove installation parent must be a real directory: ${root}/.dove.`);
+  if (lstatOrNull(fsOps, path.join(root, ".dove-install")) !== null) throw legacyInitError(root);
   const directoryPath = path.join(root, INSTALLATION_DIRECTORY);
   const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);
   const manifestStat = lstatOrNull(fsOps, manifestPath);
   if (manifestStat === null) {
     const directoryStat = lstatOrNull(fsOps, directoryPath);
-    if (directoryStat === null || preservedDoctorOnly(directoryPath, directoryStat, fsOps)) return { state: "absent", root, manifestPath };
+    if (directoryStat === null || preservedInstallationDirectory(directoryPath, directoryStat, fsOps)) return { state: "absent", root, manifestPath };
     return { state: "residue", root, manifestPath, directoryPath, directoryStat };
   }
   if (manifestStat.isSymbolicLink()) throw new Error(`Dove project installation manifest must not be a symbolic link: ${manifestPath}.`);
@@ -82,11 +86,10 @@ function assertSafeInitCandidate(candidate, installation) {
   throw new Error(`Dove installation directory is incomplete because ${INSTALLATION_MANIFEST_PATH} is missing at ${candidate}.`);
 }
 
-function setupEvidenceAt(root, fsOps, options = {}) {
+function setupEvidenceAt(root, fsOps) {
   const paths = [
     INSTALLATION_MANIFEST_PATH,
-    LEGACY_INSTALLATION_MANIFEST_PATH,
-    ...(options.includeResearch === true ? [".dove/manifest.json"] : [])
+    LEGACY_INSTALLATION_MANIFEST_PATH
   ];
   for (const relativePath of paths) {
     const target = path.join(root, relativePath);
@@ -104,20 +107,14 @@ function setupEvidenceAt(root, fsOps, options = {}) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) {
       throw new Error(`Dove setup path must be a real directory: ${target}.`);
     }
-    if (relativePath === INSTALLATION_DIRECTORY && preservedDoctorOnly(target, stat, fsOps)) continue;
+    if (relativePath === INSTALLATION_DIRECTORY && preservedInstallationDirectory(target, stat, fsOps)) continue;
     return { state: "residue", relativePath };
   }
   return { state: "absent", relativePath: null };
 }
 
-function legacyInitError(candidate, root, evidence) {
-  if (evidence.relativePath === LEGACY_INSTALLATION_MANIFEST_PATH) {
-    return new Error(`Dove found a legacy project installation at ${root}. Current adoption accepts only a readable Markdown research tree with the old .dove/manifest.json marker. Run 'dove doctor --json' before choosing explicit reinstall or manual recovery.`);
-  }
-  if (evidence.relativePath === ".dove/manifest.json") {
-    return new Error(`Dove found existing Dove research workspace state at ${root}. Run 'dove update' to adopt it when the Markdown research tree is current, or 'dove doctor --json' for diagnosis.`);
-  }
-  return new Error(`Dove found incomplete legacy Dove state at ${root}. Run 'dove doctor --json' before initializing another project.`);
+function legacyInitError(root) {
+  return new Error(`Dove found unsupported or incomplete installation state at ${root}. Run 'dove doctor --json' and resolve it explicitly; Dove does not migrate or clean it up.`);
 }
 
 function gitRootFrom(start, fsOps) {
@@ -155,8 +152,8 @@ export function resolveProjectRootForInit(project, options = {}) {
       if (index === 0) throw new Error(`Dove project integration is already initialized at ${directory}. Use dove update instead.`);
       throw new Error(`Refusing nested Dove project initialization at ${candidate}; an initialized project already exists at ${directory}.`);
     }
-    const evidence = setupEvidenceAt(directory, fsOps, { includeResearch: index === 0 });
-    if (evidence.state !== "absent") throw legacyInitError(candidate, directory, evidence);
+    const evidence = setupEvidenceAt(directory, fsOps);
+    if (evidence.state !== "absent") throw legacyInitError(directory);
   }
 
   return !explicitProject && gitRoot !== null ? gitRoot : candidate;
@@ -192,6 +189,8 @@ export function resolveInstalledProjectRoot(start, options = {}) {
   for (const directory of parentDirectories(startingDirectory)) {
     const installation = installationStateAt(directory, options);
     if (installation.state === "initialized") return directory;
+    if (installation.state === "residue") throw new Error(`Dove installation state is incomplete at ${directory}.`);
+    if (lstatOrNull(fsOps, path.join(directory, ".git")) !== null || packageProjectBoundary(directory, fsOps)) break;
   }
   throw initRequiredError(startingDirectory);
 }
@@ -218,7 +217,7 @@ export function inspectProjectRoot(start, options = {}) {
     const message = error instanceof Error ? error.message : String(error);
     const uninitialized = message.includes("Dove project integration is not initialized");
     return Object.freeze({
-      state: uninitialized ? "uninitialized" : "invalid",
+      state: uninitialized ? "uninitialized" : "blocked",
       initialized: false,
       start: canonicalStart,
       root: null,

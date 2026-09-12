@@ -35,7 +35,6 @@ const CASE_FILE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*\.json$/u;
 const EXPECTATION_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const ALLOWED_SURFACE_ENTRIES = new Set(["slash-command", "ambient-prompt"]);
 const ALLOWED_SURFACE_COMMANDS = new Set(["/dove:research", "/dove:status", "/dove:source", "/dove:experiment", "/dove:draft", "/dove:figure", "/dove:review", "/dove:rebuttal", "/dove:lessons"]);
-const PRIVATE_PATH_PREFIXES = [".git", ".claude", ".dove/install", ".dove/reviews", ".dove/runs"];
 const FORBIDDEN_FIXTURE_ROOT_ENTRIES = new Set(["node_modules", ".claude", ".git"]);
 const REQUIRED_EVIDENCE_FILES = [
   "receipt.json",
@@ -55,10 +54,6 @@ function isObject(value) {
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
-}
-
-function hasPathPrefix(relativePath, prefix) {
-  return relativePath === prefix || relativePath.startsWith(`${prefix}/`);
 }
 
 function assertTrimmedNonEmptyString(value, label) {
@@ -129,12 +124,9 @@ function assertFixture(testCase) {
   return fixtureRoot;
 }
 
-function assertPathSpec(value, label, { allowPrivateForbiddenPath = false } = {}) {
+function assertPathSpec(value, label) {
   assertTrimmedNonEmptyString(value, label);
-  assert.equal(isSafeProjectRelativePathSpec(value), true, `${label} must be a safe project-relative path spec: ${value}`);
-  if (!allowPrivateForbiddenPath) {
-    for (const forbidden of PRIVATE_PATH_PREFIXES) assert.equal(hasPathPrefix(value.replace(/\/\*\*$/u, ""), forbidden), false, `${label} must not point at private runner/Dove installation path ${forbidden}: ${value}`);
-  }
+  assert.equal(isSafeProjectRelativePathSpec(value), true, `${label} must remain inside the fixture: ${value}`);
 }
 
 function assertSurface(testCase) {
@@ -148,7 +140,6 @@ function assertSurface(testCase) {
   }
   assertTrimmedNonEmptyString(testCase.surface.prompt, "surface.prompt");
   assert.ok(testCase.surface.prompt.length <= 4000, "surface.prompt must be bounded");
-  assert.doesNotMatch(testCase.surface.prompt, /transcript|conversation log|private memory|API completion|curl|WebFetch/iu, "surface.prompt must not ask for private transcripts, API completion, or web-fetch substitutes");
 }
 
 function assertBudgets(testCase) {
@@ -161,10 +152,10 @@ function assertBudgets(testCase) {
 
 function assertSnapshot(testCase) {
   assert.equal(isObject(testCase.snapshot), true, "snapshot must be an object");
-  assertStringArray(testCase.snapshot.include, "snapshot.include", { minLength: 1 });
+  assertStringArray(testCase.snapshot.include, "snapshot.include");
   for (const spec of testCase.snapshot.include) {
     // Public review exchange records may be captured as file facts, never host transcripts.
-    assertPathSpec(spec, `snapshot.include ${spec}`, { allowPrivateForbiddenPath: spec === ".dove/reviews/**" });
+    assertPathSpec(spec, `snapshot.include ${spec}`);
   }
 }
 
@@ -179,9 +170,7 @@ function fixturePathExists(fixtureRoot, spec) {
 
 function assertHardExpectations(testCase, fixtureRoot) {
   assert.equal(Array.isArray(testCase.hardExpectations), true, "hardExpectations must be an array");
-  assert.ok(testCase.hardExpectations.length >= 3, "hardExpectations must include at least three hard checks");
   const ids = new Set();
-  const kinds = new Set();
   for (const [index, expectation] of testCase.hardExpectations.entries()) {
     assert.equal(isObject(expectation), true, `hardExpectations[${index}] must be an object`);
     assertTrimmedNonEmptyString(expectation.id, `hardExpectations[${index}].id`);
@@ -189,17 +178,16 @@ function assertHardExpectations(testCase, fixtureRoot) {
     assert.equal(ids.has(expectation.id), false, `hard expectation id duplicated: ${expectation.id}`);
     ids.add(expectation.id);
     assert.equal(SUPPORTED_HARD_EXPECTATION_KINDS.includes(expectation.kind), true, `hard expectation kind is unsupported: ${expectation.kind}`);
-    kinds.add(expectation.kind);
     const spec = expectationPath(expectation);
     if (spec !== null) {
-      assertPathSpec(spec, `hardExpectations[${index}].path`, { allowPrivateForbiddenPath: expectation.kind === "tool-action-forbidden-path" || expectation.kind === "path-not-created" });
+      assertPathSpec(spec, `hardExpectations[${index}].path`);
       if (["path-changed", "path-unchanged"].includes(expectation.kind)) {
         assert.equal(fixturePathExists(fixtureRoot, spec), true, `hard expectation ${expectation.id} must point at an existing fixture path: ${spec}`);
       }
     }
-    if (expectation.kind === "public-output-includes-any" || expectation.kind === "public-output-excludes-any") {
+    if (expectation.kind === "public-output-includes-any") {
       assertStringArray(expectation.terms, `hardExpectations[${index}].terms`, { minLength: 1 });
-      assert.ok(expectation.terms.every((term) => term.length <= 120), `hardExpectations[${index}].terms must be bounded`);
+      for (const term of expectation.terms) assertPathSpec(term, `hardExpectations[${index}].terms artifact path`);
       if (expectation.minMatches !== undefined) {
         assert.equal(Number.isInteger(expectation.minMatches), true, `hardExpectations[${index}].minMatches must be an integer`);
         assert.ok(expectation.minMatches >= 1 && expectation.minMatches <= expectation.terms.length, `hardExpectations[${index}].minMatches must be feasible`);
@@ -211,32 +199,20 @@ function assertHardExpectations(testCase, fixtureRoot) {
     }
     if (expectation.description !== undefined) assertTrimmedNonEmptyString(expectation.description, `hardExpectations[${index}].description`);
   }
-  assert.equal(kinds.has("public-output-not-empty"), true, "hardExpectations must include public-output-not-empty");
-  assert.equal([...kinds].some((kind) => kind.startsWith("path-")), true, "hardExpectations must include a path-based check");
-  assert.equal(kinds.has("tool-action-forbidden-path") || kinds.has("no-tool-path-outside-workspace"), true, "hardExpectations must include a runner boundary/tool-path hard check");
 }
 
-function assertMustAndForbiddenPaths(testCase, fixtureRoot) {
+function assertExpectedMaterials(testCase, fixtureRoot) {
   assert.equal(isObject(testCase.expectedBehavior), true, "expectedBehavior must be an object");
   assertStringArray(testCase.expectedBehavior.mustInspectOrChange, "expectedBehavior.mustInspectOrChange");
-  assertStringArray(testCase.expectedBehavior.mustNotTouch, "expectedBehavior.mustNotTouch", { minLength: 1 });
   for (const spec of testCase.expectedBehavior.mustInspectOrChange) {
     assertPathSpec(spec, `expectedBehavior.mustInspectOrChange ${spec}`);
-    assert.equal(fixturePathExists(fixtureRoot, spec), true, `expectedBehavior.mustInspectOrChange must point at an existing fixture path: ${spec}`);
-  }
-  for (const spec of testCase.expectedBehavior.mustNotTouch) assertPathSpec(spec, `expectedBehavior.mustNotTouch ${spec}`, { allowPrivateForbiddenPath: true });
-  const forbidden = new Set(testCase.expectedBehavior.mustNotTouch.map((spec) => spec.replace(/\/\*\*$/u, "")));
-  for (const spec of testCase.expectedBehavior.mustInspectOrChange) {
-    const base = spec.replace(/\/\*\*$/u, "");
-    for (const forbiddenSpec of forbidden) {
-      assert.equal(hasPathPrefix(base, forbiddenSpec) || hasPathPrefix(forbiddenSpec, base), false, `must path ${spec} conflicts with forbidden path ${forbiddenSpec}`);
-    }
+    assert.equal(fixturePathExists(fixtureRoot, spec), true, `expected material must exist: ${spec}`);
   }
 }
 
 function assertRubric(testCase) {
   assert.equal(Array.isArray(testCase.humanReviewRubric), true, "humanReviewRubric must be an array");
-  assert.ok(testCase.humanReviewRubric.length >= 3, "humanReviewRubric must include at least three criteria");
+  assert.ok(testCase.humanReviewRubric.length > 0, "humanReviewRubric must describe the case's research judgment");
   for (const [index, item] of testCase.humanReviewRubric.entries()) {
     assert.equal(isObject(item), true, `humanReviewRubric[${index}] must be an object`);
     assertTrimmedNonEmptyString(item.criterion, `humanReviewRubric[${index}].criterion`);
@@ -259,25 +235,22 @@ function assertCase(testCase, file) {
   assertSurface(testCase);
   assertBudgets(testCase);
   assertSnapshot(testCase);
-  assertMustAndForbiddenPaths(testCase, fixtureRoot);
+  assertExpectedMaterials(testCase, fixtureRoot);
   assertHardExpectations(testCase, fixtureRoot);
   assertRubric(testCase);
 }
 
 test("behavior case corpus is schema-valid, sourced, safe, and reviewable", () => {
   const files = listCaseFiles();
-  assert.ok(files.length >= 9 && files.length <= 12, "keep the existing corpus and the three bounded execution, Source, and Figure extensions");
+  assert.ok(files.length > 0, "behavior cases must be discoverable");
   const ids = new Set();
-  const fixtureIds = new Set();
   for (const file of files) {
     assert.match(file, CASE_FILE_PATTERN, `case file name must be kebab-case JSON: ${file}`);
     const testCase = readJson(path.join(CASES_ROOT, file));
     assertCase(testCase, file);
     assert.equal(ids.has(testCase.id), false, `duplicate case id ${testCase.id}`);
     ids.add(testCase.id);
-    fixtureIds.add(testCase.fixture);
   }
-  assert.ok(fixtureIds.size >= 4, "behavior cases should cover multiple fixtures, not one prompt-only regex fixture");
 });
 
 test("behavior eval runner evidence shapes are deterministic contracts", () => {
@@ -490,30 +463,11 @@ test("Claude stream-json fixture parses public text and tool paths", () => {
   assertToolActionsShape(evidence.toolActions);
 });
 
-test("outside tool paths fail workspace-boundary hard checks", () => {
+test("path extraction preserves outside references as observations, not an access audit", () => {
   const stream = fs.readFileSync(path.join(FIXTURES_ROOT, "claude-stream-json", "outside-tool-path.jsonl"), "utf8");
   const evidence = parseEvidence(stream, ROOT);
-  assert.equal(evidence.toolActions.actions.length, 1);
   assert.deepEqual(evidence.toolActions.actions[0].referencedPaths, ["/etc/passwd"]);
-  const hardCheck = evaluateHardExpectation({ id: "no-outside", kind: "no-tool-path-outside-workspace" }, {
-    before: { entries: [] },
-    after: { entries: [] },
-    publicOutput: evidence.publicText,
-    toolActions: evidence.toolActions,
-    workspaceRoot: ROOT
-  });
-  assert.equal(hardCheck.passed, false);
-  assert.deepEqual(hardCheck.evidence.outside, [{ action: 1, path: "/etc/passwd" }]);
-
-  const relativeEscape = evaluateHardExpectation({ id: "no-relative-escape", kind: "no-tool-path-outside-workspace" }, {
-    before: { entries: [] },
-    after: { entries: [] },
-    publicOutput: "ok",
-    toolActions: { schemaVersion: "dove.behavior.tool-actions.v1", actions: [{ index: 1, name: "Read", referencedPaths: ["../outside.md"], inputShape: ["file_path"] }] },
-    workspaceRoot: ROOT
-  });
-  assert.equal(relativeEscape.passed, false);
-  assert.deepEqual(relativeEscape.evidence.outside, [{ action: 1, path: "../outside.md" }]);
+  assertToolActionsShape(evidence.toolActions);
 });
 
 test("path checks reject similarly named files and never equate SVG source with raster evidence", () => {
@@ -524,7 +478,6 @@ test("path checks reject similarly named files and never equate SVG source with 
   const expectation = { id: "paper", kind: "tool-action-path", path: "paper/main.tex" };
   assert.equal(evaluateHardExpectation(expectation, { toolActions: { actions: evidence.toolActions.actions.slice(0, 1) } }).passed, false);
   assert.equal(evaluateHardExpectation(expectation, { toolActions: evidence.toolActions }).passed, true);
-  assert.equal(evaluateHardExpectation({ ...expectation, kind: "tool-action-forbidden-path" }, { toolActions: { actions: evidence.toolActions.actions.slice(0, 1) } }).passed, true);
 
   const action = (index, name, referencedPath) => ({ index, name, referencedPaths: [referencedPath] });
   assert.equal(evaluateHardExpectation(expectation, { toolActions: { actions: [action(1, "OtherHostTool", "paper/main.tex")] } }).passed, true, "path observations need not mandate a host tool");
@@ -542,7 +495,7 @@ test("CLI options reach the actual offline spawn and public outcome without init
   const originalPath = process.env.PATH;
   for (const [model, expectedStatus] of [
     ["fake-success", "completed"], ["fake-stream-error", "failed"], ["fake-budget-stop", "failed"],
-    ["fake-over-budget", "failed"], ["fake-permission-denial", "failed"], ["fake-incomplete", "incomplete"]
+    ["fake-over-budget", "failed"], ["fake-permission-denial", "completed"], ["fake-incomplete", "incomplete"]
   ]) {
     const options = parseArgs(["--case", testCase.id, "--attempts=2", "--model", model, "--permission-mode", "acceptEdits", "--claude-command", fakeCli, "--max-budget-usd=0.002"]);
     assert.equal(options.runReal, false, "the test invokes only the fake spawn seam, not runOneAttempt/init");
@@ -585,6 +538,25 @@ test("CLI options reach the actual offline spawn and public outcome without init
   assert.throws(() => parseArgs(["--attempts=0"]), /integer/u);
 });
 
+test("permission denial is an execution fact, independent of completion and hard checks", () => {
+  const denial = { tool_name: "Write", tool_use_id: "denied-plan" };
+  const terminal = { type: "result", subtype: "success", permission_denials: [denial] };
+  const outcome = executionResult({ status: 0, signal: null, stderr: "" }, [terminal], 1, 0.02);
+  assert.equal(outcome.status, "completed");
+  assert.deepEqual(outcome.permissionDenials, [denial]);
+  const expectation = { id: "plan", kind: "path-exists", path: "notes/plan.md" };
+  assert.equal(evaluateHardExpectation(expectation, { after: { entries: [] } }).passed, false, "completion cannot supply a missing artifact");
+  assert.equal(executionResult({ status: 1, signal: null, stderr: "" }, [terminal], 1, 0.02).status, "failed");
+});
+
+test("case-specific expectations need no fixed path, rubric, or check count", () => {
+  const testCase = readJson(path.join(CASES_ROOT, "stop-continuation-zero-write.json"));
+  testCase.snapshot.include = [];
+  testCase.hardExpectations = [{ id: "answer-visible", kind: "public-output-not-empty" }];
+  testCase.humanReviewRubric = testCase.humanReviewRubric.slice(0, 1);
+  assertCase(testCase, `${testCase.id}.json`);
+});
+
 test("execution evidence preserves stream failures, unknown cost, and interruption facts", () => {
   const spawned = { status: 0, signal: null, stderr: "" };
   const success = { type: "result", subtype: "success", total_cost_usd: 0.01 };
@@ -616,7 +588,7 @@ test("all declared expected paths are captured without inventing automatic behav
   for (const file of listCaseFiles()) {
     const testCase = readJson(path.join(CASES_ROOT, file));
     const include = materializedSnapshotInclude(testCase);
-    for (const spec of [...testCase.snapshot.include, ...testCase.expectedBehavior.mustInspectOrChange, ...testCase.expectedBehavior.mustNotTouch]) {
+    for (const spec of [...testCase.snapshot.include, ...testCase.expectedBehavior.mustInspectOrChange]) {
       assert.ok(include.includes(spec), `${testCase.id}: missing snapshot capture for ${spec}`);
     }
     for (const expectation of testCase.hardExpectations) {

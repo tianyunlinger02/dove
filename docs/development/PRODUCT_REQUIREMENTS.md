@@ -7,6 +7,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - 用户面对一个 Dove research agent。普通 Claude rule 共享科研判断，`claude --agent dove` 启动作者主会话；有界独立科研调查可以使用 Dove subagent，需要完整对话、重要用户澄清或持续主线责任的工作不得委派。
 - 九个公开 Skills 保持为：`research`、`status`、`source`、`experiment`、`draft`、`figure`、`review`、`rebuttal`、`lessons`。
 - Skills 是同一个 Dove 的专项入口，不是不同人格、固定阶段或独立工作流。
+- 宿主常驻短核心，实质评级与重要研究决策主动读取完整 `.dove/install/RESEARCH_QUALITY.md`，复用已读内容，缺失则说明限制。隔离 reviewer 使用另供的 `.dove-package/RESEARCH_QUALITY.md`；两者均是包指导而非研究证据，不扩大权限或依赖 Lessons 才可达。
 - 默认多轮推进属于 Dove 本身；不得新增 Auto Skill、Auto command、隐藏后台任务或无界队列。
 - Claude Code 获得完整 Dove 集成；DeepSeek Harness 获得 project-local filesystem Skills only。
 
@@ -29,7 +30,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - `.dove/research/**` 是普通 researcher-owned Markdown。
 - 研究目录不存在时，init 只创建最小 `RESEARCH.md`；已有目录即使缺少 overview 也保持不变，输出必须区分实际创建与保留。Mission、Source、Experiment、Review、Claim 和 Lesson documents 按需出现。
 - 不得要求固定 headings、frontmatter、generated IDs、stored counts、research hashes、machine index 或数据库式记录。
-- `dove update`、SessionStart sync、reinstall 和 uninstall 必须保留现有 `.dove/research/**`、`.dove/reviews/**` 和 `.dove/runs/**` 内容；当前资源不得安装 `UserPromptSubmit` 或替代每轮 hook，旧 manifest-owned Dove `UserPromptSubmit` 只能精确退休且不得触碰用户/Trellis 其他 prompt hooks。
+- `dove update`、只读 SessionStart、reinstall 和 uninstall 必须保留现有 `.dove/research/**`、`.dove/reviews/**` 和 `.dove/runs/**` 内容；当前资源不得安装 `UserPromptSubmit` 或替代每轮 hook，旧 manifest-owned Dove `UserPromptSubmit` 只能精确退休且不得触碰用户/Trellis 其他 prompt hooks。
 - 研究 Markdown 只在用户要求、重要结论/决策/优先级改变，或对保存证据和后续恢复确实有用时维护。Lessons 可按更宽的 reusable-value 标准维护。
 - Mission 可追加真实结果、纠错和后续判断，但不得事后改写进入时的问题、原命题或范围来伪装成后来出现的新题；发生实质变化时保留原语义与原结论，并按实际情况记录暂定分支或用户授权主线。不得为此要求新文件、固定标题、append-only 存储或运行时状态。
 - 可在有恢复价值时使用普通 Markdown 相对链接和 project-relative artifact path 指向真实材料，但不得新增 link parser、backlink audit、一致性矩阵或数据库式一致性检查。
@@ -87,8 +88,8 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 ## 集成、恢复与运行收据
 
 - 显式 update 覆盖有效 manifest-owned 集成的本地修改，并在人类输出及 `replacedLocalEdits` JSON 中提醒；不覆盖用户自有文件或无关配置。
-- SessionStart 跳过本地修改，继续其余安全同步，以 `systemMessage` 提醒；磁盘更新不等于当前会话重新加载。
-- `statusLine` 不再安装或管理，旧 helper 只留给用户组合脚本；退休时保留用户修改版本和无关配置。
+- SessionStart 完全只读；集成非当前时可用 `systemMessage` 提示显式 update，不写资源、配置或清理状态，不重载当前会话。集成仅四态 `uninitialized`、`current`、`needs-update`、`blocked`，不提供 adoption、旧 manifest migration 或热同步。
+- Claude 项目没有既有 `statusLine` 时，Dove 安装只读状态栏，显示宿主模型、总上下文容量、剩余上下文比例、Git 分支和当前 Claude 会话时长；不读取科研记录，不把分支当科学主线或把会话时长当累计科研工时。既有用户/Trellis 状态栏不接管；Dove-owned 状态栏遵循显式 update/reinstall/uninstall ownership，并保留用户后续修改版本和无关配置。
 - compact/resume 只提供只读事实卡：`RESEARCH.md` 存在性与绝对 mtime；最新 Review 的 id、round、绝对 `updatedAt` 与材料 currentness；最新 Run 的 id、绝对 `startedAt`、status 与 exit。缺失或不可读保留 `unavailable`。不读研究 Markdown 正文、report 或 stdout/stderr logs，不推断主线；startup/clear 无研究卡。
 - Reviewer workspace 使用短路径，避免嵌入项目目录层级；路径本身不证明隔离行为。
 - Run 收据除命令、时间、结果、指标和比较依据外，只保留显式 seed 与 Git commit/dirty 最低事实，不扩展为环境分类清单。Git 不改变比较资格或排名；机器比较不替代科学可比性判断。

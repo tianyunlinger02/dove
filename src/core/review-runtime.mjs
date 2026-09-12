@@ -4,11 +4,10 @@ import path from "node:path";
 
 import { DOVE_REVIEW_BACKEND_ID, runClaudeReviewBackend } from "./review-claude-backend.mjs";
 import { REVIEW_MATERIAL_DENY_PATTERNS, createReviewSnapshot } from "./review-snapshot.mjs";
-import { assertReviewWorkspaceMatchesSnapshot, createReviewId, finalizePreparedReviewWorkspace, normalizeReviewId, prepareReviewWorkspace, resolveReviewStateRoot, restorePreparedReviewWorkspace, reviewWorkspaceName } from "./review-workspace.mjs";
+import { DOVE_REVIEW_QUALITY_REFERENCE_PATH, assertReviewWorkspaceMatchesSnapshot, createReviewId, finalizePreparedReviewWorkspace, normalizeReviewId, prepareReviewWorkspace, resolveReviewStateRoot, restorePreparedReviewWorkspace, reviewWorkspaceName } from "./review-workspace.mjs";
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
 import { resolveInstalledProjectRoot } from "./project-root.mjs";
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
-import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 import { renderDoveReviewerStanceSection, renderDoveSharedResearchContractSection } from "./dove-agent-persona.mjs";
 
 const REVIEW_RECORD_SCHEMA = "dove.review.record.v1";
@@ -61,7 +60,7 @@ function serializeJson(value) {
 }
 
 function materialLines(snapshot) {
-  return snapshot.materials.map((material) => `- ${material.path} (${material.size} bytes, sha256 ${material.sha256})`).join("\n");
+  return snapshot.materials.map((material) => `- ${material.path} (${material.size} bytes)`).join("\n");
 }
 
 function promptForRound(options) {
@@ -78,6 +77,8 @@ ${renderDoveSharedResearchContractSection()}
 ${renderDoveReviewerStanceSection()}
 
 You are running in a separate Claude Code reviewer session for Dove's isolated \`dove-review\` path. Review only the copied materials in this workspace. Your available tool is Read, and the large files are intentionally not inlined here.
+
+Full quality reference (workspace-relative): \`${DOVE_REVIEW_QUALITY_REFERENCE_PATH}\`. Read it proactively at the decision triggers above. This fixed package guidance is not user material or research evidence and grants no additional tool or material access. All scientific grounding remains limited to the listed frozen materials.
 
 Target venue: ${options.venue ?? "not specified"}
 Review id: ${options.reviewId}
@@ -120,8 +121,9 @@ function readReviewRecordWithState(projectRoot, reviewId, options = {}) {
   if (!stat) return { record: null, expectedState: absentFileState() };
   if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`Dove review record must be a regular non-symlink file: ${pathName}`);
   const bytes = anchor.readFile(pathName);
-  const value = parseJsonWithoutDuplicateKeys(bytes.toString("utf8"), pathName);
-  if (!value || typeof value !== "object" || Array.isArray(value) || value.schema !== REVIEW_RECORD_SCHEMA || value.id !== normalizeReviewId(reviewId)) {
+  const value = JSON.parse(bytes.toString("utf8"));
+  if (!value || typeof value !== "object" || Array.isArray(value) || value.schema !== REVIEW_RECORD_SCHEMA || value.id !== normalizeReviewId(reviewId)
+    || !Array.isArray(value.rounds) || !Number.isSafeInteger(value.currentRound) || value.currentRound < 0) {
     throw new Error(`Dove review record is not a valid Dove review record: ${pathName}`);
   }
   return { record: value, expectedState: { exists: true, type: "file", sha256: sha256(bytes), mode: stat.mode & 0o7777 } };
@@ -145,7 +147,7 @@ function readSnapshot(projectRoot, reviewId, round, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const pathName = roundPaths(reviewId, round).snapshot;
-  const value = parseJsonWithoutDuplicateKeys(anchor.readFile(pathName).toString("utf8"), pathName);
+  const value = JSON.parse(anchor.readFile(pathName).toString("utf8"));
   if (!value || typeof value !== "object" || Array.isArray(value) || !Array.isArray(value.materials)) throw new Error(`Dove review snapshot is invalid: ${pathName}`);
   return value;
 }
@@ -183,7 +185,6 @@ function makeRoundRecord(options) {
     latestReportPath: options.latestReportPath ?? paths.report,
     latestBackendPath: options.latestBackendPath ?? paths.backend,
     materials: options.materials,
-    reportSha256: options.reportSha256,
     sessionId: options.sessionId ?? null,
     imported: options.provenance === "imported",
     attempts: Array.isArray(options.attempts) ? options.attempts : []
@@ -205,7 +206,6 @@ function makeAttemptRecord(options) {
     createdAt: options.createdAt,
     reportPath: paths.report,
     backendPath: paths.backend,
-    reportSha256: options.reportSha256,
     sessionId: options.sessionId ?? null
   };
 }
@@ -266,13 +266,34 @@ function localBackendFailure(error, options = {}) {
   };
 }
 
+function prepareRuntimeRound(projectRoot, record, snapshot, workspaceRoot, requestedSessionId, options = {}) {
+  const now = exactIsoTimestamp(options.now ?? new Date());
+  const existingRound = record.rounds.find((item) => item.round === snapshot.round);
+  const roundRecord = existingRound
+    ? { ...existingRound, status: "pending", updatedAt: now }
+    : {
+      ...makeRoundRecord({
+        reviewId: record.id, round: snapshot.round, status: "pending", provenance: "runtime",
+        venue: snapshot.venue, createdAt: now, updatedAt: now, materials: snapshot.materials
+      }),
+      reportPath: null, backendPath: null, latestReportPath: null, latestBackendPath: null
+    };
+  const nextRecord = {
+    ...updateRecordForRound(record, roundRecord),
+    pendingExchange: { round: snapshot.round, workspaceRoot, requestedSessionId }
+  };
+  const entries = [{ relativePath: reviewPath(record.id), content: serializeJson(nextRecord), expectedState: options.recordExpectedState }];
+  if (!existingRound) entries.unshift({ relativePath: roundRecord.snapshotPath, content: serializeJson(snapshot), expectedState: absentFileState() });
+  writeReviewFiles(projectRoot, entries, options);
+  return nextRecord;
+}
+
 function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, options = {}) {
   const now = exactIsoTimestamp(options.now ?? new Date());
   const round = options.round;
-  const reportSha = sha256(reportBytes);
   const status = backend.status === "completed" ? "completed" : "failed";
   const existingRound = Array.isArray(record.rounds) ? record.rounds.find((item) => item.round === round) : null;
-  const appendAttempt = options.preserveCurrentRoundReturn === true && existingRound;
+  const appendAttempt = existingRound?.reportPath != null;
   const paths = appendAttempt ? roundAttemptPaths(record.id, round, nextAttemptNumber(existingRound)) : roundPaths(record.id, round);
   const attempts = appendAttempt
     ? [
@@ -284,7 +305,6 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
         status,
         provenance: "runtime",
         createdAt: now,
-        reportSha256: reportSha,
         sessionId: backend.sessionId ?? null
       })
     ]
@@ -308,26 +328,29 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
       createdAt: options.roundCreatedAt ?? now,
       updatedAt: now,
       materials: snapshot.materials,
-      reportSha256: reportSha,
       latestReportPath: paths.report,
       latestBackendPath: paths.backend,
       sessionId: backend.sessionId ?? null,
       attempts
     });
   const nextRecord = updateRecordForRound(record, roundRecord, { sessionId: backend.sessionId });
+  if (backend.status === "completed") delete nextRecord.pendingExchange;
   const recordState = options.recordExpectedState ?? fileState(projectRoot, reviewPath(record.id), options);
   const writeEntries = [
     { relativePath: paths.report, content: reportBytes, expectedState: absentFileState() },
     { relativePath: paths.backend, content: serializeJson(backend), encoding: "utf8", expectedState: absentFileState() },
     { relativePath: reviewPath(record.id), content: serializeJson(nextRecord), encoding: "utf8", expectedState: recordState }
   ];
-  if (!appendAttempt) writeEntries.unshift({ relativePath: roundPaths(record.id, round).snapshot, content: serializeJson(snapshot), encoding: "utf8", expectedState: absentFileState() });
-  writeReviewFiles(projectRoot, writeEntries, options);
+  try {
+    writeReviewFiles(projectRoot, writeEntries, options);
+  } catch (error) {
+    throw new Error(`Dove review ${record.id} return was not saved. The frozen materials and exchange records are retained; resume attempts the requested session, but cannot recover this unsaved return. ${error.message}`, { cause: error });
+  }
   return { record: nextRecord, round: roundRecord, reportPath: paths.report, backendPath: paths.backend, snapshotPath: roundPaths(record.id, round).snapshot };
 }
 
 function sessionIdOrThrow(record) {
-  const sessionId = record.session?.sessionId;
+  const sessionId = record.pendingExchange?.requestedSessionId ?? record.session?.sessionId;
   if (typeof sessionId !== "string" || !sessionId.trim()) throw new Error(`Dove review ${record.id} has no real runtime reviewer session id to resume.`);
   return sessionId;
 }
@@ -342,11 +365,13 @@ function assertCurrentRoundCanUseRuntime(record) {
 
 function recordedWorkspaceRoot(projectRoot, record, options = {}) {
   if (record.projectRoot !== projectRoot) throw new Error("Dove review record belongs to a different project.");
+  if (record.pendingExchange) return record.pendingExchange.workspaceRoot;
   const round = record.rounds.find((item) => item.provenance === "runtime" && item.sessionId === record.session.sessionId);
   if (!round) throw new Error("Dove review session has no recorded runtime workspace.");
   const anchor = openRootedFilesystem(projectRoot, { fsOps: options.fsOps ?? fs });
-  const backendPath = roundPaths(record.id, round.round).backend;
-  const backend = parseJsonWithoutDuplicateKeys(anchor.readFile(backendPath).toString("utf8"), backendPath);
+  const attempt = round.attempts.findLast((item) => item.status === "completed");
+  const backendPath = attempt?.backendPath ?? round.backendPath;
+  const backend = JSON.parse(anchor.readFile(backendPath).toString("utf8"));
   if (backend?.sessionId !== record.session.sessionId || typeof backend.cwd !== "string" || !backend.cwd) {
     throw new Error("Dove review backend is missing the workspace for its recorded session.");
   }
@@ -418,28 +443,24 @@ function materialOverall(items) {
   return "changed";
 }
 
-function materialMode(stat) {
-  return stat.mode & 0o7777;
-}
-
-function sameFileIdentity(left, right) {
-  return Number.isInteger(left?.dev) && Number.isInteger(left?.ino) && Number.isInteger(right?.dev) && Number.isInteger(right?.ino)
-    ? left.dev === right.dev && left.ino === right.ino
-    : true;
-}
-
-function readObservedRegularFile(anchor, relativePath, expectedStat) {
-  const fsOps = anchor.fsOps;
-  if (typeof fsOps.openSync !== "function" || typeof fsOps.fstatSync !== "function" || typeof fsOps.closeSync !== "function") throw new Error("Dove review material status requires file-descriptor reads for symlink-safe currentness checks.");
-  const flags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
-  const fd = fsOps.openSync(anchor.displayPath(relativePath), flags);
+function observeMaterialPath(anchor, relativePath) {
+  const observed = { exists: null, type: "unreadable", size: null, sha256: null };
   try {
-    const openedStat = fsOps.fstatSync(fd);
-    if (!openedStat.isFile()) throw new Error(`Dove review material is no longer a regular file: ${relativePath}`);
-    if (!sameFileIdentity(expectedStat, openedStat)) throw new Error(`Dove review material changed while status was reading it: ${relativePath}`);
-    return Buffer.from(fsOps.readFileSync(fd));
-  } finally {
-    fsOps.closeSync(fd);
+    const stat = anchor.tryLstat(relativePath);
+    observed.exists = stat !== null;
+    if (!stat) return { ...observed, type: "absent" };
+    if (stat.isSymbolicLink()) return { ...observed, type: "symlink" };
+    if (stat.isDirectory()) return { ...observed, type: "directory" };
+    if (!stat.isFile()) return { ...observed, type: "special" };
+    const absolutePath = anchor.displayPath(relativePath);
+    const canonical = anchor.fsOps.realpathSync.native?.(absolutePath) ?? anchor.fsOps.realpathSync(absolutePath);
+    if (path.relative(anchor.root, canonical).split(path.sep).join("/") !== relativePath) {
+      throw new Error(`Dove review material path must be canonical project-relative form: ${relativePath}`);
+    }
+    const bytes = anchor.fsOps.readFileSync(absolutePath);
+    return { exists: true, type: "file", size: bytes.length, sha256: sha256(bytes) };
+  } catch (error) {
+    return { ...observed, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -450,36 +471,20 @@ function observedMaterialFact(material, options = {}) {
     size: Number.isSafeInteger(material?.size) ? material.size : null,
     sha256: typeof material?.sha256 === "string" ? material.sha256 : null
   };
-  if (!pathName || REVIEW_MATERIAL_DENY_PATTERNS.some((pattern) => pattern.test(pathName))) {
-    return { path: pathName ?? null, status: "changed", expected, observed: { exists: null, type: "unsafe-path", size: null, sha256: null, mode: null } };
-  }
   let relativePath;
   try {
     relativePath = options.anchor.normalize(pathName, "Dove review material status path");
   } catch (error) {
-    return { path: pathName, status: "changed", expected, observed: { exists: null, type: "invalid-path", size: null, sha256: null, mode: null, error: error instanceof Error ? error.message : String(error) } };
+    return { path: pathName, status: "changed", expected, observed: { exists: null, type: "invalid-path", size: null, sha256: null, error: error instanceof Error ? error.message : String(error) } };
   }
   if (REVIEW_MATERIAL_DENY_PATTERNS.some((pattern) => pattern.test(relativePath))) {
-    return { path: relativePath, status: "changed", expected, observed: { exists: null, type: "unsafe-path", size: null, sha256: null, mode: null } };
+    return { path: relativePath, status: "changed", expected, observed: { exists: null, type: "unsafe-path", size: null, sha256: null } };
   }
-  let stat;
-  try {
-    stat = options.anchor.tryLstat(relativePath);
-  } catch (error) {
-    return { path: relativePath, status: "changed", expected, observed: { exists: null, type: "unreadable", size: null, sha256: null, mode: null, error: error instanceof Error ? error.message : String(error) } };
-  }
-  if (!stat) return { path: relativePath, status: "missing", expected, observed: { exists: false, type: "absent", size: null, sha256: null, mode: null } };
-  if (stat.isSymbolicLink()) return { path: relativePath, status: "changed", expected, observed: { exists: true, type: "symlink", size: null, sha256: null, mode: materialMode(stat) } };
-  if (stat.isDirectory()) return { path: relativePath, status: "changed", expected, observed: { exists: true, type: "directory", size: null, sha256: null, mode: materialMode(stat) } };
-  if (!stat.isFile()) return { path: relativePath, status: "changed", expected, observed: { exists: true, type: "special", size: null, sha256: null, mode: materialMode(stat) } };
-  try {
-    const bytes = readObservedRegularFile(options.anchor, relativePath, stat);
-    const observed = { exists: true, type: "file", size: bytes.length, sha256: sha256(bytes), mode: materialMode(stat) };
-    const status = observed.size === expected.size && observed.sha256 === expected.sha256 ? "current" : "changed";
-    return { path: relativePath, status, expected, observed };
-  } catch (error) {
-    return { path: relativePath, status: "changed", expected, observed: { exists: true, type: "unreadable-file", size: stat.size, sha256: null, mode: materialMode(stat), error: error instanceof Error ? error.message : String(error) } };
-  }
+  if (!options.observations.has(relativePath)) options.observations.set(relativePath, observeMaterialPath(options.anchor, relativePath));
+  const observed = options.observations.get(relativePath);
+  const status = observed.type === "absent" ? "missing"
+    : observed.type === "file" && observed.size === expected.size && observed.sha256 === expected.sha256 ? "current" : "changed";
+  return { path: relativePath, status, expected, observed };
 }
 
 function materialCurrentnessForRound(projectRoot, reviewId, round, options = {}) {
@@ -493,7 +498,8 @@ function materialCurrentnessForRound(projectRoot, reviewId, round, options = {})
   const materials = Array.isArray(snapshot.materials) ? snapshot.materials : [];
   if (materials.length === 0) return { overall: "unavailable", items: [] };
   const anchor = openRootedFilesystem(projectRoot, { fsOps: options.fsOps ?? fs });
-  const items = materials.map((material) => observedMaterialFact(material, { anchor }));
+  const observations = options.observations ?? new Map();
+  const items = materials.map((material) => observedMaterialFact(material, { anchor, observations }));
   return { overall: materialOverall(items), items };
 }
 
@@ -569,6 +575,15 @@ function publicRound(round, options = {}) {
   };
 }
 
+function publicPendingExchange(record) {
+  const pending = record.pendingExchange;
+  return pending ? {
+    round: Number.isSafeInteger(pending.round) ? pending.round : null,
+    workspaceRoot: publicText(pending.workspaceRoot),
+    requestedSessionId: publicText(pending.requestedSessionId)
+  } : null;
+}
+
 function publicReviewResult(kind, projectRoot, review, round, extras = {}) {
   const roundNumber = round?.round ?? review.currentRound;
   const result = {
@@ -579,6 +594,7 @@ function publicReviewResult(kind, projectRoot, review, round, extras = {}) {
     round: Number.isSafeInteger(roundNumber) ? roundNumber : null,
     venue: publicText(review.venue),
     sessionId: publicText(review.session?.sessionId),
+    pendingExchange: publicPendingExchange(review),
     provenance: publicText(round?.provenance),
     snapshotPath: publicText(round?.snapshotPath),
     reportPath: publicText(round?.reportPath),
@@ -605,6 +621,14 @@ export function handoffReview(options = {}) {
     const workspace = prepareReviewWorkspace({ reviewId, files, ...stateRootOptions({ ...options, projectRoot }) });
     const sessionId = options.sessionId ?? crypto.randomUUID();
     const prompt = promptForRound({ operation: "handoff", reviewId, round: 1, venue: options.venue, snapshot });
+    let record = newRecord({ reviewId, projectRoot, venue: options.venue, createdAt, updatedAt: createdAt });
+    try {
+      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, { ...options, recordExpectedState: existingRecord.expectedState });
+    } catch (error) {
+      restorePreparedReviewWorkspace(workspace, stateRootOptions({ ...options, projectRoot }));
+      throw error;
+    }
+    const recordExpectedState = fileState(projectRoot, reviewPath(reviewId), { fsOps });
     let outcome;
     try {
       outcome = runClaudeReviewBackend({
@@ -619,15 +643,9 @@ export function handoffReview(options = {}) {
     } catch (error) {
       outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options) };
     }
-    const record = newRecord({ reviewId, projectRoot, venue: options.venue, createdAt, updatedAt: createdAt });
     const reportBytes = reportBytesForOutcome(outcome);
-    try {
-      const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round: 1, roundCreatedAt: createdAt, recordExpectedState: existingRecord.expectedState });
-      return publicReviewResult("handoff", projectRoot, written.record, written.round, { workspaceRoot: workspace.workspaceRoot });
-    } catch (error) {
-      restorePreparedReviewWorkspace(workspace, stateRootOptions({ ...options, projectRoot }));
-      throw error;
-    }
+    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round: 1, roundCreatedAt: createdAt, recordExpectedState });
+    return publicReviewResult("handoff", projectRoot, written.record, written.round, { workspaceRoot: workspace.workspaceRoot });
   });
 }
 
@@ -636,7 +654,7 @@ export function resumeReview(options = {}) {
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
-    const { record, expectedState } = requireReviewRecordWithState(projectRoot, reviewId, { fsOps });
+    let { record, expectedState } = requireReviewRecordWithState(projectRoot, reviewId, { fsOps });
     const sessionId = sessionIdOrThrow(record);
     const round = record.currentRound;
     if (!Number.isInteger(round) || round < 1) throw new Error(`Dove review ${reviewId} has no current round to resume.`);
@@ -646,21 +664,29 @@ export function resumeReview(options = {}) {
     let outcome;
     try {
       workspace = assertReviewWorkspaceMatchesSnapshot({ reviewId, snapshot, ...stateRootOptions({ ...options, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) });
-      const prompt = promptForRound({ operation: "resume", reviewId, round, venue: record.venue, snapshot });
-      outcome = runClaudeReviewBackend({
-        workspaceRoot: workspace.workspaceRoot,
-        prompt,
-        session: { resumeSessionId: sessionId },
-        claudeCommand: options.claudeCommand,
-        env: options.env,
-        spawnSync: options.spawnSync,
-        timeout: options.timeout
-      });
     } catch (error) {
       outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options) };
     }
+    if (workspace) {
+      const prompt = promptForRound({ operation: "resume", reviewId, round, venue: record.venue, snapshot });
+      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, { ...options, recordExpectedState: expectedState });
+      expectedState = fileState(projectRoot, reviewPath(reviewId), { fsOps });
+      try {
+        outcome = runClaudeReviewBackend({
+          workspaceRoot: workspace.workspaceRoot,
+          prompt,
+          session: { resumeSessionId: sessionId },
+          claudeCommand: options.claudeCommand,
+          env: options.env,
+          spawnSync: options.spawnSync,
+          timeout: options.timeout
+        });
+      } catch (error) {
+        outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options) };
+      }
+    }
     const reportBytes = reportBytesForOutcome(outcome);
-    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round, roundCreatedAt: existingRound.createdAt ?? exactIsoTimestamp(options.now ?? new Date()), preserveCurrentRoundReturn: true, recordExpectedState: expectedState });
+    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round, roundCreatedAt: existingRound.createdAt ?? exactIsoTimestamp(options.now ?? new Date()), recordExpectedState: expectedState });
     return publicReviewResult("resume", projectRoot, written.record, written.round, { workspaceRoot: workspace?.workspaceRoot ?? null, latestReportPath: written.reportPath, latestBackendPath: written.backendPath });
   });
 }
@@ -670,7 +696,8 @@ export function rerunReview(options = {}) {
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
-    const { record, expectedState } = requireReviewRecordWithState(projectRoot, reviewId, { fsOps });
+    let { record, expectedState } = requireReviewRecordWithState(projectRoot, reviewId, { fsOps });
+    if (record.pendingExchange) throw new Error(`Dove review ${reviewId} has a pending exchange; use resume before starting another round.`);
     const sessionId = sessionIdOrThrow(record);
     const round = record.currentRound + 1;
     const createdAt = exactIsoTimestamp(options.now ?? new Date());
@@ -679,6 +706,14 @@ export function rerunReview(options = {}) {
     const workspaceOptions = { ...stateRootOptions({ ...options, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) };
     const workspace = prepareReviewWorkspace({ reviewId, files, keepPreviousWorkspaceBackup: true, ...workspaceOptions });
     const prompt = promptForRound({ operation: "rerun", reviewId, round, venue, snapshot });
+    try {
+      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, { ...options, recordExpectedState: expectedState });
+    } catch (error) {
+      restorePreparedReviewWorkspace(workspace, workspaceOptions);
+      throw error;
+    }
+    finalizePreparedReviewWorkspace(workspace, workspaceOptions);
+    expectedState = fileState(projectRoot, reviewPath(reviewId), { fsOps });
     let outcome;
     try {
       outcome = runClaudeReviewBackend({
@@ -693,15 +728,9 @@ export function rerunReview(options = {}) {
     } catch (error) {
       outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options) };
     }
-    try {
-      const reportBytes = reportBytesForOutcome(outcome);
-      const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round, roundCreatedAt: createdAt, recordExpectedState: expectedState });
-      finalizePreparedReviewWorkspace(workspace, workspaceOptions);
-      return publicReviewResult("rerun", projectRoot, written.record, written.round, { workspaceRoot: workspace.workspaceRoot });
-    } catch (error) {
-      restorePreparedReviewWorkspace(workspace, workspaceOptions);
-      throw error;
-    }
+    const reportBytes = reportBytesForOutcome(outcome);
+    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round, roundCreatedAt: createdAt, recordExpectedState: expectedState });
+    return publicReviewResult("rerun", projectRoot, written.record, written.round, { workspaceRoot: workspace.workspaceRoot });
   });
 }
 
@@ -744,6 +773,7 @@ export function importReviewReturn(options = {}) {
   const reviewId = normalizeReviewId(options.id);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
     const { record: existing, expectedState } = readReviewRecordWithState(projectRoot, reviewId, { fsOps });
+    if (existing?.pendingExchange) throw new Error(`Dove review ${reviewId} has a pending exchange; use resume before importing another round.`);
     if (existing === null && fileState(projectRoot, reviewBasePath(reviewId), { fsOps }).exists) throw new Error(`Dove review path already exists without a valid record: ${reviewBasePath(reviewId)}.`);
     const createdAt = exactIsoTimestamp(options.now ?? new Date());
     const round = existing ? existing.currentRound + 1 : 1;
@@ -762,7 +792,6 @@ export function importReviewReturn(options = {}) {
       error: null
     };
     const paths = roundPaths(reviewId, round);
-    const reportSha = sha256(bytes);
     const roundRecord = makeRoundRecord({
       reviewId,
       round,
@@ -772,7 +801,6 @@ export function importReviewReturn(options = {}) {
       createdAt,
       updatedAt: createdAt,
       materials: snapshot.materials,
-      reportSha256: reportSha,
       latestReportPath: paths.report,
       latestBackendPath: paths.backend,
       sessionId: null,
@@ -839,7 +867,8 @@ export function inspectReviewStatus(options = {}) {
   if (options.id !== undefined && options.id !== null) {
     const reviewId = normalizeReviewId(options.id);
     const record = requireReviewRecord(projectRoot, reviewId, { fsOps });
-    const rounds = record.rounds.map((round) => publicRound(round, { projectRoot, reviewId, fsOps }));
+    const observations = new Map();
+    const rounds = record.rounds.map((round) => publicRound(round, { projectRoot, reviewId, fsOps, observations }));
     return {
       command: "status",
       status: publicText(record.status),
@@ -848,6 +877,7 @@ export function inspectReviewStatus(options = {}) {
       venue: publicText(record.venue),
       currentRound: Number.isSafeInteger(record.currentRound) ? record.currentRound : null,
       sessionId: publicText(record.session?.sessionId),
+      pendingExchange: publicPendingExchange(record),
       materialCurrentness: rounds.find((round) => round.round === record.currentRound)?.materialCurrentness ?? publicMaterialCurrentness(null),
       rounds
     };
@@ -859,7 +889,8 @@ export function inspectReviewStatus(options = {}) {
       status: publicText(record.status),
       venue: publicText(record.venue),
       currentRound: Number.isSafeInteger(record.currentRound) ? record.currentRound : null,
-      sessionId: publicText(record.session?.sessionId)
+      sessionId: publicText(record.session?.sessionId),
+      pendingExchange: publicPendingExchange(record)
     };
   }).filter(Boolean);
   return { command: "status", status: "ok", project: projectRoot, reviews };

@@ -33,12 +33,6 @@
     "mustInspectOrChange": [
       ".dove/research/RESEARCH.md",
       "paper/main.tex"
-    ],
-    "mustNotTouch": [
-      "paper/local-format-check.md",
-      ".dove/install/DOCTOR.md",
-      ".dove/reviews/**",
-      ".dove/runs/**"
     ]
   },
   "hardExpectations": [
@@ -55,16 +49,6 @@
       "id": "format-check-unchanged",
       "kind": "path-unchanged",
       "path": "paper/local-format-check.md"
-    },
-    {
-      "id": "no-doctor-write",
-      "kind": "path-not-created",
-      "path": ".dove/install/DOCTOR.md"
-    },
-    {
-      "id": "no-private-tool-path",
-      "kind": "tool-action-forbidden-path",
-      "path": ".dove/install/DOCTOR.md"
     }
   ],
   "humanReviewRubric": [

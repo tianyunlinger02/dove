@@ -3,26 +3,21 @@ import path from "node:path";
 
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
 import { PROJECT_HOST_IDS, normalizeHostSelection } from "./host-registry.mjs";
-import { LEGACY_WORKSPACE_MARKER_PATH, readLegacyWorkspaceMarker } from "./legacy-workspace-marker.mjs";
-import { classifyPackageCompatibility } from "./package-metadata.mjs";
 import {
   INSTALLATION_MANIFEST_PATH,
-  LEGACY_INSTALLATION_MANIFEST_PATH,
-  readProjectInstallationManifest,
-  readProjectInstallationManifestForMigration
+  readProjectInstallationManifest
 } from "./project-installation-manifest.mjs";
 import {
+  assertManagedOwnership,
   inspectRegularProjectFile,
-  lstatOrNull,
   planJsonFragments,
   planResource,
   preparePlan,
   transactionDelete
 } from "./project-installation-plan.mjs";
-import { CLAUDE_HOST, claudeResources, compareManaged, sameArray } from "./project-installation-resources.mjs";
-import { resolveExactInstalledProjectRoot, resolveInstalledProjectRoot, resolveProjectRootForInit, resolveProjectRootForSetup } from "./project-root.mjs";
+import { compareManaged } from "./project-installation-resources.mjs";
+import { resolveInstalledProjectRoot, resolveProjectRootForInit } from "./project-root.mjs";
 import { prepareResearchDefaults } from "./research-defaults.mjs";
-import { inspectResearchDocuments } from "./research-documents.mjs";
 
 function exactTimestamp(value) {
   if (value === undefined) return new Date().toISOString();
@@ -60,26 +55,6 @@ function resultFromTransaction(status, target, hosts, manifest, transaction, det
   };
 }
 
-function appendResearchBootstrap(root, entries, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  const researchRoot = path.join(root, ".dove", "research");
-  const researchStat = lstatOrNull(fsOps, researchRoot);
-  if (researchStat !== null) {
-    if (researchStat.isSymbolicLink() || !researchStat.isDirectory()) throw new Error("Dove research root must be a real directory when project integration is initialized.");
-    return null;
-  }
-  const prepared = prepareResearchDefaults(root, {
-    fsOps,
-    mode: options.mode ?? "sync",
-    label: options.label
-  });
-  const existingTargets = new Set(entries.map((entry) => entry.relativePath));
-  for (const entry of prepared.entries) {
-    if (!existingTargets.has(entry.relativePath)) entries.push(entry);
-  }
-  return prepared;
-}
-
 function transactionOptions(fsOps, options = {}) {
   return { ...options, fsOps };
 }
@@ -91,7 +66,7 @@ export function initializeProjectIntegration(rootOrProject, options = {}) {
   const now = exactTimestamp(options.now);
   const root = resolveProjectRootForInit(rootOrProject, { fsOps, hostIds: PROJECT_HOST_IDS });
   const plan = preparePlan({ root, hosts, packageName: options.packageName, packageVersion: options.packageVersion, now, fsOps });
-  appendResearchBootstrap(root, plan.entries, { fsOps, label: "Dove research bootstrap" });
+  plan.entries.push(...prepareResearchDefaults(root, { fsOps }).entries);
   return resultFromTransaction(
     "initialized",
     root,
@@ -101,7 +76,7 @@ export function initializeProjectIntegration(rootOrProject, options = {}) {
   );
 }
 
-function prepareInstalledIntegrationPlan(start, options = {}) {
+function prepareInstalledPlan(start, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const root = resolveInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
@@ -113,71 +88,22 @@ function prepareInstalledIntegrationPlan(start, options = {}) {
   return { fsOps, root, hosts, currentManifest: manifest, ...plan };
 }
 
-function prepareInstalledPlan(start, options = {}) {
-  return prepareInstalledIntegrationPlan(start, options);
-}
-
-function synchronizeProjectIntegration(start, options = {}) {
+export function updateProjectIntegration(start, options = {}) {
   const prepared = prepareInstalledPlan(start, { ...options, replacementPolicy: "explicit-update" });
   const transaction = writeFileSetTransaction(
     prepared.entries,
     transactionOptions(prepared.fsOps)
   );
-  return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "synchronized", prepared.root, prepared.hosts, prepared.manifest, transaction, prepared);
-}
-
-function assertIntegrationOnlyEntries(entries) {
-  if (entries.some((entry) => entry.relativePath === ".dove/research" || entry.relativePath.startsWith(".dove/research/"))) {
-    throw new Error("Dove SessionStart sync refuses to write Dove research state.");
-  }
-  if (entries.some((entry) => entry.relativePath === ".dove/reviews" || entry.relativePath.startsWith(".dove/reviews/"))) {
-    throw new Error("Dove SessionStart sync refuses to write Dove review records.");
-  }
-  if (entries.some((entry) => entry.relativePath === ".dove/runs" || entry.relativePath.startsWith(".dove/runs/"))) {
-    throw new Error("Dove SessionStart sync refuses to write Dove run records.");
-  }
-  if (entries.some((entry) => entry.relativePath === ".dove/install/DOCTOR.md")) {
-    throw new Error("Dove SessionStart sync refuses to write Dove Doctor feedback.");
-  }
-}
-
-export function synchronizeProjectIntegrationOnly(start, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
-  const root = resolveExactInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
-  const currentManifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
-  const compatibility = classifyPackageCompatibility(currentManifest.package, {
-    name: options.packageName,
-    version: options.packageVersion
-  });
-  if (["identity-mismatch", "invalid-version", "newer"].includes(compatibility)) {
-    throw new Error("Dove SessionStart sync refuses missing, invalid, newer, or foreign project integration.");
-  }
-  if (!currentManifest.hosts.includes(CLAUDE_HOST)) {
-    throw new Error("Dove SessionStart sync requires Claude Code host integration.");
-  }
-  const plan = preparePlan({
-    root,
-    hosts: [...currentManifest.hosts],
-    packageName: options.packageName,
-    packageVersion: options.packageVersion,
-    now: exactTimestamp(options.now),
-    fsOps,
-    manifest: currentManifest,
-    replacementPolicy: "session-start"
-  });
-  assertIntegrationOnlyEntries(plan.entries);
-  const transaction = writeFileSetTransaction(plan.entries, transactionOptions(fsOps));
-  return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "synchronized", root, currentManifest.hosts, plan.manifest, transaction, plan);
+  return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", prepared.root, prepared.hosts, prepared.manifest, transaction, prepared);
 }
 
 export function inspectProjectIntegration(start, options = {}) {
-  const prepared = prepareInstalledPlan(start, options);
+  const prepared = prepareInstalledPlan(start, { ...options, replacementPolicy: "inspect" });
   const writtenPaths = prepared.entries.filter((entry) => entry.delete !== true).map((entry) => entry.relativePath);
   const removedPaths = prepared.entries.filter((entry) => entry.delete === true).map((entry) => entry.relativePath);
-  const needsSync = prepared.entries.length > 0 || prepared.skippedLocalEdits.length > 0;
+  const needsUpdate = prepared.entries.length > 0 || prepared.skippedLocalEdits.length > 0;
   return {
-    status: needsSync ? "needs-sync" : "current",
+    status: needsUpdate ? "needs-update" : "current",
     target: prepared.root,
     hosts: [...prepared.hosts],
     writtenPaths,
@@ -197,125 +123,18 @@ function canonicalLifecycleRoot(start, fsOps) {
   return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
 }
 
-function walkDeletion(root, relativePath, fsOps, entries, scope, preservePaths = new Set()) {
-  const absolutePath = path.join(root, relativePath);
-  const stat = lstatOrNull(fsOps, absolutePath);
-  if (stat === null) return;
-  if (stat.isSymbolicLink()) throw new Error(`Dove lifecycle refuses symbolic links in destructive scope: ${relativePath}.`);
-  if (stat.isFile()) {
-    if (preservePaths.has(relativePath)) return;
-    const observed = inspectRegularProjectFile(root, relativePath, fsOps);
-    entries.push(transactionDelete(root, { path: relativePath }, observed));
-    scope.push({ path: relativePath, kind: "file", digest: observed.digest });
-    return;
-  }
-  if (!stat.isDirectory()) throw new Error(`Dove lifecycle found unsupported project state: ${relativePath}.`);
-  for (const child of fsOps.readdirSync(absolutePath).map(String).sort()) {
-    walkDeletion(root, path.posix.join(relativePath, child), fsOps, entries, scope, preservePaths);
-  }
-  if (preservePaths.has(relativePath)) return;
-  entries.push({
-    root,
-    relativePath,
-    delete: true,
-    deleteEmptyDirectory: true,
-    force: true,
-    expectedState: { exists: true, type: "directory", sha256: null, mode: stat.mode & 0o7777 },
-    label: `Dove lifecycle directory deletion ${relativePath}`
-  });
-  scope.push({ path: relativePath, kind: "directory", digest: null });
-}
-
-function migrationSource(root, fsOps) {
-  const current = lstatOrNull(fsOps, path.join(root, INSTALLATION_MANIFEST_PATH));
-  const legacy = lstatOrNull(fsOps, path.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
-  if (current !== null && legacy !== null) throw new Error("Dove project update found both current and 1.0 project installation manifests.");
-  if (current !== null) return readProjectInstallationManifestForMigration(root, { fsOps, hostIds: PROJECT_HOST_IDS, manifestPath: INSTALLATION_MANIFEST_PATH });
-  if (legacy !== null) return readProjectInstallationManifestForMigration(root, { fsOps, hostIds: PROJECT_HOST_IDS, manifestPath: LEGACY_INSTALLATION_MANIFEST_PATH });
-  throw new Error("Dove project update requires an installation revision 1.0 manifest.");
-}
-
-function assertAdoptableResearch(root, fsOps) {
-  const research = inspectResearchDocuments(root, { fsOps });
-  if (research.state !== "current" || research.healthy !== true) {
-    throw new Error("Dove project adoption requires a readable current Markdown research tree.");
-  }
-  return research;
-}
-
-function adoptionSource(start, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  const root = resolveProjectRootForSetup(start, { fsOps, hostIds: PROJECT_HOST_IDS });
-  const current = lstatOrNull(fsOps, path.join(root, INSTALLATION_MANIFEST_PATH));
-  if (current !== null) throw new Error("Dove project adoption requires an uninitialized project without a current installation manifest.");
-  const legacyInstall = lstatOrNull(fsOps, path.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
-  if (legacyInstall !== null) throw new Error("Dove project adoption accepts only the old .dove/manifest.json workspace marker, not legacy installation manifests.");
-  if (readLegacyWorkspaceMarker(root, { fsOps }) === null) {
-    throw new Error("Dove project adoption requires the old .dove/manifest.json workspace marker.");
-  }
-  assertAdoptableResearch(root, fsOps);
-  return { root, sourcePath: LEGACY_WORKSPACE_MARKER_PATH, createdAt: null };
-}
-
-function prepareLifecycleIntegration(root, options, { hosts, source = null, reinstall = false, adopt = false }) {
-  const fsOps = options.fsOps ?? fs;
-  const entries = [];
-  const scope = [];
-  const oldManifest = source ? { ...source, managed: source.managed } : null;
-  const now = exactTimestamp(options.now);
+function prepareLifecycleIntegration(root, options, { hosts, source }) {
   const planned = preparePlan({
     root,
     hosts,
     packageName: options.packageName,
     packageVersion: options.packageVersion,
-    now,
-    fsOps,
-    manifest: oldManifest,
-    adopt,
-    replacementPolicy: reinstall ? "confirmed-reinstall" : "explicit-update"
+    now: exactTimestamp(options.now),
+    fsOps: options.fsOps ?? fs,
+    manifest: source,
+    replacementPolicy: "confirmed-reinstall"
   });
-  const existingPaths = new Set(entries.map((entry) => entry.relativePath));
-  for (const entry of planned.entries) {
-    if (existingPaths.has(entry.relativePath)) continue;
-    existingPaths.add(entry.relativePath);
-    entries.push(entry);
-  }
-  if (reinstall) {
-    const doveRoot = path.join(root, ".dove");
-    const doveStat = lstatOrNull(fsOps, doveRoot);
-    if (doveStat !== null) {
-      if (doveStat.isSymbolicLink() || !doveStat.isDirectory()) throw new Error("Complete Reinstall requires .dove to be a real directory.");
-      const installRoot = path.join(doveRoot, "install");
-      const installStat = lstatOrNull(fsOps, installRoot);
-      if (installStat !== null) {
-        if (installStat.isSymbolicLink() || !installStat.isDirectory()) throw new Error("Complete Reinstall requires .dove/install to be a real directory.");
-        for (const child of fsOps.readdirSync(installRoot).map(String).sort()) {
-          if (child !== "manifest.json" && child !== "DOCTOR.md") walkDeletion(root, `.dove/install/${child}`, fsOps, entries, scope);
-        }
-      }
-    }
-    walkDeletion(root, ".dove-install", fsOps, entries, scope);
-  } else if (source?.sourcePath === LEGACY_INSTALLATION_MANIFEST_PATH) {
-    const legacyDirectory = lstatOrNull(fsOps, path.join(root, ".dove-install"));
-    if (legacyDirectory?.isSymbolicLink() || (legacyDirectory !== null && !legacyDirectory.isDirectory())) {
-      throw new Error("Updating Dove project integration requires .dove-install to be a real directory.");
-    }
-    const legacyObserved = inspectRegularProjectFile(root, LEGACY_INSTALLATION_MANIFEST_PATH, fsOps);
-    entries.push(transactionDelete(root, { path: LEGACY_INSTALLATION_MANIFEST_PATH }, legacyObserved));
-    const legacyChildren = legacyDirectory === null ? [] : fsOps.readdirSync(path.join(root, ".dove-install")).map(String).sort();
-    if (sameArray(legacyChildren, ["manifest.json"])) {
-      entries.push({
-        root,
-        relativePath: ".dove-install",
-        delete: true,
-        deleteEmptyDirectory: true,
-        force: true,
-        expectedState: { exists: true, type: "directory", sha256: null, mode: legacyDirectory.mode & 0o7777 },
-        label: "Dove 1.0 installation directory cleanup"
-      });
-    }
-  }
-  return { entries, manifest: planned.manifest, scope, skippedLocalEdits: planned.skippedLocalEdits, replacedLocalEdits: planned.replacedLocalEdits };
+  return { ...planned, scope: [] };
 }
 
 function previewShape(kind, root, hosts, prepared, confirmationRequired) {
@@ -348,70 +167,13 @@ function previewShape(kind, root, hosts, prepared, confirmationRequired) {
   return preview;
 }
 
-export function previewProjectUpgrade(start, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
-  const root = canonicalLifecycleRoot(start, fsOps);
-  const source = migrationSource(root, fsOps);
-  const hosts = options.hosts === undefined ? [...source.hosts] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
-  const prepared = prepareLifecycleIntegration(root, options, { hosts, source, reinstall: false });
-  return previewShape("upgrade", root, hosts, prepared, false);
-}
-
-export function upgradeProjectIntegration(start, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
-  const root = canonicalLifecycleRoot(start, fsOps);
-  const source = migrationSource(root, fsOps);
-  const hosts = options.hosts === undefined ? [...source.hosts] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
-  const prepared = prepareLifecycleIntegration(root, options, { hosts, source, reinstall: false });
-  return resultFromTransaction(
-    "upgraded",
-    root,
-    hosts,
-    prepared.manifest,
-    writeFileSetTransaction(prepared.entries, transactionOptions(fsOps)),
-    prepared
-  );
-}
-
-export function previewProjectAdoption(start, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
-  const source = adoptionSource(start, { ...options, fsOps });
-  const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
-  const prepared = prepareLifecycleIntegration(source.root, options, { hosts, source: null, reinstall: false, adopt: true });
-  return previewShape("adopt", source.root, hosts, prepared, false);
-}
-
-export function adoptProjectIntegration(start, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
-  const source = adoptionSource(start, { ...options, fsOps });
-  const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
-  const prepared = prepareLifecycleIntegration(source.root, options, { hosts, source: null, reinstall: false, adopt: true });
-  return resultFromTransaction(
-    "adopted",
-    source.root,
-    hosts,
-    prepared.manifest,
-    writeFileSetTransaction(prepared.entries, transactionOptions(fsOps)),
-    prepared
-  );
-}
-
 export function previewProjectCompleteReinstall(start, options = {}) {
   const fsOps = options.fsOps ?? fs;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
-  let source = null;
-  try {
-    source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
-  } catch {
-    try { source = migrationSource(root, fsOps); } catch { source = null; }
-  }
-  const hosts = options.hosts === undefined ? [...(source?.hosts ?? [CLAUDE_HOST])] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
-  const prepared = prepareLifecycleIntegration(root, options, { hosts, source, reinstall: true });
+  const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
+  const hosts = options.hosts === undefined ? [...source.hosts] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
+  const prepared = prepareLifecycleIntegration(root, options, { hosts, source });
   return previewShape("reinstall", root, hosts, prepared, true);
 }
 
@@ -434,14 +196,9 @@ export function completeReinstallProjectIntegration(start, options = {}) {
   const fsOps = options.fsOps ?? fs;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
-  let source = null;
-  try {
-    source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
-  } catch {
-    try { source = migrationSource(root, fsOps); } catch { source = null; }
-  }
-  const hosts = options.hosts === undefined ? [...(source?.hosts ?? [CLAUDE_HOST])] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
-  const prepared = prepareLifecycleIntegration(root, options, { hosts, source, reinstall: true });
+  const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
+  const hosts = options.hosts === undefined ? [...source.hosts] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
+  const prepared = prepareLifecycleIntegration(root, options, { hosts, source });
   const currentPreview = previewShape("reinstall", root, hosts, prepared, true);
   if (reinstallPreviewScope(currentPreview) !== reinstallPreviewScope(options.preview)) {
     throw new Error("Complete Reinstall preview is stale; review the current destructive scope and confirm again.");
@@ -465,6 +222,7 @@ function prepareUninstall(start, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const root = canonicalLifecycleRoot(start, fsOps);
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
+  assertManagedOwnership(manifest);
   const entries = [];
   const sharedPaths = [...new Set(manifest.managed.filter((entry) => entry.kind === "json-fragment").map((entry) => entry.path))].sort();
   for (const relativePath of sharedPaths) {
@@ -485,11 +243,6 @@ function prepareUninstall(start, options = {}) {
   const manifestObserved = inspectRegularProjectFile(root, INSTALLATION_MANIFEST_PATH, fsOps);
   if (!manifestObserved.exists) throw new Error("Dove uninstall requires the current project installation manifest.");
   entries.push(transactionDelete(root, { path: INSTALLATION_MANIFEST_PATH }, manifestObserved));
-  const legacyMarker = readLegacyWorkspaceMarker(root, { fsOps, strict: false });
-  if (legacyMarker !== null) {
-    const markerObserved = inspectRegularProjectFile(root, LEGACY_WORKSPACE_MARKER_PATH, fsOps);
-    entries.push(transactionDelete(root, { path: LEGACY_WORKSPACE_MARKER_PATH }, markerObserved));
-  }
   return { fsOps, root, manifest, entries };
 }
 
@@ -529,9 +282,3 @@ export function uninstallProjectIntegration(start, options = {}) {
     preservedPaths: [".dove/research/**", ".dove/reviews/**", ".dove/runs/**", ".dove/install/DOCTOR.md"]
   };
 }
-
-export function updateProjectIntegration(start, options = {}) {
-  return synchronizeProjectIntegration(start, options);
-}
-
-export const PROJECT_INTEGRATION_MANAGED_PATHS = Object.freeze(claudeResources().map((resource) => resource.path).sort());

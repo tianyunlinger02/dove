@@ -25,13 +25,13 @@ export async function assertInteractiveHostSelection() {
         if (inspectionCount === 1) {
           return {
             target,
-            setup: { mode: "init", reason: "clean-uninitialized", allowedActions: ["init", "exit"] },
+            setup: { mode: "uninitialized", reason: "uninitialized", allowedActions: ["init", "exit"] },
             projectIntegration: { state: "uninitialized" }
           };
         }
         return {
           target,
-          setup: { mode: "reinstall", reason: "current", allowedActions: ["reinstall", "uninstall", "exit"] },
+          setup: { mode: "current", reason: "current", allowedActions: ["reinstall", "uninstall", "exit"] },
           projectIntegration: { state: "current", manifest: { hosts: selectedHosts } }
         };
       },
@@ -89,17 +89,16 @@ export async function assertInteractiveLifecycleMenus() {
         staticChecksPassed: false,
         userCli: { healthy: true, package: { version: "3.0.0" } },
         projectIntegration: {
-          state: "drifted",
+          state: "blocked",
           manifest: { hosts: ["claude"] }
         },
-        migrationInstallation: { state: "absent" },
         workspaceState: { mode: "current", healthy: true },
         actions: [{ kind: "inspect", command: "dove doctor --json" }],
-        setup: { mode: "blocked", reason: "drifted", allowedActions: ["reinstall", "details", "exit"] }
+        setup: { mode: "blocked", reason: "blocked", allowedActions: ["details", "exit"] }
       }),
       promptSelect: async (config) => {
         if (actions.length === 2) {
-          assert.deepEqual(config.choices.map((choice) => choice.value), ["reinstall", "details", "exit"]);
+          assert.deepEqual(config.choices.map((choice) => choice.value), ["details", "exit"]);
           initialMenuOutput = chunks.join("");
           assert.equal(initialMenuOutput.includes("Dove 检查"), false);
         }
@@ -113,7 +112,7 @@ export async function assertInteractiveLifecycleMenus() {
     detailsCalls += chunks.join("").match(/Dove 检查/gu)?.length ?? 0;
     assert.equal(result.status, "exited");
     assert.equal(detailsCalls, 1);
-    assert.match(initialMenuOutput, /自动更新已停止/u);
+    assert.match(initialMenuOutput, /无法安全确认/u);
     assert.doesNotMatch(initialMenuOutput, /面向 Dove 开发排查/u);
   }
 
@@ -159,22 +158,22 @@ export async function assertInteractiveLifecycleMenus() {
       target,
       inspect: async () => ({
         target,
-        projectIntegration: { state: "uninitialized" },
-        setup: { mode: "adopt", reason: "adoptable", allowedActions: ["adopt", "details", "exit"] }
+        projectIntegration: { state: "needs-update", manifest: { hosts: ["dsh"] } },
+        setup: { mode: "needs-update", reason: "needs-update", allowedActions: ["update", "details", "exit"] }
       }),
       promptSelect: async (config) => {
-        assert.deepEqual(config.choices.map((choice) => choice.value), ["adopt", "details", "exit"]);
-        return "adopt";
+        assert.deepEqual(config.choices.map((choice) => choice.value), ["update", "details", "exit"]);
+        return "update";
       },
       promptCheckbox: async () => ["dsh"],
       update: async (receivedTarget, lifecycleOptions) => {
         updateCall = { target: receivedTarget, lifecycleOptions };
-        return { status: "adopted", target: receivedTarget, hosts: lifecycleOptions.hosts, writtenPaths: [], removedPaths: [], changedPaths: [] };
+        return { status: "updated", target: receivedTarget, hosts: ["dsh"], writtenPaths: [], removedPaths: [], changedPaths: [] };
       },
       stream,
       env: { NO_COLOR: "1" }
     });
-    assert.equal(result.action, "adopt");
-    assert.deepEqual(updateCall, { target, lifecycleOptions: { hosts: ["dsh"] } });
+    assert.equal(result.action, "update");
+    assert.deepEqual(updateCall, { target, lifecycleOptions: undefined });
   }
 }

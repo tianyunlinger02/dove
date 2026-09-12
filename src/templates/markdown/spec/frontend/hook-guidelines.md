@@ -6,15 +6,15 @@ This file governs **Dove product integration** in consumer projects, not this re
 
 Claude Code receives the complete Dove integration; DeepSeek Harness receives project-local filesystem Skills only, without Claude permissions, hooks, or MCP projection. Hosts route work and enforce permissions; the shared research rule is guidance, not a router or permission grant. Research/delegation responsibilities belong in [Component Guidelines](./component-guidelines.md).
 
-Claude integration owns only the documented `.mcp.json#/mcpServers/dove-paper-search` and `.mcp.json#/mcpServers/exa` fragments, plus project-scoped `permissions.deny` for built-in `WebFetch`. Pinned paper search serves scholarly discovery, download, and full-text reading; hosted Exa serves ordinary webpages, documentation, venue pages, and known URLs. Built-in `WebSearch` remains available for discovery. Hidden guidance Skills do not grant tool access. Runtime dependencies, project trust, tool approval, access, and credentials remain user-provided; do not substitute CLI/shell/`curl`/fetch scripts for unavailable web retrieval. These external tools are not Dove research-state services.
+Claude integration owns only the documented `.mcp.json#/mcpServers/dove-paper-search` and `.mcp.json#/mcpServers/exa` fragments, project-scoped `permissions.deny` for built-in `WebFetch`, and a `statusLine` fragment when that setting was empty at installation. Pinned paper search serves scholarly discovery, download, and full-text reading; hosted Exa serves ordinary webpages, documentation, venue pages, and known URLs. Built-in `WebSearch` remains available for discovery. Hidden guidance Skills and status display do not grant tool access. Runtime dependencies, project trust, tool approval, access, and credentials remain user-provided; do not substitute CLI/shell/`curl`/fetch scripts for unavailable web retrieval. These external tools are not Dove research-state services.
 
-## Product SessionStart synchronization
+## Read-only product SessionStart
 
 - Invoke user-installed `dove` on `PATH`, not a copied runtime or absolute installation path.
-- Validate the exact initialized project and same-package manifest revision `2.0` before planning writes.
-- Skip manifest-owned local edits, retain their ownership metadata, synchronize other safe resources, and report skipped paths through `systemMessage`. Do not claim skipped files are current.
-- Unsafe synchronization errors stop writes and return a `systemMessage` where possible. Apply the [transaction rules](./type-safety.md); preserve all [research and project records](./state-management.md). Do not adopt legacy state or perform Complete Reinstall.
-- Disk synchronization does not reload already-active Claude context.
+- Inspect the exact initialized project and same-package manifest revision `2.0` without writing files or shared configuration.
+- If integration is not current, report a `systemMessage` suggesting explicit `dove update`; unsupported or ambiguous state needs `dove doctor --json` and manual resolution. Never update, adopt, migrate, clean up, or reinstall from the hook.
+- Startup/clear returns null when there is no warning. Compact/resume may additionally emit the read-only facts below after a valid project inspection.
+- Inspection cannot verify or reload already-active Claude context.
 
 ## Compact/resume facts card
 
@@ -24,10 +24,15 @@ Only `compact` and `resume` emit these read-only facts:
 2. latest Review by `updatedAt`: id, current round, absolute update time, material currentness;
 3. latest Run by `startedAt`: id, absolute start time, status, exit code.
 
-Missing/unreadable facts stay `unavailable`. Startup/clear emits no research card, though synchronization notices may appear. Read review metadata and run journals; compare the latest round's listed project files with its snapshot receipt for currentness. Do not read research Markdown bodies, reports, or stdout/stderr logs, interpret verdicts, summarize research, choose actions, or infer the mainline. Latest means record time, not importance; visible conversation and relevant materials determine continuation.
+Missing/unreadable facts stay `unavailable`. Startup/clear emits no research card, though read-only integration warnings may appear. Read review metadata and run journals; compare the latest round's listed project files with its snapshot receipt for currentness. Do not read research Markdown bodies, reports, or stdout/stderr logs, interpret verdicts, summarize research, choose actions, or infer the mainline. Latest means record time, not importance; visible conversation and relevant materials determine continuation.
+
+## Read-only status line
+
+- When a Claude project has no existing `statusLine`, install the manifest-owned command `dove hook statusline --project "$CLAUDE_PROJECT_DIR"`. A pre-existing user or Trellis line remains unchanged and unowned; an empty slot may be filled by a later explicit update.
+- Consume only Claude Code's native status payload: model display name, total context capacity, remaining-context percentage, and current-session duration. Read the Git branch from the explicit project root with a bounded no-shell command. Missing facts are omitted rather than represented as zero.
+- Keep the renderer fast, single-line, read-only, offline, and free of research Markdown, Review, Run, transcript, or durable timer access. Git branch is an active work branch, not a confirmed scientific mainline; session duration is not cumulative research effort.
+- Doctor inspects managed drift read-only. Explicit update/reinstall may restore an edited manifest-owned line and report it; host removal/uninstall removes an unchanged owned line while preserving a user-modified one.
 
 ## Retired product integration
 
-Dove installs no `UserPromptSubmit`, hidden intake, replacement per-prompt hook, or Stop scheduler. Stop must not manufacture another research turn or write research state. Lifecycle refresh removes only array entries exactly matching retired Dove-owned prompt/Stop fragments, preserving unrelated user/Trellis hooks and non-array settings.
-
-Dove does not install/manage `statusLine`. The retained `dove hook statusline` helper is only for user-owned composition scripts. Retirement releases old ownership and removes an exact old Dove line while preserving user-modified lines. Read-only Doctor may identify exact attributable retired remnants by location/reason; it must not expand deletion authority, scan global settings, or certify custom hooks clean.
+Dove installs no `UserPromptSubmit`, hidden intake, replacement per-prompt hook, or Stop scheduler. Stop must not manufacture another research turn or write research state. Explicit lifecycle operations remove a retired prompt fragment only when still manifest-owned and digest-matching. Unowned legacy Stop/prompt entries and unknown files remain untouched; diagnostic recognition is not deletion authority.

@@ -16,9 +16,11 @@ Dove has one research agent and nine flat optional entrances, with no Auto comma
 | `dove.rebuttal` | Command | Skill | Analyze review findings, write responses, and make requested evidence-backed revisions. |
 | `dove.lessons` | Command | Skill | Read or maintain reusable lessons that may improve current or future research judgment. |
 
-Claude Code receives the Dove agent, commands, shared rule, SessionStart integration sync and compact/resume facts card, configured paper/web reading support, the `dove review ...` CLI handoff runtime, and the `dove run ...` local execution receipt helper. DSH receives project-local filesystem Skills only and no equivalent recoverable isolated Claude Code reviewer context.
+Claude Code receives the Dove agent, commands, shared rule, read-only SessionStart integration inspection and compact/resume facts card, configured paper/web reading support, the `dove review ...` CLI handoff runtime, and the `dove run ...` local execution receipt helper. DSH receives project-local filesystem Skills only and no equivalent recoverable isolated Claude Code reviewer context.
 
 Important route, method, hypothesis, evaluation, and central-experiment decisions use proportionate theory or mechanism grounding before commitment; exploratory diagnostics can establish missing foundations. Source separates supported, contradicted, and uncovered parts of composite claims. Central execution that needs recording saves a plan before running and appends results to the same document. Draft and Review preserve the current authoritative manuscript format.
+
+Both hosts carry a short research core and proactively read the shared `.dove/install/RESEARCH_QUALITY.md` before consequential quality and route decisions. The complete reference is package guidance, not a Lesson or research evidence. Isolated review receives a separate canonical copy without additional user-material access.
 
 ## Research Markdown
 

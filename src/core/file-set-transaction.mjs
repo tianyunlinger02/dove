@@ -205,31 +205,45 @@ export function writeFileSetTransaction(entries, options = {}) {
     return committedResult(resolved, cleanupFailures);
   } catch (error) {
     const rollbackFailures = [];
-    const attempt = (callback) => {
-      try { callback(); } catch (rollbackError) { rollbackFailures.push(errorMessage(rollbackError)); }
+    const retainedAnchors = new Set();
+    const attempt = (callback, restoreAnchor) => {
+      try { callback(); } catch (rollbackError) {
+        rollbackFailures.push(errorMessage(rollbackError));
+        if (restoreAnchor) retainedAnchors.add(restoreAnchor);
+      }
     };
     for (const promotion of [...promotions].reverse()) {
       const { entry } = promotion;
-      if (promotion.promoted && entry.anchor.exists(entry.relativePath)) {
-        attempt(() => entry.anchor.remove(entry.relativePath, { force: true }));
-      }
-      if (promotion.backupPath && entry.anchor.exists(promotion.backupPath)) attempt(() => {
-        if (entry.anchor.exists(entry.relativePath)) throw new Error(`Transactional rollback target is occupied: ${entry.relativePath}.`);
-        entry.anchor.rename(promotion.backupPath, entry.relativePath);
-      });
+      attempt(() => {
+        if (promotion.promoted && entry.anchor.exists(entry.relativePath)) {
+          if (state(entry.anchor, entry.relativePath).sha256 !== sha256(entry.content)) {
+            throw new Error(`Transactional rollback target changed: ${entry.relativePath}.`);
+          }
+          entry.anchor.remove(entry.relativePath, { force: true });
+        }
+        if (promotion.backupPath && entry.anchor.exists(promotion.backupPath)) {
+          if (entry.anchor.exists(entry.relativePath)) throw new Error(`Transactional rollback target is occupied: ${entry.relativePath}.`);
+          entry.anchor.rename(promotion.backupPath, entry.relativePath);
+        }
+      }, entry.anchor);
+    }
+    for (const entry of resolved) {
+      if (entry.stagedPath) attempt(() => entry.anchor.remove(entry.stagedPath, { force: true }));
     }
     for (const [anchor, directories] of createdDirectories) {
       for (const directoryPath of [...directories].sort((left, right) => right.length - left.length)) attempt(() => anchor.rmdir(directoryPath, { force: true }));
     }
-    for (const entry of resolved) {
-      if (entry.stagedPath && entry.anchor.exists(entry.stagedPath)) attempt(() => entry.anchor.remove(entry.stagedPath, { force: true }));
-    }
     for (const [anchor, transaction] of transactions) {
+      if (retainedAnchors.has(anchor)) continue;
       attempt(() => anchor.remove(transaction.transactionPath, { recursive: true, force: true }));
       attempt(() => removeNewTransactionParents(anchor, transaction));
     }
     if (rollbackFailures.length > 0) {
-      throw new Error(`Transactional write failed and rollback also failed: ${errorMessage(error)}; rollback: ${rollbackFailures.join("; ")}`, { cause: error });
+      const retained = [...retainedAnchors].map((anchor) => {
+        const transaction = transactions.get(anchor);
+        return `${anchor.displayPath(transaction.transactionPath)} (backups: ${anchor.displayPath(transaction.backupRoot)})`;
+      });
+      throw new Error(`Transactional write failed and rollback also failed: ${errorMessage(error)}; rollback: ${rollbackFailures.join("; ")}${retained.length ? `; retained transaction paths: ${retained.join("; ")}` : ""}`, { cause: error });
     }
     throw new Error(`Transactional write failed and all staged changes were rolled back: ${errorMessage(error)}`, { cause: error });
   }

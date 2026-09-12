@@ -5,7 +5,6 @@ import process from "node:process";
 
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { resolveInstalledProjectRoot } from "./project-root.mjs";
-import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 import { normalizeRunGitFacts } from "./run-environment.mjs";
 
 export const RUN_EVENT_SCHEMA_VERSION = "dove.run.event.v1";
@@ -20,9 +19,6 @@ const RESERVED_EVENT_FIELDS = new Set(["schemaVersion", "seq", "at", "type", "ru
 const FINAL_DECISIONS_MAX_LENGTH = 400;
 const FINAL_NOTE_MAX_LENGTH = 4000;
 const RUN_LOCK_DIRECTORY = ".journal.lock";
-const RUN_LOCK_OWNER_FILE = "owner.json";
-const RUN_LOCK_OWNER_SCHEMA_VERSION = "dove.run.lock.v1";
-const RUN_LOCK_STALE_MS = 30_000;
 const RUN_LOCK_WAIT_MS = 2_000;
 const RUN_LOCK_RETRY_MS = 25;
 const RUN_SEED_MAX_LENGTH = 200;
@@ -214,99 +210,20 @@ function tryRunDirectory(projectRoot, runId, options = {}) {
   return paths;
 }
 
-function readRunLockOwner(fsOps, lockPath) {
-  const ownerPath = path.join(lockPath, RUN_LOCK_OWNER_FILE);
-  const stat = lstatOrNull(fsOps, ownerPath);
-  if (stat === null) return null;
-  if (stat.isSymbolicLink() || !stat.isFile()) return { invalid: true, reason: "owner file is not a regular file" };
-  try {
-    const owner = JSON.parse(fsOps.readFileSync(ownerPath, "utf8"));
-    if (!plainObject(owner) || owner.schemaVersion !== RUN_LOCK_OWNER_SCHEMA_VERSION) return { invalid: true, reason: "owner file has an invalid schema" };
-    return owner;
-  } catch {
-    return { invalid: true, reason: "owner file is not readable JSON" };
-  }
-}
-
-function recoverExistingRunMutationLock(runId, lockPath, options) {
-  const fsOps = options.fsOps;
-  const stat = lstatOrNull(fsOps, lockPath);
-  if (stat === null) return { recovered: true, reason: "lock disappeared" };
-  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove run ${runId} journal lock is not a real directory.`);
-  const owner = readRunLockOwner(fsOps, lockPath);
-  if (owner !== null && owner.invalid !== true) {
-    const pid = Number(owner.pid);
-    if (Number.isInteger(pid) && pid > 0) {
-      const observation = observePid(pid);
-      if (observation.alive) {
-        return {
-          recovered: false,
-          reason: `journal writer lock is held by observable pid ${pid} (${observation.observation}; ${observation.identity})`
-        };
-      }
-      fsOps.rmSync(lockPath, { recursive: true, force: true });
-      return { recovered: true, reason: `removed stale journal lock from non-observable owner pid ${pid}` };
-    }
-  }
-  const ageMs = Math.max(0, Date.now() - stat.mtimeMs);
-  if (ageMs >= RUN_LOCK_STALE_MS) {
-    fsOps.rmSync(lockPath, { recursive: true, force: true });
-    return { recovered: true, reason: `removed stale journal lock without a live owner after ${Math.round(ageMs)}ms` };
-  }
-  return {
-    recovered: false,
-    reason: owner?.invalid === true
-      ? `journal writer lock owner is incomplete (${owner.reason}) and only ${Math.round(ageMs)}ms old`
-      : `journal writer lock has no owner yet and is only ${Math.round(ageMs)}ms old`
-  };
-}
-
-function writeRunLockOwner(fsOps, lockPath, runId, token, options) {
-  const owner = {
-    schemaVersion: RUN_LOCK_OWNER_SCHEMA_VERSION,
-    runId,
-    pid: process.pid,
-    token,
-    createdAt: exactIsoTimestamp(options.now ?? new Date()),
-    operation: options.operation ?? "append"
-  };
-  fsOps.writeFileSync(path.join(lockPath, RUN_LOCK_OWNER_FILE), `${JSON.stringify(owner)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
-}
-
 function acquireRunMutationLock(projectRoot, runId, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const paths = requireRunDirectory(projectRoot, runId, { fsOps });
   const lockPath = path.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
-  const token = crypto.randomBytes(16).toString("hex");
-  const start = Date.now();
-  let lastReason = "journal writer lock is busy";
-  while (Date.now() - start <= RUN_LOCK_WAIT_MS) {
+  for (let attempt = 0; attempt <= RUN_LOCK_WAIT_MS / RUN_LOCK_RETRY_MS; attempt += 1) {
     try {
       fsOps.mkdirSync(lockPath, { mode: 0o700 });
-      try {
-        writeRunLockOwner(fsOps, lockPath, runId, token, options);
-      } catch (error) {
-        fsOps.rmSync(lockPath, { recursive: true, force: true });
-        throw error;
-      }
-      let released = false;
-      return {
-        release() {
-          if (released) return;
-          released = true;
-          const owner = readRunLockOwner(fsOps, lockPath);
-          if (owner?.token === token) fsOps.rmSync(lockPath, { recursive: true, force: true });
-        }
-      };
+      return { release: () => fsOps.rmdirSync(lockPath) };
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
-      const recovery = recoverExistingRunMutationLock(runId, lockPath, { fsOps });
-      lastReason = recovery.reason;
-      if (recovery.recovered) continue;
-      sleepSync(RUN_LOCK_RETRY_MS);
+      if (attempt < RUN_LOCK_WAIT_MS / RUN_LOCK_RETRY_MS) sleepSync(RUN_LOCK_RETRY_MS);
     }
   }
-  throw new Error(`Dove run ${runId} already has an active journal writer lock; ${lastReason}. Stale locks are removed only when the owner pid is not observable or an ownerless lock is older than ${RUN_LOCK_STALE_MS}ms.`);
+  throw new Error(`Dove run ${runId} journal writer lock remains occupied: ${lockPath}. Inspect this path before manually removing a leftover lock; Dove does not recover locks automatically.`);
 }
 
 function validateRunEvent(value, expectedRunId, expectedSeq, label) {
@@ -330,7 +247,7 @@ export function readRunEvents(projectRoot, runId, options = {}) {
   if (lines.length === 0 || (lines.length === 1 && lines[0] === "")) throw new Error(`Dove run journal must contain JSONL events: ${paths.journalPath}`);
   return lines.map((line, index) => {
     if (!line.trim()) throw new Error(`Dove run journal must not contain blank lines: ${paths.journalPath}`);
-    const parsed = parseJsonWithoutDuplicateKeys(line, `${paths.journalPath}:${index + 1}`);
+    const parsed = JSON.parse(line);
     return validateRunEvent(parsed, id, index + 1, `${paths.journalPath}:${index + 1}`);
   });
 }
@@ -648,7 +565,7 @@ function readRunStartMetadata(projectRoot, runId, options = {}) {
       chunks.push(newline === -1 ? bytes : bytes.subarray(0, newline));
       if (newline === -1) continue;
       const label = `${paths.journalPath}:1`;
-      const started = validateRunEvent(parseJsonWithoutDuplicateKeys(Buffer.concat(chunks).toString("utf8"), label), runId, 1, label);
+      const started = validateRunEvent(JSON.parse(Buffer.concat(chunks).toString("utf8")), runId, 1, label);
       if (started.type !== "run.started" || typeof started.at !== "string") throw new Error("Dove run journal must start with a timestamped run.started event.");
       return { runId, startedAt: started.at };
     }
@@ -704,7 +621,6 @@ export function appendReconciledInterrupted(projectRoot, runId, options = {}) {
     fsOps,
     requireExisting: true,
     now: options.now,
-    operation: "reconcile",
     precondition(events) {
       if (terminalEventFrom(events) || reconciledEventFrom(events)?.terminal === true) throw new Error(`Dove run ${id} is already terminal.`);
       if (events.some((item) => item.type === "run.reconciled")) throw new Error(`Dove run ${id} has already been reconciled.`);
@@ -725,7 +641,6 @@ export function appendFinalizedRun(projectRoot, runId, options = {}) {
     fsOps,
     requireExisting: true,
     now: options.now,
-    operation: "finalize",
     precondition(events) {
       if (!startedEventFrom(events)) throw new Error(`Dove run ${id} has no run.started event.`);
       if (!terminalEventFrom(events) && reconciledEventFrom(events)?.terminal !== true) throw new Error(`dove run finalize requires a terminal run: ${id}`);

@@ -4,6 +4,9 @@ import os from "node:os";
 import path from "node:path";
 
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
+import { renderDoveResearchQualityReference } from "./dove-research-contract.mjs";
+
+export const DOVE_REVIEW_QUALITY_REFERENCE_PATH = ".dove-package/RESEARCH_QUALITY.md";
 
 const REVIEW_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$/u;
 const WINDOWS_RESERVED_NAMES = new Set(["CON", "PRN", "AUX", "NUL", ...Array.from({ length: 9 }, (_, index) => `COM${index + 1}`), ...Array.from({ length: 9 }, (_, index) => `LPT${index + 1}`)]);
@@ -140,6 +143,9 @@ function writeMaterialFiles(root, files, fsOps) {
 export function prepareReviewWorkspace(options = {}) {
   const fsOps = options.fsOps ?? fs;
   if (!Array.isArray(options.files)) throw new Error("Dove review workspace files must be an array.");
+  if (options.files.some((file) => typeof file.path === "string" && file.path.replace(/\\/gu, "/").split("/").includes(".dove-package"))) {
+    throw new Error("Dove review package guidance must not be listed as user material.");
+  }
   const { id, name, stateRoot, stateRootFs, workspaceRoot } = reviewWorkspaceLocation(options.reviewId, options);
   const stagingName = `.${name}.staging-${crypto.randomUUID()}`;
   const backupName = `.${name}.previous-${crypto.randomUUID()}`;
@@ -148,7 +154,10 @@ export function prepareReviewWorkspace(options = {}) {
   stateRootFs.mkdir(stagingName, { mode: 0o700 });
   const stagingRoot = stateRootFs.displayPath(stagingName);
   try {
-    writeMaterialFiles(stagingRoot, options.files, fsOps);
+    writeMaterialFiles(stagingRoot, [
+      { path: DOVE_REVIEW_QUALITY_REFERENCE_PATH, bytes: Buffer.from(renderDoveResearchQualityReference(), "utf8") },
+      ...options.files
+    ], fsOps);
     const existing = stateRootFs.tryLstat(name);
     if (existing !== null) {
       if (!options.workspaceRoot) throw new Error(`Dove review workspace already exists without this review's recorded session: ${workspaceRoot}`);
@@ -243,7 +252,14 @@ export function assertReviewWorkspaceMatchesSnapshot(options = {}) {
   const { workspaceRoot } = reviewWorkspaceLocation(options.reviewId, options);
   const anchor = openRootedFilesystem(workspaceRoot, { fsOps });
   const expected = new Map(snapshot.materials.map((material) => [material.path, material]));
-  const actualPaths = listWorkspaceFiles(anchor);
+  if ([...expected.keys()].some((file) => file === ".dove-package" || file.startsWith(".dove-package/"))) {
+    throw new Error("Dove review package guidance must not be listed as user material.");
+  }
+  const reference = anchor.readFile(DOVE_REVIEW_QUALITY_REFERENCE_PATH);
+  if (!reference.equals(Buffer.from(renderDoveResearchQualityReference(), "utf8"))) {
+    throw new Error(`Dove review package reference does not match canonical guidance: ${DOVE_REVIEW_QUALITY_REFERENCE_PATH}`);
+  }
+  const actualPaths = listWorkspaceFiles(anchor).filter((file) => file !== DOVE_REVIEW_QUALITY_REFERENCE_PATH);
   const actualSet = new Set(actualPaths);
   for (const actualPath of actualPaths) {
     if (!expected.has(actualPath)) throw new Error(`Dove review workspace contains an unlisted file: ${actualPath}`);

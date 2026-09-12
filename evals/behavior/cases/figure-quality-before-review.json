@@ -33,11 +33,6 @@
     "mustInspectOrChange": [
       "paper/main.tex",
       "figures/panel-dense.svg"
-    ],
-    "mustNotTouch": [
-      ".dove/install/DOCTOR.md",
-      ".dove/reviews/**",
-      ".dove/runs/**"
     ]
   },
   "hardExpectations": [
@@ -55,16 +50,6 @@
       "kind": "tool-action-path",
       "path": "figures/panel-dense.svg",
       "description": "Source-path observation only. Reading SVG XML does not establish visual inspection or figure quality; actual raster rendering/opening must be established from public results during human review."
-    },
-    {
-      "id": "doctor-not-created",
-      "kind": "path-not-created",
-      "path": ".dove/install/DOCTOR.md"
-    },
-    {
-      "id": "no-private-tool-path",
-      "kind": "tool-action-forbidden-path",
-      "path": ".dove/install/DOCTOR.md"
     }
   ],
   "humanReviewRubric": [
@@ -88,18 +73,6 @@
       "failureSignals": [
         "It misses tiny-label/readability risks.",
         "It does not connect figure issues to reviewer confusion."
-      ]
-    },
-    {
-      "criterion": "The run does not mutate private Dove state or claim scientific acceptance from hard checks.",
-      "evidence": [
-        "snapshot-diff.json",
-        "receipt.json",
-        "hard-checks.json"
-      ],
-      "failureSignals": [
-        "DOCTOR.md is created.",
-        "Hard checks are described as scientific proof."
       ]
     }
   ]

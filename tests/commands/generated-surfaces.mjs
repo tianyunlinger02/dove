@@ -2,894 +2,137 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import {
-  COMMAND_SURFACES,
-  PACKAGE_DOCUMENTATION_PATHS,
-  PROJECT_HOST_IDS,
-  adapterPathForCommand,
-  packageResourcePath
-} from "../../src/core/command-manifest.mjs";
-import { renderDoveAgentInstructions } from "../../src/core/dove-agent-persona.mjs";
-import {
-  generatedDoveAgentEntries,
-  renderClaudeDoveAgent
-} from "../../src/core/dove-agent-definition.mjs";
-import {
-  PAPER_SEARCH_SUPPORT_SKILL_PATH,
-  renderPaperSearchSupportSkill
-} from "../../src/core/paper-search-integration.mjs";
-import {
-  generatedAdapterEntries,
-  generatedClaudeAmbientProjectEntries,
-  renderCommandAdapter
-} from "../../scripts/generate-command-adapters.mjs";
-import {
-  ROOT,
-  actionCapabilities,
-  assertDoveAgentSurfaceSemantics,
-  assertMatchesAll,
-  assertSemanticDeletionsRejected,
-  assertUnique,
-  contractActions,
-  skillContract
-} from "./common.mjs";
-
+import { COMMAND_SURFACES, HOST_ADAPTERS, PACKAGE_GENERATED_SUPPORT_PATHS, PROJECT_HOST_IDS, adapterPathForCommand, packageResourcePath } from "../../src/core/command-manifest.mjs";
+import { generatedDoveAgentEntries, renderClaudeDoveAgent } from "../../src/core/dove-agent-definition.mjs";
+import { DOVE_RESEARCH_QUALITY_CRITERIA, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS, renderDoveResearchQualityReference } from "../../src/core/dove-research-contract.mjs";
+import { resourcesForHosts } from "../../src/core/project-installation-resources.mjs";
+import { PAPER_SEARCH_SUPPORT_SKILL_PATH, renderPaperSearchSupportSkill } from "../../src/core/paper-search-integration.mjs";
 import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
-import {
-  assertPropositionTransition,
-  assertResearchQualityDeletions,
-  assertResearchTaskIdentity,
-  assertSharedAuthorStance,
-  assertSharedResearchJudgment,
-  assertUserResponsePolicy
-} from "./ambient-docs.mjs";
+import { generatedAdapterEntries, generatedClaudeAmbientProjectEntries, generatedResearchQualityReferenceEntries, renderCommandAdapter } from "../../scripts/generate-command-adapters.mjs";
+import { ROOT, assertDoveAgentRoleSemantics, assertSharedResearchContractOnce, assertUnique, contractActions, skillContract } from "./common.mjs";
+import { assertSharedAuthorStance, assertSharedResearchJudgment, assertUserResponsePolicy } from "./ambient-docs.mjs";
 import { assertCapabilityJudgment, assertExperimentScientificEvaluation } from "./agent-capabilities.mjs";
 
-const AMBIGUOUS_ROUTE_TERM_PATTERNS = Object.freeze([
-  { label: "approved route", pattern: /\bapproved route\b/iu },
-  { label: "support route", pattern: /\bsupport route\b/iu },
-  { label: "source path", pattern: /\bsource path\b/iu },
-  { label: "business adapters", pattern: /\bbusiness adapters\b/iu },
-  { label: "the other MCP", pattern: /\bthe other MCP\b/iu },
-  { label: "unavailable or unapproved", pattern: /\bunavailable or unapproved\b/iu }
-]);
-
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+function assertGeneratedFileMatches(relativePath, content) {
+  assert.equal(fs.readFileSync(path.join(ROOT, relativePath), "utf8"), `${content.trimEnd()}\n`, `${relativePath}: canonical projection`);
 }
 
-function generatedSurfaceLabel(entry) {
-  return entry.label ?? entry.relativePath ?? `${entry.hostId ?? "unknown-host"} ${entry.command?.id ?? "unknown-command"}`;
-}
-
-function assertGeneratedSurfaceUsesCurrentRenderer(entry) {
-  const label = generatedSurfaceLabel(entry);
-  assert.doesNotMatch(entry.content, /Capability contract/iu, `${label} must not render retired Capability contract title`);
-  assert.doesNotMatch(entry.content, /Side-effect(?: and authorization)? boundary/iu, `${label} must not render retired Side-effect boundary title`);
-  assert.doesNotMatch(entry.content, /Result boundar(?:y|ies)/iu, `${label} must not render retired Result boundary title`);
-  assert.doesNotMatch(entry.content, /\(read-only\)/iu, `${label} must not render retired read-only action marker`);
-  assert.doesNotMatch(entry.content, /\(work-capable(?:;[^)]*)?\)/iu, `${label} must not render retired work-capable action marker`);
-  assert.doesNotMatch(entry.content, /\*\*internal-capability-id\*\*/iu, `${label} must not render **internal-capability-id** placeholder`);
-
-  for (const capability of new Set(COMMAND_SURFACES.flatMap((command) => actionCapabilities(command)))) {
-    assert.doesNotMatch(entry.content, new RegExp(`\\*\\*${escapeRegExp(capability)}\\*\\*`, "iu"), `${label} must not render internal capability id **${capability}**`);
-  }
-}
-
-function assertRenderedActions(entry) {
-  const label = generatedSurfaceLabel(entry);
-  let previousIndex = -1;
-  for (const item of contractActions(entry.command)) {
-    const index = entry.content.indexOf(item.instruction);
-    assert.ok(index > previousIndex, `${label} must render ${entry.command.id} actions in order without exposing internal capability ids`);
-    previousIndex = index;
-  }
-}
-
-function renderedSection(value, title) {
-  const heading = `### ${title}\n\n`;
-  const start = value.indexOf(heading);
-  assert.ok(start >= 0, `rendered instructions need section ${title}`);
-  const end = value.indexOf("\n### ", start + heading.length);
-  return value.slice(start + heading.length, end < 0 ? undefined : end);
-}
-
-function assertInstruction(value, locator, patterns, label) {
-  const matches = value.split("\n").filter((line) => line.startsWith("- ") && locator.test(line));
-  assert.equal(matches.length, 1, `${label} needs one actionable instruction matching ${locator}`);
-  for (const pattern of patterns) assert.match(matches[0], pattern, `${label} must preserve ${pattern}`);
-  return matches[0];
-}
-
-// Claude commands inherit their shared context from either the ordinary rule or
-// the explicit agent. DSH Skills stand alone. Never demand the shared theory
-// paragraph inside an individual Research/Experiment action.
 export function assertFinalEntrypointWiring() {
-  const rule = generatedClaudeAmbientProjectEntries().find((entry) => entry.destinationPath === ".claude/rules/dove.md")?.content;
-  assert.ok(rule, "Claude ambient rule must be reachable");
-  const agent = renderClaudeDoveAgent();
+  const rule = generatedClaudeAmbientProjectEntries().find(({ destinationPath }) => destinationPath === ".claude/rules/dove.md")?.content;
+  assert.ok(rule);
   for (const entry of generatedAdapterEntries()) {
-    const contexts = entry.hostId === "claude"
-      ? [["Claude rule + command", rule], ["Claude agent + command", agent]]
-      : [["DSH standalone Skill", ""]];
-    for (const [context, prefix] of contexts) {
-      const label = `${context} ${entry.command.id}`;
-      // No Lesson file is read or injected: these final host instructions alone
-      // must carry the standing judgment, communication, and bounded duties.
-      const value = [prefix, entry.content].filter(Boolean).join("\n\n");
+    const prefixes = entry.hostId === "claude" ? [rule, `${rule}\n\n${renderClaudeDoveAgent()}`] : [""];
+    for (const prefix of prefixes) {
+      const value = `${prefix}\n\n${entry.content}`;
+      const label = `${entry.hostId} ${entry.command.id}`;
       assertRenderedCapabilityWiring(entry);
+      assertSharedResearchJudgment(value, label);
+      assertSharedResearchContractOnce(value, label);
       assertUserResponsePolicy(value, label);
       for (const instruction of USER_RESPONSE_POLICY) {
-        assert.ok(value.includes(instruction), `${label}: canonical communication policy must be reachable without Lessons`);
-        assert.equal(entry.content.includes(instruction), entry.hostId === "dsh", `${label}: Claude commands inherit policy; DSH Skills carry it directly`);
+        assert.equal(value.split(instruction).length - 1, 1, `${label}: one communication policy owner`);
+        assert.equal(entry.content.includes(instruction), entry.hostId === "dsh");
       }
-      assertSemanticDeletionsRejected(value, label, assertUserResponsePolicy, [
-        /natural Chinese/iu,
-        /take precedence/iu,
-        /then the evidence/iu,
-        /plain language/iu,
-        /foreign terms/iu,
-        /internal terminology/iu,
-        /Report substantive progress/iu,
-        /End naturally/iu,
-        /not as a fixed closing suggestion/iu
-      ]);
-      assertSharedResearchJudgment(value, label);
-      assertSemanticDeletionsRejected(value, label, assertResearchTaskIdentity, [
-        /actual problem or phenomenon/iu,
-        /target objects\/population and regime/iu,
-        /inputs and permitted information/iu,
-        /output or estimand/iu,
-        /baseline\/reference/iu,
-        /real-world goal and any proxy relationship/iu,
-        /core proposition and intended contribution/iu,
-        /success conditions/iu,
-        /confirmed completion meaning/iu,
-        /asset continuity, not scientific task continuity/iu,
-        /grounded relationship/iu,
-        /task change, not success/iu,
-        /targeted identity comparison/iu,
-        /cumulative local changes/iu,
-        /Reuse still-applicable evidence/iu,
-        /do not recheck the whole task/iu,
-        /not a required schema, table, ID, or per-round record/iu
-      ]);
-      assertSemanticDeletionsRejected(value, label, assertPropositionTransition, [
-        /proposition that motivated the work/iu,
-        /scientific proposition unresolved/iu,
-        /constrains its dependencies/iu,
-        /support, refute, or bound/iu,
-        /without waiting for approval/iu,
-        /valid code, data, evidence, and negative findings/iu,
-        /not let a surviving component/iu,
-        /provisional candidate/iu,
-        /preserve the original conclusion/iu,
-        /independently reassess/iu,
-        /Investigation permission is not mainline-change permission/iu,
-        /requires the user's decision/iu,
-        /without repeatedly requesting the same decision/iu,
-        /success of the old proposition/iu,
-        /no inherited success, admission, or completion/iu,
-        /not deleting assets/iu,
-        /assigning unknowns zero/iu
-      ]);
-      assertResearchQualityDeletions(value, label);
-      assertSemanticDeletionsRejected(value, label, assertSharedResearchJudgment, [
-        /not how much searching/iu,
-        /evidence and confidence/iu,
-        /current purpose is satisfied/iu,
-        /work-completion facts/iu,
-        /reference and scope/iu,
-        /provisional ratings/iu,
-        /intervals/iu,
-        /not low quality or zero/iu,
-        /not applicable needs a reason/iu,
-        /does not make that component high quality/iu,
-        /without improving the (?:refuted|rejected) method/iu,
-        /not novelty magnitude/iu,
-        /exhaustive search can confirm no novelty/iu,
-        /not compensated by depth/iu,
-        /evidence facts, not quality ratings/iu,
-        /nonsignificant/iu,
-        /do not determine evidence value/iu,
-        /not scientific acceptance/iu,
-        /ordinary Markdown evaluation table/iu,
-        /rating and reason/iu,
-        /current-purpose satisfaction/iu,
-        /not a mandatory template or per-step report/iu,
-        /units, denominators/iu,
-        /separate predictions from measurements/iu,
-        /auxiliary scoring is allowed/iu,
-        /grounded scales/iu,
-        /justified task-specific weights/iu,
-        /sensitivity to reasonable weights/iu,
-        /do not average ordinal levels/iu,
-        /success\/acceptance probabilities/iu,
-        /unknown, failed, and not applicable/iu,
-        /renormalize weights/iu,
-        /manufacture success/iu,
-        /preserved original comparison/iu,
-        /automatic scientific PASS/iu,
-        /investigation needs plausible value/iu,
-        /concrete mechanism/iu,
-        /key feasibility, and resources/iu,
-        /trustworthy execution/iu,
-        /valid evaluation, fair identification/iu,
-        /uncertainty that scale can resolve/iu,
-        /matching theoretical\/statistical scope/iu,
-        /same-version independent review/iu,
-        /non-compensable necessary conditions/iu,
-        /high scores cannot offset/iu,
-        /decisive leakage/iu,
-        /theoretical contradiction/iu,
-        /unavailable necessary resources/iu,
-        /insufficient necessary value/iu,
-        /coverage of the claimed independent contribution/iu,
-        /neither an average rating nor an arbitrary lowest dimension/iu,
-        /need not satisfy full-implementation conditions/iu,
-        /not all useful action/iu,
-        /important incremental work/iu,
-        /whether the route remains worth pursuing/iu,
-        /alternative mechanism\/route/iu,
-        /stopping ineffective investment/iu,
-        /cross-dimension changes/iu,
-        /targeted reassessment/iu,
-        /lost necessary capabilities/iu,
-        /future options/iu,
-        /do not require every step to be Pareto-improving/iu,
-        /temporary regression/iu,
-        /reason, boundary, and evidence for reassessment/iu,
-        /not an indefinitely deferred promise/iu,
-        /does not automatically require rollback/iu,
-        /not a claimed mathematical global optimum/iu,
-        /distinguish scientific progress, enabling engineering work, and expression\/delivery progress/iu,
-        /justified understanding/iu,
-        /target research capability or result/iu,
-        /valid reference/iu,
-        /engineering capability, not the research effect/iu,
-        /unknown without suitable execution evidence/iu,
-        /theoretical guarantees require matching proof and conditions/iu,
-        /inference or choice changed/iu,
-        /near miss counts only for what it actually teaches/iu,
-        /do not by themselves establish/iu,
-        /complete a bounded request/iu,
-        /without claiming scientific support/iu,
-        /do not force an immediate scientific result/iu,
-        /repeated support work substitute/iu,
-        /core \(threatens the main goal\)/iu,
-        /branch \(affects a dependent route or claim\)/iu,
-        /local \(affects bounded quality\)/iu,
-        /separately from evidence strength and repair effort/iu,
-        /decision-sized units/iu,
-        /retaining dependencies/iu,
-        /same granularity/iu,
-        /subtract(?:ing)? covered contributions/iu,
-        /reassess the remaining difference/iu,
-        /Stop decomposing/iu,
-        /Clarify undefined objects/iu,
-        /design missing mechanisms/iu,
-        /validate unknown effects/iu,
-        /Simple mechanisms/iu,
-        /not a main method by sunk cost/iu,
-        /does not automatically refute/iu,
-        /restrictions still govern execution/iu,
-        /frozen protocol/iu,
-        /does not establish the scientific validity/iu,
-        /Stop investigating/iu,
-        /would not change the next action/iu,
-        /nonblocking unknowns/iu,
-        /limits dependent work and claims/iu,
-        /not every independent action/iu,
-        /Before committing to or materially changing/iu,
-        /core proposition/iu,
-        /simple alternatives/iu,
-        /distinguishing predictions/iu,
-        /as needed/iu,
-        /to (?:choose or revise|change) the method/iu,
-        /statistical identification/iu,
-        /without skipping necessary run-validity checks/iu,
-        /urgent protection/iu,
-        /conditions still hold/iu,
-        /decision-changing gaps/iu,
-        /not the whole project again for each agent/iu,
-        /comparison that cannot identify the contribution/iu,
-        /alone does not establish/iu,
-        /alone are not research progress/iu,
-        /not the facts/iu,
-        /Answer and stop for pure judgment or bounded requests/iu
-      ]);
-      if (entry.command.id === "dove.status") {
-        // Ambient author context may be present in Claude, but the actual Status
-        // command overrides action/maintenance; DSH must not receive it at all.
-        assertRenderedCapabilityWiring(entry);
-        if (entry.hostId === "dsh") {
-          assert.match(value, /For Status[^\n]*only to inspect and report[^\n]*do not execute research actions or maintain documents/iu);
-          assert.doesNotMatch(value, /^## Author stance$|After delegation|perform the feasible next in-scope step|Maintain Dove research Markdown/mu);
-        }
-      } else {
-        assertSharedAuthorStance(value, label);
-        assertSemanticDeletionsRejected(value, label, assertSharedAuthorStance, [
-          /main session/iu,
-          /full user context/iu,
-          /synthesizes decisive evidence/iu,
-          /subtask applicability/iu,
-          /unverified limits/iu,
-          /resolves contradictions/iu,
-          /without redoing every subtask/iu,
-          /decisive objections/iu,
-          /change dependent investment and claims/iu,
-          /answer them with inspected evidence/iu,
-          /unresolved objections retain that force/iu,
-          /later decisions and reports/iu,
-          /reasonable defaults/iu,
-          /low-cost, reversible in-scope choices/iu,
-          /do not change the core research judgment/iu,
-          /Before expanding cost, dependencies, or claim strength/iu,
-          /joint conditions needed for that investment/iu,
-          /not just whether implementation succeeded/iu,
-          /proportionate scope of work/iu,
-          /absorb its overall result before expanding/iu,
-          /neither check every small step/iu,
-          /nor wait for every scientific premise/iu,
-          /trace affected dependencies/iu,
-          /shared-cause redesign/iu,
-          /alternative route, further evidence, or stopping/iu,
-          /do not default to minimal patches/iu,
-          /unrelated refactoring/iu,
-          /without substituting one for another/iu,
-          /retain still-valid work and negative evidence/iu,
-          /rather than restart everything or defend sunk cost/iu,
-          /one authoritative contract/iu,
-          /producers, consumers, validation, and presentation/iu,
-          /complete needed migrations/iu,
-          /without redundant compatibility or shadow paths/iu,
-          /Do not hide errors/iu,
-          /swallowed failures/iu,
-          /truncation/iu,
-          /completion facts separately/iu,
-          /not substantive quality grades/iu,
-          /focused checks/iu,
-          /integration/iu,
-          /real execution/iu,
-          /formal output/iu,
-          /read-back/iu,
-          /actual downstream use/iu,
-          /cannot stand in for a later one or for scientific support/iu,
-          /without requiring every bounded task to reach production readiness/iu,
-          /Distinguish changing the method, evaluation, and research goal/iu,
-          /mentioning another direction is not authorization/iu,
-          /majority opinion/iu,
-          /not scientific judgment/iu,
-          /not own the mainline or important user communication/iu,
-          /do not indefinitely postpone accepting counterevidence/iu,
-          /does not erase/iu,
-          /does not await user approval/iu,
-          /Read-only requests authorize inspection and reporting, not execution or recording/iu
-        ]);
-      }
+      assert.equal(value.split(DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[entry.hostId]).length - 1, 1);
+      for (const criterion of DOVE_RESEARCH_QUALITY_CRITERIA) assert.ok(!value.includes(criterion), `${label}: full criteria stay on demand`);
+      if (entry.hostId === "dsh" && entry.command.id === "dove.status") {
+        assert.equal(value.includes("## Author stance"), false);
+        assert.match(value, /only to inspect and report/iu);
+      } else assertSharedAuthorStance(value, label);
     }
   }
 }
 
-function assertSubmissionCompletion(value, label) {
-  for (const pattern of [
-    /submission-completion goal.*completion needs author-side scientific sufficiency.*current independent `dove-review`.*same full version.*real delivery readiness/iu,
-    /Unavailable isolated review.*requirement unmet, not waived/iu,
-    /bounded local review.*can finish without becoming a submission-completion goal/iu
-  ]) assert.match(value, pattern, `${label} must keep current independent full review mandatory for submission, not for bounded work`);
-}
-
-function assertAuthoritativeManuscript(value, label) {
-  for (const pattern of [
-    /preserve.*current authoritative manuscript format/iu,
-    /identify.*source.*build or export path.*actual venue requirements/iu,
-    /Only for a new manuscript.*default to LaTeX when the venue accepts it.*otherwise.*required format/iu,
-    /Inspect.*actual submission output.*compiled output for LaTeX/iu,
-    /propagate.*(?:changes|revisions|edits).*authoritative source/iu
-  ]) assert.match(value, pattern, `${label} must preserve the actual authoritative manuscript, not impose LaTeX`);
-}
-
-// These checks inspect final host instructions independently of manifest string
-// identity. They protect textual behavior and ordering, not model execution.
+// Preserve consequential workflow order, not sentence order or punctuation.
+// Locate the canonical actions by their task purpose; their projection is tested
+// independently below. Actual plan persistence and raster evidence have fixtures
+// in behavior:validate rather than word-deletion mutation probes.
 export function assertRenderedCapabilityWiring(entry) {
-  const label = generatedSurfaceLabel(entry);
-  const value = entry.content;
-  const capability = value.slice(value.indexOf("## How Dove approaches this work"));
-  assert.match(capability, /quality grades[^.\n]*substantive merit[^.\n]*evidence confidence and completed work[^.\n]*separate[^.\n]*not stages[^.\n]*promote quality/iu, `${label}: the renderer must not turn capability work into a quality ladder`);
-  assertCapabilityJudgment(capability, entry.command.id, label);
-  const actions = entry.command.id === "dove.review" ? value : renderedSection(value, "Ways Dove may proceed");
-  switch (entry.command.id) {
-    case "dove.research": {
-      assertMatchesAll(capability, label, [
-        /surviving component[^.\n]*local metric gain[^.\n]*provisional[^.\n]*scientific task identity[^.\n]*independent quality[^.\n]*joint conditions[^.\n]*serious alternatives[^.\n]*promotion/iu,
-        /Normal corrections[^.\n]*real problem[^.\n]*output[^.\n]*contribution[^.\n]*completion meaning[^.\n]*do not require renewed mainline approval/iu
-      ]);
-      assertInstruction(actions, /Follow the confirmed or provisional mainline/iu, [
-        /choose[^\n]*discriminating action[^\n]*perform[^\n]*permitted host tools[^\n]*reassess[^\n]*continue/iu,
-        /reassess[^.\n]*original proposition[^.\n]*result[^.\n]*continue/iu,
-        /surviving component[^.\n]*materially different problem[^.\n]*original conclusion visible/iu,
-        /existing authorization while provisional[^.\n]*user's decision before adopting[^.\n]*different confirmed mainline[^.\n]*contribution[^.\n]*completion meaning/iu,
-        /submission goal.*Review.*current whole-paper judgment.*before declaring completion/iu
-      ], label);
-      assertInstruction(actions, /naturally named Mission document/iu, [
-        /Preserve the problem, proposition, and task scope that motivated entry/iu,
-        /append actual results, corrections/iu,
-        /changed identity elements/iu,
-        /provisional[^.\n]*authorized mainline|authorized[^.\n]*provisional/iu,
-        /still.valid assets|counterevidence/iu,
-        /Do not rewrite an earlier Mission/iu,
-        /do not require a new file or fixed task.identity template/iu
-      ], label);
-      break;
-    }
-    case "dove.status":
-      assertMatchesAll(capability, label, [
-        /Report the confirmed mainline, any provisional candidate/iu,
-        /scientific.task identity changes and authorization basis/iu,
-        /entering proposition's current disposition/iu
-      ]);
-      assertInstruction(actions, /Read `\.dove\/research\/RESEARCH\.md`/u, [
-        /only.*summaries and linked details needed/iu,
-        /visible conversation.*necessary current project materials.*distinguish live work from durable research notes/iu,
-        /conflicts or stale notes.*without silently reconciling/iu,
-        /candidate as confirmed mainline only when[^.\n]*(?:visible context|research materials)[^.\n]*decision/iu,
-        /do not infer[^.\n]*(?:promotion|task continuity)[^.\n]*latest code, Review, Run receipt[^.\n]*project name[^.\n]*asset lineage/iu,
-        /identity comparison[^.\n]*authorization basis[^.\n]*absent[^.\n]*do not modify files or run validation to manufacture it/iu,
-        /absent.*say so naturally.*do not modify files/iu
-      ], label);
-      break;
-    case "dove.source":
-      assertInstruction(actions, /Discover, retrieve/iu, [
-        /verify identity and metadata first.*direct DOI lookup before fuzzy title search/iu,
-        /failed lookup is unknown/iu,
-        /Metadata identity is not full-text inspection or claim support.*inspect actual content before using.*claim/iu,
-        /Split compound claims.*material parts.*report each as supported, contradicted, or uncovered.*inspected content.*passage or evidence.*limits/iu,
-        /Partial support is not support for the whole sentence/iu,
-        /recommend only the supported wording without automatically editing the manuscript/iu,
-        /explicit systematic work.*ordinary paper finding.*single fact checks stay proportional/iu,
-        /unavailable.*say what is missing.*continue.*other material/iu
-      ], label);
-      break;
-    case "dove.experiment": {
-      const capability = value.slice(value.indexOf("## How Dove approaches this work"));
-      assertExperimentScientificEvaluation(capability, label);
-      assertMatchesAll(capability, label, [
-        /real (?:research )?goal[^.\n]*actual output[^.\n]*baseline[^.\n]*reference[^.\n]*proxy[^.\n]*success condition/iu,
-        /correct(?:ing|ion|ed)[^.\n]*(?:metric|measurement)[^.\n]*same (?:real )?(?:goal|target)[^.\n]*(?:normal|in.task) (?:correction|repair)/iu,
-        /correct(?:ing|ion)[^.\n]*baseline[^.\n]*same (?:real )?(?:goal|target)[^.\n]*(?:faithful|normal|in.task)[^.\n]*(?:correction|repair)/iu,
-        /changing[^.\n]*target output[^.\n]*proxy goal[^.\n]*(?:scientific.task identity|identity judgment|task change)/iu,
-        /preserv(?:e|ing)[^.\n]*original comparison[^.\n]*(?:explain|basis|reason|rationale)[^.\n]*(?:correction|change|revision)/iu,
-        /more runs[^.\n]*(?:do not|cannot)[^.\n]*(?:repair|fix)[^.\n]*(?:target|real.goal)[^.\n]*mismatch/iu
-      ]);
-      const design = assertInstruction(actions, /For new design/iu, [
-        /claim-driven comparison and evaluation chain/iu,
-        /central basis is missing[^\n]*pause central design[^\n]*inspect actual project material or relevant sources[^\n]*rather than inventing/iu,
-        /new data, methods, evaluation chains, or decision-relevant gaps[^\n]*existing code, samples, and outputs where sufficient/iu,
-        /diagnostic only when necessary and authorized/iu,
-        /Small samples[^\n]*chain semantics and implementation[^\n]*not population-level statistical sufficiency/iu,
-        /design-only[^\n]*read-only[^\n]*plan with unverified parts[^\n]*without running diagnostics or experiments/iu,
-        /Analyze existing results directly.*retrospective.*rather than inventing prior design/iu
-      ], label);
-      const plan = assertInstruction(actions, /Only for newly authorized central execution/iu, [
-        /central execution that needs recording.*select.*Experiment document.*save the prospective plan there before execution begins/iu,
-        /what it tests.*prediction.*alternative.*procedure.*results.*judged/iu,
-        /same document.*later actual results/iu,
-        /Design-only.*existing-result analysis.*retrospective.*exploratory diagnostics do not require a new document/iu
-      ], label);
-      const execution = assertInstruction(actions, /Execute only when requested and permitted/iu, [
-        /methods, configuration, data, metrics, run counts, and result numbers from actual code, logs, outputs/iu,
-        /Interpret results[^\n]*evaluation chain[^\n]*actual control differences[^\n]*anomalies before treating them as evidence/iu,
-        /execute only after[^\n]*prospective plan[^\n]*successfully saved[^\n]*then append[^\n]*actual procedure, result[^\n]*deviation[^\n]*evidence scope[^\n]*same Experiment document/iu,
-        /existing-result analysis or retrospective.*do not imply a prior plan existed/iu,
-        /what was observed[^.\n]*what it means[^.\n]*why it matters/iu,
-        /(?:explain|report)[^.\n]*follow.up[^.\n]*only when useful/iu
-      ], label);
-      assertTextOrder(actions, design, plan, `${label} design then prospective save`);
-      assertTextOrder(actions, plan, execution, `${label} prospective save then execution and append`);
-      break;
-    }
-    case "dove.draft": {
-      const edit = assertInstruction(actions, /Read the target and relevant material/iu, [
-        /Propagate authorized edits.*real build or export path.*inspect.*actual output before claiming.*current/iu,
-        /assessment-only.*findings without edits/iu
-      ], label);
-      assertAuthoritativeManuscript(edit, label);
-      assert.match(value, /Preserve certainty, causality, scope, generality, quantitative qualifiers, and novelty.*say what changed before changing the text/iu, `${label} must explain claim changes before editing`);
-      break;
-    }
-    case "dove.figure": {
-      const plan = assertInstruction(actions, /Create a compact Figure brief/iu, [/planning-only or assessment-only.*without creating files/iu], label);
-      const creation = assertInstruction(actions, /For creation, choose/iu, [
-        /plot quantitative figures from real data with reproducible code.*editable.*SVG.*exposed host image/iu,
-        /Render the actual figure and write its caption from the inspected data or mechanism logic/iu,
-        /do not invent data, results, or method details/iu
-      ], label);
-      const inspection = assertInstruction(actions, /Open or view the actual rendered figure/iu, [
-        /not just filenames or thumbnails.*realistic final dimensions.*manuscript context/iu,
-        /source data or mechanism logic.*visual encoding.*rendered panels.*caption.*nearby text.*layout fit.*manuscript claim/iu
-      ], label);
-      const revision = assertInstruction(actions, /For revision, make targeted changes/iu, [/rerender and inspect.*before delivery/iu], label);
-      const delivery = assertInstruction(actions, /Deliver the final figure file/iu, [/caption.*route-native editable source.*later modification/iu], label);
-      for (const [first, second] of [[plan, creation], [creation, inspection], [inspection, revision], [revision, delivery]]) assertTextOrder(actions, first, second, label);
-      break;
-    }
-    case "dove.review": {
-      const selfCheck = renderedSection(value, "Author-side scientific self-check");
-      const grounding = assertInstruction(selfCheck, /For whole-paper author-side self-check/iu, [
-        /official venue sources.*formal requirements.*inspected relevant published work/iu,
-        /published practice does not replace official rules/iu,
-        /Import, context inspection, or bounded local review does not trigger.*search by itself/iu
-      ], label);
-      const questions = assertInstruction(selfCheck, /For the complete paper, ask four questions/iu, [
-        /method answer the research question/iu,
-        /mechanisms, terms, comparisons, literature, counterexamples, and limits correct for the field/iu,
-        /contribution, evidence, scope, and expression fit the target venue and its readers/iu,
-        /strongest reasonable objection.*evidence or revision needed to answer it/iu,
-        /citation identity.*claim support.*claim strength.*unsupported facts.*anomalous results/iu,
-        /local paragraph, figure, citation, or method review.*requested scope.*do not force.*or start an independent handoff/iu
-      ], label);
-      assertTextOrder(selfCheck, grounding, questions, `${label} grounding before full-paper judgment`);
-      assert.equal((value.match(/ask four questions:/gu) ?? []).length, 1, `${label} must define all four questions only once`);
-      const independent = renderedSection(value, "Independent `dove-review`");
-      assert.match(independent, /whole current frozen paper, not only a diff.*same four full-paper questions above/iu);
-      assertMatchesAll(value, label, [
-        /cosmetic.only changes[^.\n]*selective evidence[^.\n]*hiding counterevidence[^.\n]*unjustified narrowing[^.\n]*diff.only review[^.\n]*restarting the reviewer context/iu,
-        /favorable judgment[^.\n]*current task and claims only[^.\n]*neither erases an earlier proposition's failure[^.\n]*nor authorizes a different author.side mainline/iu
-      ]);
-      assertSubmissionCompletion(independent, label);
-      assert.match(independent, /Verdict.*Blocking issues.*Grounding basis.*Author-side next actions/iu);
-      const handoff = assertInstruction(independent, /Start `dove-review` only from/iu, [
-        /current complete paper.*authoritative manuscript source in its existing format and actual submission output.*appendices or supplements.*target venue/iu,
-        /compiled output for LaTeX/iu,
-        /author-retrieved venue or literature grounding[^.\n]*frozen-material judgment/iu,
-        /Include[^.\n]*grounding inspected above[^.\n]*frozen-material judgment/iu,
-        /only those listed materials.*Read-only access.*no web, MCP, private author conversations, or unlisted files/iu,
-        /isolated, persistent, recoverable reviewer context.*resume or rerun.*whole-paper rounds.*same review id and reviewer session/iu,
-        /grounding is missing.*limit venue or literature conclusions.*runtime is unavailable.*without counting it as independent review/iu
-      ], label);
-      assertTextOrder(value, grounding, handoff, `${label} inspect grounding before frozen handoff`);
-      assert.doesNotMatch(independent, /authoritative LaTeX source and compiled output/iu, `${label} must not require LaTeX for every handoff`);
-      assert.match(independent, /Do not restart it to avoid prior objections/iu);
-      const returned = renderedSection(value, "Returned review or existing context");
-      assertInstruction(returned, /When the user supplies a `dove-review` return/iu, [
-        /append the actual text faithfully.*same review id and round when known/iu,
-        /Do not revise author artifacts, start a new review, rewrite the return, or add author interpretation unless asked/iu
-      ], label);
-      assert.match(returned, /Import and inspection do not automatically begin author response, revision, venue search, paper search, or a new handoff/iu);
-      const delivery = renderedSection(value, "Delivery readiness");
-      assert.match(delivery, /official venue (?:rules|requirements)/iu);
-      assert.match(delivery, /delivery readiness separate(?:ly)? from scientific acceptability/iu);
-      assertInstruction(delivery, /When delivery review is requested or genuinely limiting/iu, [
-        /inspect[^.\n]*actual venue-facing package[^.\n]*requirements[^.\n]*report[^.\n]*delivery gaps/iu
-      ], label);
-      break;
-    }
-    case "dove.rebuttal": {
-      assertInstruction(actions, /Read the Review document/iu, [
-        /same review id and round.*reviewed material list.*current material state.*actual artifacts/iu,
-        /each material finding.*source, experiment, method, analysis, expression, figure, venue-fit, or scientific-task identity problem.*requested revisions/iu,
-        /new citations.*identity and inspected-content support through Source.*new results.*actual Experiment materials before using them.*Then draft the response/iu,
-        /Do not rerun review for cosmetic or response-only edits.*rerun.*substantive evidence.*old recommendation no longer covers the current full version/iu
-      ], label);
-      const validation = assertInstruction(actions, /Check that each response and requested revision/iu, [
-        /Propagate requested revisions.*build or export path.*inspect the output before claiming.*current/iu
-      ], label);
-      assertAuthoritativeManuscript(validation, label);
-      assert.match(value, /Compare original claim, reviewer interpretation, planned response, and revised claim.*certainty, causality, scope, quantitative qualifiers, novelty, contribution, problem, output, baseline, real goal, proxy, and success meaning do not change silently/iu);
-      assertMatchesAll(value, label, [
-        /Reviewer objections[^.\n]*do not automatically authorize[^.\n]*succession of easier tasks/iu,
-        /preserve the original proposition's disposition[^.\n]*independently judge[^.\n]*materially different candidate[^.\n]*mainline promotion/iu,
-        /Do not chase acceptance[^.\n]*cosmetic.only changes[^.\n]*selective evidence[^.\n]*hidden counterevidence[^.\n]*unjustified narrowing[^.\n]*unacknowledged task changes/iu,
-        /warranted response[^.\n]*materially changes[^.\n]*confirmed mainline[^.\n]*intended contribution[^.\n]*completion meaning[^.\n]*old proposition's conclusion[^.\n]*independently assess[^.\n]*user's decision/iu
-      ]);
-      assert.match(value, /Do not overwrite original returns|do not overwrite original returns/iu);
-      break;
-    }
-    case "dove.lessons":
-      assertInstruction(actions, /Read "\.dove\/research\/lessons\/LESSONS\.md"/u, [
-        /directly relevant or plausibly useful/iu,
-        /Reuse Lessons already read in the active context/iu,
-        /Do not create or modify files during reading.*do not treat Lessons as evidence/iu
-      ], label);
-      assertInstruction(actions, /When an experience/iu, [
-        /inspire current or subsequent work.*improve judgment.*expand the candidate space.*prevent repeated mistakes/iu,
-        /preserve.*reusable insight and relevant conditions.*narrowest suitable researcher-owned Lessons document/iu,
-        /Avoid recording routine progress, transient status/iu,
-        /Do not create lesson IDs, frontmatter, an application ledger, or treat Lessons as evidence/iu
-      ], label);
-      break;
-    default:
-      assert.fail(`${label} needs an explicit capability wiring audit`);
+  const value = entry.content.slice(entry.content.indexOf("## How Dove approaches this work"));
+  const label = `${entry.hostId} ${entry.command.id}`;
+  assertCapabilityJudgment(value, entry.command.id, label);
+  if (entry.command.id === "dove.experiment") {
+    assertExperimentScientificEvaluation(value, label);
+    const actions = contractActions(entry.command);
+    const plan = actions.findIndex((action) => /save the prospective plan/iu.test(action));
+    const execution = actions.findIndex((action) => /Execute only when/iu.test(action));
+    assert.ok(plan >= 0 && execution > plan, `${label}: prospective persistence before execution`);
+    assert.match(actions[plan], /before execution/iu);
+    assert.match(actions[execution], /successfully saved/iu);
+    assert.match(actions[execution], /append/iu);
+    assert.match(actions[execution], /same Experiment document/iu);
   }
-}
-
-function assertWiringRejectsRegressions(entries) {
-  const judgmentDeletions = {
-    "dove.research": [/shared substantive quality criteria/iu, /evidence confidence/iu, /current-purpose satisfaction stated separately/iu, /not how much literature/iu, /remains incremental/iu, /joint conditions/iu, /overall tradeoffs/iu, /evaluation table when useful/iu, /only when/iu, /actually been inspected/iu, /preserve their meanings/iu, /not a combined score or global admission threshold/iu, /N1 coverage/iu, /N4 search standing/iu, /does not mean foundational innovation/iu, /do not convert/iu, /require duplicate ratings/iu, /surviving (?:component|branch)/iu, /existing authorization while provisional/iu, /scientific task identity, independent quality/iu, /independent[^.\n]*(?:quality|problem value)/iu, /authorization|user's decision/iu, /original proposition[^.\n]*(?:result|conclusion)/iu, /do not[^.\n]*(?:rewrite|revise)[^.\n]*(?:Mission|old)/iu],
-    "dove.status": [/existing materials/iu, /evidence confidence/iu, /current-purpose satisfaction/iu, /rating undetermined/iu, /enabling engineering/iu, /without treating completed checks as high quality/iu, /engineering receipts/iu, /do not start validation/iu, /Report the confirmed mainline, any provisional candidate/iu, /scientific-task identity changes and authorization basis/iu, /entering proposition's current disposition/iu],
-    "dove.source": [/found leads/iu, /verified citation identity/iu, /inspected relevant full text/iu, /checked a specific claim/iu, /source-use facts, not novelty grades/iu, /remaining substantive contribution/iu, /search depth informing confidence/iu, /not necessarily support/iu, /remaining difference's independence/iu, /does not establish absence of overlap/iu, /stop searching/iu],
-    "dove.experiment": [/specified design/iu, /working execution chain/iu, /work facts, not quality grades/iu, /evaluation validity/iu, /establish, refute, or bound/iu, /valid negative result/iu, /without supporting the proposed method/iu, /nonsignificant/iu, /not run completion as scientific success/iu, /joint conditions/iu, /upper bounds/iu, /attainability/iu, /evaluation reliability/iu, /minimum worthwhile benefit/iu, /no single successful check/iu, /real (?:research )?goal/iu, /actual output/iu, /normal in-task repair/iu, /changing the target output/iu, /task identity|identity comparison/iu, /original comparison/iu, /target mismatch|goal mismatch|target misalignment/iu],
-    "dove.draft": [/outline/iu, /complete draft/iu, /evidence check/iu, /actual delivery/iu, /work facts, not scientific quality grades/iu, /misleading, weak/iu, /independent of contribution and evidence strength/iu, /unsupported central claim/iu, /not establish stronger facts/iu, /core gaps constrain/iu, /without restarting research/iu],
-    "dove.figure": [/visual plan/iu, /rendered visual/iu, /materials and meaning checked/iu, /final use context/iu, /work facts, not quality grades/iu, /judge accuracy/iu, /misleading encoding remains poor after inspection/iu, /preserve nearby claims and evidence/iu, /does not establish final-context readiness/iu, /schematic explanation/iu, /do not trigger a whole-project audit/iu],
-    "dove.review": [/核心问题/u, /分支问题/u, /局部问题/u, /evidence sufficiency separately/iu, /rather than equating/iu, /reasoned objections/iu, /cited evidence/iu, /not new empirical evidence or automatic proof/iu, /cosmetic-only changes/iu, /selective evidence/iu, /hiding counterevidence/iu, /unjustified narrowing/iu, /diff-only review/iu, /restarting the reviewer context/iu, /favorable judgment applies to the current task and claims only/iu],
-    "dove.rebuttal": [/finding understood/iu, /response path grounded/iu, /needed revisions implemented/iu, /effect checked/iu, /processing facts, not resolution grades/iu, /resolved, reduced, or still limiting/iu, /without new scientific defects/iu, /shared-cause redesign/iu, /rather than defaulting to the smallest reply/iu, /same root cause/iu, /coverage of each material finding/iu, /does not establish that the issue is resolved/iu, /does not mean reviewer acceptance/iu, /do not automatically authorize a succession of easier tasks/iu, /original proposition's disposition/iu, /unacknowledged task changes/iu, /obtain the user's decision before adopting it/iu],
-    "dove.lessons": [/tentative, grounded/iu, /tested through reuse under stated conditions/iu, /evidence facts, not grades of usefulness/iu, /transfer value/iu, /reuse may refute advice/iu, /repeated citation, recording, or application alone/iu, /does not improve a lesson or establish scientific progress/iu, /counterexamples/iu, /not package-owned defaults/iu]
-  };
-  const regressions = [
-    ["dove.research", "reassess the original proposition against the result", "accept the completed subtask as success"],
-    ["dove.source", "Partial support is not support for the whole sentence", "Partial support is support for the whole sentence"],
-    ["dove.experiment", "save the prospective plan there before execution begins", "save the prospective plan there after execution finishes"],
-    ["dove.experiment", "then append the actual procedure", "then replace the plan with the actual procedure"],
-    ["dove.draft", "Only for a new manuscript", "For every existing manuscript"],
-    ["dove.figure", "Render the actual figure and write its caption", "Render the actual figure without writing its caption"],
-    ["dove.review", "grounding inspected above", "grounding merely found"],
-    ["dove.review", "current independent `dove-review`", "historical author-side review"],
-    ["dove.review", "same four full-paper questions above", "only the venue-fit question"],
-    ["dove.review", "or start an independent handoff", "and start an independent handoff"],
-    ["dove.rebuttal", "inspect the output before claiming", "claim without inspecting the output"],
-    ["dove.status", "do not modify files", "repair the files"],
-    ["dove.lessons", "do not treat Lessons as evidence", "treat Lessons as evidence"]
-  ];
-  for (const entry of entries) {
-    assertSemanticDeletionsRejected(entry.content, generatedSurfaceLabel(entry),
-      (content) => assertRenderedCapabilityWiring({ ...entry, content }), [
-        /substantive merit/iu,
-        /evidence confidence and completed work/iu,
-        /not stages that automatically promote quality/iu,
-        ...judgmentDeletions[entry.command.id]
-      ]);
-    for (const [id, before, after] of regressions.filter(([id]) => id === entry.command.id)) {
-      const content = entry.content.replaceAll(before, after);
-      assert.notEqual(content, entry.content, `${entry.hostId} ${id} regression probe must alter the instruction`);
-      assert.throws(() => assertRenderedCapabilityWiring({ ...entry, content }), { code: "ERR_ASSERTION" }, `${entry.hostId} ${id} must reject ${after}`);
-    }
-    if (entry.command.id === "dove.experiment") {
-      assertSemanticDeletionsRejected(entry.content, generatedSurfaceLabel(entry),
-        (content) => assertRenderedCapabilityWiring({ ...entry, content }), [
-          /each method's actual output/iu,
-          /target object and granularity/iu,
-          /justify any proxy/iu,
-          /denominators/iu,
-          /without silently retaining only the successful intersection/iu,
-          /or automatically assigning every failure zero/iu,
-          /same evaluation units/iu,
-          /sample dependence/iu,
-          /Protect final-test independence/iu,
-          /actual code, configuration, and outputs/iu,
-          /information access/iu,
-          /training budget/iu,
-          /numerical scale/iu,
-          /edit magnitude/iu,
-          /component's gain under the given control/iu,
-          /evaluation redesign/iu,
-          /identifiable alternative mechanism or route/iu,
-          /stopping the branch/iu,
-          /more runs do not repair identification/iu,
-          /current conclusion within actual evidence/iu,
-          /overall-best authorized action/iu,
-          /rather than defaulting to minimal controls or claim narrowing/iu,
-          /only when necessary and authorized/iu,
-          /not population-level statistical sufficiency/iu,
-          /without running diagnostics or experiments/iu,
-          /do not impose/iu,
-          /successfully saved/iu,
-          /actual control differences/iu
-        ]);
-      const lines = entry.content.split("\n");
-      const plan = lines.findIndex((line) => /^- Only for newly authorized central execution/u.test(line));
-      const execution = lines.findIndex((line) => /^- Execute only when requested and permitted/u.test(line));
-      assert.ok(plan >= 0 && execution > plan);
-      [lines[plan], lines[execution]] = [lines[execution], lines[plan]];
-      assert.throws(() => assertRenderedCapabilityWiring({ ...entry, content: lines.join("\n") }), { code: "ERR_ASSERTION" }, `${entry.hostId} must reject execution before prospective persistence even when every keyword remains`);
-    }
+  if (entry.command.id === "dove.source") {
+    assert.match(value, /partial support/iu);
+    assert.match(value, /without automatically editing/iu);
   }
-}
-
-function assertGeneratedSurfaceLinkMaintenanceSemantics(entries) {
-  const value = entries.map((entry) => entry.content).join("\n");
-  assert.match(value, /ordinary Markdown links?/iu, "generated command surfaces must mention ordinary Markdown links");
-  assert.match(value, /project-relative artifact paths?/iu, "generated command surfaces must mention project-relative artifact paths");
-  assert.match(value, /when useful(?: for recovery)?|only when useful|useful for recovery/iu, "generated command surfaces must keep optional when-useful recovery semantics");
-
-  assert.match(value, /human-readable notes?|human prose|not a structured (?:figure )?store/iu, "generated command surfaces must keep research notes natural rather than structured stores");
-}
-
-function assertRenderedSemanticSectionOrder(entry) {
-  const sections = entry.command.contract?.semanticSections;
-  if (!Array.isArray(sections) || sections.length === 0) return;
-  let previousIndex = -1;
-  for (const section of sections.filter((item) => item.title !== "Return with")) {
-    const index = entry.content.indexOf(`### ${section.title}`);
-    assert.ok(index > previousIndex, `${entry.command.id} generated adapter must render semantic section ${section.title} in contract order`);
-    previousIndex = index;
+  if (entry.command.id === "dove.figure") {
+    assert.match(value, /rerender and inspect/iu);
+    assert.match(value, /planning-only or assessment-only/iu);
   }
-  const returnIndex = entry.content.lastIndexOf("### Return with");
-  assert.ok(returnIndex > previousIndex, `${entry.command.id} generated adapter must render Return with last`);
-}
-
-function assertNoAmbiguousRouteTerms(entries) {
-  for (const entry of entries) {
-    for (const { label, pattern } of AMBIGUOUS_ROUTE_TERM_PATTERNS) {
-      assert.doesNotMatch(entry.content, pattern, `${entry.label} must not contain ambiguous term: ${label}`);
-    }
+  if (entry.command.id === "dove.review") {
+    for (const topic of [/same review id/iu, /only those listed materials/iu, /current independent/iu, /same full version/iu, /unmet, not waived/iu]) assert.match(value, topic);
   }
-}
-
-function packageDocumentEntries() {
-  return PACKAGE_DOCUMENTATION_PATHS.map((relativePath) => ({
-    label: `public package doc ${relativePath}`,
-    content: fs.readFileSync(path.join(ROOT, relativePath), "utf8")
-  }));
-}
-
-function actualGeneratedFile(relativePath) {
-  return fs.readFileSync(path.join(ROOT, relativePath), "utf8");
-}
-
-function assertGeneratedFileMatches(relativePath, expectedContent) {
-  assert.equal(actualGeneratedFile(relativePath), `${expectedContent.trimEnd()}\n`, `${relativePath} must match its canonical renderer`);
-}
-
-function assertTextOrder(value, first, second, label) {
-  const firstIndex = value.indexOf(first);
-  const secondIndex = value.indexOf(second);
-  assert.ok(firstIndex >= 0, `${label} must include ${first}`);
-  assert.ok(secondIndex > firstIndex, `${label} must mention ${second} after ${first}`);
-}
-
-function assertIdentityStates(value, label) {
-  const normalized = value.toLowerCase().replace(/not-found/gu, "not found");
-  for (const term of ["verified", "conflict", "not found", "unknown"]) {
-    assert.ok(normalized.includes(term), `${label} must distinguish DOI identity state ${term}`);
-  }
-}
-
-function assertNegativeOnlySourceStorageTerms(value, label) {
-  const sentences = value.split(/\n+|(?<=\.)\s+/u).filter((sentence) => /\b(?:databases?|caches?|trust scores?|DOI ledgers?|BibTeX parsers?|research hashes?)\b/iu.test(sentence));
-  assert.ok(sentences.length > 0, `${label} must explicitly reject source database/cache/trust-score machinery`);
-  for (const sentence of sentences) {
-    assert.match(sentence, /\b(?:do not|not add|avoid|no|must not)\b/iu, `${label} must mention source storage machinery only as a prohibition: ${sentence}`);
-  }
-}
-
-function assertNoDoiIdentityFallbackOrFullTextConflation(value, label) {
-  assert.doesNotMatch(value, /DOI[^.\n]{0,180}\bfallback\b|\bfallback\b[^.\n]{0,180}DOI/iu, `${label} must not attach fallback chains to DOI identity lookup`);
-  assert.doesNotMatch(value, /direct DOI metadata lookup[^.\n]{0,180}(?:download_with_fallback|full[- ]text|database|cache|trust score|BibTeX)/iu, `${label} must keep direct DOI metadata lookup separate from full text and storage machinery`);
-  assert.doesNotMatch(value, /metadata identity (?:verification|verified)[^.\n]{0,120}(?:means|establishes|proves|confirms)[^.\n]{0,120}(?:full[- ]text|claim support)/iu, `${label} must not turn metadata identity into full-text inspection or claim support`);
-}
-
-export function assertCanonicalTerminology() {
-  assertNoAmbiguousRouteTerms([
-    { label: "canonical rendered Dove agent instructions", content: renderDoveAgentInstructions() },
-    { label: "canonical rendered Claude Dove agent", content: renderClaudeDoveAgent() },
-    ...generatedDoveAgentEntries().map((entry) => ({ label: `generated Dove agent ${entry.relativePath}`, content: entry.content })),
-    ...generatedAdapterEntries().map((entry) => ({ label: `generated ${entry.hostId} ${entry.command.id}`, content: entry.content })),
-    ...generatedClaudeAmbientProjectEntries().map((entry) => ({ label: `ambient/support guidance ${entry.destinationPath}`, content: entry.content })),
-    ...packageDocumentEntries()
-  ]);
+  if (entry.command.id === "dove.status") assert.match(value, /do not modify files/iu);
 }
 
 export function assertSourceIdentityGuidanceProjection() {
-  const source = COMMAND_SURFACES.find((command) => command.id === "dove.source");
-  assert.ok(source, "canonical Dove Source command must exist");
-  const sourceWork = contractActions(source).find((item) => item.capability === "source-research");
-  assert.ok(sourceWork, "canonical Dove Source must include source-research work");
-  assertTextOrder(sourceWork.instruction, "direct DOI lookup", "fuzzy title search", "canonical Source DOI identity guidance");
-  assertIdentityStates(source.contract.responsibilities.join("\n"), "canonical Source DOI identity guidance");
-  assert.match(sourceWork.instruction, /failed lookup is unknown/iu, "canonical Source must classify failed lookup as unknown");
-  assert.match(sourceWork.instruction, /Metadata identity is not full-text inspection or claim support/iu, "canonical Source must separate metadata identity from full text and claim support");
-  assert.match(source.contract.boundaries.join("\n"), /transient by default.*Source notes or bibliography entries.*materially affect/isu, "canonical Source must keep DOI checks transient by default");
-  assert.match(source.contract.responsibilities.join("\n"), /bounded bibliography DOI identity check.*only the requested entries/isu, "canonical Source must permit requested bounded bibliography checks");
-  assert.doesNotMatch(source.contract.nonGoals.join("\n"), /Do not batch-scan bibliographies/iu, "canonical Source must not prohibit its bounded bibliography capability");
-  assert.match(source.contract.nonGoals.join("\n"), /BibTeX parsers/iu, "canonical Source must reject BibTeX parser machinery");
-
-  const sourceEntries = generatedAdapterEntries().filter((entry) => entry.command.id === "dove.source");
-  assert.equal(sourceEntries.length, PROJECT_HOST_IDS.length, "Dove Source must project to each host exactly once");
-  for (const entry of sourceEntries) {
+  const source = COMMAND_SURFACES.find(({ id }) => id === "dove.source");
+  const sourceWork = contractActions(source).find((action) => /direct DOI lookup/iu.test(action));
+  assert.ok(sourceWork);
+  for (const topic of [/unknown/iu, /metadata identity/iu, /full-text inspection/iu, /claim support/iu]) assert.match(sourceWork, topic);
+  for (const entry of generatedAdapterEntries().filter(({ command }) => command.id === source.id)) {
     assertGeneratedFileMatches(entry.relativePath, entry.content);
-    assert.equal(entry.content, renderCommandAdapter(entry.hostId, source), `${entry.relativePath} must be rendered from the canonical Source command`);
-    assert.ok(entry.content.includes(sourceWork.instruction), `${entry.relativePath} must contain the canonical Source DOI instruction`);
-    assertNoDoiIdentityFallbackOrFullTextConflation(entry.content, entry.relativePath);
-    assertNegativeOnlySourceStorageTerms(entry.content, entry.relativePath);
+    assert.ok(entry.content.includes(sourceWork));
   }
-
-  const paperSearchEntry = generatedClaudeAmbientProjectEntries().find((entry) => entry.destinationPath === PAPER_SEARCH_SUPPORT_SKILL_PATH);
-  assert.ok(paperSearchEntry, "hidden paper-search support guidance must be generated");
-  assert.equal(paperSearchEntry.content, renderPaperSearchSupportSkill(), "hidden paper-search guidance must come from paper-search integration");
-  assertGeneratedFileMatches(packageResourcePath("claude", PAPER_SEARCH_SUPPORT_SKILL_PATH), paperSearchEntry.content);
-  assertTextOrder(paperSearchEntry.content, "get_crossref_paper_by_doi", "fuzzy title search", "paper-search DOI identity guidance");
-  assertIdentityStates(paperSearchEntry.content, "paper-search DOI identity guidance");
-  assert.match(paperSearchEntry.content, /empty result is not-found/iu, "paper-search guidance must classify empty DOI lookup as not-found");
-  assert.match(paperSearchEntry.content, /MCP, permission, or network failure is unknown/iu, "paper-search guidance must classify MCP and network failure as unknown");
-  assert.match(paperSearchEntry.content, /Metadata identity is not full-text inspection or claim support/iu, "paper-search guidance must separate metadata identity from full text and claim support");
-  assert.match(paperSearchEntry.content, /Inspect actual paper content before saying it supports a scientific claim/iu, "paper-search guidance must require actual content for claim support");
-  assert.match(paperSearchEntry.content, /Update an ordinary Source note or bibliography only when.*materially changes/isu, "paper-search guidance must keep DOI checks transient unless material");
-  assert.match(paperSearchEntry.content, /bounded bibliography DOI identity check.*requested entries in the current manuscript/isu, "paper-search must support bounded manuscript bibliography checks");
-  assert.doesNotMatch(paperSearchEntry.content, /Do not batch-scan bibliographies/iu, "paper-search must not forbid the requested bounded check");
-  assertNoDoiIdentityFallbackOrFullTextConflation(paperSearchEntry.content, "paper-search guidance");
-  assertNegativeOnlySourceStorageTerms(paperSearchEntry.content, "paper-search guidance");
+  const support = generatedClaudeAmbientProjectEntries().find(({ destinationPath }) => destinationPath === PAPER_SEARCH_SUPPORT_SKILL_PATH);
+  assert.equal(support.content, renderPaperSearchSupportSkill());
+  assertGeneratedFileMatches(packageResourcePath("claude", support.destinationPath), support.content);
+  for (const topic of [/get_crossref_paper_by_doi/u, /verified, conflict, not-found, or unknown/iu, /bounded bibliography DOI identity check/iu, /actual paper content/iu]) assert.match(support.content, topic);
 }
 
 export function assertGeneratedAdapters() {
   const entries = generatedAdapterEntries();
-  const agentEntries = generatedDoveAgentEntries();
   assert.equal(entries.length, COMMAND_SURFACES.length * PROJECT_HOST_IDS.length);
-  assertGeneratedSurfaceLinkMaintenanceSemantics(entries);
-  assertWiringRejectsRegressions(entries);
-  assertUnique(entries.map((entry) => entry.relativePath), "Generated adapter paths");
-  assertUnique(agentEntries.map((entry) => entry.relativePath), "Generated Dove agent paths");
-  assert.deepEqual(agentEntries.map((entry) => entry.relativePath), [".claude/agents/dove.md"]);
-
-  for (const entry of agentEntries) {
-    assertGeneratedSurfaceUsesCurrentRenderer(entry);
-    assert.match(entry.content, /# Dove Agent/u);
-    assertDoveAgentSurfaceSemantics(entry.content, "Generated Dove agent");
-    assert.doesNotMatch(entry.content, /\b(?:PICOS|PRISMA|risk-of-bias|GRADE|meta-analysis)\b/iu, "Generated Dove agent must leave systematic-review details to Source");
-    assert.doesNotMatch(entry.relativePath, /dove-(?:planner|builder|reviewer|reader|referee)|dove-(?:reviewer|reader|referee)/u);
-    assert.doesNotMatch(entry.content, /three primary roles|Planner.*Builder\/Author.*Reviewer|user-switchable.*(?:reader|referee)/isu);
+  assertUnique(entries.map(({ relativePath }) => relativePath), "Adapter paths");
+  for (const entry of generatedDoveAgentEntries()) {
+    assertDoveAgentRoleSemantics(entry.content, "Generated agent");
+    assertGeneratedFileMatches(packageResourcePath("claude", entry.relativePath), entry.content);
   }
-
   for (const entry of entries) {
-    const contract = skillContract(entry.command);
     assert.equal(entry.destinationPath, adapterPathForCommand(entry.hostId, entry.command));
-    assert.match(entry.relativePath, /^package-resources\/hosts\/(?:claude|dsh)\//u);
     assert.equal(entry.content, renderCommandAdapter(entry.hostId, entry.command));
-    assert.match(entry.content, /^---\n/um);
-    assert.match(entry.content, /## How Dove approaches this work\n\n/iu);
-    assert.match(entry.content, /### What this is for\n\n/u);
-    assert.match(entry.content, /### When to use\n\n/u);
-    assert.match(entry.content, /### Scope and changes\n\n/u);
-    assert.match(entry.content, /### Using host tools\n\n/u);
-    assertGeneratedSurfaceUsesCurrentRenderer(entry);
-    assertRenderedActions(entry);
+    assertGeneratedFileMatches(entry.relativePath, entry.content);
+    const contract = skillContract(entry.command);
+    let previous = -1;
+    for (const action of contractActions(entry.command)) {
+      const index = entry.content.indexOf(action);
+      assert.ok(index > previous, `${entry.relativePath}: canonical action order`);
+      previous = index;
+    }
+    for (const instruction of contract.returnWith) assert.ok(entry.content.includes(instruction));
+    assert.ok(entry.content.lastIndexOf("### Return with") > entry.content.indexOf("### Using host tools"));
+    if (entry.hostId === "claude") assert.equal(entry.content.split("$ARGUMENTS").length - 1, 1);
+    else assert.equal(entry.content.includes("$ARGUMENTS"), false);
     assertRenderedCapabilityWiring(entry);
-
-    if (Array.isArray(contract.semanticSections) && contract.semanticSections.length > 0) {
-      assertRenderedSemanticSectionOrder(entry);
-      assert.doesNotMatch(entry.content, /^#### /mu, "semantic command adapters should not reintroduce nested renderer labels");
-    } else {
-      if (contract.responsibilities.length > (contract.returnWith?.length ?? 0)) assert.match(entry.content, /### What Dove will examine\n\n/u);
-      if (contract.actions.length > 0) assert.match(entry.content, /### Ways Dove may proceed\n\n/u);
-      if (contract.nonGoals.length > 0) assert.match(entry.content, /### What this should not replace\n\n/u);
-    }
-    if (contract.clarification.length > 0) assert.match(entry.content, /### When Dove needs input\n\n/u);
-
-    assert.match(entry.content, /### Return with\n\n/u, "Skill adapters must end with the concise Return with footer");
-    assert.ok(entry.content.lastIndexOf("### Return with") > entry.content.indexOf("### Using host tools"), `${entry.command.id} Return with footer must appear near the end`);
-    if (entry.hostId === "claude") {
-      assert.match(entry.content, /argument-hint:/u, "Claude command adapters may expose an argument hint");
-      const argumentMatches = entry.content.match(/\$ARGUMENTS/gu) ?? [];
-      assert.equal(argumentMatches.length, 1, `${entry.relativePath} must include $ARGUMENTS exactly once`);
-    }
-    if (entry.hostId === "dsh") {
-      assert.doesNotMatch(entry.content, /\$ARGUMENTS|argument-hint:|\/dove:|<[^>]+>/u, "DSH filesystem Skills must not advertise Claude command arguments or placeholder syntax");
-    }
-    assert.doesNotMatch(entry.content, /## Dove capsule/u, "Skill adapters must not duplicate the full Dove agent capsule");
-    assert.doesNotMatch(entry.content, /## Internal workflow|Internal guidance only|^\s*\d+\./mu);
-    assert.doesNotMatch(entry.content, /Dove MCP tools|Call `(?:query|manage)_dove|semantic ID/iu);
-    assert.doesNotMatch(entry.content, /No file write is required|Persist only when:/u);
-    assert.doesNotMatch(entry.content, /work-capable; not standalone authorization|Read-only: do not create or modify files\.|Other file changes still require authorization|File changes require authorization/iu, "generated actions must not carry repeated authorization tails");
-
-    if (actionCapabilities(entry.command).includes("research-document-maintenance")) {
-      if (entry.command.id === "dove.lessons") {
-        assert.match(entry.content, /inspire current or subsequent work|improve judgment|expand the candidate space|prevent repeated mistakes/iu);
-        assert.match(entry.content, /reusable insight|future value|routine progress/iu);
-        assert.doesNotMatch(entry.content, /maintenance is explicit-only|only when the user explicitly asks/iu);
-      } else if (entry.command.id === "dove.review") {
-        assert.match(entry.content, /`dove-review` return|user-pasted review opinion|preserve self-check or handoff context|returned review/isu);
-      } else {
-        assert.match(entry.content, /user explicitly asks to record, update, or save Dove research context/iu);
-        assert.match(entry.content, /research mainline, conclusion, decision, or priority/iu);
-        assert.match(entry.content, /preserving the work's evidence and continuation context is genuinely useful/iu);
-      }
-    }
-    if (entry.command.id === "dove.status") assert.match(entry.content, /without writes|only inspect and report|do not create, modify, repair, validate, or normalize files/iu);
-    if (entry.command.id === "dove.lessons") {
-      assert.match(entry.content, /RESEARCH\.md.*project context.*active context|project context.*RESEARCH\.md.*active context/isu);
-      assert.match(entry.content, /Reuse Lessons.*active context.*rereading|already read.*active context.*rereading/isu);
-    }
-    if (entry.command.id === "dove.review") assert.match(entry.content, /delivery readiness.*scientific acceptability|scientific acceptability.*delivery readiness/isu);
-    assert.doesNotMatch(entry.content, /## Response policy/u);
-    if (entry.hostId === "dsh") assert.doesNotMatch(entry.content, /\/dove:/u, "DSH filesystem Skills must not advertise Claude slash commands");
   }
+}
+
+export function assertQualityReferenceResources() {
+  const entries = generatedResearchQualityReferenceEntries();
+  assert.deepEqual(entries.map(({ hostId }) => hostId), PROJECT_HOST_IDS);
+  for (const entry of entries) {
+    assert.equal(entry.destinationPath, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[entry.hostId]);
+    assert.equal(entry.relativePath, packageResourcePath(entry.hostId, entry.destinationPath));
+    assert.ok(PACKAGE_GENERATED_SUPPORT_PATHS.includes(entry.relativePath));
+    assert.ok(HOST_ADAPTERS[entry.hostId].requiredPaths.includes(entry.destinationPath));
+    assert.equal(entry.content, renderDoveResearchQualityReference());
+    assertGeneratedFileMatches(entry.relativePath, entry.content);
+    const references = resourcesForHosts([entry.hostId]).filter(({ path: resourcePath }) => resourcePath.startsWith(".dove/"));
+    assert.equal(references.length, 1);
+    assert.equal(references[0].path, ".dove/install/RESEARCH_QUALITY.md");
+    assert.equal(references[0].kind, "exclusive-file");
+    assert.equal(references[0].content, entry.content);
+  }
+  assert.equal(resourcesForHosts(PROJECT_HOST_IDS).filter(({ path: resourcePath }) => resourcePath === ".dove/install/RESEARCH_QUALITY.md").length, 1);
 }

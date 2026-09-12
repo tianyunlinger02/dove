@@ -2,6 +2,7 @@ export { PACKAGE_NAME } from "./package-metadata.mjs";
 export { ARTIFACT_PATHS, PACKAGE_VERSION } from "./schema.mjs";
 
 export { parseSessionStartPayload, sessionStartFailureOutput, sessionStartOutput } from "./session-start-hook.mjs";
+export { formatContextCapacity, formatSessionDuration, inspectGitBranch, parseDoveStatusLinePayload, renderDoveStatusLine } from "./statusline.mjs";
 export {
   DOVE_CLAUDE_SESSION_START_HOOK_COMMAND,
   DOVE_CLAUDE_STATUS_LINE,
@@ -12,15 +13,8 @@ export {
 export {
   RESEARCH_DEFAULT_DIRECTORY_PATHS,
   RESEARCH_DEFAULT_DOCUMENTS,
-  RESEARCH_DEFAULT_FILE_PATHS,
   RESEARCH_DEFAULT_PATHS,
-  RESEARCH_LESSON_TOPICS,
-  appendExactMarkdownBlocks,
-  appendExactMarkdownLines,
-  planResearchDefaults,
-  prepareResearchDefaults,
-  readResearchDefaultsSnapshot,
-  researchDefaultTransactionEntries
+  prepareResearchDefaults
 } from "./research-defaults.mjs";
 export { RESEARCH_DOCUMENT_PATHS, inspectResearchDocuments } from "./research-documents.mjs";
 export {
@@ -47,25 +41,12 @@ export {
 export * from "./dove-research-contract.mjs";
 
 export {
-  DOVE_AGENT_DEFINITION,
   DOVE_AGENT_SURFACES,
   generatedDoveAgentEntries,
   renderClaudeDoveAgent
 } from "./dove-agent-definition.mjs";
 export {
-  DOVE_AGENT_CAPSULE_BULLETS,
-  DOVE_AGENT_CURIOSITY,
-  DOVE_AGENT_DESCRIPTION,
-  DOVE_AGENT_DIRECT_JUDGMENT,
-  DOVE_AGENT_FRAME,
-  DOVE_AGENT_HUNCH,
-  DOVE_AGENT_LAYERING,
-  DOVE_AGENT_NAME,
-  DOVE_AGENT_PERSONA_BULLETS,
-  DOVE_AGENT_PROPORTIONALITY,
-  DOVE_AGENT_STOPPING,
   renderDoveAgentInstructions,
-  renderDoveAgentPersonaSection,
   renderDoveAuthorStanceSection,
   renderDoveReviewerStanceSection,
   renderDoveSharedResearchContractSection
@@ -74,7 +55,6 @@ export {
   COMMAND_SURFACES,
   COMMAND_SURFACE_BY_ID,
   HOST_ADAPTERS,
-  HOST_ADAPTER_POLICY,
   PROJECT_HOST_IDS,
   allGeneratedCommandAdapterPaths,
   commandAdapterPathsForHost
@@ -85,7 +65,6 @@ export {
   inspectProjectIntegration,
   previewProjectCompleteReinstall,
   previewProjectUninstall,
-  synchronizeProjectIntegrationOnly,
   uninstallProjectIntegration,
   updateProjectIntegration
 } from "./project-installation.mjs";
@@ -98,6 +77,7 @@ export { handoffReview, importReviewReturn, inspectReviewStatus, rerunReview, re
 export {
   RUNS_DIRECTORY_PATH,
   RUN_EVENT_SCHEMA_VERSION,
+  appendFinalizedRun,
   compareRuns,
   createRunId,
   inspectRunStatus,
@@ -106,4 +86,4 @@ export {
   runRelativePaths,
   summarizeRun
 } from "./run-record.mjs";
-export { finalizeRunWithSupervisor, resumeRun, startDetachedRunSupervisor } from "./run-supervisor.mjs";
+export { resumeRun, startDetachedRunSupervisor } from "./run-supervisor.mjs";

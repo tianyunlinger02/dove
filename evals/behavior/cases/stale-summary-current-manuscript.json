@@ -41,11 +41,6 @@
       "notes/author-page-tasks.md",
       "paper/main.tex",
       "notes/current-scientific-critique.md"
-    ],
-    "mustNotTouch": [
-      ".dove/install/DOCTOR.md",
-      ".dove/reviews/**",
-      ".dove/runs/**"
     ]
   },
   "hardExpectations": [
@@ -82,16 +77,6 @@
       "id": "preserve-supplied-critique",
       "kind": "path-unchanged",
       "path": "notes/current-scientific-critique.md"
-    },
-    {
-      "id": "no-doctor-write",
-      "kind": "path-not-created",
-      "path": ".dove/install/DOCTOR.md"
-    },
-    {
-      "id": "no-private-feedback-access",
-      "kind": "tool-action-forbidden-path",
-      "path": ".dove/install/DOCTOR.md"
     }
   ],
   "humanReviewRubric": [

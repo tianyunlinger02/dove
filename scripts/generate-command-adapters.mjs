@@ -10,6 +10,7 @@ import {
 import { generatedDoveAgentEntries } from "../src/core/dove-agent-definition.mjs";
 import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "../src/core/dove-agent-persona.mjs";
 import { USER_RESPONSE_POLICY } from "../src/core/user-response-policy.mjs";
+import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS, renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
 import {
   PAPER_SEARCH_SUPPORT_SKILL_PATH,
   renderPaperSearchSupportSkill
@@ -54,10 +55,6 @@ function renderBullets(bullets) {
   return bullets.map((bullet) => `- ${bullet}`).join("\n");
 }
 
-function renderAction(item) {
-  return `- ${item.instruction}`;
-}
-
 function renderListSection(title, items) {
   const values = Array.isArray(items) ? items.filter(Boolean) : [];
   return values.length > 0 ? `### ${title}\n\n${renderBullets(values)}` : "";
@@ -75,7 +72,7 @@ function renderHostGuidance(contract, hostId) {
 function renderSemanticSection(section) {
   const items = [
     ...(Array.isArray(section.responsibilities) ? section.responsibilities : []),
-    ...(Array.isArray(section.actions) ? section.actions.map((item) => item.instruction) : []),
+    ...(Array.isArray(section.actions) ? section.actions : []),
     ...(Array.isArray(section.boundaries) ? section.boundaries : []),
     ...(Array.isArray(section.nonGoals) ? section.nonGoals : [])
   ].filter(Boolean);
@@ -92,15 +89,6 @@ function renderReturnWith(contract) {
   return renderListSection("Return with", contract.returnWith);
 }
 
-function withoutReturnWith(items, contract) {
-  const returns = new Set(contract.returnWith ?? []);
-  return (items ?? []).filter((item) => !returns.has(item));
-}
-
-function isReturnWithSection(section) {
-  return /^Return with$/iu.test(section?.title ?? "");
-}
-
 function renderSemanticCapabilityContract(command, hostId = null) {
   const contract = command.contract;
   const sections = [
@@ -108,7 +96,7 @@ function renderSemanticCapabilityContract(command, hostId = null) {
     `### What this is for\n\n${contract.purpose}`,
     `### When to use\n\n${contract.when}`,
     renderListSection("Scope and changes", contract.boundaries),
-    ...contract.semanticSections.filter((section) => !isReturnWithSection(section)).map(renderSemanticSection),
+    ...contract.semanticSections.map(renderSemanticSection),
     renderListSection("When Dove needs input", contract.clarification),
     renderHostGuidance(contract, hostId),
     renderReturnWith(contract)
@@ -126,20 +114,15 @@ function renderCapabilityContract(command, hostId = null) {
     "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.",
     `### What this is for\n\n${contract.purpose}`,
     `### When to use\n\n${contract.when}`,
-    renderListSection("What Dove will examine", withoutReturnWith(contract.responsibilities, contract)),
+    renderListSection("What Dove will examine", contract.responsibilities),
     renderListSection("Scope and changes", contract.boundaries),
-    Array.isArray(contract.actions) && contract.actions.length > 0 ? `### Ways Dove may proceed\n\n${contract.actions.map(renderAction).join("\n")}` : "",
+    Array.isArray(contract.actions) && contract.actions.length > 0 ? `### Ways Dove may proceed\n\n${renderBullets(contract.actions)}` : "",
     renderListSection("What this should not replace", contract.nonGoals),
     renderListSection("When Dove needs input", contract.clarification),
     renderHostGuidance(contract, hostId),
     renderReturnWith(contract)
   ].filter(Boolean);
   return sections.join("\n\n");
-}
-
-function renderGuidance(command) {
-  const notes = Array.isArray(command.guidance) ? command.guidance.filter(Boolean) : [];
-  return notes.length > 0 ? `## Command guidance\n\n${renderBullets(notes)}` : "";
 }
 
 function renderExamples(command, hostId = null) {
@@ -157,16 +140,15 @@ function renderBody(command, heading, hostId = null) {
   const args = renderArgumentBlock(hostId);
   const examples = renderExamples(command, hostId);
   const contract = renderCapabilityContract(command, hostId);
-  const guidance = renderGuidance(command);
   const responsePolicy = hostId === "dsh" ? USER_RESPONSE_POLICY.join("\n") : "";
-  const coveredText = [responsePolicy, contract].filter(Boolean).join("\n\n");
   const shared = hostId === "dsh" ? [
     responsePolicy,
-    renderDoveSharedResearchContractSection({ compact: true, coveredText }),
+    renderDoveSharedResearchContractSection(),
+    `Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`. Read it proactively at the decision triggers above; it is guidance, not research evidence.`,
     command.id === "dove.status" ? "For Status, use these principles only to inspect and report; do not execute research actions or maintain documents."
-      : renderDoveAuthorStanceSection({ compact: true, coveredText })
+      : renderDoveAuthorStanceSection()
   ].join("\n\n") : "";
-  return [`# ${heading}`, purpose, args, examples.trim(), shared, contract, guidance].filter(Boolean).join("\n\n") + "\n";
+  return [`# ${heading}`, purpose, args, examples.trim(), shared, contract].filter(Boolean).join("\n\n") + "\n";
 }
 
 function renderFrontmatter(command, fields = {}) {
@@ -209,6 +191,15 @@ export function generatedAdapterEntries() {
   })));
 }
 
+export function generatedResearchQualityReferenceEntries() {
+  return PROJECT_HOST_IDS.map((hostId) => ({
+    hostId,
+    destinationPath: DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId],
+    relativePath: packageResourcePath(hostId, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId]),
+    content: renderDoveResearchQualityReference()
+  }));
+}
+
 export function generatedClaudeAmbientProjectEntries() {
   return [
     { destinationPath: DOVE_CLAUDE_AMBIENT_RULE_PATH, relativePath: packageResourcePath("claude", DOVE_CLAUDE_AMBIENT_RULE_PATH), content: renderClaudeAmbientRule() },
@@ -248,7 +239,7 @@ export function writeGeneratedDoveAgentSurfaces(root = PACKAGE_ROOT, options = {
       label: "Generated Dove agent surface path"
     })),
     ...staleEntries
-  ], { fsOps: options.fsOps });
+  ], { fsOps: options.fsOps, transactionBase: ".claude/tmp/dove-generated-transactions" });
 }
 
 export function checkGeneratedDoveAgentSurfaces(root = PACKAGE_ROOT) {
@@ -319,6 +310,7 @@ function existingGeneratedAdapterPaths(root) {
 export function writeGeneratedAdapters(root = PACKAGE_ROOT, options = {}) {
   const entries = [
     ...generatedAdapterEntries().map((entry) => ({ ...entry, label: "Generated command adapter path" })),
+    ...generatedResearchQualityReferenceEntries().map((entry) => ({ ...entry, label: "Generated research quality reference path" })),
     ...generatedClaudeAmbientProjectEntries().map((entry) => ({ ...entry, label: "Generated Claude ambient project path" }))
   ];
   const expectedPaths = new Set(entries.map((entry) => entry.relativePath));
@@ -335,11 +327,11 @@ export function writeGeneratedAdapters(root = PACKAGE_ROOT, options = {}) {
       label: entry.label
     })),
     ...staleEntries
-  ], { fsOps: options.fsOps });
+  ], { fsOps: options.fsOps, transactionBase: ".claude/tmp/dove-generated-transactions" });
 }
 
 export function checkGeneratedAdapters(root = PACKAGE_ROOT) {
-  const entries = [...generatedAdapterEntries(), ...generatedClaudeAmbientProjectEntries()];
+  const entries = [...generatedAdapterEntries(), ...generatedClaudeAmbientProjectEntries(), ...generatedResearchQualityReferenceEntries()];
   const expectedPaths = new Set(entries.map((entry) => entry.relativePath));
   const drift = [];
   for (const entry of entries) {

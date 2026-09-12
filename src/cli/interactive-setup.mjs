@@ -48,29 +48,20 @@ async function selectHosts(promptCheckbox, selectedHosts, message = "选择要�
 
 function setupSummary(result, color) {
   const state = result.projectIntegration?.state;
-  if (state === "drifted") {
-    return [
-      terminalStyle("项目接入需要处理", "bold", { color }),
-      "Dove 管理的项目接入配置已被修改，因此自动更新已停止。",
-      "为避免覆盖项目内容，本次尚未修改任何文件。"
-    ].join("\n");
-  }
-  if (state === "invalid" || result.setup?.mode === "blocked") {
+  if (state === "blocked" || result.setup?.mode === "blocked") {
     return [
       terminalStyle("项目接入需要处理", "bold", { color }),
       "Dove 无法安全确认当前项目接入状态，因此没有自动修改文件。"
     ].join("\n");
   }
-  if (result.setup?.mode === "adopt") return "发现现有 Dove Markdown 研究内容，可以保留研究文件并建立当前项目接入。";
-  if (result.setup?.mode === "update") return "Dove 项目接入可以安全更新。";
+  if (result.setup?.mode === "needs-update") return "Dove 项目接入可以安全更新。";
   if (result.setup?.mode === "current") return "Dove 项目接入已是当前版本。";
   return "当前项目尚未配置 Dove。";
 }
 
 function menuMessage(setup) {
-  if (setup.mode === "init") return "当前项目尚未配置 Dove。请选择：";
-  if (setup.mode === "adopt") return "发现可采用的 Dove 研究内容。请选择：";
-  if (setup.mode === "update") return "Dove 项目接入需要更新。请选择：";
+  if (setup.mode === "uninitialized") return "当前项目尚未配置 Dove。请选择：";
+  if (setup.mode === "needs-update") return "Dove 项目接入需要更新。请选择：";
   if (setup.mode === "current") return "Dove 已在当前项目配置。请选择：";
   return "Dove 项目接入需要处理。请选择：";
 }
@@ -79,10 +70,9 @@ function actionChoices(setup) {
   const allowed = new Set(setup.allowedActions ?? []);
   const choices = [];
   if (allowed.has("init")) choices.push({ name: "安装项目接入", value: "init" });
-  if (allowed.has("adopt")) choices.push({ name: "采用现有研究并配置平台", value: "adopt" });
   if (allowed.has("update")) choices.push({ name: "更新当前平台", value: "update" });
   if (allowed.has("change-hosts")) choices.push({ name: setup.mode === "current" ? "更改安装平台" : "更改平台并更新", value: "change-hosts" });
-  if (allowed.has("reinstall")) choices.push({ name: setup.reason === "drifted" ? "重新安装 Dove 项目接入" : "完全重新安装项目接入", value: "reinstall" });
+  if (allowed.has("reinstall")) choices.push({ name: "完全重新安装项目接入", value: "reinstall" });
   if (allowed.has("uninstall")) choices.push({ name: "卸载 Dove 项目接入", value: "uninstall" });
   if (allowed.has("details")) choices.push({ name: "查看详情", value: "details" });
   choices.push({ name: "退出", value: "exit" });
@@ -177,16 +167,6 @@ export async function runInteractiveDoveSetup(options) {
       const current = await inspect(setupTarget);
       stream.write(`\n${renderProjectIntegrationResult("init", result, { stream, env })}\n`);
       return { status: "initialized", action: "init", result: current };
-    }
-    if (action === "adopt") {
-      if (typeof update !== "function") throw new Error("Dove 项目接入采用核心尚未接入。");
-      const hosts = await selectHosts(promptCheckbox, DEFAULT_INITIALIZABLE_HOSTS, "选择要配置 Dove 的平台：");
-      const result = await update(setupTarget, { hosts });
-      stream.write(`\n${renderProjectIntegrationResult("update", {
-        ...result,
-        target: lifecycleTarget(result, setupTarget)
-      }, { stream, env })}\n`);
-      return { status: result.status, action: "adopt", result };
     }
     if (action === "update") {
       if (typeof update !== "function") throw new Error("Dove 项目接入更新核心尚未接入。");

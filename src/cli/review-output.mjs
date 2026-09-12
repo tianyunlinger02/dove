@@ -32,11 +32,15 @@ function renderMaterialCurrentness(currentness, label = "当前轮次材料") {
   return lines;
 }
 
+function renderPendingExchange(pending) {
+  return pending ? [`待完成交换：轮次 ${terminalSafeText(pending.round)}；resume 将尝试原请求会话 ${terminalSafeText(pending.requestedSessionId)}，返回匹配后才确认继续成功；不会找回未保存的返回。`] : [];
+}
+
 export function renderReviewResult(result) {
   if (result.command === "status" && Array.isArray(result.reviews)) {
     const lines = ["Dove review 状态", "", `项目：${terminalSafeText(result.project)}`];
     if (result.reviews.length === 0) lines.push("", "尚无 .dove/reviews/** 记录。");
-    else lines.push("", ...result.reviews.map((review) => `- ${terminalSafeText(review.reviewId)}：${terminalSafeText(review.status)}，轮次 ${terminalSafeText(review.currentRound)}${review.sessionId ? `，会话 ${terminalSafeText(review.sessionId)}` : ""}`));
+    else lines.push("", ...result.reviews.map((review) => `- ${terminalSafeText(review.reviewId)}：${terminalSafeText(review.status)}，轮次 ${terminalSafeText(review.currentRound)}${review.sessionId ? `，会话 ${terminalSafeText(review.sessionId)}` : ""}${review.pendingExchange ? "，待完成交换（使用 resume）" : ""}`));
     return lines.join("\n");
   }
   if (result.command === "status") {
@@ -49,6 +53,7 @@ export function renderReviewResult(result) {
       `状态：${terminalSafeText(result.status)}`,
       `当前轮次：${terminalSafeText(result.currentRound)}`,
       `会话：${terminalSafeText(result.sessionId ?? "无")}`,
+      ...renderPendingExchange(result.pendingExchange),
       "",
       ...currentnessLines,
       "",
@@ -58,7 +63,7 @@ export function renderReviewResult(result) {
         const latest = round.latestReportPath ?? round.reportPath;
         const canonical = latest === round.reportPath ? "" : `；原始报告保留在 ${terminalSafeText(round.reportPath)}`;
         const currentness = round.materialCurrentness?.overall ? `；材料 ${terminalSafeText(round.materialCurrentness.overall)}` : "";
-        return `- 轮次 ${terminalSafeText(round.round)}：${terminalSafeText(round.status)}（${terminalSafeText(round.provenance)}），报告 ${terminalSafeText(latest)}${canonical}${currentness}`;
+        return `- 轮次 ${terminalSafeText(round.round)}：${terminalSafeText(round.status)}（${terminalSafeText(round.provenance)}），报告 ${terminalSafeText(latest ?? "尚未保存")}${canonical}${currentness}`;
       })
     ].join("\n");
   }
@@ -78,6 +83,7 @@ export function renderReviewResult(result) {
     `状态：${terminalSafeText(result.status)}`,
     `来源：${terminalSafeText(result.provenance)}`,
     `会话：${terminalSafeText(result.sessionId ?? "无")}`,
+    ...renderPendingExchange(result.pendingExchange),
     `报告：${terminalSafeText(result.latestReportPath ?? result.reportPath)}`,
     `后端记录：${terminalSafeText(result.latestBackendPath ?? result.backendPath)}`,
     "",

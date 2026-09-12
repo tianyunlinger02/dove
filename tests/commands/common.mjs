@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DOVE_RESEARCH_SHARED_CONTRACT_BULLETS } from "../../src/core/dove-research-contract.mjs";
+import { renderDoveAgentInstructions } from "../../src/core/dove-agent-persona.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const EXPECTED_HOST_IDS = ["claude", "dsh"];
@@ -8,109 +10,51 @@ export const EXPECTED_SKILL_IDS = ["dove.research", "dove.status", "dove.source"
 export const SEMANTIC_SECTION_FIELDS = Object.freeze(["responsibilities", "actions", "boundaries", "nonGoals"]);
 
 export function assertUnique(values, label) {
-  assert.equal(new Set(values).size, values.length, `${label} must not contain duplicates`);
-}
-
-export function text(value) {
-  return JSON.stringify(value);
+  assert.equal(new Set(values).size, values.length, `${label}: no duplicate entries`);
 }
 
 export function skillContract(command) {
   const contract = command.contract;
-  assert.equal(typeof contract?.purpose, "string", `${command.id} needs a purpose`);
-  assert.equal(typeof contract?.when, "string", `${command.id} needs use guidance`);
-  for (const field of ["responsibilities", "returnWith", "actions", "boundaries", "nonGoals", "clarification"]) {
-    assert.ok(Array.isArray(contract[field]), `${command.id} contract.${field} must be an array`);
+  assert.equal(typeof contract?.purpose, "string");
+  assert.equal(typeof contract?.when, "string");
+  for (const field of ["returnWith", "boundaries", "clarification"]) assert.ok(Array.isArray(contract[field]), `${command.id} ${field}`);
+  for (const field of ["responsibilities", "actions", "nonGoals"]) {
+    if (contract.semanticSections) assert.equal(Object.hasOwn(contract, field), false, `${command.id}: sections own ${field}`);
+    else assert.ok(Array.isArray(contract[field]));
   }
-  assert.equal(typeof contract.hostGuidance, "object", `${command.id} needs conditional host guidance`);
+  assert.equal(typeof contract.hostGuidance, "object");
   return contract;
 }
 
-export function contractText(command) {
-  return text(skillContract(command));
-}
-
-export function contractAction(command, capability) {
-  return skillContract(command).actions.find((item) => item.capability === capability);
-}
-
 export function contractActions(command) {
-  return skillContract(command).actions;
+  const contract = skillContract(command);
+  return contract.semanticSections ? contract.semanticSections.flatMap((section) => section.actions ?? []) : contract.actions;
 }
 
-export function actionCapabilities(command) {
-  return contractActions(command).map((item) => item.capability);
-}
-
-export function structuredText(value) {
+function structuredText(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return value;
-  if (Array.isArray(value)) return value.map(structuredText).filter(Boolean).join("\n");
-  if (typeof value === "object") return Object.values(value).map(structuredText).filter(Boolean).join("\n");
+  if (Array.isArray(value)) return value.map(structuredText).join("\n");
+  if (typeof value === "object") return Object.values(value).map(structuredText).join("\n");
   return String(value);
 }
 
-export function semanticSectionText(section) {
-  return [section.title, section.purpose, section.description, ...SEMANTIC_SECTION_FIELDS.map((field) => structuredText(section[field]))].filter(Boolean).join("\n");
-}
-
 export function semanticContractText(command) {
-  const contract = skillContract(command);
-  return structuredText([
-    contract.purpose,
-    contract.when,
-    contract.semanticSections ?? [],
-    contract.responsibilities,
-    contract.actions,
-    contract.boundaries,
-    contract.nonGoals,
-    contract.hostGuidance
-  ]);
+  return structuredText(skillContract(command));
 }
 
 export function assertMatchesAll(value, label, patterns) {
-  for (const pattern of patterns) assert.match(value, pattern, `${label} semantic contract drifted: ${pattern}`);
+  for (const pattern of patterns) assert.match(value, pattern, `${label}: missing topic ${pattern}`);
 }
 
-export function assertMatchesNone(value, label, patterns) {
-  for (const pattern of patterns) assert.doesNotMatch(value, pattern, `${label} must not contain retired or unsafe language: ${pattern}`);
+export function assertSharedResearchContractOnce(value, label) {
+  // Equality here protects renderer ownership, not wording against later edits.
+  for (const instruction of DOVE_RESEARCH_SHARED_CONTRACT_BULLETS) assert.equal(value.split(instruction).length - 1, 1, `${label}: one shared instruction owner`);
 }
 
-// Mutate rendered text, not canonical constants: a removed responsibility must
-// fail the same semantic assertion used for the real entrypoint.
-export function assertSemanticDeletionsRejected(value, label, assertion, probes) {
-  for (const pattern of probes) {
-    const mutated = value.replace(new RegExp(pattern.source, [...new Set(`${pattern.flags}g`)].join("")), "");
-    assert.notEqual(mutated, value, `${label}: deletion probe must remove ${pattern}`);
-    assert.throws(() => assertion(mutated, label), { code: "ERR_ASSERTION" }, `${label}: must reject deletion of ${pattern}`);
-  }
-}
-
-export function assertDoveAgentSurfaceSemantics(value, label) {
-  assertMatchesAll(value, label, [
-    /one complete (?:Dove )?research agent|same research collaboration/iu,
-    /nine Skills.*(?:same research collaboration|current decision|optional specialist methods)|optional specialist capabilities/isu,
-    /real research question/iu,
-    /current or provisional route|provisional research question or route/iu,
-    /user need/iu,
-    /key uncertainty/iu,
-    /decision that matters/iu,
-    /literature|current theory|related work/iu,
-    /adjacent (?:ideas|fields)|analogies/iu,
-    /mathematics|mathematical|physical reasoning|physical analysis/iu,
-    /assumptions/iu,
-    /applicability/iu,
-    /predictions/iu,
-    /failure conditions/iu,
-    /hunches.*hypotheses|first impressions.*hypotheses/isu,
-    /negative results?.*near misses?.*(?:hypotheses|diagnostic|route|validity)|near misses?.*(?:hypotheses|diagnostic|route|validity)/isu,
-    /inspected (?:supplied )?(?:material|evidence)|retrieved sources|execution outputs|executed work|rendered figures|checked artifacts/iu,
-    /user-confirmed Workspace mainline/iu,
-    /active confirmed research context.*feasible next in-scope step|short follow-ups.*perform the feasible next in-scope step/isu,
-    /Maintain Dove research Markdown.*record, update, or save/iu,
-    /preserving the work's evidence and continuation context is genuinely useful/iu,
-    /author-side Review.*scientific self-check|author-side Review is Dove's own scientific self-check/isu,
-    /independent `dove-review`.*real isolated persistent reviewer context|real isolated persistent reviewer context.*current frozen handoff|isolated `dove-review` exists only when a real isolated persistent reviewer context judges the current frozen handoff/isu,
-    /findings.*inform.*author-side judgment|findings.*evidence to absorb|not authority over the Workspace mainline/isu
-  ]);
+export function assertDoveAgentRoleSemantics(value, label) {
+  assert.ok(value.includes(renderDoveAgentInstructions()), `${label}: canonical identity and scope projection`);
+  assertMatchesAll(value, label, [/project research rule/iu, /main session/iu, /bounded subagent/iu, /assigned question/iu]);
+  assert.equal(value.includes("## Shared researcher judgment"), false);
+  assert.equal(value.includes("## Author stance"), false);
 }

@@ -22,6 +22,6 @@ export function renderDoveHelp() {
   dove hook session-start --project <dir>
   dove hook statusline --project <dir>
 
-Dove 负责把当前项目接入支持的宿主，并提供 doctor、review、run 与 hook 等项目级命令。真正的科研推进仍在一个 Dove agent 中完成；研究记录是研究者维护的普通 Markdown。初始化只创建最小入口 \`.dove/research/RESEARCH.md\`，不代表已经完成研究、结论或验证。Dove 只管理 SessionStart 项目 hook，不安装也不暴露 UserPromptSubmit 或 Stop hook。
+Dove 负责把当前项目接入支持的宿主，并提供 doctor、review、run 与 hook 等项目级命令。真正的科研推进仍在一个 Dove agent 中完成；研究记录是研究者维护的普通 Markdown。初始化只创建最小入口 \`.dove/research/RESEARCH.md\`，不代表已经完成研究、结论或验证。Claude 接入管理只读 SessionStart hook，并在没有现有用户配置时安装只读 statusLine；不安装也不暴露 UserPromptSubmit 或 Stop hook。
 `;
 }

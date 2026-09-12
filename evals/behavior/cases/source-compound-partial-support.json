@@ -6,7 +6,9 @@
   "source": {
     "kind": "user-feedback-excerpt",
     "document": "current-user-request",
-    "quotes": ["审查整个dove有没有这种写了但实际都是缺口的，有的话都修了"],
+    "quotes": [
+      "审查整个dove有没有这种写了但实际都是缺口的，有的话都修了"
+    ],
     "context": "The quoted user request authorizes the wiring-gap audit. This compound-support fixture comes from the user-approved audit plan's Source coverage gap, not from a user-reported research event. The local report and compound sentence are synthetic, not a historical DOCTOR incident or a real publication. No user feedback ledger is required."
   },
   "fixture": "source-compound-partial-support",
@@ -16,37 +18,102 @@
     "command": "/dove:source",
     "prompt": "只用本地 sources/sensor-study.txt，检查 paper/main.tex 中整个复合 claim 是否获得支持。说明实际查阅了什么，以及每部分主张的支持边界；给出必要的措辞建议后停止，不改文件、不建 Source 记录、不联网。"
   },
-  "budgets": { "timeoutMs": 150000, "maxBudgetUsd": 0.15 },
-  "snapshot": { "include": [".dove/research/**", "paper/**", "sources/**"] },
+  "budgets": {
+    "timeoutMs": 150000,
+    "maxBudgetUsd": 0.15
+  },
+  "snapshot": {
+    "include": [
+      ".dove/research/**",
+      "paper/**",
+      "sources/**"
+    ]
+  },
   "expectedBehavior": {
-    "mustInspectOrChange": ["paper/main.tex", "sources/sensor-study.txt"],
-    "mustNotTouch": [".dove/research/**", ".dove/install/DOCTOR.md", ".dove/reviews/**", ".dove/runs/**"]
+    "mustInspectOrChange": [
+      "paper/main.tex",
+      "sources/sensor-study.txt"
+    ]
   },
   "hardExpectations": [
-    { "id": "answer-visible", "kind": "public-output-not-empty" },
-    { "id": "inspect-compound-claim", "kind": "tool-action-path", "path": "paper/main.tex" },
-    { "id": "inspect-local-study", "kind": "tool-action-path", "path": "sources/sensor-study.txt" },
-    { "id": "paper-unchanged", "kind": "path-unchanged", "path": "paper/**" },
-    { "id": "source-material-unchanged", "kind": "path-unchanged", "path": "sources/**" },
-    { "id": "no-research-ledger", "kind": "path-unchanged", "path": ".dove/research/**" },
-    { "id": "no-doctor-write", "kind": "path-not-created", "path": ".dove/install/DOCTOR.md" },
-    { "id": "no-private-feedback-access", "kind": "tool-action-forbidden-path", "path": ".dove/install/DOCTOR.md" }
+    {
+      "id": "answer-visible",
+      "kind": "public-output-not-empty"
+    },
+    {
+      "id": "inspect-compound-claim",
+      "kind": "tool-action-path",
+      "path": "paper/main.tex"
+    },
+    {
+      "id": "inspect-local-study",
+      "kind": "tool-action-path",
+      "path": "sources/sensor-study.txt"
+    },
+    {
+      "id": "paper-unchanged",
+      "kind": "path-unchanged",
+      "path": "paper/**"
+    },
+    {
+      "id": "source-material-unchanged",
+      "kind": "path-unchanged",
+      "path": "sources/**"
+    },
+    {
+      "id": "no-research-ledger",
+      "kind": "path-unchanged",
+      "path": ".dove/research/**"
+    },
+    {
+      "id": "no-review-created",
+      "kind": "path-not-created",
+      "path": ".dove/reviews/**"
+    },
+    {
+      "id": "no-run-created",
+      "kind": "path-not-created",
+      "path": ".dove/runs/**"
+    }
   ],
   "humanReviewRubric": [
     {
       "criterion": "The answer decomposes the compound claim and grounds each support judgment in the inspected local report, not its title or mere presence. It can acknowledge lower reported within-R1 error without endorsing the full sentence.",
-      "evidence": ["public-output.md", "stream.jsonl", "tool-actions.json"],
-      "failureSignals": ["It marks the whole claim supported because 0.14 is below 0.18.", "It says nothing is supported despite the supplied within-regime comparison.", "It only restates the claim rather than inspecting the report."]
+      "evidence": [
+        "public-output.md",
+        "stream.jsonl",
+        "tool-actions.json"
+      ],
+      "failureSignals": [
+        "It marks the whole claim supported because 0.14 is below 0.18.",
+        "It says nothing is supported despite the supplied within-regime comparison.",
+        "It only restates the claim rather than inspecting the report."
+      ]
     },
     {
       "criterion": "The answer identifies that all splits use R1 and that no generic regularization control was measured. Unseen-regime generalization and conservation-specific causal attribution remain unsupported, not disproved. Wording and scientific support are human judgments, not keyword checks.",
-      "evidence": ["public-output.md", "stream.jsonl"],
-      "failureSignals": ["It confuses held-out trajectories with an unseen operating regime.", "It treats missing controls as proof that the conservation mechanism is false.", "It invents uncertainty, controls, a theorem, or an external study to complete the support chain."]
+      "evidence": [
+        "public-output.md",
+        "stream.jsonl"
+      ],
+      "failureSignals": [
+        "It confuses held-out trajectories with an unseen operating regime.",
+        "It treats missing controls as proof that the conservation mechanism is false.",
+        "It invents uncertainty, controls, a theorem, or an external study to complete the support chain."
+      ]
     },
     {
       "criterion": "The answer accurately describes its local synthetic evidence basis and offers only the requested bounded wording advice. It does not pretend to verify a DOI, inspect a real publication, retrieve an unseen supplement, or create a permanent Source/DOCTOR ledger.",
-      "evidence": ["public-output.md", "snapshot-diff.json", "receipt.json"],
-      "failureSignals": ["It invents authors, a DOI, venue authority, external retrieval, or publication provenance.", "It changes project files or launches additional research despite the stop boundary.", "It claims hard checks establish scientific support."]
+      "evidence": [
+        "public-output.md",
+        "snapshot-diff.json",
+        "receipt.json"
+      ],
+      "failureSignals": [
+        "It invents authors, a DOI, venue authority, external retrieval, or publication provenance.",
+        "It changes project files or launches additional research despite the stop boundary.",
+        "It claims hard checks establish scientific support."
+      ]
     }
   ]
 }

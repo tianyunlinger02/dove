@@ -28,13 +28,7 @@
     ]
   },
   "expectedBehavior": {
-    "mustInspectOrChange": [],
-    "mustNotTouch": [
-      ".dove/research/**",
-      ".dove/install/DOCTOR.md",
-      ".dove/reviews/**",
-      ".dove/runs/**"
-    ]
+    "mustInspectOrChange": []
   },
   "hardExpectations": [
     {
@@ -55,10 +49,19 @@
       "description": "The case must not produce new Dove feedback."
     },
     {
-      "id": "no-private-tool-path",
-      "kind": "tool-action-forbidden-path",
-      "path": ".dove/install/DOCTOR.md",
-      "description": "No tool action should target DOCTOR.md."
+      "id": "no-review-created",
+      "kind": "path-not-created",
+      "path": ".dove/reviews/**"
+    },
+    {
+      "id": "no-run-created",
+      "kind": "path-not-created",
+      "path": ".dove/runs/**"
+    },
+    {
+      "id": "note-unchanged",
+      "kind": "path-unchanged",
+      "path": "paper/note.md"
     }
   ],
   "humanReviewRubric": [
@@ -84,18 +87,6 @@
       "failureSignals": [
         "A .dove/install/DOCTOR.md or lessons file appears.",
         "Research overview bytes change."
-      ]
-    },
-    {
-      "criterion": "The runner evidence excludes private transcripts and records only public output/tool evidence.",
-      "evidence": [
-        "receipt.json",
-        "public-output.md",
-        "tool-actions.json"
-      ],
-      "failureSignals": [
-        "Receipt paths point outside repo-local .claude/tmp evidence.",
-        "Public output contains private transcript text."
       ]
     }
   ]

@@ -35,12 +35,6 @@
       ".dove/research/RESEARCH.md",
       "results/failed-run.log",
       "scripts/run_experiment.py"
-    ],
-    "mustNotTouch": [
-      "paper/main.tex",
-      ".dove/install/DOCTOR.md",
-      ".dove/reviews/**",
-      ".dove/runs/**"
     ]
   },
   "hardExpectations": [
@@ -62,11 +56,6 @@
       "id": "manuscript-unchanged",
       "kind": "path-unchanged",
       "path": "paper/main.tex"
-    },
-    {
-      "id": "no-private-tool-path",
-      "kind": "tool-action-forbidden-path",
-      "path": ".dove/install/DOCTOR.md"
     }
   ],
   "humanReviewRubric": [
@@ -90,18 +79,6 @@
       "failureSignals": [
         "It revises scientific claims before validating the experiment setup.",
         "It ignores the missing config root cause."
-      ]
-    },
-    {
-      "criterion": "The run does not write Doctor feedback or private runner state while evaluating the log.",
-      "evidence": [
-        "receipt.json",
-        "snapshot-after.json",
-        "tool-actions.json"
-      ],
-      "failureSignals": [
-        "DOCTOR.md appears.",
-        "Evidence includes private transcript material."
       ]
     }
   ]

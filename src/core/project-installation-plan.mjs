@@ -19,6 +19,7 @@ import {
   removeWebFetchDenyPermission,
   webFetchDenyFragmentState as inspectWebFetchDenyFragmentState
 } from "./web-access-integration.mjs";
+import { classifyPackageCompatibility } from "./package-metadata.mjs";
 import { PROJECT_HOST_IDS } from "./host-registry.mjs";
 import {
   INSTALLATION_MANIFEST_PATH,
@@ -27,9 +28,8 @@ import {
 } from "./project-installation-manifest.mjs";
 import {
   SESSION_START_SELECTOR,
-  SETTINGS_SELECTOR,
   STATUS_LINE_SELECTOR,
-  USER_PROMPT_SUBMIT_SELECTOR,
+  RETIRED_USER_PROMPT_SUBMIT_SELECTOR,
   canonicalJson,
   compareManaged,
   desiredManaged,
@@ -47,7 +47,7 @@ function plainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-export function lstatOrNull(fsOps, targetPath) {
+function lstatOrNull(fsOps, targetPath) {
   try {
     return fsOps.lstatSync(targetPath);
   } catch (error) {
@@ -75,13 +75,13 @@ export function inspectRegularProjectFile(root, relativePath, fsOps = fs) {
   throw new Error(`Invalid Dove project integration path: ${relativePath}.`);
 }
 
-export function expectedFileState(state) {
+function expectedFileState(state) {
   return state.exists
     ? { exists: true, type: "file", sha256: state.digest, mode: state.mode }
     : { exists: false, type: "absent", sha256: null, mode: null };
 }
 
-export function transactionWrite(root, resource, content, observed) {
+function transactionWrite(root, resource, content, observed) {
   return {
     root,
     relativePath: resource.path,
@@ -104,14 +104,14 @@ export function transactionDelete(root, resource, observed) {
   };
 }
 
-export function parseSharedJson(state, relativePath) {
+function parseSharedJson(state, relativePath) {
   if (!state.exists) return {};
   const value = parseJsonWithoutDuplicateKeys(state.bytes.toString("utf8"), relativePath);
   if (!plainObject(value)) throw new Error(`${relativePath} must contain a JSON object.`);
   return value;
 }
 
-export function serializeSharedJson(value) {
+function serializeSharedJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
@@ -156,7 +156,6 @@ function hookCommandMarkers(eventName) {
 }
 
 function referencesDoveHook(entry, eventName) {
-  if (eventName === "Stop") return exactLegacyDoveStopHook(entry);
   if (eventName === "UserPromptSubmit") return exactRetiredDoveUserPromptSubmitHook(entry);
   if (!plainObject(entry) || !Array.isArray(entry.hooks)) return false;
   const markers = hookCommandMarkers(eventName);
@@ -169,7 +168,7 @@ function hookFragmentState(settings, eventName) {
   if (settings.hooks !== undefined && !plainObject(settings.hooks)) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks must be a JSON object.`);
   const entries = settings.hooks?.[eventName];
   if (entries !== undefined && !Array.isArray(entries)) {
-    if (eventName === "Stop" || eventName === "UserPromptSubmit") return { exists: false, digest: null, index: -1, fragment: null };
+    if (eventName === "UserPromptSubmit") return { exists: false, digest: null, index: -1, fragment: null };
     throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks.${eventName} must be an array.`);
   }
   const candidates = (entries ?? []).map((entry, index) => ({ entry, index })).filter(({ entry }) => referencesDoveHook(entry, eventName));
@@ -187,17 +186,6 @@ function settingsWithHookEntries(settings, eventName, entries) {
   if (Object.keys(hooks).length > 0) next.hooks = hooks;
   else delete next.hooks;
   return next;
-}
-
-function removeExactLegacyDoveStopHook(settings) {
-  if (settings.hooks?.Stop === undefined) return { settings, changed: false };
-  if (!plainObject(settings.hooks) || !Array.isArray(settings.hooks.Stop)) return { settings, changed: false };
-  const entries = settings.hooks.Stop.filter((entry) => !exactLegacyDoveStopHook(entry));
-  if (entries.length === settings.hooks.Stop.length) return { settings, changed: false };
-  return {
-    settings: settingsWithHookEntries(settings, "Stop", entries),
-    changed: true
-  };
 }
 
 function namedMcpFragmentState(config, serverName) {
@@ -220,26 +208,13 @@ function webFetchDenyFragmentState(settings) {
   return state.exists ? { ...state, digest: semanticDigest(state.fragment) } : state;
 }
 
-function settingsHookFragmentState(value, options = {}) {
-  const sessionStart = hookFragmentState(value, "SessionStart");
-  const prompt = options.includeRetiredUserPrompt === true ? hookFragmentState(value, "UserPromptSubmit") : { exists: false };
-  const stop = options.includeRetiredStop === true ? hookFragmentState(value, "Stop") : { exists: false };
-  if (!sessionStart.exists && !prompt.exists) return { exists: false, digest: null, index: -1, fragment: null };
-  const fragment = {
-    ...(prompt.exists ? { UserPromptSubmit: prompt.fragment } : {}),
-    ...(sessionStart.exists ? { SessionStart: sessionStart.fragment } : {}),
-    ...(stop.exists ? { Stop: stop.fragment } : {})
-  };
-  return { exists: true, digest: semanticDigest(fragment), index: -1, fragment };
-}
-
 function statusLineState(value) {
   if (value.statusLine === undefined) return { exists: false, digest: null, index: -1, fragment: null };
   return { exists: true, digest: semanticDigest(value.statusLine), index: -1, fragment: value.statusLine };
 }
 
 function fragmentState(resource, value) {
-  if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return hookFragmentState(value, "UserPromptSubmit");
+  if (resource.selector === RETIRED_USER_PROMPT_SUBMIT_SELECTOR) return hookFragmentState(value, "UserPromptSubmit");
   if (resource.selector === SESSION_START_SELECTOR) return hookFragmentState(value, "SessionStart");
   if (resource.selector === STATUS_LINE_SELECTOR) return statusLineState(value);
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) return webFetchDenyFragmentState(value);
@@ -255,7 +230,7 @@ function removeHookFragment(value, eventName) {
 }
 
 function removeFragment(resource, value, current, options = {}) {
-  if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return removeHookFragment(value, "UserPromptSubmit");
+  if (resource.selector === RETIRED_USER_PROMPT_SUBMIT_SELECTOR) return removeHookFragment(value, "UserPromptSubmit");
   if (resource.selector === SESSION_START_SELECTOR) return removeHookFragment(value, "SessionStart");
   if (resource.selector === STATUS_LINE_SELECTOR) {
     const next = { ...value };
@@ -306,7 +281,7 @@ function shouldRecordReplacedLocalEdit(options) {
 }
 
 function shouldSkipLocalEdit(options) {
-  return options.replacementPolicy === "session-start" || options.replacementPolicy === "inspect";
+  return options.replacementPolicy === "inspect";
 }
 
 function emptyPlanResult(entry = null, changed = false) {
@@ -350,10 +325,7 @@ function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
 
 function addFragment(resource, value) {
   if (resource.selector === SESSION_START_SELECTOR) return mergeClaudeSessionStartSettings(value).settings;
-  if (resource.selector === STATUS_LINE_SELECTOR) {
-    if (value.statusLine !== undefined && JSON.stringify(value.statusLine) !== JSON.stringify(DOVE_CLAUDE_STATUS_LINE)) throw conflictError(resource);
-    return { ...value, statusLine: DOVE_CLAUDE_STATUS_LINE };
-  }
+  if (resource.selector === STATUS_LINE_SELECTOR) return { ...value, statusLine: resource.fragment };
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) return mergeWebFetchDenyPermission(value).settings;
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) {
     return {
@@ -393,30 +365,6 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
   const omittedManagedKeys = [];
   let next = original;
   let changed = false;
-  const managesSettingsHook = relativePath === DOVE_CLAUDE_SETTINGS_PATH
-    && [...oldEntries, ...desiredEntries].some((entry) => [USER_PROMPT_SUBMIT_SELECTOR, SESSION_START_SELECTOR, SETTINGS_SELECTOR].includes(entry.selector));
-  const originalSettingsHook = managesSettingsHook
-    ? settingsHookFragmentState(original)
-    : { exists: false, digest: null };
-  const originalSettingsHookWithRetired = managesSettingsHook
-    ? settingsHookFragmentState(original, { includeRetiredUserPrompt: true })
-    : { exists: false, digest: null };
-  const legacyCombinedHookEntry = managesSettingsHook && !oldEntries.some((entry) => entry.selector === SESSION_START_SELECTOR)
-    ? oldEntries.find((entry) => entry.selector === USER_PROMPT_SUBMIT_SELECTOR || entry.selector === SETTINGS_SELECTOR) ?? null
-    : null;
-  if (managesSettingsHook) {
-    const cleaned = removeExactLegacyDoveStopHook(next);
-    next = cleaned.settings;
-    changed = cleaned.changed;
-  }
-
-  const matchesOldEntry = (resource, oldEntry, current) => {
-    if (!oldEntry || !current.exists) return false;
-    if (current.digest === oldEntry.digest) return true;
-    if (![USER_PROMPT_SUBMIT_SELECTOR, SESSION_START_SELECTOR, SETTINGS_SELECTOR].includes(resource.selector)) return false;
-    return (originalSettingsHook.exists && originalSettingsHook.digest === oldEntry.digest)
-      || (originalSettingsHookWithRetired.exists && originalSettingsHookWithRetired.digest === oldEntry.digest);
-  };
   const retainSkipped = (resource, oldEntry) => {
     skippedLocalEdits.push(localEditRecord(resource));
     if (oldEntry) retainedManaged.push(oldEntry);
@@ -425,15 +373,12 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
 
   for (const key of [...new Set([...oldByKey.keys(), ...desiredByKey.keys()])].sort()) {
     const desired = desiredByKey.get(key) ?? null;
-    let oldEntry = oldByKey.get(key) ?? null;
+    const oldEntry = oldByKey.get(key) ?? null;
     const resource = desired ?? oldEntry;
-    if (!oldEntry && desired?.selector === SESSION_START_SELECTOR && legacyCombinedHookEntry) {
-      oldEntry = { path: desired.path, kind: desired.kind, selector: desired.selector, digest: legacyCombinedHookEntry.digest };
-    }
     const current = fragmentState(resource, next);
 
-    if (oldEntry && !desired && resource.selector === USER_PROMPT_SUBMIT_SELECTOR) {
-      if (current.exists) {
+    if (oldEntry && !desired && resource.selector === RETIRED_USER_PROMPT_SUBMIT_SELECTOR) {
+      if (current.exists && current.digest === oldEntry.digest) {
         next = removeFragment(resource, next, current, { force: true });
       }
       changed = true;
@@ -441,7 +386,7 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
     }
 
     if (oldEntry && !desired && resource.selector === STATUS_LINE_SELECTOR) {
-      if (current.exists && current.digest === semanticDigest(DOVE_CLAUDE_STATUS_LINE)) {
+      if (current.exists && current.digest === oldEntry.digest) {
         next = removeFragment(resource, next, current, { force: true });
       }
       changed = true;
@@ -450,16 +395,7 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
 
     if (!oldEntry) {
       if (current.exists && current.digest === desired.digest) continue;
-      const adoptableClaudeHookFragment = options.adopt === true
-        && relativePath === DOVE_CLAUDE_SETTINGS_PATH
-        && [USER_PROMPT_SUBMIT_SELECTOR, SESSION_START_SELECTOR, SETTINGS_SELECTOR].includes(resource.selector);
-      if (adoptableClaudeHookFragment) {
-        const eventName = resource.selector === SESSION_START_SELECTOR ? "SessionStart" : "UserPromptSubmit";
-        const eventState = hookFragmentState(next, eventName);
-        if (eventState.exists && eventState.digest !== desired.digest) throw conflictError(desired);
-      } else if (current.exists) {
-        throw conflictError(desired);
-      }
+      if (current.exists) throw conflictError(desired);
       next = addFragment(desired, next);
       changed = true;
       continue;
@@ -471,7 +407,7 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
         changed = true;
         continue;
       }
-      const drifted = !matchesOldEntry(resource, oldEntry, current) && current.digest !== desired.digest;
+      const drifted = current.digest !== oldEntry.digest && current.digest !== desired.digest;
       if (drifted && !replaceDrift) {
         if (skipDrift) {
           retainSkipped(resource, oldEntry);
@@ -493,7 +429,7 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
       changed = true;
       continue;
     }
-    const drifted = !matchesOldEntry(resource, oldEntry, current);
+    const drifted = current.digest !== oldEntry.digest;
     if (drifted && !replaceDrift) {
       if (skipDrift) {
         retainSkipped(resource, oldEntry);
@@ -529,17 +465,38 @@ export function planResource(root, desired, oldEntry, fsOps = fs, options = {}) 
   throw new Error(`Unsupported project integration resource kind: ${kind}.`);
 }
 
-export function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs, manifest = null, adopt = false, replacementPolicy = "safe" }) {
+export function assertManagedOwnership(manifest) {
+  const knownKeys = new Set(resourcesForHosts(manifest?.hosts ?? []).map(managedKey));
+  for (const entry of manifest?.managed ?? []) {
+    const retired = entry.path === DOVE_CLAUDE_SETTINGS_PATH && entry.kind === "json-fragment"
+      && entry.selector === RETIRED_USER_PROMPT_SUBMIT_SELECTOR;
+    if (!knownKeys.has(managedKey(entry)) && !retired) {
+      throw new Error(`Dove project integration contains unknown ownership: ${entry.path}${entry.selector ? `#${entry.selector}` : ""}.`);
+    }
+  }
+}
+
+export function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs, manifest = null, replacementPolicy = "safe" }) {
+  if (manifest && ["identity-mismatch", "invalid-version", "newer"].includes(classifyPackageCompatibility(manifest.package, { name: packageName, version: packageVersion }))) {
+    throw new Error("Dove project integration package is incompatible with the running CLI.");
+  }
+  assertManagedOwnership(manifest);
   const oldByKey = new Map((manifest?.managed ?? []).map((entry) => [managedKey(entry), entry]));
   const skippedLocalEdits = [];
   const replacedLocalEdits = [];
   const retainedManagedByKey = new Map();
   const omittedManagedKeys = new Set();
   const desiredResources = resourcesForHosts(hosts).filter((entry) => {
-    if (entry.selector !== WEB_FETCH_DENY_SELECTOR || oldByKey.has(managedKey(entry))) return true;
-    const observed = inspectRegularProjectFile(root, entry.path, fsOps);
-    if (!observed.exists) return true;
-    return !inspectWebFetchDenyFragmentState(parseSharedJson(observed, entry.path)).exists;
+    if (oldByKey.has(managedKey(entry))) return true;
+    if (entry.selector === STATUS_LINE_SELECTOR) {
+      const observed = inspectRegularProjectFile(root, entry.path, fsOps);
+      return !observed.exists || !statusLineState(parseSharedJson(observed, entry.path)).exists;
+    }
+    if (entry.selector === WEB_FETCH_DENY_SELECTOR) {
+      const observed = inspectRegularProjectFile(root, entry.path, fsOps);
+      return !observed.exists || !inspectWebFetchDenyFragmentState(parseSharedJson(observed, entry.path)).exists;
+    }
+    return true;
   });
   const desiredByKey = new Map(desiredResources.map((entry) => [managedKey(entry), entry]));
   const entries = [];
@@ -558,7 +515,7 @@ export function preparePlan({ root, hosts, packageName, packageVersion, now, fsO
       desiredResources.filter((entry) => entry.kind === "json-fragment" && entry.path === relativePath),
       (manifest?.managed ?? []).filter((entry) => entry.kind === "json-fragment" && entry.path === relativePath),
       fsOps,
-      { adopt, replacementPolicy }
+      { replacementPolicy }
     );
     if (planned.retiredHooks) retiredHooks = planned.retiredHooks;
     if (planned.entry) entries.push(planned.entry);

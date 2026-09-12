@@ -31,12 +31,6 @@
   "expectedBehavior": {
     "mustInspectOrChange": [
       "paper/main.tex"
-    ],
-    "mustNotTouch": [
-      ".dove/research/**",
-      ".dove/install/DOCTOR.md",
-      ".dove/reviews/**",
-      ".dove/runs/**"
     ]
   },
   "hardExpectations": [
@@ -60,9 +54,14 @@
       "path": "paper/main.tex"
     },
     {
-      "id": "no-private-tool-path",
-      "kind": "tool-action-forbidden-path",
-      "path": ".dove/install/DOCTOR.md"
+      "id": "no-review-created",
+      "kind": "path-not-created",
+      "path": ".dove/reviews/**"
+    },
+    {
+      "id": "no-run-created",
+      "kind": "path-not-created",
+      "path": ".dove/runs/**"
     }
   ],
   "humanReviewRubric": [

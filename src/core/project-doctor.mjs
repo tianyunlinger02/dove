@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { PACKAGE_RUNTIME_PATHS } from "./command-manifest.mjs";
 import { PROJECT_HOST_IDS } from "./host-registry.mjs";
 import { classifyPackageCompatibility } from "./package-metadata.mjs";
-import { inspectProjectIntegration, previewProjectAdoption } from "./project-installation.mjs";
-import { INSTALLATION_MANIFEST_PATH, LEGACY_INSTALLATION_MANIFEST_PATH, readProjectInstallationManifest, readProjectInstallationManifestForMigration } from "./project-installation-manifest.mjs";
+import { inspectProjectIntegration } from "./project-installation.mjs";
+import { INSTALLATION_MANIFEST_PATH, readProjectInstallationManifest } from "./project-installation-manifest.mjs";
 import { inspectResearchDocuments } from "./research-documents.mjs";
 import { inspectProjectRoot, resolveProjectRootForSetup } from "./project-root.mjs";
 import { classifyProjectSetup } from "./project-setup-classification.mjs";
@@ -81,7 +81,7 @@ function inspectIntegration(start, options) {
   } catch (error) {
     return {
       healthy: false,
-      state: "invalid",
+      state: "blocked",
       start: project.start,
       root: project.root,
       error: messageFor(error),
@@ -93,15 +93,14 @@ function inspectIntegration(start, options) {
   if (options.packageName !== undefined && options.packageVersion !== undefined) {
     const compatibility = classifyPackageCompatibility(manifest.package, { name: options.packageName, version: options.packageVersion });
     if (["identity-mismatch", "newer", "invalid-version"].includes(compatibility)) {
-      return { healthy: false, state: "invalid", start: project.start, root: project.root, error: "Dove project integration package is incompatible with the running CLI.", manifest: manifestSummary(manifest), packageCompatibility: compatibility, missing: [], drifted: [] };
+      return { healthy: false, state: "blocked", start: project.start, root: project.root, error: "Dove project integration package is incompatible with the running CLI.", manifest: manifestSummary(manifest), packageCompatibility: compatibility, missing: [], drifted: [] };
     }
   }
   try {
     const canonical = (options.inspectCurrentIntegration ?? inspectProjectIntegration)(project.root, {
       packageName: options.packageName ?? manifest.package.name,
       packageVersion: options.packageVersion ?? manifest.package.version,
-      fsOps: options.fsOps,
-      replacementPolicy: "inspect"
+      fsOps: options.fsOps
     });
     return {
       healthy: canonical.status === "current",
@@ -110,8 +109,8 @@ function inspectIntegration(start, options) {
       root: project.root,
       error: null,
       manifest: manifestSummary(manifest),
-      needsSync: canonical.status === "needs-sync",
-      syncPaths: [...canonical.changedPaths],
+      needsUpdate: canonical.status === "needs-update",
+      updatePaths: [...canonical.changedPaths],
       skippedLocalEdits: [...(canonical.skippedLocalEdits ?? [])],
       replacedLocalEdits: [...(canonical.replacedLocalEdits ?? [])],
       retiredHooks: canonical.retiredHooks ?? null,
@@ -122,7 +121,7 @@ function inspectIntegration(start, options) {
     const message = messageFor(error);
     return {
       healthy: false,
-      state: /ownership drift/iu.test(message) ? "drifted" : "invalid",
+      state: "blocked",
       start: project.start,
       root: project.root,
       error: message,
@@ -130,33 +129,6 @@ function inspectIntegration(start, options) {
       missing: [],
       drifted: []
     };
-  }
-}
-
-function inspectMigration(root, options) {
-  const fsOps = options.fsOps ?? fs;
-  const current = lstatOrNull(fsOps, path.join(root, INSTALLATION_MANIFEST_PATH));
-  const legacy = lstatOrNull(fsOps, path.join(root, LEGACY_INSTALLATION_MANIFEST_PATH));
-  const migrationPath = legacy ? LEGACY_INSTALLATION_MANIFEST_PATH : current ? INSTALLATION_MANIFEST_PATH : null;
-  const result = (state, fields = {}) => ({ state, root, markerPath: migrationPath, ...fields });
-  if (current && legacy) return result("conflicting-manifests", { error: "Dove found both current and 1.0 installation manifests." });
-  if (!legacy && !current) {
-    const legacyDirectory = lstatOrNull(fsOps, path.join(root, ".dove-install"));
-    return legacyDirectory ? result("invalid-legacy", { error: "Dove found an incomplete 1.0 installation directory." }) : result("absent", { error: null });
-  }
-  if (current) {
-    try {
-      readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
-      return result("absent", { markerPath: null, error: null });
-    } catch {
-      // A current-path 1.0 manifest is classified only by the explicit migration reader below.
-    }
-  }
-  try {
-    const manifest = readProjectInstallationManifestForMigration(root, { fsOps, hostIds: PROJECT_HOST_IDS, manifestPath: migrationPath });
-    return result("valid-legacy", { error: null, manifest: { path: migrationPath, revision: manifest.revision, package: manifest.package, runtime: manifest.runtime, hosts: [...manifest.hosts] } });
-  } catch (error) {
-    return result("invalid-legacy", { error: messageFor(error) });
   }
 }
 
@@ -178,32 +150,13 @@ function researchState(root, options) {
   }
 }
 
-function adoptionState(root, options) {
-  if (!root) return { state: "absent", ready: false, preview: null, error: "Project root is unavailable." };
-  try {
-    const preview = (options.previewProjectAdoption ?? previewProjectAdoption)(root, {
-      fsOps: options.fsOps,
-      packageName: options.packageName,
-      packageVersion: options.packageVersion
-    });
-    return { state: "adoptable", ready: true, preview, error: null };
-  } catch (error) {
-    return { state: "absent", ready: false, preview: null, error: messageFor(error) };
-  }
-}
-
 function actionsFor(result) {
-  const actions = [];
-  const adoptReady = result.adoption.state === "adoptable";
-  if (adoptReady) actions.push({ kind: "update", command: "dove update" });
-  if (!adoptReady && result.setup.mode === "init") actions.push({ kind: "init", command: "dove init" });
-  else if (!adoptReady && result.projectIntegration.state === "needs-sync") actions.push({ kind: "update", command: "dove update" });
-  else if (!adoptReady && result.setup.mode === "reinstall" && result.projectIntegration.state !== "current") actions.push({ kind: "reinstall", command: "dove reinstall" });
-  else if (!adoptReady && result.setup.mode === "blocked") actions.push({ kind: "inspect", command: "dove doctor --json" });
-  if (actions.length === 0 && result.projectIntegration.retiredHooks?.matchedPaths.length > 0) {
-    actions.push({ kind: "inspect", command: "dove doctor --json" });
+  if (result.setup.mode === "uninitialized") return [{ kind: "init", command: "dove init" }];
+  if (result.setup.mode === "needs-update") return [{ kind: "update", command: "dove update" }];
+  if (result.setup.mode === "blocked" || result.projectIntegration.retiredHooks?.matchedPaths.length > 0) {
+    return [{ kind: "inspect", command: "dove doctor --json" }];
   }
-  return actions;
+  return [];
 }
 
 export function inspectProjectDoctor(start, options = {}) {
@@ -212,10 +165,8 @@ export function inspectProjectDoctor(start, options = {}) {
   try { setupRoot = resolveProjectRootForSetup(start, { fsOps: options.fsOps }); } catch { setupRoot = typeof start === "string" ? path.resolve(start) : null; }
   const projectIntegration = inspectIntegration(start, options);
   const safeRoot = projectIntegration.root ?? setupRoot;
-  const migrationInstallation = safeRoot ? inspectMigration(safeRoot, options) : { state: "absent", root: null, error: "Project root is unavailable." };
   const workspaceState = researchState(safeRoot, options);
-  const adoption = safeRoot ? adoptionState(safeRoot, options) : { state: "absent", ready: false, preview: null, error: "Project root is unavailable." };
-  const setup = classifyProjectSetup({ projectIntegration, migrationInstallation, workspaceState, adoption });
+  const setup = classifyProjectSetup({ projectIntegration });
   const staticChecksPassed = userCli.healthy
     && projectIntegration.healthy
     && workspaceState.healthy;
@@ -225,9 +176,7 @@ export function inspectProjectDoctor(start, options = {}) {
     target: safeRoot,
     userCli,
     projectIntegration,
-    migrationInstallation,
     workspaceState,
-    adoption,
     setup
   };
   result.actions = actionsFor(result);

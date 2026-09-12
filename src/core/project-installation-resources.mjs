@@ -2,7 +2,8 @@ import crypto from "node:crypto";
 
 import {
   DOVE_CLAUDE_SESSION_START_HOOK_ENTRY,
-  DOVE_CLAUDE_SETTINGS_PATH
+  DOVE_CLAUDE_SETTINGS_PATH,
+  DOVE_CLAUDE_STATUS_LINE
 } from "./ambient-policy.mjs";
 import {
   PAPER_SEARCH_MCP_FRAGMENT,
@@ -15,13 +16,11 @@ import {
   WEB_FETCH_DENY_PERMISSION,
   WEB_FETCH_DENY_SELECTOR
 } from "./web-access-integration.mjs";
-import { generatedAdapterEntries, generatedClaudeAmbientProjectEntries } from "../../scripts/generate-command-adapters.mjs";
+import { generatedAdapterEntries, generatedClaudeAmbientProjectEntries, generatedResearchQualityReferenceEntries } from "../../scripts/generate-command-adapters.mjs";
 import { generatedDoveAgentEntries } from "./dove-agent-definition.mjs";
 
 export const RETIRED_USER_PROMPT_SUBMIT_SELECTOR = "/hooks/UserPromptSubmit[dove-user-prompt-submit]";
-export const USER_PROMPT_SUBMIT_SELECTOR = RETIRED_USER_PROMPT_SUBMIT_SELECTOR;
 export const SESSION_START_SELECTOR = "/hooks/SessionStart[dove-session-start]";
-export const SETTINGS_SELECTOR = SESSION_START_SELECTOR;
 export const STATUS_LINE_SELECTOR = "/statusLine[dove-project-directory]";
 export const CLAUDE_HOST = "claude";
 
@@ -71,6 +70,7 @@ export function sameManaged(left, right) {
 }
 
 function assertManagedResourcePath(relativePath) {
+  if (relativePath === ".dove/install/RESEARCH_QUALITY.md") return;
   if (relativePath === ".dove" || relativePath.startsWith(".dove/")) throw new Error(`Project integration resources must not manage Dove workspace state: ${relativePath}.`);
   if (FORBIDDEN_RESOURCE_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) throw new Error(`Project integration resources must not install runtime bundles: ${relativePath}.`);
 }
@@ -80,6 +80,7 @@ export function claudeResources() {
   const files = [
     ...generatedAdapterEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
     ...generatedClaudeAmbientProjectEntries(),
+    ...generatedResearchQualityReferenceEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
     ...agentEntries
   ].map((entry) => {
     const destinationPath = entry.destinationPath ?? entry.relativePath;
@@ -101,6 +102,14 @@ export function claudeResources() {
     selector: SESSION_START_SELECTOR,
     fragment: DOVE_CLAUDE_SESSION_START_HOOK_ENTRY,
     digest: semanticDigest(DOVE_CLAUDE_SESSION_START_HOOK_ENTRY)
+  };
+  const statusLine = {
+    hostId: CLAUDE_HOST,
+    path: DOVE_CLAUDE_SETTINGS_PATH,
+    kind: "json-fragment",
+    selector: STATUS_LINE_SELECTOR,
+    fragment: DOVE_CLAUDE_STATUS_LINE,
+    digest: semanticDigest(DOVE_CLAUDE_STATUS_LINE)
   };
   const webFetchDeny = {
     hostId: CLAUDE_HOST,
@@ -126,13 +135,14 @@ export function claudeResources() {
     fragment: EXA_MCP_FRAGMENT,
     digest: semanticDigest(EXA_MCP_FRAGMENT)
   };
-  const resources = [...files, sessionStartHook, webFetchDeny, paperSearch, exa];
+  const resources = [...files, sessionStartHook, statusLine, webFetchDeny, paperSearch, exa];
   if (new Set(resources.map(managedKey)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }
 
 export function dshResources() {
-  return generatedAdapterEntries().filter((entry) => entry.hostId === "dsh").map((entry) => {
+  return [...generatedAdapterEntries(), ...generatedResearchQualityReferenceEntries()].filter((entry) => entry.hostId === "dsh").map((entry) => {
+    assertManagedResourcePath(entry.destinationPath);
     const content = normalizedGeneratedContent(entry.content);
     return {
       hostId: "dsh",
@@ -146,7 +156,8 @@ export function dshResources() {
 }
 
 export function resourcesForHosts(hosts) {
-  return [...claudeResources(), ...dshResources()].filter((entry) => hosts.includes(entry.hostId)).sort(compareManaged);
+  const selected = [...claudeResources(), ...dshResources()].filter((entry) => hosts.includes(entry.hostId));
+  return [...new Map(selected.map((entry) => [managedKey(entry), entry])).values()].sort(compareManaged);
 }
 
 export function desiredManaged(resources) {

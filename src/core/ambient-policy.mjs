@@ -1,5 +1,6 @@
 import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "./dove-agent-persona.mjs";
 import { USER_RESPONSE_POLICY } from "./user-response-policy.mjs";
+import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS } from "./dove-research-contract.mjs";
 
 export const DOVE_CLAUDE_SETTINGS_PATH = ".claude/settings.json";
 export const DOVE_CLAUDE_AMBIENT_RULE_PATH = ".claude/rules/dove.md";
@@ -87,6 +88,8 @@ export function renderClaudeAmbientRule() {
 ${USER_RESPONSE_POLICY.join("\n")}
 
 ${renderDoveSharedResearchContractSection()}
+
+Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude}\`. Read it proactively at the decision triggers above; it is guidance, not research evidence.
 
 ${renderDoveAuthorStanceSection()}
 

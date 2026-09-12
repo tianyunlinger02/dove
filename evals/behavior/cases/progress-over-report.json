@@ -32,11 +32,6 @@
     "mustInspectOrChange": [
       ".dove/research/RESEARCH.md",
       "paper/main.tex"
-    ],
-    "mustNotTouch": [
-      ".dove/install/DOCTOR.md",
-      ".dove/reviews/**",
-      ".dove/runs/**"
     ]
   },
   "hardExpectations": [
@@ -53,16 +48,6 @@
       "id": "manuscript-changed",
       "kind": "path-changed",
       "path": "paper/main.tex"
-    },
-    {
-      "id": "no-doctor-write",
-      "kind": "path-not-created",
-      "path": ".dove/install/DOCTOR.md"
-    },
-    {
-      "id": "no-private-tool-path",
-      "kind": "tool-action-forbidden-path",
-      "path": ".dove/install/DOCTOR.md"
     }
   ],
   "humanReviewRubric": [

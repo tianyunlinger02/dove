@@ -55,7 +55,7 @@ function replacedLocalEditNotice(result) {
   const omitted = replaced.length - labels.length;
   return [
     `注意：本次显式 update 已覆盖 ${replaced.length} 个 manifest-owned 本地编辑：${labels.join(", ")}${omitted > 0 ? `，另有 ${omitted} 个未列出` : ""}。`,
-    "SessionStart 只会跳过这些本地编辑并提醒；dove update 是显式刷新 package-managed 项目接入的覆盖入口。"
+    "SessionStart 完全只读，不会修改这些本地编辑；dove update 是显式刷新 package-managed 项目接入的覆盖入口。"
   ];
 }
 
@@ -63,8 +63,7 @@ function headingFor(command, status) {
   if (command === "init" && status === "initialized") return "Dove 已在此项目启用";
   if (command === "init" && status === "already-initialized") return "Dove 已经在此项目启用";
   if (command === "update" && status === "unchanged") return "Dove 项目集成已是最新";
-  if (command === "update" && status === "adopted") return "Dove 已保留现有 Markdown 研究树并建立当前项目接入";
-  if (command === "update" && ["synchronized", "updated", "upgraded"].includes(status)) return "Dove 项目集成已刷新";
+  if (command === "update" && status === "updated") return "Dove 项目集成已刷新";
   throw new Error(`Unsupported Dove integration presentation: ${command}/${status}.`);
 }
 
@@ -74,7 +73,7 @@ function setupLines(command, { status, hosts, writtenPaths = [] }) {
   const lines = [];
   if (command === "init" && status === "already-initialized") return ["✓ 现有项目集成保持不变，没有写入任何文件"];
   if (hasClaude) {
-    lines.push("✓ Dove agent 与 9 个可选专项入口已安装", "✓ Claude SessionStart hook 与 WebFetch 禁用已配置", "✓ 按需论文检索 MCP 与普通网页 Exa MCP 已声明");
+    lines.push("✓ Dove agent 与 9 个可选专项入口已安装", "✓ Claude SessionStart hook 与 WebFetch 禁用已配置；状态栏空缺时安装 Dove 只读显示", "✓ 按需论文检索 MCP 与普通网页 Exa MCP 已声明");
   }
   if (hasDsh) lines.push("✓ DSH 项目级 filesystem Skills 已安装");
   if (command === "init") lines.push(
@@ -84,7 +83,6 @@ function setupLines(command, { status, hosts, writtenPaths = [] }) {
     "✓ 项目集成记录已建立"
   );
   else if (status === "unchanged") return ["✓ Dove 能力入口和已选宿主接入均已是最新"];
-  else if (status === "adopted") lines.push("✓ 现有研究 Markdown 保持不变", "✓ 项目集成记录已建立为 revision 2.0");
   else lines.push("✓ Dove 能力入口和已选宿主接入已刷新");
   return lines;
 }
@@ -117,8 +115,6 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
   lines.push("");
   if (command === "init" && result.status === "already-initialized") {
     lines.push("如需刷新项目集成，请运行 dove update。更新不会重写、重连或规范化 .dove/research/**。");
-  } else if (command === "update" && result.status === "adopted") {
-    lines.push("本次采用只建立 revision 2.0 项目接入记录并安装缺失或完全当前的 package-managed Claude 集成；不会重写 .dove/research/、DOCTOR、archive 或旧工作区 marker。未知漂移会阻止采用。");
   } else {
     lines.push(command === "init"
       ? "研究 overview 与任何后续主题文档由研究者按需维护；已有研究目录不会被补写。它们不代表科研主线、结论或任务已经完成。"

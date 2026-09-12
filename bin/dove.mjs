@@ -22,15 +22,16 @@ import {
   terminalColorEnabled
 } from "../src/cli/terminal-output.mjs";
 import { parseSessionStartPayload, sessionStartFailureOutput, sessionStartOutput } from "../src/core/session-start-hook.mjs";
+import { renderDoveStatusLine } from "../src/core/statusline.mjs";
 import { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
 import { PROJECT_HOST_IDS } from "../src/core/host-registry.mjs";
 import { classifyPackageCompatibility, PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
-import { initializeProjectIntegration, inspectProjectIntegration, previewProjectCompleteReinstall, synchronizeProjectIntegrationOnly } from "../src/core/project-installation.mjs";
+import { initializeProjectIntegration, inspectProjectIntegration, previewProjectCompleteReinstall } from "../src/core/project-installation.mjs";
 import { readProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
 import { resolveExactInstalledProjectRoot, resolveInstalledProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
-import { compareRuns, inspectRunStatus } from "../src/core/run-record.mjs";
-import { finalizeRunWithSupervisor, isRunSupervisorInvocation, resumeRun, runSupervisorMain, startDetachedRunSupervisor } from "../src/core/run-supervisor.mjs";
+import { appendFinalizedRun, compareRuns, inspectRunStatus } from "../src/core/run-record.mjs";
+import { isRunSupervisorInvocation, resumeRun, runSupervisorMain, startDetachedRunSupervisor } from "../src/core/run-supervisor.mjs";
 import { handoffReview, importReviewReturn, inspectReviewStatus, rerunReview, resumeReview } from "../src/core/review-runtime.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -176,11 +177,7 @@ function inspectHome(target) {
 }
 
 function homeState(inspection) {
-  if (inspection.setup?.mode === "init") return "uninitialized";
-  if (inspection.setup?.mode === "update") return "needs-sync";
-  if (inspection.projectIntegration?.state === "current") return "current";
-  if (inspection.projectIntegration?.state === "needs-sync") return "needs-sync";
-  return "blocked";
+  return inspection.setup.mode;
 }
 
 const command = parsed.command;
@@ -360,11 +357,11 @@ try {
       result = inspectRunStatus(common);
     } else if (subcommand === "resume") {
       if (!common.id) throw new Error("dove run resume 需要 --id <run-id>。");
-      result = await resumeRun(common);
+      result = resumeRun(common);
     } else if (subcommand === "finalize") {
       if (!common.id) throw new Error("dove run finalize 需要 --id <run-id>。");
       if (common.metricValue === undefined) throw new Error("dove run finalize 需要 --metric-value <number>。");
-      result = await finalizeRunWithSupervisor(common);
+      result = { command: "finalize", ...appendFinalizedRun(common.project, common.id, common) };
     } else if (subcommand === "compare") {
       result = compareRuns({ ...common, ids: runIds(options) });
     } else {
@@ -383,7 +380,7 @@ try {
         const target = prepareHookProject(projectOption(options));
         const payload = parseSessionStartPayload(input);
         assertHookPayloadProject(payload, target);
-        const result = synchronizeProjectIntegrationOnly(target, PACKAGE_OPTIONS);
+        const result = inspectProjectIntegration(target, PACKAGE_OPTIONS);
         const output = sessionStartOutput(payload, result, { project: target });
         if (output !== null) process.stdout.write(JSON.stringify(output));
         process.exit(0);
@@ -391,13 +388,12 @@ try {
         const output = sessionStartFailureOutput(error);
         process.stdout.write(JSON.stringify(output));
         // Claude processes hook JSON only on exit 0. The systemMessage reports
-        // the failed sync; no further sync or research writes run after failure.
+        // the failed read-only inspection; no project writes run in this hook.
         process.exit(0);
       }
     }
-    const target = prepareHookProject(projectOption(options));
     if (hookName === "statusline") {
-      process.stdout.write(`${target}\n`);
+      process.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path.resolve(projectOption(options)) })}\n`);
       process.exit(0);
     }
     throw new Error("dove hook only supports session-start and statusline.");

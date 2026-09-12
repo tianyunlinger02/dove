@@ -17,14 +17,6 @@ export function parseSessionStartPayload(input) {
   return payload;
 }
 
-function safePathLabel(item) {
-  const path = String(item?.path ?? "unknown").replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
-  const selector = item?.selector === null || item?.selector === undefined
-    ? ""
-    : String(item.selector).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
-  return selector ? `${path}#${selector}` : path;
-}
-
 function systemMessage(message) {
   return { systemMessage: message };
 }
@@ -74,11 +66,8 @@ function sessionFacts(project, options = {}) {
 
 export function sessionStartOutput(payload, result = null, options = {}) {
   const output = {};
-  const skipped = Array.isArray(result?.skippedLocalEdits) ? result.skippedLocalEdits : [];
-  if (skipped.length > 0) {
-    const labels = skipped.slice(0, 6).map(safePathLabel);
-    const omitted = Math.max(0, skipped.length - labels.length);
-    output.systemMessage = `Dove SessionStart synchronized package-managed integration except local edits at ${labels.join(", ")}${omitted > 0 ? ` and ${omitted} more` : ""}. Run dove update to replace those manifest-owned local edits explicitly.`;
+  if (result && result.status !== "current") {
+    output.systemMessage = "Dove project integration needs attention. SessionStart is read-only; run dove update explicitly to update supported manifest-owned integration. If blocked, inspect dove doctor --json before changing files.";
   }
   if (payload.source === "compact" || payload.source === "resume") {
     output.hookSpecificOutput = {
@@ -92,5 +81,5 @@ export function sessionStartOutput(payload, result = null, options = {}) {
 export function sessionStartFailureOutput(error) {
   const raw = error instanceof Error ? error.message : String(error);
   const message = raw.replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
-  return systemMessage(`Dove SessionStart did not synchronize project integration: ${message}`);
+  return systemMessage(`Dove SessionStart could not inspect project integration (read-only): ${message} Run dove update explicitly for supported integration, or dove doctor --json to inspect blocked state.`);
 }

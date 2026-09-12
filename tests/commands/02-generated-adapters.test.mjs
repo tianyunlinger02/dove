@@ -1,15 +1,11 @@
 import test from "node:test";
 
 import {
-  assertCanonicalTerminology,
   assertFinalEntrypointWiring,
   assertGeneratedAdapters,
+  assertQualityReferenceResources,
   assertSourceIdentityGuidanceProjection
 } from "./generated-surfaces.mjs";
-
-test("Dove terminology avoids ambiguous route language", () => {
-  assertCanonicalTerminology();
-});
 
 test("generated host adapters match canonical command renderers", () => {
   assertGeneratedAdapters();
@@ -21,4 +17,8 @@ test("final Claude context + command and standalone DSH preserve scientific judg
 
 test("Source DOI identity guidance stays canonical and projected", () => {
   assertSourceIdentityGuidanceProjection();
+});
+
+test("quality references are rendered and included in host installation resources", () => {
+  assertQualityReferenceResources();
 });

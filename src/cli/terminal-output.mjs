@@ -137,7 +137,7 @@ export function renderDoveHome(options = {}) {
   const nextCommand = options.nextCommand ?? (
     state === "uninitialized"
       ? "dove"
-      : state === "needs-sync"
+      : state === "needs-update"
         ? "dove update"
         : state === "blocked"
           ? "dove doctor"
@@ -145,7 +145,7 @@ export function renderDoveHome(options = {}) {
   );
   const stateLabel = {
     uninitialized: "尚未配置 Dove",
-    "needs-sync": "Dove 项目集成需要更新",
+    "needs-update": "Dove 项目集成需要更新",
     current: "Dove 项目集成已是当前版本",
     blocked: "Dove 项目集成需要人工处理"
   }[state] ?? "Dove 项目状态未知";

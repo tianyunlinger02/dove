@@ -3,7 +3,6 @@ import fs from "node:fs";
 import process from "node:process";
 
 import {
-  appendFinalizedRun,
   appendReconciledInterrupted,
   appendRunEvent,
   createRunId,
@@ -17,8 +16,7 @@ import {
   normalizeRunProject,
   normalizeRunSeed,
   reserveRunDirectory,
-  runAbsolutePaths,
-  summarizeRun
+  runAbsolutePaths
 } from "./run-record.mjs";
 import { captureRunGitFacts, normalizeRunGitFacts } from "./run-environment.mjs";
 
@@ -100,7 +98,7 @@ function appendTerminalEvent(projectRoot, runId, payload, options = {}) {
     source: options.source ?? "supervisor",
     supervisorPid: process.pid,
     targetPid: options.targetPid ?? null
-  }, { now: options.now, operation: "terminal" });
+  }, { now: options.now });
 }
 
 function openRunLogFiles(paths) {
@@ -135,6 +133,7 @@ async function superviseTargetRun(rawPayload) {
   let target = null;
   let timeoutTimer = null;
   let graceTimer = null;
+  let groupWaitTimer = null;
   let timedOut = false;
   let terminalWritten = false;
   let closedTarget = null;
@@ -149,6 +148,7 @@ async function superviseTargetRun(rawPayload) {
   function finish(status = 0) {
     if (timeoutTimer) clearTimeout(timeoutTimer);
     if (graceTimer) clearTimeout(graceTimer);
+    if (groupWaitTimer) clearTimeout(groupWaitTimer);
     closeFd(stdoutFd);
     closeFd(stderrFd);
     process.exit(status);
@@ -156,16 +156,23 @@ async function superviseTargetRun(rawPayload) {
 
   function finishClosedTarget() {
     if (terminalWritten || closedTarget === null) return;
-    if (graceTimer !== null) {
-      // A closed POSIX leader does not imply its process group has exited.
-      // Keep the referenced grace timer unless that group is no longer observed.
-      if (process.platform !== "win32" && signalTargetGroup(target.pid, 0).error !== "not-observed") return;
-      clearTimeout(graceTimer);
-      graceTimer = null;
+    if (process.platform !== "win32" && budget.timeoutMs !== null && (!timedOut || graceTimer !== null)) {
+      // Leader close is not group completion. Keep one referenced wait while
+      // the declared deadline/grace is pending, and finish if the group disappears.
+      // Signal 0 also observes zombies; do not wait beyond escalation for reaping.
+      if (signalTargetGroup(target.pid, 0).error !== "not-observed") {
+        if (groupWaitTimer === null) {
+          groupWaitTimer = setTimeout(() => {
+            groupWaitTimer = null;
+            finishClosedTarget();
+          }, 50);
+        }
+        return;
+      }
     }
     terminalWritten = true;
     try {
-      appendTerminalEvent(projectRoot, runId, closedTarget, { source: "target-close", targetPid: target.pid });
+      appendTerminalEvent(projectRoot, runId, terminalPayloadForClose(closedTarget.code, closedTarget.signal, timedOut), { source: "target-close", targetPid: target.pid });
       finish(0);
     } catch {
       finish(1);
@@ -196,7 +203,7 @@ async function superviseTargetRun(rawPayload) {
         killGraceMs: budget.killGraceMs,
         ...scope
       }
-    }, { operation: "start" });
+    });
     await sendReady({ commit, dirty });
 
     target = spawn(argv[0], argv.slice(1), {
@@ -216,10 +223,12 @@ async function superviseTargetRun(rawPayload) {
           stdoutPath: paths.stdoutPath,
           stderrPath: paths.stderrPath,
           termination: scope
-        }, { operation: "target-started" });
+        });
       } catch {}
       if (budget.timeoutMs !== null) {
         timeoutTimer = setTimeout(() => {
+          timeoutTimer = null;
+          finishClosedTarget();
           timedOut = true;
           const firstSignal = signalTargetGroup(target.pid, "SIGTERM");
           try {
@@ -233,7 +242,7 @@ async function superviseTargetRun(rawPayload) {
               signal: "SIGTERM",
               firstSignal,
               termination: scope
-            }, { operation: "timeout" });
+            });
           } catch {}
           const kill = () => {
             graceTimer = null;
@@ -247,7 +256,7 @@ async function superviseTargetRun(rawPayload) {
                 signal: "SIGKILL",
                 secondSignal,
                 termination: scope
-              }, { operation: "timeout-escalated" });
+              });
             } catch {}
             finishClosedTarget();
           };
@@ -280,7 +289,7 @@ async function superviseTargetRun(rawPayload) {
     });
 
     target.once("close", (code, signal) => {
-      closedTarget = terminalPayloadForClose(code, signal, timedOut);
+      closedTarget = { code, signal };
       finishClosedTarget();
     });
     await new Promise(() => {});
@@ -304,61 +313,11 @@ async function superviseTargetRun(rawPayload) {
   }
 }
 
-function normalizeReconcilePayload(raw) {
-  const runId = normalizeRunId(raw.runId);
-  const projectRoot = raw.projectRoot;
-  if (typeof projectRoot !== "string" || !projectRoot.trim() || projectRoot.includes("\0")) throw new Error("Dove run reconcile project root is invalid.");
-  return { runId, projectRoot, supervisorPid: raw.supervisorPid ?? null, targetPid: raw.targetPid ?? null };
-}
-
-function normalizeFinalizePayload(raw) {
-  const runId = normalizeRunId(raw.runId);
-  const projectRoot = raw.projectRoot;
-  if (typeof projectRoot !== "string" || !projectRoot.trim() || projectRoot.includes("\0")) throw new Error("Dove run finalize project root is invalid.");
-  return {
-    runId,
-    projectRoot,
-    metricName: raw.metricName,
-    direction: raw.direction,
-    metricUnit: raw.metricUnit,
-    metricValue: raw.metricValue,
-    decision: raw.decision,
-    note: raw.note
-  };
-}
-
-async function reconcileInterruptedRun(rawPayload) {
-  const payload = normalizeReconcilePayload(rawPayload);
-  try {
-    const written = appendReconciledInterrupted(payload.projectRoot, payload.runId, {
-      supervisorPid: payload.supervisorPid,
-      targetPid: payload.targetPid
-    });
-    await sendSupervisorMessageAsync({ type: "reconciled", runId: payload.runId, project: payload.projectRoot, event: written.event });
-    process.exit(0);
-  } catch (error) {
-    try { await sendSupervisorMessageAsync({ type: "failed", runId: payload.runId, project: payload.projectRoot, error: error instanceof Error ? error.message : String(error) }); } catch {}
-    process.exit(1);
-  }
-}
-
-async function finalizeRun(rawPayload) {
-  const payload = normalizeFinalizePayload(rawPayload);
-  try {
-    const written = appendFinalizedRun(payload.projectRoot, payload.runId, payload);
-    await sendSupervisorMessageAsync({ type: "finalized", runId: payload.runId, project: payload.projectRoot, event: written.event, summary: written.summary });
-    process.exit(0);
-  } catch (error) {
-    try { await sendSupervisorMessageAsync({ type: "failed", runId: payload.runId, project: payload.projectRoot, error: error instanceof Error ? error.message : String(error) }); } catch {}
-    process.exit(1);
-  }
-}
-
-function spawnSupervisor(executablePath, payload, options = {}) {
+function spawnSupervisor(executablePath, payload) {
   if (typeof executablePath !== "string" || !executablePath.trim()) throw new Error("Dove run supervisor requires the current CLI executable path.");
   const child = spawn(process.execPath, [executablePath, SUPERVISOR_ENTRY], {
     cwd: payload.projectRoot,
-    detached: options.detached === true,
+    detached: true,
     windowsHide: true,
     stdio: ["ignore", "ignore", "ignore", "ipc"]
   });
@@ -457,7 +416,7 @@ export async function startDetachedRunSupervisor(options = {}) {
     dirty: git.dirty,
     group
   };
-  const child = spawnSupervisor(options.executablePath, payload, { detached: true });
+  const child = spawnSupervisor(options.executablePath, payload);
   let ready;
   try {
     ready = await configureSupervisorAndWait(child, payload, ["ready"]);
@@ -494,54 +453,16 @@ export async function startDetachedRunSupervisor(options = {}) {
   };
 }
 
-async function runReconcileSupervisor(options = {}) {
-  const projectRoot = options.projectRoot;
-  const runId = normalizeRunId(options.runId);
-  const payload = {
-    mode: "reconcile",
-    projectRoot,
-    runId,
-    supervisorPid: options.supervisorPid ?? null,
-    targetPid: options.targetPid ?? null
-  };
-  const child = spawnSupervisor(options.executablePath, payload, { detached: false });
-  const message = await configureSupervisorAndWait(child, payload, ["reconciled"]);
-  try { child.disconnect(); } catch {}
-  return message;
-}
-
-export async function finalizeRunWithSupervisor(options = {}) {
-  const initial = inspectRunStatus(options);
-  const payload = {
-    mode: "finalize",
-    projectRoot: initial.project,
-    runId: initial.runId,
-    metricName: options.metricName,
-    direction: options.direction,
-    metricUnit: options.metricUnit,
-    metricValue: options.metricValue,
-    decision: options.decision,
-    note: options.note
-  };
-  const child = spawnSupervisor(options.executablePath, payload, { detached: false });
-  const message = await configureSupervisorAndWait(child, payload, ["finalized"]);
-  try { child.disconnect(); } catch {}
-  return { command: "finalize", event: message.event, summary: message.summary };
-}
-
-export async function resumeRun(options = {}) {
+export function resumeRun(options = {}) {
   const initial = inspectRunStatus(options);
   if (initial.terminal) return { command: "resume", status: "terminal", action: "none", write: false, reason: "run is already terminal", run: initial };
   if (initial.pidObservation.supervisor.alive) return { command: "resume", status: "active", action: "none", write: false, reason: "supervisor pid is currently observable by PID-only liveness; Dove will not reconcile or mutate it", run: initial };
   if (initial.pidObservation.target.alive) return { command: "resume", status: "orphaned", action: "blocked", write: false, reason: "target pid is observable by PID-only liveness but supervisor pid is not; Dove will not rerun or mutate this run", run: initial };
-  await runReconcileSupervisor({
-    executablePath: options.executablePath,
-    projectRoot: initial.project,
-    runId: initial.runId,
+  const { summary: reconciled } = appendReconciledInterrupted(initial.project, initial.runId, {
+    ...options,
     supervisorPid: initial.supervisorPid,
     targetPid: initial.targetPid
   });
-  const reconciled = summarizeRun(initial.project, initial.runId, { fsOps: options.fsOps ?? fs });
   return { command: "resume", status: "interrupted", action: "reconciled", write: true, reason: "supervisor and target pids were not observable, so Dove recorded one interrupted reconciliation", run: reconciled };
 }
 
@@ -588,10 +509,8 @@ export async function runSupervisorMain(argv = process.argv.slice(2)) {
   try {
     if (argv.length !== 1) throw new Error("Dove hidden run supervisor does not accept command-line payload arguments.");
     payload = await receiveSupervisorConfig();
-    if (payload.mode === "start") await superviseTargetRun(payload);
-    else if (payload.mode === "reconcile") await reconcileInterruptedRun(payload);
-    else if (payload.mode === "finalize") await finalizeRun(payload);
-    else throw new Error("Dove hidden run supervisor mode is unsupported.");
+    if (payload.mode !== "start") throw new Error("Dove hidden run supervisor only supports start.");
+    await superviseTargetRun(payload);
   } catch (error) {
     sendSupervisorMessage({ type: "failed", runId: payload?.runId ?? null, project: payload?.projectRoot ?? null, error: error instanceof Error ? error.message : String(error) });
     process.exit(1);

@@ -8,7 +8,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
-import { reviewWorkspaceName } from "../src/core/review-workspace.mjs";
+import { DOVE_REVIEW_QUALITY_REFERENCE_PATH, reviewWorkspaceName } from "../src/core/review-workspace.mjs";
+import { renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
+import { renderDoveAuthorStanceSection, renderDoveReviewerStanceSection, renderDoveSharedResearchContractSection } from "../src/core/dove-agent-persona.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import * as publicCore from "../src/core/index.mjs";
 
@@ -176,51 +178,29 @@ assert.doesNotMatch(input, /# Dove Agent/u);
 assert.match(input, /Independent dove-review task/u);
 assert.match(input, /Shared researcher judgment/u);
 assert.match(input, /Reviewer stance/u);
-assert.match(input, /method answers the research question|method answer/iu);
-assert.match(input, /correct[^;\\n]*field|field[^;\\n]*correct/iu);
-assert.match(input, /fit the target venue|venue fit/iu);
+assert.match(input, /research question/iu);
+assert.match(input, /field/iu);
+assert.match(input, /target venue/iu);
 assert.match(input, /strongest reasonable objection/iu);
 assert.match(input, /## Verdict/u);
 assert.match(input, /## Blocking issues/u);
 assert.match(input, /## Grounding basis/u);
 assert.match(input, /## Author-side next actions/u);
-assert.match(input, /Your available tool is Read/u);
-assert.match(input, /private conversation/iu);
-assert.match(input, /transcripts/iu);
-assert.match(input, /do not include enough venue rules, literature grounding, or task-identity material/iu);
-// Inspect what the fake backend actually receives, not just exported prompt
-// constants. This is prompt plumbing evidence, not a model-behavior evaluation.
-for (const pattern of [
-  /Before committing to or materially changing[^\\n]*central experiment/iu,
-  /core proposition[^.\\n]*theory or mechanism[^.\\n]*proportionate/iu,
-  /simple alternatives[^.\\n]*assumptions[^.\\n]*distinguishing predictions or failure conditions/iu,
-  /derivation[^.\\n]*counterexamples[^.\\n]*or permitted exploratory diagnostics[^.\\n]*as needed/iu,
-  /as needed to (?:choose or revise|change)[^.\\n]*method[^.\\n]*baseline[^.\\n]*metric[^.\\n]*investment decision/iu,
-  /problem[^\\n]*contribution[^\\n]*data and evaluation validity[^\\n]*statistical identification[^\\n]*execution[^\\n]*recovery/iu,
-  /Reuse checked evidence[^\\n]*conditions still hold/iu,
-  /comparison that cannot identify the contribution/iu,
-  /passing checks[^.\\n]*alone are not research progress/iu,
-  /(?:Valid execution|performance gain)[^.\\n]*alone does not establish[^.\\n]*evaluation validity[^.\\n]*scientific mechanism/iu,
-  /only to judging the frozen materials[^\\n]*recommending author-side work/iu,
-  /Do not establish missing grounding through new research[^\\n]*run diagnostics[^\\n]*execute experiments[^\\n]*author revisions/iu,
-  /read-only and limited to the listed frozen materials/iu,
-  /scientific task continuity[^.\\n]*actual problem or phenomenon[^.\\n]*output or estimand[^.\\n]*baseline.reference[^.\\n]*real-world goal[^.\\n]*proxy relationship/iu,
-  /project, paper, repository, module, dataset, and code lineage[^.\\n]*asset continuity, not scientific task continuity/iu,
-  /proxy supports the real goal only through a grounded relationship/iu,
-  /silently making an easier proxy, output, or success criterion the goal[^.\\n]*task change, not success/iu,
-  /proposition that motivated the work[^.\\n]*support, refute, or bound the core proposition/iu,
-  /surviving component[^.\\n]*automatically become the main method/iu,
-  /provisional candidate for authorized, proportionate investigation/iu,
-  /Investigation permission is not mainline-change permission/iu,
-  /no inherited success, admission, or completion[^.\\n]*not deleting assets/iu,
-  /cosmetic-only changes[^.\\n]*selective evidence[^.\\n]*hiding counterevidence[^.\\n]*unjustified narrowing[^.\\n]*diff-only review[^.\\n]*restarting the reviewer context/iu,
-  /favorable recommendation[^.\\n]*current frozen task and claims[^.\\n]*does not rewrite failure[^.\\n]*earlier proposition[^.\\n]*authorize a different author-side mainline/iu,
-  /listed materials[^.\\n]*do not include[^.\\n]*task-identity material[^.\\n]*judgment is limited[^.\\n]*instead of fetching, inferring, or obtaining unlisted context/iu
-]) assert.match(input, pattern, "missing reviewer prompt pattern " + pattern);
-assert.doesNotMatch(input, /^## Author stance$|After delegation|synthesizes decisive evidence|perform the feasible next in-scope step|Maintain Dove research Markdown/mu);
+// Check actual backend input against its owning renderers, not copied sentences.
+// Tool permissions and frozen-material/session behavior are checked separately.
+assert.ok(input.includes(${JSON.stringify(renderDoveSharedResearchContractSection())}));
+assert.ok(input.includes(${JSON.stringify(renderDoveReviewerStanceSection())}));
+assert.equal(input.includes(${JSON.stringify(renderDoveAuthorStanceSection())}), false);
+const referencePath = ${JSON.stringify(DOVE_REVIEW_QUALITY_REFERENCE_PATH)};
+assert.ok(input.includes(referencePath));
+assert.match(input, /package guidance/iu);
+assert.doesNotMatch(input, /sha256|[a-f0-9]{64}/iu);
+assert.equal(fs.readFileSync(path.join(process.cwd(), referencePath), "utf8"), ${JSON.stringify(renderDoveResearchQualityReference())});
+assert.doesNotMatch(input, /^## Author stance$/mu);
 
 const allowed = new Set();
-for (const match of input.matchAll(/^- (.+?) \\(\\d+ bytes, sha256 [a-f0-9]{64}\\)$/gmu)) allowed.add(match[1]);
+for (const match of input.matchAll(/^- (.+?) \\(\\d+ bytes\\)$/gmu)) allowed.add(match[1]);
+assert.equal(allowed.has(referencePath), false, "package guidance is not user material");
 const actual = [];
 const stack = [""];
 while (stack.length > 0) {
@@ -235,19 +215,26 @@ while (stack.length > 0) {
     else throw new Error("unsupported workspace path " + relativePath);
   }
 }
-assert.deepEqual(actual.sort(), [...allowed].sort());
+assert.deepEqual(actual.sort(), [referencePath, ...allowed].sort());
 for (const forbidden of ["private-note.md", "CLAUDE.md", ".claude/settings.json", ".dove/research/RESEARCH.md", "paper/result.pdf"]) {
   if (!allowed.has(forbidden)) assert.equal(actual.includes(forbidden), false, forbidden);
 }
+const sessionPath = path.join(process.env.DOVE_FAKE_SESSION_ROOT, sessionId + ".json");
+const materialBytes = Object.fromEntries(actual.map((file) => [file, fs.readFileSync(path.join(process.cwd(), file)).toString("hex")]));
+const exchange = { mode, round: Number(input.match(/^Round: (\\d+)$/mu)[1]), materialBytes };
+if (process.env.DOVE_FAKE_LOG) fs.appendFileSync(process.env.DOVE_FAKE_LOG, JSON.stringify({ ...exchange, sessionId, cwd: process.cwd(), allowed: [...allowed].sort() }) + "\\n");
+if (mode === "--resume" && !fs.existsSync(sessionPath)) {
+  process.stderr.write("requested reviewer session does not exist\\n");
+  process.exit(18);
+}
+const session = mode === "--session-id" ? { cwd: process.cwd(), history: [] } : JSON.parse(fs.readFileSync(sessionPath, "utf8"));
+assert.equal(session.cwd, process.cwd(), "resumed session must keep its workspace");
+session.history.push(exchange);
+fs.writeFileSync(sessionPath, JSON.stringify(session), { flag: mode === "--session-id" ? "wx" : "w" });
 if (process.env.DOVE_FAKE_CLAUDE_FAIL === "1") {
-  process.stderr.write("fake reviewer backend failed after validating argv and material workspace\\n");
+  process.stderr.write("fake reviewer backend failed after reading the frozen materials\\n");
   process.exit(17);
 }
-const sessionPath = path.join(process.env.DOVE_FAKE_SESSION_ROOT, sessionId + ".json");
-if (mode === "--session-id") fs.writeFileSync(sessionPath, JSON.stringify({ cwd: process.cwd() }), { flag: "wx" });
-else assert.equal(JSON.parse(fs.readFileSync(sessionPath, "utf8")).cwd, process.cwd(), "resumed session must keep its workspace");
-const materialBytes = Object.fromEntries(actual.map((file) => [file, fs.readFileSync(path.join(process.cwd(), file)).toString("hex")]));
-if (process.env.DOVE_FAKE_LOG) fs.appendFileSync(process.env.DOVE_FAKE_LOG, JSON.stringify({ mode, sessionId, cwd: process.cwd(), allowed: [...allowed].sort(), materialBytes }) + "\\n");
 process.stdout.write(JSON.stringify({
   type: "result",
   session_id: process.env.DOVE_FAKE_BAD_SESSION === "1" ? sessionId + "-wrong" : sessionId,
@@ -310,7 +297,8 @@ try {
   const record1 = readJson(reviewRecordPath);
   assert.equal(record1.session.sessionId, handoff.sessionId);
   assert.equal(record1.rounds[0].reportPath, `.dove/reviews/${reviewId}/rounds/1/report.md`);
-  assertSha256(record1.rounds[0].reportSha256, "review.json round reportSha256");
+  assert.equal(Object.hasOwn(record1.rounds[0], "reportSha256"), false);
+  assert.equal(fs.existsSync(path.join(project, record1.rounds[0].reportPath)), true);
   assert.deepEqual(record1.rounds[0].materials.map((item) => item.path), ["paper/main.tex", "paper/result.pdf"]);
   for (const material of record1.rounds[0].materials) assertSha256(material.sha256, `review.json material ${material.path}`);
   const snapshot1 = readJson(path.join(project, ".dove", "reviews", reviewId, "rounds", "1", "snapshot.json"));
@@ -318,13 +306,12 @@ try {
   const backend1 = readJson(path.join(project, ".dove", "reviews", reviewId, "rounds", "1", "backend.json"));
   assert.equal(backend1.status, "completed");
   assert.equal(backend1.sessionId, handoff.sessionId);
-  assertSha256(backend1.promptSha256, "backend promptSha256");
-  assertSha256(backend1.resultSha256, "backend resultSha256");
+  for (const field of ["promptSha256", "resultSha256", "claudeJsonFields"]) assert.equal(Object.hasOwn(backend1, field), false);
   assert.equal(backend1.argv.includes("--session-id"), true);
   assert.equal(backend1.argv.includes("--resume"), false);
 
   const copied1 = listFiles(handoff.workspaceRoot);
-  assert.deepEqual(copied1, ["paper/main.tex", "paper/result.pdf"]);
+  assert.deepEqual(copied1, [DOVE_REVIEW_QUALITY_REFERENCE_PATH, "paper/main.tex", "paper/result.pdf"]);
   assert.equal(copied1.includes("paper/private-note.md"), false);
   assert.equal(copied1.includes("CLAUDE.md"), false);
   assert.equal(copied1.includes("paper/CLAUDE.md"), false);
@@ -420,7 +407,7 @@ try {
   assert.equal(rerun.round, 2);
   assert.equal(rerun.sessionId, handoff.sessionId);
   assert.deepEqual(rerun.materials.map((item) => item.path), ["paper/main.tex", "paper/supplement.tex"]);
-  assert.deepEqual(listFiles(handoff.workspaceRoot), ["paper/main.tex", "paper/supplement.tex"]);
+  assert.deepEqual(listFiles(handoff.workspaceRoot), [DOVE_REVIEW_QUALITY_REFERENCE_PATH, "paper/main.tex", "paper/supplement.tex"]);
   const backend2 = readJson(path.join(project, ".dove", "reviews", reviewId, "rounds", "2", "backend.json"));
   assert.equal(backend2.argv.includes("--resume"), true);
   assert.equal(backend2.requestedSessionId, handoff.sessionId);
@@ -476,7 +463,7 @@ try {
   assert.equal(failedRerunBackend.status, "failed");
   assert.equal(failedRerunBackend.requestedSessionId, handoff.sessionId);
   assert.equal(Object.hasOwn(failedRerunBackend, "sessionId"), false);
-  assert.deepEqual(listFiles(handoff.workspaceRoot), ["paper/failure-round.tex"]);
+  assert.deepEqual(listFiles(handoff.workspaceRoot), [DOVE_REVIEW_QUALITY_REFERENCE_PATH, "paper/failure-round.tex"]);
   assertReviewStatusReadOnly(project, env, ["review", "status", "--project", project, "--id", reviewId, "--json"], (value) => {
     assert.equal(value.currentRound, 4);
     assert.equal(value.materialCurrentness.overall, "current");
@@ -567,9 +554,95 @@ try {
   assert.ok(failedBackend.requestedSessionId.length > 0);
 
   const invocations = fs.readFileSync(fakeLog, "utf8").trim().split("\n").map((line) => JSON.parse(line));
-  assert.deepEqual(invocations.map((item) => item.mode), ["--session-id", "--resume", "--resume"]);
+  assert.deepEqual(invocations.map((item) => item.mode), ["--session-id", "--resume", "--resume", "--resume", "--session-id"]);
+  const history = readJson(path.join(sessionRoot, `${handoff.sessionId}.json`)).history;
+  assert.deepEqual(history.map((item) => item.round), [1, 1, 2, 4]);
+  assert.notEqual(history[0].materialBytes["paper/main.tex"], history[2].materialBytes["paper/main.tex"]);
+  assert.deepEqual(history[3].materialBytes, invocations[3].materialBytes, "failed backend calls also advance reviewer history");
   assert.equal(invocations[1].sessionId, invocations[0].sessionId);
   assert.equal(invocations[2].sessionId, invocations[0].sessionId);
+
+  const firstRoundProject = makeProject(tempRoot, "first-round-recovery");
+  const firstRoundOptions = { project: firstRoundProject, materials: ["paper/main.tex"], stateRoot, env };
+  let firstPrepareFailure = false;
+  assert.throws(() => publicCore.handoffReview({
+    ...firstRoundOptions, id: "prepare-failure",
+    spawnSync() { assert.fail("failed initial preparation must not invoke a reviewer"); },
+    fsOps: {
+      ...fs,
+      mkdirSync(target, ...args) {
+        if (!firstPrepareFailure && String(target).startsWith(path.join(firstRoundProject, ".dove/reviews/.transactions"))) {
+          firstPrepareFailure = true;
+          throw new Error("injected initial preparation failure");
+        }
+        return fs.mkdirSync(target, ...args);
+      }
+    }
+  }), /injected initial preparation failure/u);
+  assert.equal(firstPrepareFailure, true);
+  assert.equal(fs.existsSync(path.join(firstRoundProject, ".dove/reviews/prepare-failure/review.json")), false);
+
+  for (const sessionExists of [true, false]) {
+    const id = sessionExists ? "first-timeout-existing" : "first-timeout-missing";
+    const options = { ...firstRoundOptions, id };
+    let requestedId;
+    const timedOut = publicCore.handoffReview({
+      ...options,
+      spawnSync(command, args, spawnOptions) {
+        requestedId = args.at(-1);
+        const pending = readJson(path.join(firstRoundProject, ".dove/reviews", id, "review.json"));
+        assert.equal(pending.session.sessionId, null, "requested id is not yet a verified session");
+        assert.equal(pending.pendingExchange.requestedSessionId, requestedId);
+        if (sessionExists) {
+          const result = spawnSync(command, args, spawnOptions);
+          assert.equal(result.status, 0, result.stderr);
+        }
+        return { status: null, signal: "SIGTERM", error: Object.assign(new Error("synthetic first-round timeout"), { code: "ETIMEDOUT" }) };
+      }
+    });
+    assert.equal(timedOut.status, "failed");
+    assert.equal(timedOut.sessionId, null);
+    assert.equal(timedOut.pendingExchange.requestedSessionId, requestedId);
+    const originalBackend = fs.readFileSync(path.join(firstRoundProject, timedOut.backendPath));
+    const originalReport = fs.readFileSync(path.join(firstRoundProject, timedOut.reportPath));
+    if (sessionExists) {
+      const jsonError = publicCore.resumeReview({
+        ...options,
+        spawnSync(command, args) {
+          assert.deepEqual(args.slice(-2), ["--resume", requestedId]);
+          return { status: 0, stdout: JSON.stringify({ session_id: requestedId, is_error: true, result: "synthetic reviewer session error" }) };
+        }
+      });
+      assert.equal(jsonError.status, "failed", "matching session id on an error payload is not successful recovery");
+      assert.equal(jsonError.sessionId, null);
+      assert.equal(jsonError.pendingExchange.requestedSessionId, requestedId);
+      const mismatch = publicCore.resumeReview({ ...options, env: { ...env, DOVE_FAKE_BAD_SESSION: "1" } });
+      assert.equal(mismatch.status, "failed");
+      assert.equal(mismatch.sessionId, null);
+      assert.equal(mismatch.pendingExchange.requestedSessionId, requestedId);
+      assert.match(readJson(path.join(firstRoundProject, mismatch.latestBackendPath)).error, /does not match the requested reviewer session/u);
+    }
+    const continued = publicCore.resumeReview(options);
+    assert.equal(continued.status, sessionExists ? "completed" : "failed");
+    assert.equal(continued.sessionId, sessionExists ? requestedId : null);
+    assert.deepEqual(fs.readFileSync(path.join(firstRoundProject, timedOut.backendPath)), originalBackend);
+    assert.deepEqual(fs.readFileSync(path.join(firstRoundProject, timedOut.reportPath)), originalReport);
+    const calls = fs.readFileSync(fakeLog, "utf8").trim().split("\n").map(JSON.parse).filter((item) => item.sessionId === requestedId);
+    if (sessionExists) {
+      assert.equal(continued.pendingExchange, null);
+      assert.deepEqual(calls.map((item) => item.mode), ["--session-id", "--resume", "--resume"]);
+      const again = publicCore.resumeReview(options);
+      assert.equal(again.status, "completed", "workspace lookup must use the saved successful attempt, not the first timeout return");
+      const session = readJson(path.join(sessionRoot, `${requestedId}.json`));
+      assert.equal(session.history.length, 4);
+      assert.ok(session.history.every((item) => JSON.stringify(item.materialBytes) === JSON.stringify(session.history[0].materialBytes)));
+    } else {
+      assert.equal(continued.pendingExchange.requestedSessionId, requestedId);
+      assert.match(readJson(path.join(firstRoundProject, continued.latestBackendPath)).error, /requested reviewer session does not exist/u);
+      assert.deepEqual(calls.map((item) => item.mode), ["--resume"], "missing initial session must fail, never create a replacement session");
+      assert.equal(fs.existsSync(path.join(sessionRoot, `${requestedId}.json`)), false);
+    }
+  }
 
   const orphanId = "unclaimed-workspace";
   const orphanRoot = path.join(stateRoot, reviewWorkspaceName(orphanId, { projectRoot: project }));
@@ -636,30 +709,114 @@ try {
   assert.deepEqual(sharedInvocations.filter((item) => item.sessionId === firstA.sessionId).map((item) => item.materialBytes["paper/main.tex"]), ["Project A frozen version one.\n", "Project A frozen version one.\n", "Project A revised full version.\n"].map((text) => Buffer.from(text).toString("hex")));
   assert.ok(sharedInvocations.filter((item) => item.sessionId === firstB.sessionId).every((item) => item.cwd === firstB.workspaceRoot && item.materialBytes["paper/main.tex"] === Buffer.from("Project B frozen version one.\n").toString("hex")));
 
-  const beforeRollbackA = directoryObservationDigest(firstA.workspaceRoot);
-  const beforeRollbackB = directoryObservationDigest(firstB.workspaceRoot);
-  const recordBeforeRollback = fs.readFileSync(path.join(projectA, ".dove/reviews", sharedId, "review.json"));
+  const beforePreparationA = directoryObservationDigest(firstA.workspaceRoot);
+  const beforePreparationB = directoryObservationDigest(firstB.workspaceRoot);
+  const recordAPath = path.join(projectA, ".dove/reviews", sharedId, "review.json");
+  const recordBeforePreparation = fs.readFileSync(recordAPath);
+  const sessionAPath = path.join(sessionRoot, `${firstA.sessionId}.json`);
+  const historyBeforePreparation = readJson(sessionAPath).history;
   writeFile(projectA, "paper/main.tex", "A revision whose record transaction will fail.\n");
   let injectedFailure = false;
   assert.throws(() => publicCore.rerunReview({
     project: projectA, id: sharedId, materials: ["paper/main.tex"], stateRoot, env,
+    spawnSync() { assert.fail("preparation failure must not call the reviewer"); },
     fsOps: {
       ...fs,
       mkdirSync(target, ...args) {
         if (!injectedFailure && String(target).startsWith(path.join(projectA, ".dove/reviews/.transactions"))) {
           injectedFailure = true;
-          throw new Error("injected review transaction failure");
+          throw new Error("injected review preparation failure");
         }
         return fs.mkdirSync(target, ...args);
       }
     }
-  }), /injected review transaction failure/u);
+  }), /injected review preparation failure/u);
   assert.equal(injectedFailure, true);
-  assertDigestEqual(directoryObservationDigest(firstA.workspaceRoot), beforeRollbackA, "failed rerun must restore the project-keyed workspace");
-  assertDigestEqual(directoryObservationDigest(firstB.workspaceRoot), beforeRollbackB, "A rollback must not touch B workspace");
-  assert.deepEqual(fs.readFileSync(path.join(projectA, ".dove/reviews", sharedId, "review.json")), recordBeforeRollback);
-  assert.equal(jsonCli(argsFor("resume", projectA), env).status, "completed", "restored frozen workspace must remain resumable");
+  assertDigestEqual(directoryObservationDigest(firstA.workspaceRoot), beforePreparationA, "before calling the backend, failed preparation may restore the old materials");
+  assert.deepEqual(fs.readFileSync(recordAPath), recordBeforePreparation);
+  assert.deepEqual(readJson(sessionAPath).history, historyBeforePreparation);
+
+  let backendCalled = false;
+  let commitFailure = false;
+  const oldReturns = directoryObservationDigest(path.join(projectA, ".dove/reviews", sharedId, "rounds"));
+  assert.throws(() => publicCore.rerunReview({
+    project: projectA, id: sharedId, materials: ["paper/main.tex"], stateRoot, env,
+    spawnSync(command, args, options) {
+      const prepared = readJson(recordAPath);
+      assert.equal(prepared.currentRound, 3);
+      assert.equal(prepared.status, "pending");
+      assert.deepEqual(prepared.pendingExchange, { round: 3, workspaceRoot: firstA.workspaceRoot, requestedSessionId: firstA.sessionId });
+      assert.equal(fs.existsSync(path.join(projectA, prepared.rounds[2].snapshotPath)), true);
+      backendCalled = true;
+      return spawnSync(command, args, options);
+    },
+    fsOps: {
+      ...fs,
+      renameSync(source, destination) {
+        if (backendCalled && !commitFailure && destination === recordAPath) {
+          commitFailure = true;
+          throw new Error("injected review return commit failure");
+        }
+        return fs.renameSync(source, destination);
+      }
+    }
+  }), /return was not saved[\s\S]*cannot recover this unsaved return[\s\S]*injected review return commit failure/u);
+  assert.equal(commitFailure, true);
+  const pending = readJson(recordAPath);
+  assert.equal(pending.currentRound, 3, "post-call failure must not pretend the reviewer stayed on round 2");
+  assert.equal(pending.status, "pending");
+  assert.equal(pending.pendingExchange.requestedSessionId, firstA.sessionId);
+  assert.equal(pending.rounds[2].reportPath, null);
+  assert.equal(fs.existsSync(path.join(projectA, ".dove/reviews", sharedId, "rounds/3/report.md")), false);
+  assert.equal(fs.readFileSync(path.join(firstA.workspaceRoot, "paper/main.tex"), "utf8"), "A revision whose record transaction will fail.\n");
+  assert.equal(readJson(sessionAPath).history.length, historyBeforePreparation.length + 1);
+  for (const [file, fact] of oldReturns) assert.deepEqual(directoryObservationDigest(path.join(projectA, ".dove/reviews", sharedId, "rounds")).get(file), fact, "previous returns remain unchanged");
+  assertDigestEqual(directoryObservationDigest(firstB.workspaceRoot), beforePreparationB, "A failures must not touch B workspace");
+  const pendingStatus = assertReviewStatusReadOnly(projectA, env, argsFor("status", projectA), (status) => {
+    assert.equal(status.status, "pending");
+    assert.deepEqual(status.pendingExchange, pending.pendingExchange);
+  });
+  assert.equal(pendingStatus.rounds[2].latestReportPath, null);
+  const pendingHuman = cliReview(argsFor("status", projectA).filter((arg) => arg !== "--json"), env);
+  assert.equal(pendingHuman.status, 0);
+  assert.match(pendingHuman.stdout, /待完成交换[\s\S]*返回匹配[\s\S]*不会找回未保存/u);
+  assert.match(pendingHuman.stdout, /尚未保存/u);
+  assert.throws(() => publicCore.rerunReview({ project: projectA, id: sharedId, materials: ["paper/main.tex"], stateRoot, env }), /pending exchange; use resume/u);
+  writeFile(projectA, "paper/main.tex", "Unsubmitted author change must not replace pending frozen materials.\n");
+  const recovered = jsonCli(argsFor("resume", projectA), env);
+  assert.equal(recovered.status, "completed");
+  assert.equal(recovered.round, 3);
+  assert.equal(recovered.sessionId, firstA.sessionId);
+  assert.equal(recovered.pendingExchange, null);
+  const recoveredHistory = readJson(sessionAPath).history;
+  assert.deepEqual(recoveredHistory.at(-1).materialBytes, recoveredHistory.at(-2).materialBytes, "resume continues the materials already seen, not old or newly edited author files");
+  assert.deepEqual(recoveredHistory.slice(0, -2), historyBeforePreparation);
   assert.equal(fs.readdirSync(stateRoot).some((entry) => entry.includes(".previous-") || entry.includes(".staging-")), false);
+
+  const currentReturns = directoryObservationDigest(path.join(projectA, ".dove/reviews", sharedId, "rounds/3"));
+  backendCalled = false;
+  commitFailure = false;
+  assert.throws(() => publicCore.resumeReview({
+    project: projectA, id: sharedId, stateRoot, env,
+    spawnSync(command, args, options) {
+      backendCalled = true;
+      return spawnSync(command, args, options);
+    },
+    fsOps: {
+      ...fs,
+      renameSync(source, destination) {
+        if (backendCalled && !commitFailure && destination === recordAPath) {
+          commitFailure = true;
+          throw new Error("injected resume return commit failure");
+        }
+        return fs.renameSync(source, destination);
+      }
+    }
+  }), /return was not saved[\s\S]*injected resume return commit failure/u);
+  assert.equal(commitFailure, true);
+  assert.equal(readJson(recordAPath).pendingExchange.round, 3);
+  assert.equal(readJson(sessionAPath).history.length, recoveredHistory.length + 1);
+  assertDigestEqual(directoryObservationDigest(path.join(projectA, ".dove/reviews", sharedId, "rounds/3")), currentReturns, "failed resume commit must preserve all existing round returns");
 
   const failedResume = jsonCli(argsFor("resume", projectA), { ...env, DOVE_FAKE_CLAUDE_FAIL: "1" }, { expectedStatus: 1 });
   assert.equal(failedResume.status, "failed");
@@ -723,32 +880,20 @@ try {
     const first = core.handoffReview(options);
     assert.equal(first.status, "completed");
     assertNoPublicHashFields(first);
-    const materialFds = new Set();
     let materialReads = 0;
     const currentnessStatus = core.inspectReviewStatus({
       ...options,
       fsOps: {
         ...fs,
-        openSync(file, ...args) {
-          const fd = fs.openSync(file, ...args);
-          if (file === path.join(project, "paper", "main.tex")) materialFds.add(fd);
-          return fd;
-        },
+        openSync() { assert.fail("material currentness must not use fd forensics"); },
         readFileSync(file, ...args) {
           const bytes = fs.readFileSync(file, ...args);
-          if (materialFds.has(file)) {
-            materialReads += 1;
-            if (materialReads > 1) bytes[0] ^= 1;
-          }
+          if (file === path.join(project, "paper", "main.tex")) materialReads += 1;
           return bytes;
-        },
-        closeSync(fd) {
-          materialFds.delete(fd);
-          return fs.closeSync(fd);
         }
       }
     });
-    assert.equal(materialReads, 1, "status must read each round's material only once");
+    assert.equal(materialReads, 1, "status must read each normalized material path only once");
     assert.equal(currentnessStatus.materialCurrentness.overall, "current");
     assert.deepEqual(currentnessStatus.materialCurrentness, currentnessStatus.rounds[0].materialCurrentness);
     const missingSnapshotStatus = core.inspectReviewStatus({
@@ -766,6 +911,43 @@ try {
     assert.deepEqual(missingSnapshotStatus.materialCurrentness, missingSnapshotStatus.rounds[0].materialCurrentness);
     assertNoPublicHashFields(core.resumeReview(options));
     assertNoPublicHashFields(core.rerunReview(options));
+    const secondSnapshotPath = path.join(project, `.dove/reviews/${id}/rounds/2/snapshot.json`);
+    const secondSnapshot = readJson(secondSnapshotPath);
+    secondSnapshot.materials[0].path = "paper\\main.tex";
+    writeJson(secondSnapshotPath, secondSnapshot);
+    const readsAcrossRounds = new Map();
+    const inspectCached = () => core.inspectReviewStatus({
+      ...options,
+      fsOps: {
+        ...fs,
+        openSync() { assert.fail("currentness must not open descriptors"); },
+        readFileSync(file, ...args) {
+          if (file === path.join(project, "paper/main.tex")) readsAcrossRounds.set(file, (readsAcrossRounds.get(file) ?? 0) + 1);
+          return fs.readFileSync(file, ...args);
+        }
+      }
+    });
+    assert.equal(inspectCached().materialCurrentness.overall, "current");
+    assert.equal(readsAcrossRounds.get(path.join(project, "paper/main.tex")), 1, "all rounds share one normalized-path observation");
+    assert.equal(inspectCached().materialCurrentness.overall, "current");
+    assert.equal(readsAcrossRounds.get(path.join(project, "paper/main.tex")), 2, "cache must not outlive a status call");
+    secondSnapshot.materials[0].path = "paper/main.tex";
+    writeJson(secondSnapshotPath, secondSnapshot);
+    const projectMaterialPath = path.join(project, "paper/main.tex");
+    const originalProjectBytes = fs.readFileSync(projectMaterialPath);
+    const sameSizeChange = Buffer.from(originalProjectBytes);
+    sameSizeChange[0] ^= 1;
+    fs.writeFileSync(projectMaterialPath, sameSizeChange);
+    assert.equal(core.inspectReviewStatus(options).materialCurrentness.overall, "changed", "same-size project changes must still be detected by material SHA");
+    fs.writeFileSync(projectMaterialPath, originalProjectBytes);
+    const referenceFile = path.join(first.workspaceRoot, DOVE_REVIEW_QUALITY_REFERENCE_PATH);
+    const referenceBytes = fs.readFileSync(referenceFile);
+    fs.writeFileSync(referenceFile, "not canonical guidance");
+    const badReference = core.resumeReview(options);
+    assert.equal(badReference.status, "failed");
+    assert.match(readJson(path.join(project, badReference.latestBackendPath)).error, /does not match canonical guidance/u);
+    fs.writeFileSync(referenceFile, referenceBytes);
+    assert.equal(core.resumeReview(options).status, "completed");
     const workspaceFile = path.join(first.workspaceRoot, "paper", "main.tex");
     const frozenBytes = fs.readFileSync(workspaceFile);
     const changedBytes = Buffer.from(frozenBytes);
@@ -776,6 +958,7 @@ try {
     assertNoPublicHashFields(tampered);
     assert.match(readJson(path.join(project, tampered.latestBackendPath)).error, /no longer matches the frozen snapshot/u);
     fs.writeFileSync(workspaceFile, frozenBytes);
+    assert.equal(core.resumeReview(options).status, "completed", "local material-check failure must not hide the last saved successful session return");
     assertNoPublicHashFields(core.importReviewReturn({ ...options, file: importedReturn }));
 
     const recordPath = path.join(project, ".dove", "reviews", id, "review.json");

@@ -10,6 +10,7 @@ export const REVIEW_MATERIAL_DENY_PATTERNS = Object.freeze([
   /(?:^|\/)\.claude(?:\/|$)/u,
   /(?:^|\/)\.dsh(?:\/|$)/u,
   /(?:^|\/)\.mcp\.json$/u,
+  /(?:^|\/)\.dove-package(?:\/|$)/u,
   /(?:^|\/)\.dove\/install(?:\/|$)/u,
   /(?:^|\/)\.dove\/research(?:\/|$)/u,
   /(?:^|\/)\.dove\/reviews(?:\/|$)/u,
@@ -19,12 +20,6 @@ export const REVIEW_MATERIAL_DENY_PATTERNS = Object.freeze([
 
 function sha256(content) {
   return crypto.createHash("sha256").update(content).digest("hex");
-}
-
-function canonicalJson(value) {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
 }
 
 function exactIsoTimestamp(value = new Date()) {
@@ -91,8 +86,4 @@ export function createReviewSnapshot(options = {}) {
     },
     files
   };
-}
-
-export function snapshotDigest(snapshot) {
-  return sha256(`${canonicalJson(snapshot)}\n`);
 }
