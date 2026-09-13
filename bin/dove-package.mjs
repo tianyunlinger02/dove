@@ -7632,10 +7632,10 @@ var require_lib2 = __commonJS({
     exports.analyse = analyse;
     var detectFile = (filepath, opts = {}) => new Promise((resolve, reject) => {
       let fd;
-      const fs19 = (0, node_1.default)();
+      const fs20 = (0, node_1.default)();
       const handler = (err, buffer) => {
         if (fd) {
-          fs19.closeSync(fd);
+          fs20.closeSync(fd);
         }
         if (err) {
           reject(err);
@@ -7647,9 +7647,9 @@ var require_lib2 = __commonJS({
       };
       const sampleSize = (opts === null || opts === void 0 ? void 0 : opts.sampleSize) || 0;
       if (sampleSize > 0) {
-        fd = fs19.openSync(filepath, "r");
+        fd = fs20.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(sampleSize);
-        fs19.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
+        fs20.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
           if (err) {
             handler(err, null);
           } else {
@@ -7661,22 +7661,22 @@ var require_lib2 = __commonJS({
         });
         return;
       }
-      fs19.readFile(filepath, handler);
+      fs20.readFile(filepath, handler);
     });
     exports.detectFile = detectFile;
     var detectFileSync = (filepath, opts = {}) => {
-      const fs19 = (0, node_1.default)();
+      const fs20 = (0, node_1.default)();
       if (opts && opts.sampleSize) {
-        const fd = fs19.openSync(filepath, "r");
+        const fd = fs20.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(opts.sampleSize);
-        const bytesRead = fs19.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
+        const bytesRead = fs20.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
         if (bytesRead < opts.sampleSize) {
           sample = sample.subarray(0, bytesRead);
         }
-        fs19.closeSync(fd);
+        fs20.closeSync(fd);
         return (0, exports.detect)(sample);
       }
-      return (0, exports.detect)(fs19.readFileSync(filepath));
+      return (0, exports.detect)(fs20.readFileSync(filepath));
     };
     exports.detectFileSync = detectFileSync;
     exports.default = {
@@ -15326,7 +15326,7 @@ var DOVE_RESEARCH_ONE_AGENT = "Dove works as one complete research agent and col
 var DOVE_RESEARCH_SKILL_INVENTORY_TEXT = "research, status, source, experiment, draft, figure, review, rebuttal, and lessons";
 var DOVE_RESEARCH_FLAT_SKILL_SENTENCE = `Its nine Skills \u2014 ${DOVE_RESEARCH_SKILL_INVENTORY_TEXT} \u2014 are flat entrances into the same research collaboration, used only when they help the current decision.`;
 var DOVE_RESEARCH_DEFAULT_AUTONOMY = "For a confirmed research goal, Dove advances by default through multiple substantive rounds: choose the best feasible mainline action, absorb what it changes, then continue until the goal is achieved, no effective in-scope path remains, or a material user decision is needed.";
-var DOVE_RESEARCH_MAINLINE_ANCHORING = "Keep the user-confirmed Workspace mainline, intended contribution, key claim or route decision, and completion meaning as the anchor; evidence may change the route inside it, but a material change to that anchor belongs to the user. Distinguish changing the method, evaluation, and research goal; mentioning another direction is not authorization to adopt it. When direction is open, start with a clearly provisional research question or route and refine it through evidence.";
+var DOVE_RESEARCH_MAINLINE_ANCHORING = "Keep the project's user-confirmed current research mainline, intended contribution, key claim or route decision, and completion meaning as the anchor; evidence may change the route inside it, but a material change to that anchor belongs to the user. Distinguish changing the method, evaluation, and research goal; mentioning another direction is not authorization to adopt it. When direction is open, start with a clearly provisional research question or route and refine it through evidence.";
 var DOVE_RESEARCH_OVERALL_BEST_ACTION = "Choose by expected scientific value, result quality, time, resources, opportunity cost, rework risk, and downstream effects across the whole research path. Before defaulting to the latest local fix, judge whether the route remains worth pursuing; compare a proportionate complete repair, shared-cause redesign, alternative mechanism/route, discriminating evidence, or stopping ineffective investment when relevant. Absorb each substantive result's overall consequences; cross-dimension changes, counterevidence, expansion, or repeated patches shifting the problem trigger targeted reassessment, not a whole-project review for every tool action. Weigh gains against lost necessary capabilities, cost, coverage, knowledge, and future options. Do not require every step to be Pareto-improving: a temporary regression may buy meaningful knowledge or a necessary later capability with a reason, boundary, and evidence for reassessment, not an indefinitely deferred promise. No metric gain does not automatically require rollback; repeated uninformative work is not progress. When repeated trials stop informing the decision, distinguish insufficient evidence, a shared mechanism or attainable upper bound limiting the candidate family, an invalid evaluator, and evidence against a necessary premise. Choose accordingly between discriminating evidence, a different mechanism or representation, evaluation repair, and stopping dependent investment; do not merely generate more variants of the same failed approach. Choose the best defensible path under current evidence and constraints, not a claimed mathematical global optimum.";
 var DOVE_RESEARCH_SUBSTANTIVE_PROGRESS_TEST = "Distinguish scientific progress, enabling engineering work, and expression/delivery progress. Scientific progress changes justified understanding, establishes an advance in the target research capability or result against a valid reference, or changes a defensible research decision about the goal; explain the evidence and what inference or choice changed. Merely enabling a pipeline to run establishes an engineering capability, not the research effect it is meant to test. A reliable negative result or counterexample can advance knowledge without improving the rejected method; a near miss counts only for what it actually teaches. Coding, search, passing checks, successful runs, frozen protocols, completed subtasks, and artifact or record changes do not by themselves establish novelty, valid evidence, or scientific goal attainment. Enabling and delivery work can be necessary and can complete a bounded request; report that value without claiming scientific support. Do not force an immediate scientific result from every useful engineering action, or let repeated support work substitute for addressing the scientific bottleneck.";
 var DOVE_RESEARCH_CLARIFICATION = "Ask only when ambiguity in intent, target artifact, evaluation criteria, scope, or a key tradeoff cannot be resolved from available context or reasonable in-scope defaults that leave the core research judgment unchanged and would materially change the next useful action. If active research context implies a feasible follow-up, do that next step rather than merely suggesting it.";
@@ -15900,7 +15900,7 @@ import fs5 from "node:fs";
 import path8 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.0.8" : null;
+var injectedVersion = true ? "3.0.9" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -16399,6 +16399,7 @@ ${bullets([
     "After delegation, the main session with full user context synthesizes decisive evidence, applicability, and unverified limits, resolves contradictions, and decides what changes and comes next without redoing every subtask. Answer decisive objections with inspected evidence or change dependent claims and investment; unresolved objections remain consequential. Agent completion, majority opinion, or concatenated reports are not scientific judgment. Bounded subagents investigate their question, not own the mainline or important user communication.",
     "Answer and stop for pure judgment or bounded requests; in an active confirmed research context, perform the feasible next in-scope step and continue while an effective mainline action remains. Use reasonable defaults for low-cost reversible choices that leave core judgment unchanged; ask only when unresolved ambiguity or authorization would materially change the work. Read-only requests authorize inspection and reporting, not execution or recording. A blocked tool is not a blocked goal: compare other effective in-scope paths before stopping. Stop at completion, no effective in-scope path, or a required user decision or external boundary.",
     "When implementing, use one authoritative producer-consumer contract, complete necessary changes without redundant compatibility or shadow paths, and do not hide errors through swallowed failures, unrelated defaults, truncation, or fallback success. Do not default to minimum patches or unrelated refactoring. Preserve user work and valid assets; respect file, execution, resource, publication, and destructive-action boundaries. Do not commit or publish without authorization. Report actual checks, integration, execution, output inspection, and downstream use separately, including missing verification rather than implying later facts from earlier ones.",
+    "Keep core function, core code, and real producer-consumer contracts primary; tests serve them rather than generate requirements or preserve a wrong abstraction. Retain direct protection for valid public contracts, important domain invariants, consequential failures, and real use paths, while distinguishing an obsolete test from a core regression. Do not weaken a valid assertion merely to make a suite green or derive the expected answer from the implementation under test. Within the authorized scope, replace or delete obsolete, duplicate, low-value, or ownerless assertions and whole test files; when rescuing residual coverage costs more than its remaining protection, preserve only consequential checks and stop. Test count, coverage appearance, suite greenness, and test governance are not development goals.",
     `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}. Keep local requests local; do not create records merely to show activity.`,
     "Author-side Review is Dove's scientific self-check; independent `dove-review` requires a real isolated persistent reviewer context judging the current frozen handoff. Its findings inform author-side judgment, not automatic revision or acceptance.",
     DOVE_RESEARCH_REVIEW_DUAL_COMPLETION
@@ -18045,8 +18046,56 @@ function sessionStartFailureOutput(error) {
 
 // src/core/statusline.mjs
 import { spawnSync as spawnSync4 } from "node:child_process";
+import fs12 from "node:fs";
 import path13 from "node:path";
 import process5 from "node:process";
+
+// src/core/research-defaults.mjs
+import fs11 from "node:fs";
+var RESEARCH_ROOT = ARTIFACT_PATHS.researchDocumentsDir;
+var RESEARCH_DEFAULT_PATHS = Object.freeze({
+  root: RESEARCH_ROOT,
+  overview: ARTIFACT_PATHS.researchOverview,
+  missionsDirectory: `${RESEARCH_ROOT}/missions`,
+  missionsSummary: `${RESEARCH_ROOT}/missions/MISSIONS.md`,
+  experimentsDirectory: `${RESEARCH_ROOT}/experiments`,
+  experimentsSummary: `${RESEARCH_ROOT}/experiments/EXPERIMENTS.md`,
+  sourcesDirectory: `${RESEARCH_ROOT}/sources`,
+  sourcesSummary: `${RESEARCH_ROOT}/sources/SOURCES.md`,
+  reviewsDirectory: `${RESEARCH_ROOT}/reviews`,
+  reviewsSummary: `${RESEARCH_ROOT}/reviews/REVIEWS.md`,
+  claimsDirectory: `${RESEARCH_ROOT}/claims`,
+  claimsSummary: `${RESEARCH_ROOT}/claims/CLAIMS.md`,
+  lessonsDirectory: `${RESEARCH_ROOT}/lessons`,
+  lessonsSummary: ARTIFACT_PATHS.researchLessons
+});
+var RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
+  Object.freeze({
+    path: RESEARCH_DEFAULT_PATHS.overview,
+    content: "# Research\n\nThis researcher-owned entry keeps the current research mainline, material progress, important conclusions and limits, linked work, and next priorities concise and recoverable.\n"
+  })
+]);
+var RESEARCH_DEFAULT_DIRECTORY_PATHS = Object.freeze([RESEARCH_ROOT]);
+function prepareResearchDefaults(root, options2 = {}) {
+  const anchor = openRootedFilesystem(root, { fsOps: options2.fsOps ?? fs11 });
+  const directory = anchor.tryLstat(RESEARCH_ROOT);
+  if (directory && (directory.isSymbolicLink() || !directory.isDirectory())) {
+    throw new Error(`${RESEARCH_ROOT} must be a real directory.`);
+  }
+  const entries = directory ? [] : RESEARCH_DEFAULT_DOCUMENTS.map(({ path: relativePath, content }) => ({
+    root,
+    relativePath,
+    content,
+    force: false,
+    expectedState: { exists: false, type: "absent", sha256: null, mode: null },
+    label: `Dove research bootstrap ${relativePath}`
+  }));
+  return { entries, changedPaths: entries.map((entry) => entry.relativePath) };
+}
+
+// src/core/statusline.mjs
+var MAX_OVERVIEW_BYTES = 64 * 1024;
+var MAX_MAINLINE_CODE_POINTS = 80;
 var STATUS_SEPARATOR = " \xB7 ";
 var CONTROL_CHARACTERS = /[\x00-\x1f\x7f-\x9f]/gu;
 var CAPACITY_IN_MODEL_NAME = /\b\d+(?:\.\d+)?\s*[KMG](?:\s+context)?\b/iu;
@@ -18057,6 +18106,12 @@ function oneLine(value2) {
   if (typeof value2 !== "string") return null;
   const normalized = value2.trim().replace(CONTROL_CHARACTERS, "?");
   return normalized || null;
+}
+function shortMainline(value2) {
+  const normalized = oneLine(value2);
+  if (!normalized) return null;
+  const codePoints = [...normalized];
+  return codePoints.length <= MAX_MAINLINE_CODE_POINTS ? normalized : `${codePoints.slice(0, MAX_MAINLINE_CODE_POINTS - 1).join("")}\u2026`;
 }
 function nonNegativeNumber(value2) {
   return typeof value2 === "number" && Number.isFinite(value2) && value2 >= 0 ? value2 : null;
@@ -18103,6 +18158,64 @@ function inspectGitBranch(projectRoot, options2 = {}) {
     return null;
   }
 }
+function parseResearchMainline(markdown) {
+  let fence = null;
+  let frontmatter = false;
+  const matches = [];
+  const lines = markdown.split(/\r?\n/u);
+  for (const [index, line] of lines.entries()) {
+    if (index === 0 && line === "---") {
+      frontmatter = true;
+      continue;
+    }
+    if (frontmatter) {
+      if (line === "---" || line === "...") frontmatter = false;
+      continue;
+    }
+    if (fence) {
+      const closing = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/u);
+      if (closing && closing[1][0] === fence[0] && closing[1].length >= fence.length) fence = null;
+      continue;
+    }
+    const opening = line.match(/^ {0,3}(`{3,}|~{3,})/u);
+    if (opening) {
+      fence = opening[1];
+      continue;
+    }
+    if (line.startsWith("Mainline:") && !/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "")) {
+      matches.push(line.slice("Mainline:".length));
+    }
+  }
+  return matches.length === 1 && matches[0].startsWith(" ") ? oneLine(matches[0]) : null;
+}
+function inspectResearchMainline(projectRoot, options2 = {}) {
+  if (!projectRoot) return null;
+  const fsOps = options2.fsOps ?? fs12;
+  let fd;
+  try {
+    const anchor = openRootedFilesystem(projectRoot, { fsOps });
+    const stat = anchor.inspectRegularFile(RESEARCH_DEFAULT_PATHS.overview);
+    if (stat.size > MAX_OVERVIEW_BYTES) return null;
+    fd = fsOps.openSync(
+      anchor.displayPath(RESEARCH_DEFAULT_PATHS.overview),
+      fs12.constants.O_RDONLY | (fs12.constants.O_NOFOLLOW ?? 0) | (fs12.constants.O_NONBLOCK ?? 0)
+    );
+    if (!fsOps.fstatSync(fd).isFile()) return null;
+    const buffer = Buffer.alloc(MAX_OVERVIEW_BYTES + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const count = fsOps.readSync(fd, buffer, length, buffer.length - length, null);
+      if (count === 0) break;
+      length += count;
+    }
+    if (length > MAX_OVERVIEW_BYTES) return null;
+    return parseResearchMainline(new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, length)));
+  } catch {
+    return null;
+  } finally {
+    if (fd !== void 0) fsOps.closeSync(fd);
+  }
+}
 function renderDoveStatusLine(input, options2 = {}) {
   const payload = typeof input === "string" ? parseDoveStatusLinePayload(input) : plainObject3(input) ? input : {};
   const model = oneLine(payload.model?.display_name);
@@ -18110,27 +18223,32 @@ function renderDoveStatusLine(input, options2 = {}) {
   const remainingValue = nonNegativeNumber(payload.context_window?.remaining_percentage);
   const remaining = remainingValue === null ? null : Math.min(100, Math.round(remainingValue));
   const duration = formatSessionDuration(payload.cost?.total_duration_ms);
-  const project = oneLine(options2.projectRoot);
+  const project = options2.projectRoot ? oneLine(path13.resolve(options2.projectRoot)) : null;
+  const mainline = shortMainline(Object.hasOwn(options2, "mainline") ? options2.mainline : inspectResearchMainline(options2.projectRoot, options2));
+  const noColorValue = (options2.env ?? process5.env).NO_COLOR;
+  const noColor = typeof noColorValue === "string" && noColorValue.length > 0;
   const branch = Object.hasOwn(options2, "branch") ? oneLine(options2.branch) : inspectGitBranch(options2.projectRoot, options2);
   const parts = [];
   if (model) parts.push(capacity && !CAPACITY_IN_MODEL_NAME.test(model) ? `${model} (${capacity})` : model);
   else if (capacity) parts.push(`ctx ${capacity}`);
   if (remaining !== null) parts.push(`ctx ${remaining}%`);
-  if (project) parts.push(project);
+  if (mainline) parts.push(noColor ? mainline : `\x1B[36m${mainline}\x1B[0m`);
   if (branch) parts.push(branch);
   if (duration) parts.push(duration);
-  return parts.length > 0 ? parts.join(STATUS_SEPARATOR) : "Dove";
+  const session = parts.length > 0 ? parts.join(STATUS_SEPARATOR) : "Dove";
+  return project ? `${session}
+${project}` : session;
 }
 
 // src/core/dove-lifecycle.mjs
-import fs15 from "node:fs";
+import fs16 from "node:fs";
 
 // src/core/project-installation.mjs
-import fs14 from "node:fs";
+import fs15 from "node:fs";
 import path16 from "node:path";
 
 // src/core/project-installation-plan.mjs
-import fs12 from "node:fs";
+import fs14 from "node:fs";
 import path15 from "node:path";
 
 // src/core/user-response-policy.mjs
@@ -18351,7 +18469,7 @@ Use the \`exa\` hosted project MCP only when ordinary webpage body retrieval, do
 import crypto7 from "node:crypto";
 
 // scripts/generate-command-adapters.mjs
-import fs11 from "node:fs";
+import fs13 from "node:fs";
 import path14 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
@@ -18458,6 +18576,7 @@ function contract(slug) {
       relevantLessons,
       `Inspect the project materials and external context needed to understand the question. ${DOVE_RESEARCH_FRAME}`,
       `${DOVE_RESEARCH_ADVANCE} Carry the entering proposition through each material result: state whether it remains unresolved, supported, refuted, or bounded and what dependent claims or investment change. If a surviving component now answers a materially different problem, keep the original conclusion visible, investigate it only within existing authorization while provisional, and obtain the user's decision before adopting it as a different confirmed mainline, contribution, or completion meaning. For a submission goal, use Review to establish the current whole-paper judgment before declaring completion.`,
+      "Only when the user first confirms the project's research mainline or confirms a material change, and maintaining `.dove/research/RESEARCH.md` is already warranted, maintain one ordinary top-level line `Mainline: <text>` near its beginning with a concise statement of that confirmed mainline. This optional display source is not a heading, list, quote, code block, frontmatter, or schema. Do not add or refresh it merely because Research ran, the line is absent, a local method changed, or a provisional branch produced a result; do not backfill existing research trees for the status line.",
       maintainArea("missions", "When the maintenance trigger is met, update or create a naturally named Mission document for the substantive work, evidence, decisions, failures, and continuation context. Preserve the problem, proposition, and task scope that motivated entry; append actual results, corrections, changed identity elements, whether a branch is provisional or an authorized mainline, and still-valid assets or counterevidence. Do not rewrite an earlier Mission as though it always pursued a later task, and do not require a new file or fixed task-identity template merely because a change occurred.")
     ],
     boundaries: [
@@ -18483,7 +18602,7 @@ function contract(slug) {
       "Treat missing overviews, summaries, or links as ordinary document facts."
     ],
     actions: [
-      "Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Report a candidate as confirmed mainline only when the visible context or research materials contain that decision; do not infer promotion or task continuity from the latest code, Review, Run receipt, project name, or asset lineage alone. If an overview, summary, link, identity comparison, or authorization basis is absent, say so naturally and do not modify files or run validation to manufacture it.",
+      "Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Report a candidate as confirmed mainline only when the visible context or research materials contain that decision; do not infer the mainline, promotion, or task continuity from a Git branch, latest Mission, code, Review, Run receipt, project name, or asset lineage alone. The optional unique ordinary `Mainline: <text>` line in the root research overview supplies the statusline display, not a completion certificate; if absent, empty, or ambiguous, leave that display unavailable rather than guessing or filling it. Status can still report an explicitly confirmed mainline from the visible context or research prose, distinguishing its basis and any conflict with the saved line. If an overview, summary, link, identity comparison, or authorization basis is absent, say so naturally and do not modify files or run validation to manufacture it.",
       relevantLessons
     ],
     boundaries: [
@@ -19220,7 +19339,7 @@ function lstatOrNull5(fsOps, targetPath) {
     throw error;
   }
 }
-function inspectRegularProjectFile(root, relativePath, fsOps = fs12) {
+function inspectRegularProjectFile(root, relativePath, fsOps = fs14) {
   let current = root;
   const components = relativePath.split("/");
   for (const [index, component] of components.entries()) {
@@ -19470,7 +19589,7 @@ function addFragment(resource, value2) {
   }
   throw new Error(`Dove does not install unsupported project-local fragment ${resource.path}#${resource.selector}.`);
 }
-function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps = fs12, options2 = {}) {
+function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps = fs14, options2 = {}) {
   const replaceDrift = shouldReplaceLocalEdit(options2);
   const skipDrift = shouldSkipLocalEdit(options2);
   const observed = inspectRegularProjectFile(root, relativePath, fsOps);
@@ -19568,7 +19687,7 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
     retiredHooks
   };
 }
-function planResource(root, desired, oldEntry, fsOps = fs12, options2 = {}) {
+function planResource(root, desired, oldEntry, fsOps = fs14, options2 = {}) {
   const kind = desired?.kind ?? oldEntry.kind;
   if (kind === "exclusive-file") return planExclusive(root, desired, oldEntry, fsOps, options2);
   throw new Error(`Unsupported project integration resource kind: ${kind}.`);
@@ -19582,7 +19701,7 @@ function assertManagedOwnership(manifest) {
     }
   }
 }
-function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs12, manifest = null, replacementPolicy = "safe" }) {
+function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs14, manifest = null, replacementPolicy = "safe" }) {
   if (manifest && ["identity-mismatch", "invalid-version", "newer"].includes(classifyPackageCompatibility(manifest.package, { name: packageName, version: packageVersion }))) {
     throw new Error("Dove project integration package is incompatible with the running CLI.");
   }
@@ -19661,49 +19780,6 @@ function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs
   return { entries, manifest: nextManifest, manifestChanged, skippedLocalEdits, replacedLocalEdits, retiredHooks };
 }
 
-// src/core/research-defaults.mjs
-import fs13 from "node:fs";
-var RESEARCH_ROOT = ARTIFACT_PATHS.researchDocumentsDir;
-var RESEARCH_DEFAULT_PATHS = Object.freeze({
-  root: RESEARCH_ROOT,
-  overview: ARTIFACT_PATHS.researchOverview,
-  missionsDirectory: `${RESEARCH_ROOT}/missions`,
-  missionsSummary: `${RESEARCH_ROOT}/missions/MISSIONS.md`,
-  experimentsDirectory: `${RESEARCH_ROOT}/experiments`,
-  experimentsSummary: `${RESEARCH_ROOT}/experiments/EXPERIMENTS.md`,
-  sourcesDirectory: `${RESEARCH_ROOT}/sources`,
-  sourcesSummary: `${RESEARCH_ROOT}/sources/SOURCES.md`,
-  reviewsDirectory: `${RESEARCH_ROOT}/reviews`,
-  reviewsSummary: `${RESEARCH_ROOT}/reviews/REVIEWS.md`,
-  claimsDirectory: `${RESEARCH_ROOT}/claims`,
-  claimsSummary: `${RESEARCH_ROOT}/claims/CLAIMS.md`,
-  lessonsDirectory: `${RESEARCH_ROOT}/lessons`,
-  lessonsSummary: ARTIFACT_PATHS.researchLessons
-});
-var RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
-  Object.freeze({
-    path: RESEARCH_DEFAULT_PATHS.overview,
-    content: "# Research\n\nThis researcher-owned entry keeps the current research mainline, material progress, important conclusions and limits, linked work, and next priorities concise and recoverable.\n"
-  })
-]);
-var RESEARCH_DEFAULT_DIRECTORY_PATHS = Object.freeze([RESEARCH_ROOT]);
-function prepareResearchDefaults(root, options2 = {}) {
-  const anchor = openRootedFilesystem(root, { fsOps: options2.fsOps ?? fs13 });
-  const directory = anchor.tryLstat(RESEARCH_ROOT);
-  if (directory && (directory.isSymbolicLink() || !directory.isDirectory())) {
-    throw new Error(`${RESEARCH_ROOT} must be a real directory.`);
-  }
-  const entries = directory ? [] : RESEARCH_DEFAULT_DOCUMENTS.map(({ path: relativePath, content }) => ({
-    root,
-    relativePath,
-    content,
-    force: false,
-    expectedState: { exists: false, type: "absent", sha256: null, mode: null },
-    label: `Dove research bootstrap ${relativePath}`
-  }));
-  return { entries, changedPaths: entries.map((entry) => entry.relativePath) };
-}
-
 // src/core/project-installation.mjs
 function exactTimestamp(value2) {
   if (value2 === void 0) return (/* @__PURE__ */ new Date()).toISOString();
@@ -19741,7 +19817,7 @@ function transactionOptions(fsOps, options2 = {}) {
   return { ...options2, fsOps };
 }
 function initializeProjectIntegration(rootOrProject, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs14;
+  const fsOps = options2.fsOps ?? fs15;
   assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const hosts = normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: true });
   const now = exactTimestamp(options2.now);
@@ -19757,7 +19833,7 @@ function initializeProjectIntegration(rootOrProject, options2 = {}) {
   );
 }
 function prepareInstalledPlan(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs14;
+  const fsOps = options2.fsOps ?? fs15;
   const root = resolveInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
   const hosts = options2.hosts === void 0 ? [...manifest.hosts] : normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: false });
@@ -19806,7 +19882,7 @@ function prepareLifecycleIntegration(root, options2, { hosts, source }) {
     packageName: options2.packageName,
     packageVersion: options2.packageVersion,
     now: exactTimestamp(options2.now),
-    fsOps: options2.fsOps ?? fs14,
+    fsOps: options2.fsOps ?? fs15,
     manifest: source,
     replacementPolicy: "confirmed-reinstall"
   });
@@ -19842,7 +19918,7 @@ function previewShape(kind, root, hosts, prepared, confirmationRequired) {
   return preview;
 }
 function previewProjectCompleteReinstall(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs14;
+  const fsOps = options2.fsOps ?? fs15;
   assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
@@ -19865,7 +19941,7 @@ function reinstallPreviewScope(preview) {
 function completeReinstallProjectIntegration(start, options2 = {}) {
   if (options2.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true after displaying the real destructive scope.");
   if (!options2.preview || options2.preview.action !== "reinstall") throw new Error("Complete Reinstall requires the approved reinstall preview.");
-  const fsOps = options2.fsOps ?? fs14;
+  const fsOps = options2.fsOps ?? fs15;
   assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
@@ -19890,7 +19966,7 @@ function completeReinstallProjectIntegration(start, options2 = {}) {
   );
 }
 function prepareUninstall(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs14;
+  const fsOps = options2.fsOps ?? fs15;
   const root = canonicalLifecycleRoot(start, fsOps);
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
   assertManagedOwnership(manifest);
@@ -19953,7 +20029,7 @@ function uninstallProjectIntegration(start, options2 = {}) {
 
 // src/core/dove-lifecycle.mjs
 function updateDoveLifecycle(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs15;
+  const fsOps = options2.fsOps ?? fs16;
   const root = resolveProjectRootForSetup(start, { fsOps });
   return updateProjectIntegration(root, options2);
 }
@@ -19970,12 +20046,12 @@ function uninstallDoveLifecycle(start, options2 = {}) {
 }
 
 // src/core/project-doctor.mjs
-import fs17 from "node:fs";
+import fs18 from "node:fs";
 import path18 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/core/research-documents.mjs
-import fs16 from "node:fs";
+import fs17 from "node:fs";
 import path17 from "node:path";
 var V2_FORMAT_PATH = ".dove/format.json";
 var V2_FORMAT = "dove-research-v2";
@@ -20036,7 +20112,7 @@ function emptyResult(state2, fields = {}) {
   };
 }
 function inspectResearchDocuments(root, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   let anchor;
   try {
     anchor = openRootedFilesystem(canonicalRoot(root, fsOps), { ...options2, fsOps });
@@ -20128,7 +20204,7 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 function inspectUserCli(options2) {
-  const fsOps = options2.fsOps ?? fs17;
+  const fsOps = options2.fsOps ?? fs18;
   const packageRoot = path18.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options2.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
     const absolutePath = path18.resolve(packageRoot, relativePath);
@@ -20267,7 +20343,7 @@ function inspectProjectDoctor(start, options2 = {}) {
 
 // src/core/run-supervisor.mjs
 import { spawn as spawn2 } from "node:child_process";
-import fs18 from "node:fs";
+import fs19 from "node:fs";
 import process6 from "node:process";
 var SUPERVISOR_ENTRY = "__dove-run-supervisor";
 var SUPERVISOR_READY_TIMEOUT_MS = 1e4;
@@ -20302,7 +20378,7 @@ function sendSupervisorMessageAsync(message) {
 function closeFd(fd) {
   if (!Number.isInteger(fd)) return;
   try {
-    fs18.closeSync(fd);
+    fs19.closeSync(fd);
   } catch {
   }
 }
@@ -20346,8 +20422,8 @@ function appendTerminalEvent(projectRoot, runId, payload, options2 = {}) {
 }
 function openRunLogFiles(paths) {
   return {
-    stdoutFd: fs18.openSync(paths.absoluteStdoutPath, "wx", 384),
-    stderrFd: fs18.openSync(paths.absoluteStderrPath, "wx", 384)
+    stdoutFd: fs19.openSync(paths.absoluteStdoutPath, "wx", 384),
+    stderrFd: fs19.openSync(paths.absoluteStderrPath, "wx", 384)
   };
 }
 function normalizeStartPayload(raw) {
@@ -20614,7 +20690,7 @@ async function configureSupervisorAndWait(child, payload, acceptedTypes) {
   }
   return await result;
 }
-function removeEmptyReservedRunDirectory(paths, fsOps = fs18) {
+function removeEmptyReservedRunDirectory(paths, fsOps = fs19) {
   try {
     const entries = fsOps.readdirSync(paths.absoluteRunDirectory);
     if (entries.length === 0) fsOps.rmdirSync(paths.absoluteRunDirectory);

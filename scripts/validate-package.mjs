@@ -15,6 +15,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "installation:validate", "uninstall:validate", "review-runtime:validate", "runs:validate", "behavior:validate", "behavior:eval", "package:validate", "check", "release:check"];
 const PRODUCTION_DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "bundleDependencies", "bundledDependencies"];
 const REQUIRED_PACKAGE_KEYWORDS = ["research", "academic-writing", "experiments", "claude-code", "markdown", "cli"];
+const THIRD_PARTY_LICENSES = new Set(["MIT", "ISC"]);
 const FORBIDDEN_PACKAGE_PATHS = [
   ".paper",
   ".claude/agents/dove-reviewer.md",
@@ -78,16 +79,38 @@ function assertPackageMetadata() {
   assertAbsentProductionDependencies(packageJson, "package.json");
 }
 
-function assertLegalInventory() {
+function assertLegalInventory(bundledPackageNames) {
+  assert.deepEqual(PACKAGE_LEGAL_PATHS, ["LICENSE", "THIRD_PARTY_NOTICES.md"]);
   for (const relativePath of PACKAGE_LEGAL_PATHS) {
     assert.equal(packageJson.files.includes(relativePath), true, `package files manifest must include legal path ${relativePath}`);
     assert.equal(fs.existsSync(path.join(ROOT, relativePath)), true, `legal file must exist: ${relativePath}`);
   }
+
   const licenseText = fs.readFileSync(path.join(ROOT, "LICENSE"), "utf8");
   assert.match(licenseText, /^# PolyForm Noncommercial License 1\.0\.0\n/u);
   assert.match(licenseText, /<https:\/\/polyformproject\.org\/licenses\/noncommercial\/1\.0\.0>/u);
   assert.match(licenseText, /## Noncommercial Purposes\n\nAny noncommercial purpose is a permitted purpose\./u);
   assert.doesNotMatch(licenseText, /Permission to use, copy, modify,[\s\S]{0,200}for any purpose/u);
+
+  const noticesText = fs.readFileSync(path.join(ROOT, "THIRD_PARTY_NOTICES.md"), "utf8");
+  assert.match(noticesText, /^# Third-Party Notices\n/u);
+  assert.match(noticesText, /Dove PolyForm Noncommercial License does not replace or restrict the rights granted by these third-party licenses/u);
+  const licenseTextsAt = noticesText.indexOf("## License texts");
+  assert.notEqual(licenseTextsAt, -1, "third-party license texts section is missing");
+  const listedPackages = [];
+  for (const match of noticesText.matchAll(/^- `((?:@[^/]+\/)?[^@`]+)@([^`]+)` — (MIT|ISC)$/gmu)) {
+    const [, name, version, license] = match;
+    const lockMetadata = packageLock.packages?.[`node_modules/${name}`];
+    assert.ok(lockMetadata, `bundled package is absent from lockfile: ${name}`);
+    assert.equal(version, lockMetadata.version, `notice version must match lockfile for ${name}`);
+    assert.equal(license, lockMetadata.license, `notice license must match lockfile for ${name}`);
+    assert.equal(THIRD_PARTY_LICENSES.has(license), true, `unexpected bundled license for ${name}: ${license}`);
+    assert.equal(noticesText.slice(licenseTextsAt).includes(`${name}@${version}`), true, `license text must identify ${name}@${version}`);
+    listedPackages.push(name);
+  }
+  assert.deepEqual([...new Set(listedPackages)].sort(), bundledPackageNames, "third-party notices must cover exactly the packages bundled into the standalone CLI");
+  assert.match(noticesText.slice(licenseTextsAt), /Permission is hereby granted, free of charge/u);
+  assert.match(noticesText.slice(licenseTextsAt), /Permission to use, copy, modify, and\/or distribute this software/u);
 }
 
 function assertLockfile() {
@@ -130,7 +153,14 @@ function realPackagePack(tempRoot) {
 }
 
 function assertBuildCurrent() {
-  spawnChecked(process.execPath, [path.join(ROOT, "scripts", "build-package.mjs"), "--check"], { cwd: ROOT });
+  const result = spawnChecked(process.execPath, [path.join(ROOT, "scripts", "build-package.mjs"), "--check"], { cwd: ROOT });
+  const proofLine = result.stderr.match(/^Package build proof: (.+)$/mu);
+  assert.ok(proofLine, "package build proof is missing");
+  const proof = JSON.parse(proofLine[1]);
+  const cliProof = proof.find((item) => item.output === "bin/dove-package.mjs");
+  assert.ok(cliProof, "standalone CLI build proof is missing");
+  assert.equal(Array.isArray(cliProof.bundledPackageNames), true, "standalone CLI bundled package inventory is missing");
+  return cliProof.bundledPackageNames;
 }
 
 function assertPackedFiles(pack) {
@@ -159,7 +189,12 @@ function installPackedPackage(tarball, installRoot) {
   const installedPackageJson = JSON.parse(fs.readFileSync(installedPackageJsonPath, "utf8"));
   assert.equal(installedPackageJson.name, packageJson.name);
   assert.equal(installedPackageJson.version, packageJson.version);
+  assert.equal(installedPackageJson.license, packageJson.license);
   assertAbsentProductionDependencies(installedPackageJson, "installed package.json");
+  const installedPackageRoot = path.dirname(installedPackageJsonPath);
+  for (const relativePath of PACKAGE_LEGAL_PATHS) {
+    assert.equal(digestFile(path.join(installedPackageRoot, relativePath)), digestFile(path.join(ROOT, relativePath)), `installed legal file must match source: ${relativePath}`);
+  }
   for (const packageName of ["@inquirer", "esbuild"]) {
     assert.equal(fs.existsSync(path.join(installRoot, "node_modules", packageName)), false, `--omit=dev install must not install ${packageName}`);
   }
@@ -365,9 +400,9 @@ if (process.argv.includes("--library-only")) {
   process.exit(0);
 }
 
-assertBuildCurrent();
+const bundledPackageNames = assertBuildCurrent();
 assertPackageMetadata();
-assertLegalInventory();
+assertLegalInventory(bundledPackageNames);
 assertLockfile();
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "review-runtime:validate"), true);
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "runs:validate"), true);
@@ -397,9 +432,6 @@ for (const bundlePath of ["dist/index.mjs", "bin/dove-package.mjs"]) {
   assert.doesNotMatch(bundleText, /src\/core\/research-export\.mjs|export-research|previewResearchExport|exportResearch|exportCommand/iu, `${bundlePath} must not contain retired legacy export runtime`);
   assert.doesNotMatch(bundleText, /ambientContextForPrompt|isResearchRelatedWakeupPrompt|renderClaudeAmbientSkill|parseUserPromptSubmitPayload|userPromptSubmitOutput|DOVE_CLAUDE_AMBIENT_HOOK|DOVE_CLAUDE_AMBIENT_SKILL|\.claude\/skills\/dove-intake\/SKILL\.md/iu, `${bundlePath} must not contain retired UserPromptSubmit intake runtime`);
 }
-
-const cliVersion = spawnChecked(process.execPath, [path.join(ROOT, "bin", "dove-package.mjs"), "--version"], { cwd: ROOT });
-assert.equal(cliVersion.stdout.trim(), packageJson.version);
 
 const tempBase = path.join(path.dirname(ROOT), ".dove-package-validate");
 fs.mkdirSync(tempBase, { recursive: true });

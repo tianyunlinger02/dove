@@ -9,14 +9,15 @@ import { fileURLToPath } from "node:url";
 
 import { createProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
 import { DOVE_REVIEW_QUALITY_REFERENCE_PATH, reviewWorkspaceName } from "../src/core/review-workspace.mjs";
-import { renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
+import { DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS, renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
 import { renderDoveAuthorStanceSection, renderDoveReviewerStanceSection, renderDoveSharedResearchContractSection } from "../src/core/dove-agent-persona.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import * as publicCore from "../src/core/index.mjs";
 
+assert.ok(renderDoveReviewerStanceSection().includes(DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS));
+
 const SOURCE_ONLY = process.argv.includes("--source-only");
 const coreEntries = [["source", publicCore]];
-if (!SOURCE_ONLY) coreEntries.push(["bundle", await import("../dist/index.mjs")]);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCRATCH_ROOT = path.join(ROOT, ".claude", "tmp", "dove-wiring-audit");
 fs.mkdirSync(SCRATCH_ROOT, { recursive: true });

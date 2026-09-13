@@ -89,7 +89,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 
 - 显式 update 覆盖有效 manifest-owned 集成的本地修改，并在人类输出及 `replacedLocalEdits` JSON 中提醒；不覆盖用户自有文件或无关配置。
 - SessionStart 完全只读；集成非当前时可用 `systemMessage` 提示显式 update，不写资源、配置或清理状态，不重载当前会话。集成仅四态 `uninitialized`、`current`、`needs-update`、`blocked`，不提供 adoption、旧 manifest migration 或热同步。
-- Claude 项目没有既有 `statusLine` 时，Dove 安装只读状态栏，保留绝对项目路径，并显示宿主模型、总上下文容量、剩余上下文比例、Git 分支和当前 Claude 会话时长；不读取科研记录，不把分支当科学主线或把会话时长当累计科研工时。既有用户/Trellis 状态栏不接管；Dove-owned 状态栏遵循显式 update/reinstall/uninstall ownership，并保留用户后续修改版本和无关配置。
+- Claude 项目没有既有 `statusLine` 时，Dove 安装只读双行状态栏，第一行保留宿主模型、总上下文容量、剩余上下文比例、Git 分支和当前 Claude 会话时长，将原路径槽位换为无标签的青色主线正文；第二行仅绝对项目路径。仅非空 `NO_COLOR` 禁色，空字符串不禁色。仅定点读取根 `.dove/research/RESEARCH.md`（上限 64 KiB）的唯一普通 `Mainline: <text>` 行，缺失、空白、重复或不可读时省略，不扫描科研树，不从其他正文、branch 或最新 Mission/Run/Review 猜主线，不把会话时长当累计科研工时。主线维护边界见研究模型；不改 bootstrap、已有研究树或 SessionStart。既有用户/Trellis 状态栏不接管；Dove-owned 状态栏遵循显式 update/reinstall/uninstall ownership，并保留用户后续修改版本和无关配置。
 - compact/resume 只提供只读事实卡：`RESEARCH.md` 存在性与绝对 mtime；最新 Review 的 id、round、绝对 `updatedAt` 与材料 currentness；最新 Run 的 id、绝对 `startedAt`、status 与 exit。缺失或不可读保留 `unavailable`。不读研究 Markdown 正文、report 或 stdout/stderr logs，不推断主线；startup/clear 无研究卡。
 - Reviewer workspace 使用短路径，避免嵌入项目目录层级；路径本身不证明隔离行为。
 - Run 收据除命令、时间、结果、指标和比较依据外，只保留显式 seed 与 Git commit/dirty 最低事实，不扩展为环境分类清单。Git 不改变比较资格或排名；机器比较不替代科学可比性判断。

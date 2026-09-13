@@ -24,7 +24,7 @@ import {
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "./web-access-integration.mjs";
 
 export const PACKAGE_DOCUMENTATION_PATHS = ["README.md", "docs/README.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"];
-export const PACKAGE_LEGAL_PATHS = ["LICENSE"];
+export const PACKAGE_LEGAL_PATHS = ["LICENSE", "THIRD_PARTY_NOTICES.md"];
 export const PACKAGE_RUNTIME_PATHS = ["dist/index.mjs", "bin/dove-package.mjs"];
 export const PROJECT_HOST_IDS = ["claude", "dsh"];
 export const DOVE_CLAUDE_AMBIENT_PROJECT_PATHS = Object.freeze([
@@ -119,6 +119,7 @@ function contract(slug) {
       relevantLessons,
       `Inspect the project materials and external context needed to understand the question. ${DOVE_RESEARCH_FRAME}`,
       `${DOVE_RESEARCH_ADVANCE} Carry the entering proposition through each material result: state whether it remains unresolved, supported, refuted, or bounded and what dependent claims or investment change. If a surviving component now answers a materially different problem, keep the original conclusion visible, investigate it only within existing authorization while provisional, and obtain the user's decision before adopting it as a different confirmed mainline, contribution, or completion meaning. For a submission goal, use Review to establish the current whole-paper judgment before declaring completion.`,
+      "Only when the user first confirms the project's research mainline or confirms a material change, and maintaining `.dove/research/RESEARCH.md` is already warranted, maintain one ordinary top-level line `Mainline: <text>` near its beginning with a concise statement of that confirmed mainline. This optional display source is not a heading, list, quote, code block, frontmatter, or schema. Do not add or refresh it merely because Research ran, the line is absent, a local method changed, or a provisional branch produced a result; do not backfill existing research trees for the status line.",
       maintainArea("missions", "When the maintenance trigger is met, update or create a naturally named Mission document for the substantive work, evidence, decisions, failures, and continuation context. Preserve the problem, proposition, and task scope that motivated entry; append actual results, corrections, changed identity elements, whether a branch is provisional or an authorized mainline, and still-valid assets or counterevidence. Do not rewrite an earlier Mission as though it always pursued a later task, and do not require a new file or fixed task-identity template merely because a change occurred.")
     ],
     boundaries: [
@@ -144,7 +145,7 @@ function contract(slug) {
       "Treat missing overviews, summaries, or links as ordinary document facts."
     ],
     actions: [
-      "Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Report a candidate as confirmed mainline only when the visible context or research materials contain that decision; do not infer promotion or task continuity from the latest code, Review, Run receipt, project name, or asset lineage alone. If an overview, summary, link, identity comparison, or authorization basis is absent, say so naturally and do not modify files or run validation to manufacture it.",
+      "Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Report a candidate as confirmed mainline only when the visible context or research materials contain that decision; do not infer the mainline, promotion, or task continuity from a Git branch, latest Mission, code, Review, Run receipt, project name, or asset lineage alone. The optional unique ordinary `Mainline: <text>` line in the root research overview supplies the statusline display, not a completion certificate; if absent, empty, or ambiguous, leave that display unavailable rather than guessing or filling it. Status can still report an explicitly confirmed mainline from the visible context or research prose, distinguishing its basis and any conflict with the saved line. If an overview, summary, link, identity comparison, or authorization basis is absent, say so naturally and do not modify files or run validation to manufacture it.",
       relevantLessons
     ],
     boundaries: [

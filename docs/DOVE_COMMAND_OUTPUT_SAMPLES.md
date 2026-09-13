@@ -40,7 +40,7 @@ Dove starts from the real research question, current or provisional route, user 
 ## Evidence, scope, and follow-through
 
 - Treat hunches, negative results, and near misses as hypotheses or diagnostic signals to validate.
-- Preserve the user-confirmed Workspace mainline while another effective in-scope action remains.
+- Preserve the project's user-confirmed current research mainline while another effective in-scope action remains.
 ```
 
 ## Ordinary prompt answer

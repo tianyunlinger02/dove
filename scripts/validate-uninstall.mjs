@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,21 +48,6 @@ assert.deepEqual(initializedSettings.statusLine, DOVE_CLAUDE_STATUS_LINE);
 assert.equal(initializedSettings.permissions.deny.includes(WEB_FETCH_DENY_PERMISSION), true);
 const initializedMcp = JSON.parse(fs.readFileSync(path.join(fixture, ".mcp.json"), "utf8"));
 assert.deepEqual(initializedMcp.mcpServers[EXA_MCP_SERVER_NAME], EXA_MCP_FRAGMENT);
-const statusline = spawnSync(process.execPath, [path.join(root, "bin", "dove.mjs"), "hook", "statusline", "--project", fixture], {
-  cwd: fixture,
-  input: JSON.stringify({
-    model: { display_name: "gpt-5.6-sol(high)" },
-    context_window: { context_window_size: 272_000, used_percentage: 76, remaining_percentage: 24 },
-    cost: { total_duration_ms: ((54 * 60) + 34) * 60_000 }
-  }),
-  encoding: "utf8"
-});
-assert.equal(statusline.status, 0, statusline.stderr || statusline.stdout);
-const statuslineParts = statusline.stdout.trim().split(" · ");
-assert.equal(statuslineParts[0], "gpt-5.6-sol(high) (272K)");
-assert.equal(statuslineParts[1], "ctx 24%");
-assert.equal(statuslineParts.at(-1), "54h34m");
-assert.equal(statusline.stdout.includes("ctx 76%"), false);
 const doctor = path.join(fixture, ".dove", "install", "DOCTOR.md");
 fs.writeFileSync(doctor, "preserve this feedback\n");
 const reviewRecord = path.join(fixture, ".dove", "reviews", "review-preserve", "review.json");

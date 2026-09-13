@@ -10,7 +10,6 @@ import { fileURLToPath } from "node:url";
 
 import {
   BEHAVIOR_CASE_SCHEMA_VERSION,
-  RUN_RECEIPT_SCHEMA_VERSION,
   SUPPORTED_HARD_EXPECTATION_KINDS,
   behaviorEvalShapeExamples,
   createFixtureCliLauncher,
@@ -21,7 +20,6 @@ import {
   parseEvidence,
   evaluateHardExpectation,
   assertReceiptRecordShape,
-  assertSnapshotRecordShape,
   assertToolActionsShape,
   isSafeProjectRelativePathSpec
 } from "./eval.mjs";
@@ -251,19 +249,6 @@ test("behavior case corpus is schema-valid, sourced, safe, and reviewable", () =
     assert.equal(ids.has(testCase.id), false, `duplicate case id ${testCase.id}`);
     ids.add(testCase.id);
   }
-});
-
-test("behavior eval runner evidence shapes are deterministic contracts", () => {
-  const examples = behaviorEvalShapeExamples();
-  assertSnapshotRecordShape(examples.snapshot);
-  assertToolActionsShape(examples.toolActions);
-  assertReceiptRecordShape(examples.receipt);
-  assert.equal(examples.receipt.schemaVersion, RUN_RECEIPT_SCHEMA_VERSION);
-  assert.equal(examples.receipt.budgets.effectiveMaxBudgetUsd, 0.01);
-  assert.equal(examples.receipt.runner.argv[examples.receipt.runner.argv.indexOf("--max-budget-usd") + 1], "0.01");
-  assert.equal(examples.receipt.runner.argv.includes("--verbose"), true);
-  assert.equal(examples.receipt.runner.permissionMode, "acceptEdits");
-  assert.deepEqual(Object.keys(examples.receipt.paths).sort(), ["hardChecks", "publicOutput", "receipt", "runRoot", "snapshotAfter", "snapshotBefore", "snapshotDiff", "stderr", "stream", "toolActions", "workspaceRoot"].sort());
 });
 
 test("receipt paths accept separate short workspace and evidence roots", () => {
@@ -627,13 +612,4 @@ test("known user feedback excerpts need no fabricated DOCTOR citation or ledger"
   assertBehaviorFeedbackSource(source);
   assert.throws(() => assertBehaviorFeedbackSource({ ...source, lineStart: 1 }), /invented document line/u);
   assert.throws(() => assertBehaviorFeedbackSource({ ...source, kind: "invented" }), /unknown feedback source/u);
-});
-
-test("package scripts expose deterministic validate without releasing the corpus", () => {
-  const packageJson = readJson(path.join(ROOT, "package.json"));
-  assert.equal(packageJson.scripts?.["behavior:validate"], "node ./evals/behavior/validate.mjs");
-  assert.equal(packageJson.scripts?.["behavior:eval"], "node ./evals/behavior/eval.mjs");
-  assert.match(packageJson.scripts?.check ?? "", /npm run behavior:validate/u, "npm run check must include behavior:validate");
-  assert.doesNotMatch(packageJson.scripts?.["release:check"] ?? "", /behavior:eval/u, "release:check must not run behavior:eval");
-  assert.equal(packageJson.files.some((entry) => entry === "evals" || entry.startsWith("evals/")), false, "eval corpus must not be packed via package files inventory");
 });

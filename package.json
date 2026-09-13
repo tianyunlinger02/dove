@@ -1,6 +1,6 @@
 {
   "name": "dove",
-  "version": "3.0.8",
+  "version": "3.0.9",
   "description": "Local-first Markdown research workflow for papers, experiments, figures, review, and revision.",
   "type": "module",
   "bin": {
@@ -20,7 +20,8 @@
     "docs/CAPABILITY_MATRIX.md",
     "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "dove": "node ./bin/dove.mjs",
@@ -32,7 +33,7 @@
     "uninstall:validate": "node ./scripts/validate-uninstall.mjs",
     "review-runtime:validate": "node ./scripts/validate-review-runtime.mjs",
     "runs:validate": "node ./scripts/validate-runs.mjs",
-    "runtime:validate": "node --test ./tests/runtime-json-transactions.test.mjs",
+    "runtime:validate": "node --test ./tests/file-write-safety.test.mjs",
     "behavior:validate": "node ./evals/behavior/validate.mjs",
     "behavior:eval": "node ./evals/behavior/eval.mjs",
     "package:validate": "node ./scripts/validate-package.mjs",

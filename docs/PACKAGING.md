@@ -2,19 +2,22 @@
 
 ## Delivery model
 
-Dove 3.0.8 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
+Dove 3.0.9 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
 
 The bare public npm package named `dove` is unrelated. Release instructions must use an exact trusted tarball, Git revision, or internal-registry package version.
 
+Dove 3.0.9 is source-available under the PolyForm Noncommercial License 1.0.0, not OSI-approved open-source software. Dove itself may be used only for purposes permitted by that license; this release does not offer or advertise a commercial-license path. Bundled third-party components retain their own MIT or ISC rights, recorded separately in `THIRD_PARTY_NOTICES.md`.
+
 ## Release inventory
 
-Every Dove 3.0.8 release contains:
+Every Dove 3.0.9 release contains:
 
 - **one Dove research agent** for supported agent hosts;
 - **9 optional specialist Skills**: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`;
 - generated adapters for the declared host formats;
 - the project lifecycle CLI, explicit `dove review ...` runtime, local `dove run ...` execution receipts, plus the Claude SessionStart hook;
-- public documentation; and
+- public documentation;
+- the Dove `LICENSE` and bundled-component `THIRD_PARTY_NOTICES.md`; and
 - **2 standalone Node.js bundles**.
 
 There is no Auto Skill or command, Dove research MCP server bundle, research tool registry, MCP CLI command, Research Format runtime, or separate Dove-managed planning, authoring, or reviewing agent. The explicit `dove review ...` runtime stores review exchange records under `.dove/reviews/**` and uses the user's installed Claude Code CLI for isolated read-only reviewer sessions; it is not a research database or proof of acceptance. The `dove run ...` helper stores local run receipts under `.dove/runs/**`; it records command execution evidence, not scientific conclusions or cross-host process control. The artifact contains hidden Claude guidance Skills and fixed project fragments for pinned `dove-paper-search` (`paper-search-mcp==0.1.4`) and hosted Exa; it does not contain third-party runtimes or credentials.
@@ -92,7 +95,7 @@ Bare `dove` is the interactive lifecycle front door. It classifies the project, 
 - `run start|status|resume|finalize|compare` records explicit `.dove/runs/<id>/run.jsonl`, `stdout.log`, and `stderr.log` receipts. `start` launches a detached supervisor that directly spawns the target command from the project root without a shell, records command, timing, outcome, metric, budget, and basis, plus an explicitly declared seed and minimum Git commit/dirty facts rather than an environment inventory. Git facts do not affect comparison eligibility or ranking. `status` is read-only; `resume` never reruns work; `finalize` appends one scalar metric after terminal completion; `compare` ranks only compatible terminal finalized runs by metric, budget, data, evaluator, and resource basis.
 - `hook session-start` inspects package-managed integration read-only. Non-current integration may prompt explicit `dove update`; unsupported state is blocked rather than migrated or reconstructed.
 - Only compact/resume receives a read-only facts card: `RESEARCH.md` existence and absolute mtime; latest Review id, round, absolute `updatedAt`, and material currentness; latest Run id, absolute `startedAt`, status, and exit code. It reads metadata and run journals, and checks the latest review round's listed material bytes for currentness; it does not read research Markdown bodies, reports, or stdout/stderr logs or infer the mainline. Startup/clear receives no research card. Missing or unreadable facts remain `unavailable`.
-- `hook` supports read-only `session-start` inspection and the managed `statusline` renderer. The renderer preserves the explicit absolute project path, consumes Claude Code's native model, context-capacity, remaining-context and current-session-duration fields, reads the Git branch without a shell, and accesses no research records. It does not expose `user-prompt-submit`.
+- `hook` supports read-only `session-start` inspection and the managed `statusline` renderer. The renderer keeps native model/context facts, optional unlabeled cyan mainline text, Git branch and session duration on the first line, and only the explicit absolute project path on the second. Only a nonempty `NO_COLOR` disables color. It reads Git without a shell and only the root `.dove/research/RESEARCH.md` within 64 KiB for one ordinary `Mainline: <text>` line; unavailable or ambiguous mainlines are omitted, never inferred from other prose or Mission/Run/Review. There are no research-tree scans or writes, and SessionStart is unchanged. It does not expose `user-prompt-submit`.
 - SessionStart never writes files or configuration, cleans up legacy/unknown state, or invokes update or Complete Reinstall. Startup/clear without warnings returns no output. Inspection does not reload same-session host context.
 - Stop is not a managed lifecycle hook and does not perform synchronization, research continuation, tool calls, or writes.
 

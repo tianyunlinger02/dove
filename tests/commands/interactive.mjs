@@ -6,7 +6,7 @@ import {
   HOST_REGISTRY,
   PROJECT_HOST_IDS as REGISTERED_PROJECT_HOST_IDS
 } from "../../src/core/host-registry.mjs";
-import { EXPECTED_HOST_IDS } from "./common.mjs";
+const EXPECTED_HOST_IDS = ["claude", "dsh"];
 
 export async function assertInteractiveHostSelection() {
   assert.deepEqual(REGISTERED_PROJECT_HOST_IDS, EXPECTED_HOST_IDS);

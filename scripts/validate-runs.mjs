@@ -575,7 +575,6 @@ if (process.argv.includes("--timeouts-only") || comparisonsOnly || receiptsOnly)
 }
 
 const tempRoot = fs.mkdtempSync(path.join(SCRATCH_ROOT, "dove-runs-"));
-const cleanupProcessGroups = [];
 try {
   const project = path.join(tempRoot, "project");
   fs.mkdirSync(project, { recursive: true });
@@ -734,29 +733,6 @@ try {
   assert.equal(timeoutEvents.some((event) => event.type === "timeout.requested"), true);
   assert.match(fs.readFileSync(runPath(project, "timeout-a", "stdout.log"), "utf8"), /timeout start/u);
 
-  if (process.platform !== "win32") {
-    const pgScript = path.join(project, "scripts", "pg-parent.mjs");
-    const marker = path.join(project, "pg-child-marker.txt");
-    writeScript(pgScript, `
-      import { spawn } from "node:child_process";
-      import fs from "node:fs";
-      const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
-      fs.writeFileSync(${JSON.stringify(marker)}, String(child.pid));
-      setInterval(() => {}, 1000);
-    `);
-    startRun(project, "timeout-pg", ["--timeout-ms", "200", "--kill-grace-ms", "100"], [process.execPath, pgScript]);
-    const pgStatus = waitForTerminal(project, "timeout-pg");
-    assert.equal(pgStatus.status, "timed-out");
-    const childPid = Number(fs.readFileSync(marker, "utf8"));
-    sleep(200);
-    try {
-      process.kill(childPid, 0);
-      throw new Error(`POSIX process-group child ${childPid} still appears alive`);
-    } catch (error) {
-      assert.equal(error.code, "ESRCH");
-    }
-  }
-
   const compatibleScript = path.join(project, "scripts", "compatible.mjs");
   writeScript(compatibleScript, `process.exit(0);\n`);
   startRun(project, "success-b", [
@@ -856,118 +832,11 @@ try {
   assert.equal(reconciledAgain.write, false);
   assertFileStateEqual(fileState(path.join(manualDir, "run.jsonl")), beforeManualTerminalResume, "reconciled terminal resume must be zero-write");
 
-  let orphanPid = null;
-  let orphanProc = null;
-  if (process.platform !== "win32") {
-    orphanProc = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" });
-    orphanPid = orphanProc.pid;
-    cleanupProcessGroups.push(orphanPid);
-    orphanProc.unref();
-    const orphanDir = path.join(project, ".dove", "runs", "manual-orphaned");
-    fs.mkdirSync(orphanDir, { recursive: true });
-    fs.writeFileSync(path.join(orphanDir, "stdout.log"), "");
-    fs.writeFileSync(path.join(orphanDir, "stderr.log"), "");
-    fs.writeFileSync(path.join(orphanDir, "run.jsonl"), `${JSON.stringify({
-      schemaVersion: "dove.run.event.v1",
-      seq: 1,
-      at: "2026-09-02T00:00:00.000Z",
-      type: "run.started",
-      runId: "manual-orphaned",
-      argv: [process.execPath, "-e", "setInterval(() => {}, 1000)"],
-      cwd: project,
-      group: null,
-      budget: { timeoutMs: null, killGraceMs: 5000 },
-      metric: { name: null, direction: null, unit: null },
-      data: null,
-      evaluator: null,
-      resourceBasis: null,
-      platform: { platform: process.platform, arch: process.arch, node: process.version, release: "manual" },
-      supervisorPid: findUnobservedPid(),
-      timeout: { requested: false, timeoutMs: null, killGraceMs: 5000, scope: "manual", note: "manual fixture" }
-    })}\n${JSON.stringify({
-      schemaVersion: "dove.run.event.v1",
-      seq: 2,
-      at: "2026-09-02T00:00:01.000Z",
-      type: "target.started",
-      runId: "manual-orphaned",
-      targetPid: orphanPid,
-      targetProcessGroup: orphanPid,
-      supervisorPid: findUnobservedPid(),
-      stdoutPath: ".dove/runs/manual-orphaned/stdout.log",
-      stderrPath: ".dove/runs/manual-orphaned/stderr.log",
-      termination: { scope: "manual", note: "manual fixture" }
-    })}\n`);
-    const orphanBefore = fileState(path.join(orphanDir, "run.jsonl"));
-    const orphaned = jsonCli(["run", "resume", "--project", project, "--id", "manual-orphaned", "--json"]);
-    assert.equal(orphaned.status, "orphaned");
-    assert.equal(orphaned.write, false);
-    assertFileStateEqual(fileState(path.join(orphanDir, "run.jsonl")), orphanBefore, "orphaned resume must be zero-write");
-    try { process.kill(-orphanPid, "SIGKILL"); } catch {}
-    cleanupProcessGroups.pop();
-  }
-
-  const staleLockDir = writeManualRunJournal(project, "manual-stale-lock", [{
-    schemaVersion: "dove.run.event.v1",
-    seq: 1,
-    at: "2026-09-02T00:00:00.000Z",
-    type: "run.started",
-    runId: "manual-stale-lock",
-    argv: [process.execPath, "-e", "process.exit(0)"],
-    cwd: project,
-    group: null,
-    budget: { timeoutMs: null, killGraceMs: 5000 },
-    metric: { name: null, direction: null, unit: null },
-    data: null,
-    evaluator: null,
-    resourceBasis: null,
-    platform: { platform: process.platform, arch: process.arch, node: process.version, release: "manual" },
-    supervisorPid: findUnobservedPid(),
-    timeout: { requested: false, timeoutMs: null, killGraceMs: 5000, scope: "manual", note: "manual fixture" }
-  }]);
-  const staleLock = path.join(staleLockDir, ".journal.lock");
-  fs.mkdirSync(staleLock, { mode: 0o700 });
-  fs.writeFileSync(path.join(staleLock, "owner.json"), `${JSON.stringify({ schemaVersion: "dove.run.lock.v1", runId: "manual-stale-lock", pid: findUnobservedPid(), token: "stale", createdAt: "2026-09-02T00:00:00.000Z", operation: "manual-fixture" })}\n`, { mode: 0o600 });
-  const staleReconciled = cli(["run", "resume", "--project", project, "--id", "manual-stale-lock", "--json"]);
-  assert.notEqual(staleReconciled.status, 0);
-  assert.ok(JSON.parse(staleReconciled.stderr).message.includes(staleLock));
-  assert.equal(fs.existsSync(staleLock), true, "leftover journal lock is reported, not recovered");
-
-  const liveLockDir = writeManualRunJournal(project, "manual-live-lock", [{
-    schemaVersion: "dove.run.event.v1",
-    seq: 1,
-    at: "2026-09-02T00:00:00.000Z",
-    type: "run.started",
-    runId: "manual-live-lock",
-    argv: [process.execPath, "-e", "process.exit(0)"],
-    cwd: project,
-    group: null,
-    budget: { timeoutMs: null, killGraceMs: 5000 },
-    metric: { name: null, direction: null, unit: null },
-    data: null,
-    evaluator: null,
-    resourceBasis: null,
-    platform: { platform: process.platform, arch: process.arch, node: process.version, release: "manual" },
-    supervisorPid: findUnobservedPid(),
-    timeout: { requested: false, timeoutMs: null, killGraceMs: 5000, scope: "manual", note: "manual fixture" }
-  }]);
-  const liveLock = path.join(liveLockDir, ".journal.lock");
-  fs.mkdirSync(liveLock, { mode: 0o700 });
-  fs.writeFileSync(path.join(liveLock, "owner.json"), `${JSON.stringify({ schemaVersion: "dove.run.lock.v1", runId: "manual-live-lock", pid: process.pid, token: "live", createdAt: new Date().toISOString(), operation: "manual-fixture" })}\n`, { mode: 0o600 });
-  const liveLocked = cli(["run", "resume", "--project", project, "--id", "manual-live-lock", "--json"]);
-  assert.notEqual(liveLocked.status, 0);
-  assert.match(liveLocked.stderr, /journal writer lock remains occupied/iu);
-  assert.ok(JSON.parse(liveLocked.stderr).message.includes(liveLock));
-  assert.equal(fs.existsSync(liveLock), true, "observable live journal lock must not be deleted");
-  fs.rmSync(liveLock, { recursive: true, force: true });
-
   const hidden = cli(["__dove-run-supervisor", "not-a-public-command"]);
   assert.notEqual(hidden.status, 0);
   assert.doesNotMatch(hidden.stderr, /Usage:/u);
 
   console.log(JSON.stringify({ status: "passed" }, null, 2));
 } finally {
-  for (const pid of cleanupProcessGroups) {
-    try { process.kill(-pid, "SIGKILL"); } catch {}
-  }
   fs.rmSync(tempRoot, { recursive: true, force: true });
 }

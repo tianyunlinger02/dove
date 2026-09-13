@@ -44,6 +44,10 @@ function externalImports(metafile) {
   return [...external].sort();
 }
 
+function bundledPackages(metafile) {
+  return [...new Set(Object.keys(metafile.inputs ?? {}).map(inputPackage).filter(Boolean))].sort();
+}
+
 function assertExternalImports(metafile, label) {
   for (const specifier of externalImports(metafile)) {
     assert.match(specifier, NODE_EXTERNAL_IMPORT, `${label} has non-node external import ${specifier}`);
@@ -75,6 +79,8 @@ function assertMetafileStandaloneProof(result, item) {
   const [[outputPath, output]] = outputEntries;
   assert.equal(output.entryPoint, item.entry, `${item.output} metafile must record entry point ${item.entry}`);
   const bundledInquirerPackages = assertInquirerBundled(result.metafile, item);
+  const bundledPackageNames = bundledPackages(result.metafile);
+  if (item.output !== "bin/dove-package.mjs") assert.deepEqual(bundledPackageNames, [], `${item.output} must not bundle third-party packages`);
   return {
     output: item.output,
     metafile: true,
@@ -83,6 +89,7 @@ function assertMetafileStandaloneProof(result, item) {
     bytes: output.bytes,
     inputCount: Object.keys(result.metafile.inputs ?? {}).length,
     bundledInquirerPackages,
+    bundledPackageNames,
     externalImports: externalImports(result.metafile)
   };
 }
