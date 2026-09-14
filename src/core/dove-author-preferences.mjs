@@ -5,7 +5,11 @@ export const DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS = Object.freeze({
   dsh: ".dove/install/AUTHOR_PREFERENCES.md"
 });
 
-export const DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP = `At the beginning of each fresh main-agent context—including Claude startup or /clear, and the first author-side Dove Skill use on a host without a session hook—the current host main agent must personally read the full author preferences at \`${DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude}\` completely from beginning to end before substantive research, engineering, writing, or collaboration work. If a read is truncated, continue with offsets until EOF. Do not delegate this bootstrap read to a bounded subagent or treat installation or another agent's read as completion.`;
+export function renderDoveAuthorPreferencesBootstrap(referencePath = DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude) {
+  return `At the beginning of each fresh main-agent context—including Claude startup or /clear, and the first author-side Dove Skill use on a host without a session hook—the current host main agent must personally read the full author preferences at \`${referencePath}\` completely from beginning to end before substantive research, engineering, writing, or collaboration work. If a read is truncated, continue with offsets until EOF. Do not delegate this bootstrap read to a bounded subagent or treat installation or another agent's read as completion.`;
+}
+
+export const DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP = renderDoveAuthorPreferencesBootstrap();
 
 export const DOVE_AUTHOR_PREFERENCES_CONTINUITY = `This is a continuation of the same main context: keep using the author preferences already read here rather than rereading the full file merely because of compact or resume. If the recovered context clearly lacks that completed bootstrap, the current main agent must complete the full read before further substantive work.`;
 

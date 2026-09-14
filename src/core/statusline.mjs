@@ -85,6 +85,7 @@ export function inspectGitBranch(projectRoot, options = {}) {
 export function parseResearchMainline(markdown) {
   let fence = null;
   let frontmatter = false;
+  let comment = false;
   const matches = [];
   const lines = markdown.split(/\r?\n/u);
   for (const [index, line] of lines.entries()) {
@@ -101,11 +102,17 @@ export function parseResearchMainline(markdown) {
       if (closing && closing[1][0] === fence[0] && closing[1].length >= fence.length) fence = null;
       continue;
     }
-    const opening = line.match(/^ {0,3}(`{3,}|~{3,})/u);
+    const opening = !comment && line.match(/^ {0,3}(`{3,}|~{3,})/u);
     if (opening) {
       fence = opening[1];
       continue;
     }
+    const startsInComment = comment;
+    for (const marker of line.matchAll(/<!--|-->/gu)) {
+      if (marker[0] === "<!--") comment = true;
+      else comment = false;
+    }
+    if (startsInComment) continue;
     if (line.startsWith("Mainline:") && !/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "")) {
       matches.push(line.slice("Mainline:".length));
     }

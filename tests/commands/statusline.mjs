@@ -97,11 +97,20 @@ export function assertResearchMainlineParsing() {
     "Mainline: First\nMainline: Second", "Mainline: Same\nMainline: Same",
     "Mainline: Goal\nMainline:", "```md\nMainline: Example\n```",
     "~~~markdown\nMainline: Example\n~~~", "---\nMainline: Metadata\n---",
-    "The confirmed mainline is described only in prose."
+    "The confirmed mainline is described only in prose.",
+    "<!--\nMainline: Hidden goal\n-->", "<!-- Mainline: Hidden goal -->",
+    "<!--\nMainline: Unclosed comment",
+    "<!--\nMainline: Hidden\n-->\nMainline: First\nMainline: Second"
   ]) assert.equal(parseResearchMainline(text), null, text);
   const examples = "---\nMainline: Metadata\n---\n````md\n```\nMainline: Example\n````\n" +
     "~~~\nMainline: Another example\n~~~\nMainline: Actual goal\n> Mainline: Quote\n";
   assert.equal(parseResearchMainline(examples), "Actual goal");
+  for (const hidden of [
+    "<!--\nMainline: Hidden\n```\n-->",
+    "<!-- first --> <!-- second\nMainline: Hidden\n-->",
+    "```md\n<!--\n```", "~~~md\n<!--\n~~~",
+    "---\n<!--\n..."
+  ]) assert.equal(parseResearchMainline(`${hidden}\nMainline: Actual goal`), "Actual goal", hidden);
   assert.equal(parseResearchMainline(RESEARCH_DEFAULT_DOCUMENTS[0].content), null, "fresh bootstrap is not a confirmed mainline");
 }
 

@@ -1,8 +1,10 @@
 import fs from "node:fs";
+import path from "node:path";
 
 import {
   DOVE_AUTHOR_PREFERENCES_CONTINUITY,
-  DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP
+  DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS,
+  renderDoveAuthorPreferencesBootstrap
 } from "./dove-author-preferences.mjs";
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 import { inspectLatestReviewFacts } from "./review-runtime.mjs";
@@ -74,9 +76,12 @@ export function sessionStartOutput(payload, result = null, options = {}) {
     output.systemMessage = "Dove project integration needs attention. SessionStart is read-only; run dove update explicitly to update supported manifest-owned integration. If blocked, inspect dove doctor --json before changing files.";
   }
   if (payload.source === "startup" || payload.source === "clear") {
+    if (typeof options.project !== "string" || !path.isAbsolute(options.project)) {
+      throw new Error("Dove SessionStart bootstrap requires an explicit absolute project root.");
+    }
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
-      additionalContext: DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP
+      additionalContext: renderDoveAuthorPreferencesBootstrap(path.join(options.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude))
     };
   } else if (payload.source === "compact" || payload.source === "resume") {
     output.hookSpecificOutput = {

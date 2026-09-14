@@ -286,7 +286,7 @@ function validateSessionFacts(root, executable) {
       const context = output.hookSpecificOutput.additionalContext;
       assert.equal(typeof context, "string");
       if (source === "startup" || source === "clear") {
-        assert.equal(context, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP);
+        assert.equal(context, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP.replace(".dove/install/AUTHOR_PREFERENCES.md", path.join(root, ".dove/install/AUTHOR_PREFERENCES.md")));
         assert.match(context, /current host main agent must personally read/iu);
         assert.match(context, /AUTHOR_PREFERENCES\.md.*beginning to end/iu);
         assert.match(context, /offsets until EOF/iu);
@@ -310,7 +310,7 @@ function validateSessionFacts(root, executable) {
   for (const source of ["startup", "clear", "compact", "resume"]) {
     const output = invoke(source);
     if (source === "startup" || source === "clear") {
-      assert.equal(output.hookSpecificOutput.additionalContext, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP);
+      assert.equal(output.hookSpecificOutput.additionalContext, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP.replace(".dove/install/AUTHOR_PREFERENCES.md", path.join(root, ".dove/install/AUTHOR_PREFERENCES.md")));
     } else {
       assert.match(output.hookSpecificOutput.additionalContext, /RESEARCH\.md: exists=no; mtime=unavailable/u);
       assert.match(output.hookSpecificOutput.additionalContext, /Latest Review: unavailable\nLatest Run: unavailable/u);
@@ -352,7 +352,7 @@ function validateSessionFacts(root, executable) {
   for (const source of ["startup", "clear", "compact", "resume"]) {
     const output = invoke(source);
     if (source === "startup" || source === "clear") {
-      assert.equal(output.hookSpecificOutput.additionalContext, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP);
+      assert.equal(output.hookSpecificOutput.additionalContext, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP.replace(".dove/install/AUTHOR_PREFERENCES.md", path.join(root, ".dove/install/AUTHOR_PREFERENCES.md")));
     } else {
       const facts = output.hookSpecificOutput.additionalContext;
       assert.match(facts, new RegExp(`RESEARCH\\.md: exists=yes; mtime=${oldTime}`, "u"));

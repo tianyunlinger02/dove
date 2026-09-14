@@ -116,18 +116,22 @@ export function renderCompleteReinstallInventory(preview, options = {}) {
 }
 
 export function renderUninstallInventory(preview, options = {}) {
-  if (!preview || preview.action !== "uninstall" || typeof preview.target !== "string" || !Array.isArray(preview.removedPaths)) {
+  if (!preview || preview.action !== "uninstall" || typeof preview.target !== "string" || !Array.isArray(preview.removedPaths) || !Array.isArray(preview.writtenPaths)) {
     throw new Error("Dove uninstall inventory is invalid.");
   }
   const color = options.color === true;
   const removed = preview.removedPaths.length > 0 ? preview.removedPaths.map((item) => `- ${terminalSafeText(item)}`) : ["- 无"];
+  const written = preview.writtenPaths.length > 0 ? preview.writtenPaths.map((item) => `- ${terminalSafeText(item)}`) : ["- 无"];
   return [
     terminalStyle("卸载 Dove 项目接入", "bold", { color }),
     "",
     `项目：${terminalSafeText(preview.target)}`,
     "",
-    terminalStyle("将删除或移除", "bold", { color }),
+    terminalStyle("将删除", "bold", { color }),
     ...removed,
+    "",
+    terminalStyle("将修改共享配置（文件保留，仅移除 Dove 片段）", "bold", { color }),
+    ...written,
     "",
     terminalStyle("将保留", "bold", { color }),
     "- .dove/research/**",

@@ -306,7 +306,8 @@ export function normalizeRunCommandArgv(rawArgv) {
   if (!Array.isArray(rawArgv) || rawArgv.length === 0) throw new Error("dove run start requires a command after '--'.");
   const argv = rawArgv.map((item) => String(item));
   for (const [index, item] of argv.entries()) {
-    if (!item || item.includes("\0")) throw new Error(`Dove run command argv[${index}] must be a non-empty string without NUL bytes.`);
+    if (index === 0 && !item) throw new Error("Dove run command argv[0] must be a non-empty string.");
+    if (item.includes("\0")) throw new Error(`Dove run command argv[${index}] must not contain NUL bytes.`);
   }
   return argv;
 }
