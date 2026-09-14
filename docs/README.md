@@ -1,5 +1,7 @@
 # Dove documentation
 
+<img src="../dove.png" alt="Dove pixel-art pigeon carrying a branch" width="320">
+
 Dove is one research agent. Ordinary Claude conversation in an initialized project is its primary entrance; `claude --agent dove` and nine flat Skills are optional, with no higher judgment authority. Ordinary tasks with no research impact do not acquire a research workflow.
 
 ## Guides

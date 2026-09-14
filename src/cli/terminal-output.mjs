@@ -1,19 +1,46 @@
+// Exact no-glow terminal pixels derived from the 32×32 grid in root dove.png.
 export const DOVE_PIXEL_ART = Object.freeze([
-  "  ██▓▓                          █▓▓▓",
-  " ▓█████                      ████▓██",
-  " ▓█████▓                   ▓████████",
-  " ▓███████▓                ██████████",
-  "  █████████▓            ▓██████████",
-  "  ████████████▓         ██████████",
-  "  ███████████████     ▓█████████",
-  "    ▓█████████████▓  ▓████████▓",
-  "     ███████████████████████▓",
-  "      █████████████████████▓▓████",
-  "       ▓██████████████████████████",
-  "          ▓███████████████████▓  ▓",
-  "        ▓██████████████████▓",
-  " ▓▓▓███████████████████▓▓",
-  "█████████▓▓▓"
+  "  ██                    ██",
+  "  ████                ████",
+  "    ████            ██████",
+  "██████████          ████████              ██",
+  "████████████      ██████████          ██████",
+  "  ████████████    ██████████          ████",
+  "  ██████████████  ██████████          ██████",
+  "    ██████████████  ██████          ██  ██",
+  "  ████████████████  ████████████    ██",
+  "      ██████████████  ████████████    ████",
+  "    ████████████████████████████  ██  ██",
+  "        ██████████████████████    ██",
+  "          ████████████████████",
+  "                ██████████████",
+  "          ██████████████████",
+  "      ████████████████████",
+  "    ████████████████████",
+  "      ██  ██████",
+  "            ██"
+]);
+
+const DOVE_BRANCH_SPANS = Object.freeze([
+  [],
+  [],
+  [],
+  [[42, 44]],
+  [[38, 44]],
+  [[38, 42]],
+  [[38, 44]],
+  [[36, 38], [40, 42]],
+  [[36, 38]],
+  [[38, 42]],
+  [[34, 36], [38, 40]],
+  [[34, 36]],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  []
 ]);
 
 const ANSI = Object.freeze({
@@ -42,7 +69,20 @@ export function terminalStyle(text, style, options = {}) {
 
 export function renderDovePixelArt(options = {}) {
   const color = options.color === true;
-  return DOVE_PIXEL_ART.map((line) => terminalStyle(line, "cyan", { color })).join("\n");
+  if (!color) return DOVE_PIXEL_ART.join("\n");
+  return DOVE_PIXEL_ART.map((line, index) => {
+    const spans = DOVE_BRANCH_SPANS[index];
+    if (spans.length === 0) return terminalStyle(line, "cyan", { color });
+    const segments = [];
+    let cursor = 0;
+    for (const [start, end] of spans) {
+      if (start > cursor) segments.push(terminalStyle(line.slice(cursor, start), "cyan", { color }));
+      segments.push(terminalStyle(line.slice(start, end), "green", { color }));
+      cursor = end;
+    }
+    if (cursor < line.length) segments.push(terminalStyle(line.slice(cursor), "cyan", { color }));
+    return segments.join("");
+  }).join("\n");
 }
 
 function terminalSafeText(value) {

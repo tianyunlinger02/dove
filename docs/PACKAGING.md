@@ -16,9 +16,11 @@ Every Dove 3.0.10 release contains:
 - **9 optional specialist Skills**: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`;
 - generated adapters for the declared host formats;
 - the project lifecycle CLI, explicit `dove review ...` runtime, local `dove run ...` execution receipts, plus the Claude SessionStart hook;
-- public documentation;
+- public documentation and the official root `dove.png` brand artwork;
 - the Dove `LICENSE` and bundled-component `THIRD_PARTY_NOTICES.md`; and
 - **2 standalone Node.js bundles**.
+
+The root `dove.png` is the authoritative brand artwork shipped as an ordinary package asset and displayed by both README entry pages. The CLI preserves its hard pixel outline as a static Unicode rendering, with a cyan Dove and green branch in color terminals and no glow, so ordinary terminals need no image protocol or runtime decoder; the image is not copied into consumer projects or embedded as another bundle.
 
 There is no Auto Skill or command, Dove research MCP server bundle, research tool registry, MCP CLI command, Research Format runtime, or separate Dove-managed planning, authoring, or reviewing agent. The explicit `dove review ...` runtime stores review exchange records under `.dove/reviews/**` and uses the user's installed Claude Code CLI for isolated read-only reviewer sessions; it is not a research database or proof of acceptance. The `dove run ...` helper stores local run receipts under `.dove/runs/**`; it records command execution evidence, not scientific conclusions or cross-host process control. The artifact contains hidden Claude guidance Skills and fixed project fragments for pinned `dove-paper-search` (`paper-search-mcp==0.1.4`) and hosted Exa; it does not contain third-party runtimes or credentials.
 

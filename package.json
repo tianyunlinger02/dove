@@ -11,6 +11,7 @@
   },
   "files": [
     "package-resources/hosts/**",
+    "dove.png",
     "dist/index.mjs",
     "bin/dove-package.mjs",
     "docs/README.md",

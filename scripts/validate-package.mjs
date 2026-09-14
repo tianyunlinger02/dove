@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { COMMAND_SURFACES, MANAGED_PACKAGE_PATHS, PACKAGE_LEGAL_PATHS } from "../src/core/command-manifest.mjs";
+import { COMMAND_SURFACES, MANAGED_PACKAGE_PATHS, PACKAGE_BRAND_PATHS, PACKAGE_LEGAL_PATHS } from "../src/core/command-manifest.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "../src/core/web-access-integration.mjs";
 import { renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
@@ -79,6 +79,19 @@ function assertPackageMetadata() {
   assert.equal(packageJson.devDependencies?.["@inquirer/prompts"], "^7.10.1");
   assert.equal(packageJson.devDependencies?.esbuild, "^0.28.1");
   assertAbsentProductionDependencies(packageJson, "package.json");
+}
+
+function assertBrandInventory() {
+  assert.deepEqual(PACKAGE_BRAND_PATHS, ["dove.png"]);
+  const relativePath = PACKAGE_BRAND_PATHS[0];
+  const sourcePath = path.join(ROOT, relativePath);
+  const stat = fs.lstatSync(sourcePath);
+  assert.equal(stat.isFile(), true, "Dove brand artwork must be a regular file");
+  assert.equal(stat.size > 0, true, "Dove brand artwork must be non-empty");
+  assert.deepEqual(fs.readFileSync(sourcePath).subarray(0, 8), Buffer.from("89504e470d0a1a0a", "hex"), "Dove brand artwork must be a PNG");
+  assert.equal(packageJson.files.includes(relativePath), true, "package files manifest must include dove.png");
+  assert.match(fs.readFileSync(path.join(ROOT, "README.md"), "utf8"), /<img src="\.\/dove\.png"[^>]*>/u, "README must display the packaged Dove artwork");
+  assert.match(fs.readFileSync(path.join(ROOT, "docs/README.md"), "utf8"), /<img src="\.\.\/dove\.png"[^>]*>/u, "documentation index must display the packaged Dove artwork");
 }
 
 function assertLegalInventory(bundledPackageNames) {
@@ -194,8 +207,8 @@ function installPackedPackage(tarball, installRoot) {
   assert.equal(installedPackageJson.license, packageJson.license);
   assertAbsentProductionDependencies(installedPackageJson, "installed package.json");
   const installedPackageRoot = path.dirname(installedPackageJsonPath);
-  for (const relativePath of PACKAGE_LEGAL_PATHS) {
-    assert.equal(digestFile(path.join(installedPackageRoot, relativePath)), digestFile(path.join(ROOT, relativePath)), `installed legal file must match source: ${relativePath}`);
+  for (const relativePath of [...PACKAGE_LEGAL_PATHS, ...PACKAGE_BRAND_PATHS]) {
+    assert.equal(digestFile(path.join(installedPackageRoot, relativePath)), digestFile(path.join(ROOT, relativePath)), `installed package file must match source: ${relativePath}`);
   }
   for (const packageName of ["@inquirer", "esbuild"]) {
     assert.equal(fs.existsSync(path.join(installRoot, "node_modules", packageName)), false, `--omit=dev install must not install ${packageName}`);
@@ -441,6 +454,7 @@ if (process.argv.includes("--library-only")) {
 
 const bundledPackageNames = assertBuildCurrent();
 assertPackageMetadata();
+assertBrandInventory();
 assertLegalInventory(bundledPackageNames);
 assertLockfile();
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "review-runtime:validate"), true);

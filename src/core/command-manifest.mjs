@@ -26,6 +26,7 @@ import { DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS } from "./dove-author-preferenc
 
 export const PACKAGE_DOCUMENTATION_PATHS = ["README.md", "docs/README.md", "docs/AUTHOR_PREFERENCES.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"];
 export const PACKAGE_LEGAL_PATHS = ["LICENSE", "THIRD_PARTY_NOTICES.md"];
+export const PACKAGE_BRAND_PATHS = ["dove.png"];
 export const PACKAGE_RUNTIME_PATHS = ["dist/index.mjs", "bin/dove-package.mjs"];
 export const PROJECT_HOST_IDS = ["claude", "dsh"];
 export const DOVE_CLAUDE_AMBIENT_PROJECT_PATHS = Object.freeze([
@@ -454,5 +455,6 @@ export const MANAGED_PACKAGE_PATHS = Object.freeze([
   ...commandAdapterPathsForHost("dsh").map((item) => packageResourcePath("dsh", item)),
   ...PACKAGE_GENERATED_SUPPORT_PATHS,
   ...CURRENT_MANAGED_PATHS.core,
+  ...PACKAGE_BRAND_PATHS,
   ...PACKAGE_DOCUMENTATION_PATHS
 ]);

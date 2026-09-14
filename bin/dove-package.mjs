@@ -14098,21 +14098,46 @@ function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
 
 // src/cli/terminal-output.mjs
 var DOVE_PIXEL_ART = Object.freeze([
-  "  \u2588\u2588\u2593\u2593                          \u2588\u2593\u2593\u2593",
-  " \u2593\u2588\u2588\u2588\u2588\u2588                      \u2588\u2588\u2588\u2588\u2593\u2588\u2588",
-  " \u2593\u2588\u2588\u2588\u2588\u2588\u2593                   \u2593\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
-  " \u2593\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2593                \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
-  "  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2593            \u2593\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
-  "  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2593         \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
-  "  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588     \u2593\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
-  "    \u2593\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2593  \u2593\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2593",
-  "     \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2593",
-  "      \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2593\u2593\u2588\u2588\u2588\u2588",
-  "       \u2593\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
-  "          \u2593\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2593  \u2593",
-  "        \u2593\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2593",
-  " \u2593\u2593\u2593\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2593\u2593",
-  "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2593\u2593\u2593"
+  "  \u2588\u2588                    \u2588\u2588",
+  "  \u2588\u2588\u2588\u2588                \u2588\u2588\u2588\u2588",
+  "    \u2588\u2588\u2588\u2588            \u2588\u2588\u2588\u2588\u2588\u2588",
+  "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588          \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588              \u2588\u2588",
+  "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588      \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588          \u2588\u2588\u2588\u2588\u2588\u2588",
+  "  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588          \u2588\u2588\u2588\u2588",
+  "  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588          \u2588\u2588\u2588\u2588\u2588\u2588",
+  "    \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588          \u2588\u2588  \u2588\u2588",
+  "  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588",
+  "      \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588\u2588\u2588",
+  "    \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588  \u2588\u2588",
+  "        \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588",
+  "          \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+  "                \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+  "          \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+  "      \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+  "    \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588",
+  "      \u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588",
+  "            \u2588\u2588"
+]);
+var DOVE_BRANCH_SPANS = Object.freeze([
+  [],
+  [],
+  [],
+  [[42, 44]],
+  [[38, 44]],
+  [[38, 42]],
+  [[38, 44]],
+  [[36, 38], [40, 42]],
+  [[36, 38]],
+  [[38, 42]],
+  [[34, 36], [38, 40]],
+  [[34, 36]],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  []
 ]);
 var ANSI = Object.freeze({
   reset: "\x1B[0m",
@@ -14136,7 +14161,20 @@ function terminalStyle(text, style, options2 = {}) {
 }
 function renderDovePixelArt(options2 = {}) {
   const color = options2.color === true;
-  return DOVE_PIXEL_ART.map((line) => terminalStyle(line, "cyan", { color })).join("\n");
+  if (!color) return DOVE_PIXEL_ART.join("\n");
+  return DOVE_PIXEL_ART.map((line, index) => {
+    const spans = DOVE_BRANCH_SPANS[index];
+    if (spans.length === 0) return terminalStyle(line, "cyan", { color });
+    const segments = [];
+    let cursor = 0;
+    for (const [start, end] of spans) {
+      if (start > cursor) segments.push(terminalStyle(line.slice(cursor, start), "cyan", { color }));
+      segments.push(terminalStyle(line.slice(start, end), "green", { color }));
+      cursor = end;
+    }
+    if (cursor < line.length) segments.push(terminalStyle(line.slice(cursor), "cyan", { color }));
+    return segments.join("");
+  }).join("\n");
 }
 function terminalSafeText(value2) {
   return String(value2).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
@@ -14482,11 +14520,12 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
   const stream = options2.stream ?? process.stdout;
   const env = options2.env ?? process.env;
   const interactive = isInteractiveTerminal(stream);
+  const showMascot = options2.showMascot !== false;
   const color = terminalColorEnabled(stream, env);
   const heading = headingFor(command3, result.status);
   const projectName = terminalSafeText2(path2.basename(result.target) || result.target);
   const lines = [];
-  if (command3 === "init" && ["initialized", "already-initialized"].includes(result.status) && interactive) {
+  if (showMascot && command3 === "init" && ["initialized", "already-initialized"].includes(result.status) && interactive) {
     lines.push(renderDovePixelArt({ color }), "");
   }
   lines.push(terminalStyle(heading, "bold", { color }));
@@ -14640,7 +14679,7 @@ async function runInteractiveDoveSetup(options2) {
   const projectName = safeProjectName(setupTarget);
   const setup = initial.setup;
   if (!setup || !Array.isArray(setup.allowedActions)) throw new Error("Dove \u9879\u76EE\u72B6\u6001\u7F3A\u5C11\u53EF\u7528\u7684\u4EA4\u4E92\u64CD\u4F5C\u3002");
-  stream.write(`${renderDovePixelArt({ color })}
+  if (isInteractiveTerminal(stream)) stream.write(`${renderDovePixelArt({ color })}
 
 `);
   stream.write(`${terminalStyle("Dove", "bold", { color })}
@@ -14673,7 +14712,7 @@ ${renderDoveDoctor(initial, { stream, env })}
       const result = await initialize(setupTarget, { hosts });
       const current = await inspect2(setupTarget);
       stream.write(`
-${renderProjectIntegrationResult("init", result, { stream, env })}
+${renderProjectIntegrationResult("init", result, { stream, env, showMascot: false })}
 `);
       return { status: "initialized", action: "init", result: current };
     }
@@ -18514,6 +18553,7 @@ function generatedDoveAgentEntries() {
 
 // src/core/command-manifest.mjs
 var PACKAGE_DOCUMENTATION_PATHS = ["README.md", "docs/README.md", "docs/AUTHOR_PREFERENCES.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"];
+var PACKAGE_BRAND_PATHS = ["dove.png"];
 var PACKAGE_RUNTIME_PATHS = ["dist/index.mjs", "bin/dove-package.mjs"];
 var PROJECT_HOST_IDS2 = ["claude", "dsh"];
 var DOVE_CLAUDE_AMBIENT_PROJECT_PATHS = Object.freeze([
@@ -18933,6 +18973,7 @@ var MANAGED_PACKAGE_PATHS = Object.freeze([
   ...commandAdapterPathsForHost("dsh").map((item) => packageResourcePath("dsh", item)),
   ...PACKAGE_GENERATED_SUPPORT_PATHS,
   ...CURRENT_MANAGED_PATHS.core,
+  ...PACKAGE_BRAND_PATHS,
   ...PACKAGE_DOCUMENTATION_PATHS
 ]);
 

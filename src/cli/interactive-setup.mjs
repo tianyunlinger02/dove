@@ -10,6 +10,7 @@ import {
 import { renderDoveDoctor } from "./doctor-output.mjs";
 import { renderProjectIntegrationResult } from "./project-integration-output.mjs";
 import {
+  isInteractiveTerminal,
   renderCompleteReinstallInventory,
   renderDoveLifecycleResult,
   renderDovePixelArt,
@@ -141,7 +142,7 @@ export async function runInteractiveDoveSetup(options) {
   const setup = initial.setup;
   if (!setup || !Array.isArray(setup.allowedActions)) throw new Error("Dove 项目状态缺少可用的交互操作。");
 
-  stream.write(`${renderDovePixelArt({ color })}\n\n`);
+  if (isInteractiveTerminal(stream)) stream.write(`${renderDovePixelArt({ color })}\n\n`);
   stream.write(`${terminalStyle("Dove", "bold", { color })}\n`);
   stream.write("完整科研 agent，围绕主线判断推进真实工作。\n\n");
   stream.write(`${terminalStyle("项目", "dim", { color })}  ${projectName}\n\n`);
@@ -165,7 +166,7 @@ export async function runInteractiveDoveSetup(options) {
       const hosts = await selectHosts(promptCheckbox, DEFAULT_INITIALIZABLE_HOSTS);
       const result = await initialize(setupTarget, { hosts });
       const current = await inspect(setupTarget);
-      stream.write(`\n${renderProjectIntegrationResult("init", result, { stream, env })}\n`);
+      stream.write(`\n${renderProjectIntegrationResult("init", result, { stream, env, showMascot: false })}\n`);
       return { status: "initialized", action: "init", result: current };
     }
     if (action === "update") {

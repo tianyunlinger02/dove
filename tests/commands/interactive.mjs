@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { runInteractiveDoveSetup } from "../../src/cli/interactive-setup.mjs";
+import { renderDovePixelArt } from "../../src/cli/terminal-output.mjs";
 import {
   DEFAULT_INITIALIZABLE_HOSTS,
   HOST_REGISTRY,
@@ -58,6 +59,7 @@ export async function assertInteractiveHostSelection() {
       checked: DEFAULT_INITIALIZABLE_HOSTS.includes(hostId)
     })));
     const text = output.join("");
+    assert.equal(text.includes(renderDovePixelArt()), false, "non-TTY interactive setup must not show the mascot");
     assert.match(text, /Dove 已在此项目启用/u);
     assert.doesNotMatch(text, /Prompt Hook/u);
     if (bootstrap) assert.match(text, /RESEARCH\.md 已建立/u);
@@ -67,6 +69,38 @@ export async function assertInteractiveHostSelection() {
     }
     if (selectedHosts.includes("claude")) assert.match(text, /SessionStart hook/u);
     else assert.doesNotMatch(text, /WebFetch 禁用|Exa MCP/u);
+  }
+
+  {
+    const target = "/workspace/example-project";
+    const output = [];
+    let inspectionCount = 0;
+    await runInteractiveDoveSetup({
+      target,
+      inspect: async () => {
+        inspectionCount += 1;
+        return inspectionCount === 1
+          ? {
+              target,
+              setup: { mode: "uninitialized", reason: "uninitialized", allowedActions: ["init", "exit"] },
+              projectIntegration: { state: "uninitialized" }
+            }
+          : {
+              target,
+              setup: { mode: "current", reason: "current", allowedActions: ["exit"] },
+              projectIntegration: { state: "current", manifest: { hosts: ["claude"] } }
+            };
+      },
+      initialize: async () => ({ status: "initialized", target, hosts: ["claude"], writtenPaths: [] }),
+      promptSelect: async () => "init",
+      promptCheckbox: async () => ["claude"],
+      stream: { isTTY: true, write: (chunk) => output.push(chunk) },
+      env: { NO_COLOR: "1" }
+    });
+    const text = output.join("");
+    const mascot = renderDovePixelArt();
+    assert.equal(text.split(mascot).length - 1, 1, "interactive init must show the mascot exactly once");
+    assert.doesNotMatch(text, /\x1b\[/u, "NO_COLOR interactive output must not contain ANSI escapes");
   }
 }
 

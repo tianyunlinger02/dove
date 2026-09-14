@@ -1,5 +1,7 @@
 # Dove
 
+<img src="./dove.png" alt="Dove pixel-art pigeon carrying a branch" width="320">
+
 Dove helps you move a research project forward. Tell it what you are trying to achieve; it can read sources, inspect project material, analyze results, design or run experiments, keep local run receipts, write and revise text, make figures, review the work, and help respond to criticism.
 
 For a confirmed research goal, Dove keeps taking useful in-scope steps while the work can still move forward. It checks consequential plans and investments against that goal, grounds important research decisions proportionately, and asks when the next step needs your decision or permission or hits a real outside limit. Ordinary tasks with no research impact finish normally, without imposed research planning, grading, or records.

@@ -5,6 +5,11 @@ import { renderDoveHelp } from "../../src/cli/help-output.mjs";
 import { renderProjectIntegrationResult } from "../../src/cli/project-integration-output.mjs";
 import { renderReviewResult } from "../../src/cli/review-output.mjs";
 import { renderRunMetric, renderRunResult } from "../../src/cli/run-output.mjs";
+import {
+  DOVE_PIXEL_ART,
+  renderDoveHome,
+  renderDovePixelArt
+} from "../../src/cli/terminal-output.mjs";
 import { normalizeReviewId } from "../../src/core/review-workspace.mjs";
 
 function assertRuntimeCli() {
@@ -100,6 +105,40 @@ function assertDoveCliHelpRenderer() {
   assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "review", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
 }
 
+function countOccurrences(text, value) {
+  return text.split(value).length - 1;
+}
+
+function stripAnsi(text) {
+  return text.replace(/\x1b\[[0-9;]*m/gu, "");
+}
+
+function assertDoveMascotRenderer() {
+  const plainMascot = DOVE_PIXEL_ART.join("\n");
+  assert.equal(DOVE_PIXEL_ART.length, 19, "terminal mascot must preserve the 32×32 artwork's occupied rows");
+  assert.equal(Math.max(...DOVE_PIXEL_ART.map((line) => line.length)), 44, "terminal mascot must preserve two terminal columns per logical pixel");
+  for (const line of DOVE_PIXEL_ART) {
+    assert.match(line, /^[ █]*$/u, "terminal mascot must use only exact hard pixels and spaces");
+    assert.equal(line.trimEnd(), line, "terminal mascot must not contain trailing spaces");
+  }
+  assert.equal(renderDovePixelArt(), plainMascot);
+  const coloredMascot = renderDovePixelArt({ color: true });
+  assert.equal(stripAnsi(coloredMascot), plainMascot, "color must not change Dove pixels");
+  assert.match(coloredMascot, /\x1b\[36m/u, "Dove body must be cyan in a color terminal");
+  assert.match(coloredMascot, /\x1b\[32m/u, "Dove branch must be green in a color terminal");
+  assert.doesNotMatch(plainMascot, /[░▒▓▀▄]/u, "terminal mascot must not add glow or resampled pixels");
+
+  const ttyNoColorHome = renderDoveHome({ stream: { isTTY: true }, env: { NO_COLOR: "1" }, state: "current" });
+  assert.equal(countOccurrences(ttyNoColorHome, plainMascot), 1, "TTY home must show one mascot when color is disabled");
+  assert.doesNotMatch(ttyNoColorHome, /\x1b\[/u);
+  const ttyColorHome = renderDoveHome({ stream: { isTTY: true }, env: { NO_COLOR: "" }, state: "current" });
+  assert.match(ttyColorHome, /\x1b\[32m/u, "empty NO_COLOR must keep the green branch");
+  assert.equal(stripAnsi(ttyColorHome).includes(plainMascot), true);
+  const nonTtyHome = renderDoveHome({ stream: { isTTY: false }, env: {}, state: "current" });
+  assert.equal(nonTtyHome.includes(plainMascot), false, "non-TTY home must not show the mascot");
+  assert.doesNotMatch(nonTtyHome, /\x1b\[/u);
+}
+
 function assertProjectIntegrationRenderer() {
   const output = renderProjectIntegrationResult("update", {
     status: "updated",
@@ -132,6 +171,24 @@ function assertProjectIntegrationRenderer() {
   }, { stream: { isTTY: false }, env: {} });
   assert.match(preservedResearch, /现有研究目录保持不变，未创建或补写研究文档/u);
   assert.doesNotMatch(preservedResearch, /研究入口(?: RESEARCH\.md)?已建立|研究入口 RESEARCH\.md 已建立/u);
+
+  const plainMascot = renderDovePixelArt();
+  const directInit = renderProjectIntegrationResult("init", {
+    ...initializedResult,
+    writtenPaths: [".dove/install/manifest.json"]
+  }, { stream: { isTTY: true }, env: { NO_COLOR: "1" } });
+  assert.equal(countOccurrences(directInit, plainMascot), 1, "direct TTY init must show one mascot");
+  const suppressedInit = renderProjectIntegrationResult("init", {
+    ...initializedResult,
+    writtenPaths: [".dove/install/manifest.json"]
+  }, { stream: { isTTY: true }, env: { NO_COLOR: "1" }, showMascot: false });
+  assert.equal(suppressedInit.includes(plainMascot), false, "interactive init summary must be able to suppress its second mascot");
+  const ttyUpdate = renderProjectIntegrationResult("update", {
+    ...initializedResult,
+    status: "updated",
+    writtenPaths: []
+  }, { stream: { isTTY: true }, env: { NO_COLOR: "1" } });
+  assert.equal(ttyUpdate.includes(plainMascot), false, "update must not show the mascot");
 }
 
 function assertReviewResultRenderer() {
@@ -388,6 +445,7 @@ export function assertCliParserAndRenderers() {
   assertRuntimeCli();
   assertCliParserAdditionalCases();
   assertDoveCliHelpRenderer();
+  assertDoveMascotRenderer();
   assertProjectIntegrationRenderer();
   assertReviewResultRenderer();
   assertRunResultRenderer();

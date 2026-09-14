@@ -97,12 +97,13 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
   const stream = options.stream ?? process.stdout;
   const env = options.env ?? process.env;
   const interactive = isInteractiveTerminal(stream);
+  const showMascot = options.showMascot !== false;
   const color = terminalColorEnabled(stream, env);
   const heading = headingFor(command, result.status);
   const projectName = terminalSafeText(path.basename(result.target) || result.target);
   const lines = [];
 
-  if (command === "init" && ["initialized", "already-initialized"].includes(result.status) && interactive) {
+  if (showMascot && command === "init" && ["initialized", "already-initialized"].includes(result.status) && interactive) {
     lines.push(renderDovePixelArt({ color }), "");
   }
 
