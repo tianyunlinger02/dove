@@ -1,5 +1,9 @@
 import fs from "node:fs";
 
+import {
+  DOVE_AUTHOR_PREFERENCES_CONTINUITY,
+  DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP
+} from "./dove-author-preferences.mjs";
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 import { inspectLatestReviewFacts } from "./review-runtime.mjs";
 import { inspectLatestRunFacts } from "./run-record.mjs";
@@ -69,10 +73,15 @@ export function sessionStartOutput(payload, result = null, options = {}) {
   if (result && result.status !== "current") {
     output.systemMessage = "Dove project integration needs attention. SessionStart is read-only; run dove update explicitly to update supported manifest-owned integration. If blocked, inspect dove doctor --json before changing files.";
   }
-  if (payload.source === "compact" || payload.source === "resume") {
+  if (payload.source === "startup" || payload.source === "clear") {
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
-      additionalContext: sessionFacts(options.project, options)
+      additionalContext: DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP
+    };
+  } else if (payload.source === "compact" || payload.source === "resume") {
+    output.hookSpecificOutput = {
+      hookEventName: "SessionStart",
+      additionalContext: `${sessionFacts(options.project, options)}\n${DOVE_AUTHOR_PREFERENCES_CONTINUITY}`
     };
   }
   return Object.keys(output).length > 0 ? output : null;

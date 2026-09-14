@@ -121,9 +121,9 @@ Dove 的作者上下文在论文准备过程中可以进行作者侧科学自检
 
 以上边界不收紧合法记录维护，不要求把每项有用支撑变成科学贡献，也不否认有依据的负结果价值。支撑工作是否值得做，与它是否已经改变科学认识分开判断。
 
-用户显式 update 会覆盖 manifest-owned 集成中的本地修改并提醒；SessionStart 完全只读，只检查并按需以 `systemMessage` 提示显式 update，不同步任何资源、写配置或清理旧状态，也不重载当前会话。Doctor 的集成状态仅为 `uninitialized`、`current`、`needs-update`、`blocked`；没有 adoption、旧 manifest migration 或 hot-sync 成功路径，未知文件保留。两者不改研究记录。Claude 项目没有既有 `statusLine` 时，Dove 安装只读双行显示：第一行使用宿主模型、总上下文容量、剩余上下文比例、可选的无标签青色主线正文、Git 分支和当前 Claude 会话时长，第二行仅绝对项目路径；仅非空 `NO_COLOR` 禁色。主线只来自根 `.dove/research/RESEARCH.md` 的唯一普通 `Mainline: <text>` 行，读取上限为 64 KiB；缺失、空白、重复、过大或不可读时省略，不扫描科研树或读取其他记录，不把分支或时长伪装成科学主线或累计科研工时。主线维护遵循[研究模型](RESEARCH_MODEL.md#项目与当前科研主线)，不为显示补写或迁移已有研究树，不改 fresh bootstrap 或 SessionStart。既有用户/Trellis line 不接管；没有 `UserPromptSubmit`、隐藏 intake 或替代每轮 hook。
+用户显式 update 会覆盖 manifest-owned 集成中的本地修改并提醒；SessionStart 完全只读，检查集成并按需以 `systemMessage` 提示显式 update，startup 和 `/clear` 另向当前主 agent提供完整作者偏好的读取引导，不同步任何资源、写配置或清理旧状态，也不把引导或安装伪装成已经读过。compact/resume 复用同一主上下文已读偏好，不无条件重读。Doctor 的集成状态仅为 `uninitialized`、`current`、`needs-update`、`blocked`；没有 adoption、旧 manifest migration 或 hot-sync 成功路径，未知文件保留。两者不改研究记录。Claude 项目没有既有 `statusLine` 时，Dove 安装只读双行显示：第一行使用宿主模型、总上下文容量、剩余上下文比例、可选的无标签青色主线正文、Git 分支和当前 Claude 会话时长，第二行仅绝对项目路径；仅非空 `NO_COLOR` 禁色。主线只来自根 `.dove/research/RESEARCH.md` 的唯一普通 `Mainline: <text>` 行，读取上限为 64 KiB；缺失、空白、重复、过大或不可读时省略，不扫描科研树或读取其他记录，不把分支或时长伪装成科学主线或累计科研工时。主线维护遵循[研究模型](RESEARCH_MODEL.md#项目与当前科研主线)，不为显示补写或迁移已有研究树，不改 fresh bootstrap 或 SessionStart。既有用户/Trellis line 不接管；没有 `UserPromptSubmit`、隐藏 intake 或替代每轮 hook。
 
-compact/resume 只提供事实卡：`RESEARCH.md` 是否存在及绝对修改时间；最新 Review 的 id、round、绝对更新时间和材料 currentness；最新 Run 的 id、绝对开始时间、status 和 exit。不读取研究 Markdown 正文、report 或 stdout/stderr logs，不猜主线；startup/clear 无研究卡。卡片帮助定位记录，不恢复科研判断。
+compact/resume 继续复用同一主上下文已读偏好，不无条件重读，并只提供事实卡：`RESEARCH.md` 是否存在及绝对修改时间；最新 Review 的 id、round、绝对更新时间和材料 currentness；最新 Run 的 id、绝对开始时间、status 和 exit。不读取研究 Markdown 正文、report 或 stdout/stderr logs，不猜主线；startup/clear 提供单独的偏好读取引导而无研究卡。卡片帮助定位记录，不恢复科研判断。
 
 Run 收据保留命令、时间、结果、指标和比较依据，以及用户声明的 seed、Git commit 和 dirty 最低事实，不变成环境清单。Git 不改变比较资格或排名；机器比较也不替代科学可比性判断。Source 可以完成用户指定条目的有界 bibliography DOI 核验，但元数据核验不代表读过全文或支持主张。
 

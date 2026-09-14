@@ -8,6 +8,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { DOVE_CLAUDE_STATUS_LINE } from "../src/core/ambient-policy.mjs";
+import {
+  DOVE_AUTHOR_PREFERENCES_CONTINUITY,
+  DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP
+} from "../src/core/dove-author-preferences.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { initializeProjectIntegration, inspectProjectIntegration, updateProjectIntegration, previewProjectCompleteReinstall, completeReinstallProjectIntegration, previewProjectUninstall } from "../src/core/project-installation.mjs";
 import { INSTALLATION_MANIFEST_PATH, validateProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
@@ -281,10 +285,21 @@ function validateSessionFacts(root, executable) {
       assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
       const context = output.hookSpecificOutput.additionalContext;
       assert.equal(typeof context, "string");
-      assert.equal(context.split("\n").length, 4, "Facts stay limited to one header and three items.");
-      assert.match(context, /not the current research mainline/u);
+      if (source === "startup" || source === "clear") {
+        assert.equal(context, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP);
+        assert.match(context, /current host main agent must personally read/iu);
+        assert.match(context, /AUTHOR_PREFERENCES\.md.*beginning to end/iu);
+        assert.match(context, /offsets until EOF/iu);
+        assert.match(context, /Do not delegate/iu);
+        assert.equal(context.length < 1200, true, "Startup bootstrap must remain a small instruction rather than embedded preference content.");
+      } else {
+        assert.equal(context.split("\n").length, 5, "Continuation context stays limited to one header, three facts, and one preference line.");
+        assert.match(context, /not the current research mainline/u);
+        assert.equal(context.endsWith(DOVE_AUTHOR_PREFERENCES_CONTINUITY), true);
+      }
       assert.doesNotMatch(context, /sha256|digest|report\.md|stdout\.log|stderr\.log|ago|minutes? later|DO_NOT_INJECT/iu);
       assert.doesNotMatch(context, /z-older|historical-material/u);
+      assert.equal(context.includes(REFERENCES[0].content.slice(0, 500)), false, "Hook context must not embed the author-preference body.");
     }
     return output;
   };
@@ -294,8 +309,9 @@ function validateSessionFacts(root, executable) {
   fs.renameSync(path.join(root, ".dove/research"), path.join(SCRATCH_ROOT, `${path.basename(root)}-initial-research`));
   for (const source of ["startup", "clear", "compact", "resume"]) {
     const output = invoke(source);
-    if (source === "startup" || source === "clear") assert.equal(output, null);
-    else {
+    if (source === "startup" || source === "clear") {
+      assert.equal(output.hookSpecificOutput.additionalContext, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP);
+    } else {
       assert.match(output.hookSpecificOutput.additionalContext, /RESEARCH\.md: exists=no; mtime=unavailable/u);
       assert.match(output.hookSpecificOutput.additionalContext, /Latest Review: unavailable\nLatest Run: unavailable/u);
     }
@@ -335,12 +351,14 @@ function validateSessionFacts(root, executable) {
   fs.utimesSync(journalPath, new Date(oldTime), new Date(oldTime));
   for (const source of ["startup", "clear", "compact", "resume"]) {
     const output = invoke(source);
-    if (source === "startup" || source === "clear") assert.equal(output, null);
-    else {
+    if (source === "startup" || source === "clear") {
+      assert.equal(output.hookSpecificOutput.additionalContext, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP);
+    } else {
       const facts = output.hookSpecificOutput.additionalContext;
       assert.match(facts, new RegExp(`RESEARCH\\.md: exists=yes; mtime=${oldTime}`, "u"));
       assert.ok(facts.includes(`Latest Review: id=a-latest; round=2; updatedAt=${reviewTime}; material currentness=current`));
       assert.ok(facts.includes(`Latest Run: id=a-latest; startedAt=${runTime}; status=failed; exit=7`));
+      assert.equal(facts.endsWith(DOVE_AUTHOR_PREFERENCES_CONTINUITY), true);
     }
   }
 
@@ -424,7 +442,7 @@ function validateSessionFacts(root, executable) {
   for (const source of ["startup", "clear", "compact", "resume"]) {
     const output = invoke(source);
     assert.match(output.systemMessage, /read-only.*dove update/u);
-    assert.equal(Object.hasOwn(output, "hookSpecificOutput"), source === "compact" || source === "resume");
+    assert.equal(Object.hasOwn(output, "hookSpecificOutput"), true);
   }
   // A missing managed resource and an older package must prompt explicit
   // update, never cause the hook to restore files or refresh the manifest.
@@ -434,7 +452,7 @@ function validateSessionFacts(root, executable) {
   for (const source of ["startup", "clear", "compact", "resume"]) {
     const output = invoke(source);
     assert.match(output.systemMessage, /read-only.*dove update/u);
-    assert.equal(Object.hasOwn(output, "hookSpecificOutput"), source === "compact" || source === "resume");
+    assert.equal(Object.hasOwn(output, "hookSpecificOutput"), true);
   }
   fs.renameSync(savedAgentPath, agentPath);
   const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);

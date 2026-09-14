@@ -33,16 +33,16 @@ The bare public npm package name `dove` is unrelated. For package trust, lifecyc
 | `dove.rebuttal` | Analyze findings, write responses, and make requested evidence-backed revisions. |
 | `dove.lessons` | Read or maintain reusable advice that may improve research judgment. |
 
-## Short core and two on-demand references
+## Short core and two reference read contracts
 
 Claude's project rule and standalone DSH Skills carry a short shared research core. Both hosts install two package-managed references with separate responsibilities:
 
 | Reference | Role and when to read |
 |---|---|
 | `.dove/install/RESEARCH_QUALITY.md` | Full substantive quality criteria and joint conditions for the current use. Read before consequential grading, route/investment or scale-up decisions, core/submission conclusions, and after decision-changing counterevidence, task-identity changes, or cross-dimensional tradeoffs. |
-| `.dove/install/AUTHOR_PREFERENCES.md` | Full author-side research, engineering, writing, and collaboration preferences. Read relevant sections when those decisions need them, within the current request and project constraints. Its sole editable source is [Author preferences](AUTHOR_PREFERENCES.md). |
+| `.dove/install/AUTHOR_PREFERENCES.md` | Full author-side research, engineering, writing, and collaboration preferences. Each fresh host main-agent context must personally read it completely before substantive work, then apply relevant preferences within the current request and project constraints. Its sole editable source is [Author preferences](AUTHOR_PREFERENCES.md). |
 
-Reuse guidance already read in the active context and evidence whose conditions still hold. Neither reference is evidence, a permission grant, an optional Lesson, or a full-task checklist. Unavailable guidance limits what can be judged; do not invent grades or assume missing preferences. Isolated review receives its own quality reference only; it does not gain author-preference access. DSH Status remains inspection/reporting only, without author stance or its preference-read trigger.
+Claude startup and `/clear` receive a read-only SessionStart bootstrap requiring the current main agent—ordinary Claude or explicit Dove—to personally complete that full read, following offsets through EOF if needed. DSH has no SessionStart, so its first author-side Dove Skill use in a context requires the same read if the current main agent has not completed it there. Compact/resume continues using preferences already read in the same main context and does not unconditionally reread the full file. Installation, a bootstrap instruction, or another agent's read does not establish completion. Reuse active-context guidance and evidence whose conditions still hold. Neither reference is evidence, a permission grant, an optional Lesson, or a full-task checklist. Unavailable guidance limits what can be judged; do not invent grades or assume missing preferences. Bounded subagents receive relevant constraints from the main agent rather than performing the bootstrap. Isolated review receives its own quality reference only; it does not gain author-preference access. DSH Status remains inspection/reporting only, without author stance or its preference-read trigger.
 
 ## Scope, plans, and progress
 

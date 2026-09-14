@@ -91,7 +91,7 @@ This project rule is the primary Dove entry in ordinary Claude conversations. Ap
 
 ${renderDoveSharedResearchContractSection()}
 
-Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude}\`. Read relevant criteria at the decision triggers above for scoped quality and investment judgments. The separate author-preference reference linked in author stance guides applicable research, engineering, writing, and collaboration choices; neither reference is research evidence.
+Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude}\`. Read relevant criteria at the decision triggers above for scoped quality and investment judgments. The separate author-preference reference linked in author stance is fully bootstrapped by the current host main agent in each fresh context, then reused for applicable research, engineering, writing, and collaboration choices; neither reference is research evidence.
 
 ${renderDoveAuthorStanceSection()}
 

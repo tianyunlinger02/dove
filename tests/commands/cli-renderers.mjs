@@ -8,6 +8,7 @@ import { renderRunMetric, renderRunResult } from "../../src/cli/run-output.mjs";
 import {
   DOVE_PIXEL_ART,
   renderDoveHome,
+  renderDoveLifecycleResult,
   renderDovePixelArt
 } from "../../src/cli/terminal-output.mjs";
 import { normalizeReviewId } from "../../src/core/review-workspace.mjs";
@@ -152,6 +153,9 @@ function assertProjectIntegrationRenderer() {
   assert.match(output, /已覆盖 1 个 manifest-owned 本地编辑/u);
   assert.match(output, /\.claude\/settings\?\.json#\/hooks\/SessionStart\[dove-session-start\]/u);
   assert.match(output, /SessionStart 完全只读，不会修改这些本地编辑/u);
+  assert.match(output, /当前主 agent（普通 Claude 或显式 Dove）亲自完整读取/u);
+  assert.match(output, /安装本身不代表模型已经读过/u);
+  assert.match(output, /已经打开的主 agent.*现在应先完整读取/u);
 
   const initializedResult = {
     status: "initialized",
@@ -189,6 +193,43 @@ function assertProjectIntegrationRenderer() {
     writtenPaths: []
   }, { stream: { isTTY: true }, env: { NO_COLOR: "1" } });
   assert.equal(ttyUpdate.includes(plainMascot), false, "update must not show the mascot");
+
+  const dshOnly = renderProjectIntegrationResult("init", {
+    ...initializedResult,
+    hosts: ["dsh"],
+    writtenPaths: [".dove/install/manifest.json"]
+  }, { stream: { isTTY: false }, env: {} });
+  assert.match(dshOnly, /DSH 没有 SessionStart/u);
+  assert.match(dshOnly, /当前主 agent若尚未读取，必须先亲自完整读取/u);
+  assert.doesNotMatch(dshOnly, /普通 Claude 或显式 Dove/u);
+
+  for (const hosts of [["claude"], ["dsh"], ["claude", "dsh"]]) {
+    const alreadyInitialized = renderProjectIntegrationResult("init", {
+      ...initializedResult,
+      status: "already-initialized",
+      hosts,
+      writtenPaths: []
+    }, { stream: { isTTY: false }, env: {} });
+    assert.match(alreadyInitialized, /未安装或刷新作者偏好/u);
+    assert.match(alreadyInitialized, /不能据此确认/u);
+    assert.match(alreadyInitialized, /dove update/u);
+    assert.match(alreadyInitialized, /安装本身不代表模型已经读过/u);
+    assert.doesNotMatch(alreadyInitialized, /完整作者偏好已安装|startup 与 \/clear 会要求/u);
+  }
+
+  const claudeReinstall = renderDoveLifecycleResult("reinstall", {
+    status: "reinstalled",
+    hosts: ["claude"]
+  }, { stream: { isTTY: false }, env: {} });
+  assert.match(claudeReinstall, /当前已打开的主 agent现在应亲自完整读取/u);
+  assert.match(claudeReinstall, /新开 Claude 会话或在现有会话中 \/clear/u);
+  assert.match(claudeReinstall, /安装本身不代表已经读过/u);
+  const dshReinstall = renderDoveLifecycleResult("reinstall", {
+    status: "reinstalled",
+    hosts: ["dsh"]
+  }, { stream: { isTTY: false }, env: {} });
+  assert.match(dshReinstall, /DSH 没有 SessionStart/u);
+  assert.doesNotMatch(dshReinstall, /新开 Claude 会话/u);
 }
 
 function assertReviewResultRenderer() {

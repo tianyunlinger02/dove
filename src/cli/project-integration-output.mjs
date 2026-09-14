@@ -48,6 +48,17 @@ function localEditLabel(item) {
   return selector ? `${relativePath}#${selector}` : relativePath;
 }
 
+function authorPreferenceActivationLines(hosts) {
+  if (hosts.includes("claude")) return [
+    "完整作者偏好已安装在 .dove/install/AUTHOR_PREFERENCES.md。Claude fresh startup 与 /clear 会要求当前主 agent（普通 Claude 或显式 Dove）亲自完整读取；不会委派给 subagent。",
+    "若当前命令由一个已经打开的主 agent 执行，它现在应先完整读取该文件；若命令来自普通 shell，请新开会话或在现有会话中 /clear。安装本身不代表模型已经读过。"
+  ];
+  return [
+    "完整作者偏好已安装在 .dove/install/AUTHOR_PREFERENCES.md。DSH 没有 SessionStart；首次进入作者侧 Dove Skill 时，当前主 agent若尚未读取，必须先亲自完整读取，不能委派给 subagent。",
+    "安装本身不代表模型已经读过。"
+  ];
+}
+
 function replacedLocalEditNotice(result) {
   const replaced = Array.isArray(result.replacedLocalEdits) ? result.replacedLocalEdits : [];
   if (replaced.length === 0) return [];
@@ -124,6 +135,11 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
   }
   lines.push(...replacedLocalEditNotice(result));
   lines.push("");
+  if (command === "init" && result.status === "already-initialized") {
+    lines.push("本次 init 未安装或刷新作者偏好及宿主读取引导；不能据此确认完整引用或引导已就绪。如需刷新，请显式运行 dove update。安装本身不代表模型已经读过。", "");
+  } else {
+    lines.push(...authorPreferenceActivationLines(result.hosts), "");
+  }
   if (result.hosts.includes("claude")) {
     lines.push("论文检索需要本机已有 uvx；Claude Code 首次使用 `dove-paper-search` 或 `exa` project MCP 时会请求你批准。Dove 未安装依赖、写入凭据或替你批准。WebSearch 保留用于搜索发现，WebFetch 由项目权限禁用。");
     lines.push("");

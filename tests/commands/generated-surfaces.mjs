@@ -25,7 +25,12 @@ import {
   renderDoveResearchQualityReference
 } from "../../src/core/dove-research-contract.mjs";
 import { resourcesForHosts } from "../../src/core/project-installation-resources.mjs";
-import { DOVE_AUTHOR_PREFERENCES_READ_TRIGGER, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS, renderDoveAuthorPreferencesReference } from "../../src/core/dove-author-preferences.mjs";
+import {
+  DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP,
+  DOVE_AUTHOR_PREFERENCES_READ_TRIGGER,
+  DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS,
+  renderDoveAuthorPreferencesReference
+} from "../../src/core/dove-author-preferences.mjs";
 import { checkGeneratedAuthorPreferencesContent } from "../../scripts/generate-author-preferences.mjs";
 import {
   PAPER_SEARCH_MCP_FRAGMENT,
@@ -98,7 +103,12 @@ export function assertFinalEntrypointWiring() {
   assert.ok(rule.includes(renderDoveSharedResearchContractSection()));
   assert.ok(rule.includes(renderDoveAuthorStanceSection()));
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, 1, "author stance owns the preference read trigger");
+  assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP).length - 1, 1, "author stance requires one main-agent bootstrap");
+  assert.match(rule, /current host main agent must personally read/iu);
+  assert.match(rule, /offsets until EOF/iu);
+  assert.match(rule, /Do not delegate this bootstrap read/iu);
   assert.equal(renderDoveSharedResearchContractSection().includes(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER), false, "shared judgment does not carry author-only guidance");
+  assert.equal(renderDoveAgentInstructions().includes(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP), false, "bounded agent definition must not own the bootstrap");
 
   for (const resourcePath of [PAPER_SEARCH_SUPPORT_SKILL_PATH, EXA_WEB_SUPPORT_SKILL_PATH]) {
     const support = byPath.get(resourcePath);
@@ -120,7 +130,8 @@ export function assertFinalEntrypointWiring() {
     const standaloneAuthor = entry.hostId === "dsh" && entry.command.id !== "dove.status";
     assert.equal(entry.content.includes(renderDoveAuthorStanceSection()), standaloneAuthor, `${label}: author stance projection`);
     assert.equal(entry.content.includes(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER), standaloneAuthor, `${label}: author-only preference entry`);
-    assert.equal(entry.content.includes(renderDoveAuthorPreferencesReference()), false, `${label}: full preferences stay on demand`);
+    assert.equal(entry.content.includes(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP), standaloneAuthor, `${label}: main-agent bootstrap follows author stance`);
+    assert.equal(entry.content.includes(renderDoveAuthorPreferencesReference()), false, `${label}: full preferences stay in the installed reference`);
     for (const prefix of prefixes) {
       const value = `${prefix}\n\n${entry.content}`;
       assertSharedContractOnce(value, label);

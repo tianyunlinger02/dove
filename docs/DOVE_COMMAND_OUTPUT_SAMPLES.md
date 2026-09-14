@@ -13,13 +13,14 @@ Dove 已在此项目启用
 宿主  Claude Code
 
 ✓ Dove agent 与 9 个可选入口已安装
-✓ Claude 项目提示与来源阅读支持已配置
+✓ Claude 项目提示、主 agent SessionStart 偏好读取与来源阅读支持已配置
 ✓ 最小研究入口 RESEARCH.md 已建立
 ✓ 项目集成记录已建立
 
 后续研究 overview 与主题文档由研究者按需维护。
+完整作者偏好已安装；当前主 agent若正在执行此命令，应立即亲自完整读取。普通 shell 用户请新开 Claude 会话或在现有会话中 /clear。安装本身不代表已经读过。
 
-下一步  重新进入 Claude Code，直接提出科研请求；/dove:* 是可选专项入口。首次使用外部论文或网页阅读能力时，宿主可能请求你的批准。
+下一步  进入 Claude Code，直接提出科研请求；普通 Claude 或显式 Dove 都由当前主 agent本人读取偏好，/dove:* 只是可选专项入口。首次使用外部论文或网页阅读能力时，宿主可能请求你的批准。
 ```
 
 Piped output should omit mascot art and ANSI styling while keeping the same human summary. Human CLI output is Chinese while commands, paths, technical names, JSON keys, and enums remain exact. Explicit JSON modes should return one direct machine-readable result with no prose wrapper. For `dove run start`, flags after `--` belong to the target command and do not request Dove JSON output.

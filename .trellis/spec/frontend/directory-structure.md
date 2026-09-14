@@ -7,7 +7,7 @@ Paths below are relative to the repository root unless labeled as consumer-proje
 | Responsibility | Canonical source |
 |---|---|
 | Shared scientific judgment, quality reference and stance rendering | `src/core/dove-research-contract.mjs`, `src/core/dove-agent-persona.mjs` |
-| Full author preferences and on-demand access | `docs/AUTHOR_PREFERENCES.md` (sole editable content), `src/core/dove-author-preferences.mjs` (path, renderer, read trigger) |
+| Full author preferences and fresh-main-context read contract | `docs/AUTHOR_PREFERENCES.md` (sole editable content), `src/core/dove-author-preferences.mjs` (path, renderer, bootstrap/read trigger) |
 | Dove agent, ordinary Claude rule, response policy | `src/core/dove-agent-definition.mjs`, `src/core/ambient-policy.mjs`, `src/core/user-response-policy.mjs` |
 | Skill inventory and workflows | `src/core/command-manifest.mjs` |
 | Host and external-tool integration | `src/core/host-registry.mjs`, `src/core/paper-search-integration.mjs`, `src/core/web-access-integration.mjs` |

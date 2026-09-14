@@ -40,7 +40,7 @@ test("author preferences retain the full Markdown in generated and installed res
 test("installation manifests own only the two exact Dove reference files", () => {
   const hosts = ["claude", "dsh"];
   const input = {
-    package: { name: "dove", version: "3.0.10" },
+    package: { name: "dove", version: "3.0.11" },
     hosts,
     managed: resourcesForHosts(hosts),
     now: "2026-09-13T00:00:00.000Z"

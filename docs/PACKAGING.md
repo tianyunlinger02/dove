@@ -2,15 +2,15 @@
 
 ## Delivery model
 
-Dove 3.0.10 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
+Dove 3.0.11 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
 
 The bare public npm package named `dove` is unrelated. Release instructions must use an exact trusted tarball, Git revision, or internal-registry package version.
 
-Dove 3.0.10 is source-available under the PolyForm Noncommercial License 1.0.0, not OSI-approved open-source software. Dove itself may be used only for purposes permitted by that license; this release does not offer or advertise a commercial-license path. Bundled third-party components retain their own MIT or ISC rights, recorded separately in `THIRD_PARTY_NOTICES.md`.
+Dove 3.0.11 is source-available under the PolyForm Noncommercial License 1.0.0, not OSI-approved open-source software. Dove itself may be used only for purposes permitted by that license; this release does not offer or advertise a commercial-license path. Bundled third-party components retain their own MIT or ISC rights, recorded separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Release inventory
 
-Every Dove 3.0.10 release contains:
+Every Dove 3.0.11 release contains:
 
 - **one Dove research agent** for supported agent hosts;
 - **9 optional specialist Skills**: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`;
@@ -40,7 +40,7 @@ Both hosts declare two shared exclusive reference resources:
 | `.dove/install/RESEARCH_QUALITY.md` | `src/core/dove-research-contract.mjs` renders substantive quality criteria and current-use joint conditions. |
 | `.dove/install/AUTHOR_PREFERENCES.md` | `docs/AUTHOR_PREFERENCES.md` is the sole editable source for full author-side research, engineering, writing, and collaboration preferences. `src/core/dove-author-preferences-content.generated.mjs` preserves its Markdown for the bundled renderer; `src/core/dove-author-preferences.mjs` owns the reference path, renderer, and read trigger. |
 
-Both references are installed once when both hosts are selected; no other `.dove/install` file becomes an exclusive integration resource. They are neither researcher-owned Lessons nor research evidence. Short host context links to them on demand; [Usage](USAGE.md#short-core-and-two-on-demand-references) owns applicability and read triggers. Isolated review receives only separate canonical quality guidance, not the author preference reference.
+Both references are installed once when both hosts are selected; no other `.dove/install` file becomes an exclusive integration resource. They are neither researcher-owned Lessons nor research evidence. Short host context links to quality guidance on demand and requires each fresh host main-agent context to personally read the full author-preference reference before substantive work; installation or hook delivery is not proof of that read. [Usage](USAGE.md#short-core-and-two-reference-read-contracts) owns applicability and read triggers. Isolated review receives only separate canonical quality guidance, not the author preference reference.
 
 Release projections live under `package-resources/hosts/...`, outside host-recognized repository roots. Installation uses bundled renderers to write canonical resources into consumer projects, not disk copies of these projections. OpenCode, Codex, Cursor, and shared Agents projections are not packaged.
 
@@ -105,7 +105,7 @@ Bare `dove` is the interactive lifecycle front door. It classifies the project, 
 - `hook session-start` inspects package-managed integration read-only. Non-current integration may prompt explicit `dove update`; unsupported state is blocked rather than migrated or reconstructed.
 - Only compact/resume receives a read-only facts card: `RESEARCH.md` existence and absolute mtime; latest Review id, round, absolute `updatedAt`, and material currentness; latest Run id, absolute `startedAt`, status, and exit code. It reads metadata and run journals, and checks the latest review round's listed material bytes for currentness; it does not read research Markdown bodies, reports, or stdout/stderr logs or infer the mainline. Startup/clear receives no research card. Missing or unreadable facts remain `unavailable`.
 - `hook` supports read-only `session-start` inspection and the managed `statusline` renderer. The renderer keeps native model/context facts, optional unlabeled cyan mainline text, Git branch and session duration on the first line, and only the explicit absolute project path on the second. Only a nonempty `NO_COLOR` disables color. It reads Git without a shell and only the root `.dove/research/RESEARCH.md` within 64 KiB for one ordinary `Mainline: <text>` line; unavailable or ambiguous mainlines are omitted, never inferred from other prose or Mission/Run/Review. There are no research-tree scans or writes, and SessionStart is unchanged. It does not expose `user-prompt-submit`.
-- SessionStart never writes files or configuration, cleans up legacy/unknown state, or invokes update or Complete Reinstall. Startup/clear without warnings returns no output. Inspection does not reload same-session host context.
+- SessionStart never writes files or configuration, cleans up legacy/unknown state, or invokes update or Complete Reinstall. Startup and `/clear` emit the small author-preference bootstrap even without warnings; compact/resume retains its bounded facts card plus continuity guidance without an unconditional full preference reread. Inspection does not retroactively reload same-session host context, and hook delivery does not prove the current main agent completed the read.
 - Stop is not a managed lifecycle hook and does not perform synchronization, research continuation, tool calls, or writes.
 
 There is no `mcp` command and no `migrate-research` command.

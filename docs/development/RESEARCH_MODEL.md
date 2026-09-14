@@ -4,7 +4,7 @@
 
 Claude rule、DSH standalone Skills 和隔离 reviewer 常驻短核心；完整逐级判据、联合条件与路线判断按需读取。作者宿主共享包托管 `.dove/install/RESEARCH_QUALITY.md`，隔离 reviewer 由运行时另供 `.dove-package/RESEARCH_QUALITY.md`，与冻结用户材料及其快照分开，不作研究证据或权限来源。实质评级、重要路线选择、大额开发或实验扩量、核心主张或投稿完成判断之前，以及决定性反证、科学任务身份变化或跨维权衡可能改变决策时，Dove 主动读取完整 reference，应用相关部分并复用已读指导与仍适用证据；局部工作保持局部，不做每步全项目清单。缺失或不可读时说明判断限制，不编等级、不把检查通过当科学接受。该 reference 不是可选 Lessons，也不要求维护研究文档。
 
-作者侧另按需读取 `.dove/install/AUTHOR_PREFERENCES.md`，其唯一可编辑源是 [通用科研、工程与协作偏好](../AUTHOR_PREFERENCES.md)。质量 reference 负责实质等级、当前用途联合条件和科研判断；偏好 reference 负责适用的科研、工程、写作与协作选择，不复制逐级判据。两者都复用当前上下文已读内容，不是每步全量清单、研究证据或权限来源，缺失时说明相关限制。隔离 reviewer 不获得作者偏好读取入口；DSH Status 保持只读呈现，不带作者立场及其偏好触发。
+每个全新的宿主主 agent 上下文都须在实质工作前亲自完整读取 `.dove/install/AUTHOR_PREFERENCES.md`，其唯一可编辑源是 [通用科研、工程与协作偏好](../AUTHOR_PREFERENCES.md)。普通 Claude 和显式 Dove 都由当前主 agent 本人读取，不能委派给 bounded subagent；Claude startup 和 `/clear` 接收只读 SessionStart 引导，DSH 在当前上下文首次使用作者侧 Skill 且尚未完整读取时履行要求。compact/resume 继续复用同一主上下文已读内容，不无条件重读；安装、引导或其他 agent 的读取都不能证明当前主 agent 已读。质量 reference 负责实质等级、当前用途联合条件和科研判断；偏好 reference 负责适用的科研、工程、写作与协作选择，不复制逐级判据。两者都不是每步全量清单、研究证据或权限来源，缺失时说明相关限制。隔离 reviewer 不获得作者偏好读取入口；DSH Status 保持只读呈现，不带作者立场及其偏好触发。
 
 普通 Claude 会话通过已安装的项目 rule 成为首要 Dove 入口，不要求 `--agent dove` 或 Skill 才能承担作者侧判断。显式 agent 和九个 Skills 均为可选入口，无更高判断权威。无科研影响的普通任务正常完成，不强行添加科研计划、评级或记录；实现、诊断、优化或交付科研路线的工程工作则仍承担与其影响相称的科学责任。
 

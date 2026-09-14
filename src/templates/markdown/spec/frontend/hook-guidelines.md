@@ -13,8 +13,8 @@ Claude integration owns only the documented `.mcp.json#/mcpServers/dove-paper-se
 - Invoke user-installed `dove` on `PATH`, not a copied runtime or absolute installation path.
 - Inspect the exact initialized project and same-package manifest revision `2.0` without writing files or shared configuration.
 - If integration is not current, report a `systemMessage` suggesting explicit `dove update`; unsupported or ambiguous state needs `dove doctor --json` and manual resolution. Never update, adopt, migrate, clean up, or reinstall from the hook.
-- Startup/clear returns null when there is no warning. Compact/resume may additionally emit the read-only facts below after a valid project inspection.
-- Inspection cannot verify or reload already-active Claude context.
+- Startup and `/clear` emit a small author-preference bootstrap after valid inspection, even without an integration warning. It requires the current host main agent—ordinary Claude or explicit Dove—to personally read the full installed reference before substantive work; it does not embed the body or delegate the read. Compact/resume may additionally emit the read-only facts below plus continuity guidance, without an unconditional full reread.
+- Inspection and bootstrap delivery cannot verify reading or retroactively reload already-active Claude context.
 
 ## Compact/resume facts card
 
@@ -24,7 +24,7 @@ Only `compact` and `resume` emit these read-only facts:
 2. latest Review by `updatedAt`: id, current round, absolute update time, material currentness;
 3. latest Run by `startedAt`: id, absolute start time, status, exit code.
 
-Missing/unreadable facts stay `unavailable`. Startup/clear emits no research card, though read-only integration warnings may appear. Read review metadata and run journals; compare the latest round's listed project files with its snapshot receipt for currentness. Do not read research Markdown bodies, reports, or stdout/stderr logs, interpret verdicts, summarize research, choose actions, or infer the mainline. Latest means record time, not importance; visible conversation and relevant materials determine continuation.
+Missing/unreadable facts stay `unavailable`. Startup/clear emits the separate author-preference bootstrap, not a research card; read-only integration warnings may also appear. Compact/resume continues using preferences already read in the same main context and only repairs a clearly missing bootstrap. Read review metadata and run journals; compare the latest round's listed project files with its snapshot receipt for currentness. Do not read research Markdown bodies, reports, or stdout/stderr logs, interpret verdicts, summarize research, choose actions, or infer the mainline. Latest means record time, not importance; visible conversation and relevant materials determine continuation.
 
 ## Read-only status line
 
