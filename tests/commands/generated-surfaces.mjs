@@ -25,6 +25,8 @@ import {
   renderDoveResearchQualityReference
 } from "../../src/core/dove-research-contract.mjs";
 import { resourcesForHosts } from "../../src/core/project-installation-resources.mjs";
+import { DOVE_AUTHOR_PREFERENCES_READ_TRIGGER, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS, renderDoveAuthorPreferencesReference } from "../../src/core/dove-author-preferences.mjs";
+import { checkGeneratedAuthorPreferencesContent } from "../../scripts/generate-author-preferences.mjs";
 import {
   PAPER_SEARCH_MCP_FRAGMENT,
   PAPER_SEARCH_PACKAGE_SPECIFIER,
@@ -39,6 +41,7 @@ import {
 import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
 import {
   generatedAdapterEntries,
+  generatedAuthorPreferencesReferenceEntries,
   generatedClaudeAmbientProjectEntries,
   generatedResearchQualityReferenceEntries,
   renderCommandAdapter
@@ -94,7 +97,8 @@ export function assertFinalEntrypointWiring() {
   const rule = byPath.get(".claude/rules/dove.md");
   assert.ok(rule.includes(renderDoveSharedResearchContractSection()));
   assert.ok(rule.includes(renderDoveAuthorStanceSection()));
-  assert.match(rule, /tests serve them rather than generate requirements/iu);
+  assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, 1, "author stance owns the preference read trigger");
+  assert.equal(renderDoveSharedResearchContractSection().includes(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER), false, "shared judgment does not carry author-only guidance");
 
   for (const resourcePath of [PAPER_SEARCH_SUPPORT_SKILL_PATH, EXA_WEB_SUPPORT_SKILL_PATH]) {
     const support = byPath.get(resourcePath);
@@ -113,6 +117,10 @@ export function assertFinalEntrypointWiring() {
     const label = `${entry.hostId} ${entry.command.id}`;
     const prefixes = entry.hostId === "claude" ? [rule, `${rule}\n\n${renderClaudeDoveAgent()}`] : [""];
     assertHostGuidanceProjection(entry);
+    const standaloneAuthor = entry.hostId === "dsh" && entry.command.id !== "dove.status";
+    assert.equal(entry.content.includes(renderDoveAuthorStanceSection()), standaloneAuthor, `${label}: author stance projection`);
+    assert.equal(entry.content.includes(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER), standaloneAuthor, `${label}: author-only preference entry`);
+    assert.equal(entry.content.includes(renderDoveAuthorPreferencesReference()), false, `${label}: full preferences stay on demand`);
     for (const prefix of prefixes) {
       const value = `${prefix}\n\n${entry.content}`;
       assertSharedContractOnce(value, label);
@@ -126,11 +134,13 @@ export function assertFinalEntrypointWiring() {
       for (const criterion of DOVE_RESEARCH_QUALITY_CRITERIA) {
         assert.equal(value.includes(criterion), false, `${label}: detailed criteria stay on demand`);
       }
-      if (entry.hostId === "dsh" && entry.command.id === "dove.status") {
+      const authorOwners = entry.hostId === "dsh" && entry.command.id === "dove.status" ? 0 : 1;
+      assert.equal(value.split(renderDoveAuthorStanceSection()).length - 1, authorOwners, `${label}: one applicable author owner`);
+      assert.equal(value.split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, authorOwners, `${label}: preference trigger follows author stance`);
+      assert.equal(value.split(DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[entry.hostId]).length - 1, authorOwners, `${label}: preference path follows author stance`);
+      if (authorOwners === 0) {
         assert.equal(value.includes("## Author stance"), false);
         assert.match(value, /only to inspect and report/iu);
-      } else {
-        assert.ok(value.includes(renderDoveAuthorStanceSection()), `${label}: canonical author stance`);
       }
     }
   }
@@ -201,6 +211,29 @@ export function assertGeneratedAdapters() {
   }
 }
 
+export function assertAuthorPreferencesResources() {
+  const source = fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8");
+  assert.deepEqual(checkGeneratedAuthorPreferencesContent(ROOT), []);
+  assert.equal(renderDoveAuthorPreferencesReference(), source);
+  const entries = generatedAuthorPreferencesReferenceEntries();
+  assert.deepEqual(entries.map(({ hostId }) => hostId), PROJECT_HOST_IDS);
+  for (const entry of entries) {
+    assert.equal(entry.destinationPath, ".dove/install/AUTHOR_PREFERENCES.md");
+    assert.equal(entry.destinationPath, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[entry.hostId]);
+    assert.equal(entry.relativePath, packageResourcePath(entry.hostId, entry.destinationPath));
+    assert.ok(PACKAGE_GENERATED_SUPPORT_PATHS.includes(entry.relativePath));
+    assert.ok(HOST_ADAPTERS[entry.hostId].requiredPaths.includes(entry.destinationPath));
+    assert.equal(entry.content, source);
+    assert.equal(fs.readFileSync(path.join(ROOT, entry.relativePath), "utf8"), source);
+  }
+  for (const hosts of [["claude"], ["dsh"], PROJECT_HOST_IDS]) {
+    const references = resourcesForHosts(hosts).filter(({ path }) => path.startsWith(".dove/"));
+    assert.deepEqual(references.map(({ path }) => path), [".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY.md"]);
+    assert.ok(references.every(({ kind, selector }) => kind === "exclusive-file" && selector === null));
+    assert.equal(references[0].content, source);
+  }
+}
+
 export function assertQualityReferenceResources() {
   const entries = generatedResearchQualityReferenceEntries();
   assert.deepEqual(entries.map(({ hostId }) => hostId), PROJECT_HOST_IDS);
@@ -212,10 +245,10 @@ export function assertQualityReferenceResources() {
     assert.equal(entry.content, renderDoveResearchQualityReference());
     assertGeneratedFileMatches(entry.relativePath, entry.content);
     const references = resourcesForHosts([entry.hostId]).filter(({ path: resourcePath }) => resourcePath.startsWith(".dove/"));
-    assert.equal(references.length, 1);
-    assert.equal(references[0].path, ".dove/install/RESEARCH_QUALITY.md");
-    assert.equal(references[0].kind, "exclusive-file");
-    assert.equal(references[0].content, entry.content);
+    assert.deepEqual(references.map(({ path }) => path), [".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY.md"]);
+    const quality = references.find(({ path }) => path === entry.destinationPath);
+    assert.equal(quality.kind, "exclusive-file");
+    assert.equal(quality.content, entry.content);
   }
   assert.equal(
     resourcesForHosts(PROJECT_HOST_IDS).filter(({ path: resourcePath }) => resourcePath === ".dove/install/RESEARCH_QUALITY.md").length,

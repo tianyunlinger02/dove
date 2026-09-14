@@ -13,13 +13,16 @@ import { DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS, renderDoveResearchQualityReference
 import { renderDoveAuthorStanceSection, renderDoveReviewerStanceSection, renderDoveSharedResearchContractSection } from "../src/core/dove-agent-persona.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import * as publicCore from "../src/core/index.mjs";
+import { DOVE_AUTHOR_PREFERENCES_READ_TRIGGER, renderDoveAuthorPreferencesReference } from "../src/core/dove-author-preferences.mjs";
+import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 
 assert.ok(renderDoveReviewerStanceSection().includes(DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS));
 
 const SOURCE_ONLY = process.argv.includes("--source-only");
 const coreEntries = [["source", publicCore]];
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SCRATCH_ROOT = path.join(ROOT, ".claude", "tmp", "dove-wiring-audit");
+const SCRATCH_ROOT = resolveTempWorkspaceBase();
+const AUTHOR_PREFERENCES_SENTINEL = "SYNTHETIC_AUTHOR_PREFERENCES_MUST_NOT_REACH_REVIEWER";
 fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
 
 function writeJson(filePath, value) {
@@ -192,6 +195,10 @@ assert.match(input, /## Author-side next actions/u);
 assert.ok(input.includes(${JSON.stringify(renderDoveSharedResearchContractSection())}));
 assert.ok(input.includes(${JSON.stringify(renderDoveReviewerStanceSection())}));
 assert.equal(input.includes(${JSON.stringify(renderDoveAuthorStanceSection())}), false);
+assert.equal(input.includes(${JSON.stringify(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER)}), false);
+assert.equal(input.includes(${JSON.stringify(renderDoveAuthorPreferencesReference())}), false);
+assert.equal(input.includes(${JSON.stringify(AUTHOR_PREFERENCES_SENTINEL)}), false);
+assert.doesNotMatch(input, /AUTHOR_PREFERENCES\\.md/u);
 const referencePath = ${JSON.stringify(DOVE_REVIEW_QUALITY_REFERENCE_PATH)};
 assert.ok(input.includes(referencePath));
 assert.match(input, /package guidance/iu);
@@ -217,6 +224,13 @@ while (stack.length > 0) {
   }
 }
 assert.deepEqual(actual.sort(), [referencePath, ...allowed].sort());
+for (const file of actual) {
+  assert.notEqual(path.basename(file), "AUTHOR_PREFERENCES.md");
+  const content = fs.readFileSync(path.join(process.cwd(), file), "utf8");
+  assert.equal(content.includes(${JSON.stringify(AUTHOR_PREFERENCES_SENTINEL)}), false);
+  assert.equal(content.includes(${JSON.stringify(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER)}), false);
+  assert.equal(content.includes(${JSON.stringify(renderDoveAuthorPreferencesReference())}), false);
+}
 for (const forbidden of ["private-note.md", "CLAUDE.md", ".claude/settings.json", ".dove/research/RESEARCH.md", "paper/result.pdf"]) {
   if (!allowed.has(forbidden)) assert.equal(actual.includes(forbidden), false, forbidden);
 }
@@ -262,6 +276,7 @@ function makeProject(tempRoot, name) {
   writeFile(project, "paper/CLAUDE.md", "nested author instruction must not be copied\n");
   writeFile(project, "CLAUDE.md", "author private project instruction must not be copied\n");
   writeFile(project, ".dove/research/notes.md", "author research note must not be copied\n");
+  writeFile(project, ".dove/install/AUTHOR_PREFERENCES.md", `${renderDoveAuthorPreferencesReference()}\n${AUTHOR_PREFERENCES_SENTINEL}\n`);
   return project;
 }
 
@@ -342,6 +357,17 @@ try {
   assert.notEqual(gitPrivate.status, 0);
   assert.match(gitPrivate.stderr, /private or Dove-owned/iu);
   assert.equal(fs.existsSync(path.join(project, ".dove", "reviews", "review-git-private")), false);
+
+  const beforePrivateReference = directoryObservationDigest(project);
+  const callsBeforePrivateReference = fs.readFileSync(fakeLog, "utf8");
+  const privateReference = cliReview([
+    "review", "handoff", "--project", project, "--id", "review-author-preferences",
+    "--material", ".dove/install/AUTHOR_PREFERENCES.md", "--json"
+  ], env);
+  assert.notEqual(privateReference.status, 0);
+  assert.match(privateReference.stderr, /private or Dove-owned/iu);
+  assertDigestEqual(directoryObservationDigest(project), beforePrivateReference, "Rejected author preferences must not create review records.");
+  assert.equal(fs.readFileSync(fakeLog, "utf8"), callsBeforePrivateReference, "Rejected author preferences must not launch the reviewer.");
 
   const internalStateRoot = cliReview([
     "review", "handoff",

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import {
   completeReinstallProjectIntegration,
@@ -15,6 +14,7 @@ import {
 import { DOVE_CLAUDE_STATUS_LINE } from "../src/core/ambient-policy.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
+import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 import { inspectProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
 import {
   EXA_MCP_FRAGMENT,
@@ -23,8 +23,8 @@ import {
   WEB_FETCH_DENY_SELECTOR
 } from "../src/core/web-access-integration.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const scratchRoot = path.join(root, ".dove-dev", "tmp");
+const scratchRoot = resolveTempWorkspaceBase();
+const referencePaths = [".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY.md"];
 fs.mkdirSync(scratchRoot, { recursive: true });
 let fixture;
 
@@ -70,7 +70,10 @@ const preview = previewProjectUninstall(fixture);
 assert.equal(preview.action, "uninstall");
 assert(preview.removedPaths.includes(".dove/install/manifest.json"));
 assert.equal(preview.removedPaths.includes(".dove/manifest.json"), false);
-assert(preview.removedPaths.includes(".dove/install/RESEARCH_QUALITY.md"));
+for (const relativePath of referencePaths) assert.equal(preview.removedPaths.includes(relativePath), true);
+for (const relativePath of [".dove/install/DOCTOR.md", ".dove/install/unknown.bin", ".dove/research/RESEARCH.md", ".dove/reviews/review-preserve/review.json", ".dove/runs/run-preserve/run.jsonl"]) {
+  assert.equal(preview.removedPaths.includes(relativePath), false);
+}
 assert(preview.removedPaths.includes(".claude/agents/dove.md"));
 assert(preview.removedPaths.includes(".dsh/skills/dove-research/SKILL.md"));
 const result = uninstallProjectIntegration(fixture, { confirmed: true });
@@ -79,6 +82,7 @@ assert.equal(fs.existsSync(path.join(fixture, ".dove", "install", "manifest.json
 assert.equal(fs.existsSync(legacyMarker), true);
 assert.equal(fs.existsSync(path.join(fixture, ".claude", "agents", "dove.md")), false);
 assert.equal(fs.existsSync(path.join(fixture, ".dsh", "skills", "dove-research", "SKILL.md")), false);
+for (const relativePath of referencePaths) assert.equal(fs.existsSync(path.join(fixture, relativePath)), false);
 assert.deepEqual({ doctor: digest(doctor), research: digest(research), review: digest(reviewRecord), run: digest(runRecord) }, before);
 const settings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.equal(settings.statusLine, undefined);
@@ -211,4 +215,46 @@ uninstallProjectIntegration(fixture, { confirmed: true });
 const preexistingPermissionAfterUninstall = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.deepEqual(preexistingPermissionAfterUninstall.permissions.deny, [WEB_FETCH_DENY_PERMISSION]);
 
-console.log(JSON.stringify({ status: "passed" }));
+for (const relativePath of referencePaths) {
+  reset();
+  initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude", "dsh"] });
+  const referenceFile = path.join(fixture, relativePath);
+  const unknownInstallFile = path.join(fixture, ".dove/install/unknown.bin");
+  const unknownBytes = Buffer.from([0xff, 0x00, 0x01]);
+  fs.writeFileSync(unknownInstallFile, unknownBytes);
+  const canonicalBytes = fs.readFileSync(referenceFile);
+  fs.appendFileSync(referenceFile, "local reference edit\n");
+  const observedPaths = [relativePath, ".dove/install/manifest.json", ".claude/settings.json", ".dsh/skills/dove-research/SKILL.md"];
+  const observe = () => observedPaths.map((file) => digest(path.join(fixture, file)));
+  const before = observe();
+  assert.throws(() => previewProjectUninstall(fixture), /ownership drift/u);
+  assert.throws(() => uninstallProjectIntegration(fixture, { confirmed: true }), /ownership drift/u);
+  assert.deepEqual(observe(), before, "Uninstall must not partially remove integration after reference drift.");
+
+  const options = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
+  const preview = previewProjectCompleteReinstall(fixture, options);
+  assert.equal(preview.replacedPaths.includes(relativePath), true);
+  fs.appendFileSync(referenceFile, "changed after preview\n");
+  const changed = observe();
+  assert.throws(() => completeReinstallProjectIntegration(fixture, { ...options, preview, confirmed: true }), /preview is stale/u);
+  assert.deepEqual(observe(), changed);
+  completeReinstallProjectIntegration(fixture, {
+    ...options, confirmed: true, preview: previewProjectCompleteReinstall(fixture, options)
+  });
+  assert.deepEqual(fs.readFileSync(referenceFile), canonicalBytes);
+
+  // A missing owned reference does not block removal of the remaining integration.
+  fs.rmSync(referenceFile);
+  const missingPreview = previewProjectUninstall(fixture);
+  assert.equal(missingPreview.removedPaths.includes(relativePath), false);
+  for (const other of referencePaths.filter((file) => file !== relativePath)) assert.equal(missingPreview.removedPaths.includes(other), true);
+  uninstallProjectIntegration(fixture, { confirmed: true });
+  for (const file of [...referencePaths, ".dove/install/manifest.json"]) assert.equal(fs.existsSync(path.join(fixture, file)), false);
+  assert.equal(fs.existsSync(path.join(fixture, ".dove/research/RESEARCH.md")), true);
+  assert.equal(missingPreview.removedPaths.includes(".dove/install/unknown.bin"), false);
+  assert.deepEqual(fs.readFileSync(unknownInstallFile), unknownBytes);
+  assert.equal(inspectProjectRoot(fixture).state, "blocked", "Preserved unknown installation residue is not a clean uninitialized project.");
+  assert.throws(() => resolveProjectRootForInit(fixture), /installation directory is incomplete/u);
+}
+
+console.log(JSON.stringify({ status: "passed", checks: ["exact reference removal", "reference drift and stale reinstall", "missing reference uninstall", "research and unknown installation preservation"] }));

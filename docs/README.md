@@ -1,25 +1,21 @@
 # Dove documentation
 
-Dove is one research agent with nine optional entrances and ordinary Markdown research notes. These guides explain how to install it, use it, and maintain the package without turning support machinery into research progress.
+Dove is one research agent. Ordinary Claude conversation in an initialized project is its primary entrance; `claude --agent dove` and nine flat Skills are optional, with no higher judgment authority. Ordinary tasks with no research impact do not acquire a research workflow.
 
 ## Guides
 
-- [Installation](INSTALL.md) explains trusted package installation, Claude Code and DSH setup, permissions, update, reinstall, uninstall, and Doctor.
-- [Usage](USAGE.md) explains how to use Dove, the nine Skills, research Markdown, local run receipts, Review, and `dove-review`.
-- [Capability matrix](CAPABILITY_MATRIX.md) summarizes the nine research capabilities and host availability.
+- [Installation](INSTALL.md) owns trusted package installation, Claude Code and DSH setup, permissions, managed-file ownership, lifecycle operations, and Doctor.
+- [Usage](USAGE.md) owns everyday entry modes, scoped research behavior, the nine Skills, research Markdown, local run receipts, and Review.
+- [Capability matrix](CAPABILITY_MATRIX.md) summarizes capabilities and host availability, not another workflow or grading rubric.
 - [Output samples](DOVE_COMMAND_OUTPUT_SAMPLES.md) shows output shapes without imposing response templates.
-- [Packaging](PACKAGING.md) defines package inventory and release checks.
-- [Development docs](development/README.md) index the stable Dove vision, research model, product requirements, and expected behavior.
+- [Packaging](PACKAGING.md) owns source-to-generated-resource relationships, package inventory, and release checks.
+- [Author preferences](AUTHOR_PREFERENCES.md) is the sole editable source for complete cross-project research, engineering, writing, and collaboration preferences; installed copies are generated references, not researcher-owned Lessons. The generation procedure belongs in [Packaging](PACKAGING.md#runtime-bundles).
+- [Development docs](development/README.md) index the stable Dove vision, research model, product requirements, and expected behavior. [Research model](development/RESEARCH_MODEL.md) gives the full intended scientific semantics; public guides summarize rather than duplicate its criteria.
 
-## Shared principles
+## Keep these boundaries clear
 
-- Ordinary Claude conversations share research judgment through the project rule; `claude --agent dove` starts the author-side main session. Bounded independent investigations may use a Dove subagent, but full-conversation work, important user clarification, and ongoing mainline ownership stay in the main session. The nine flat Skills are optional shortcuts, not personas or stages.
-- A confirmed research goal keeps moving while Dove can take another useful in-scope step. There is no Auto Skill or Auto command.
-- Research context lives in ordinary `.dove/research/**` Markdown. Fresh initialization creates only `RESEARCH.md`; other notes appear when useful.
-- Author-side self-check is not independent external review.
-- `dove-review` is the same researcher in an isolated reviewer position: `dove review handoff` freezes listed near-submission materials for an isolated Claude Code reviewer context, `status` compares those frozen materials with current project files read-only, and `resume`/`rerun` reuse that reviewer session.
-- `dove run` keeps local experiment receipts under `.dove/runs/**`; status is read-only, resume never reruns, finalize records one scalar metric, start records explicit seed plus Git commit/dirty facts, and compare only ranks compatible finalized runs by metric, budget, data, evaluator, and resource basis.
-- Status only reads and reports. Compact/resume receives a small facts card, not the current research direction; startup/clear receives no research card. Missing notes and broken links are reported plainly.
-- Explicit update replaces local edits to manifest-owned integration with a notice. SessionStart only inspects read-only and may suggest explicit `dove update` through `systemMessage`; it never synchronizes files or reloads active context. Neither rewrites research records.
-- `UserPromptSubmit` and intake are retired without a replacement per-prompt hook. When no user status line already exists, Claude integration installs a read-only Dove `statusLine` showing the absolute project path, native model/context/session facts, and the Git branch; it never reads research notes or turns the branch or session duration into scientific state.
-- Software checks and installed support files do not prove scientific correctness, completion, acceptance, or reviewer independence.
+- The [two on-demand references](USAGE.md#short-core-and-two-on-demand-references) separate research quality criteria from author preferences. They are package guidance, not evidence, permissions, or optional Lessons.
+- A confirmed research goal continues while useful authorized work remains; a bounded request can finish locally. There is no Auto Skill or command.
+- [Research Markdown](USAGE.md#research-markdown) is researcher-owned. Status is read-only, and lifecycle operations preserve existing research, review, and run records.
+- [Author-side self-check and isolated review](USAGE.md#review) have different evidence boundaries; a role label does not establish independence.
+- Research participation, requested-work completion, and scientific progress are distinct. Source instructions, generated resources, installed disk state, currently loaded context, and observed behavior likewise support different claims; see [verification evidence](PACKAGING.md#verification-evidence).

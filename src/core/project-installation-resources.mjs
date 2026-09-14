@@ -16,7 +16,7 @@ import {
   WEB_FETCH_DENY_PERMISSION,
   WEB_FETCH_DENY_SELECTOR
 } from "./web-access-integration.mjs";
-import { generatedAdapterEntries, generatedClaudeAmbientProjectEntries, generatedResearchQualityReferenceEntries } from "../../scripts/generate-command-adapters.mjs";
+import { generatedAdapterEntries, generatedAuthorPreferencesReferenceEntries, generatedClaudeAmbientProjectEntries, generatedResearchQualityReferenceEntries } from "../../scripts/generate-command-adapters.mjs";
 import { generatedDoveAgentEntries } from "./dove-agent-definition.mjs";
 
 export const RETIRED_USER_PROMPT_SUBMIT_SELECTOR = "/hooks/UserPromptSubmit[dove-user-prompt-submit]";
@@ -70,7 +70,7 @@ export function sameManaged(left, right) {
 }
 
 function assertManagedResourcePath(relativePath) {
-  if (relativePath === ".dove/install/RESEARCH_QUALITY.md") return;
+  if (relativePath === ".dove/install/RESEARCH_QUALITY.md" || relativePath === ".dove/install/AUTHOR_PREFERENCES.md") return;
   if (relativePath === ".dove" || relativePath.startsWith(".dove/")) throw new Error(`Project integration resources must not manage Dove workspace state: ${relativePath}.`);
   if (FORBIDDEN_RESOURCE_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) throw new Error(`Project integration resources must not install runtime bundles: ${relativePath}.`);
 }
@@ -81,6 +81,7 @@ export function claudeResources() {
     ...generatedAdapterEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
     ...generatedClaudeAmbientProjectEntries(),
     ...generatedResearchQualityReferenceEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
+    ...generatedAuthorPreferencesReferenceEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
     ...agentEntries
   ].map((entry) => {
     const destinationPath = entry.destinationPath ?? entry.relativePath;
@@ -141,7 +142,7 @@ export function claudeResources() {
 }
 
 export function dshResources() {
-  return [...generatedAdapterEntries(), ...generatedResearchQualityReferenceEntries()].filter((entry) => entry.hostId === "dsh").map((entry) => {
+  return [...generatedAdapterEntries(), ...generatedResearchQualityReferenceEntries(), ...generatedAuthorPreferencesReferenceEntries()].filter((entry) => entry.hostId === "dsh").map((entry) => {
     assertManagedResourcePath(entry.destinationPath);
     const content = normalizedGeneratedContent(entry.content);
     return {

@@ -1,6 +1,6 @@
 {
   "name": "dove",
-  "version": "3.0.9",
+  "version": "3.0.10",
   "description": "Local-first Markdown research workflow for papers, experiments, figures, review, and revision.",
   "type": "module",
   "bin": {
@@ -14,6 +14,7 @@
     "dist/index.mjs",
     "bin/dove-package.mjs",
     "docs/README.md",
+    "docs/AUTHOR_PREFERENCES.md",
     "docs/INSTALL.md",
     "docs/USAGE.md",
     "docs/PACKAGING.md",

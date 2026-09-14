@@ -11,6 +11,10 @@ import {
   renderDoveAgentInstructions
 } from "../../src/core/index.mjs";
 import * as publicCore from "../../src/core/index.mjs";
+import { renderDoveReviewerStanceSection, renderDoveSharedResearchContractSection } from "../../src/core/dove-agent-persona.mjs";
+import { DOVE_AUTHOR_PREFERENCES_READ_TRIGGER, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS } from "../../src/core/dove-author-preferences.mjs";
+import { renderDoveResearchQualityReference } from "../../src/core/dove-research-contract.mjs";
+import { generatedAdapterEntries } from "../../scripts/generate-command-adapters.mjs";
 
 const EXPECTED_HOST_IDS = ["claude", "dsh"];
 const EXPECTED_SKILL_IDS = [
@@ -43,6 +47,15 @@ test("public Dove capability and host surfaces remain explicit", () => {
   }
 });
 
+test("Experiment discovery includes agreed capability checks and retrospective work", () => {
+  for (const entry of generatedAdapterEntries().filter(({ command }) => command.id === "dove.experiment")) {
+    const description = JSON.parse(entry.content.match(/^description: (.+)$/mu)[1]);
+    for (const purpose of [/reproduction/iu, /delivery/iu, /retrospective/iu]) {
+      assert.match(description, purpose, `${entry.hostId}: discovery includes ${purpose.source}`);
+    }
+  }
+});
+
 test("Dove exposes one Claude agent definition with bounded roles", () => {
   assert.deepEqual(DOVE_AGENT_SURFACES, { claude: ".claude/agents/dove.md" });
   const agent = renderClaudeDoveAgent();
@@ -54,6 +67,17 @@ test("Dove exposes one Claude agent definition with bounded roles", () => {
   assert.deepEqual(generatedDoveAgentEntries(), [
     { relativePath: DOVE_AGENT_SURFACES.claude, content: agent }
   ]);
+});
+
+test("reviewer guidance excludes author stance and preference access", () => {
+  // The runtime composes these owners; checking them needs no reviewer launch.
+  for (const guidance of [renderDoveSharedResearchContractSection(), renderDoveReviewerStanceSection(), renderDoveResearchQualityReference()]) {
+    assert.equal(guidance.includes("## Author stance"), false);
+    assert.equal(guidance.includes(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER), false);
+    assert.equal(guidance.includes(DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude), false);
+  }
+  assert.match(renderDoveReviewerStanceSection(), /read-only/iu);
+  assert.match(renderDoveReviewerStanceSection(), /listed frozen materials/iu);
 });
 
 test("retired abstractions do not return as public API", () => {

@@ -2,9 +2,19 @@
 
 import process from "node:process";
 
-import { checkGeneratedAdapters, checkGeneratedDoveAgentSurfaces, generatedWriteSummary, writeGeneratedAdapters, writeGeneratedDoveAgentSurfaces } from "./generate-command-adapters.mjs";
+import { checkGeneratedAuthorPreferencesContent, writeGeneratedAuthorPreferencesContent } from "./generate-author-preferences.mjs";
 
-if (process.argv.includes("--check")) {
+const check = process.argv.includes("--check");
+const contentDrift = check ? checkGeneratedAuthorPreferencesContent() : [];
+if (contentDrift.length > 0) {
+  for (const item of contentDrift) console.error(`${item.relativePath}: ${item.reason}`);
+  process.exit(1);
+}
+const contentTransaction = check ? null : writeGeneratedAuthorPreferencesContent();
+// Load renderers only after generating or checking their imported content.
+const { checkGeneratedAdapters, checkGeneratedDoveAgentSurfaces, generatedWriteSummary, writeGeneratedAdapters, writeGeneratedDoveAgentSurfaces } = await import("./generate-command-adapters.mjs");
+
+if (check) {
   const drift = [...checkGeneratedAdapters(), ...checkGeneratedDoveAgentSurfaces()];
   if (drift.length > 0) {
     for (const item of drift) {
@@ -17,6 +27,6 @@ if (process.argv.includes("--check")) {
 } else {
   const transaction = writeGeneratedAdapters();
   const agents = writeGeneratedDoveAgentSurfaces();
-  const summary = generatedWriteSummary(transaction, agents);
+  const summary = generatedWriteSummary(contentTransaction, transaction, agents);
   console.log(JSON.stringify(summary, null, 2));
 }

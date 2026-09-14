@@ -26,7 +26,7 @@ Piped output should omit mascot art and ANSI styling while keeping the same huma
 
 ## Dove agent excerpt
 
-Ordinary Claude conversations receive the shared research rule. `claude --agent dove` starts the author-side main session; a bounded independent investigation may use a Dove subagent, but work needing the full conversation, important user clarification, or ongoing mainline ownership stays in the main session. The installed agent file is generated from the canonical behavior; the following is illustrative, not a literal excerpt or proof of live behavior:
+Ordinary Claude conversation is the primary Dove entrance through the project rule's shared judgment and author stance. `claude --agent dove` is optional and adds no higher judgment authority; a bounded independent investigation may use a Dove subagent, but work needing the full conversation, important user clarification, or ongoing mainline ownership stays in the ordinary main session. The installed agent file is generated from the canonical behavior; the following is illustrative, not a literal excerpt or proof of live behavior:
 
 ```markdown
 # Dove Agent

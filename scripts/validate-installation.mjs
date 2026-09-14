@@ -15,9 +15,15 @@ import { resourcesForHosts, STATUS_LINE_SELECTOR } from "../src/core/project-ins
 import { prepareResearchDefaults } from "../src/core/research-defaults.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
+import { renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
+import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SCRATCH_ROOT = path.join(ROOT, ".dove-dev", "tmp");
+const SCRATCH_ROOT = resolveTempWorkspaceBase();
+const REFERENCES = [
+  [".dove/install/AUTHOR_PREFERENCES.md", fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8")],
+  [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()]
+].map(([relativePath, content]) => ({ path: relativePath, content: `${content.trimEnd()}\n` }));
 const PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
 fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
 
@@ -118,7 +124,7 @@ function assertDoctorReadOnly(root, cliPath = path.join(ROOT, "bin", "dove.mjs")
   return { ...result, human: human.stdout };
 }
 
-function validateDoctorVersions(root, cliPath) {
+function validateDoctorVersions(root, cliPath, resourcePath = ".claude/agents/dove.md") {
   const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);
   const manifest = readJson(manifestPath);
   const current = assertDoctorReadOnly(root, cliPath);
@@ -133,7 +139,6 @@ function validateDoctorVersions(root, cliPath) {
   assert.equal(missing.projectIntegration.manifest, null);
   assert.match(missing.human, /项目接入\s+manifest 版本 未知/u);
 
-  const resourcePath = ".claude/agents/dove.md";
   const original = fs.readFileSync(path.join(root, resourcePath));
   const oldContent = "Synthetic older managed agent resource at the same package version.\n";
   const oldManifest = structuredClone(manifest);
@@ -496,13 +501,49 @@ for (const hosts of [["claude"], ["dsh"], ["claude", "dsh"]]) {
   const initialized = initializeProjectIntegration(root, { ...PACKAGE_OPTIONS, hosts });
   assert.deepEqual(fs.readdirSync(path.join(root, ".dove/research")), ["RESEARCH.md"]);
   assert.deepEqual(initialized.manifest.managed, resourcesForHosts(hosts).map(({ path, kind, selector, digest }) => ({ path, kind, selector, digest })));
-  const quality = initialized.manifest.managed.filter((entry) => entry.path.startsWith(".dove/"));
-  assert.deepEqual(quality.map((entry) => entry.path), [".dove/install/RESEARCH_QUALITY.md"]);
+  const references = initialized.manifest.managed.filter((entry) => entry.path.startsWith(".dove/"));
+  assert.deepEqual(references, REFERENCES.map(({ path: relativePath, content }) => ({
+    path: relativePath, kind: "exclusive-file", selector: null,
+    digest: crypto.createHash("sha256").update(content).digest("hex")
+  })));
+  for (const reference of REFERENCES) {
+    assert.equal(fs.readFileSync(path.join(root, reference.path), "utf8"), reference.content);
+  }
   const before = treeSnapshot(root);
   assert.equal(updateProjectIntegration(root, PACKAGE_OPTIONS).status, "unchanged");
   assert.deepEqual(treeSnapshot(root), before);
+  for (const reference of REFERENCES) {
+    fs.rmSync(path.join(root, reference.path));
+    const missing = assertDoctorReadOnly(root);
+    assert.equal(missing.setup.mode, "needs-update");
+    assert.equal(missing.projectIntegration.updatePaths.includes(reference.path), true);
+    assert.deepEqual(missing.projectIntegration.skippedLocalEdits, []);
+    const restored = updateProjectIntegration(root, PACKAGE_OPTIONS);
+    assert.equal(restored.writtenPaths.includes(reference.path), true);
+    assert.deepEqual(restored.replacedLocalEdits, []);
+    assert.equal(fs.readFileSync(path.join(root, reference.path), "utf8"), reference.content);
+
+    // An earlier valid revision-2 inventory may not yet include this reference.
+    const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);
+    const manifest = readJson(manifestPath);
+    manifest.managed = manifest.managed.filter((entry) => entry.path !== reference.path);
+    writeJson(manifestPath, manifest);
+    writeFile(root, reference.path, "unowned reference customization\n");
+    const conflictBefore = treeSnapshot(root);
+    assert.equal(assertDoctorReadOnly(root).setup.mode, "blocked");
+    assert.throws(() => updateProjectIntegration(root, PACKAGE_OPTIONS), /conflicting content/u);
+    assert.throws(() => previewProjectCompleteReinstall(root, PACKAGE_OPTIONS), /conflicting content/u);
+    assert.deepEqual(treeSnapshot(root), conflictBefore, "Missing ownership must not authorize replacing a local reference.");
+    fs.rmSync(path.join(root, reference.path));
+    assert.equal(assertDoctorReadOnly(root).projectIntegration.updatePaths.includes(reference.path), true);
+    const added = updateProjectIntegration(root, PACKAGE_OPTIONS);
+    assert.deepEqual(added.manifest.managed.find((entry) => entry.path === reference.path), references.find((entry) => entry.path === reference.path));
+    assert.equal(fs.readFileSync(path.join(root, reference.path), "utf8"), reference.content);
+  }
   const changed = updateProjectIntegration(root, { ...PACKAGE_OPTIONS, hosts: hosts.includes("claude") ? ["dsh"] : ["claude"] });
   assert.equal(changed.manifest.hosts.length, 1);
+  assert.deepEqual(changed.manifest.managed.filter((entry) => entry.path.startsWith(".dove/")), references);
+  for (const reference of REFERENCES) assert.equal(changed.changedPaths.includes(reference.path), false, "Shared references survive host changes without rewriting.");
   assert.equal(inspectProjectDoctor(root, PACKAGE_OPTIONS).setup.mode, "current");
 }
 
@@ -556,30 +597,60 @@ assert.equal(inspectProjectDoctor(absent, PACKAGE_OPTIONS).setup.mode, "uninitia
 
 const preservedRoot = scratch();
 initializeProjectIntegration(preservedRoot, PACKAGE_OPTIONS);
-const unknownPaths = [".dove/install/unknown.bin", ".dove/install/DOCTOR.md", ".dove/manifest.json", "scripts/old-runtime.mjs"];
+const unknownPaths = [".dove/install/unknown.bin", ".dove/install/DOCTOR.md", ".dove/manifest.json", ".dove/research/RESEARCH.md", ".dove/reviews/preserved/review.json", ".dove/runs/preserved/run.jsonl", "scripts/old-runtime.mjs"];
 for (const relativePath of unknownPaths) writeFile(preservedRoot, relativePath, "preserve unknown bytes\n");
 const preserved = unknownPaths.map((relativePath) => [relativePath, fs.readFileSync(path.join(preservedRoot, relativePath))]);
+const assertPreserved = () => {
+  for (const [relativePath, bytes] of preserved) assert.deepEqual(fs.readFileSync(path.join(preservedRoot, relativePath)), bytes);
+};
 const qualityPath = ".dove/install/RESEARCH_QUALITY.md";
-fs.appendFileSync(path.join(preservedRoot, qualityPath), "local edit\n");
-const update = updateProjectIntegration(preservedRoot, PACKAGE_OPTIONS);
-assert.deepEqual(update.replacedLocalEdits, [{ path: qualityPath, selector: null }]);
-fs.appendFileSync(path.join(preservedRoot, qualityPath), "local edit\n");
-const reinstall = previewProjectCompleteReinstall(preservedRoot, PACKAGE_OPTIONS);
-assert.deepEqual(reinstall.removedPaths, []);
-assert.deepEqual(reinstall.writtenPaths.sort(), [qualityPath, INSTALLATION_MANIFEST_PATH].sort());
-completeReinstallProjectIntegration(preservedRoot, { ...PACKAGE_OPTIONS, preview: reinstall, confirmed: true });
-for (const [relativePath, bytes] of preserved) assert.deepEqual(fs.readFileSync(path.join(preservedRoot, relativePath)), bytes);
+for (const reference of REFERENCES) {
+  validateDoctorVersions(preservedRoot, path.join(ROOT, "bin/dove.mjs"), reference.path);
+  fs.appendFileSync(path.join(preservedRoot, reference.path), "local edit\n");
+  const edited = assertDoctorReadOnly(preservedRoot);
+  assert.deepEqual(edited.projectIntegration.drifted, [{ path: reference.path, selector: null }]);
+  const update = updateProjectIntegration(preservedRoot, PACKAGE_OPTIONS);
+  assert.deepEqual(update.replacedLocalEdits, [{ path: reference.path, selector: null }]);
+  assert.equal(fs.readFileSync(path.join(preservedRoot, reference.path), "utf8"), reference.content);
+  assertPreserved();
+  for (const missing of [false, true]) {
+    if (missing) fs.rmSync(path.join(preservedRoot, reference.path));
+    else fs.appendFileSync(path.join(preservedRoot, reference.path), "local edit\n");
+    const before = treeSnapshot(preservedRoot);
+    const reinstall = previewProjectCompleteReinstall(preservedRoot, PACKAGE_OPTIONS);
+    assert.deepEqual(reinstall.removedPaths, []);
+    assert.deepEqual(reinstall.writtenPaths.sort(), [reference.path, INSTALLATION_MANIFEST_PATH].sort());
+    assert.throws(() => completeReinstallProjectIntegration(preservedRoot, { ...PACKAGE_OPTIONS, preview: reinstall }), /requires confirmed/u);
+    assert.deepEqual(treeSnapshot(preservedRoot), before, "Preview and unconfirmed reinstall must not write.");
+    completeReinstallProjectIntegration(preservedRoot, { ...PACKAGE_OPTIONS, preview: reinstall, confirmed: true });
+    assert.equal(fs.readFileSync(path.join(preservedRoot, reference.path), "utf8"), reference.content);
+    assert.equal(inspectProjectDoctor(preservedRoot, PACKAGE_OPTIONS).setup.mode, "current");
+    assertPreserved();
+  }
+}
 
 const manifestPath = path.join(preservedRoot, INSTALLATION_MANIFEST_PATH);
 const manifest = readJson(manifestPath);
-for (const relativePath of [".dove/research/RESEARCH.md", ".dove/install/DOCTOR.md", ".dove/install/unknown.md", ".dove/install/manifest.json", ".dove/reviews/review.json", ".dove/runs/run.jsonl", ".dove", ".dove/install/RESEARCH_QUALITY.md/extra"]) {
+for (const relativePath of [".dove/research/RESEARCH.md", ".dove/install/DOCTOR.md", ".dove/install/unknown.md", ".dove/install/manifest.json", ".dove/reviews/review.json", ".dove/runs/run.jsonl", ".dove", ".dove/install", ...REFERENCES.flatMap((entry) => [`${entry.path}/extra`, `${entry.path}.bak`, entry.path.toLowerCase()])]) {
   const invalid = structuredClone(manifest);
   invalid.managed.push({ path: relativePath, kind: "exclusive-file", selector: null, digest: "a".repeat(64) });
   assert.throws(() => validateProjectInstallationManifest(invalid, { hostIds: ["claude", "dsh"] }), /must not manage/u);
 }
-const fragmentQuality = structuredClone(manifest);
-Object.assign(fragmentQuality.managed.find((entry) => entry.path === qualityPath), { kind: "json-fragment", selector: "/anything" });
-assert.throws(() => validateProjectInstallationManifest(fragmentQuality, { hostIds: ["claude", "dsh"] }), /one exclusive file/u);
+for (const reference of REFERENCES) {
+  for (const kind of ["json-fragment", "text-block", "exclusive-file"]) {
+    const fragmented = structuredClone(manifest);
+    Object.assign(fragmented.managed.find((entry) => entry.path === reference.path), { kind, selector: "/anything" });
+    assert.throws(() => validateProjectInstallationManifest(fragmented, { hostIds: ["claude", "dsh"] }), /one exclusive file/u);
+  }
+  const duplicated = structuredClone(manifest);
+  duplicated.managed.push(structuredClone(duplicated.managed.find((entry) => entry.path === reference.path)));
+  assert.throws(() => validateProjectInstallationManifest(duplicated, { hostIds: ["claude", "dsh"] }), /must be unique/u);
+  const root = scratch();
+  writeFile(root, reference.path, "unowned reference customization\n");
+  const before = treeSnapshot(root);
+  assert.throws(() => initializeProjectIntegration(root, PACKAGE_OPTIONS), /installation directory is incomplete/u);
+  assert.deepEqual(treeSnapshot(root), before, "Init must not claim or overwrite an incomplete installation's reference bytes.");
+}
 for (const modify of [
   (value) => { value.revision = "1.0"; },
   (value) => { value.revision = "3.0"; },
@@ -682,4 +753,4 @@ const driftDoctor = inspectProjectDoctor(doctorRoot, {
 assert.equal(driftDoctor.projectIntegration.state, "blocked");
 assert.equal(driftDoctor.setup.mode, "blocked");
 
-console.log(JSON.stringify({ status: "passed", scratch: SCRATCH_ROOT, retainedFixtures: roots, sessionFactsCli: "bin/dove.mjs", checks: ["read-only SessionStart", "doctor/setup states", "explicit lifecycle", "opaque research bootstrap", "exact quality ownership", "legacy and unknown preservation"] }, null, 2));
+console.log(JSON.stringify({ status: "passed", scratch: SCRATCH_ROOT, retainedFixtures: roots, sessionFactsCli: "bin/dove.mjs", checks: ["read-only SessionStart", "doctor/setup states", "explicit lifecycle", "opaque research bootstrap", "exact quality and author preferences ownership", "legacy and unknown preservation"] }, null, 2));

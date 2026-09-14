@@ -4,7 +4,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 
 ## Agent 与 Skills
 
-- 用户面对一个 Dove research agent。普通 Claude rule 共享科研判断，`claude --agent dove` 启动作者主会话；有界独立科研调查可以使用 Dove subagent，需要完整对话、重要用户澄清或持续主线责任的工作不得委派。
+- 用户面对一个 Dove research agent。普通 Claude 主会话通过项目 rule 承担共享科研判断和作者立场，是首要入口；`claude --agent dove` 是可选显式入口，无更高判断权威。有界独立科研调查可以使用 Dove subagent，需要完整对话、重要用户澄清或持续主线责任的工作留在普通主会话。
 - 九个公开 Skills 保持为：`research`、`status`、`source`、`experiment`、`draft`、`figure`、`review`、`rebuttal`、`lessons`。
 - Skills 是同一个 Dove 的专项入口，不是不同人格、固定阶段或独立工作流。
 - 宿主常驻短核心，实质评级与重要研究决策主动读取完整 `.dove/install/RESEARCH_QUALITY.md`，复用已读内容，缺失则说明限制。隔离 reviewer 使用另供的 `.dove-package/RESEARCH_QUALITY.md`；两者均是包指导而非研究证据，不扩大权限或依赖 Lessons 才可达。
@@ -45,8 +45,8 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 
 ## Experiment 要求
 
-- Experiment 必须区分 design-only、requested execution、existing-result analysis、retrospective recording、小规模实验和 diagnostic work。
-- 中央实验需要清楚说明它要解决什么不确定性、比较什么替代解释、什么结果算有用。
+- Experiment 分开判断请求方式（design-only、requested execution、existing-result analysis、retrospective recording）与目的（探索、诊断、确认性检验、复现或交付检查）；两者不是互斥阶段，具体语义见 [研究模型](RESEARCH_MODEL.md#experiment)。
+- 实验按目的说明所问问题或目标能力、相关条件及结果用途。确认性检验事前明确主张或问题、相关预测、比较、重要替代解释和判据；探索不要求预定主张或代码修改，复现／交付按约定能力检查，不自动重开新颖性判断。准确限定的探索结果可以成为最终结果，但不能冒充独立确认。
 - 方法、配置、数据、指标、运行次数和结果数字必须来自实际代码、配置、日志、输出、数据文件或用户材料。
 - 异常、反常、不稳定、无法复现或异常优异结果先排查实现、数据/预处理、配置/环境、随机性、指标、baseline 和分析错误，再进入科学解释。
 - 评价链须区分真实目标、实际输出、baseline、reference、proxy 和成功条件，并从实际输入、输出、评价依据和指标追溯到比较；检查 proxy 与真实目标关系、失败与排除的分母处理，以及适用的配对、不确定性、相关性和最终测试独立性。忠实测量同一目标的指标或 baseline 修正可以正常进行并保留原比较；换成另一输出、代理目标或成功含义必须重判任务身份。消融依据实际代码、配置和输出识别混杂，区分整套实现、组件增益与机制证据；无法识别贡献时先判断路线是否仍值得，再比较完整修复、评价或方法重设计、替代路线、辨别性取证与停止，不默认最小对照、限定结论或更多运行。

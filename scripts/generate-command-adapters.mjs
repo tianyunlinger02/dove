@@ -11,6 +11,7 @@ import { generatedDoveAgentEntries } from "../src/core/dove-agent-definition.mjs
 import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "../src/core/dove-agent-persona.mjs";
 import { USER_RESPONSE_POLICY } from "../src/core/user-response-policy.mjs";
 import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS, renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
+import { DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS, renderDoveAuthorPreferencesReference } from "../src/core/dove-author-preferences.mjs";
 import {
   PAPER_SEARCH_SUPPORT_SKILL_PATH,
   renderPaperSearchSupportSkill
@@ -141,10 +142,12 @@ function renderBody(command, heading, hostId = null) {
   const examples = renderExamples(command, hostId);
   const contract = renderCapabilityContract(command, hostId);
   const responsePolicy = hostId === "dsh" ? USER_RESPONSE_POLICY.join("\n") : "";
+  // Author stance owns the short preference read trigger for the eight author
+  // Skills. Status gets only inspection/reporting scope; Claude uses its rule.
   const shared = hostId === "dsh" ? [
     responsePolicy,
     renderDoveSharedResearchContractSection(),
-    `Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`. Read it proactively at the decision triggers above; it is guidance, not research evidence.`,
+    `Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`. Read relevant criteria at the decision triggers above for scoped quality and investment judgments; it is guidance, not research evidence.`,
     command.id === "dove.status" ? "For Status, use these principles only to inspect and report; do not execute research actions or maintain documents."
       : renderDoveAuthorStanceSection()
   ].join("\n\n") : "";
@@ -197,6 +200,15 @@ export function generatedResearchQualityReferenceEntries() {
     destinationPath: DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId],
     relativePath: packageResourcePath(hostId, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId]),
     content: renderDoveResearchQualityReference()
+  }));
+}
+
+export function generatedAuthorPreferencesReferenceEntries() {
+  return PROJECT_HOST_IDS.map((hostId) => ({
+    hostId,
+    destinationPath: DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId],
+    relativePath: packageResourcePath(hostId, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId]),
+    content: renderDoveAuthorPreferencesReference()
   }));
 }
 
@@ -298,6 +310,10 @@ function listFiles(root, relativeDir, acceptPath) {
 
 function existingGeneratedAdapterPaths(root) {
   return unique([
+    ...PROJECT_HOST_IDS.flatMap((hostId) => [
+      packageResourcePath(hostId, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId]),
+      packageResourcePath(hostId, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId])
+    ]).filter((relativePath) => fs.existsSync(path.join(root, relativePath))),
     ...listFiles(root, "package-resources/hosts/claude/.claude/commands/dove", (relativePath) => /\/dove\/.*\.md$/.test(relativePath)),
     ...listFiles(root, "package-resources/hosts/dsh/.dsh/skills", (relativePath) => /\/dove-[^/]+\/SKILL\.md$/.test(relativePath)),
     ...listFiles(root, "package-resources/hosts/claude/.claude/rules", (relativePath) => relativePath.endsWith("/.claude/rules/dove.md")),
@@ -311,6 +327,7 @@ export function writeGeneratedAdapters(root = PACKAGE_ROOT, options = {}) {
   const entries = [
     ...generatedAdapterEntries().map((entry) => ({ ...entry, label: "Generated command adapter path" })),
     ...generatedResearchQualityReferenceEntries().map((entry) => ({ ...entry, label: "Generated research quality reference path" })),
+    ...generatedAuthorPreferencesReferenceEntries().map((entry) => ({ ...entry, label: "Generated author preferences reference path" })),
     ...generatedClaudeAmbientProjectEntries().map((entry) => ({ ...entry, label: "Generated Claude ambient project path" }))
   ];
   const expectedPaths = new Set(entries.map((entry) => entry.relativePath));
@@ -331,7 +348,7 @@ export function writeGeneratedAdapters(root = PACKAGE_ROOT, options = {}) {
 }
 
 export function checkGeneratedAdapters(root = PACKAGE_ROOT) {
-  const entries = [...generatedAdapterEntries(), ...generatedClaudeAmbientProjectEntries(), ...generatedResearchQualityReferenceEntries()];
+  const entries = [...generatedAdapterEntries(), ...generatedClaudeAmbientProjectEntries(), ...generatedResearchQualityReferenceEntries(), ...generatedAuthorPreferencesReferenceEntries()];
   const expectedPaths = new Set(entries.map((entry) => entry.relativePath));
   const drift = [];
   for (const entry of entries) {

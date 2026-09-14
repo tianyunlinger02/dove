@@ -56,7 +56,7 @@ function canonicalProjectRelativePath(value, label) {
   if (normalized !== value || normalized === "." || normalized === ".." || normalized.startsWith("../") || value.includes("//") || value.endsWith("/")) {
     throw new Error(`${label} must be one canonical project-relative path: ${value}`);
   }
-  if ((value === ".dove" || value.startsWith(".dove/")) && value !== ".dove/install/RESEARCH_QUALITY.md") {
+  if ((value === ".dove" || value.startsWith(".dove/")) && value !== ".dove/install/RESEARCH_QUALITY.md" && value !== ".dove/install/AUTHOR_PREFERENCES.md") {
     throw new Error(`${label} must not manage Dove research or installation state: ${value}`);
   }
   return value;
@@ -85,8 +85,8 @@ function validateManagedEntry(entry, index) {
   const label = `Project installation manifest managed[${index}]`;
   assertFields(entry, MANAGED_FIELDS, label);
   canonicalProjectRelativePath(entry.path, `${label}.path`);
-  if (entry.path === ".dove/install/RESEARCH_QUALITY.md" && (entry.kind !== "exclusive-file" || entry.selector !== null)) {
-    throw new Error(`${label} must own RESEARCH_QUALITY.md as one exclusive file.`);
+  if ((entry.path === ".dove/install/RESEARCH_QUALITY.md" || entry.path === ".dove/install/AUTHOR_PREFERENCES.md") && (entry.kind !== "exclusive-file" || entry.selector !== null)) {
+    throw new Error(`${label} must own ${path.posix.basename(entry.path)} as one exclusive file.`);
   }
   if (!MANAGED_KINDS.has(entry.kind)) throw new Error(`${label}.kind is unsupported: ${entry.kind}.`);
   if (entry.kind === "exclusive-file") {

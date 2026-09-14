@@ -10,6 +10,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { COMMAND_SURFACES, MANAGED_PACKAGE_PATHS, PACKAGE_LEGAL_PATHS } from "../src/core/command-manifest.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "../src/core/web-access-integration.mjs";
+import { renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
+import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "installation:validate", "uninstall:validate", "review-runtime:validate", "runs:validate", "behavior:validate", "behavior:eval", "package:validate", "check", "release:check"];
@@ -148,7 +150,7 @@ function realPackagePack(tempRoot) {
   const pack = parsed[0];
   const tarball = path.join(tempRoot, pack.filename);
   assert.equal(fs.existsSync(tarball), true, `real npm pack tarball missing: ${tarball}`);
-  assert.equal(path.dirname(fs.realpathSync.native(tarball)), fs.realpathSync.native(tempRoot), "npm pack tarball must stay outside the repository");
+  assert.equal(path.dirname(fs.realpathSync.native(tarball)), fs.realpathSync.native(tempRoot), "npm pack tarball must stay in its validation workspace");
   return { pack, tarball };
 }
 
@@ -211,6 +213,43 @@ function assertInstalledCli(installedBin, cwd) {
   assert.match(help.stdout, /dove --version/u);
   assert.match(help.stdout, /dove init \[--project <dir>\]/u);
   assert.match(help.stdout, /(?:Dove 负责|The runtime CLI manages project integration)/u);
+}
+
+function expectedReferences() {
+  return [
+    [".dove/install/AUTHOR_PREFERENCES.md", fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8")],
+    [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()]
+  ].map(([relativePath, content]) => ({ path: relativePath, content: `${content.trimEnd()}\n` }));
+}
+
+function assertPackagedReferences(packageRoot) {
+  assert.deepEqual(fs.readFileSync(path.join(packageRoot, "docs/AUTHOR_PREFERENCES.md")), fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md")));
+  for (const host of ["claude", "dsh"]) {
+    for (const reference of expectedReferences()) {
+      assert.equal(fs.readFileSync(path.join(packageRoot, "package-resources/hosts", host, reference.path), "utf8"), reference.content, `Packed ${host} reference must contain the full canonical text: ${reference.path}`);
+    }
+  }
+}
+
+function assertReferenceInstallation(executable, projectRoot, hosts) {
+  initInstallProject(projectRoot);
+  fs.mkdirSync(path.join(projectRoot, ".git"));
+  const initialized = spawnChecked(process.execPath, [executable, "init", "--project", projectRoot, "--host", hosts.join(","), "--json"], { cwd: projectRoot });
+  assert.equal(JSON.parse(initialized.stdout).status, "initialized");
+  const manifest = JSON.parse(fs.readFileSync(path.join(projectRoot, ".dove/install/manifest.json"), "utf8"));
+  assert.deepEqual(manifest.hosts, hosts);
+  const references = expectedReferences();
+  assert.deepEqual(manifest.managed.filter((entry) => entry.path.startsWith(".dove/")), references.map((reference) => ({
+    path: reference.path, kind: "exclusive-file", selector: null,
+    digest: crypto.createHash("sha256").update(reference.content).digest("hex")
+  })));
+  for (const reference of references) {
+    assert.equal(fs.readFileSync(path.join(projectRoot, reference.path), "utf8"), reference.content, `Installed reference must contain the full canonical text: ${reference.path}`);
+  }
+  const before = snapshotDirectory(projectRoot);
+  const updated = spawnChecked(process.execPath, [executable, "update", "--project", projectRoot, "--json"], { cwd: projectRoot });
+  assert.equal(JSON.parse(updated.stdout).status, "unchanged");
+  assert.deepEqual(snapshotDirectory(projectRoot), before, "Current installed references must not need an update.");
 }
 
 function digestFile(filePath) {
@@ -356,7 +395,7 @@ function assertDoctorRuntime(core, project, packageRoot) {
 async function assertTemporaryPublicLibrary() {
   const { build } = await import("esbuild");
   const source = await import("../src/core/index.mjs");
-  const scratch = path.join(ROOT, ".claude", "tmp", "dove-wiring-audit");
+  const scratch = resolveTempWorkspaceBase();
   fs.mkdirSync(scratch, { recursive: true });
   const tempRoot = fs.mkdtempSync(path.join(scratch, "library-"));
   try {
@@ -433,7 +472,7 @@ for (const bundlePath of ["dist/index.mjs", "bin/dove-package.mjs"]) {
   assert.doesNotMatch(bundleText, /ambientContextForPrompt|isResearchRelatedWakeupPrompt|renderClaudeAmbientSkill|parseUserPromptSubmitPayload|userPromptSubmitOutput|DOVE_CLAUDE_AMBIENT_HOOK|DOVE_CLAUDE_AMBIENT_SKILL|\.claude\/skills\/dove-intake\/SKILL\.md/iu, `${bundlePath} must not contain retired UserPromptSubmit intake runtime`);
 }
 
-const tempBase = path.join(path.dirname(ROOT), ".dove-package-validate");
+const tempBase = resolveTempWorkspaceBase();
 fs.mkdirSync(tempBase, { recursive: true });
 const tempRoot = fs.mkdtempSync(path.join(tempBase, "run-"));
 try {
@@ -443,12 +482,22 @@ try {
   const installedBin = installPackedPackage(tarball, installRoot);
   assertInstalledCli(installedBin, installRoot);
   const syntheticProject = path.join(tempRoot, "synthetic-project");
+  fs.mkdirSync(path.join(syntheticProject, ".git"), { recursive: true });
   const smoke = assertPtyBareMenuExit(installedBin, syntheticProject);
   assertDoctorRuntime(packageExports, syntheticProject, ROOT);
   const installedRoot = path.join(installRoot, "node_modules", packageJson.name);
   assertDoctorRuntime(await import(pathToFileURL(path.join(installedRoot, "dist/index.mjs")).href), syntheticProject, installedRoot);
-  console.log(JSON.stringify({ status: "passed", packed: pack.filename, installedVersion: packageJson.version, ptyBareMenuExit: { exitCode: smoke.exitCode, zeroProjectWrites: true } }, null, 2));
+  assertPackagedReferences(installedRoot);
+  const standaloneRoot = path.join(tempRoot, "standalone");
+  fs.mkdirSync(standaloneRoot);
+  const standaloneBin = path.join(standaloneRoot, "dove-package.mjs");
+  fs.copyFileSync(path.join(installedRoot, "bin/dove-package.mjs"), standaloneBin);
+  assert.deepEqual(fs.readdirSync(standaloneRoot), ["dove-package.mjs"], "Standalone init must work without docs, package resources, or source modules alongside the bundle.");
+  for (const hosts of [["claude"], ["dsh"], ["claude", "dsh"]]) {
+    assertReferenceInstallation(path.join(installedRoot, "bin/dove-package.mjs"), path.join(tempRoot, `packed-${hosts.join("-")}`), hosts);
+    assertReferenceInstallation(standaloneBin, path.join(tempRoot, `standalone-${hosts.join("-")}`), hosts);
+  }
+  console.log(JSON.stringify({ status: "passed", packed: pack.filename, installedVersion: packageJson.version, references: "full canonical text from tarball and standalone init for claude, dsh, and both hosts", ptyBareMenuExit: { exitCode: smoke.exitCode, zeroProjectWrites: true } }, null, 2));
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
-  try { fs.rmdirSync(tempBase); } catch (error) { if (error?.code !== "ENOTEMPTY" && error?.code !== "ENOENT") throw error; }
 }

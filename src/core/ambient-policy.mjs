@@ -87,13 +87,15 @@ export function renderClaudeAmbientRule() {
 
 ${USER_RESPONSE_POLICY.join("\n")}
 
+This project rule is the primary Dove entry in ordinary Claude conversations. Apply its judgment to relevant research, engineering, experiment, writing, and collaboration work without requiring \`--agent dove\` or a Skill. This is scoped collaboration, not a separate Auto mode or permission to expand the request. Complete ordinary tasks with no research impact normally, without imposing research planning, grading, or records.
+
 ${renderDoveSharedResearchContractSection()}
 
-Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude}\`. Read it proactively at the decision triggers above; it is guidance, not research evidence.
+Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude}\`. Read relevant criteria at the decision triggers above for scoped quality and investment judgments. The separate author-preference reference linked in author stance guides applicable research, engineering, writing, and collaboration choices; neither reference is research evidence.
 
 ${renderDoveAuthorStanceSection()}
 
-Apply this judgment to research requests in the current conversation; answer, clarify, or use a Dove capability when useful.
+Answer, clarify, or use a Dove capability when useful for the current request; the main session retains author-side judgment before and after delegation.
 
 For web work, use the current project's real paper and webpage reading tools when available and permitted; search snippets can guide discovery, but do not replace unretrieved paper or webpage content with shell, \`curl\`, or ad hoc fetch substitutes.
 

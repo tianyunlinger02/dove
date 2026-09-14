@@ -2,15 +2,15 @@
 
 ## Delivery model
 
-Dove 3.0.9 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
+Dove 3.0.10 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
 
 The bare public npm package named `dove` is unrelated. Release instructions must use an exact trusted tarball, Git revision, or internal-registry package version.
 
-Dove 3.0.9 is source-available under the PolyForm Noncommercial License 1.0.0, not OSI-approved open-source software. Dove itself may be used only for purposes permitted by that license; this release does not offer or advertise a commercial-license path. Bundled third-party components retain their own MIT or ISC rights, recorded separately in `THIRD_PARTY_NOTICES.md`.
+Dove 3.0.10 is source-available under the PolyForm Noncommercial License 1.0.0, not OSI-approved open-source software. Dove itself may be used only for purposes permitted by that license; this release does not offer or advertise a commercial-license path. Bundled third-party components retain their own MIT or ISC rights, recorded separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Release inventory
 
-Every Dove 3.0.9 release contains:
+Every Dove 3.0.10 release contains:
 
 - **one Dove research agent** for supported agent hosts;
 - **9 optional specialist Skills**: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`;
@@ -22,7 +22,7 @@ Every Dove 3.0.9 release contains:
 
 There is no Auto Skill or command, Dove research MCP server bundle, research tool registry, MCP CLI command, Research Format runtime, or separate Dove-managed planning, authoring, or reviewing agent. The explicit `dove review ...` runtime stores review exchange records under `.dove/reviews/**` and uses the user's installed Claude Code CLI for isolated read-only reviewer sessions; it is not a research database or proof of acceptance. The `dove run ...` helper stores local run receipts under `.dove/runs/**`; it records command execution evidence, not scientific conclusions or cross-host process control. The artifact contains hidden Claude guidance Skills and fixed project fragments for pinned `dove-paper-search` (`paper-search-mcp==0.1.4`) and hosted Exa; it does not contain third-party runtimes or credentials.
 
-A Skill is a flat capability shortcut. Ordinary Claude conversations share research judgment through the project rule; `claude --agent dove` starts the author-side main session. A bounded independent investigation may use Dove as a subagent when isolated context helps, but full-conversation work, important clarification, and ongoing mainline ownership must not be delegated. Isolated review uses the same research judgment in a reviewer position, not another persona. No Auto command is needed for multi-round progression. Adapters project these instructions into host formats; research documents remain researcher-owned Markdown.
+Ordinary Claude conversation is the primary Dove entrance through the project rule's shared judgment and author stance. `claude --agent dove` and the nine flat Skills are optional entrances with no higher judgment authority. The ordinary main session keeps full-conversation work, important clarification, and mainline ownership before and after bounded delegation. Isolated review uses the same researcher in a reviewer position, not another persona. There is no Auto command. Adapters project these roles into host formats; scoped behavior belongs in [Usage](USAGE.md#scope-plans-and-progress), not a separate packaging rubric.
 
 ## Generated host surfaces
 
@@ -31,9 +31,16 @@ Dove supports exactly two host projections:
 - Claude Code: `.claude/agents/dove.md`, nine `.claude/commands/dove/*.md` optional Skill shortcuts, the shared Dove rule, SessionStart hook, paper-search MCP integration, and Exa integration;
 - DeepSeek Harness: `.dsh/skills/dove-*/SKILL.md` for the nine filesystem Skills.
 
-Both hosts also declare the shared exclusive `.dove/install/RESEARCH_QUALITY.md` resource. Claude's rule and standalone DSH Skills carry the short core and an active read trigger; full grades and decision guidance stay in this reference. Dove reads it before consequential grading, route selection, investment/scale-up, core/submission conclusions, and decision-changing counterevidence, task changes, or cross-dimensional tradeoffs. It uses relevant criteria, reuses already-read guidance, and reports unavailable guidance instead of inventing grades. The reference is neither researcher-owned Lessons nor research evidence.
+Both hosts declare two shared exclusive reference resources:
 
-Release copies live under `package-resources/hosts/...`, outside host-recognized repository roots. Installation writes their canonical destination paths into consumer projects. OpenCode, Codex, Cursor, and shared Agents projections are not packaged.
+| Installed destination | Canonical source and role |
+|---|---|
+| `.dove/install/RESEARCH_QUALITY.md` | `src/core/dove-research-contract.mjs` renders substantive quality criteria and current-use joint conditions. |
+| `.dove/install/AUTHOR_PREFERENCES.md` | `docs/AUTHOR_PREFERENCES.md` is the sole editable source for full author-side research, engineering, writing, and collaboration preferences. `src/core/dove-author-preferences-content.generated.mjs` preserves its Markdown for the bundled renderer; `src/core/dove-author-preferences.mjs` owns the reference path, renderer, and read trigger. |
+
+Both references are installed once when both hosts are selected; no other `.dove/install` file becomes an exclusive integration resource. They are neither researcher-owned Lessons nor research evidence. Short host context links to them on demand; [Usage](USAGE.md#short-core-and-two-on-demand-references) owns applicability and read triggers. Isolated review receives only separate canonical quality guidance, not the author preference reference.
+
+Release projections live under `package-resources/hosts/...`, outside host-recognized repository roots. Installation uses bundled renderers to write canonical resources into consumer projects, not disk copies of these projections. OpenCode, Codex, Cursor, and shared Agents projections are not packaged.
 
 Claude support resources include the shared Dove rule, hidden Claude guidance Skills for pinned `dove-paper-search` and hosted Exa use, the managed SessionStart hook, and an optional managed `statusLine` fragment. The status line is installed only when the project has no existing line; it invokes the user-level CLI read-only. Package resources do not install or own `UserPromptSubmit`, hidden intake, or any replacement per-prompt hook.
 
@@ -50,7 +57,7 @@ The package contains two standalone Node.js 22 ESM bundles:
 | `dist/index.mjs` | Public library bundle. |
 | `bin/dove-package.mjs` | Packaged `dove` CLI. |
 
-The package contains no MCP server bundle, prompt-hook bundle, or third-party Python source. `commands:generate` writes only declared host adapters and support resources, including quality references and the Claude agent. `commands:check` checks those projections for drift. `build` writes only `dist/index.mjs` and `bin/dove-package.mjs` from the declared source entries; `build:check` compares temporary in-memory builds with those outputs. None of these commands installs or synchronizes a consumer project. Consumer installation does not regenerate them.
+The package contains no MCP server bundle, prompt-hook bundle, or third-party Python source. `commands:generate` first generates `src/core/dove-author-preferences-content.generated.mjs` from `docs/AUTHOR_PREFERENCES.md`, then writes declared host adapters and support resources, including quality and author-preference references and the Claude agent. `commands:check` checks the generated content module and those projections for drift. `build` writes only `dist/index.mjs` and `bin/dove-package.mjs` from the declared source entries; `build:check` compares temporary in-memory builds with those outputs. None of these commands installs or synchronizes a consumer project. Consumer installation does not regenerate them.
 
 ## Project integration
 
@@ -68,7 +75,7 @@ Research context is ordinary Markdown under `.dove/research/`. Fresh project ini
 
 The isolated review prompt shares Dove's research judgment but uses the reviewer position: reconstruct and challenge the contribution rather than inherit the author's mainline. Whole-paper review asks whether the method answers the question, field judgment is correct, contribution and evidence fit the venue, and the strongest reasonable objection can be answered. The requested Markdown headings are `Verdict`, `Blocking issues`, `Grounding basis`, and `Author-side next actions`; the runtime does not parse them into an acceptance gate.
 
-Each optional summary is a researcher-owned entrance and synthesis, not a generated index. Lessons are advisory materials and are not mandatory package-owned defaults. Source explanations are useful when available but not mandatory.
+Each optional summary is a researcher-owned entrance and synthesis, not a generated index. Lessons are fallible reusable experience, not a carrier for package-default preferences or a replacement for either managed reference. Source explanations are useful when available but not mandatory.
 
 The package does not define fixed headings, frontmatter, IDs, enums, machine indexes, stored counts, research hashes, or a mandatory Markdown template. Mission, Source, Experiment, Review, and occasional Claim documents are conventions chosen for readability, not entity stores.
 
@@ -88,7 +95,7 @@ Bare `dove` is the interactive lifecycle front door. It classifies the project, 
 
 - `init` creates supported project integration and, only if the research directory is absent, the minimal researcher-owned `RESEARCH.md` entry in one transaction. Existing research directories are not read or repaired.
 - `update` refreshes recognized integration without rewriting existing `.dove/research/**` content. It replaces local edits only for valid manifest-owned generated or existing Dove integration resources and reports `replacedLocalEdits` in JSON output. It installs the Dove status line when that setting is empty, preserves an unowned existing line, and does not create missing summaries or replace Lessons materials.
-- `uninstall` displays the exact managed removal scope and defaults to No. After confirmation it removes manifest-owned Dove project integration, including the exact `.dove/install/RESEARCH_QUALITY.md` reference and an unchanged Dove-owned status line, while preserving `.dove/research/**`, `.dove/reviews/**`, `.dove/runs/**`, `.dove/install/DOCTOR.md`, all legacy markers and unknown installation files, unrelated settings, hooks, MCP servers, pre-existing or user-modified status lines, and ordinary files. A manifest-owned exact retired `UserPromptSubmit` setting is deleted only when still attributable.
+- `uninstall` displays the exact managed removal scope and defaults to No. After confirmation it removes manifest-owned Dove project integration, including the exact `.dove/install/RESEARCH_QUALITY.md` and `.dove/install/AUTHOR_PREFERENCES.md` references and an unchanged Dove-owned status line, while preserving `.dove/research/**`, `.dove/reviews/**`, `.dove/runs/**`, `.dove/install/DOCTOR.md`, all legacy markers and unknown installation files, unrelated settings, hooks, MCP servers, pre-existing or user-modified status lines, and ordinary files. A manifest-owned exact retired `UserPromptSubmit` setting is deleted only when still attributable.
 - `reinstall` displays the deletion and replacement scope and defaults to No. A valid current installation manifest is required; no adoption, revision-1.0 migration, or unknown-file cleanup is performed. After confirmation it rebuilds integration while preserving `.dove/research/**`, `.dove/reviews/**`, `.dove/runs/**`, `.dove/install/DOCTOR.md`, and ordinary project files.
 - `doctor` is a read-only developer diagnostic with integration states `uninitialized`, `current`, `needs-update`, and `blocked`; it does not judge science. Host-maintained `DOCTOR.md` feedback is separate and does not require this command.
 - `review handoff|status|resume|rerun|import` records explicit `.dove/reviews/<id>/review.json` metadata and per-round `snapshot.json`, `report.md`, and `backend.json`. `handoff` and `rerun` copy only the listed project-relative regular files into the external reviewer workspace, use the Claude Code CLI with Read-only tools, and preserve the real returned session id. The reviewer has no web or MCP access, so venue or literature grounding must be author-side material listed in the frozen handoff when needed. `status` is read-only and compares internal snapshot receipts with current project files as `current`, `changed`, `missing`, or `unavailable`; public CLI and JSON output expose paths plus safe size/existence/type/error facts without hash fields and do not parse report verdict text. `import` stores user-supplied Markdown as imported provenance and does not claim the runtime reviewer generated it.
@@ -114,6 +121,21 @@ Reviewer workspaces use short runtime paths rather than embedding the consumer p
 - Local command experiments may use `dove run start|status|resume|finalize|compare`; run receipts are execution evidence only and do not claim reproducibility, statistical significance, or scientific correctness.
 - A native role label, author-side self-check, or ordinary local session does not establish `dove-review` independence.
 - Tests and packaged artifacts do not certify research claims or Dove research quality.
+
+## Verification evidence
+
+Keep these claims separate; none implies the next:
+
+| Evidence | What it establishes |
+|---|---|
+| Canonical source instructions | Intended behavior encoded by the current source revision. |
+| Generated host resources / built bundles | The inspected projections or bundles match their source owners, when the relevant drift checks actually ran. |
+| Installed project resources | Managed disk bytes and configuration for that project, when inspected; generating or building alone does not install them. |
+| Currently loaded host context | Only directly observed session loading facts; the CLI cannot infer these from installed bytes, version equality, or an explicit update. |
+| Actual model behavior | What happened in the observed task and permitted context, not what the prompt says should happen. |
+| Scientific outcomes | Claim-matched research evidence, not source changes, test passes, installation health, or a model's completion notice. |
+
+These are evidence boundaries, not mandatory stages, a new state machine, or a requirement to run every check for every task. Documentation-only work can finish with static checks without claiming refreshed installation, live behavior, or scientific progress.
 
 ## Build and release validation
 

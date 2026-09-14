@@ -48,7 +48,7 @@ dove init --host claude --host dsh
 
 Claude Code receives the complete integration described below. DSH receives the nine Dove filesystem Skills and no Claude permissions or MCP projection. `dove init` installs project integration and the minimal researcher-owned research entry. It may write:
 
-- `.dove/install/manifest.json` and the full quality reference `.dove/install/RESEARCH_QUALITY.md`, shared by the selected hosts;
+- `.dove/install/manifest.json` and two full references, `.dove/install/RESEARCH_QUALITY.md` and `.dove/install/AUTHOR_PREFERENCES.md`, shared once across the selected hosts;
 - project-local Claude commands under `.claude/commands/dove/`;
 - the project-local Dove agent at `.claude/agents/dove.md`;
 - the project-local Dove shared researcher judgment rule;
@@ -75,17 +75,17 @@ There is no `dove install` command and no `--platform` option.
 
 ## Dove agent and ordinary entry
 
-The initialized Claude project provides three complementary entry points:
+After initialization, start ordinary `claude` in the target project and describe the task. The installed surfaces have these roles:
 
-- `.claude/rules/dove.md` shares research judgment with ordinary Claude conversations; it is not a per-prompt router or a separate agent session.
-- `.claude/agents/dove.md` supports `claude --agent dove` for the author-side main research session. Dove can also serve as a subagent for a bounded independent investigation when separate context helps. Work needing the full user conversation, important clarification, or ongoing mainline ownership stays in the main session.
-- `.claude/commands/dove/*.md` are nine flat capability shortcuts, not additional researchers.
+- `.claude/rules/dove.md` is the primary Dove entrance in ordinary Claude conversations, carrying shared judgment and author stance. It is not a per-prompt router or a separate agent session.
+- `.claude/agents/dove.md` supports optional `claude --agent dove` sessions and bounded subagent investigations. Selecting it adds no higher judgment authority. The ordinary main session retains full-conversation work, important clarification, and mainline ownership before and after delegation.
+- `.claude/commands/dove/*.md` are nine optional flat capability shortcuts, not additional researchers or authority levels.
 
-The Claude rule and standalone DSH Skills carry a short core, not the full quality criteria. Before substantive grading, consequential route/investment decisions, experiment scale-up, core or submission conclusions, and decision-changing counterevidence, task changes, or cross-dimensional tradeoffs, Dove proactively reads `.dove/install/RESEARCH_QUALITY.md`. It selects relevant criteria, reuses already-read guidance, and reports unavailable guidance without inventing grades. This shared package resource is separate from optional researcher-owned Lessons and grants no permissions. Isolated review receives its own canonical package copy, not access to this author-side path.
+The Claude rule and standalone DSH Skills carry a short core rather than full references. Both hosts install research quality criteria and author preferences as separate package-managed guidance; neither is a Lesson, evidence, or a permission grant. Read triggers and applicability are defined in [Usage](USAGE.md#short-core-and-two-on-demand-references). Isolated review receives only its separate canonical quality guidance, not author-preference access. Ordinary tasks with no research impact do not require research planning, grading, or records.
 
 Dove's flat Skills are `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`. They are optional specialist shortcuts, not separate personalities, stages, or an autonomy switch. Users can tell Dove the goal directly; default multi-round research progression does not require an Auto command.
 
-Dove no longer installs a `UserPromptSubmit` prompt hook, hidden intake Skill, ambient regex router, or replacement per-prompt hook. The host handles ordinary routing, and the same Dove model chooses whether to answer, clarify, or use optional capabilities. Confirmed goal-shaped requests invoke Dove's default research progression.
+Dove no longer installs a `UserPromptSubmit` prompt hook, hidden intake Skill, ambient regex router, or replacement per-prompt hook. The host handles ordinary routing, and the same Dove model chooses whether to answer, clarify, or use optional capabilities. Confirmed research goals use Dove's in-scope progression; ordinary and bounded requests retain their actual scope.
 
 ## Project runtime invocation
 
@@ -109,7 +109,7 @@ The `dove-paper-search` MCP declaration launches pinned `paper-search-mcp==0.1.4
 
 ## Integration manifest
 
-Within `.dove/install/`, Dove manages its manifest and the exact `RESEARCH_QUALITY.md` resource, not the whole directory. The manifest records initialized hosts and the integration contract needed by `update` and `doctor`. Other files, including optional researcher feedback `DOCTOR.md`, are not package-owned.
+Within `.dove/install/`, Dove manages its manifest and the two exact resources `RESEARCH_QUALITY.md` and `AUTHOR_PREFERENCES.md`, not the whole directory. The manifest records initialized hosts and the integration contract needed by `update` and `doctor`. Other files, including optional researcher feedback `DOCTOR.md`, are not package-owned.
 
 The manifest is not research evidence and must not contain substantive research artifacts. Users should not hand-edit managed integration files.
 
@@ -129,7 +129,7 @@ There is no adoption or revision-1.0 migration path. Update and Complete Reinsta
 
 ## Uninstall
 
-Run `dove uninstall` from an initialized project. Dove first shows the exact removal scope and defaults to No. After confirmation it removes manifest-owned host files, the Dove SessionStart hook, retired exact Dove prompt hook entries when recorded by the manifest, permission and MCP fragments, `.dove/install/manifest.json`, and the manifest-owned `.dove/install/RESEARCH_QUALITY.md` reference. It preserves `.dove/research/**`, `.dove/reviews/**`, `.dove/runs/**`, `.dove/install/DOCTOR.md`, all legacy markers and unknown installation files, unrelated host settings, unrelated hooks, unrelated MCP servers, any pre-existing user-owned `permissions.deny` entry for `WebFetch`, and ordinary project files. If no conflicting installation residue remains, a project retaining only researcher-owned context is then classified as uninitialized rather than offered an update. Preserved unknown files under `.dove/install/` or an unsupported legacy installation directory can still leave setup blocked; uninstall does not delete them to force an uninitialized state. Drift, symlinks, or changed transaction preconditions block replacement; caught promotion failures trigger rollback. If restoration fails, Dove keeps the transaction root and backups and reports their absolute paths. This does not promise crash recovery or filesystem-wide atomicity.
+Run `dove uninstall` from an initialized project. Dove first shows the exact removal scope and defaults to No. After confirmation it removes manifest-owned host files, the Dove SessionStart hook, retired exact Dove prompt hook entries when recorded by the manifest, permission and MCP fragments, `.dove/install/manifest.json`, and the manifest-owned `.dove/install/RESEARCH_QUALITY.md` and `.dove/install/AUTHOR_PREFERENCES.md` references. It preserves `.dove/research/**`, `.dove/reviews/**`, `.dove/runs/**`, `.dove/install/DOCTOR.md`, all legacy markers and unknown installation files, unrelated host settings, unrelated hooks, unrelated MCP servers, any pre-existing user-owned `permissions.deny` entry for `WebFetch`, and ordinary project files. If no conflicting installation residue remains, a project retaining only researcher-owned context is then classified as uninitialized rather than offered an update. Preserved unknown files under `.dove/install/` or an unsupported legacy installation directory can still leave setup blocked; uninstall does not delete them to force an uninitialized state. Drift, symlinks, or changed transaction preconditions block replacement; caught promotion failures trigger rollback. If restoration fails, Dove keeps the transaction root and backups and reports their absolute paths. This does not promise crash recovery or filesystem-wide atomicity.
 
 ## Doctor
 
@@ -155,7 +155,7 @@ The current session's actual loaded resources remain unknown to the CLI, even af
 
 The ownership boundary is strict:
 
-- `.dove/install/manifest.json`, the exact `.dove/install/RESEARCH_QUALITY.md` reference, and declared host integration resources are Dove-managed. Other `.dove/install/` files, including `DOCTOR.md`, remain outside managed resource ownership.
+- `.dove/install/manifest.json`, the exact `.dove/install/RESEARCH_QUALITY.md` and `.dove/install/AUTHOR_PREFERENCES.md` references, and declared host integration resources are Dove-managed. Other `.dove/install/` files, including `DOCTOR.md`, remain outside managed resource ownership.
 - `.dove/research/` is ordinary researcher-owned Markdown context.
 - `.dove/reviews/` holds explicit isolated review exchange records and is preserved across reinstall and uninstall.
 - `.dove/runs/` holds local execution receipts for Dove run supervisors and is preserved across update, read-only SessionStart, reinstall, and uninstall.

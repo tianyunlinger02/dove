@@ -2,7 +2,7 @@
 
 Dove helps you move a research project forward. Tell it what you are trying to achieve; it can read sources, inspect project material, analyze results, design or run experiments, keep local run receipts, write and revise text, make figures, review the work, and help respond to criticism.
 
-For a confirmed goal, Dove keeps taking useful steps while the work can still move forward. Important route and central-experiment decisions start from proportionate theory or mechanism grounding, with exploratory diagnostics when foundations are missing. It asks when the next step would change the goal, require your decision, need permission, or hit a real outside limit.
+For a confirmed research goal, Dove keeps taking useful in-scope steps while the work can still move forward. It checks consequential plans and investments against that goal, grounds important research decisions proportionately, and asks when the next step needs your decision or permission or hits a real outside limit. Ordinary tasks with no research impact finish normally, without imposed research planning, grading, or records.
 
 ## Start
 
@@ -16,23 +16,29 @@ dove
 
 For package trust, host setup, permissions, update, reinstall, uninstall, and Doctor details, see [Installation](docs/INSTALL.md).
 
-## Nine entrances
+## Ordinary conversation first
 
-You can talk to Dove directly, or use `/dove:*` when you want a specific entrance.
+After initializing Claude integration, start ordinary `claude` in the project and describe the task. The project rule is the primary Dove entrance for relevant research, engineering, writing, and collaboration work. Neither `--agent dove` nor a Skill is required.
+
+### Nine optional Skills
+
+Use `/dove:*` when a specific capability shortcut helps.
 
 | Skill | Use it for |
 |---|---|
 | `dove.research` | Advance a research goal and let Dove choose the next useful step. |
 | `dove.status` | Read current research notes and next priorities without writing. |
 | `dove.source` | Find, read, check, and use sources that matter to the question. |
-| `dove.experiment` | Design, analyze, record, or explicitly run experiments and diagnostics. |
+| `dove.experiment` | Design, run when authorized, analyze, or record exploration, diagnostics, confirmation, reproduction, and delivery checks. |
 | `dove.draft` | Draft, assess, or revise text and project artifacts from real evidence. |
 | `dove.figure` | Gather materials, draw or revise figures, check them in context, and caption them. |
 | `dove.review` | Run author-side self-check, delivery review, `dove-review` handoff, review import, or review inspection. |
 | `dove.rebuttal` | Analyze review findings, write responses, and make requested evidence-backed revisions. |
 | `dove.lessons` | Read or maintain reusable lessons that can improve current or future work. |
 
-In Claude Code, ordinary conversations share Dove's research judgment through the project rule. Start `claude --agent dove` for a full author-side research session. A bounded investigation that benefits from separate context may use Dove as a subagent; work needing the full conversation, important user clarification, or ongoing mainline ownership stays in the main session. The nine `/dove:*` commands remain flat shortcuts, with no Auto command. DeepSeek Harness receives the nine project-local Skills. See [Usage](docs/USAGE.md) and [Installation](docs/INSTALL.md) for details.
+`claude --agent dove` is an optional explicit entrance for long author-side sessions, not a higher judgment authority; Skills likewise add no authority or permissions. The ordinary main session retains the full conversation, important clarification, and mainline ownership before and after bounded delegation. Separate context can help an investigation without creating another persona. DeepSeek Harness receives the nine project-local Skills; there is no Auto command. See [Usage](docs/USAGE.md) and [Installation](docs/INSTALL.md).
+
+The short core uses two on-demand references: research quality criteria and author preferences. Neither is evidence or a Lesson; [Usage](docs/USAGE.md#short-core-and-two-on-demand-references) explains their separate roles. Participating in research, completing requested work, and making scientific progress are distinct: useful engineering or delivery can finish without establishing a new scientific result.
 
 ## Research notes
 
@@ -52,7 +58,7 @@ For explicit local experiments or diagnostics, Dove can use `dove run start [--s
 
 ## License
 
-Dove 3.0.9 is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) only for purposes that license permits. It is source-available software, not OSI-approved open-source software, and this project does not offer or advertise a commercial-license path.
+Dove 3.0.10 is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) only for purposes that license permits. It is source-available software, not OSI-approved open-source software, and this project does not offer or advertise a commercial-license path.
 
 Bundled third-party components remain under their own MIT or ISC terms. See [Third-Party Notices](THIRD_PARTY_NOTICES.md); Dove's PolyForm license does not replace or restrict those grants.
 

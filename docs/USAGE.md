@@ -16,26 +16,43 @@ The bare public npm package name `dove` is unrelated. For package trust, lifecyc
 
 ## Entry modes
 
-- **Ordinary Claude conversation** uses the project rule's shared research judgment. Normal host routing remains in charge; there is no `UserPromptSubmit`, hidden intake, or replacement per-prompt hook.
-- **`claude --agent dove`** starts a full author-side research session. This is the place for ongoing mainline work and decisions that need the full conversation or user clarification.
+- **Ordinary Claude conversation is the primary Dove entrance.** Start `claude` in the initialized project and describe the task. The project rule supplies shared judgment and author stance for relevant research, engineering, experiment, writing, and collaboration work. The ordinary main session owns ongoing mainline work and decisions requiring the full conversation or clarification. Normal host routing remains in charge; there is no `UserPromptSubmit`, hidden intake, or replacement per-prompt hook.
+- **`claude --agent dove`** is an optional explicit entrance for long author-side sessions, with no higher judgment authority than the ordinary installed main session.
 - **A Dove subagent** can investigate a bounded research question when separate context helps. Give it a clear question, relevant materials, and a return scope. Do not delegate work that needs the full user conversation, important clarification, or continuing ownership of the author's mainline. Separate context does not create a new persona or automatically make the task an independent paper review.
-- **`/dove:*` commands** are nine flat capability shortcuts for the same Dove, not stages or an Auto mode. DSH receives these as project-local filesystem Skills rather than Claude commands or agent integration.
+- **`/dove:*` commands** are nine optional flat capability shortcuts for the same Dove, not stages, higher authorities, permission grants, or an Auto mode. DSH receives these as project-local filesystem Skills rather than Claude commands or agent integration.
 
 | Skill | Use it for |
 |---|---|
 | `dove.research` | Advance a research goal and choose the next useful step. |
 | `dove.status` | Read research notes, open questions, and next priorities without writing. |
 | `dove.source` | Find, read, check, and use relevant sources, including bounded bibliography DOI identity checks. |
-| `dove.experiment` | Design experiments, analyze results, record findings, or explicitly run diagnostics and experiments. |
+| `dove.experiment` | Design, run when authorized, analyze, or record exploration, diagnostics, confirmation, reproduction, and delivery checks. |
 | `dove.draft` | Draft, assess, or revise text and project artifacts from real evidence. |
 | `dove.figure` | Gather materials, draw or revise figures, inspect them in context, and caption them. |
 | `dove.review` | Do author-side self-check, delivery review, isolated review handoff, returned-review import, or inspection. |
 | `dove.rebuttal` | Analyze findings, write responses, and make requested evidence-backed revisions. |
 | `dove.lessons` | Read or maintain reusable advice that may improve research judgment. |
 
-## Short core and on-demand quality reference
+## Short core and two on-demand references
 
-Claude's project rule and standalone DSH Skills carry a short shared research core. Both hosts install the full package-managed guidance at `.dove/install/RESEARCH_QUALITY.md`; it is not a Lesson or research evidence. Dove proactively reads it before substantive grading, consequential route selection, major investment or experiment scale-up, core-claim or submission-completion judgments, and after decisive counterevidence, task-identity changes, or cross-dimensional tradeoffs that may change the decision. Apply the relevant criteria and joint conditions, reuse already-read guidance and still-applicable evidence, and keep local work local. If the reference is unavailable, report the limitation rather than invent grades or equate checks with scientific acceptance. Reading guidance grants no new tool, execution, or material access.
+Claude's project rule and standalone DSH Skills carry a short shared research core. Both hosts install two package-managed references with separate responsibilities:
+
+| Reference | Role and when to read |
+|---|---|
+| `.dove/install/RESEARCH_QUALITY.md` | Full substantive quality criteria and joint conditions for the current use. Read before consequential grading, route/investment or scale-up decisions, core/submission conclusions, and after decision-changing counterevidence, task-identity changes, or cross-dimensional tradeoffs. |
+| `.dove/install/AUTHOR_PREFERENCES.md` | Full author-side research, engineering, writing, and collaboration preferences. Read relevant sections when those decisions need them, within the current request and project constraints. Its sole editable source is [Author preferences](AUTHOR_PREFERENCES.md). |
+
+Reuse guidance already read in the active context and evidence whose conditions still hold. Neither reference is evidence, a permission grant, an optional Lesson, or a full-task checklist. Unavailable guidance limits what can be judged; do not invent grades or assume missing preferences. Isolated review receives its own quality reference only; it does not gain author-preference access. DSH Status remains inspection/reporting only, without author stance or its preference-read trigger.
+
+## Scope, plans, and progress
+
+Ordinary tasks with no research impact finish normally without research planning, grading, or records. Engineering that implements, diagnoses, optimizes, or delivers a research route is research work and retains relevant scientific responsibilities; calling it engineering does not exempt a consequential choice from the confirmed goal.
+
+Before forming or adopting a plan, making a consequential implementation, data, supervision, or representation choice, launching an experiment, or expanding investment, compare the affected route with the confirmed mainline, necessary capabilities, permitted information, evaluation, resources, and completion meaning. Reuse settled context and inspect decision-relevant gaps, not every tool action or the whole project. Fixed conditions bind; negotiable preferences inform tradeoffs. A known conflict immediately stops the affected investment until an in-scope correction or necessary user decision, not all independent work. Unknown effects alone do not block authorized implementation when mechanism, necessary capability, information, and resource conditions give reasonable grounds to proceed.
+
+New-route or intended-contribution investment needs proportionate scientific admission. Do not mechanically reopen topic selection or novelty assessment for already-confirmed reproduction, implementation, repair, or delivery; complete the agreed capability with task-matched checks unless a concrete issue threatens the goal's correctness or feasibility. Prior approval does not erase a current conflict.
+
+Separate **research participation**, **completion of the requested work**, and **scientific progress**. A bounded engineering or delivery task can finish without new science. Scientific progress needs evidence of changed understanding, target research capability against a valid reference, or a defensible research decision; coding, running, searching, or recording alone is insufficient. Reliable negative findings can advance knowledge without improving the rejected method.
 
 ## Tools and sources
 
@@ -83,9 +100,20 @@ Ordinary source work stays proportional. Explicit systematic review, meta-analys
 
 ### Experiment
 
-Use `/dove:experiment` for design-only work, requested execution, existing-result analysis, retrospective recording, or diagnostics. Before a central experiment, establish the uncertainty, strongest alternative, and distinguishing result. Trace actual inputs → method outputs → suitable evaluation basis → metrics → comparison, including failures, exclusions, and denominators. Use pairing, uncertainty, dependence, and final-test independence where applicable. Check ablations against actual code, configuration, and outputs: a whole implementation winning is not automatically a component gain or mechanism evidence. If the comparison cannot identify the contribution, compare a suitable repair, evaluation redesign, alternative route, further evidence, or stopping; keep current conclusions within the evidence rather than defaulting to small controls, claim narrowing, or more runs.
+Experiment separates **request mode** from **purpose**. Design-only, requested execution, existing-result analysis, and retrospective recording determine what work is authorized; exploration, diagnostics, confirmation, and reproduction/delivery determine what it must establish.
+
+- **Exploration** may discover phenomena, test feasibility, or form explanations without a predeclared claim or predetermined code change.
+- **Diagnostics** locate a specific capability, correctness, information, or resource bottleneck; act once enough is known rather than repeat low-information checks.
+- **Confirmation** specifies the claim or question, relevant predictions, comparisons, alternatives, and judgment criteria before testing. Keeping implementation and protocol unchanged can add necessary evidence.
+- **Reproduction/delivery** checks agreed behavior, conditions, references, and actual use without reopening novelty by default.
+
+Temporary versus final use is separate from exploratory versus confirmatory evidence. Accurately bounded exploratory findings may be final results, but later explanations are not retroactive independent confirmation. A useful run need not change code or select a new route.
+
+Trace actual inputs → method outputs → suitable evaluation basis → metrics → comparison, including failures, exclusions, and denominators. Use pairing, uncertainty, dependence, and final-test independence where applicable. Check ablations against actual code, configuration, and outputs: a whole implementation winning is not automatically a component gain or mechanism evidence. If the comparison cannot identify the contribution, compare a suitable repair, evaluation redesign, alternative route, further evidence, or stopping; keep current conclusions within the evidence rather than defaulting to small controls, claim narrowing, or more runs.
 
 Reuse inspected evidence while its conditions hold; new data, methods, evaluation chains, or decision-relevant gaps call for targeted checks, not a full rescan. Run a representative diagnostic only when needed and authorized; small samples check chain semantics and implementation, not population-level statistical sufficiency. Design-only stays read-only apart from delivering the plan and unverified limits, without executing diagnostics. Analyze existing results directly and keep retrospective records retrospective. For authorized new central work that needs recording, successfully save the plan before execution and append actual results and interpretation-changing deviations to that same document—no new template or gate. Check surprising or unstable results for implementation, data, configuration, randomness, metric, baseline, and analysis errors before using them scientifically.
+
+For consequential CPU/GPU/accelerator choices, inspect the representative end-to-end route: loading and transfers, core computation, synchronization, evaluation, outputs, and required downstream use. Reuse applicable measurements or profile only when execution is authorized. Compare total time to useful evidence or delivery, including implementation, repeated runs, and known recovery costs—not one utilization signal, kernel timing, or convenient code path. Use suitable available acceleration without forcing every stage onto it or maintaining a redundant full CPU fallback; preserve necessary capability and effective scale. After optimization, recheck affected numerical/output semantics, information boundaries, evaluation, and budget comparability. Design-only permits inspection and estimates, not profiling execution; unrelated local work needs no profiling ritual.
 
 ### Run receipts
 
@@ -144,7 +172,7 @@ Use `/dove:rebuttal` for author-side response and requested revision. Check whic
 
 ### Lessons
 
-Use `/dove:lessons` for reusable advice that may improve current or future work. Lessons are fallible guidance, not proof that a claim or project is correct.
+Use `/dove:lessons` for optional researcher-owned, reusable experience that may improve current or future work. Lessons retain applicability, counterexamples, and limits; they do not carry package-default author preferences or replace either reference. They are fallible guidance, not proof that a claim or project is correct.
 
 ## Submission readiness
 
