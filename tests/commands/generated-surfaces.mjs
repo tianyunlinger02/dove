@@ -91,6 +91,16 @@ function assertHostGuidanceProjection(entry) {
   }
 }
 
+function assertCoreActionGuidance(value, label) {
+  assert.match(value, /unfinished core capabilities or evidence/iu, label);
+  assert.match(value, /Being related to the goal is not enough/iu, label);
+  assert.match(value, /neither refuses nor expands/iu, label);
+  assert.match(value, /no fixed round count or per-step progress quota/iu, label);
+  assert.match(value, /Credible positive signals are preliminary support/iu, label);
+  assert.match(value, /core implementation need not wait for positive evidence/iu, label);
+  assert.match(value, /never select samples, change criteria, or hide counterevidence/iu, label);
+}
+
 export function assertFinalEntrypointWiring() {
   const ambient = generatedClaudeAmbientProjectEntries();
   assert.deepEqual(ambient.map(({ destinationPath }) => destinationPath), [
@@ -102,6 +112,7 @@ export function assertFinalEntrypointWiring() {
   const rule = byPath.get(".claude/rules/dove.md");
   assert.ok(rule.includes(renderDoveSharedResearchContractSection()));
   assert.ok(rule.includes(renderDoveAuthorStanceSection()));
+  assertCoreActionGuidance(rule, "ordinary Claude rule");
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, 1, "author stance owns the preference read trigger");
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP).length - 1, 1, "author stance requires one main-agent bootstrap");
   assert.match(rule, /current host main agent must personally read/iu);
@@ -135,6 +146,7 @@ export function assertFinalEntrypointWiring() {
     for (const prefix of prefixes) {
       const value = `${prefix}\n\n${entry.content}`;
       assertSharedContractOnce(value, label);
+      if (["dove.research", "dove.experiment"].includes(entry.command.id)) assertCoreActionGuidance(value, label);
       assert.doesNotMatch(value, /Workspace mainline/u);
       if (["dove.research", "dove.status"].includes(entry.command.id)) assert.match(value, /Mainline: <text>/u);
       for (const instruction of USER_RESPONSE_POLICY) {

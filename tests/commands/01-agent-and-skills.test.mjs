@@ -80,6 +80,16 @@ test("reviewer guidance excludes author stance and preference access", () => {
   assert.match(renderDoveReviewerStanceSection(), /listed frozen materials/iu);
 });
 
+test("quality reference connects contribution signals to investment without positivity gates", () => {
+  const reference = renderDoveResearchQualityReference();
+  assert.match(reference, /preliminary support/iu);
+  assert.match(reference, /valid derivations/iu);
+  assert.match(reference, /important alternative explanations/iu);
+  assert.match(reference, /core implementation without prior positive evidence/iu);
+  assert.match(reference, /Preserve reliable negative findings and counterexamples/iu);
+  assert.match(reference, /not a fixed sequence/iu);
+});
+
 test("retired abstractions do not return as public API", () => {
   for (const name of [
     "DOVE_AGENT_DEFINITION",
