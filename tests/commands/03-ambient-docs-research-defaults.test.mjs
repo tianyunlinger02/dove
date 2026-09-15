@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { renderDoveAuthorStanceSection } from "../../src/core/dove-agent-persona.mjs";
 import {
   RESEARCH_DEFAULT_DIRECTORY_PATHS,
   RESEARCH_DEFAULT_DOCUMENTS,
@@ -18,6 +19,23 @@ test("research bootstrap remains a minimal researcher-owned overview", () => {
   ]);
   assert.deepEqual(RESEARCH_DEFAULT_DIRECTORY_PATHS, [RESEARCH_DEFAULT_PATHS.root]);
   assert.match(RESEARCH_DEFAULT_DOCUMENTS[0].content, /researcher-owned entry/iu);
+});
+
+test("author stance reads durable research context only when decision-relevant", () => {
+  const stance = renderDoveAuthorStanceSection();
+  const overview = "`.dove/research/RESEARCH.md`";
+  assert.equal(stance.split(overview).length - 1, 1);
+  assert.match(stance, /If durable Dove context may change the current decision/iu);
+  assert.match(stance, /only directly relevant/iu);
+  assert.match(stance, /Lessons guide judgment, not supply research evidence/iu);
+  assert.match(stance, /Do not scan the broad research tree/iu);
+  assert.match(stance, /no research-tree prerequisite/iu);
+  assert.match(stance, /agreed bounded deliverables/iu);
+  assert.match(stance, /investment dependent on a scientific proposition/iu);
+  assert.match(stance, /Complete genuine bounded/iu);
+  assert.match(stance, /neither refuses nor expands/iu);
+  assert.match(stance, /Stop investment dependent on that justification/iu);
+  assert.match(stance, /preserving independently useful authorized work/iu);
 });
 
 test("Trellis specs match their installed Markdown templates", () => {

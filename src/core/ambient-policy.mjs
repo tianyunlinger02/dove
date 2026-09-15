@@ -1,4 +1,5 @@
 import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "./dove-agent-persona.mjs";
+import { renderDoveAmbientParticipationSection } from "./command-manifest.mjs";
 import { USER_RESPONSE_POLICY } from "./user-response-policy.mjs";
 import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS } from "./dove-research-contract.mjs";
 
@@ -109,7 +110,7 @@ Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_P
 
 ${renderDoveAuthorStanceSection()}
 
-Answer, clarify, or use a Dove capability when useful for the current request; the main session retains author-side judgment before and after delegation.
+${renderDoveAmbientParticipationSection()}
 
 For web work, use the current project's real paper and webpage reading tools when available and permitted; search snippets can guide discovery, but do not replace unretrieved paper or webpage content with shell, \`curl\`, or ad hoc fetch substitutes.
 

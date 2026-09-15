@@ -9,7 +9,8 @@ import {
   PACKAGE_GENERATED_SUPPORT_PATHS,
   PROJECT_HOST_IDS,
   adapterPathForCommand,
-  packageResourcePath
+  packageResourcePath,
+  renderDoveAmbientParticipationSection
 } from "../../src/core/command-manifest.mjs";
 import { generatedDoveAgentEntries, renderClaudeDoveAgent } from "../../src/core/dove-agent-definition.mjs";
 import {
@@ -94,8 +95,13 @@ function assertHostGuidanceProjection(entry) {
 function assertCoreActionGuidance(value, label) {
   assert.match(value, /unfinished core capabilities or evidence/iu, label);
   assert.match(value, /Being related to the goal is not enough/iu, label);
+  assert.match(value, /Scientific core means/iu, label);
+  assert.match(value, /engineering core means[^.\n]*producer-consumer behavior/iu, label);
   assert.match(value, /neither refuses nor expands/iu, label);
+  assert.match(value, /scientific contract is clear enough[^.\n]*implement the necessary core path/iu, label);
   assert.match(value, /no fixed round count or per-step progress quota/iu, label);
+  assert.match(value, /Contract tests establish implementation behavior/iu, label);
+  assert.match(value, /claim-matched controls and evaluation establish only the scientific claim/iu, label);
   assert.match(value, /Credible positive signals are preliminary support/iu, label);
   assert.match(value, /core implementation need not wait for positive evidence/iu, label);
   assert.match(value, /never select samples, change criteria, or hide counterevidence/iu, label);
@@ -110,8 +116,22 @@ export function assertFinalEntrypointWiring() {
   ]);
   const byPath = new Map(ambient.map(({ destinationPath, content }) => [destinationPath, content]));
   const rule = byPath.get(".claude/rules/dove.md");
+  const participation = renderDoveAmbientParticipationSection();
   assert.ok(rule.includes(renderDoveSharedResearchContractSection()));
   assert.ok(rule.includes(renderDoveAuthorStanceSection()));
+  assert.equal(rule.split("## Capability participation").length - 1, 1, "ordinary Claude has one capability projection");
+  assert.equal(rule.split(participation).length - 1, 1, "ordinary Claude uses the canonical capability projection");
+  assert.equal(participation.split("\n").filter((line) => line.startsWith("- Dove ")).length, COMMAND_SURFACES.length);
+  assert.match(participation, /commands are shortcuts, not prerequisites/iu);
+  assert.match(participation, /never expands authorization/iu);
+  for (const command of COMMAND_SURFACES) {
+    assert.equal(rule.split(command.contract.ambientParticipation).length - 1, 1, `${command.id}: one ambient participation sentence`);
+  }
+  const statusParticipation = COMMAND_SURFACES.find(({ id }) => id === "dove.status").contract.ambientParticipation;
+  assert.match(statusParticipation, /explicitly asked/iu);
+  assert.match(statusParticipation, /read-only/iu);
+  assert.match(rule, /without requiring `--agent dove` or a Skill/iu);
+  assert.match(renderClaudeDoveAgent(), /no higher judgment authority/iu);
   assertCoreActionGuidance(rule, "ordinary Claude rule");
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, 1, "author stance owns the preference read trigger");
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP).length - 1, 1, "author stance requires one main-agent bootstrap");
@@ -138,6 +158,16 @@ export function assertFinalEntrypointWiring() {
     const label = `${entry.hostId} ${entry.command.id}`;
     const prefixes = entry.hostId === "claude" ? [rule, `${rule}\n\n${renderClaudeDoveAgent()}`] : [""];
     assertHostGuidanceProjection(entry);
+    assert.equal(entry.content.includes("## Capability participation"), false, `${label}: no duplicated ambient section`);
+    if (entry.hostId === "claude") {
+      for (const command of COMMAND_SURFACES) {
+        assert.equal(entry.content.includes(command.contract.ambientParticipation), false, `${label}: ambient participation stays in the ordinary rule`);
+      }
+    } else {
+      assert.ok(entry.content.includes(renderDoveSharedResearchContractSection()), `${label}: standalone shared contract`);
+      assert.match(entry.content, /## How Dove approaches this work/u, `${label}: full capability contract`);
+      assert.match(entry.content, /### Return with/u, `${label}: capability return contract`);
+    }
     const standaloneAuthor = entry.hostId === "dsh" && entry.command.id !== "dove.status";
     assert.equal(entry.content.includes(renderDoveAuthorStanceSection()), standaloneAuthor, `${label}: author stance projection`);
     assert.equal(entry.content.includes(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER), standaloneAuthor, `${label}: author-only preference entry`);
@@ -172,6 +202,16 @@ export function assertFinalEntrypointWiring() {
 export function assertRenderedCapabilityWiring(entry) {
   const value = entry.content.slice(entry.content.indexOf("## How Dove approaches this work"));
   const label = `${entry.hostId} ${entry.command.id}`;
+  if (entry.command.id === "dove.research") {
+    assert.match(value, /input-output capability is an engineering boundary/iu, label);
+    assert.match(value, /available data[^.\n]*provisional candidates rather than definitions of the goal or default method/iu, label);
+    assert.match(value, /simpler existing solution or no remaining research contribution/iu, label);
+    assert.match(value, /targeted near-neighbor subtraction/iu, label);
+    assert.match(value, /exhaustive search[^.\n]*prerequisite/iu, label);
+    assert.match(value, /local effect supports only the local claim/iu, label);
+    assert.match(value, /Judge continuation prospectively/iu, label);
+    assert.match(value, /past work matters only through/iu, label);
+  }
   if (entry.command.id === "dove.source") {
     assert.match(value, /Partial support is not support for the whole sentence/u, label);
     assert.match(value, /supported, contradicted, or uncovered/iu, label);
@@ -212,6 +252,31 @@ export function assertGeneratedAdapters() {
   const entries = generatedAdapterEntries();
   assert.equal(entries.length, COMMAND_SURFACES.length * PROJECT_HOST_IDS.length);
   assertUnique(entries.map(({ relativePath }) => relativePath), "adapter paths are unique");
+  const establishedSupportPaths = {
+    claude: [
+      ".claude/rules/dove.md",
+      ".dove/install/RESEARCH_QUALITY.md",
+      ".dove/install/AUTHOR_PREFERENCES.md",
+      ".claude/skills/dove-paper-search/SKILL.md",
+      ".claude/skills/dove-web-reader/SKILL.md",
+      ".claude/settings.json"
+    ],
+    dsh: [
+      ".dove/install/RESEARCH_QUALITY.md",
+      ".dove/install/AUTHOR_PREFERENCES.md"
+    ]
+  };
+  for (const hostId of PROJECT_HOST_IDS) {
+    const hostEntries = entries.filter((entry) => entry.hostId === hostId);
+    assert.deepEqual(
+      hostEntries.map((entry) => entry.command.id),
+      COMMAND_SURFACES.map(({ id }) => id),
+      `${hostId}: exactly the nine canonical capability adapters`
+    );
+    const expectedManaged = [...hostEntries.map(({ destinationPath }) => destinationPath), ...establishedSupportPaths[hostId]];
+    assert.deepEqual(HOST_ADAPTERS[hostId].paths, expectedManaged, `${hostId}: no hidden Skill or managed path`);
+    assert.deepEqual(HOST_ADAPTERS[hostId].requiredPaths, expectedManaged, `${hostId}: required managed path inventory`);
+  }
 
   for (const entry of generatedDoveAgentEntries()) {
     assertAgentProjection(entry.content, "generated agent");

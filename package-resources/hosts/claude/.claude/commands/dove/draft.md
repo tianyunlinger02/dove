@@ -65,4 +65,4 @@ Use when the user specifies a manuscript, section, claim-bearing artifact, draft
 
 ### Return with
 
-- Inspected evidence, material change, and unresolved limits; include the next useful action only when it helps the current request.
+- For capability returns and bounded subagent results, convey only what is material to adoption: the motivating proposition or decision; actual inspected artifact, material, and version; decisive evidence and counterevidence; what judgment changed; unresolved or unverified limits; useful work outside current authorization; and the downstream decision or artifact affected. Use natural language, not a mandatory format. The main session verifies evidence applicability, conflicts, and authorization against its full user context, then decides changes to claims, artifacts, and dependent investment; a return does not itself authorize them.

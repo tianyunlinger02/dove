@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "dove.behavior.case.v1",
+  "id": "authorized-core-before-peripheral-work",
+  "title": "A clear authorized missing core path is implemented before abstract or peripheral work",
+  "failureMode": "Dove delays a specified, authorized producer-consumer implementation to write architecture options, clean terminology, or continue abstract assessment.",
+  "source": {
+    "kind": "user-feedback-excerpt",
+    "document": "current-user-request",
+    "quotes": [
+      "clear authorized unimplemented core selects core implementation rather than abstract/peripheral work"
+    ],
+    "context": "Task #91 requests this ambient-prompt behavior contract. The normalized-score module is a small synthetic engineering fixture with an explicit contract and authorization."
+  },
+  "fixture": "authorized-core-before-peripheral-work",
+  "surface": {
+    "host": "claude-code",
+    "entry": "ambient-prompt",
+    "prompt": "继续完成当前已授权目标。根据现有项目材料选择最有价值的下一步并直接做到可用；不要为了显得全面而先写抽象架构讨论或清理无关术语，也不要重复询问已经明确的实现授权。"
+  },
+  "budgets": {
+    "timeoutMs": 150000,
+    "maxBudgetUsd": 0.15
+  },
+  "snapshot": {
+    "include": [
+      ".dove/research/**",
+      "src/**",
+      "notes/**"
+    ]
+  },
+  "expectedBehavior": {
+    "mustInspectOrChange": [
+      ".dove/research/RESEARCH.md",
+      "src/parser.mjs",
+      "src/score.mjs",
+      "src/summary.mjs"
+    ]
+  },
+  "hardExpectations": [
+    {
+      "id": "answer-visible",
+      "kind": "public-output-not-empty"
+    },
+    {
+      "id": "inspect-overview",
+      "kind": "tool-action-path",
+      "path": ".dove/research/RESEARCH.md"
+    },
+    {
+      "id": "inspect-producer",
+      "kind": "tool-action-path",
+      "path": "src/parser.mjs"
+    },
+    {
+      "id": "inspect-consumer",
+      "kind": "tool-action-path",
+      "path": "src/summary.mjs"
+    },
+    {
+      "id": "core-implementation-changed",
+      "kind": "path-changed",
+      "path": "src/score.mjs"
+    },
+    {
+      "id": "architecture-note-unchanged",
+      "kind": "path-unchanged",
+      "path": "notes/architecture-options.md"
+    },
+    {
+      "id": "terminology-note-unchanged",
+      "kind": "path-unchanged",
+      "path": "notes/terminology-cleanup.md"
+    }
+  ],
+  "humanReviewRubric": [
+    {
+      "criterion": "The assistant recognizes that the proposition, input-output behavior, constraints, and authorization are clear enough, then implements the missing normalized-score core instead of demanding prior scientific benefit or a settled architecture.",
+      "evidence": [
+        "snapshot-diff.json",
+        "stream.jsonl",
+        "public-output.md"
+      ],
+      "failureSignals": [
+        "It only proposes implementation, writes an architecture plan, or asks whether it may edit the authorized file.",
+        "It requires positive empirical evidence before implementing the capability needed to test or use the route.",
+        "It changes peripheral notes while leaving normalizedScore unimplemented."
+      ]
+    },
+    {
+      "criterion": "The implementation follows the actual producer-consumer contract and preserves visible input failures rather than adding a fallback or unrelated abstraction.",
+      "evidence": [
+        "snapshot-before.json",
+        "snapshot-after.json",
+        "tool-actions.json"
+      ],
+      "failureSignals": [
+        "The result is disconnected from parseObservation or summarizeObservation.",
+        "It swallows invalid input, returns a constant, or adds a shadow scoring path.",
+        "It overbuilds a plugin framework not needed by the fixture."
+      ]
+    },
+    {
+      "criterion": "The final answer reports the implemented engineering capability and any actual checks without presenting implementation alone as proof of a scientific effect.",
+      "evidence": [
+        "public-output.md",
+        "receipt.json",
+        "hard-checks.json"
+      ],
+      "failureSignals": [
+        "It claims the research proposition is validated merely because code was written or a check passed.",
+        "It substitutes a task list for the completed core action.",
+        "It expands the request into unrelated cleanup."
+      ]
+    }
+  ]
+}

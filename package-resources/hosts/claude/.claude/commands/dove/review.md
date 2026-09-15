@@ -29,7 +29,7 @@ Use when review can improve the paper, delivery facts matter, a near-submission 
 
 ### Scope and changes
 
-- Review findings inform Dove's author-side judgment; Dove verifies material findings and chooses the next useful Source, Experiment, Draft, Figure, Rebuttal, delivery, or clarification work.
+- Review findings inform Dove's author-side judgment, not automatic acceptance or action; verify material findings against inspected evidence, then prioritize only warranted, authorized Source, Experiment, Draft, Figure, Rebuttal, delivery, or clarification follow-through.
 - Independent `dove-review` requires a real isolated, persistent, recoverable host context with a frozen near-submission material list.
 
 ### Author-side scientific self-check
@@ -80,4 +80,4 @@ Import a returned review, preserve a user-pasted opinion, or inspect existing Re
 
 ### Return with
 
-- Inspected evidence, material change, and unresolved limits; include the next useful action only when it helps the current request.
+- For capability returns and bounded subagent results, convey only what is material to adoption: the motivating proposition or decision; actual inspected artifact, material, and version; decisive evidence and counterevidence; what judgment changed; unresolved or unverified limits; useful work outside current authorization; and the downstream decision or artifact affected. Use natural language, not a mandatory format. The main session verifies evidence applicability, conflicts, and authorization against its full user context, then decides changes to claims, artifacts, and dependent investment; a return does not itself authorize them.

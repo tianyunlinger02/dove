@@ -4,7 +4,7 @@
 
 Dove helps you move a research project forward. Tell it what you are trying to achieve; it can read sources, inspect project material, analyze results, design or run experiments, keep local run receipts, write and revise text, make figures, review the work, and help respond to criticism.
 
-For a confirmed research goal, Dove keeps taking useful in-scope steps while the work can still move forward. It seeks the shortest total path from problem through method to an evidence-supported contribution—not the fewest local steps—and checks consequential plans and investments against that goal, grounds important research decisions proportionately, and asks when the next step needs your decision or permission or hits a real outside limit. Ordinary tasks with no research impact finish normally, without imposed research planning, grading, or records.
+For a confirmed research goal, Dove keeps taking useful in-scope steps while the work can still move forward. It seeks the shortest total path from problem through method to an evidence-supported contribution—not the fewest local steps—and checks consequential plans and investments against that goal, grounds important research decisions proportionately, and asks when the next step needs your decision or permission or hits a real outside limit. An interface, available data, supplied solution, mature implementation, or past effort does not define the scientific problem or justify a contribution by itself: Dove reconstructs the independent need and allows simpler existing solutions or no remaining research contribution. Once the scientific contract is clear enough, it translates the mechanism and distinguishing prediction into the necessary producer-consumer behavior and claim-matched evidence, then implements the authorized core path without waiting for exhaustive search or prior positive results. Ordinary tasks with no research impact finish normally, without imposed research planning, grading, or records.
 
 ## Start
 
@@ -20,7 +20,7 @@ For package trust, host setup, permissions, update, reinstall, uninstall, and Do
 
 ## Ordinary conversation first
 
-After initializing Claude integration, start ordinary `claude` in the project and describe the task. The project rule is the primary Dove entrance for relevant research, engineering, writing, and collaboration work. Neither `--agent dove` nor a Skill is required. After installing or updating integration in an active session, reload the host session to load the changed resources; disk installation alone is not live loading.
+After initializing Claude integration, start ordinary `claude` in the project and describe the task. The project rule makes that main session the complete Dove entrance for relevant research, engineering, writing, and collaboration work; it can use the same capability methods naturally without a command. `--agent dove` and Skills are optional shortcuts, not prerequisites, routers, permissions, or workflow stages. After installing or updating integration in an active session, reload the host session to load the changed resources; disk installation alone is not live loading.
 
 ### Nine optional Skills
 
@@ -38,7 +38,7 @@ Use `/dove:*` when a specific capability shortcut helps.
 | `dove.rebuttal` | Analyze review findings, write responses, and make requested evidence-backed revisions. |
 | `dove.lessons` | Read or maintain reusable lessons that can improve current or future work. |
 
-`claude --agent dove` is an optional explicit entrance for long author-side sessions, not a higher judgment authority; Skills likewise add no authority or permissions. The ordinary main session retains the full conversation, important clarification, and mainline ownership before and after bounded delegation. Separate context can help an investigation without creating another persona. DeepSeek Harness receives the nine project-local Skills; there is no Auto command. See [Usage](docs/USAGE.md) and [Installation](docs/INSTALL.md).
+`claude --agent dove` is an optional explicit entrance for long author-side sessions, not a higher judgment authority; Skills likewise add no authority or permissions. The ordinary main session retains the full conversation, important clarification, mainline ownership, and adoption of scoped capability or delegated returns. Material findings must change affected claims, dependencies, investment, artifacts, or next action—or explain why no change follows—without automatically invoking another capability. Separate context can help an investigation without creating another persona. DeepSeek Harness receives the nine project-local Skills; there is no Auto command. See [Usage](docs/USAGE.md) and [Installation](docs/INSTALL.md).
 
 The short core uses two references with different read contracts: research quality criteria are consulted at consequential decision triggers, while each fresh host main-agent context must personally read the complete author preferences before substantive work. Claude startup and `/clear` deliver that bootstrap to the current main agent—ordinary Claude or explicit Dove; DSH performs it on first author-side Skill use if not already completed in that context. Neither reference is evidence or a Lesson; [Usage](docs/USAGE.md#short-core-and-two-reference-read-contracts) explains the boundaries. Participating in research, completing requested work, and making scientific progress are distinct: useful engineering or delivery can finish without establishing a new scientific result.
 
@@ -60,7 +60,7 @@ For explicit local experiments or diagnostics, Dove can use `dove run start [--s
 
 ## License
 
-Dove 3.2.0 is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) only for purposes that license permits. It is source-available software, not OSI-approved open-source software, and this project does not offer or advertise a commercial-license path.
+Dove 3.2.1 is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) only for purposes that license permits. It is source-available software, not OSI-approved open-source software, and this project does not offer or advertise a commercial-license path.
 
 Bundled third-party components remain under their own MIT or ISC terms. See [Third-Party Notices](THIRD_PARTY_NOTICES.md); Dove's PolyForm license does not replace or restrict those grants.
 
