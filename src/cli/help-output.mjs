@@ -20,8 +20,9 @@ export function renderDoveHelp() {
   dove run finalize --project <dir> --id <id> --metric-value <number> [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--decision <text>] [--note <text>] [--json|--format json]
   dove run compare --project <dir> [--group <name>|--id <id>...] [--json|--format json]
   dove hook session-start --project <dir>
+  dove hook user-prompt-submit --project <dir>
   dove hook statusline --project <dir>
 
-Dove 负责把当前项目接入支持的宿主，并提供 doctor、review、run 与 hook 等项目级命令。真正的科研推进仍在一个 Dove agent 中完成；研究记录是研究者维护的普通 Markdown。初始化只创建最小入口 \`.dove/research/RESEARCH.md\`，不代表已经完成研究、结论或验证。Claude 接入管理只读 SessionStart hook，并在没有现有用户配置时安装只读 statusLine；不安装也不暴露 UserPromptSubmit 或 Stop hook。
+Dove 负责把当前项目接入支持的宿主，并提供 doctor、review、run 与 hook 等项目级命令。真正的科研推进仍在一个 Dove agent 中完成；研究记录是研究者维护的普通 Markdown。初始化只创建最小入口 \`.dove/research/RESEARCH.md\`，不代表已经完成研究、结论或验证。Claude 接入管理只读 SessionStart hook，并在没有现有用户配置时安装只读 statusLine；UserPromptSubmit 对每条 prompt 返回同一作者立场提醒，不分类、不读取或写入研究内容、不检查集成、不授予权限也不阻塞请求。不安装也不暴露 Stop hook。
 `;
 }

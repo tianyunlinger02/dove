@@ -13,7 +13,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 
 ## 行为要求
 
-- Dove 必须围绕用户确认的目标行动；开放探索和幸存分支的早期调查必须明确标为 provisional question/route。
+- Dove 必须围绕用户确认的目标选择问题—方法—贡献的最短总路径，计入必要实现、有效证据、依赖与返工，不机械最小化局部步骤。重复纠正须改变错误理解及依赖计划；对照从属于问题与贡献，不成为替代目标。开放探索和幸存分支的早期调查必须明确标为 provisional question/route。
 - 科学任务身份按真正问题、研究对象/场景、输入与约束、输出、baseline/reference、真实目标与 proxy、核心命题/机制/贡献，以及成功和整体完成含义比较。项目名、仓库和代码资产连续不得被当作课题连续；跨轮局部修改累计改变这些内容时必须触发重判，不新增固定模板、状态、ID 或 ledger。
 - 实质改变确认主线、贡献定义或完成含义需要用户参与决策。已授权、低成本、可逆的暂定调查不等于主线转换；事实否定不需要批准。
 - 会影响行动的意图、目标产物、评价标准、范围或关键取舍不清时，Dove 必须先反问必要问题，并说明答案如何改变下一步。
@@ -30,7 +30,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - `.dove/research/**` 是普通 researcher-owned Markdown。
 - 研究目录不存在时，init 只创建最小 `RESEARCH.md`；已有目录即使缺少 overview 也保持不变，输出必须区分实际创建与保留。Mission、Source、Experiment、Review、Claim 和 Lesson documents 按需出现。
 - 不得要求固定 headings、frontmatter、generated IDs、stored counts、research hashes、machine index 或数据库式记录。
-- `dove update`、只读 SessionStart、reinstall 和 uninstall 必须保留现有 `.dove/research/**`、`.dove/reviews/**` 和 `.dove/runs/**` 内容；当前资源不得安装 `UserPromptSubmit` 或替代每轮 hook，旧 manifest-owned Dove `UserPromptSubmit` 只能精确退休且不得触碰用户/Trellis 其他 prompt hooks。
+- `dove update`、只读 SessionStart、reinstall 和 uninstall 必须保留现有 `.dove/research/**`、`.dove/reviews/**` 和 `.dove/runs/**` 内容；短 `UserPromptSubmit` re-anchor 不读取或维护这些材料，不建立 Research Spine schema/ledger；旧 manifest-owned Dove prompt 条目只能按精确归属退休且不得触碰用户/Trellis 其他 prompt hooks。
 - 研究 Markdown 只在用户要求、重要结论/决策/优先级改变，或对保存证据和后续恢复确实有用时维护。Lessons 可按更宽的 reusable-value 标准维护。
 - Mission 可追加真实结果、纠错和后续判断，但不得事后改写进入时的问题、原命题或范围来伪装成后来出现的新题；发生实质变化时保留原语义与原结论，并按实际情况记录暂定分支或用户授权主线。不得为此要求新文件、固定标题、append-only 存储或运行时状态。
 - 可在有恢复价值时使用普通 Markdown 相对链接和 project-relative artifact path 指向真实材料，但不得新增 link parser、backlink audit、一致性矩阵或数据库式一致性检查。
@@ -98,6 +98,6 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 ## 实现一致性
 
 - 公共文档、实现和生成文件必须与 [研究模型](RESEARCH_MODEL.md) 一致。
-- 普通 Claude 会话通过项目 rule 共享科研判断，不通过每轮 hook 注入或分类。`UserPromptSubmit`、隐藏 intake 和其替代每轮 hook 均已退休；rule 不是授权机制，也不创建另一套研究状态。
-- `status` 必须只读。
+- 普通 Claude 会话通过项目 rule 共享科研判断；`UserPromptSubmit` 仅对每个 prompt 确定性提供短 re-anchor，无分类、研究读写、权限决定或阻塞。仍禁止 hidden intake、router、Stop 和逐工具科学审批，不创建另一套研究状态。SessionStart 不变；安装或更新后活跃会话须重载，不能以磁盘集成证明实际加载。DSH 仍只有 Skills。
+- `status` 必须只读；窄状态冲突只报告可见来源、影响范围及未决处，不静默裁决、写回、扩查或另选主线。
 - 软件检查保护实现和发布行为；不得把检查结果表述为科学正确、研究完成、可复现性、接收、独立审稿或 Dove 研究质量证明。

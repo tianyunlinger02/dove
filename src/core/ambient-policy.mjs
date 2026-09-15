@@ -5,6 +5,10 @@ import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS } from "./dove-research-contract.
 export const DOVE_CLAUDE_SETTINGS_PATH = ".claude/settings.json";
 export const DOVE_CLAUDE_AMBIENT_RULE_PATH = ".claude/rules/dove.md";
 export const DOVE_CLAUDE_SESSION_START_HOOK_COMMAND = 'dove hook session-start --project "$CLAUDE_PROJECT_DIR"';
+export const DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND = 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"';
+export const DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY = Object.freeze({
+  hooks: Object.freeze([Object.freeze({ type: "command", command: DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, timeout: 10 })])
+});
 export const DOVE_CLAUDE_STATUS_LINE_COMMAND = 'dove hook statusline --project "$CLAUDE_PROJECT_DIR"';
 export const DOVE_CLAUDE_STATUS_LINE = Object.freeze({
   type: "command",
@@ -38,6 +42,7 @@ function exactManagedHook(value, command) {
 
 function hookCommandMarkers(eventName) {
   if (eventName === "SessionStart") return ["dove hook session-start"];
+  if (eventName === "UserPromptSubmit") return ["dove hook user-prompt-submit"];
   throw new Error(`Unsupported Dove Claude hook event: ${eventName}.`);
 }
 
@@ -80,6 +85,15 @@ export function mergeClaudeSessionStartSettings(settings) {
     },
     changed: true
   };
+}
+
+export function mergeClaudeUserPromptSubmitSettings(settings) {
+  const hooks = assertClaudeSettingsShape(settings);
+  const entries = hooks.UserPromptSubmit;
+  if (entries !== undefined && !Array.isArray(entries)) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks.UserPromptSubmit must be an array.`);
+  const merged = mergeManagedHook(entries ?? [], "UserPromptSubmit", DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY);
+  if (!merged.changed) return { settings, changed: false };
+  return { settings: { ...settings, hooks: { ...hooks, UserPromptSubmit: merged.entries } }, changed: true };
 }
 
 export function renderClaudeAmbientRule() {

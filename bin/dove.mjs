@@ -21,6 +21,7 @@ import {
   renderUninstallInventory,
   terminalColorEnabled
 } from "../src/cli/terminal-output.mjs";
+import { parseUserPromptSubmitPayload, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../src/core/user-prompt-submit-hook.mjs";
 import { parseSessionStartPayload, sessionStartFailureOutput, sessionStartOutput } from "../src/core/session-start-hook.mjs";
 import { renderDoveStatusLine } from "../src/core/statusline.mjs";
 import { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
@@ -375,6 +376,18 @@ try {
     const hookName = subcommand;
     if (projectOption(options) === undefined) throw new Error(`dove hook ${hookName} 需要 --project <dir>。`);
     const input = await readStdin();
+    if (hookName === "user-prompt-submit") {
+      try {
+        const output = userPromptSubmitOutput(parseUserPromptSubmitPayload(input));
+        process.stdout.write(JSON.stringify(output));
+        process.exit(0);
+      } catch (error) {
+        process.stdout.write(JSON.stringify(userPromptSubmitFailureOutput(error)));
+        // Claude processes hook JSON only on exit 0. The systemMessage reports
+        // that the static re-anchor was not delivered; this hook performs no reads or writes.
+        process.exit(0);
+      }
+    }
     if (hookName === "session-start") {
       try {
         const target = prepareHookProject(projectOption(options));
@@ -396,7 +409,7 @@ try {
       process.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path.resolve(projectOption(options)) })}\n`);
       process.exit(0);
     }
-    throw new Error("dove hook only supports session-start and statusline.");
+    throw new Error("dove hook only supports session-start, user-prompt-submit and statusline.");
   }
 } catch (error) {
   operationalFailure(error, options);

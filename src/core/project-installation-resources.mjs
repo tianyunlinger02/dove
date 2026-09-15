@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import {
   DOVE_CLAUDE_SESSION_START_HOOK_ENTRY,
+  DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY,
   DOVE_CLAUDE_SETTINGS_PATH,
   DOVE_CLAUDE_STATUS_LINE
 } from "./ambient-policy.mjs";
@@ -19,7 +20,7 @@ import {
 import { generatedAdapterEntries, generatedAuthorPreferencesReferenceEntries, generatedClaudeAmbientProjectEntries, generatedResearchQualityReferenceEntries } from "../../scripts/generate-command-adapters.mjs";
 import { generatedDoveAgentEntries } from "./dove-agent-definition.mjs";
 
-export const RETIRED_USER_PROMPT_SUBMIT_SELECTOR = "/hooks/UserPromptSubmit[dove-user-prompt-submit]";
+export const USER_PROMPT_SUBMIT_SELECTOR = "/hooks/UserPromptSubmit[dove-user-prompt-submit]";
 export const SESSION_START_SELECTOR = "/hooks/SessionStart[dove-session-start]";
 export const STATUS_LINE_SELECTOR = "/statusLine[dove-project-directory]";
 export const CLAUDE_HOST = "claude";
@@ -104,6 +105,14 @@ export function claudeResources() {
     fragment: DOVE_CLAUDE_SESSION_START_HOOK_ENTRY,
     digest: semanticDigest(DOVE_CLAUDE_SESSION_START_HOOK_ENTRY)
   };
+  const userPromptSubmitHook = {
+    hostId: CLAUDE_HOST,
+    path: DOVE_CLAUDE_SETTINGS_PATH,
+    kind: "json-fragment",
+    selector: USER_PROMPT_SUBMIT_SELECTOR,
+    fragment: DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY,
+    digest: semanticDigest(DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY)
+  };
   const statusLine = {
     hostId: CLAUDE_HOST,
     path: DOVE_CLAUDE_SETTINGS_PATH,
@@ -136,7 +145,7 @@ export function claudeResources() {
     fragment: EXA_MCP_FRAGMENT,
     digest: semanticDigest(EXA_MCP_FRAGMENT)
   };
-  const resources = [...files, sessionStartHook, statusLine, webFetchDeny, paperSearch, exa];
+  const resources = [...files, sessionStartHook, userPromptSubmitHook, statusLine, webFetchDeny, paperSearch, exa];
   if (new Set(resources.map(managedKey)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }

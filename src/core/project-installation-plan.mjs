@@ -4,7 +4,8 @@ import path from "node:path";
 import {
   DOVE_CLAUDE_SETTINGS_PATH,
   DOVE_CLAUDE_STATUS_LINE,
-  mergeClaudeSessionStartSettings
+  mergeClaudeSessionStartSettings,
+  mergeClaudeUserPromptSubmitSettings
 } from "./ambient-policy.mjs";
 import {
   PAPER_SEARCH_MCP_PATH,
@@ -29,7 +30,7 @@ import {
 import {
   SESSION_START_SELECTOR,
   STATUS_LINE_SELECTOR,
-  RETIRED_USER_PROMPT_SUBMIT_SELECTOR,
+  USER_PROMPT_SUBMIT_SELECTOR,
   canonicalJson,
   compareManaged,
   desiredManaged,
@@ -133,8 +134,7 @@ function exactRetiredDoveUserPromptSubmitHook(entry) {
   const hook = entry.hooks[0];
   return sameKeys(hook, ["command", "timeout", "type"])
     && hook.type === "command"
-    && (hook.command === 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"'
-      || hook.command === 'node "$CLAUDE_PROJECT_DIR/scripts/dove-user-prompt-submit-package.mjs"')
+    && hook.command === 'node "$CLAUDE_PROJECT_DIR/scripts/dove-user-prompt-submit-package.mjs"'
     && hook.timeout === 10;
 }
 
@@ -152,11 +152,11 @@ function inspectRetiredHooks(settings) {
 
 function hookCommandMarkers(eventName) {
   if (eventName === "SessionStart") return ["dove hook session-start"];
+  if (eventName === "UserPromptSubmit") return ["dove hook user-prompt-submit"];
   throw new Error(`Unsupported Dove Claude hook event: ${eventName}.`);
 }
 
 function referencesDoveHook(entry, eventName) {
-  if (eventName === "UserPromptSubmit") return exactRetiredDoveUserPromptSubmitHook(entry);
   if (!plainObject(entry) || !Array.isArray(entry.hooks)) return false;
   const markers = hookCommandMarkers(eventName);
   return entry.hooks.some((hook) => plainObject(hook)
@@ -168,7 +168,6 @@ function hookFragmentState(settings, eventName) {
   if (settings.hooks !== undefined && !plainObject(settings.hooks)) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks must be a JSON object.`);
   const entries = settings.hooks?.[eventName];
   if (entries !== undefined && !Array.isArray(entries)) {
-    if (eventName === "UserPromptSubmit") return { exists: false, digest: null, index: -1, fragment: null };
     throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks.${eventName} must be an array.`);
   }
   const candidates = (entries ?? []).map((entry, index) => ({ entry, index })).filter(({ entry }) => referencesDoveHook(entry, eventName));
@@ -214,7 +213,7 @@ function statusLineState(value) {
 }
 
 function fragmentState(resource, value) {
-  if (resource.selector === RETIRED_USER_PROMPT_SUBMIT_SELECTOR) return hookFragmentState(value, "UserPromptSubmit");
+  if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return hookFragmentState(value, "UserPromptSubmit");
   if (resource.selector === SESSION_START_SELECTOR) return hookFragmentState(value, "SessionStart");
   if (resource.selector === STATUS_LINE_SELECTOR) return statusLineState(value);
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) return webFetchDenyFragmentState(value);
@@ -230,7 +229,7 @@ function removeHookFragment(value, eventName) {
 }
 
 function removeFragment(resource, value, current, options = {}) {
-  if (resource.selector === RETIRED_USER_PROMPT_SUBMIT_SELECTOR) return removeHookFragment(value, "UserPromptSubmit");
+  if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return removeHookFragment(value, "UserPromptSubmit");
   if (resource.selector === SESSION_START_SELECTOR) return removeHookFragment(value, "SessionStart");
   if (resource.selector === STATUS_LINE_SELECTOR) {
     const next = { ...value };
@@ -324,6 +323,7 @@ function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
 }
 
 function addFragment(resource, value) {
+  if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return mergeClaudeUserPromptSubmitSettings(value).settings;
   if (resource.selector === SESSION_START_SELECTOR) return mergeClaudeSessionStartSettings(value).settings;
   if (resource.selector === STATUS_LINE_SELECTOR) return { ...value, statusLine: resource.fragment };
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) return mergeWebFetchDenyPermission(value).settings;
@@ -375,9 +375,18 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
     const desired = desiredByKey.get(key) ?? null;
     const oldEntry = oldByKey.get(key) ?? null;
     const resource = desired ?? oldEntry;
+    if (oldEntry && resource.selector === USER_PROMPT_SUBMIT_SELECTOR && Array.isArray(next.hooks?.UserPromptSubmit)) {
+      const entries = next.hooks.UserPromptSubmit;
+      const ownedLegacy = entries.filter((entry) => exactRetiredDoveUserPromptSubmitHook(entry) && semanticDigest(entry) === oldEntry.digest);
+      if (ownedLegacy.length > 1) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} defines multiple owned legacy Dove UserPromptSubmit hooks.`);
+      if (ownedLegacy.length === 1) {
+        next = settingsWithHookEntries(next, "UserPromptSubmit", entries.filter((entry) => entry !== ownedLegacy[0]));
+        changed = true;
+      }
+    }
     const current = fragmentState(resource, next);
 
-    if (oldEntry && !desired && resource.selector === RETIRED_USER_PROMPT_SUBMIT_SELECTOR) {
+    if (oldEntry && !desired && resource.selector === USER_PROMPT_SUBMIT_SELECTOR) {
       if (current.exists && current.digest === oldEntry.digest) {
         next = removeFragment(resource, next, current, { force: true });
       }
@@ -468,9 +477,7 @@ export function planResource(root, desired, oldEntry, fsOps = fs, options = {}) 
 export function assertManagedOwnership(manifest) {
   const knownKeys = new Set(resourcesForHosts(manifest?.hosts ?? []).map(managedKey));
   for (const entry of manifest?.managed ?? []) {
-    const retired = entry.path === DOVE_CLAUDE_SETTINGS_PATH && entry.kind === "json-fragment"
-      && entry.selector === RETIRED_USER_PROMPT_SUBMIT_SELECTOR;
-    if (!knownKeys.has(managedKey(entry)) && !retired) {
+    if (!knownKeys.has(managedKey(entry))) {
       throw new Error(`Dove project integration contains unknown ownership: ${entry.path}${entry.selector ? `#${entry.selector}` : ""}.`);
     }
   }

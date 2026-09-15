@@ -483,7 +483,7 @@ for (const retiredExport of ["exportResearch", "previewResearchExport"]) assert.
 for (const bundlePath of ["dist/index.mjs", "bin/dove-package.mjs"]) {
   const bundleText = fs.readFileSync(path.join(ROOT, bundlePath), "utf8");
   assert.doesNotMatch(bundleText, /src\/core\/research-export\.mjs|export-research|previewResearchExport|exportResearch|exportCommand/iu, `${bundlePath} must not contain retired legacy export runtime`);
-  assert.doesNotMatch(bundleText, /ambientContextForPrompt|isResearchRelatedWakeupPrompt|renderClaudeAmbientSkill|parseUserPromptSubmitPayload|userPromptSubmitOutput|DOVE_CLAUDE_AMBIENT_HOOK|DOVE_CLAUDE_AMBIENT_SKILL|\.claude\/skills\/dove-intake\/SKILL\.md/iu, `${bundlePath} must not contain retired UserPromptSubmit intake runtime`);
+  assert.doesNotMatch(bundleText, /ambientContextForPrompt|isResearchRelatedWakeupPrompt|renderClaudeAmbientSkill|DOVE_CLAUDE_AMBIENT_HOOK|DOVE_CLAUDE_AMBIENT_SKILL|\.claude\/skills\/dove-intake\/SKILL\.md/iu, `${bundlePath} must not contain retired UserPromptSubmit intake or router runtime`);
 }
 
 const tempBase = resolveTempWorkspaceBase();

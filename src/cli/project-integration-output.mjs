@@ -50,6 +50,7 @@ function localEditLabel(item) {
 
 function authorPreferenceActivationLines(hosts) {
   if (hosts.includes("claude")) return [
+    "Claude UserPromptSubmit 对每条 prompt 提供同一作者立场提醒；不分类、不调用隐藏 Skill、不读写研究材料、不检查集成、不授予权限或阻塞请求。",
     "完整作者偏好已安装在 .dove/install/AUTHOR_PREFERENCES.md。Claude fresh startup 与 /clear 会要求当前主 agent（普通 Claude 或显式 Dove）亲自完整读取；不会委派给 subagent。",
     "若当前命令由一个已经打开的主 agent 执行，它现在应先完整读取该文件；若命令来自普通 shell，请新开会话或在现有会话中 /clear。安装本身不代表模型已经读过。"
   ];
@@ -84,7 +85,7 @@ function setupLines(command, { status, hosts, writtenPaths = [] }) {
   const lines = [];
   if (command === "init" && status === "already-initialized") return ["✓ 现有项目集成保持不变，没有写入任何文件"];
   if (hasClaude) {
-    lines.push("✓ Dove agent 与 9 个可选专项入口已安装", "✓ Claude SessionStart hook 与 WebFetch 禁用已配置；状态栏空缺时安装 Dove 只读显示", "✓ 按需论文检索 MCP 与普通网页 Exa MCP 已声明");
+    lines.push("✓ Dove agent 与 9 个可选专项入口已安装", "✓ Claude SessionStart hook、UserPromptSubmit hook 与 WebFetch 禁用已配置；状态栏空缺时安装 Dove 只读显示", "✓ 按需论文检索 MCP 与普通网页 Exa MCP 已声明");
   }
   if (hasDsh) lines.push("✓ DSH 项目级 filesystem Skills 已安装");
   if (command === "init") lines.push(

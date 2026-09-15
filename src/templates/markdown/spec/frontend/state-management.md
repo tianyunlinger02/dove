@@ -16,7 +16,7 @@ Dove is file-first, not a research database. Substantive host work and researche
 | `.dove/runs/**` | Durable local command journals/logs, not Experiment documents or scientific conclusions |
 | Legacy research and archives | User-owned material preserved in place |
 
-Research Markdown has no schema/version, fixed headings, frontmatter, generated IDs, enums, machine indexes, counts, or research hashes. Organize it through ordinary host rename, move, relink, and consolidation operations, not a migration framework or runtime fallback. There is no research-state MCP service, Research Format runtime, or Claim store.
+Research Markdown has no schema/version, fixed headings, frontmatter, generated IDs, enums, machine indexes, counts, or research hashes. Organize it through ordinary host rename, move, relink, and consolidation operations, not a migration framework or runtime fallback. There is no research-state MCP service, Research Format runtime, Claim store, or Research Spine schema/ledger. A short prompt re-anchor creates no research read/write or maintenance trigger; its host contract belongs in [Hook Guidelines](./hook-guidelines.md).
 
 ## Maintenance triggers
 

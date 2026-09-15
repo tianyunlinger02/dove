@@ -11,7 +11,7 @@ import {
   uninstallProjectIntegration,
   updateProjectIntegration
 } from "../src/core/project-installation.mjs";
-import { DOVE_CLAUDE_STATUS_LINE } from "../src/core/ambient-policy.mjs";
+import { DOVE_CLAUDE_STATUS_LINE, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY } from "../src/core/ambient-policy.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
@@ -27,13 +27,14 @@ const scratchRoot = resolveTempWorkspaceBase();
 const referencePaths = [".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY.md"];
 fs.mkdirSync(scratchRoot, { recursive: true });
 let fixture;
+const userPromptHook = { hooks: [{ type: "command", command: "project prompt hook" }] };
 
 function reset() {
   fixture = fs.mkdtempSync(path.join(scratchRoot, "dove-uninstall-"));
   fs.mkdirSync(path.join(fixture, ".git"));
   fs.writeFileSync(path.join(fixture, "package.json"), "{}\n");
   fs.mkdirSync(path.join(fixture, ".claude"), { recursive: true });
-  fs.writeFileSync(path.join(fixture, ".claude", "settings.json"), `${JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: "command", command: "project hook" }] }] }, enabledPlugins: { demo: true } }, null, 2)}\n`);
+  fs.writeFileSync(path.join(fixture, ".claude", "settings.json"), `${JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: "command", command: "project hook" }] }], UserPromptSubmit: [userPromptHook] }, enabledPlugins: { demo: true } }, null, 2)}\n`);
   fs.writeFileSync(path.join(fixture, ".mcp.json"), `${JSON.stringify({ mcpServers: { other: { type: "stdio", command: "other" } } }, null, 2)}\n`);
 }
 
@@ -45,6 +46,7 @@ reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude", "dsh"] });
 const initializedSettings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.deepEqual(initializedSettings.statusLine, DOVE_CLAUDE_STATUS_LINE);
+assert.deepEqual(initializedSettings.hooks.UserPromptSubmit, [userPromptHook, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY]);
 assert.equal(initializedSettings.permissions.deny.includes(WEB_FETCH_DENY_PERMISSION), true);
 const initializedMcp = JSON.parse(fs.readFileSync(path.join(fixture, ".mcp.json"), "utf8"));
 assert.deepEqual(initializedMcp.mcpServers[EXA_MCP_SERVER_NAME], EXA_MCP_FRAGMENT);
@@ -86,6 +88,7 @@ for (const relativePath of referencePaths) assert.equal(fs.existsSync(path.join(
 assert.deepEqual({ doctor: digest(doctor), research: digest(research), review: digest(reviewRecord), run: digest(runRecord) }, before);
 const settings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.equal(settings.statusLine, undefined);
+assert.deepEqual(settings.hooks.UserPromptSubmit, [userPromptHook]);
 assert.equal(settings.permissions, undefined);
 assert.equal(settings.enabledPlugins.demo, true);
 assert.equal(settings.hooks.SessionStart.length, 1);
@@ -98,6 +101,11 @@ assert.equal(postUninstallDoctor.setup.mode, "uninitialized");
 assert.equal(postUninstallDoctor.setup.reason, "uninitialized");
 assert.deepEqual(postUninstallDoctor.actions, [{ kind: "init", command: "dove init" }]);
 assert.equal(resolveProjectRootForInit(fixture), fixture);
+
+reset();
+initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude", "dsh"] });
+updateProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["dsh"] });
+assert.deepEqual(JSON.parse(fs.readFileSync(path.join(fixture, ".claude/settings.json"), "utf8")).hooks.UserPromptSubmit, [userPromptHook]);
 
 reset();
 const preexistingStatusLineSettingsPath = path.join(fixture, ".claude", "settings.json");

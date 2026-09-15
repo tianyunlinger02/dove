@@ -1,10 +1,14 @@
 export { PACKAGE_NAME } from "./package-metadata.mjs";
 export { ARTIFACT_PATHS, PACKAGE_VERSION } from "./schema.mjs";
 
+export { parseUserPromptSubmitPayload, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "./user-prompt-submit-hook.mjs";
 export { parseSessionStartPayload, sessionStartFailureOutput, sessionStartOutput } from "./session-start-hook.mjs";
 export { formatContextCapacity, formatSessionDuration, inspectGitBranch, parseDoveStatusLinePayload, renderDoveStatusLine } from "./statusline.mjs";
 export {
   DOVE_CLAUDE_SESSION_START_HOOK_COMMAND,
+  DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND,
+  DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY,
+  mergeClaudeUserPromptSubmitSettings,
   DOVE_CLAUDE_STATUS_LINE,
   DOVE_CLAUDE_STATUS_LINE_COMMAND,
   renderClaudeAmbientRule

@@ -16,7 +16,7 @@ import { normalizeReviewId } from "../../src/core/review-workspace.mjs";
 function assertRuntimeCli() {
   assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "init"));
   assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "hook"));
-  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS.hook.subcommands), ["session-start", "statusline"], "hook subcommands must be formal parser subcommands");
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS.hook.subcommands), ["session-start", "user-prompt-submit", "statusline"], "hook subcommands must be formal parser subcommands");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "mcp"), false, "CLI must not expose the retired MCP server");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "migrate-research"), false, "CLI must not expose format migration");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "export-research"), false, "CLI must not expose the retired legacy export command");
@@ -59,7 +59,10 @@ function assertRuntimeCli() {
     options: { project: "/workspace", id: "review-1", file: "return.md", venue: "TestConf", material: ["paper/main.tex"] },
     passthrough: []
   });
-  assertParserError(["hook", "user-prompt-submit", "--project=/workspace"], /hook 只接受这些子命令：session-start(?:，或| 或) statusline/iu, false);
+  assert.deepEqual(parseDoveCli(["hook", "user-prompt-submit", "--project=/workspace"]), {
+    command: "hook", subcommand: "user-prompt-submit", options: { project: "/workspace" }, passthrough: []
+  });
+  assertParserError(["hook", "stop"], /hook 只接受这些子命令/u, false);
   assert.deepEqual(assertParserShape(parseDoveCli(["init", "--host", "claude,dsh", "--host=dsh,claude", "--project=/workspace"])), {
     command: "init",
     subcommand: null,
@@ -97,12 +100,13 @@ function assertDoveCliHelpRenderer() {
   assert.match(output, /dove review handoff --project <dir> --venue <venue> --material <path>\.\.\./u);
   assert.match(output, /dove run start --project <dir>.*--seed <short-text>.* -- <command> \[args\.\.\.\]/u);
   assert.match(output, /dove hook session-start --project <dir>/u);
-  assert.doesNotMatch(output, /dove hook user-prompt-submit/u);
+  assert.match(output, /dove hook user-prompt-submit --project <dir>/u);
   assert.match(output, /doctor、review、run 与 hook 等项目级命令/u);
   assert.match(output, /真正的科研推进仍在一个 Dove agent 中完成/u);
   assert.match(output, /研究记录是研究者维护的普通 Markdown/u);
   assert.match(output, /Claude 接入管理只读 SessionStart hook，并在没有现有用户配置时安装只读 statusLine/u);
-  assert.match(output, /不安装也不暴露 UserPromptSubmit 或 Stop hook/u);
+  assert.match(output, /UserPromptSubmit 对每条 prompt 返回同一作者立场提醒/u);
+  assert.match(output, /不安装也不暴露 Stop hook/u);
   assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "review", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
 }
 

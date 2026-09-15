@@ -4,7 +4,7 @@
 
 Dove helps you move a research project forward. Tell it what you are trying to achieve; it can read sources, inspect project material, analyze results, design or run experiments, keep local run receipts, write and revise text, make figures, review the work, and help respond to criticism.
 
-For a confirmed research goal, Dove keeps taking useful in-scope steps while the work can still move forward. It checks consequential plans and investments against that goal, grounds important research decisions proportionately, and asks when the next step needs your decision or permission or hits a real outside limit. Ordinary tasks with no research impact finish normally, without imposed research planning, grading, or records.
+For a confirmed research goal, Dove keeps taking useful in-scope steps while the work can still move forward. It seeks the shortest total path from problem through method to an evidence-supported contribution—not the fewest local steps—and checks consequential plans and investments against that goal, grounds important research decisions proportionately, and asks when the next step needs your decision or permission or hits a real outside limit. Ordinary tasks with no research impact finish normally, without imposed research planning, grading, or records.
 
 ## Start
 
@@ -20,7 +20,7 @@ For package trust, host setup, permissions, update, reinstall, uninstall, and Do
 
 ## Ordinary conversation first
 
-After initializing Claude integration, start ordinary `claude` in the project and describe the task. The project rule is the primary Dove entrance for relevant research, engineering, writing, and collaboration work. Neither `--agent dove` nor a Skill is required.
+After initializing Claude integration, start ordinary `claude` in the project and describe the task. The project rule is the primary Dove entrance for relevant research, engineering, writing, and collaboration work. Neither `--agent dove` nor a Skill is required. After installing or updating integration in an active session, reload the host session to load the changed resources; disk installation alone is not live loading.
 
 ### Nine optional Skills
 
@@ -46,7 +46,7 @@ The short core uses two references with different read contracts: research quali
 
 Dove keeps useful research context as ordinary Markdown under `.dove/research/`. Fresh initialization creates only `RESEARCH.md`; additional Mission, Source, Experiment, Review, Claim, and Lesson documents are optional and appear when they help future work.
 
-Dove records notes when you ask, when the research direction or conclusion changes, or when saving evidence and continuation context is genuinely useful. Explicit update, reinstall, uninstall, and the read-only SessionStart inspection preserve existing `.dove/research/**` content, `.dove/reviews/**` review records, and `.dove/runs/**` local run receipts. Dove no longer installs `UserPromptSubmit`, hidden intake, or a replacement per-prompt hook. When the project has no existing user status line, Claude integration installs a read-only two-line Dove display: model/context facts, optional unlabeled cyan mainline text, Git branch, and current session duration on the first line; only the absolute project path on the second. The mainline comes solely from the root research overview's unique ordinary `Mainline: <text>` line through a bounded read, with no guessing or backfilling; only a nonempty `NO_COLOR` disables color. See [Usage](docs/USAGE.md#research-markdown) for maintenance boundaries. The branch is not a scientific-mainline claim and the duration is not cumulative research time. Explicit `dove update` replaces local edits to manifest-owned integration and tells you what was replaced; SessionStart inspects read-only, may suggest that explicit update, and on startup or `/clear` requires the current main agent to personally read the full installed author preferences. After compact/resume it supplies only a small read-only facts card plus preference-continuity guidance, not a reconstructed research mainline or an unconditional full reread; startup/clear gets no research card.
+Dove records notes when you ask, when the research direction or conclusion changes, or when saving evidence and continuation context is genuinely useful. Explicit update, reinstall, uninstall, and the read-only SessionStart inspection preserve existing `.dove/research/**` content, `.dove/reviews/**` review records, and `.dove/runs/**` local run receipts. Claude's `UserPromptSubmit` delivers a deterministic short re-anchor on every prompt: no classification, research reads or writes, permission decisions, or blocking. It is not hidden intake, a router, a Stop scheduler, or per-tool scientific approval. When the project has no existing user status line, Claude integration installs a read-only two-line Dove display: model/context facts, optional unlabeled cyan mainline text, Git branch, and current session duration on the first line; only the absolute project path on the second. The mainline comes solely from the root research overview's unique ordinary `Mainline: <text>` line through a bounded read, with no guessing or backfilling; only a nonempty `NO_COLOR` disables color. See [Usage](docs/USAGE.md#research-markdown) for maintenance boundaries. The branch is not a scientific-mainline claim and the duration is not cumulative research time. Explicit `dove update` replaces local edits to manifest-owned integration and tells you what was replaced; SessionStart inspects read-only, may suggest that explicit update, and on startup or `/clear` requires the current main agent to personally read the full installed author preferences. After compact/resume it supplies only a small read-only facts card plus preference-continuity guidance, not a reconstructed research mainline or an unconditional full reread; startup/clear gets no research card.
 
 ## Review
 
@@ -60,7 +60,7 @@ For explicit local experiments or diagnostics, Dove can use `dove run start [--s
 
 ## License
 
-Dove 3.1.1 is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) only for purposes that license permits. It is source-available software, not OSI-approved open-source software, and this project does not offer or advertise a commercial-license path.
+Dove 3.2.0 is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) only for purposes that license permits. It is source-available software, not OSI-approved open-source software, and this project does not offer or advertise a commercial-license path.
 
 Bundled third-party components remain under their own MIT or ISC terms. See [Third-Party Notices](THIRD_PARTY_NOTICES.md); Dove's PolyForm license does not replace or restrict those grants.
 

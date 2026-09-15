@@ -2,20 +2,20 @@
 
 ## Delivery model
 
-Dove 3.1.1 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
+Dove 3.2.0 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles.
 
 The bare public npm package named `dove` is unrelated. Release instructions must use an exact trusted tarball, Git revision, or internal-registry package version.
 
-Dove 3.1.1 is source-available under the PolyForm Noncommercial License 1.0.0, not OSI-approved open-source software. Dove itself may be used only for purposes permitted by that license; this release does not offer or advertise a commercial-license path. Bundled third-party components retain their own MIT or ISC rights, recorded separately in `THIRD_PARTY_NOTICES.md`.
+Dove 3.2.0 is source-available under the PolyForm Noncommercial License 1.0.0, not OSI-approved open-source software. Dove itself may be used only for purposes permitted by that license; this release does not offer or advertise a commercial-license path. Bundled third-party components retain their own MIT or ISC rights, recorded separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Release inventory
 
-Every Dove 3.1.1 release contains:
+Every Dove 3.2.0 release contains:
 
 - **one Dove research agent** for supported agent hosts;
 - **9 optional specialist Skills**: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`;
 - generated adapters for the declared host formats;
-- the project lifecycle CLI, explicit `dove review ...` runtime, local `dove run ...` execution receipts, plus the Claude SessionStart hook;
+- the project lifecycle CLI, explicit `dove review ...` runtime, local `dove run ...` execution receipts, plus the Claude SessionStart and short UserPromptSubmit re-anchor hooks;
 - public documentation and the official root `dove.png` brand artwork;
 - the Dove `LICENSE` and bundled-component `THIRD_PARTY_NOTICES.md`; and
 - **2 standalone Node.js bundles**.
@@ -30,7 +30,7 @@ Ordinary Claude conversation is the primary Dove entrance through the project ru
 
 Dove supports exactly two host projections:
 
-- Claude Code: `.claude/agents/dove.md`, nine `.claude/commands/dove/*.md` optional Skill shortcuts, the shared Dove rule, SessionStart hook, paper-search MCP integration, and Exa integration;
+- Claude Code: `.claude/agents/dove.md`, nine `.claude/commands/dove/*.md` optional Skill shortcuts, the shared Dove rule, SessionStart and UserPromptSubmit re-anchor hooks, paper-search MCP integration, and Exa integration;
 - DeepSeek Harness: `.dsh/skills/dove-*/SKILL.md` for the nine filesystem Skills.
 
 Both hosts declare two shared exclusive reference resources:
@@ -44,7 +44,7 @@ Both references are installed once when both hosts are selected; no other `.dove
 
 Release projections live under `package-resources/hosts/...`, outside host-recognized repository roots. Installation uses bundled renderers to write canonical resources into consumer projects, not disk copies of these projections. OpenCode, Codex, Cursor, and shared Agents projections are not packaged.
 
-Claude support resources include the shared Dove rule, hidden Claude guidance Skills for pinned `dove-paper-search` and hosted Exa use, the managed SessionStart hook, and an optional managed `statusLine` fragment. The status line is installed only when the project has no existing line; it invokes the user-level CLI read-only. Package resources do not install or own `UserPromptSubmit`, hidden intake, or any replacement per-prompt hook.
+Claude support resources include the shared Dove rule, hidden Claude guidance Skills for pinned `dove-paper-search` and hosted Exa use, the managed SessionStart hook, and an optional managed `statusLine` fragment. The status line is installed only when the project has no existing line; it invokes the user-level CLI read-only. The managed `UserPromptSubmit` supplies a deterministic short re-anchor on every prompt: no classification, research reads/writes, permission decisions, or blocking. It adds no hidden intake, router, Stop scheduler, or per-tool scientific approval; DSH remains Skills-only.
 
 Adapters are generated from canonical Dove workflow sources. They carry the same Dove agent behavior into installed projects: for a confirmed goal, Dove keeps selecting, performing, and absorbing the overall-best feasible mainline action until the goal is achieved or a real blocker is established. They use only tools the current host exposes and current user/project permissions allow. Do not edit generated projections independently. Adapter presence does not establish installation, registration, tool availability, project readiness, reviewer identity, or `dove-review` independence. Claude's Review command can call `dove review handoff|status|resume|rerun|import`; DSH has no equivalent recoverable isolated Claude Code context in this package and should not present one as available.
 
@@ -63,7 +63,7 @@ The package contains no MCP server bundle, prompt-hook bundle, or third-party Py
 
 ## Project integration
 
-For the supported path, `dove init --host claude` installs the Claude command adapters, Dove agent, shared Dove rule, hidden paper/web guidance Skills, SessionStart hook, `.dove/install/manifest.json`, a project-scoped `permissions.deny` entry for built-in `WebFetch`, and owned fragments at `.mcp.json#/mcpServers/dove-paper-search` and `.mcp.json#/mcpServers/exa`. If no `statusLine` already exists, it also installs the managed read-only command `dove hook statusline --project "$CLAUDE_PROJECT_DIR"`; any existing user or Trellis line is left unowned and unchanged. It does not install or own `UserPromptSubmit`.
+For the supported path, `dove init --host claude` installs the Claude command adapters, Dove agent, shared Dove rule, hidden paper/web guidance Skills, SessionStart and UserPromptSubmit re-anchor hooks, `.dove/install/manifest.json`, a project-scoped `permissions.deny` entry for built-in `WebFetch`, and owned fragments at `.mcp.json#/mcpServers/dove-paper-search` and `.mcp.json#/mcpServers/exa`. If no `statusLine` already exists, it also installs the managed read-only command `dove hook statusline --project "$CLAUDE_PROJECT_DIR"`; any existing user or Trellis line is left unowned and unchanged. The prompt fragment is managed separately from exact retired prompt entries under the same ownership protections.
 
 The `dove-paper-search` fragment launches the pinned external package through user-provided `uvx` for scholarly paper discovery, DOI metadata lookup, download, and full-text reading; direct DOI checks use `get_crossref_paper_by_doi` when exposed and permitted. The Exa fragment is the hosted remote MCP shape `{ "url": "https://mcp.exa.ai/mcp", "type": "http" }` for ordinary webpage bodies, documentation pages, venue pages, and known URLs. Built-in `WebSearch` remains available for search discovery, while built-in `WebFetch` is denied. Dove does not install or bundle Python source, write credentials, register a user-level server, approve project trust, or provide CLI/shell/`curl`/fetch-script substitutions for web retrieval. It also bootstraps only the minimal researcher-owned `.dove/research/RESEARCH.md` entry outside the installation manifest when no research tree exists. Existing `.dove/research/**` bytes remain researcher-owned.
 
@@ -79,7 +79,7 @@ The isolated review prompt shares Dove's research judgment but uses the reviewer
 
 Each optional summary is a researcher-owned entrance and synthesis, not a generated index. Lessons are fallible reusable experience, not a carrier for package-default preferences or a replacement for either managed reference. Source explanations are useful when available but not mandatory.
 
-The package does not define fixed headings, frontmatter, IDs, enums, machine indexes, stored counts, research hashes, or a mandatory Markdown template. Mission, Source, Experiment, Review, and occasional Claim documents are conventions chosen for readability, not entity stores.
+The package does not define fixed headings, frontmatter, IDs, enums, machine indexes, stored counts, research hashes, a Research Spine schema/ledger, or a mandatory Markdown template. Mission, Source, Experiment, Review, and occasional Claim documents are conventions chosen for readability, not entity stores.
 
 Research documents may use ordinary Markdown relative links and readable project-relative artifact paths for recovery, but the package does not parse links, audit backlinks, enforce a consistency matrix, or turn them into a database.
 
@@ -104,8 +104,8 @@ Bare `dove` is the interactive lifecycle front door. It classifies the project, 
 - `run start|status|resume|finalize|compare` records explicit `.dove/runs/<id>/run.jsonl`, `stdout.log`, and `stderr.log` receipts. `start` launches a detached supervisor that directly spawns the target command from the project root without a shell, records command, timing, outcome, metric, budget, and basis, plus an explicitly declared seed and minimum Git commit/dirty facts rather than an environment inventory. Git facts do not affect comparison eligibility or ranking. `status` is read-only; `resume` never reruns work; `finalize` appends one scalar metric after terminal completion; `compare` ranks only compatible terminal finalized runs by metric, budget, data, evaluator, and resource basis.
 - `hook session-start` inspects package-managed integration read-only. Non-current integration may prompt explicit `dove update`; unsupported state is blocked rather than migrated or reconstructed.
 - Only compact/resume receives a read-only facts card: `RESEARCH.md` existence and absolute mtime; latest Review id, round, absolute `updatedAt`, and material currentness; latest Run id, absolute `startedAt`, status, and exit code. It reads metadata and run journals, and checks the latest review round's listed material bytes for currentness; it does not read research Markdown bodies, reports, or stdout/stderr logs or infer the mainline. Startup/clear receives no research card. Missing or unreadable facts remain `unavailable`.
-- `hook` supports read-only `session-start` inspection and the managed `statusline` renderer. The renderer keeps native model/context facts, optional unlabeled cyan mainline text, Git branch and session duration on the first line, and only the explicit absolute project path on the second. Only a nonempty `NO_COLOR` disables color. It reads Git without a shell and only the root `.dove/research/RESEARCH.md` within 64 KiB for one ordinary `Mainline: <text>` line; unavailable or ambiguous mainlines are omitted, never inferred from other prose or Mission/Run/Review. There are no research-tree scans or writes, and SessionStart is unchanged. It does not expose `user-prompt-submit`.
-- SessionStart never writes files or configuration, cleans up legacy/unknown state, or invokes update or Complete Reinstall. Startup and `/clear` emit the small author-preference bootstrap even without warnings; compact/resume retains its bounded facts card plus continuity guidance without an unconditional full preference reread. Inspection does not retroactively reload same-session host context, and hook delivery does not prove the current main agent completed the read.
+- `hook` supports read-only `session-start` inspection and the managed `statusline` renderer. The renderer keeps native model/context facts, optional unlabeled cyan mainline text, Git branch and session duration on the first line, and only the explicit absolute project path on the second. Only a nonempty `NO_COLOR` disables color. It reads Git without a shell and only the root `.dove/research/RESEARCH.md` within 64 KiB for one ordinary `Mainline: <text>` line; unavailable or ambiguous mainlines are omitted, never inferred from other prose or Mission/Run/Review. There are no research-tree scans or writes, and SessionStart is unchanged. `hook user-prompt-submit` emits only the short re-anchor described above, not the SessionStart facts card.
+- SessionStart never writes files or configuration, cleans up legacy/unknown state, or invokes update or Complete Reinstall. Startup and `/clear` emit the small author-preference bootstrap even without warnings; compact/resume retains its bounded facts card plus continuity guidance without an unconditional full preference reread. Installation or update requires reloading an active host session to load changed integration; inspection does not do so, and hook delivery does not prove the current main agent completed the read.
 - Stop is not a managed lifecycle hook and does not perform synchronization, research continuation, tool calls, or writes.
 
 There is no `mcp` command and no `migrate-research` command.

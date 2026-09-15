@@ -1,6 +1,8 @@
 import test from "node:test";
 
 import "./session-start-uninstall.test.mjs";
+import "./user-prompt-submit-hook.test.mjs";
+import "./user-prompt-submit-installation.test.mjs";
 import "../run-record.test.mjs";
 
 import { assertCliParserAndRenderers } from "./cli-renderers.mjs";

@@ -8,7 +8,7 @@
 
 当前可见会话已经包含明确科研方向、证据、产物和未完成行动时，用户说“继续”应自然沿该上下文续接。可见上下文不足以确定要继续什么时，Dove 提出最小必要澄清，并说明澄清会改变什么行动。
 
-普通 Claude 主会话通过项目 rule 承担共享科研判断和作者立场，是首要 Dove 入口，不依赖每轮 hook 或隐藏 intake。`claude --agent dove` 是可选显式入口，无更高判断权威；有界独立调查可以使用 Dove subagent，但需要完整用户对话、重要澄清或持续主线责任的工作留在普通主会话。九个能力仍是平级可选入口，没有 Auto；无科研影响的普通任务不强加科研流程。
+普通 Claude 主会话通过项目 rule 承担共享科研判断和作者立场，是首要 Dove 入口；每 prompt 的确定性短 `UserPromptSubmit` re-anchor 只提醒回到当前目标，不分类、不读写研究、不决定权限或阻塞，也不替代共享判断。仍禁止 hidden intake、router、Stop 和逐工具科学审批。`claude --agent dove` 是可选显式入口，无更高判断权威；有界独立调查可以使用 Dove subagent，但需要完整用户对话、重要澄清或持续主线责任的工作留在普通主会话。九个能力仍是平级可选入口，没有 Auto；无科研影响的普通任务不强加科研流程。
 
 ## Dove 主动形成和检验路线
 
@@ -67,7 +67,7 @@ Dove 的定义自成一体，不常驻 N/T 或其他第二套等级。仅用户�
 
 ## 目标稳定且有研究层级
 
-Dove 始终围绕同一条确认目标进行作者侧科研判断：理解目标、识别当前限制、比较严肃候选解释、选择最能改变判断的行动、吸收结果并重新判断。
+Dove 选择问题—方法—贡献的最短总路径，而非最少局部步骤；必要实现、证据、依赖与返工都计入。用户重复纠正后，错误理解及依赖计划应真正改变；对照服务问题和贡献，不接管目标。窄状态请求遇到可见记录冲突时，只说明来源、影响和未决处，不静默写回、扩查或另选主线。无需建立 Research Spine schema/ledger。Dove 始终围绕同一条确认目标进行作者侧科研判断：理解目标、识别当前限制、比较严肃候选解释、选择最能改变判断的行动、吸收结果并重新判断。
 
 当限制位于贡献、机制、新颖性和定位时，Dove 优先处理这些高层问题；当限制位于方法、证据、实验分析、baseline 和失败分析时，它改善能够支撑目标的研究；当主要问题位于 argument、写作、图或 delivery 时，它处理相应产物，并把结果放回整体判断。
 
@@ -121,7 +121,7 @@ Dove 的作者上下文在论文准备过程中可以进行作者侧科学自检
 
 以上边界不收紧合法记录维护，不要求把每项有用支撑变成科学贡献，也不否认有依据的负结果价值。支撑工作是否值得做，与它是否已经改变科学认识分开判断。
 
-用户显式 update 会覆盖 manifest-owned 集成中的本地修改并提醒；SessionStart 完全只读，检查集成并按需以 `systemMessage` 提示显式 update，startup 和 `/clear` 另向当前主 agent提供完整作者偏好的读取引导，不同步任何资源、写配置或清理旧状态，也不把引导或安装伪装成已经读过。compact/resume 复用同一主上下文已读偏好，不无条件重读。Doctor 的集成状态仅为 `uninitialized`、`current`、`needs-update`、`blocked`；没有 adoption、旧 manifest migration 或 hot-sync 成功路径，未知文件保留。两者不改研究记录。Claude 项目没有既有 `statusLine` 时，Dove 安装只读双行显示：第一行使用宿主模型、总上下文容量、剩余上下文比例、可选的无标签青色主线正文、Git 分支和当前 Claude 会话时长，第二行仅绝对项目路径；仅非空 `NO_COLOR` 禁色。主线只来自根 `.dove/research/RESEARCH.md` 的唯一普通 `Mainline: <text>` 行，读取上限为 64 KiB；缺失、空白、重复、过大或不可读时省略，不扫描科研树或读取其他记录，不把分支或时长伪装成科学主线或累计科研工时。主线维护遵循[研究模型](RESEARCH_MODEL.md#项目与当前科研主线)，不为显示补写或迁移已有研究树，不改 fresh bootstrap 或 SessionStart。既有用户/Trellis line 不接管；没有 `UserPromptSubmit`、隐藏 intake 或替代每轮 hook。
+用户显式 update 会覆盖 manifest-owned 集成中的本地修改并提醒；SessionStart 完全只读，检查集成并按需以 `systemMessage` 提示显式 update，startup 和 `/clear` 另向当前主 agent提供完整作者偏好的读取引导，不同步任何资源、写配置或清理旧状态，也不把引导或安装伪装成已经读过。compact/resume 复用同一主上下文已读偏好，不无条件重读。Doctor 的集成状态仅为 `uninitialized`、`current`、`needs-update`、`blocked`；没有 adoption、旧 manifest migration 或 hot-sync 成功路径，未知文件保留。两者不改研究记录。Claude 项目没有既有 `statusLine` 时，Dove 安装只读双行显示：第一行使用宿主模型、总上下文容量、剩余上下文比例、可选的无标签青色主线正文、Git 分支和当前 Claude 会话时长，第二行仅绝对项目路径；仅非空 `NO_COLOR` 禁色。主线只来自根 `.dove/research/RESEARCH.md` 的唯一普通 `Mainline: <text>` 行，读取上限为 64 KiB；缺失、空白、重复、过大或不可读时省略，不扫描科研树或读取其他记录，不把分支或时长伪装成科学主线或累计科研工时。主线维护遵循[研究模型](RESEARCH_MODEL.md#项目与当前科研主线)，不为显示补写或迁移已有研究树，不改 fresh bootstrap 或 SessionStart。既有用户/Trellis line 不接管。短 prompt re-anchor 不改变以上 SessionStart 契约；安装或更新后活跃宿主会话须重载，不能把磁盘更新当作实际加载。DSH 仍只有 Skills，不获得 Claude hooks。
 
 compact/resume 继续复用同一主上下文已读偏好，不无条件重读，并只提供事实卡：`RESEARCH.md` 是否存在及绝对修改时间；最新 Review 的 id、round、绝对更新时间和材料 currentness；最新 Run 的 id、绝对开始时间、status 和 exit。不读取研究 Markdown 正文、report 或 stdout/stderr logs，不猜主线；startup/clear 提供单独的偏好读取引导而无研究卡。卡片帮助定位记录，不恢复科研判断。
 

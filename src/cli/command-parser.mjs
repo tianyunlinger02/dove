@@ -49,6 +49,7 @@ export const CLI_COMMAND_SPECS = Object.freeze({
   hook: command([], {
     subcommands: {
       "session-start": command([projectOption]),
+      "user-prompt-submit": command([projectOption]),
       statusline: command([projectOption])
     }
   })
