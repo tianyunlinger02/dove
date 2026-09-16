@@ -53,6 +53,37 @@ test("public Dove capability and host surfaces remain explicit", () => {
   }
 });
 
+test("Lessons supports bounded ambient use and content-driven first preservation", () => {
+  const lessons = COMMAND_SURFACE_BY_ID["dove.lessons"].contract;
+  const value = [
+    lessons.ambientParticipation,
+    lessons.purpose,
+    lessons.when,
+    ...lessons.responsibilities,
+    ...lessons.actions,
+    ...lessons.boundaries,
+    ...lessons.nonGoals
+  ].join("\n");
+  assert.match(lessons.ambientParticipation, /consequential choices or after corrections and recurring failures/iu);
+  assert.match(lessons.ambientParticipation, /once within the active context/iu);
+  assert.match(lessons.ambientParticipation, /without waiting for an explicit command/iu);
+  assert.match(value, /content-bearing "\.dove\/research\/lessons\/LESSONS\.md"/iu);
+  assert.match(value, /do not bootstrap an empty directory or index during reading/iu);
+  assert.match(value, /naturally named linked Markdown file only when separating a theme is genuinely useful/iu);
+  assert.match(value, /actual basis, conditions, counterexamples, and limits/iu);
+  assert.match(value, /routine progress, transient status, one-off tool failures, non-transferable bugs/iu);
+  assert.match(value, /Do not create lesson IDs, frontmatter, an application ledger/iu);
+  assert.match(value, /fallible guidance rather than evidence|fallible guidance, never as evidence/iu);
+
+  for (const id of ["dove.research", "dove.source", "dove.experiment", "dove.draft", "dove.figure", "dove.rebuttal"]) {
+    assert.match(
+      COMMAND_SURFACE_BY_ID[id].contract.boundaries.join("\n"),
+      /research Markdown other than Lessons only when/iu,
+      `${id}: general maintenance must not swallow the Lessons threshold`
+    );
+  }
+});
+
 test("Experiment discovery includes agreed capability checks and retrospective work", () => {
   for (const entry of generatedAdapterEntries().filter(({ command }) => command.id === "dove.experiment")) {
     const description = JSON.parse(entry.content.match(/^description: (.+)$/mu)[1]);
@@ -82,6 +113,8 @@ test("reviewer guidance excludes author stance and preference access", () => {
     assert.equal(guidance.includes("## Author stance"), false);
     assert.equal(guidance.includes(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER), false);
     assert.equal(guidance.includes(DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude), false);
+    assert.equal(guidance.includes(".dove/research/lessons/LESSONS.md"), false);
+    assert.equal(guidance.includes("preserve the narrowest useful researcher-owned Lesson"), false);
   }
   assert.match(renderDoveReviewerStanceSection(), /read-only/iu);
   assert.match(renderDoveReviewerStanceSection(), /listed frozen materials/iu);

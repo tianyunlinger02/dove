@@ -76,7 +76,7 @@ function hostGuidance(extra = {}) {
 }
 
 const LESSONS_VALUE_STANDARD = "could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes";
-const relevantLessons = `When existing Lessons ${LESSONS_VALUE_STANDARD}, read ".dove/research/lessons/LESSONS.md" if it exists, then the directly relevant or plausibly useful linked Lessons. Read ".dove/research/RESEARCH.md" first only when project context is still needed and it has not already been read in the active context. Reuse Lessons already read in the active context instead of rereading them mechanically. If Lessons materials are absent, work without them. Treat Lessons as fallible guidance, never as evidence.`;
+const relevantLessons = `Before the first consequential choice for the current request, or after a user correction or recurring repair or failure exposes a possibly shared mistaken premise, read ".dove/research/lessons/LESSONS.md" once if it exists unless it has already been checked for this question in the active context, then only directly relevant or plausibly decision-changing linked Lessons. Reuse still-applicable Lessons instead of rereading them mechanically. Read ".dove/research/RESEARCH.md" separately only when project context is still needed; it is not a prerequisite for Lessons. If Lessons materials are absent, continue without creating them. Treat Lessons as fallible guidance, never as evidence. Ordinary deterministic local work has no Lessons prerequisite.`;
 
 const AREA = Object.freeze({
   missions: Object.freeze({ directory: "missions", summary: "MISSIONS.md" }),
@@ -130,7 +130,7 @@ function contract(slug) {
     ],
     boundaries: [
       "Research may read, write, edit, run, or inspect ordinary project artifacts when the user's goal authorizes it and the mainline action needs it.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not expose a separate autonomy Skill, mode, or user coordination requirement.",
@@ -183,7 +183,7 @@ function contract(slug) {
     boundaries: [
       "Save retrieved source material or source notes only when useful and permitted.",
       "Keep DOI identity checks transient by default; update ordinary Source notes or bibliography entries only when identity results materially affect research judgment, manuscript citations, or continuation context.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not treat search snippets, titles, abstracts, verified metadata identity, or missing results as papers read.",
@@ -221,7 +221,7 @@ function contract(slug) {
     boundaries: [
       "Design-only work does not authorize diagnostic or experiment execution; high-cost, destructive, outward-facing, or resource-heavy experiments still require explicit user direction and permission.",
       "Apply reference, pairing, and data-split reasoning only where it fits the study; do not impose ground truth, paired designs, or train/test splits on no-ground-truth, non-paired, or purely theoretical work.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not synthesize a prospective plan after execution or disguise retrospective notes as prior design.",
@@ -250,7 +250,7 @@ function contract(slug) {
     ],
     boundaries: [
       "Draft may create or edit ordinary project artifacts requested by the user or needed for the bounded deliverable; destructive, outward-facing, or submission actions still need explicit authorization.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not let polished wording, export, or local checks replace missing evidence for a claim.",
@@ -281,7 +281,7 @@ function contract(slug) {
     boundaries: [
       "Figure may create, edit, render, open, inspect, caption, export, or update ordinary project visuals and nearby manuscript text when requested or material to the deliverable; it must not invent data, results, or method details.",
       "Pure context reading, planning, and inspection are read-only; creation, revision, caption insertion, export, delivery, and research-document maintenance are write-capable only within the authorized task scope.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not treat image counts, embedding, resolution, contact sheets, opening an image, beauty, or unchanged re-export as proof that the figure communicates the research.",
@@ -382,7 +382,7 @@ function contract(slug) {
     ],
     boundaries: [
       "Rebuttal may modify ordinary project artifacts and research documents when requested or when revisions are the in-scope response; outward-facing submission or destructive action still requires explicit authorization.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not let reviewer findings replace Dove's author-side judgment.",
@@ -390,7 +390,7 @@ function contract(slug) {
     ]
   });
   return capabilityContract({
-    ambientParticipation: "When reusable experience can improve judgment or prevent mistakes, apply useful Lessons as fallible guidance, not evidence, and write Lessons only within authorization.",
+    ambientParticipation: "At consequential choices or after corrections and recurring failures, check useful Lessons once within the active context; preserve genuinely reusable experience within authorization without waiting for an explicit command, and treat Lessons as fallible guidance rather than evidence.",
     purpose: "Read or maintain researcher-owned Lessons that can improve current or subsequent work.",
     when: `Use when existing or newly learned guidance ${LESSONS_VALUE_STANDARD}, including when the user asks to inspect, remember, reflect on, or preserve Lessons.`,
     responsibilities: [
@@ -399,8 +399,8 @@ function contract(slug) {
       `For maintenance, preserve a Lesson whenever the experience ${LESSONS_VALUE_STANDARD}. Write the reusable insight with its basis, conditions, counterexamples, and limits when known, not a routine activity log.`
     ],
     actions: [
-      `Read ".dove/research/lessons/LESSONS.md" if it exists, then linked Lessons that are directly relevant or plausibly useful because they ${LESSONS_VALUE_STANDARD}. Read ".dove/research/RESEARCH.md" first only when project context is still needed and it has not already been read in the active context. Reuse Lessons already read in the active context instead of rereading them mechanically. If no Lessons summary or useful linked Lesson exists, report that naturally and continue from the available context. Do not create or modify files during reading and do not treat Lessons as evidence.`,
-      `When an experience ${LESSONS_VALUE_STANDARD}, preserve its reusable insight and relevant conditions in the narrowest suitable researcher-owned Lessons document, or create a naturally named Markdown file when a new theme is useful. Update "lessons/LESSONS.md" with a natural link when needed. Avoid recording routine progress, transient status, or observations with no plausible future value. Source explanation is optional. Do not create lesson IDs, frontmatter, an application ledger, or treat Lessons as evidence.`
+      `Read ".dove/research/lessons/LESSONS.md" if it exists, then linked Lessons that are directly relevant or plausibly useful because they ${LESSONS_VALUE_STANDARD}. Read ".dove/research/RESEARCH.md" separately only when project context is still needed and it has not already been read in the active context; it is not a prerequisite for Lessons. Reuse Lessons already read in the active context instead of rereading them mechanically. If no Lessons summary or useful linked Lesson exists, report that naturally and continue from the available context. Do not create or modify files during reading and do not treat Lessons as evidence.`,
+      `When an experience ${LESSONS_VALUE_STANDARD}, preserve its reusable insight and relevant conditions in the narrowest suitable researcher-owned Lessons document. If no Lessons material exists, create a content-bearing ".dove/research/lessons/LESSONS.md" only for that first qualifying experience; do not bootstrap an empty directory or index during reading. Create a naturally named linked Markdown file only when separating a theme is genuinely useful, and update "lessons/LESSONS.md" with a natural link when needed. Include the actual basis, conditions, counterexamples, and limits when known. Avoid recording routine progress, transient status, one-off tool failures, non-transferable bugs, or observations with no plausible future value. Do not create lesson IDs, frontmatter, an application ledger, or treat Lessons as evidence.`
     ],
     boundaries: [
       "Lessons reading only inspects existing material. Lessons maintenance is limited to researcher-owned Lessons files plus natural links from `lessons/LESSONS.md`, and records reusable guidance rather than routine activity.",

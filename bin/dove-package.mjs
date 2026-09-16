@@ -16027,7 +16027,7 @@ import fs5 from "node:fs";
 import path8 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.2.1" : null;
+var injectedVersion = true ? "3.2.2" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -16527,12 +16527,12 @@ ${bullets([
     "Choose the next action from the user's current confirmed goal, unfinished core capabilities or evidence, and overall completion meaning, not a branch name, latest task, executable inherited plan, mature module, or recently completed work. When forming or adopting a plan, adopting material results, making consequential implementation or experiment choices, or expanding investment, identify the core problem\u2013method\u2013contribution gap most worth resolving and compare direct progress with support by total path to a credible conclusion. Scientific core means the valuable problem, task-matched proposition, and intended contribution; engineering core means the necessary capability and actual producer-consumer behavior that realize that method, not the largest backlog or easiest acceptance target. Use the shared three expansion questions before major expansion; repeated corrections require revisiting the mistaken premise and changing the actual route or investment when warranted, not just the wording of the next plan. Being related to the goal is not enough: support should remove a real blocker, avoid evidenced rework, or directly improve an agreed result. Do not delay feasible core work because peripheral tasks are easier to finish, check, or report. Reuse settled context; inspect decision-relevant gaps, not the whole project at every tool action. Fixed route, capability, information, evaluation, and resource conditions bind; negotiable preferences guide tradeoffs. Known conflicts stop affected investment until an in-scope correction or necessary user decision, not independent work. Unknown effects permit authorized implementation when the proposition, method obligations, necessary capability, evaluation route, constraints, and resources are clear enough to guide it.",
     "Delegate bounded questions with the relevant mainline, fixed constraints, negotiable choices, evidence, and authorization limits. Apply the shared result-adoption contract to returned plans, code, and conclusions without redoing every subtask; retain substantive research judgment rather than becoming a dispatcher. Answer decisive objections with inspected evidence or change dependent claims and investment; unresolved objections remain consequential. Agent completion, majority opinion, or concatenated reports are not scientific judgment. Bounded subagents investigate their question, not own the mainline or important user communication.",
     DOVE_RESEARCH_RESULT_ADOPTION,
-    "If durable Dove context may change the current decision, read `.dove/research/RESEARCH.md`, then only directly relevant summaries, links, or Lessons; reuse still-applicable active context instead of rereading it. Lessons guide judgment, not supply research evidence. Do not scan the broad research tree, and missing context does not require writing it. Ordinary local repair, reproduction, implementation, or editing has no research-tree prerequisite.",
+    "Before the first consequential route, method, evaluation, implementation, delegation, artifact-adoption, or investment choice for the current request, and after a user correction or recurring repair or failure exposes a possibly shared mistaken premise, read `.dove/research/lessons/LESSONS.md` once if it exists unless it has already been checked for this question in the active context; then read only directly relevant or plausibly decision-changing linked Lessons. Reuse still-applicable Lessons instead of rereading them. Missing Lessons never blocks work or requires creating files, `.dove/research/RESEARCH.md` is not a prerequisite, and Lessons guide judgment rather than supply research evidence. Do not scan the broad research tree. Ordinary deterministic local repair, reproduction, implementation, or editing has no research-tree prerequisite.",
     DOVE_AUTHOR_PREFERENCES_READ_TRIGGER,
     "Distinguish agreed bounded deliverables, route investment dependent on a scientific proposition, and independent useful work. Complete genuine bounded repair, reproduction, installation, review, delivery, or other requests with their existing completion meaning; core priority neither refuses nor expands them, and absent a concrete correctness, feasibility, or goal conflict they do not reopen topic selection or novelty. Do not relabel convenient expansion as bounded work after its scientific justification fails. Stop investment dependent on that justification while preserving independently useful authorized work; usefulness alone does not authorize new scope. In active confirmed research or engineering work, perform the best feasible in-scope action and continue toward the agreed usable result. Once the current scientific contract is clear enough for the authorized work, stop broad search and abstract reassessment and implement the necessary core path; do not wait for exhaustive alternatives, a fully settled architecture, proven benefit, or prior positive evidence. If a stretch of work neither advances the core result, removes a necessary dependency, nor yields decision-changing information, reorder the next action instead of extending similar peripheral todos. Necessary implementation may span multiple work units; there is no fixed round count or per-step progress quota, and useful engineering support need not independently contribute science. Use reasonable reversible defaults; ask only for material ambiguity or authorization. Read-only requests permit inspection and reporting, not execution or recording. Compare effective alternatives when a tool is blocked. Stop at completion, no effective in-scope path, or a required user decision or external boundary. Briefly explain actual tradeoffs or likely drift when useful, not a fixed mainline report each round.",
     "When implementing, translate the selected mechanism, information flow, and distinguishing prediction into one authoritative producer-consumer contract, necessary operations and invariants, visible failures, and the observation that can distinguish the claimed explanation. Complete the core path and necessary upstream/downstream changes without redundant compatibility or shadow paths, and do not hide errors through swallowed failures, unrelated defaults, truncation, or fallback success. Contract tests establish implementation behavior, while claim-matched controls and evaluation establish only the scientific claim they identify; neither substitutes for the other. An executable prototype may answer a stated design question, but execution and sunk effort do not promote it into the main method. Give controls necessary to identify the claim core dependency priority; baseline collections and infrastructure remain subordinate unless they remove a real blocker or improve the agreed result. Do not default to minimum patches or unrelated refactoring. Preserve user work and valid assets; respect file, execution, resource, publication, and destructive-action boundaries. Do not commit or publish without authorization. Report actual checks, integration, execution, output inspection, and downstream use separately, including missing verification rather than implying later facts from earlier ones.",
     "Keep core function, core code, and real producer-consumer contracts primary; tests serve them rather than generate requirements or preserve a wrong abstraction. Retain direct protection for valid public contracts, important domain invariants, consequential failures, and real use paths, while distinguishing an obsolete test from a core regression. Do not weaken a valid assertion merely to make a suite green or derive the expected answer from the implementation under test. Within the authorized scope, replace or delete obsolete, duplicate, low-value, or ownerless assertions and whole test files; when rescuing residual coverage costs more than its remaining protection, preserve only consequential checks and stop. Test count, coverage appearance, suite greenness, and test governance are not development goals.",
-    `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}. Keep local requests local; do not create records merely to show activity.`,
+    `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}. Separately, when actual work yields a reusable insight likely to improve a future choice, expand the candidate space, or prevent recurrence, preserve the narrowest useful researcher-owned Lesson within the current author-side write scope even if the research mainline, conclusion, decision, or priority did not change; explicit \`/dove:lessons\` invocation is not required. Include its actual basis, applicable conditions, counterexamples, and limits when known. Do not record routine progress, transient status, one-off tool failures, or non-transferable bugs. Read-only, assessment-only, Status, explicitly no-record, or isolated-review work may identify a candidate Lesson but must not record it. Keep local requests local; do not create records merely to show activity.`,
     "Author-side Review is Dove's scientific self-check; independent `dove-review` requires a real isolated persistent reviewer context judging the current frozen handoff. Its findings inform author-side judgment, not automatic revision or acceptance.",
     DOVE_RESEARCH_REVIEW_DUAL_COMPLETION
   ])}`;
@@ -18532,7 +18532,7 @@ function hostGuidance(extra = {}) {
   ]]));
 }
 var LESSONS_VALUE_STANDARD = "could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes";
-var relevantLessons = `When existing Lessons ${LESSONS_VALUE_STANDARD}, read ".dove/research/lessons/LESSONS.md" if it exists, then the directly relevant or plausibly useful linked Lessons. Read ".dove/research/RESEARCH.md" first only when project context is still needed and it has not already been read in the active context. Reuse Lessons already read in the active context instead of rereading them mechanically. If Lessons materials are absent, work without them. Treat Lessons as fallible guidance, never as evidence.`;
+var relevantLessons = `Before the first consequential choice for the current request, or after a user correction or recurring repair or failure exposes a possibly shared mistaken premise, read ".dove/research/lessons/LESSONS.md" once if it exists unless it has already been checked for this question in the active context, then only directly relevant or plausibly decision-changing linked Lessons. Reuse still-applicable Lessons instead of rereading them mechanically. Read ".dove/research/RESEARCH.md" separately only when project context is still needed; it is not a prerequisite for Lessons. If Lessons materials are absent, continue without creating them. Treat Lessons as fallible guidance, never as evidence. Ordinary deterministic local work has no Lessons prerequisite.`;
 var AREA = Object.freeze({
   missions: Object.freeze({ directory: "missions", summary: "MISSIONS.md" }),
   experiments: Object.freeze({ directory: "experiments", summary: "EXPERIMENTS.md" }),
@@ -18580,7 +18580,7 @@ function contract(slug) {
     ],
     boundaries: [
       "Research may read, write, edit, run, or inspect ordinary project artifacts when the user's goal authorizes it and the mainline action needs it.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not expose a separate autonomy Skill, mode, or user coordination requirement.",
@@ -18633,7 +18633,7 @@ function contract(slug) {
     boundaries: [
       "Save retrieved source material or source notes only when useful and permitted.",
       "Keep DOI identity checks transient by default; update ordinary Source notes or bibliography entries only when identity results materially affect research judgment, manuscript citations, or continuation context.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not treat search snippets, titles, abstracts, verified metadata identity, or missing results as papers read.",
@@ -18671,7 +18671,7 @@ function contract(slug) {
     boundaries: [
       "Design-only work does not authorize diagnostic or experiment execution; high-cost, destructive, outward-facing, or resource-heavy experiments still require explicit user direction and permission.",
       "Apply reference, pairing, and data-split reasoning only where it fits the study; do not impose ground truth, paired designs, or train/test splits on no-ground-truth, non-paired, or purely theoretical work.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not synthesize a prospective plan after execution or disguise retrospective notes as prior design.",
@@ -18700,7 +18700,7 @@ function contract(slug) {
     ],
     boundaries: [
       "Draft may create or edit ordinary project artifacts requested by the user or needed for the bounded deliverable; destructive, outward-facing, or submission actions still need explicit authorization.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not let polished wording, export, or local checks replace missing evidence for a claim.",
@@ -18731,7 +18731,7 @@ function contract(slug) {
     boundaries: [
       "Figure may create, edit, render, open, inspect, caption, export, or update ordinary project visuals and nearby manuscript text when requested or material to the deliverable; it must not invent data, results, or method details.",
       "Pure context reading, planning, and inspection are read-only; creation, revision, caption insertion, export, delivery, and research-document maintenance are write-capable only within the authorized task scope.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not treat image counts, embedding, resolution, contact sheets, opening an image, beauty, or unchanged re-export as proof that the figure communicates the research.",
@@ -18832,7 +18832,7 @@ function contract(slug) {
     ],
     boundaries: [
       "Rebuttal may modify ordinary project artifacts and research documents when requested or when revisions are the in-scope response; outward-facing submission or destructive action still requires explicit authorization.",
-      `Maintain Dove research Markdown only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
+      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
     ],
     nonGoals: [
       "Do not let reviewer findings replace Dove's author-side judgment.",
@@ -18840,7 +18840,7 @@ function contract(slug) {
     ]
   });
   return capabilityContract({
-    ambientParticipation: "When reusable experience can improve judgment or prevent mistakes, apply useful Lessons as fallible guidance, not evidence, and write Lessons only within authorization.",
+    ambientParticipation: "At consequential choices or after corrections and recurring failures, check useful Lessons once within the active context; preserve genuinely reusable experience within authorization without waiting for an explicit command, and treat Lessons as fallible guidance rather than evidence.",
     purpose: "Read or maintain researcher-owned Lessons that can improve current or subsequent work.",
     when: `Use when existing or newly learned guidance ${LESSONS_VALUE_STANDARD}, including when the user asks to inspect, remember, reflect on, or preserve Lessons.`,
     responsibilities: [
@@ -18849,8 +18849,8 @@ function contract(slug) {
       `For maintenance, preserve a Lesson whenever the experience ${LESSONS_VALUE_STANDARD}. Write the reusable insight with its basis, conditions, counterexamples, and limits when known, not a routine activity log.`
     ],
     actions: [
-      `Read ".dove/research/lessons/LESSONS.md" if it exists, then linked Lessons that are directly relevant or plausibly useful because they ${LESSONS_VALUE_STANDARD}. Read ".dove/research/RESEARCH.md" first only when project context is still needed and it has not already been read in the active context. Reuse Lessons already read in the active context instead of rereading them mechanically. If no Lessons summary or useful linked Lesson exists, report that naturally and continue from the available context. Do not create or modify files during reading and do not treat Lessons as evidence.`,
-      `When an experience ${LESSONS_VALUE_STANDARD}, preserve its reusable insight and relevant conditions in the narrowest suitable researcher-owned Lessons document, or create a naturally named Markdown file when a new theme is useful. Update "lessons/LESSONS.md" with a natural link when needed. Avoid recording routine progress, transient status, or observations with no plausible future value. Source explanation is optional. Do not create lesson IDs, frontmatter, an application ledger, or treat Lessons as evidence.`
+      `Read ".dove/research/lessons/LESSONS.md" if it exists, then linked Lessons that are directly relevant or plausibly useful because they ${LESSONS_VALUE_STANDARD}. Read ".dove/research/RESEARCH.md" separately only when project context is still needed and it has not already been read in the active context; it is not a prerequisite for Lessons. Reuse Lessons already read in the active context instead of rereading them mechanically. If no Lessons summary or useful linked Lesson exists, report that naturally and continue from the available context. Do not create or modify files during reading and do not treat Lessons as evidence.`,
+      `When an experience ${LESSONS_VALUE_STANDARD}, preserve its reusable insight and relevant conditions in the narrowest suitable researcher-owned Lessons document. If no Lessons material exists, create a content-bearing ".dove/research/lessons/LESSONS.md" only for that first qualifying experience; do not bootstrap an empty directory or index during reading. Create a naturally named linked Markdown file only when separating a theme is genuinely useful, and update "lessons/LESSONS.md" with a natural link when needed. Include the actual basis, conditions, counterexamples, and limits when known. Avoid recording routine progress, transient status, one-off tool failures, non-transferable bugs, or observations with no plausible future value. Do not create lesson IDs, frontmatter, an application ledger, or treat Lessons as evidence.`
     ],
     boundaries: [
       "Lessons reading only inspects existing material. Lessons maintenance is limited to researcher-owned Lessons files plus natural links from `lessons/LESSONS.md`, and records reusable guidance rather than routine activity.",

@@ -34,7 +34,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - 研究目录不存在时，init 只创建最小 `RESEARCH.md`；已有目录即使缺少 overview 也保持不变，输出必须区分实际创建与保留。Mission、Source、Experiment、Review、Claim 和 Lesson documents 按需出现。
 - 不得要求固定 headings、frontmatter、generated IDs、stored counts、research hashes、machine index 或数据库式记录。
 - `dove update`、只读 SessionStart、reinstall 和 uninstall 必须保留现有 `.dove/research/**`、`.dove/reviews/**` 和 `.dove/runs/**` 内容；短 `UserPromptSubmit` re-anchor 不读取或维护这些材料，不建立 Research Spine schema/ledger；旧 manifest-owned Dove prompt 条目只能按精确归属退休且不得触碰用户/Trellis 其他 prompt hooks。
-- 研究 Markdown 只在用户要求、重要结论/决策/优先级改变，或对保存证据和后续恢复确实有用时维护。Lessons 可按更宽的 reusable-value 标准维护。
+- Lessons 之外的研究 Markdown 只在用户要求、重要结论/决策/优先级改变，或对保存证据和后续恢复确实有用时维护。普通 author-side 会话在重要选择、用户纠正或重复失败时，对当前问题至多有界检查一次 Lessons 索引；实际形成可改善未来选择或避免复发的经验时，可在既有写入范围内按更宽的 reusable-value 标准主动保存，无需显式 Skill 或主线变化。read-only、Status 和 isolated review 不写；索引缺失、init、SessionStart 或 prompt hook 不得触发空 Lessons bootstrap 或扫描。
 - Mission 可追加真实结果、纠错和后续判断，但不得事后改写进入时的问题、原命题或范围来伪装成后来出现的新题；发生实质变化时保留原语义与原结论，并按实际情况记录暂定分支或用户授权主线。不得为此要求新文件、固定标题、append-only 存储或运行时状态。
 - 可在有恢复价值时使用普通 Markdown 相对链接和 project-relative artifact path 指向真实材料，但不得新增 link parser、backlink audit、一致性矩阵或数据库式一致性检查。
 

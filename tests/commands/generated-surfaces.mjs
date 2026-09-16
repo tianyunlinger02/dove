@@ -128,8 +128,15 @@ export function assertFinalEntrypointWiring() {
     assert.equal(rule.split(command.contract.ambientParticipation).length - 1, 1, `${command.id}: one ambient participation sentence`);
   }
   const statusParticipation = COMMAND_SURFACES.find(({ id }) => id === "dove.status").contract.ambientParticipation;
+  const lessonsParticipation = COMMAND_SURFACES.find(({ id }) => id === "dove.lessons").contract.ambientParticipation;
   assert.match(statusParticipation, /explicitly asked/iu);
   assert.match(statusParticipation, /read-only/iu);
+  assert.match(lessonsParticipation, /consequential choices or after corrections and recurring failures/iu);
+  assert.match(lessonsParticipation, /once within the active context/iu);
+  assert.match(lessonsParticipation, /without waiting for an explicit command/iu);
+  assert.equal(rule.split("`.dove/research/lessons/LESSONS.md`").length - 1, 1, "ordinary Claude owns one bounded Lessons index trigger");
+  assert.match(rule, /research Markdown other than Lessons only when/iu);
+  assert.match(rule, /explicit `\/dove:lessons` invocation is not required/iu);
   assert.match(rule, /without requiring `--agent dove` or a Skill/iu);
   assert.match(renderClaudeDoveAgent(), /no higher judgment authority/iu);
   assertCoreActionGuidance(rule, "ordinary Claude rule");
@@ -229,7 +236,15 @@ export function assertRenderedCapabilityWiring(entry) {
     assert.match(value, /only those listed materials/iu, label);
   }
   if (entry.command.id === "dove.figure") assert.match(value, /rerender and inspect/iu, label);
-  if (entry.command.id === "dove.status") assert.match(value, /do not modify files/iu, label);
+  if (entry.command.id === "dove.status") {
+    assert.match(value, /do not modify files/iu, label);
+    assert.doesNotMatch(value, /preserve the narrowest useful researcher-owned Lesson/iu, label);
+  }
+  if (entry.command.id === "dove.lessons") {
+    assert.match(value, /content-bearing "\.dove\/research\/lessons\/LESSONS\.md"/iu, label);
+    assert.match(value, /do not bootstrap an empty directory or index during reading/iu, label);
+    assert.match(value, /one-off tool failures, non-transferable bugs/iu, label);
+  }
 }
 
 export function assertSourceIdentityGuidanceProjection() {

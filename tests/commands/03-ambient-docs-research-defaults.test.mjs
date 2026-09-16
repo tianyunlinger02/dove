@@ -21,15 +21,26 @@ test("research bootstrap remains a minimal researcher-owned overview", () => {
   assert.match(RESEARCH_DEFAULT_DOCUMENTS[0].content, /researcher-owned entry/iu);
 });
 
-test("author stance reads durable research context only when decision-relevant", () => {
+test("author stance uses Lessons once at consequential triggers without burdening local work", () => {
   const stance = renderDoveAuthorStanceSection();
   const overview = "`.dove/research/RESEARCH.md`";
+  const lessons = "`.dove/research/lessons/LESSONS.md`";
   assert.equal(stance.split(overview).length - 1, 1);
-  assert.match(stance, /If durable Dove context may change the current decision/iu);
-  assert.match(stance, /only directly relevant/iu);
-  assert.match(stance, /Lessons guide judgment, not supply research evidence/iu);
+  assert.equal(stance.split(lessons).length - 1, 1);
+  assert.match(stance, /first consequential route, method, evaluation, implementation, delegation, artifact-adoption, or investment choice/iu);
+  assert.match(stance, /user correction or recurring repair or failure/iu);
+  assert.match(stance, /once if it exists unless it has already been checked for this question/iu);
+  assert.match(stance, /only directly relevant or plausibly decision-changing linked Lessons/iu);
+  assert.match(stance, /RESEARCH\.md[^.]*not a prerequisite/iu);
+  assert.match(stance, /Missing Lessons never blocks work or requires creating files/iu);
+  assert.match(stance, /Lessons guide judgment rather than supply research evidence/iu);
   assert.match(stance, /Do not scan the broad research tree/iu);
-  assert.match(stance, /no research-tree prerequisite/iu);
+  assert.match(stance, /Ordinary deterministic local[^.]*no research-tree prerequisite/iu);
+  assert.match(stance, /research Markdown other than Lessons only when/iu);
+  assert.match(stance, /even if the research mainline, conclusion, decision, or priority did not change/iu);
+  assert.match(stance, /explicit `\/dove:lessons` invocation is not required/iu);
+  assert.match(stance, /routine progress, transient status, one-off tool failures, or non-transferable bugs/iu);
+  assert.match(stance, /Read-only, assessment-only, Status, explicitly no-record, or isolated-review work/iu);
   assert.match(stance, /agreed bounded deliverables/iu);
   assert.match(stance, /investment dependent on a scientific proposition/iu);
   assert.match(stance, /Complete genuine bounded/iu);
