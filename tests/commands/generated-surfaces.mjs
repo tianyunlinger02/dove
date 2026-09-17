@@ -19,6 +19,7 @@ import {
   renderDoveSharedResearchContractSection
 } from "../../src/core/dove-agent-persona.mjs";
 import {
+  DOVE_RESEARCH_CANDIDATE_COVERAGE,
   DOVE_RESEARCH_QUALITY_CRITERIA,
   DOVE_RESEARCH_QUALITY_REFERENCE_PATHS,
   DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS,
@@ -226,6 +227,7 @@ export function assertRenderedCapabilityWiring(entry) {
   if (entry.command.id === "dove.experiment") {
     assert.match(value, /Apply reference, pairing, and data-split reasoning only where it fits the study/u, label);
     assert.match(value, /do not impose ground truth, paired designs, or train\/test splits/u, label);
+    assert.ok(value.includes(DOVE_RESEARCH_CANDIDATE_COVERAGE), `${label}: canonical candidate coverage contract`);
     const actions = contractActions(entry.command);
     const plan = actions.findIndex((action) => /save the prospective plan/iu.test(action));
     const execution = actions.findIndex((action) => /Execute only when/iu.test(action));

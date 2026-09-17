@@ -14,6 +14,7 @@ import * as publicCore from "../../src/core/index.mjs";
 import { renderDoveAuthorStanceSection, renderDoveReviewerStanceSection, renderDoveSharedResearchContractSection } from "../../src/core/dove-agent-persona.mjs";
 import { DOVE_AUTHOR_PREFERENCES_READ_TRIGGER, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS } from "../../src/core/dove-author-preferences.mjs";
 import {
+  DOVE_RESEARCH_CANDIDATE_COVERAGE,
   DOVE_RESEARCH_DECISION_CONSEQUENCE,
   DOVE_RESEARCH_RESULT_ADOPTION,
   DOVE_RESEARCH_SHARED_CONTRACT_BULLETS,
@@ -146,6 +147,9 @@ test("material decision consequences stay in standing and full quality guidance"
   }
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /necessary dependency/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /use condition/iu);
+  for (const concept of [/decisive basis/iu, /affected claim or dependent investment/iu, /next authorized action/iu, /what result would change the judgment/iu]) {
+    assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, concept);
+  }
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /realizes or tests a still-worthwhile authorized core proposition/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /restores necessary capability or evaluation validity/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /minimum decision-changing evidence/iu);
@@ -153,6 +157,20 @@ test("material decision consequences stay in standing and full quality guidance"
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /close the round/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /stop dependent investment/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /preserving independent useful work/iu);
+});
+
+test("Experiment candidate coverage keeps generation, selection, and end-to-end conclusions distinct", () => {
+  const experiment = COMMAND_SURFACE_BY_ID["dove.experiment"].contract;
+  const value = [experiment.purpose, ...experiment.responsibilities, ...experiment.actions, ...experiment.boundaries, ...experiment.nonGoals].join("\\n");
+  assert.equal(value.split(DOVE_RESEARCH_CANDIDATE_COVERAGE).length - 1, 1);
+  assert.match(value, /candidate reachability or generation/iu);
+  assert.match(value, /selection quality given the same candidate set/iu);
+  assert.match(value, /end-to-end target effect/iu);
+  assert.match(value, /fixed candidates does not by itself assess candidate generation/iu);
+  assert.match(value, /successful intersection cannot stand in for an end-to-end conclusion/iu);
+  assert.match(value, /failed, missing, invalid, and excluded cases enter the denominator/iu);
+  assert.match(value, /do not silently retain only successful cases/iu);
+  assert.match(value, /collapse every failure into the same scientific failure/iu);
 });
 
 test("capabilities and bounded agents reuse one result-adoption contract", () => {
