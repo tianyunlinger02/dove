@@ -1,0 +1,14 @@
+{
+  "enrollment": [
+    { "clinic": "north", "participantId": "1", "score": 10 },
+    { "clinic": "south", "participantId": "1", "score": 30 },
+    { "clinic": "north", "participantId": "2", "score": 8 },
+    { "clinic": "west", "participantId": "3", "score": 15 }
+  ],
+  "day30": [
+    { "clinic": "south", "participantId": "1", "score": 26 },
+    { "clinic": "north", "participantId": "1", "score": 14 },
+    { "clinic": "north", "participantId": "2", "score": 12 },
+    { "clinic": "north", "participantId": "2", "score": 11 }
+  ]
+}

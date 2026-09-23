@@ -97,6 +97,8 @@ function assertCoreActionGuidance(value, label) {
   assert.match(value, /unfinished core capability or evidence/iu, label);
   assert.match(value, /Support takes priority only when it removes a real blocker/iu, label);
   assert.match(value, /scientific core is the valuable problem/iu, label);
+  assert.match(value, /expected-best necessary engineering route/iu, label);
+  assert.match(value, /prefer less code only when/iu, label);
   assert.match(value, /engineering core is the producer-consumer behavior/iu, label);
   assert.match(value, /one grounded recommendation with its strongest objection/iu, label);
   assert.match(value, /stop or pause stoppable/iu, label);

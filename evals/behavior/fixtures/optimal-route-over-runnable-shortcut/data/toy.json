@@ -1,0 +1,10 @@
+{
+  "enrollment": [
+    { "clinic": "north", "participantId": "1", "score": 10 },
+    { "clinic": "north", "participantId": "2", "score": 20 }
+  ],
+  "day30": [
+    { "clinic": "north", "participantId": "1", "score": 14 },
+    { "clinic": "north", "participantId": "2", "score": 22 }
+  ]
+}

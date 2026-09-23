@@ -1,0 +1,1 @@
+Target claim for later evaluation: mean within-person recovery score increases by at least 3 points from enrollment to day 30 among uniquely matched participants across eight clinics. No real-data estimate is available yet; the toy export is not evidence for this claim.
