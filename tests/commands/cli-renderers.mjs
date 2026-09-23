@@ -110,7 +110,9 @@ function assertDoveCliHelpRenderer() {
   assert.match(output, /Claude 接入管理只读 SessionStart hook，并在没有现有用户配置时安装只读 statusLine/u);
   assert.match(output, /UserPromptSubmit 对每条 prompt 返回同一作者立场提醒/u);
   assert.match(output, /不安装也不暴露 Stop hook/u);
-  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "review", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "projects", "review", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
+  assert.match(output, /dove projects import --project <dir>/u);
+  assert.match(output, /dove projects sync/u);
 }
 
 function countOccurrences(text, value) {

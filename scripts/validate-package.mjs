@@ -39,6 +39,7 @@ const FORBIDDEN_SCRIPTS = ["mcp:serve", "mcp:validate"];
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
 const packageLock = JSON.parse(fs.readFileSync(path.join(ROOT, "package-lock.json"), "utf8"));
+let validationEnv = process.env;
 
 function assertAbsentProductionDependencies(manifest, label) {
   for (const field of PRODUCTION_DEPENDENCY_FIELDS) {
@@ -149,7 +150,7 @@ function assertLockfile() {
 }
 
 function spawnChecked(command, args, options = {}) {
-  const result = spawnSync(command, args, { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, ...options });
+  const result = spawnSync(command, args, { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, ...options, env: { ...validationEnv, ...options.env } });
   assert.equal(result.error, undefined, result.error?.message);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return result;
@@ -489,6 +490,15 @@ for (const bundlePath of ["dist/index.mjs", "bin/dove-package.mjs"]) {
 const tempBase = resolveTempWorkspaceBase();
 fs.mkdirSync(tempBase, { recursive: true });
 const tempRoot = fs.mkdtempSync(path.join(tempBase, "run-"));
+validationEnv = {
+  ...process.env,
+  HOME: path.join(tempRoot, "home"),
+  XDG_CONFIG_HOME: path.join(tempRoot, "config"),
+  npm_config_prefix: path.join(tempRoot, "prefix"),
+  npm_config_cache: path.join(tempRoot, "cache"),
+  npm_config_userconfig: path.join(tempRoot, "npmrc"),
+  npm_config_globalconfig: path.join(tempRoot, "global-npmrc")
+};
 try {
   const { pack, tarball } = realPackagePack(tempRoot);
   assertPackedFiles(pack);

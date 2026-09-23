@@ -131,6 +131,8 @@ Dove 的作者上下文在论文准备过程中可以进行作者侧科学自检
 
 用户显式 update 会覆盖 manifest-owned 集成中的本地修改并提醒；SessionStart 完全只读，检查集成并按需以 `systemMessage` 提示显式 update，startup 和 `/clear` 另向当前主 agent提供完整作者偏好的读取引导，不同步任何资源、写配置或清理旧状态，也不把引导或安装伪装成已经读过。compact/resume 复用同一主上下文已读偏好，不无条件重读。Doctor 的集成状态仅为 `uninitialized`、`current`、`needs-update`、`blocked`；没有 adoption、旧 manifest migration 或 hot-sync 成功路径，未知文件保留。两者不改研究记录。Claude 项目没有既有 `statusLine` 时，Dove 安装只读双行显示：第一行使用宿主模型、总上下文容量、剩余上下文比例、可选的无标签青色主线正文、Git 分支和当前 Claude 会话时长，第二行仅绝对项目路径；仅非空 `NO_COLOR` 禁色。主线只来自根 `.dove/research/RESEARCH.md` 的唯一普通 `Mainline: <text>` 行，读取上限为 64 KiB；缺失、空白、重复、过大或不可读时省略，不扫描科研树或读取其他记录，不把分支或时长伪装成科学主线或累计科研工时。主线维护遵循[研究模型](RESEARCH_MODEL.md#项目与当前科研主线)，不为显示补写或迁移已有研究树，不改 fresh bootstrap 或 SessionStart。既有用户/Trellis line 不接管。短 prompt re-anchor 不改变以上 SessionStart 契约；安装或更新后活跃宿主会话须重载，不能把磁盘更新当作实际加载。DSH 仍只有 Skills，不获得 Claude hooks。
 
+全局 npm 升级启用 lifecycle scripts 时，可通过 `postinstall` 刷新用户 XDG 配置注册表中的项目集成；这不是 SessionStart 热同步。已有项目首次纳入注册表需按准确根路径执行 `dove projects import --project <root>... --sync`，以后可用 `dove projects sync` 重试、`dove projects status` 只读查看结果。不扫描整个主目录。自动同步只要发现任一托管本地修改或冲突，就零写入地跳过该项目，继续处理其他项目；显式 `dove update` 仍可告知并覆盖合法托管修改。任何同步均不改科研、Review 或 Run 记录，已打开的宿主会话仍须重载。
+
 compact/resume 继续复用同一主上下文已读偏好，不无条件重读，并只提供事实卡：`RESEARCH.md` 是否存在及绝对修改时间；最新 Review 的 id、round、绝对更新时间和材料 currentness；最新 Run 的 id、绝对开始时间、status 和 exit。不读取研究 Markdown 正文、report 或 stdout/stderr logs，不猜主线；startup/clear 提供单独的偏好读取引导而无研究卡。卡片帮助定位记录，不恢复科研判断。
 
 Run 收据保留命令、时间、结果、指标和比较依据，以及用户声明的 seed、Git commit 和 dirty 最低事实，不变成环境清单。Git 不改变比较资格或排名；机器比较也不替代科学可比性判断。Source 可以完成用户指定条目的有界 bibliography DOI 核验，但元数据核验不代表读过全文或支持主张。

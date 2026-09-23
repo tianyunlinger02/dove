@@ -16,7 +16,7 @@ import {
   transactionDelete
 } from "./project-installation-plan.mjs";
 import { compareManaged } from "./project-installation-resources.mjs";
-import { resolveInstalledProjectRoot, resolveProjectRootForInit } from "./project-root.mjs";
+import { resolveExactInstalledProjectRoot, resolveInstalledProjectRoot, resolveProjectRootForInit } from "./project-root.mjs";
 import { prepareResearchDefaults } from "./research-defaults.mjs";
 
 function exactTimestamp(value) {
@@ -97,8 +97,21 @@ export function updateProjectIntegration(start, options = {}) {
   return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", prepared.root, prepared.hosts, prepared.manifest, transaction, prepared);
 }
 
+export function syncProjectIntegration(start, options = {}) {
+  const fsOps = options.fsOps ?? fs;
+  const root = resolveExactInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
+  const inspected = prepareInstalledPlan(root, { ...options, fsOps, replacementPolicy: "auto-inspect" });
+  if (inspected.skippedLocalEdits.length > 0) {
+    const paths = inspected.skippedLocalEdits.map((item) => `${item.path}${item.selector ? `#${item.selector}` : ""}`);
+    throw new Error(`Dove automatic project update preserved local edits; no project files were changed: ${paths.join(", ")}.`);
+  }
+  const prepared = prepareInstalledPlan(root, { ...options, fsOps, replacementPolicy: "auto-safe" });
+  const transaction = writeFileSetTransaction(prepared.entries, transactionOptions(fsOps));
+  return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", root, prepared.hosts, prepared.manifest, transaction, prepared);
+}
+
 export function inspectProjectIntegration(start, options = {}) {
-  const prepared = prepareInstalledPlan(start, { ...options, replacementPolicy: "inspect" });
+  const prepared = prepareInstalledPlan(start, { ...options, replacementPolicy: options.autoSync === true ? "auto-inspect" : "inspect" });
   const writtenPaths = prepared.entries.filter((entry) => entry.delete !== true).map((entry) => entry.relativePath);
   const removedPaths = prepared.entries.filter((entry) => entry.delete === true).map((entry) => entry.relativePath);
   const needsUpdate = prepared.entries.length > 0 || prepared.skippedLocalEdits.length > 0;

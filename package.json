@@ -1,6 +1,6 @@
 {
   "name": "dove",
-  "version": "3.2.3",
+  "version": "3.2.4",
   "description": "Local-first Markdown research workflow for papers, experiments, figures, review, and revision.",
   "type": "module",
   "bin": {
@@ -32,6 +32,7 @@
     "commands:check": "node ./scripts/generate-command-adapters-cli.mjs --check",
     "commands:validate": "node ./scripts/validate-commands.mjs",
     "installation:validate": "node ./scripts/validate-installation.mjs",
+    "cascade:validate": "node --test ./tests/auto-sync.test.mjs ./tests/project-registry.test.mjs",
     "uninstall:validate": "node ./scripts/validate-uninstall.mjs",
     "review-runtime:validate": "node ./scripts/validate-review-runtime.mjs",
     "runs:validate": "node ./scripts/validate-runs.mjs",
@@ -39,12 +40,13 @@
     "behavior:validate": "node ./evals/behavior/validate.mjs",
     "behavior:eval": "node ./evals/behavior/eval.mjs",
     "package:validate": "node ./scripts/validate-package.mjs",
-    "check": "npm run build:check && npm run commands:check && npm run commands:validate && npm run uninstall:validate && npm run installation:validate && npm run review-runtime:validate && npm run runs:validate && npm run runtime:validate",
+    "check": "npm run build:check && npm run commands:check && npm run commands:validate && npm run uninstall:validate && npm run installation:validate && npm run cascade:validate && npm run review-runtime:validate && npm run runs:validate && npm run runtime:validate",
     "release:check": "npm run check && npm run package:validate",
     "pack:dry-run": "npm pack --dry-run",
     "build": "node ./scripts/build-package.mjs",
     "build:check": "node ./scripts/build-package.mjs --check",
-    "prepack": "npm run build:check"
+    "prepack": "npm run build:check",
+    "postinstall": "node ./bin/dove-package.mjs projects postinstall"
   },
   "engines": {
     "node": ">=22"

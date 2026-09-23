@@ -26,6 +26,8 @@ import { parseSessionStartPayload, sessionStartFailureOutput, sessionStartOutput
 import { renderDoveStatusLine } from "../src/core/statusline.mjs";
 import { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
 import { PROJECT_HOST_IDS } from "../src/core/host-registry.mjs";
+import { importProjectRoots, inspectRegisteredProjects, syncRegisteredProjects } from "../src/core/project-cascade.mjs";
+import { changeRegisteredProjects, readLastProjectSync } from "../src/core/project-registry.mjs";
 import { classifyPackageCompatibility, PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { initializeProjectIntegration, inspectProjectIntegration, previewProjectCompleteReinstall } from "../src/core/project-installation.mjs";
@@ -121,6 +123,32 @@ function operationalFailure(error, jsonOrOptions = {}) {
   else console.error(`Dove 不能继续：${message}`);
 }
 
+function recordLifecycle(result, action) {
+  try {
+    if (action === "uninstall") changeRegisteredProjects([], [result.target]);
+    else changeRegisteredProjects([result.target]);
+  } catch (error) {
+    throw new Error(`Dove project operation ${action} succeeded at ${result.target}, but user-level project registration failed; future automatic upgrades may not reach this project: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+  }
+  return result;
+}
+
+function warnSyncResult(result) {
+  if (result.reportError) console.error(`Dove: 项目级联结果未能持久保存：${result.reportError}`);
+  if (result.status === "partial") console.error("Dove: 部分已登记项目未更新；运行 dove projects status 查看上次保存的结果，或 dove projects sync 重试。");
+}
+
+function reportIncompleteCascade() {
+  try {
+    const last = readLastProjectSync();
+    if (last?.packageVersion === PACKAGE_VERSION && last.status === "partial") {
+      console.error("Dove: 部分项目自动更新未完成；运行 dove projects status 查看受保护或失败的项目。");
+    }
+  } catch (error) {
+    console.error(`Dove: 无法读取项目级联报告：${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 function inspect(target, options = {}) {
   return inspectProjectDoctor(target, {
     ...PACKAGE_OPTIONS,
@@ -190,12 +218,12 @@ if (!command) {
       await runInteractiveDoveSetup({
         target: process.cwd(),
         inspect: inspectHome,
-        initialize: (target, lifecycleOptions) => initializeProjectIntegration(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
-        update: (target, lifecycleOptions) => updateDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions, inspect }),
+        initialize: (target, lifecycleOptions) => recordLifecycle(initializeProjectIntegration(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }), "init"),
+        update: (target, lifecycleOptions) => recordLifecycle(updateDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions, inspect }), "update"),
         previewCompleteReinstall: (target, lifecycleOptions) => previewProjectCompleteReinstall(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
-        completeReinstall: (target, lifecycleOptions) => completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
+        completeReinstall: (target, lifecycleOptions) => recordLifecycle(completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }), "reinstall"),
         previewUninstall: (target) => previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS),
-        uninstall: (target, lifecycleOptions) => uninstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
+        uninstall: (target, lifecycleOptions) => recordLifecycle(uninstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }), "uninstall"),
         stream: process.stdout,
         env: process.env
       });
@@ -206,6 +234,7 @@ if (!command) {
         env: process.env,
         state: homeState(inspection)
       }));
+      reportIncompleteCascade();
     }
     process.exit(0);
   } catch (error) {
@@ -237,28 +266,29 @@ try {
         throw new Error("Dove 已经用另一组 host 初始化。请使用 dove update --host <host> 修改。");
       }
       inspectProjectIntegration(target, PACKAGE_OPTIONS);
-      writeIntegrationResult("init", {
+      const result = recordLifecycle({
         status: "already-initialized",
         target,
         hosts: [...manifest.hosts],
         writtenPaths: [],
         removedPaths: [],
         changedPaths: []
-      }, options);
+      }, "init");
+      writeIntegrationResult("init", result, options);
       process.exit(0);
     }
-    const result = initializeProjectIntegration(target, { ...PACKAGE_OPTIONS, hosts: selectedHosts(options) });
+    const result = recordLifecycle(initializeProjectIntegration(target, { ...PACKAGE_OPTIONS, hosts: selectedHosts(options) }), "init");
     writeIntegrationResult("init", integrationResult(result), options);
     process.exit(0);
   }
 
   if (command === "update") {
     const target = projectOption(options) ?? process.cwd();
-    const result = updateDoveLifecycle(target, {
+    const result = recordLifecycle(updateDoveLifecycle(target, {
       ...PACKAGE_OPTIONS,
       hosts: selectedHosts(options),
       inspect
-    });
+    }), "update");
     writeIntegrationResult("update", integrationResult(result), options);
     process.exit(0);
   }
@@ -282,7 +312,7 @@ try {
       console.log("未修改任何文件。");
       process.exit(0);
     }
-    const result = completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true, preview });
+    const result = recordLifecycle(completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true, preview }), "reinstall");
     writeLifecycleResult("reinstall", result, options);
     process.exit(0);
   }
@@ -304,15 +334,41 @@ try {
       console.log("未修改任何文件。");
       process.exit(0);
     }
-    const result = uninstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true, preview });
+    const result = recordLifecycle(uninstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, confirmed: true, preview }), "uninstall");
     writeLifecycleResult("uninstall", result, options);
+    process.exit(0);
+  }
+
+  if (command === "projects") {
+    if (subcommand === "postinstall") {
+      if (process.env.npm_config_global !== "true") process.exit(0);
+      const result = syncRegisteredProjects(PACKAGE_OPTIONS);
+      console.log(JSON.stringify(result));
+      warnSyncResult(result);
+      process.exit(0);
+    }
+    if (subcommand === "import") {
+      const projects = importProjectRoots(options.project ?? [], PACKAGE_OPTIONS);
+      const result = options.sync ? syncRegisteredProjects(PACKAGE_OPTIONS) : { status: "registered", projects };
+      if (wantsJson(options)) writeJson(result);
+      else console.log(JSON.stringify(result, null, 2));
+      if (options.sync) warnSyncResult(result);
+      process.exit(0);
+    }
+    const result = subcommand === "sync" ? syncRegisteredProjects(PACKAGE_OPTIONS) : inspectRegisteredProjects(PACKAGE_OPTIONS);
+    if (wantsJson(options)) writeJson(result);
+    else console.log(JSON.stringify(result, null, 2));
+    if (subcommand === "sync") warnSyncResult(result);
     process.exit(0);
   }
 
   if (command === "doctor") {
     const result = inspect(projectOption(options) ?? process.cwd());
     if (wantsJson(options)) writeJson(result);
-    else console.log(renderDoveDoctor(result, { stream: process.stdout, env: process.env }));
+    else {
+      console.log(renderDoveDoctor(result, { stream: process.stdout, env: process.env }));
+      reportIncompleteCascade();
+    }
     process.exit(result.staticChecksPassed ? 0 : 1);
   }
 

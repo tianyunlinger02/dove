@@ -20,6 +20,7 @@ function cli(args, options = {}) {
   return spawnSync(process.execPath, [path.join(ROOT, "bin", "dove.mjs"), ...args], {
     cwd: options.cwd ?? ROOT,
     encoding: "utf8",
+    env: { ...process.env, XDG_CONFIG_HOME: path.join(SCRATCH_ROOT, "run-validator-user-config") },
     ...options
   });
 }

@@ -14,7 +14,7 @@ Claude integration owns only the documented `.mcp.json#/mcpServers/dove-paper-se
 - Inspect the exact initialized project and same-package manifest revision `2.0` without writing files or shared configuration.
 - If integration is not current, report a `systemMessage` suggesting explicit `dove update`; unsupported or ambiguous state needs `dove doctor --json` and manual resolution. Never update, adopt, migrate, clean up, or reinstall from the hook.
 - Startup and `/clear` emit a small author-preference bootstrap after valid inspection, even without an integration warning. It requires the current host main agent—ordinary Claude or explicit Dove—to personally read the full installed reference before substantive work; it does not embed the body or delegate the read. Compact/resume may additionally emit the read-only facts below plus continuity guidance, without an unconditional full reread.
-- Inspection and bootstrap delivery cannot verify reading or retroactively reload already-active Claude context.
+- Inspection and bootstrap delivery cannot verify reading or retroactively reload already-active Claude context. npm global `postinstall` may independently synchronize registered projects during an upgrade; SessionStart itself stays read-only and never triggers that sync.
 
 ## Compact/resume facts card
 

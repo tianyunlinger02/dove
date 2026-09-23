@@ -2,8 +2,8 @@
 
 Dove uses a two-stage installation model:
 
-1. install the Dove npm artifact once for the current user so `dove` is available on that user's `PATH`; and
-2. initialize each project explicitly with the host integration Dove should manage.
+1. install the Dove npm artifact for the current user so `dove` is available on that user's `PATH`; and
+2. initialize each project explicitly with the host integration Dove should manage. Later global upgrades can refresh registered projects automatically; initial project selection is never inferred from a home-directory scan.
 
 The matching Dove release is not currently available under the bare public npm name `dove`, which is occupied by an unrelated package. Use only an exact package specifier supplied by a trusted Dove release channel, such as a packed tarball, Git commit/tag specifier, or internal-registry specifier tied to the exact source revision.
 
@@ -25,12 +25,9 @@ Install the exact Dove artifact for the current user according to the npm prefix
 npm install --global <exact-dove-package-specifier>
 ```
 
-The user-level npm installation installs the `dove` executable into the current user's npm binary path. It must not:
+The user-level npm installation installs the `dove` executable into the current user's npm binary path. A **global upgrade**, when npm runs lifecycle scripts, also uses `postinstall` to synchronize only projects already registered by this user. This can write package-managed project integration, but not research, review, or run state. It does not edit shell startup files, user/global Claude or MCP configuration, credentials, or project research state.
 
-- write any project;
-- edit shell startup or shell RC files;
-- write user/global Claude, MCP, or other host configuration; or
-- create or modify project research state.
+The registry lives at `$XDG_CONFIG_HOME/dove/projects.json` (or `~/.config/dove/projects.json` when `XDG_CONFIG_HOME` is unset). Dove never scans the home directory to discover projects. Freshly initialized projects are registered for later upgrades; projects initialized before this registry feature need a one-time import with their exact roots (below). The registry is not a research record.
 
 If the npm binary directory is not already on `PATH`, configure the environment through the user's normal system administration process. Dove does not edit shell configuration on the user's behalf.
 
@@ -72,6 +69,20 @@ Bare `dove` is the project lifecycle menu. In an unconfigured interactive projec
 - silently import, migrate, repair, or delete legacy state.
 
 There is no `dove install` command and no `--platform` option.
+
+## Registered projects and global upgrades
+
+For projects initialized before registration was available, supply exact project roots once; `--sync` imports them and refreshes the registered set now:
+
+```bash
+dove projects import --project <root>... --sync
+```
+
+For registered projects, recover or retry a skipped upgrade with `dove projects sync`. Inspect registration and the last synchronization result without writing with `dove projects status`. Neither command discovers arbitrary projects; import uses only paths you explicitly provide. An ordinary `dove init` registers its project for future global upgrades. If registration reports an occupied `.registry-lock` after an interrupted operation, inspect that exact path and confirm no registration is active before manually removing the stale empty lock directory; Dove does not guess that an occupied lock is safe to steal.
+
+On a global npm install/upgrade **with lifecycle scripts enabled**, `postinstall` attempts the same safe sync for registered projects. It preflights each project's full managed write plan: any owned local drift, missing managed resource, or conflict (including an edited or removed paper-search MCP fragment) blocks that **entire project with zero writes**, even if other managed files need updating. Other registered projects continue. This is deliberately stricter than explicit `dove update`, which may replace valid manifest-owned local edits and names them. Neither automatic nor bulk sync adopts unknown files or changes `.dove/research/**`, `.dove/reviews/**`, or `.dove/runs/**`.
+
+Read the reported per-project outcomes and use `dove projects status` after an upgrade, especially if npm suppresses lifecycle output. `npm install --global --foreground-scripts <exact-dove-package-specifier>` displays it immediately; `--ignore-scripts` skips `postinstall` and **does not cascade**. If one project has already committed its refresh and another fails, the operation reports partial success and exits zero rather than asking npm to roll back a partially applied install; errors before any project commits can return nonzero. Resolve blocked projects deliberately with explicit `dove update` if overwriting their owned edits is intended, then retry `dove projects sync`. Reload any active host session after the integration on disk changes; neither sync nor SessionStart reloads a live context.
 
 ## Dove agent and ordinary entry
 

@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.2.3" : null;
+var injectedVersion = true ? "3.2.4" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -4983,7 +4983,10 @@ function shouldRecordReplacedLocalEdit(options) {
   return options.replacementPolicy === "explicit-update";
 }
 function shouldSkipLocalEdit(options) {
-  return options.replacementPolicy === "inspect";
+  return options.replacementPolicy === "inspect" || options.replacementPolicy === "auto-inspect";
+}
+function shouldPreserveMissing(options) {
+  return options.replacementPolicy === "auto-inspect" || options.replacementPolicy === "auto-safe";
 }
 function emptyPlanResult(entry = null, changed = false) {
   return { entry, changed, skippedLocalEdits: [], replacedLocalEdits: [], retainedManaged: [], omittedManagedKeys: [] };
@@ -4999,7 +5002,13 @@ function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
     throw conflictError(desired);
   }
   if (desired) {
-    if (!observed.exists) return emptyPlanResult(transactionWrite(root, desired, desired.content, observed), true);
+    if (!observed.exists) {
+      if (shouldPreserveMissing(options)) {
+        if (skipDrift) return { ...emptyPlanResult(null, false), skippedLocalEdits: [localEditRecord(resource)], retainedManaged: [oldEntry], omittedManagedKeys: [managedKey2(resource)] };
+        throw driftError(resource, null);
+      }
+      return emptyPlanResult(transactionWrite(root, desired, desired.content, observed), true);
+    }
     const drifted2 = observed.digest !== oldEntry.digest && observed.digest !== desired.digest;
     if (drifted2 && !replaceDrift) {
       if (skipDrift) return { ...emptyPlanResult(null, false), skippedLocalEdits: [localEditRecord(resource)], retainedManaged: [oldEntry], omittedManagedKeys: [managedKey2(resource)] };
@@ -5011,7 +5020,13 @@ function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
       replacedLocalEdits: drifted2 && shouldRecordReplacedLocalEdit(options) ? [localEditRecord(resource)] : []
     };
   }
-  if (!observed.exists) return emptyPlanResult(null, true);
+  if (!observed.exists) {
+    if (shouldPreserveMissing(options)) {
+      if (skipDrift) return { ...emptyPlanResult(null, false), skippedLocalEdits: [localEditRecord(resource)], retainedManaged: [oldEntry], omittedManagedKeys: [managedKey2(resource)] };
+      throw driftError(resource, null);
+    }
+    return emptyPlanResult(null, true);
+  }
   const drifted = observed.digest !== oldEntry.digest;
   if (drifted && !replaceDrift) {
     if (skipDrift) return { ...emptyPlanResult(null, false), skippedLocalEdits: [localEditRecord(resource)], retainedManaged: [oldEntry], omittedManagedKeys: [managedKey2(resource)] };
@@ -5081,6 +5096,13 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
     }
     const current = fragmentState(resource2, next);
     if (oldEntry && !desired && resource2.selector === USER_PROMPT_SUBMIT_SELECTOR) {
+      if (!current.exists && shouldPreserveMissing(options)) {
+        if (skipDrift) {
+          retainSkipped(resource2, oldEntry);
+          continue;
+        }
+        throw driftError(resource2, null);
+      }
       if (current.exists && current.digest === oldEntry.digest) {
         next = removeFragment(resource2, next, current, { force: true });
       }
@@ -5088,6 +5110,13 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
       continue;
     }
     if (oldEntry && !desired && resource2.selector === STATUS_LINE_SELECTOR) {
+      if (!current.exists && shouldPreserveMissing(options)) {
+        if (skipDrift) {
+          retainSkipped(resource2, oldEntry);
+          continue;
+        }
+        throw driftError(resource2, null);
+      }
       if (current.exists && current.digest === oldEntry.digest) {
         next = removeFragment(resource2, next, current, { force: true });
       }
@@ -5103,6 +5132,13 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
     }
     if (desired) {
       if (!current.exists) {
+        if (shouldPreserveMissing(options)) {
+          if (skipDrift) {
+            retainSkipped(resource2, oldEntry);
+            continue;
+          }
+          throw driftError(resource2, null);
+        }
         next = addFragment(desired, next);
         changed = true;
         continue;
@@ -5125,6 +5161,13 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
       continue;
     }
     if (!current.exists) {
+      if (shouldPreserveMissing(options)) {
+        if (skipDrift) {
+          retainSkipped(resource2, oldEntry);
+          continue;
+        }
+        throw driftError(resource2, null);
+      }
       changed = true;
       continue;
     }
@@ -5318,7 +5361,7 @@ function updateProjectIntegration(start, options = {}) {
   return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", prepared.root, prepared.hosts, prepared.manifest, transaction, prepared);
 }
 function inspectProjectIntegration(start, options = {}) {
-  const prepared = prepareInstalledPlan(start, { ...options, replacementPolicy: "inspect" });
+  const prepared = prepareInstalledPlan(start, { ...options, replacementPolicy: options.autoSync === true ? "auto-inspect" : "inspect" });
   const writtenPaths = prepared.entries.filter((entry) => entry.delete !== true).map((entry) => entry.relativePath);
   const removedPaths = prepared.entries.filter((entry) => entry.delete === true).map((entry) => entry.relativePath);
   const needsUpdate = prepared.entries.length > 0 || prepared.skippedLocalEdits.length > 0;

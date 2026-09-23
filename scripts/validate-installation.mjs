@@ -24,6 +24,12 @@ import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCRATCH_ROOT = resolveTempWorkspaceBase();
+const CLI_ENV = {
+  ...process.env,
+  HOME: path.join(SCRATCH_ROOT, "installation-home"),
+  XDG_CONFIG_HOME: path.join(SCRATCH_ROOT, "installation-config"),
+  npm_config_prefix: path.join(SCRATCH_ROOT, "installation-prefix")
+};
 const REFERENCES = [
   [".dove/install/AUTHOR_PREFERENCES.md", fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8")],
   [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()]
@@ -67,7 +73,8 @@ function cliDove(args, options = {}) {
   return spawnSync(process.execPath, [path.join(ROOT, "bin", "dove.mjs"), ...args], {
     cwd: ROOT,
     encoding: "utf8",
-    ...options
+    ...options,
+    env: { ...CLI_ENV, ...options.env }
   });
 }
 
@@ -99,7 +106,7 @@ function assertDoctorReadOnly(root, cliPath = path.join(ROOT, "bin", "dove.mjs")
   const invoke = (args) => spawnSync(process.execPath, [cliPath, "doctor", "--project", root, ...args], {
     cwd: ROOT,
     encoding: "utf8",
-    env: { ...process.env, NO_COLOR: "1" }
+    env: { ...CLI_ENV, NO_COLOR: "1" }
   });
   const json = invoke(["--json"]);
   const human = invoke([]);
@@ -275,7 +282,8 @@ function validateSessionFacts(root, executable) {
       cwd: ROOT,
       input: rawInput ?? JSON.stringify({ hook_event_name: "SessionStart", source, cwd: root, transcript_path: path.join(root, "synthetic-transcript.jsonl"), ...overrides }),
       encoding: "utf8",
-      timeout: 15000
+      timeout: 15000,
+      env: CLI_ENV
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.equal(result.stderr, "", "The hook must not attempt forbidden reads, even when errors are caught.");

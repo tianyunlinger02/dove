@@ -28,6 +28,14 @@ export const CLI_COMMAND_SPECS = Object.freeze({
   reinstall: command([projectOption, ...outputOptions]),
   uninstall: command([projectOption, ...outputOptions]),
   doctor: command([projectOption, ...outputOptions]),
+  projects: command([], {
+    subcommands: {
+      import: command([value("--project", { repeatable: true, dedupe: true }), boolean("--sync"), ...outputOptions]),
+      sync: command(outputOptions),
+      status: command(outputOptions),
+      postinstall: command([])
+    }
+  }),
   review: command([], {
     subcommands: {
       handoff: command(reviewOptions),

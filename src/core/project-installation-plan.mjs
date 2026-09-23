@@ -280,7 +280,11 @@ function shouldRecordReplacedLocalEdit(options) {
 }
 
 function shouldSkipLocalEdit(options) {
-  return options.replacementPolicy === "inspect";
+  return options.replacementPolicy === "inspect" || options.replacementPolicy === "auto-inspect";
+}
+
+function shouldPreserveMissing(options) {
+  return options.replacementPolicy === "auto-inspect" || options.replacementPolicy === "auto-safe";
 }
 
 function emptyPlanResult(entry = null, changed = false) {
@@ -298,7 +302,13 @@ function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
     throw conflictError(desired);
   }
   if (desired) {
-    if (!observed.exists) return emptyPlanResult(transactionWrite(root, desired, desired.content, observed), true);
+    if (!observed.exists) {
+      if (shouldPreserveMissing(options)) {
+        if (skipDrift) return { ...emptyPlanResult(null, false), skippedLocalEdits: [localEditRecord(resource)], retainedManaged: [oldEntry], omittedManagedKeys: [managedKey(resource)] };
+        throw driftError(resource, null);
+      }
+      return emptyPlanResult(transactionWrite(root, desired, desired.content, observed), true);
+    }
     const drifted = observed.digest !== oldEntry.digest && observed.digest !== desired.digest;
     if (drifted && !replaceDrift) {
       if (skipDrift) return { ...emptyPlanResult(null, false), skippedLocalEdits: [localEditRecord(resource)], retainedManaged: [oldEntry], omittedManagedKeys: [managedKey(resource)] };
@@ -310,7 +320,13 @@ function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
       replacedLocalEdits: drifted && shouldRecordReplacedLocalEdit(options) ? [localEditRecord(resource)] : []
     };
   }
-  if (!observed.exists) return emptyPlanResult(null, true);
+  if (!observed.exists) {
+    if (shouldPreserveMissing(options)) {
+      if (skipDrift) return { ...emptyPlanResult(null, false), skippedLocalEdits: [localEditRecord(resource)], retainedManaged: [oldEntry], omittedManagedKeys: [managedKey(resource)] };
+      throw driftError(resource, null);
+    }
+    return emptyPlanResult(null, true);
+  }
   const drifted = observed.digest !== oldEntry.digest;
   if (drifted && !replaceDrift) {
     if (skipDrift) return { ...emptyPlanResult(null, false), skippedLocalEdits: [localEditRecord(resource)], retainedManaged: [oldEntry], omittedManagedKeys: [managedKey(resource)] };
@@ -387,6 +403,13 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
     const current = fragmentState(resource, next);
 
     if (oldEntry && !desired && resource.selector === USER_PROMPT_SUBMIT_SELECTOR) {
+      if (!current.exists && shouldPreserveMissing(options)) {
+        if (skipDrift) {
+          retainSkipped(resource, oldEntry);
+          continue;
+        }
+        throw driftError(resource, null);
+      }
       if (current.exists && current.digest === oldEntry.digest) {
         next = removeFragment(resource, next, current, { force: true });
       }
@@ -395,6 +418,13 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
     }
 
     if (oldEntry && !desired && resource.selector === STATUS_LINE_SELECTOR) {
+      if (!current.exists && shouldPreserveMissing(options)) {
+        if (skipDrift) {
+          retainSkipped(resource, oldEntry);
+          continue;
+        }
+        throw driftError(resource, null);
+      }
       if (current.exists && current.digest === oldEntry.digest) {
         next = removeFragment(resource, next, current, { force: true });
       }
@@ -412,6 +442,13 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
 
     if (desired) {
       if (!current.exists) {
+        if (shouldPreserveMissing(options)) {
+          if (skipDrift) {
+            retainSkipped(resource, oldEntry);
+            continue;
+          }
+          throw driftError(resource, null);
+        }
         next = addFragment(desired, next);
         changed = true;
         continue;
@@ -435,6 +472,13 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
     }
 
     if (!current.exists) {
+      if (shouldPreserveMissing(options)) {
+        if (skipDrift) {
+          retainSkipped(resource, oldEntry);
+          continue;
+        }
+        throw driftError(resource, null);
+      }
       changed = true;
       continue;
     }
