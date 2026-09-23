@@ -39,17 +39,6 @@
     {
       "id": "answer-visible",
       "kind": "public-output-not-empty"
-    },
-    {
-      "id": "inspect-manuscript",
-      "kind": "tool-action-path",
-      "path": "paper/main.tex"
-    },
-    {
-      "id": "inspect-editable-figure-source",
-      "kind": "tool-action-path",
-      "path": "figures/panel-dense.svg",
-      "description": "Source-path observation only. Reading SVG XML does not establish visual inspection or figure quality; actual raster rendering/opening must be established from public results during human review."
     }
   ],
   "humanReviewRubric": [

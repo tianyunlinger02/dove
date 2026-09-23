@@ -51,7 +51,8 @@ export function recommendedDoveAction(result) {
     return { ...first, message: messages[first.kind] ?? "按提示处理当前 Dove 状态。" };
   }
   if (!result.staticChecksPassed) {
-    return { kind: "inspect", command: "dove doctor --json", message: "静态检查仍有未通过项，但没有可安全自动建议的修复动作；请查看 JSON 诊断中的软件、项目接入和研究文档外层状态。" };
+    const target = typeof result.target === "string" && result.target ? ` --project '${result.target.replace(/'/gu, "'\\''")}'` : "";
+    return { kind: "inspect", command: `dove doctor --json${target}`, message: "静态检查仍有未通过项，但没有可安全自动建议的修复动作；请查看 JSON 诊断中的软件、项目接入和研究文档外层状态。" };
   }
   return { kind: "static-checks-passed", command: "无需处理", message: "Dove 软件、package-managed 项目接入和研究文档外层静态检查通过；这不证明当前宿主会话已加载 agent、Skills、Hooks 或 MCP，也不代表运行时或科研就绪。" };
 }

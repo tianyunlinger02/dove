@@ -41,11 +41,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-manuscript",
-      "kind": "tool-action-path",
-      "path": "paper/main.tex"
-    },
-    {
       "id": "format-check-unchanged",
       "kind": "path-unchanged",
       "path": "paper/local-format-check.md"

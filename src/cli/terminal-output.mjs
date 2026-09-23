@@ -89,6 +89,18 @@ function terminalSafeText(value) {
   return String(value).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
 }
 
+function cleanupWarningNotice(result) {
+  const warnings = Array.isArray(result?.cleanupWarnings) ? result.cleanupWarnings : [];
+  const omitted = Number.isSafeInteger(result?.omittedCleanupWarningCount) ? result.omittedCleanupWarningCount : 0;
+  const total = warnings.length + omitted;
+  if (total === 0) return [];
+  const listed = warnings.slice(0, 6).map((warning) => `${terminalSafeText(warning?.path ?? "unknown")}（${terminalSafeText(warning?.reason ?? "unknown reason")}）`);
+  return [
+    `警告：主操作已提交，但事务清理仍有 ${total} 项未完成${listed.length > 0 ? `：${listed.join("；")}` : ""}${total > listed.length ? "；其余未列出" : ""}。`,
+    "这些残留不表示项目集成回滚；请在确认路径安全后检查并清理。"
+  ];
+}
+
 export function renderCompleteReinstallInventory(preview, options = {}) {
   if (!preview || preview.action !== "reinstall" || typeof preview.target !== "string" || !Array.isArray(preview.removedPaths) || !Array.isArray(preview.replacedPaths)) {
     throw new Error("Complete Reinstall inventory is invalid.");
@@ -151,7 +163,8 @@ export function renderDoveLifecycleResult(command, result, options = {}) {
       "",
       "✓ Dove 项目接入、命令、agent、Hooks、MCP 声明和安装记录已移除",
       "✓ .dove/research/**、.dove/reviews/**、.dove/runs/** 与 .dove/install/DOCTOR.md 已保留",
-      "✓ 未管理的项目文件未被修改"
+      "✓ 未管理的项目文件未被修改",
+      ...cleanupWarningNotice(result)
     ].join("\n");
   }
   if (command !== "reinstall" || result?.status !== "reinstalled") {
@@ -173,6 +186,7 @@ export function renderDoveLifecycleResult(command, result, options = {}) {
     "✓ 普通项目文件与用户级 Dove 安装未被管理",
     "",
     preferenceActivation,
+    ...cleanupWarningNotice(result),
     "",
     "研究文档只是研究者维护的普通入口，不代表科研工作、结论或验证已经完成。"
   ].join("\n");

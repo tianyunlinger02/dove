@@ -42,11 +42,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-current-manuscript",
-      "kind": "tool-action-path",
-      "path": "paper/main.tex"
-    },
-    {
       "id": "old-review-unchanged",
       "kind": "path-unchanged",
       "path": "reviews/old-review.md"

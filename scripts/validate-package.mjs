@@ -462,7 +462,7 @@ assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "runs:validate"), true);
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "behavior:validate"), true);
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "behavior:eval"), true);
 for (const script of REQUIRED_SCRIPTS) assert.equal(typeof packageJson.scripts?.[script], "string", `missing package script ${script}`);
-assert.match(packageJson.scripts.check, /npm run behavior:validate/u, "check must include deterministic behavior validation");
+assert.doesNotMatch(packageJson.scripts.check, /behavior:(?:validate|eval)/u, "default check must not treat behavior evaluation as a release gate");
 assert.doesNotMatch(packageJson.scripts["release:check"], /behavior:eval/u, "release:check must not invoke the real behavior runner");
 assert.equal(packageJson.files.some((entry) => entry === "evals" || entry.startsWith("evals/")), false, "behavior eval corpus must not be packed");
 for (const script of FORBIDDEN_SCRIPTS) assert.equal(Object.hasOwn(packageJson.scripts ?? {}, script), false, `retired package script remains: ${script}`);

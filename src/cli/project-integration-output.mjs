@@ -71,6 +71,21 @@ function replacedLocalEditNotice(result) {
   ];
 }
 
+function cleanupWarningNotice(result) {
+  const warnings = Array.isArray(result.cleanupWarnings) ? result.cleanupWarnings : [];
+  const omitted = Number.isSafeInteger(result.omittedCleanupWarningCount) ? result.omittedCleanupWarningCount : 0;
+  if (warnings.length === 0 && omitted <= 0) return [];
+  const entries = warnings.slice(0, 6).map((warning) => {
+    const pathName = terminalSafeText(warning?.path ?? "unknown");
+    const reason = terminalSafeText(warning?.reason ?? "unknown reason");
+    return `${pathName}（${reason}）`;
+  });
+  return [
+    `警告：主操作已提交，但事务清理仍有 ${warnings.length + omitted} 项未完成${entries.length > 0 ? `：${entries.join("；")}` : ""}${warnings.length + omitted > entries.length ? "；其余未列出" : ""}。`,
+    "这些残留不表示项目集成回滚；请在确认路径安全后检查并清理。"
+  ];
+}
+
 function headingFor(command, status) {
   if (command === "init" && status === "initialized") return "Dove 已在此项目启用";
   if (command === "init" && status === "already-initialized") return "Dove 已经在此项目启用";
@@ -135,6 +150,7 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
     );
   }
   lines.push(...replacedLocalEditNotice(result));
+  lines.push(...cleanupWarningNotice(result));
   lines.push("");
   if (command === "init" && result.status === "already-initialized") {
     lines.push("本次 init 未安装或刷新作者偏好及宿主读取引导；不能据此确认完整引用或引导已就绪。如需刷新，请显式运行 dove update。安装本身不代表模型已经读过。", "");

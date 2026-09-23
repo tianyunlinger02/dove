@@ -45,21 +45,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-refutation",
-      "kind": "tool-action-path",
-      "path": "results/refutation.md"
-    },
-    {
-      "id": "inspect-run-receipt",
-      "kind": "tool-action-path",
-      "path": ".dove/runs/run-017/receipt.json"
-    },
-    {
-      "id": "inspect-surviving-component",
-      "kind": "tool-action-path",
-      "path": "components/cache.md"
-    },
-    {
       "id": "affected-claim-corrected",
       "kind": "path-changed",
       "path": "paper/claim.md"

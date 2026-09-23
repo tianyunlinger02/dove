@@ -249,7 +249,7 @@ function prepareUninstall(start, options = {}) {
 function uninstallPreview(prepared) {
   const writtenPaths = prepared.entries.filter((entry) => entry.delete !== true).map((entry) => entry.relativePath);
   const removedPaths = prepared.entries.filter((entry) => entry.delete === true).map((entry) => entry.relativePath);
-  return {
+  const preview = {
     status: "ready",
     action: "uninstall",
     target: prepared.root,
@@ -260,6 +260,26 @@ function uninstallPreview(prepared) {
     preservedPaths: [".dove/research/**", ".dove/reviews/**", ".dove/runs/**", ".dove/install/DOCTOR.md"],
     confirmation: { required: true, default: false }
   };
+  Object.defineProperty(preview, "approvalState", {
+    value: prepared.entries.map((entry) => ({
+      path: entry.relativePath,
+      expectedState: entry.expectedState
+    })),
+    enumerable: false
+  });
+  return preview;
+}
+
+function uninstallPreviewScope(preview) {
+  return JSON.stringify({
+    target: preview.target,
+    hosts: preview.hosts,
+    writtenPaths: preview.writtenPaths,
+    removedPaths: preview.removedPaths,
+    changedPaths: preview.changedPaths,
+    preservedPaths: preview.preservedPaths,
+    approvalState: preview.approvalState
+  });
 }
 
 export function previewProjectUninstall(start, options = {}) {
@@ -268,7 +288,12 @@ export function previewProjectUninstall(start, options = {}) {
 
 export function uninstallProjectIntegration(start, options = {}) {
   if (options.confirmed !== true) throw new Error("Dove uninstall requires confirmed: true after displaying the exact removal scope.");
+  if (!options.preview || options.preview.action !== "uninstall") throw new Error("Dove uninstall requires the approved uninstall preview.");
   const prepared = prepareUninstall(start, options);
+  const currentPreview = uninstallPreview(prepared);
+  if (uninstallPreviewScope(currentPreview) !== uninstallPreviewScope(options.preview)) {
+    throw new Error("Dove uninstall preview is stale; review the current removal scope and confirm again.");
+  }
   const transaction = writeFileSetTransaction(prepared.entries, transactionOptions(prepared.fsOps));
   return {
     status: "uninstalled",

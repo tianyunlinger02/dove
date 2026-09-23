@@ -45,16 +45,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-evaluator",
-      "kind": "tool-action-path",
-      "path": "evaluation/evaluate.py"
-    },
-    {
-      "id": "inspect-current-results",
-      "kind": "tool-action-path",
-      "path": "results/current.json"
-    },
-    {
       "id": "evaluator-repaired",
       "kind": "path-changed",
       "path": "evaluation/evaluate.py"

@@ -142,8 +142,8 @@ function parseTokens(argv, specs, jsonRequested) {
     return result(commandName, null, {}, []);
   }
 
+  if (!Object.hasOwn(specs, commandName)) fail(`Dove 不支持这个命令：${commandName}。`);
   const commandSpec = specs[commandName];
-  if (!commandSpec) fail(`Dove 不支持这个命令：${commandName}。`);
 
   let subcommandName = null;
   let spec = commandSpec;

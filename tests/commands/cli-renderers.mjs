@@ -89,6 +89,9 @@ function assertRuntimeCli() {
   assertParserError(["run", "start", "--project", "/workspace", "node"], /run start 需要在 '--' 后提供要执行的命令/iu, false);
   assertParserError(["run", "start", "--project", "/workspace", "node", "--", "script.mjs"], /Dove 选项必须写在 '--' 前/iu, false);
   assertParserError(["mcp", "serve"], /Dove 不支持这个命令：mcp/iu, false);
+  for (const command of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+    assertParserError([command], new RegExp(`Dove 不支持这个命令：${command}`), false);
+  }
   assertParserError(["review"], /review 只接受这些子命令/iu, false);
   assertParserError(["review", "unknown"], /review 只接受这些子命令/iu, false);
 }
@@ -160,6 +163,19 @@ function assertProjectIntegrationRenderer() {
   assert.match(output, /当前主 agent（普通 Claude 或显式 Dove）亲自完整读取/u);
   assert.match(output, /安装本身不代表模型已经读过/u);
   assert.match(output, /已经打开的主 agent.*现在应先完整读取/u);
+  const warningOutput = renderProjectIntegrationResult("update", {
+    status: "updated",
+    target: "/workspace/example-project",
+    hosts: ["claude"],
+    writtenPaths: [],
+    removedPaths: [],
+    changedPaths: [],
+    cleanupWarnings: [{ path: `.claude/transactions${String.fromCharCode(7)}`, reason: "permission denied" }],
+    omittedCleanupWarningCount: 2
+  }, { stream: { isTTY: false }, env: {} });
+  assert.match(warningOutput, /主操作已提交.*3 项/u);
+  assert.match(warningOutput, /transactions\?[^\n]*permission denied/u);
+  assert.match(warningOutput, /不表示项目集成回滚/u);
 
   const initializedResult = {
     status: "initialized",
@@ -228,6 +244,14 @@ function assertProjectIntegrationRenderer() {
   assert.match(claudeReinstall, /当前已打开的主 agent现在应亲自完整读取/u);
   assert.match(claudeReinstall, /新开 Claude 会话或在现有会话中 \/clear/u);
   assert.match(claudeReinstall, /安装本身不代表已经读过/u);
+  const warningReinstall = renderDoveLifecycleResult("reinstall", {
+    status: "reinstalled",
+    hosts: ["claude"],
+    cleanupWarnings: [{ path: `.dove/transaction${String.fromCharCode(7)}`, reason: "busy" }],
+    omittedCleanupWarningCount: 1
+  }, { stream: { isTTY: false }, env: {} });
+  assert.match(warningReinstall, /主操作已提交.*2 项/u);
+  assert.match(warningReinstall, /不表示项目集成回滚/u);
   const dshReinstall = renderDoveLifecycleResult("reinstall", {
     status: "reinstalled",
     hosts: ["dsh"]

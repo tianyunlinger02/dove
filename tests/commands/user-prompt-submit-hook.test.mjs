@@ -12,14 +12,14 @@ function assertCurrentResearchReanchor(output) {
   const context = output.hookSpecificOutput.additionalContext;
   assert.ok(context.length < 900);
   assert.match(context, /problem → method → contribution/u);
-  assert.match(context, /interfaces[^.\n]*do not define the scientific goal/iu);
-  assert.match(context, /available assets\/supervision/iu);
-  assert.match(context, /supplied solutions/iu);
-  assert.match(context, /past effort/iu);
-  assert.match(context, /scientific contract is clear enough/iu);
+  assert.match(context, /user's live/iu);
+  assert.match(context, /fixed constraints, and inspected evidence/iu);
+  assert.match(context, /one authorized action/iu);
   assert.match(context, /producer-consumer path/iu);
-  assert.match(context, /without prior positive signal/iu);
-  assert.match(context, /material mainline\/completion changes remain the user's decision/iu);
+  assert.match(context, /prior positive evidence/iu);
+  assert.match(context, /refuted premise stops dependent investment/iu);
+  assert.match(context, /corrections change all affected tasks and delegation/iu);
+  assert.match(context, /mainline or completion changes remain the user's decision/iu);
 }
 
 test("UserPromptSubmit emits identical canonical context for every prompt without interpreting host metadata", () => {

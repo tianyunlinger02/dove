@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
-import { DOVE_REVIEW_QUALITY_REFERENCE_PATH, reviewWorkspaceName } from "../src/core/review-workspace.mjs";
+import { DOVE_REVIEW_QUALITY_REFERENCE_PATH, createReviewGuidance, reviewWorkspaceName } from "../src/core/review-workspace.mjs";
 import { DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS, renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
 import { renderDoveAuthorStanceSection, renderDoveReviewerStanceSection, renderDoveSharedResearchContractSection } from "../src/core/dove-agent-persona.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
@@ -203,7 +203,7 @@ const referencePath = ${JSON.stringify(DOVE_REVIEW_QUALITY_REFERENCE_PATH)};
 assert.ok(input.includes(referencePath));
 assert.match(input, /package guidance/iu);
 assert.doesNotMatch(input, /sha256|[a-f0-9]{64}/iu);
-assert.equal(fs.readFileSync(path.join(process.cwd(), referencePath), "utf8"), ${JSON.stringify(renderDoveResearchQualityReference())});
+assert.equal(fs.readFileSync(path.join(process.cwd(), referencePath), "utf8"), process.env.DOVE_FAKE_GUIDANCE ?? ${JSON.stringify(renderDoveResearchQualityReference())});
 assert.doesNotMatch(input, /^## Author stance$/mu);
 
 const allowed = new Set();
@@ -312,6 +312,11 @@ try {
   const reviewRecordPath = path.join(project, ".dove", "reviews", reviewId, "review.json");
   const record1 = readJson(reviewRecordPath);
   assert.equal(record1.session.sessionId, handoff.sessionId);
+  assert.deepEqual(record1.rounds[0].guidance, {
+    schema: "dove.review.guidance.v1",
+    package: { name: PACKAGE_NAME, version: PACKAGE_VERSION },
+    sha256: sha256(Buffer.from(renderDoveResearchQualityReference(), "utf8"))
+  });
   assert.equal(record1.rounds[0].reportPath, `.dove/reviews/${reviewId}/rounds/1/report.md`);
   assert.equal(Object.hasOwn(record1.rounds[0], "reportSha256"), false);
   assert.equal(fs.existsSync(path.join(project, record1.rounds[0].reportPath)), true);
@@ -435,6 +440,8 @@ try {
   assert.equal(rerun.sessionId, handoff.sessionId);
   assert.deepEqual(rerun.materials.map((item) => item.path), ["paper/main.tex", "paper/supplement.tex"]);
   assert.deepEqual(listFiles(handoff.workspaceRoot), [DOVE_REVIEW_QUALITY_REFERENCE_PATH, "paper/main.tex", "paper/supplement.tex"]);
+  const record2 = readJson(reviewRecordPath);
+  assert.deepEqual(record2.rounds[0].guidance, record2.rounds[1].guidance);
   const backend2 = readJson(path.join(project, ".dove", "reviews", reviewId, "rounds", "2", "backend.json"));
   assert.equal(backend2.argv.includes("--resume"), true);
   assert.equal(backend2.requestedSessionId, handoff.sessionId);
@@ -897,6 +904,82 @@ try {
   const foreignBefore = directoryObservationDigest(firstA.workspaceRoot);
   assert.throws(() => publicCore.rerunReview({ ...legacyOptions, id: fresh.reviewId }), /recorded workspace must belong to this project/u);
   assertDigestEqual(directoryObservationDigest(firstA.workspaceRoot), foreignBefore, "a foreign project's recorded cwd must not authorize replacement");
+
+  // A pending runtime round keeps the package guidance it actually received,
+  // even when the installed renderer has since changed. A new rerun adopts
+  // the current guidance; an unprovable identity fails closed before launch.
+  const historicalProject = makeProject(tempRoot, "historical-guidance");
+  const historicalOptions = {
+    project: historicalProject,
+    id: "historical-guidance",
+    venue: "TestConf 2026",
+    materials: ["paper/main.tex"],
+    stateRoot,
+    env,
+    claudeCommand: fakeClaude
+  };
+  const historicalFirst = publicCore.handoffReview(historicalOptions);
+  assert.equal(historicalFirst.status, "completed");
+  const historicalContent = Buffer.from(
+    `${renderDoveResearchQualityReference()}\n\nHistorical package guidance frozen for this round.\n`,
+    "utf8"
+  );
+  const historicalGuidance = createReviewGuidance({
+    content: historicalContent,
+    packageName: PACKAGE_NAME,
+    packageVersion: "3.1.0"
+  });
+  assert.notEqual(historicalContent.toString("utf8"), renderDoveResearchQualityReference());
+  const historicalRecordPath = path.join(historicalProject, ".dove", "reviews", "historical-guidance", "review.json");
+  const historicalRecord = readJson(historicalRecordPath);
+  historicalRecord.rounds[0].guidance = {
+    schema: historicalGuidance.schema,
+    package: historicalGuidance.package,
+    sha256: historicalGuidance.sha256
+  };
+  writeJson(historicalRecordPath, historicalRecord);
+  fs.writeFileSync(path.join(historicalFirst.workspaceRoot, DOVE_REVIEW_QUALITY_REFERENCE_PATH), historicalContent);
+  const historicalResume = publicCore.resumeReview({
+    ...historicalOptions,
+    env: { ...env, DOVE_FAKE_GUIDANCE: historicalContent.toString("utf8") }
+  });
+  assert.equal(historicalResume.status, "completed");
+  assertNoPublicHashFields(historicalResume);
+  assert.deepEqual(readJson(historicalRecordPath).rounds[0].guidance, {
+    schema: historicalGuidance.schema,
+    package: historicalGuidance.package,
+    sha256: historicalGuidance.sha256
+  });
+
+  writeFile(historicalProject, "paper/main.tex", "Historical project current rerun material.\n");
+  const historicalRerun = publicCore.rerunReview(historicalOptions);
+  assert.equal(historicalRerun.status, "completed");
+  assertNoPublicHashFields(historicalRerun);
+  const currentGuidance = createReviewGuidance();
+  const historicalAfterRerun = readJson(historicalRecordPath);
+  assert.notDeepEqual(historicalAfterRerun.rounds[0].guidance, historicalAfterRerun.rounds[1].guidance);
+  assert.deepEqual(historicalAfterRerun.rounds[1].guidance, {
+    schema: currentGuidance.schema,
+    package: currentGuidance.package,
+    sha256: currentGuidance.sha256
+  });
+  assert.deepEqual(
+    fs.readFileSync(path.join(historicalRerun.workspaceRoot, DOVE_REVIEW_QUALITY_REFERENCE_PATH)),
+    currentGuidance.content
+  );
+
+  const missingGuidanceRecord = readJson(historicalRecordPath);
+  delete missingGuidanceRecord.rounds[1].guidance;
+  writeJson(historicalRecordPath, missingGuidanceRecord);
+  const logBeforeMissingGuidance = fs.readFileSync(fakeLog, "utf8");
+  const missingGuidance = publicCore.resumeReview(historicalOptions);
+  assert.equal(missingGuidance.status, "failed");
+  assertNoPublicHashFields(missingGuidance);
+  assert.match(
+    readJson(path.join(historicalProject, missingGuidance.latestBackendPath)).error,
+    /frozen package guidance identity must be an object/u
+  );
+  assert.equal(fs.readFileSync(fakeLog, "utf8"), logBeforeMissingGuidance, "missing guidance identity must fail closed before reviewer launch");
 
   for (const [label, core] of coreEntries) {
     for (const internal of ["createReviewSnapshot", "snapshotDigest", "runClaudeReviewBackend"]) {

@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { DOVE_REVIEW_BACKEND_ID, runClaudeReviewBackend } from "./review-claude-backend.mjs";
 import { REVIEW_MATERIAL_DENY_PATTERNS, createReviewSnapshot } from "./review-snapshot.mjs";
-import { DOVE_REVIEW_QUALITY_REFERENCE_PATH, assertReviewWorkspaceMatchesSnapshot, createReviewId, finalizePreparedReviewWorkspace, normalizeReviewId, prepareReviewWorkspace, resolveReviewStateRoot, restorePreparedReviewWorkspace, reviewWorkspaceName } from "./review-workspace.mjs";
+import { DOVE_REVIEW_QUALITY_REFERENCE_PATH, assertReviewWorkspaceMatchesSnapshot, createReviewGuidance, createReviewId, finalizePreparedReviewWorkspace, normalizeReviewGuidanceIdentity, normalizeReviewId, prepareReviewWorkspace, resolveReviewStateRoot, restorePreparedReviewWorkspace, reviewWorkspaceName } from "./review-workspace.mjs";
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
 import { resolveInstalledProjectRoot } from "./project-root.mjs";
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
@@ -172,6 +172,9 @@ function reportBytesForOutcome(outcome) {
 
 function makeRoundRecord(options) {
   const paths = roundPaths(options.reviewId, options.round);
+  const guidance = options.provenance === "imported" && (options.guidance === undefined || options.guidance === null)
+    ? null
+    : normalizeReviewGuidanceIdentity(options.guidance, "Dove review round guidance");
   return {
     round: options.round,
     status: options.status,
@@ -185,6 +188,7 @@ function makeRoundRecord(options) {
     latestReportPath: options.latestReportPath ?? paths.report,
     latestBackendPath: options.latestBackendPath ?? paths.backend,
     materials: options.materials,
+    guidance,
     sessionId: options.sessionId ?? null,
     imported: options.provenance === "imported",
     attempts: Array.isArray(options.attempts) ? options.attempts : []
@@ -266,7 +270,7 @@ function localBackendFailure(error, options = {}) {
   };
 }
 
-function prepareRuntimeRound(projectRoot, record, snapshot, workspaceRoot, requestedSessionId, options = {}) {
+function prepareRuntimeRound(projectRoot, record, snapshot, workspaceRoot, requestedSessionId, guidance, options = {}) {
   const now = exactIsoTimestamp(options.now ?? new Date());
   const existingRound = record.rounds.find((item) => item.round === snapshot.round);
   const roundRecord = existingRound
@@ -274,7 +278,7 @@ function prepareRuntimeRound(projectRoot, record, snapshot, workspaceRoot, reque
     : {
       ...makeRoundRecord({
         reviewId: record.id, round: snapshot.round, status: "pending", provenance: "runtime",
-        venue: snapshot.venue, createdAt: now, updatedAt: now, materials: snapshot.materials
+        venue: snapshot.venue, createdAt: now, updatedAt: now, materials: snapshot.materials, guidance
       }),
       reportPath: null, backendPath: null, latestReportPath: null, latestBackendPath: null
     };
@@ -309,6 +313,7 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
       })
     ]
     : Array.isArray(existingRound?.attempts) ? existingRound.attempts : [];
+  const roundGuidance = existingRound?.guidance ?? options.guidance;
   const roundRecord = appendAttempt
     ? {
       ...existingRound,
@@ -328,6 +333,7 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
       createdAt: options.roundCreatedAt ?? now,
       updatedAt: now,
       materials: snapshot.materials,
+      guidance: roundGuidance,
       latestReportPath: paths.report,
       latestBackendPath: paths.backend,
       sessionId: backend.sessionId ?? null,
@@ -618,12 +624,13 @@ export function handoffReview(options = {}) {
     if (reviewDirectoryState.exists) throw new Error(`Dove review path already exists without a valid record: ${reviewBasePath(reviewId)}.`);
     const createdAt = exactIsoTimestamp(options.now ?? new Date());
     const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round: 1, venue: options.venue, materials: options.materials, now: createdAt, fsOps });
-    const workspace = prepareReviewWorkspace({ reviewId, files, ...stateRootOptions({ ...options, projectRoot }) });
+    const guidance = createReviewGuidance();
+    const workspace = prepareReviewWorkspace({ reviewId, files, guidance, ...stateRootOptions({ ...options, projectRoot }) });
     const sessionId = options.sessionId ?? crypto.randomUUID();
     const prompt = promptForRound({ operation: "handoff", reviewId, round: 1, venue: options.venue, snapshot });
     let record = newRecord({ reviewId, projectRoot, venue: options.venue, createdAt, updatedAt: createdAt });
     try {
-      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, { ...options, recordExpectedState: existingRecord.expectedState });
+      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, guidance, { ...options, recordExpectedState: existingRecord.expectedState });
     } catch (error) {
       restorePreparedReviewWorkspace(workspace, stateRootOptions({ ...options, projectRoot }));
       throw error;
@@ -663,13 +670,14 @@ export function resumeReview(options = {}) {
     let workspace;
     let outcome;
     try {
-      workspace = assertReviewWorkspaceMatchesSnapshot({ reviewId, snapshot, ...stateRootOptions({ ...options, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) });
+      const guidance = normalizeReviewGuidanceIdentity(existingRound.guidance, "Dove review frozen package guidance");
+      workspace = assertReviewWorkspaceMatchesSnapshot({ reviewId, snapshot, guidance, ...stateRootOptions({ ...options, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) });
     } catch (error) {
       outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options) };
     }
     if (workspace) {
       const prompt = promptForRound({ operation: "resume", reviewId, round, venue: record.venue, snapshot });
-      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, { ...options, recordExpectedState: expectedState });
+      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, existingRound.guidance, { ...options, recordExpectedState: expectedState });
       expectedState = fileState(projectRoot, reviewPath(reviewId), { fsOps });
       try {
         outcome = runClaudeReviewBackend({
@@ -686,7 +694,7 @@ export function resumeReview(options = {}) {
       }
     }
     const reportBytes = reportBytesForOutcome(outcome);
-    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round, roundCreatedAt: existingRound.createdAt ?? exactIsoTimestamp(options.now ?? new Date()), recordExpectedState: expectedState });
+    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round, guidance: existingRound.guidance, roundCreatedAt: existingRound.createdAt ?? exactIsoTimestamp(options.now ?? new Date()), recordExpectedState: expectedState });
     return publicReviewResult("resume", projectRoot, written.record, written.round, { workspaceRoot: workspace?.workspaceRoot ?? null, latestReportPath: written.reportPath, latestBackendPath: written.backendPath });
   });
 }
@@ -703,11 +711,12 @@ export function rerunReview(options = {}) {
     const createdAt = exactIsoTimestamp(options.now ?? new Date());
     const venue = options.venue ?? record.venue ?? null;
     const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round, venue, materials: options.materials, now: createdAt, fsOps });
+    const guidance = createReviewGuidance();
     const workspaceOptions = { ...stateRootOptions({ ...options, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) };
-    const workspace = prepareReviewWorkspace({ reviewId, files, keepPreviousWorkspaceBackup: true, ...workspaceOptions });
+    const workspace = prepareReviewWorkspace({ reviewId, files, guidance, keepPreviousWorkspaceBackup: true, ...workspaceOptions });
     const prompt = promptForRound({ operation: "rerun", reviewId, round, venue, snapshot });
     try {
-      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, { ...options, recordExpectedState: expectedState });
+      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, guidance, { ...options, recordExpectedState: expectedState });
     } catch (error) {
       restorePreparedReviewWorkspace(workspace, workspaceOptions);
       throw error;
@@ -729,7 +738,7 @@ export function rerunReview(options = {}) {
       outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options) };
     }
     const reportBytes = reportBytesForOutcome(outcome);
-    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round, roundCreatedAt: createdAt, recordExpectedState: expectedState });
+    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options, round, guidance, roundCreatedAt: createdAt, recordExpectedState: expectedState });
     return publicReviewResult("rerun", projectRoot, written.record, written.round, { workspaceRoot: workspace.workspaceRoot });
   });
 }

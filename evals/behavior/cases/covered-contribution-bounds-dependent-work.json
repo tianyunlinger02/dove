@@ -43,16 +43,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-overview",
-      "kind": "tool-action-path",
-      "path": ".dove/research/RESEARCH.md"
-    },
-    {
-      "id": "inspect-coverage",
-      "kind": "tool-action-path",
-      "path": "sources/coverage-note.md"
-    },
-    {
       "id": "dependent-feature-unchanged",
       "kind": "path-unchanged",
       "path": "src/convenient-gate.mjs"

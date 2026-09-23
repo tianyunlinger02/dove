@@ -89,6 +89,7 @@ export function assertDoveStatusLineRenderer() {
 export function assertResearchMainlineParsing() {
   assert.equal(parseResearchMainline("# Research\r\n\r\nMainline:  确认的问题与目标  \r\n"), "确认的问题与目标");
   assert.equal(parseResearchMainline("Mainline: Current goal"), "Current goal");
+  assert.equal(parseResearchMainline("# Research\n\nParagraph\n\nMainline: Current goal"), "Current goal");
   for (const text of [
     "", "# Mainline: Heading", "Mainline: Heading\n===", "Mainline: Heading\n---",
     "- Mainline: List", "> Mainline: Quote",
@@ -100,7 +101,11 @@ export function assertResearchMainlineParsing() {
     "The confirmed mainline is described only in prose.",
     "<!--\nMainline: Hidden goal\n-->", "<!-- Mainline: Hidden goal -->",
     "<!--\nMainline: Unclosed comment",
-    "<!--\nMainline: Hidden\n-->\nMainline: First\nMainline: Second"
+    "<!--\nMainline: Hidden\n-->\nMainline: First\nMainline: Second",
+    "> quoted paragraph\nMainline: quoted continuation",
+    "- list paragraph\nMainline: list continuation",
+    "<pre>\nMainline: code example\n</pre>",
+    "ordinary paragraph\nMainline: lazy continuation"
   ]) assert.equal(parseResearchMainline(text), null, text);
   const examples = "---\nMainline: Metadata\n---\n````md\n```\nMainline: Example\n````\n" +
     "~~~\nMainline: Another example\n~~~\nMainline: Actual goal\n> Mainline: Quote\n";

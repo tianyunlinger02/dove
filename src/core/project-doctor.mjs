@@ -150,11 +150,20 @@ function researchState(root, options) {
   }
 }
 
+function shellQuote(value) {
+  return `'${String(value).replace(/'/gu, "'\\''")}'`;
+}
+
+function projectCommand(command, target) {
+  return `${command} --project ${shellQuote(target)}`;
+}
+
 function actionsFor(result) {
-  if (result.setup.mode === "uninitialized") return [{ kind: "init", command: "dove init" }];
-  if (result.setup.mode === "needs-update") return [{ kind: "update", command: "dove update" }];
+  const target = typeof result.target === "string" && result.target ? result.target : null;
+  if (result.setup.mode === "uninitialized") return [{ kind: "init", command: target ? projectCommand("dove init", target) : "dove init" }];
+  if (result.setup.mode === "needs-update") return [{ kind: "update", command: target ? projectCommand("dove update", target) : "dove update" }];
   if (result.setup.mode === "blocked" || result.projectIntegration.retiredHooks?.matchedPaths.length > 0) {
-    return [{ kind: "inspect", command: "dove doctor --json" }];
+    return [{ kind: "inspect", command: target ? projectCommand("dove doctor --json", target) : "dove doctor --json" }];
   }
   return [];
 }

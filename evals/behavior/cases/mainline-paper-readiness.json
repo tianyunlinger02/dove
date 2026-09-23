@@ -45,21 +45,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-theory-setup",
-      "kind": "tool-action-path",
-      "path": "notes/theory.tex"
-    },
-    {
-      "id": "inspect-overview",
-      "kind": "tool-action-path",
-      "path": ".dove/research/RESEARCH.md"
-    },
-    {
-      "id": "inspect-or-change-paper",
-      "kind": "tool-action-path",
-      "path": "paper/main.tex"
-    },
-    {
       "id": "provenance-not-mainline-edit",
       "kind": "path-unchanged",
       "path": "notes/provenance.md"

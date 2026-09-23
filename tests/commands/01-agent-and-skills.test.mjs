@@ -156,7 +156,21 @@ test("material decision consequences stay in standing and full quality guidance"
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /completes an agreed bounded deliverable/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /close the round/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /stop dependent investment/iu);
-  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /preserving independent useful work/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /preserve independent useful authorized work/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /one grounded recommendation with its strongest objection, decisive test/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /stop or pause stoppable dependent work before extending it/iu);
+});
+
+test("Experiment permits early diagnostics but rejects incomparable controls and proxy milestones", () => {
+  const experiment = COMMAND_SURFACE_BY_ID["dove.experiment"].contract;
+  const value = [...experiment.responsibilities, ...experiment.actions].join("\n");
+  assert.match(value, /single-case diagnostic with a working input-to-result chain/iu);
+  assert.match(value, /before multi-case robustness or paper-level sufficiency/iu);
+  assert.match(value, /not.*confirmatory positive/iu);
+  assert.match(value, /actual control still has the claimed input, candidate support, budget, execution semantics/iu);
+  assert.match(value, /non-equivalent control leaves a diagnostic or comparison failure/iu);
+  assert.match(value, /events needed by a scientific downstream consumer/iu);
+  assert.match(experiment.boundaries.join("\n"), /Design-only work does not authorize diagnostic or experiment execution/iu);
 });
 
 test("Experiment candidate coverage keeps generation, selection, and end-to-end conclusions distinct", () => {
@@ -203,7 +217,7 @@ test("research entrances retain one spine and distinguish scientific goals from 
     assert.match(context, /Controls, baselines, diagnostics/iu);
     assert.match(context, /Before major expansion/iu);
     assert.match(context, /shared mistaken premise/iu);
-    assert.match(context, /change the method, priorities, or dependent investment/iu);
+    assert.match(context, /all affected actions and delegation/iu);
     assert.match(context, /interface[^.\n]*(?:not by itself|do not by themselves)[^.\n]*(?:scientific|question|contribution)/iu);
     assert.match(context, /available (?:data|datasets)[^.\n]*(?:do not define|does not authorize[^.\n]*define) the goal/iu);
     assert.match(context, /targeted (?:same-granularity|near-neighbor) subtraction/iu);
@@ -220,28 +234,18 @@ test("prompt re-anchor is a short research reminder with bounded judgment", () =
   // This is injected each prompt, not another full standing contract.
   assert.ok(reminder.length < 900);
   assert.match(reminder, /problem → method → contribution/u);
-  assert.match(reminder, /total path/iu);
-  assert.match(reminder, /current user decisions/iu);
+  assert.match(reminder, /one authorized action/iu);
+  assert.match(reminder, /user's live/iu);
   assert.match(reminder, /fixed constraints/iu);
   assert.match(reminder, /inspected evidence/iu);
   assert.match(reminder, /completion meaning/iu);
-  assert.match(reminder, /stale tasks\/notes/iu);
-  assert.match(reminder, /interface/iu);
-  assert.match(reminder, /available assets\/supervision/iu);
-  assert.match(reminder, /supplied solutions/iu);
-  assert.match(reminder, /past effort/iu);
-  assert.match(reminder, /do not define the scientific goal/iu);
-  assert.match(reminder, /which core gap/iu);
-  assert.match(reminder, /simpler route/iu);
-  assert.match(reminder, /ends investment/iu);
-  assert.match(reminder, /do not expand/iu);
-  assert.match(reminder, /actual route reassessment/iu);
-  assert.match(reminder, /affected assumptions, tasks, and delegation/iu);
-  assert.match(reminder, /scientific contract is clear enough/iu);
+  assert.match(reminder, /stale tasks/iu);
+  assert.match(reminder, /one authorized action/iu);
   assert.match(reminder, /producer-consumer path/iu);
-  assert.match(reminder, /prior positive signal/iu);
-  assert.match(reminder, /negative findings/iu);
-  assert.match(reminder, /bounded requests/iu);
+  assert.match(reminder, /prior positive evidence/iu);
+  assert.match(reminder, /refuted premise stops dependent investment/iu);
+  assert.match(reminder, /corrections change all affected tasks and delegation/iu);
+  assert.match(reminder, /bounded requests bounded/iu);
   assert.match(reminder, /user's decision/iu);
 });
 

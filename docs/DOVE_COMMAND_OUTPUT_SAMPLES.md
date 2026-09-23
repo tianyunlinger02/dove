@@ -129,7 +129,7 @@ Latest Review: id=review-20260902-a1b2c3d4; round=1; updatedAt=2026-09-05T08:10:
 Latest Run: id=run-20260903-a1b2c3d4; startedAt=2026-09-05T08:20:00.000Z; status=succeeded; exit=0
 ```
 
-Missing or unreadable facts remain `unavailable`. No research Markdown body, review report, stdout/stderr log, mainline summary, or next-step recommendation is included. Startup/clear emits no research card. Separate `systemMessage` notices may report skipped manifest-owned local edits or synchronization failures; explicit update replaces those local edits and reports the affected paths.
+Missing or unreadable facts remain `unavailable`. No research Markdown body, review report, stdout/stderr log, mainline summary, or next-step recommendation is included. Startup/clear emits no research card. A read-only `systemMessage` may say that project integration needs attention and point to explicit `dove update` or `dove doctor --json`; an inspection failure reports that SessionStart could not inspect integration. SessionStart never replaces local edits or synchronizes files; explicit `dove update` performs supported package-managed replacement and reports affected paths.
 
 ## Review output
 

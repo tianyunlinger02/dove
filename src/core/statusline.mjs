@@ -82,10 +82,30 @@ export function inspectGitBranch(projectRoot, options = {}) {
   }
 }
 
+const HTML_BLOCK_TAG = /^(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|pre|script|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)$/iu;
+
+function htmlBlockTag(line) {
+  const match = line.match(/^ {0,3}<([A-Za-z][A-Za-z0-9-]*)\b[^>]*>/u);
+  return match && HTML_BLOCK_TAG.test(match[1]) ? match[1].toLowerCase() : null;
+}
+
+function isBlockContinuation(line) {
+  return /^ {0,3}(?:>\s?|(?:[-+*]|\d+[.)])\s+)/u.test(line);
+}
+
+function isMainlineBoundary(line) {
+  return !(line ?? "").trim()
+    || /^ {0,3}#{1,6}(?:[ \t]|$)/u.test(line ?? "")
+    || /^ {0,3}(?:`{3,}|~{3,})/u.test(line ?? "")
+    || /^ {0,3}(?:---|\.\.\.|-->)\s*$/u.test(line ?? "")
+    || /^ {0,3}<!--/u.test(line ?? "");
+}
+
 export function parseResearchMainline(markdown) {
   let fence = null;
   let frontmatter = false;
   let comment = false;
+  let htmlBlock = null;
   const matches = [];
   const lines = markdown.split(/\r?\n/u);
   for (const [index, line] of lines.entries()) {
@@ -102,9 +122,18 @@ export function parseResearchMainline(markdown) {
       if (closing && closing[1][0] === fence[0] && closing[1].length >= fence.length) fence = null;
       continue;
     }
+    if (htmlBlock) {
+      if (new RegExp(`^ {0,3}</${htmlBlock}>[ \\t]*$`, "iu").test(line)) htmlBlock = null;
+      continue;
+    }
     const opening = !comment && line.match(/^ {0,3}(`{3,}|~{3,})/u);
     if (opening) {
       fence = opening[1];
+      continue;
+    }
+    const blockTag = !comment && htmlBlockTag(line);
+    if (blockTag) {
+      if (!new RegExp(`</${blockTag}>`, "iu").test(line)) htmlBlock = blockTag;
       continue;
     }
     const startsInComment = comment;
@@ -112,9 +141,15 @@ export function parseResearchMainline(markdown) {
       if (marker[0] === "<!--") comment = true;
       else comment = false;
     }
-    if (startsInComment) continue;
-    if (line.startsWith("Mainline:") && !/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "")) {
-      matches.push(line.slice("Mainline:".length));
+    if (startsInComment || comment) continue;
+    if (line.startsWith("Mainline:")) {
+      const previousLine = lines[index - 1] ?? "";
+      if (/^Mainline:/u.test(previousLine)) return null;
+      const accepted = (index === 0 || isMainlineBoundary(previousLine))
+        && !isBlockContinuation(previousLine)
+        && !/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "");
+      if (accepted) matches.push(line.slice("Mainline:".length));
+      if (matches.length > 1) return null;
     }
   }
   return matches.length === 1 && matches[0].startsWith(" ") ? oneLine(matches[0]) : null;

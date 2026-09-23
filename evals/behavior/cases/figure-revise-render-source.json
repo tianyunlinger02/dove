@@ -44,16 +44,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-method-material",
-      "kind": "tool-action-path",
-      "path": "materials/method.txt"
-    },
-    {
-      "id": "inspect-manuscript-context",
-      "kind": "tool-action-path",
-      "path": "paper/main.tex"
-    },
-    {
       "id": "editable-source-revised",
       "kind": "path-changed",
       "path": "figures/flow.svg"
@@ -67,20 +57,6 @@
       "id": "raster-created",
       "kind": "path-exists",
       "path": "figures/flow.png"
-    },
-    {
-      "id": "raster-path-observed",
-      "kind": "tool-action-path",
-      "path": "figures/flow.png",
-      "description": "Only a path reference. The human must confirm successful rendering followed by a visual-capable open of this raster; render arguments, failed opens, dimension probes, or Read of SVG do not establish visual inspection. No specific host tool is mandated."
-    },
-    {
-      "id": "editable-source-returned",
-      "kind": "public-output-includes-any",
-      "terms": [
-        "figures/flow.svg"
-      ],
-      "description": "Only the returned artifact path, not a quality verdict."
     },
     {
       "id": "materials-preserved",

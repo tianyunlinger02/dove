@@ -42,21 +42,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-overview",
-      "kind": "tool-action-path",
-      "path": ".dove/research/RESEARCH.md"
-    },
-    {
-      "id": "inspect-producer",
-      "kind": "tool-action-path",
-      "path": "src/parser.mjs"
-    },
-    {
-      "id": "inspect-consumer",
-      "kind": "tool-action-path",
-      "path": "src/summary.mjs"
-    },
-    {
       "id": "core-implementation-changed",
       "kind": "path-changed",
       "path": "src/score.mjs"

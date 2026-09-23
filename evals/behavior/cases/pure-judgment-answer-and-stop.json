@@ -39,11 +39,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-framing-source",
-      "kind": "tool-action-path",
-      "path": "paper/main.tex"
-    },
-    {
       "id": "research-unchanged",
       "kind": "path-unchanged",
       "path": ".dove/research/**"

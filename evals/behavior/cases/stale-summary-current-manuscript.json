@@ -49,31 +49,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-confirmed-mainline",
-      "kind": "tool-action-path",
-      "path": ".dove/research/RESEARCH.md"
-    },
-    {
-      "id": "inspect-recovery-note",
-      "kind": "tool-action-path",
-      "path": "notes/recovery-summary.md"
-    },
-    {
-      "id": "inspect-author-task-note",
-      "kind": "tool-action-path",
-      "path": "notes/author-page-tasks.md"
-    },
-    {
-      "id": "inspect-current-manuscript",
-      "kind": "tool-action-path",
-      "path": "paper/main.tex"
-    },
-    {
-      "id": "inspect-current-scientific-critique",
-      "kind": "tool-action-path",
-      "path": "notes/current-scientific-critique.md"
-    },
-    {
       "id": "preserve-supplied-critique",
       "kind": "path-unchanged",
       "path": "notes/current-scientific-critique.md"

@@ -78,7 +78,23 @@ for (const relativePath of [".dove/install/DOCTOR.md", ".dove/install/unknown.bi
 }
 assert(preview.removedPaths.includes(".claude/agents/dove.md"));
 assert(preview.removedPaths.includes(".dsh/skills/dove-research/SKILL.md"));
-const result = uninstallProjectIntegration(fixture, { confirmed: true });
+assert.throws(() => uninstallProjectIntegration(fixture, { confirmed: true }), /approved uninstall preview/u);
+const wrongActionPreview = previewProjectCompleteReinstall(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+assert.throws(
+  () => uninstallProjectIntegration(fixture, { confirmed: true, preview: wrongActionPreview }),
+  /approved uninstall preview/u
+);
+const targetMismatchPreview = { ...preview, target: `${fixture}-other` };
+assert.throws(
+  () => uninstallProjectIntegration(fixture, { confirmed: true, preview: targetMismatchPreview }),
+  /preview is stale/u
+);
+fs.rmSync(path.join(fixture, ".dsh/skills/dove-research/SKILL.md"));
+assert.throws(
+  () => uninstallProjectIntegration(fixture, { confirmed: true, preview }),
+  /preview is stale/u
+);
+const result = uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
 assert.equal(result.status, "uninstalled");
 assert.equal(fs.existsSync(path.join(fixture, ".dove", "install", "manifest.json")), false);
 assert.equal(fs.existsSync(legacyMarker), true);
@@ -99,7 +115,7 @@ assert.equal(inspectProjectRoot(fixture).state, "uninitialized");
 const postUninstallDoctor = inspectProjectDoctor(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
 assert.equal(postUninstallDoctor.setup.mode, "uninitialized");
 assert.equal(postUninstallDoctor.setup.reason, "uninitialized");
-assert.deepEqual(postUninstallDoctor.actions, [{ kind: "init", command: "dove init" }]);
+assert.deepEqual(postUninstallDoctor.actions, [{ kind: "init", command: `dove init --project '${fixture.replace(/'/gu, "'\\\\''")}'` }]);
 assert.equal(resolveProjectRootForInit(fixture), fixture);
 
 reset();
@@ -116,7 +132,7 @@ const preexistingStatusLineInit = initializeProjectIntegration(fixture, { packag
 assert.equal(preexistingStatusLineInit.manifest.managed.some((entry) => entry.selector === "/statusLine[dove-project-directory]"), false);
 assert.deepEqual(JSON.parse(fs.readFileSync(preexistingStatusLineSettingsPath, "utf8")).statusLine, { type: "command", command: "trellis-statusline" });
 assert.equal(updateProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }).status, "unchanged");
-uninstallProjectIntegration(fixture, { confirmed: true });
+uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
 assert.deepEqual(JSON.parse(fs.readFileSync(preexistingStatusLineSettingsPath, "utf8")).statusLine, { type: "command", command: "trellis-statusline" });
 
 reset();
@@ -125,7 +141,7 @@ const userStatusLineSettingsPath = path.join(fixture, ".claude", "settings.json"
 const userStatusLineSettings = JSON.parse(fs.readFileSync(userStatusLineSettingsPath, "utf8"));
 userStatusLineSettings.statusLine = { type: "command", command: "user-statusline" };
 fs.writeFileSync(userStatusLineSettingsPath, `${JSON.stringify(userStatusLineSettings, null, 2)}\n`);
-uninstallProjectIntegration(fixture, { confirmed: true });
+uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
 assert.deepEqual(JSON.parse(fs.readFileSync(userStatusLineSettingsPath, "utf8")).statusLine, { type: "command", command: "user-statusline" });
 
 reset();
@@ -137,7 +153,7 @@ stopSettings.hooks.Stop = [
   { hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] }
 ];
 fs.writeFileSync(stopSettingsPath, `${JSON.stringify(stopSettings, null, 2)}\n`);
-uninstallProjectIntegration(fixture, { confirmed: true });
+uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
 const stopCleanedSettings = JSON.parse(fs.readFileSync(stopSettingsPath, "utf8"));
 assert.deepEqual(stopCleanedSettings.hooks.Stop, stopSettings.hooks.Stop);
 
@@ -147,7 +163,7 @@ const nonArrayStopSettingsPath = path.join(fixture, ".claude", "settings.json");
 const nonArrayStopSettings = JSON.parse(fs.readFileSync(nonArrayStopSettingsPath, "utf8"));
 nonArrayStopSettings.hooks.Stop = "user-owned-stop";
 fs.writeFileSync(nonArrayStopSettingsPath, `${JSON.stringify(nonArrayStopSettings, null, 2)}\n`);
-uninstallProjectIntegration(fixture, { confirmed: true });
+uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
 const nonArrayStopCleanedSettings = JSON.parse(fs.readFileSync(nonArrayStopSettingsPath, "utf8"));
 assert.equal(nonArrayStopCleanedSettings.hooks.Stop, "user-owned-stop");
 
@@ -209,7 +225,7 @@ const unrecognizedMarker = path.join(fixture, ".dove", "manifest.json");
 fs.writeFileSync(unrecognizedMarker, `${JSON.stringify({ legacyWorkspace: true }, null, 2)}\n`);
 const unrecognizedPreview = previewProjectUninstall(fixture);
 assert.equal(unrecognizedPreview.removedPaths.includes(".dove/manifest.json"), false);
-uninstallProjectIntegration(fixture, { confirmed: true });
+uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
 assert.equal(fs.existsSync(unrecognizedMarker), true);
 
 reset();
@@ -219,7 +235,7 @@ fs.writeFileSync(path.join(fixture, ".claude", "settings.json"), `${JSON.stringi
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
 const preexistingPermissionManifest = JSON.parse(fs.readFileSync(path.join(fixture, ".dove", "install", "manifest.json"), "utf8"));
 assert.equal(preexistingPermissionManifest.managed.some((entry) => entry.selector === WEB_FETCH_DENY_SELECTOR), false);
-uninstallProjectIntegration(fixture, { confirmed: true });
+uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
 const preexistingPermissionAfterUninstall = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.deepEqual(preexistingPermissionAfterUninstall.permissions.deny, [WEB_FETCH_DENY_PERMISSION]);
 
@@ -236,7 +252,7 @@ for (const relativePath of referencePaths) {
   const observe = () => observedPaths.map((file) => digest(path.join(fixture, file)));
   const before = observe();
   assert.throws(() => previewProjectUninstall(fixture), /ownership drift/u);
-  assert.throws(() => uninstallProjectIntegration(fixture, { confirmed: true }), /ownership drift/u);
+  assert.throws(() => uninstallProjectIntegration(fixture, { confirmed: true }), /approved uninstall preview/u);
   assert.deepEqual(observe(), before, "Uninstall must not partially remove integration after reference drift.");
 
   const options = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
@@ -256,7 +272,7 @@ for (const relativePath of referencePaths) {
   const missingPreview = previewProjectUninstall(fixture);
   assert.equal(missingPreview.removedPaths.includes(relativePath), false);
   for (const other of referencePaths.filter((file) => file !== relativePath)) assert.equal(missingPreview.removedPaths.includes(other), true);
-  uninstallProjectIntegration(fixture, { confirmed: true });
+  uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
   for (const file of [...referencePaths, ".dove/install/manifest.json"]) assert.equal(fs.existsSync(path.join(fixture, file)), false);
   assert.equal(fs.existsSync(path.join(fixture, ".dove/research/RESEARCH.md")), true);
   assert.equal(missingPreview.removedPaths.includes(".dove/install/unknown.bin"), false);

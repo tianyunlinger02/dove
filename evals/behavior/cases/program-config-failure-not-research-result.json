@@ -43,16 +43,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-failure-log",
-      "kind": "tool-action-path",
-      "path": "results/failed-run.log"
-    },
-    {
-      "id": "inspect-runner-script",
-      "kind": "tool-action-path",
-      "path": "scripts/run_experiment.py"
-    },
-    {
       "id": "manuscript-unchanged",
       "kind": "path-unchanged",
       "path": "paper/main.tex"

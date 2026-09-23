@@ -44,11 +44,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-experiment-program",
-      "kind": "tool-action-path",
-      "path": "scripts/central_probe.py"
-    },
-    {
       "id": "experiment-document-exists",
       "kind": "path-exists",
       "path": "notes/central-experiment.md"

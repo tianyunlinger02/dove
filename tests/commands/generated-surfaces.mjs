@@ -94,10 +94,12 @@ function assertHostGuidanceProjection(entry) {
 }
 
 function assertCoreActionGuidance(value, label) {
-  assert.match(value, /unfinished core capabilities or evidence/iu, label);
-  assert.match(value, /Being related to the goal is not enough/iu, label);
-  assert.match(value, /Scientific core means/iu, label);
-  assert.match(value, /engineering core means[^.\n]*producer-consumer behavior/iu, label);
+  assert.match(value, /unfinished core capability or evidence/iu, label);
+  assert.match(value, /Support takes priority only when it removes a real blocker/iu, label);
+  assert.match(value, /scientific core is the valuable problem/iu, label);
+  assert.match(value, /engineering core is the producer-consumer behavior/iu, label);
+  assert.match(value, /one grounded recommendation with its strongest objection/iu, label);
+  assert.match(value, /stop or pause stoppable/iu, label);
   assert.match(value, /neither refuses nor expands/iu, label);
   assert.match(value, /scientific contract is clear enough[^.\n]*implement the necessary core path/iu, label);
   assert.match(value, /no fixed round count or per-step progress quota/iu, label);
@@ -135,6 +137,10 @@ export function assertFinalEntrypointWiring() {
   assert.match(lessonsParticipation, /consequential choices or after corrections and recurring failures/iu);
   assert.match(lessonsParticipation, /once within the active context/iu);
   assert.match(lessonsParticipation, /without waiting for an explicit command/iu);
+  const experimentParticipation = COMMAND_SURFACES.find(({ id }) => id === "dove.experiment").contract.ambientParticipation;
+  assert.match(experimentParticipation, /save the prospective plan[^.]*before executing/iu);
+  assert.match(experimentParticipation, /does not itself authorize execution/iu);
+  assert.match(rule, /save the prospective plan[^.]*before executing/iu);
   assert.equal(rule.split("`.dove/research/lessons/LESSONS.md`").length - 1, 1, "ordinary Claude owns one bounded Lessons index trigger");
   assert.match(rule, /research Markdown other than Lessons only when/iu);
   assert.match(rule, /explicit `\/dove:lessons` invocation is not required/iu);

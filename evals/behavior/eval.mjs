@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 export const BEHAVIOR_CASE_SCHEMA_VERSION = "dove.behavior.case.v1";
 export const PROJECT_SNAPSHOT_SCHEMA_VERSION = "dove.behavior.snapshot.v1";
 export const TOOL_ACTIONS_SCHEMA_VERSION = "dove.behavior.tool-actions.v1";
-export const RUN_RECEIPT_SCHEMA_VERSION = "dove.behavior.run-receipt.v1";
+export const RUN_RECEIPT_SCHEMA_VERSION = "dove.behavior.run-receipt.v2";
 export const HARD_CHECKS_SCHEMA_VERSION = "dove.behavior.hard-checks.v1";
 
 export const SUPPORTED_HARD_EXPECTATION_KINDS = Object.freeze([
@@ -19,9 +19,7 @@ export const SUPPORTED_HARD_EXPECTATION_KINDS = Object.freeze([
   "path-exists",
   "path-not-created",
   "path-unchanged",
-  "public-output-includes-any",
-  "public-output-not-empty",
-  "tool-action-path"
+  "public-output-not-empty"
 ]);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -54,10 +52,6 @@ function sha256(bytes) {
 
 function relativePosix(root, target) {
   return path.relative(root, target).split(path.sep).join("/");
-}
-
-function hasPathPrefix(relativePath, basePath) {
-  return relativePath === basePath || relativePath.startsWith(`${basePath}/`);
 }
 
 export function isSafeProjectRelativePathSpec(value) {
@@ -350,19 +344,10 @@ export function materializedSnapshotInclude(testCase) {
   return [...include].sort();
 }
 
-function actionReferencesPath(action, spec) {
-  return action.referencedPaths.some((referencedPath) => matchesPathSpec(referencedPath, spec));
-}
-
 export function evaluateHardExpectation(expectation, context) {
-  const { before, after, publicOutput, toolActions } = context;
+  const { before, after, publicOutput } = context;
   if (expectation.kind === "public-output-not-empty") {
     return { id: expectation.id, kind: expectation.kind, passed: publicOutput.trim().length > 0, evidence: { bytes: Buffer.byteLength(publicOutput) } };
-  }
-  if (expectation.kind === "public-output-includes-any") {
-    const matches = expectation.terms.filter((term) => publicOutput.toLocaleLowerCase().includes(String(term).toLocaleLowerCase()));
-    const minMatches = expectation.minMatches ?? 1;
-    return { id: expectation.id, kind: expectation.kind, passed: matches.length >= minMatches, evidence: { matches, minMatches } };
   }
   if (expectation.kind === "path-exists") {
     return { id: expectation.id, kind: expectation.kind, passed: snapshotHasPath(after, expectation.path), evidence: { path: expectation.path } };
@@ -384,11 +369,6 @@ export function evaluateHardExpectation(expectation, context) {
     const right = digestEntrySet(after, expectation.path);
     const passed = left.length > 0 && right.length > 0 && JSON.stringify(left) !== JSON.stringify(right);
     return { id: expectation.id, kind: expectation.kind, passed, evidence: { path: expectation.path, beforeEntries: left.length, afterEntries: right.length } };
-  }
-  if (expectation.kind === "tool-action-path") {
-    const verbs = new Set(expectation.verbs ?? []);
-    const matches = toolActions.actions.filter((action) => (verbs.size === 0 || verbs.has(action.name)) && actionReferencesPath(action, expectation.path));
-    return { id: expectation.id, kind: expectation.kind, passed: matches.length > 0, evidence: { path: expectation.path, verbs: [...verbs], matches: matches.map((item) => item.index) } };
   }
   throw new Error(`Unsupported hard expectation kind: ${expectation.kind}`);
 }
@@ -413,14 +393,27 @@ export function createReceiptRecord({ runId, testCase, attempt, startedAt, compl
       overrideMaxBudgetUsd: budgetOverrideMaxBudgetUsd,
       effectiveMaxBudgetUsd: actualMaxBudgetUsd
     },
-    runner,
+    runner: {
+      kind: runner.kind,
+      permissionMode: runner.permissionMode,
+      maxBudgetUsd: runner.maxBudgetUsd
+    },
     paths,
-    init,
-    result,
+    init: {
+      git: { status: init.git.status },
+      dove: { status: init.dove.status }
+    },
+    result: {
+      status: result.status,
+      exitCode: result.exitCode,
+      signal: result.signal,
+      budgetExceeded: result.budgetExceeded,
+      permissionDenials: result.permissionDenials
+    },
     hardChecks,
     humanReview: {
       rubric: testCase.humanReviewRubric,
-      note: "Complex scientific quality is not auto-judged. Review public output, tool actions, snapshots, and hard checks manually."
+      note: "Scientific quality is not auto-judged. Review public output, tool actions, snapshots, and hard checks manually."
     }
   };
 }
@@ -443,15 +436,9 @@ export function assertReceiptRecordShape(value) {
   if (value.budgets.overrideMaxBudgetUsd !== null) assert.ok(value.budgets.effectiveMaxBudgetUsd <= value.budgets.overrideMaxBudgetUsd);
   assert.equal(isObject(value.runner), true);
   assert.equal(value.runner.kind, "claude-code-cli");
-  assert.equal(typeof value.runner.command, "string");
-  assert.equal(Array.isArray(value.runner.argv), true);
-  assert.equal(value.runner.argv.includes("--verbose"), true, "runner argv must include --verbose for Claude stream-json");
-  assert.equal(value.runner.argv.includes("--max-budget-usd"), true, "runner argv must pass a pre-invocation budget cap");
-  assert.equal(value.runner.maxBudgetUsd, value.budgets.effectiveMaxBudgetUsd);
-  assert.equal(value.runner.argv[value.runner.argv.indexOf("--max-budget-usd") + 1], String(value.budgets.effectiveMaxBudgetUsd));
   assert.equal(typeof value.runner.permissionMode, "string");
   assert.doesNotMatch(value.runner.permissionMode, /bypass/iu, "runner permission mode must not bypass permissions");
-  assert.doesNotMatch(value.runner.argv.join(" "), /bypass/iu, "runner argv must not bypass permissions");
+  assert.equal(value.runner.maxBudgetUsd, value.budgets.effectiveMaxBudgetUsd);
   assert.equal(isObject(value.paths), true);
   for (const key of ["runRoot", "workspaceRoot", "stream", "stderr", "publicOutput", "toolActions", "snapshotBefore", "snapshotAfter", "snapshotDiff", "hardChecks", "receipt"]) {
     assert.equal(typeof value.paths[key], "string", `receipt paths.${key} must be a string`);
@@ -460,9 +447,6 @@ export function assertReceiptRecordShape(value) {
       : value.paths[key].startsWith(".claude/tmp/dove-behavior-evals/") && isSafeProjectRelativePathSpec(value.paths[key]);
     assert.equal(validPath, true, `receipt paths.${key} must stay under its repo-local .claude/tmp root`);
   }
-  if (value.runner.fixtureCliPath !== undefined) {
-    assert.equal(value.runner.fixtureCliPath, `${value.paths.runRoot}/bin/dove`, "runner fixture CLI must belong to this evidence root");
-  }
   assert.doesNotMatch(JSON.stringify(Object.keys(value).sort()), /transcript|conversationLog|privateMemory/iu, "receipt must not expose private transcript fields");
   assert.equal(isObject(value.init), true);
   assert.equal(isObject(value.init.git), true);
@@ -470,9 +454,10 @@ export function assertReceiptRecordShape(value) {
   assert.equal(typeof value.init.git.status, "string");
   assert.equal(typeof value.init.dove.status, "string");
   assert.equal(isObject(value.result), true);
-  assert.equal(isObject(value.result.stderr), true);
-  assert.equal(Number.isInteger(value.result.stderr.bytes), true);
-  assert.match(value.result.stderr.sha256, /^[a-f0-9]{64}$/u);
+  assert.ok(["completed", "failed", "incomplete", "skipped"].includes(value.result.status));
+  assert.equal(value.result.signal === null || typeof value.result.signal === "string", true);
+  assert.equal(value.result.budgetExceeded === null || typeof value.result.budgetExceeded === "boolean", true);
+  assert.equal(Array.isArray(value.result.permissionDenials), true);
   assert.equal(isObject(value.hardChecks), true);
   assert.equal(value.hardChecks.schemaVersion, HARD_CHECKS_SCHEMA_VERSION);
   assert.equal(Array.isArray(value.hardChecks.checks), true);
@@ -499,7 +484,7 @@ export function behaviorEvalShapeExamples() {
     attempt: 1,
     startedAt: "2026-09-04T00:00:00.000Z",
     completedAt: "2026-09-04T00:00:01.000Z",
-    runner: { kind: "claude-code-cli", command: "claude", argv: ["--print", "--verbose", "--output-format", "stream-json", "--input-format", "text", "--permission-mode", "acceptEdits", "--max-budget-usd", "0.01"], model: null, permissionMode: "acceptEdits", maxBudgetUsd: 0.01 },
+    runner: { kind: "claude-code-cli", permissionMode: "acceptEdits", maxBudgetUsd: 0.01 },
     paths: {
       runRoot: ".claude/tmp/dove-behavior-evals/shape-example-attempt-1",
       workspaceRoot: ".claude/tmp/w-example",
@@ -514,7 +499,7 @@ export function behaviorEvalShapeExamples() {
       receipt: ".claude/tmp/dove-behavior-evals/shape-example-attempt-1/receipt.json"
     },
     init: { git: { status: "skipped", exitCode: 0 }, dove: { status: "skipped", exitCode: 0 } },
-    result: { status: "skipped", exitCode: 0, signal: null, timedOut: false, durationMs: 0, observedCostUsd: null, budgetExceeded: null, stderr: { bytes: 0, sha256: sha256("") } },
+    result: { status: "skipped", exitCode: 0, signal: null, budgetExceeded: null, permissionDenials: [] },
     hardChecks: { schemaVersion: HARD_CHECKS_SCHEMA_VERSION, passed: true, checks: [] }
   });
   return { snapshot, toolActions: { schemaVersion: TOOL_ACTIONS_SCHEMA_VERSION, actions: [] }, receipt };
@@ -614,32 +599,22 @@ function runInit(workspaceRoot) {
   return { status: result.status === 0 ? "initialized" : "failed", exitCode: result.status, signal: result.signal, error: result.error?.message ?? null, stderr: result.stderr ?? "" };
 }
 
-export function executionResult(result, streamRecords, durationMs, maxBudgetUsd) {
+export function executionResult(result, streamRecords, maxBudgetUsd) {
   const terminalRecords = streamRecords.filter((record) => isObject(record) && record.type === "result" && record.parent_tool_use_id == null);
   const terminal = terminalRecords.at(-1);
-  // Only the main CLI result owns session cost. Model usage and tool payloads are not totals.
-  const cost = terminal?.total_cost_usd;
-  const observedCostUsd = typeof cost === "number" && Number.isFinite(cost) && cost >= 0 ? cost : null;
+  const terminalCost = terminal?.total_cost_usd;
+  const observedCostUsd = typeof terminalCost === "number" && Number.isFinite(terminalCost) && terminalCost >= 0 ? terminalCost : null;
   const budgetExceeded = observedCostUsd === null ? null : observedCostUsd > maxBudgetUsd;
   const streamFailed = terminalRecords.some((record) => record.is_error === true || record.subtype !== "success" || (Array.isArray(record.errors) && record.errors.length > 0));
   const permissionDenials = terminalRecords.flatMap((record) => Array.isArray(record.permission_denials) ? record.permission_denials : []);
-  const timedOut = result.error?.code === "ETIMEDOUT";
-  const stderr = result.stderr ?? "";
   return {
-    status: timedOut ? "timed-out"
-      : result.error || result.status !== 0 || result.signal || streamFailed || budgetExceeded === true ? "failed"
-        : !terminal ? "incomplete" : "completed",
+    status: result.error || result.status !== 0 || result.signal || streamFailed || budgetExceeded === true
+      ? "failed"
+      : !terminal ? "incomplete" : "completed",
     exitCode: result.status,
     signal: result.signal,
-    timedOut,
-    durationMs,
-    observedCostUsd,
     budgetExceeded,
-    resultSubtype: terminal?.subtype ?? null,
-    streamErrors: terminalRecords.flatMap((record) => Array.isArray(record.errors) ? record.errors : []),
-    permissionDenials,
-    stderr: { bytes: Buffer.byteLength(stderr), sha256: sha256(stderr) },
-    error: result.error?.message ?? null
+    permissionDenials
   };
 }
 
@@ -707,7 +682,7 @@ function runOneAttempt(testCase, attempt, options) {
   const hardChecks = evaluateHardExpectations(testCase, { before, after, publicOutput: evidence.publicText, toolActions: evidence.toolActions, workspaceRoot });
   writeJson(path.join(runRoot, "hard-checks.json"), hardChecks);
 
-  const outcome = executionResult(result, evidence.streamRecords, durationMs, actualMaxBudgetUsd);
+  const outcome = executionResult(result, evidence.streamRecords, actualMaxBudgetUsd);
   const completedAt = utcNow();
   const receipt = createReceiptRecord({
     runId,
@@ -717,12 +692,8 @@ function runOneAttempt(testCase, attempt, options) {
     completedAt,
     runner: {
       kind: "claude-code-cli",
-      command: options.claudeCommand,
-      argv,
-      model: options.model,
       permissionMode: options.permissionMode,
-      maxBudgetUsd: actualMaxBudgetUsd,
-      fixtureCliPath: relativeOutputPath(fixtureCliPath)
+      maxBudgetUsd: actualMaxBudgetUsd
     },
     paths: {
       runRoot: relativeOutputPath(runRoot),

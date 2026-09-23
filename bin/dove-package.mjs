@@ -14010,8 +14010,8 @@ function parseTokens(argv, specs, jsonRequested) {
     if (tokens.length > 0) fail(`${commandName} \u540E\u9762\u4E0D\u63A5\u53D7\u5176\u4ED6\u53C2\u6570\u3002`);
     return result(commandName, null, {}, []);
   }
+  if (!Object.hasOwn(specs, commandName)) fail(`Dove \u4E0D\u652F\u6301\u8FD9\u4E2A\u547D\u4EE4\uFF1A${commandName}\u3002`);
   const commandSpec = specs[commandName];
-  if (!commandSpec) fail(`Dove \u4E0D\u652F\u6301\u8FD9\u4E2A\u547D\u4EE4\uFF1A${commandName}\u3002`);
   let subcommandName = null;
   let spec = commandSpec;
   if (commandSpec.subcommands) {
@@ -14180,6 +14180,17 @@ function renderDovePixelArt(options2 = {}) {
 function terminalSafeText(value2) {
   return String(value2).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
 }
+function cleanupWarningNotice(result) {
+  const warnings = Array.isArray(result?.cleanupWarnings) ? result.cleanupWarnings : [];
+  const omitted = Number.isSafeInteger(result?.omittedCleanupWarningCount) ? result.omittedCleanupWarningCount : 0;
+  const total = warnings.length + omitted;
+  if (total === 0) return [];
+  const listed = warnings.slice(0, 6).map((warning) => `${terminalSafeText(warning?.path ?? "unknown")}\uFF08${terminalSafeText(warning?.reason ?? "unknown reason")}\uFF09`);
+  return [
+    `\u8B66\u544A\uFF1A\u4E3B\u64CD\u4F5C\u5DF2\u63D0\u4EA4\uFF0C\u4F46\u4E8B\u52A1\u6E05\u7406\u4ECD\u6709 ${total} \u9879\u672A\u5B8C\u6210${listed.length > 0 ? `\uFF1A${listed.join("\uFF1B")}` : ""}${total > listed.length ? "\uFF1B\u5176\u4F59\u672A\u5217\u51FA" : ""}\u3002`,
+    "\u8FD9\u4E9B\u6B8B\u7559\u4E0D\u8868\u793A\u9879\u76EE\u96C6\u6210\u56DE\u6EDA\uFF1B\u8BF7\u5728\u786E\u8BA4\u8DEF\u5F84\u5B89\u5168\u540E\u68C0\u67E5\u5E76\u6E05\u7406\u3002"
+  ];
+}
 function renderCompleteReinstallInventory(preview, options2 = {}) {
   if (!preview || preview.action !== "reinstall" || typeof preview.target !== "string" || !Array.isArray(preview.removedPaths) || !Array.isArray(preview.replacedPaths)) {
     throw new Error("Complete Reinstall inventory is invalid.");
@@ -14236,7 +14247,8 @@ function renderDoveLifecycleResult(command3, result, options2 = {}) {
       "",
       "\u2713 Dove \u9879\u76EE\u63A5\u5165\u3001\u547D\u4EE4\u3001agent\u3001Hooks\u3001MCP \u58F0\u660E\u548C\u5B89\u88C5\u8BB0\u5F55\u5DF2\u79FB\u9664",
       "\u2713 .dove/research/**\u3001.dove/reviews/**\u3001.dove/runs/** \u4E0E .dove/install/DOCTOR.md \u5DF2\u4FDD\u7559",
-      "\u2713 \u672A\u7BA1\u7406\u7684\u9879\u76EE\u6587\u4EF6\u672A\u88AB\u4FEE\u6539"
+      "\u2713 \u672A\u7BA1\u7406\u7684\u9879\u76EE\u6587\u4EF6\u672A\u88AB\u4FEE\u6539",
+      ...cleanupWarningNotice(result)
     ].join("\n");
   }
   if (command3 !== "reinstall" || result?.status !== "reinstalled") {
@@ -14256,6 +14268,7 @@ function renderDoveLifecycleResult(command3, result, options2 = {}) {
     "\u2713 \u666E\u901A\u9879\u76EE\u6587\u4EF6\u4E0E\u7528\u6237\u7EA7 Dove \u5B89\u88C5\u672A\u88AB\u7BA1\u7406",
     "",
     preferenceActivation,
+    ...cleanupWarningNotice(result),
     "",
     "\u7814\u7A76\u6587\u6863\u53EA\u662F\u7814\u7A76\u8005\u7EF4\u62A4\u7684\u666E\u901A\u5165\u53E3\uFF0C\u4E0D\u4EE3\u8868\u79D1\u7814\u5DE5\u4F5C\u3001\u7ED3\u8BBA\u6216\u9A8C\u8BC1\u5DF2\u7ECF\u5B8C\u6210\u3002"
   ].join("\n");
@@ -14324,7 +14337,8 @@ function recommendedDoveAction(result) {
     return { ...first, message: messages[first.kind] ?? "\u6309\u63D0\u793A\u5904\u7406\u5F53\u524D Dove \u72B6\u6001\u3002" };
   }
   if (!result.staticChecksPassed) {
-    return { kind: "inspect", command: "dove doctor --json", message: "\u9759\u6001\u68C0\u67E5\u4ECD\u6709\u672A\u901A\u8FC7\u9879\uFF0C\u4F46\u6CA1\u6709\u53EF\u5B89\u5168\u81EA\u52A8\u5EFA\u8BAE\u7684\u4FEE\u590D\u52A8\u4F5C\uFF1B\u8BF7\u67E5\u770B JSON \u8BCA\u65AD\u4E2D\u7684\u8F6F\u4EF6\u3001\u9879\u76EE\u63A5\u5165\u548C\u7814\u7A76\u6587\u6863\u5916\u5C42\u72B6\u6001\u3002" };
+    const target = typeof result.target === "string" && result.target ? ` --project '${result.target.replace(/'/gu, "'\\''")}'` : "";
+    return { kind: "inspect", command: `dove doctor --json${target}`, message: "\u9759\u6001\u68C0\u67E5\u4ECD\u6709\u672A\u901A\u8FC7\u9879\uFF0C\u4F46\u6CA1\u6709\u53EF\u5B89\u5168\u81EA\u52A8\u5EFA\u8BAE\u7684\u4FEE\u590D\u52A8\u4F5C\uFF1B\u8BF7\u67E5\u770B JSON \u8BCA\u65AD\u4E2D\u7684\u8F6F\u4EF6\u3001\u9879\u76EE\u63A5\u5165\u548C\u7814\u7A76\u6587\u6863\u5916\u5C42\u72B6\u6001\u3002" };
   }
   return { kind: "static-checks-passed", command: "\u65E0\u9700\u5904\u7406", message: "Dove \u8F6F\u4EF6\u3001package-managed \u9879\u76EE\u63A5\u5165\u548C\u7814\u7A76\u6587\u6863\u5916\u5C42\u9759\u6001\u68C0\u67E5\u901A\u8FC7\uFF1B\u8FD9\u4E0D\u8BC1\u660E\u5F53\u524D\u5BBF\u4E3B\u4F1A\u8BDD\u5DF2\u52A0\u8F7D agent\u3001Skills\u3001Hooks \u6216 MCP\uFF0C\u4E5F\u4E0D\u4EE3\u8868\u8FD0\u884C\u65F6\u6216\u79D1\u7814\u5C31\u7EEA\u3002" };
 }
@@ -14508,6 +14522,20 @@ function replacedLocalEditNotice(result) {
     "SessionStart \u5B8C\u5168\u53EA\u8BFB\uFF0C\u4E0D\u4F1A\u4FEE\u6539\u8FD9\u4E9B\u672C\u5730\u7F16\u8F91\uFF1Bdove update \u662F\u663E\u5F0F\u5237\u65B0 package-managed \u9879\u76EE\u63A5\u5165\u7684\u8986\u76D6\u5165\u53E3\u3002"
   ];
 }
+function cleanupWarningNotice2(result) {
+  const warnings = Array.isArray(result.cleanupWarnings) ? result.cleanupWarnings : [];
+  const omitted = Number.isSafeInteger(result.omittedCleanupWarningCount) ? result.omittedCleanupWarningCount : 0;
+  if (warnings.length === 0 && omitted <= 0) return [];
+  const entries = warnings.slice(0, 6).map((warning) => {
+    const pathName = terminalSafeText2(warning?.path ?? "unknown");
+    const reason = terminalSafeText2(warning?.reason ?? "unknown reason");
+    return `${pathName}\uFF08${reason}\uFF09`;
+  });
+  return [
+    `\u8B66\u544A\uFF1A\u4E3B\u64CD\u4F5C\u5DF2\u63D0\u4EA4\uFF0C\u4F46\u4E8B\u52A1\u6E05\u7406\u4ECD\u6709 ${warnings.length + omitted} \u9879\u672A\u5B8C\u6210${entries.length > 0 ? `\uFF1A${entries.join("\uFF1B")}` : ""}${warnings.length + omitted > entries.length ? "\uFF1B\u5176\u4F59\u672A\u5217\u51FA" : ""}\u3002`,
+    "\u8FD9\u4E9B\u6B8B\u7559\u4E0D\u8868\u793A\u9879\u76EE\u96C6\u6210\u56DE\u6EDA\uFF1B\u8BF7\u5728\u786E\u8BA4\u8DEF\u5F84\u5B89\u5168\u540E\u68C0\u67E5\u5E76\u6E05\u7406\u3002"
+  ];
+}
 function headingFor(command3, status) {
   if (command3 === "init" && status === "initialized") return "Dove \u5DF2\u5728\u6B64\u9879\u76EE\u542F\u7528";
   if (command3 === "init" && status === "already-initialized") return "Dove \u5DF2\u7ECF\u5728\u6B64\u9879\u76EE\u542F\u7528";
@@ -14564,6 +14592,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
     );
   }
   lines.push(...replacedLocalEditNotice(result));
+  lines.push(...cleanupWarningNotice2(result));
   lines.push("");
   if (command3 === "init" && result.status === "already-initialized") {
     lines.push("\u672C\u6B21 init \u672A\u5B89\u88C5\u6216\u5237\u65B0\u4F5C\u8005\u504F\u597D\u53CA\u5BBF\u4E3B\u8BFB\u53D6\u5F15\u5BFC\uFF1B\u4E0D\u80FD\u636E\u6B64\u786E\u8BA4\u5B8C\u6574\u5F15\u7528\u6216\u5F15\u5BFC\u5DF2\u5C31\u7EEA\u3002\u5982\u9700\u5237\u65B0\uFF0C\u8BF7\u663E\u5F0F\u8FD0\u884C dove update\u3002\u5B89\u88C5\u672C\u8EAB\u4E0D\u4EE3\u8868\u6A21\u578B\u5DF2\u7ECF\u8BFB\u8FC7\u3002", "");
@@ -15003,12 +15032,12 @@ var DOVE_RESEARCH_ONE_AGENT = "Dove works as one complete research agent and col
 var DOVE_RESEARCH_SKILL_INVENTORY_TEXT = "research, status, source, experiment, draft, figure, review, rebuttal, and lessons";
 var DOVE_RESEARCH_FLAT_SKILL_SENTENCE = `Its nine Skills \u2014 ${DOVE_RESEARCH_SKILL_INVENTORY_TEXT} \u2014 are flat entrances into the same research collaboration, used only when they help the current decision.`;
 var DOVE_RESEARCH_DEFAULT_AUTONOMY = "For a confirmed research goal, Dove advances by default through multiple substantive rounds: choose the best feasible mainline action, absorb what it changes, then continue until the goal is achieved, no effective in-scope path remains, or a material user decision is needed.";
-var DOVE_RESEARCH_ACTION_SPINE = "Use problem \u2192 method \u2192 contribution as the single action spine: what real question matters, how the method can answer it, and what evidence-supported contribution remains. An interface, available data or supervision, a supplied solution, an executable backlog, and sunk effort do not by themselves define that question, method, or contribution. The shortest route minimizes the total path to a credible conclusion, including necessary implementation, valid evaluation, alternatives, and rework\u2014not the next step's size or ease. Controls, baselines, diagnostics, literature, and infrastructure serve that spine; they are not parallel goals. Avoid local optimization that prolongs the whole route and aimless branching that adds no decision-changing value. Before major expansion, ask: which unresolved problem\u2013method\u2013contribution gap does this address; why is expansion better than direct core work, a simpler alternative, or stopping; and what result would change the route or end this investment? Once the current scientific contract is clear enough for authorized work, implement the necessary core path rather than continue abstract reassessment. Repeated user corrections or recurring repairs trigger an actual route reassessment: identify the shared mistaken premise, then change the method, priorities, or dependent investment when warranted rather than merely acknowledge, record, or patch it again. Keep this as natural judgment, not a schema, ledger, or per-step checklist.";
-var DOVE_RESEARCH_DECISION_CONSEQUENCE = "At consequential decisions or material results, use only dimensions that can change candidate actions. Material means capable of changing proposition disposition, claim strength, candidate actions, dependent investment, task identity, or current-use sufficiency\u2014not each tool return, check, or work unit. Attach the decisive finding to the affected proposition, claim, necessary dependency, or use condition. For a judgment that would change a claim, investment, or next action, briefly state the decisive basis, affected claim or dependent investment, next authorized action, and what result would change the judgment. An action remains effective only if it realizes or tests a still-worthwhile authorized core proposition, restores necessary capability or evaluation validity, obtains minimum decision-changing evidence, or completes an agreed bounded deliverable. Minimum evidence means decision-sufficient evidence, not a minimum patch or trial. If no such action remains, close the round and stop dependent investment while preserving independent useful work.";
+var DOVE_RESEARCH_ACTION_SPINE = "Use problem \u2192 method \u2192 contribution as the single action spine: preserve the user's real object and success meaning, identify the method's mechanism and nearest simpler alternative, and ask what evidence-supported contribution remains. Interfaces, available data or supervision, supplied solutions, inherited tasks, and sunk effort do not define the scientific goal. Choose the next authorized action by the shortest total path to a credible conclusion, not local ease: what uncertainty now decides continuation, redesign, or stopping, and will this action directly realize the core method or change that judgment? Controls, baselines, diagnostics, literature, and infrastructure serve that question, not parallel goals. Support takes priority only when it removes a real blocker, avoids evidenced rework, or improves an agreed result; a new task name, completed check, or relevance alone is not progress. Before major expansion, compare direct core work, a simpler alternative, and stopping, and identify the result that would end or change investment. Once the scientific contract is clear enough, implement the authorized core path. Repeated corrections or repairs require reassessing the shared mistaken premise and all affected actions and delegation, changing dependent investment rather than renaming the same work. This is natural judgment, not a schema, ledger, or per-step checklist.";
+var DOVE_RESEARCH_DECISION_CONSEQUENCE = "At consequential decisions or material results, use only dimensions that can change candidate actions. Material means capable of changing proposition disposition, claim strength, candidate actions, dependent investment, task identity, or current-use sufficiency\u2014not each tool return, check, or work unit. Attach the decisive finding to the affected proposition, claim, necessary dependency, or use condition. For a judgment that changes a claim, investment, or next action, briefly state the decisive basis, affected claim or dependent investment, one recommended next authorized action, and what result would change the judgment. For a requested research route, own one grounded recommendation with its strongest objection, decisive test, and stopping or redesign condition; if none is yet defensible, say so instead of offering a branch menu. Do not force this format onto bounded delivery or a material choice that belongs to the user. An action remains effective only if it realizes or tests a still-worthwhile authorized core proposition, restores necessary capability or evaluation validity, obtains minimum decision-changing evidence, or completes an agreed bounded deliverable. Minimum evidence means decision-sufficient evidence, not a minimum patch or trial. When a necessary premise is refuted or a running task no longer earns its cost, stop or pause stoppable dependent work before extending it or reporting a new plan; state what cannot be stopped, and preserve independent useful authorized work. If no effective in-scope action remains, close the round and stop dependent investment.";
 var DOVE_RESEARCH_CANDIDATE_COVERAGE = "When candidate coverage can affect the conclusion, distinguish candidate reachability or generation, selection quality given the same candidate set, and end-to-end target effect. A result on fixed candidates does not by itself assess candidate generation; a result computed only on the successful intersection cannot stand in for an end-to-end conclusion. State how failed, missing, invalid, and excluded cases enter the denominator; do not silently retain only successful cases or collapse every failure into the same scientific failure.";
 var DOVE_RESEARCH_RESULT_ADOPTION = "For capability returns and bounded subagent results, convey only what is material to adoption: the motivating proposition or decision; actual inspected artifact, material, and version; decisive evidence and counterevidence; what judgment changed; unresolved or unverified limits; useful work outside current authorization; and the downstream decision or artifact affected. Use natural language, not a mandatory format. The main session verifies evidence applicability, conflicts, and authorization against its full user context, then decides changes to claims, artifacts, and dependent investment; a return does not itself authorize them.";
 function renderDoveResearchReanchor() {
-  return "Re-anchor on live problem \u2192 method \u2192 contribution and shortest credible total path, not easiest task. Current user decisions, fixed constraints, inspected evidence, and completion meaning outrank stale tasks/notes. Interfaces, available assets/supervision, supplied solutions, and past effort do not define the scientific goal or justify investment. Before expansion ask: which core gap; why not direct core work, a simpler route, or stopping; what result changes or ends investment? If unclear, do not expand. Repeated corrections require actual route reassessment of affected assumptions, tasks, and delegation\u2014not acknowledgment or patching. Once scientific contract is clear enough for authorized work, implement core producer-consumer path without prior positive signal. Negative findings matter. Bounded requests stay bounded; material mainline/completion changes remain the user's decision.";
+  return "Re-anchor on the user's live problem \u2192 method \u2192 contribution, completion meaning, fixed constraints, and inspected evidence\u2014not stale tasks or easy wins. What one authorized action now realizes the core producer-consumer path or changes the decision to continue, redesign, or stop? Necessary support removes a real blocker; do not wait for prior positive evidence before feasible core work. A refuted premise stops dependent investment, not independent useful work. Repeated corrections change all affected tasks and delegation, not just wording. Keep bounded requests bounded; material mainline or completion changes remain the user's decision.";
 }
 var DOVE_RESEARCH_MAINLINE_ANCHORING = "Keep the project's user-confirmed current research mainline, intended contribution, key claim or route decision, and completion meaning as the anchor; evidence may change the route inside it, but a material change to that anchor belongs to the user. Distinguish changing the method, evaluation, and research goal; mentioning another direction is not authorization to adopt it. When direction is open, start with a clearly provisional research question or route and refine it through evidence.";
 var DOVE_RESEARCH_OVERALL_BEST_ACTION = "Choose work that most advances a valuable, evidence-supported core contribution through implementation, testing, or stronger evidence, weighing expected scientific value, quality, time/resources, opportunity and rework costs, and downstream effects rather than completed task counts. Credible positive signals are preliminary support for a key part of that contribution from actual observations, valid derivations, or inspected materials, not green tests, successful runs, arbitrary score gains, or final sufficient evidence. Prioritize checking their credibility and contribution meaning, ruling out important alternative explanations, then deepening or proportionately expanding warranted work rather than remaining in peripheral diagnostics. Without a signal, distinguish a core not yet implemented or validly tested, implementation/evaluation defects, and an unsupported hypothesis; choose work that can change the judgment, including authorized core implementation without prior positive evidence. Preserve reliable negative findings and counterexamples; never select samples, change criteria, or hide counterevidence to chase positivity. Before defaulting to the latest local fix, judge whether the route remains worth pursuing; compare a proportionate complete repair, shared-cause redesign, alternative mechanism/route, discriminating evidence, or stopping ineffective investment when relevant. Reassess affected whole-route consequences after substantive results, counterevidence, expansion, or cumulative shifts, not every tool action. Account for lost capabilities, coverage, knowledge, and future options; temporary regressions can buy necessary knowledge or capability with grounds, limits, and reassessment, not indefinite promises. Lack of metric gain alone requires neither rollback nor more variants: at an uninformative plateau, distinguish insufficient evidence, candidate-family mechanism or upper-bound limits, invalid evaluation, and refuted premises; choose discriminating evidence, a different mechanism, evaluation repair, or stopping dependent investment accordingly. This is the best defensible path, not a mathematical global optimum.";
@@ -15100,7 +15129,7 @@ var DOVE_RESEARCH_SHARED_CONTRACT_BULLETS = Object.freeze([
   "Use joint necessary conditions for the current decision: exploration needs plausible value and proportionate informative work; major development of a new research route or contribution needs value, contribution, mechanism, feasibility, and resources together. Confirmed reproduction, implementation, repair, and delivery need task-matched capability, correctness, and resources, not renewed topic selection or novelty assessment absent concrete threats to the goal's correctness or feasibility. Scaling experiments needs reliable implementation, valid evaluation, fair comparison, and worthwhile information or necessary evidence; core conclusions need claim-matched evidence, alternatives, and counterevidence; submission also needs accurate expression, delivery readiness, and same-version independent review. High scores elsewhere cannot offset leakage, invalid evaluation, theoretical contradiction, unavailable necessary resources, insufficient necessary value, or an already-covered independent contribution. Do not average grades or impose a universal minimum; failed prerequisites limit dependent investment, not useful authorized early diagnostics.",
   "Proactively read the full quality reference before substantive grading, material route selection, major investment or experiment scale-up, core-claim or submission-completion judgments, and after decisive counterevidence, task-identity changes, or cross-dimensional tradeoffs that may change the decision. Apply relevant criteria and reasons to current-use sufficiency, decisive gaps and dependencies, proportionate action or stopping, and reassessment of the original proposition and affected grades; do not wait for an explicit rating request or impose a full-project checklist. Proposal decisions use this same framework for problem opportunities, method deep examination, and formal proposal readiness. Reuse already-read guidance and still-applicable evidence; local work stays local. If the reference is unavailable, state the limitation rather than invent grades or treat checks as scientific acceptance.",
   "Compare scientific task identity by the actual problem, objects and setting, inputs and constraints, output, baseline/reference, real goal and proxy, core proposition and contribution, and success/completion meaning when material changes or cumulative shifts make it consequential. An interface defines a capability boundary, not by itself scientific value or contribution. Available data, benchmarks, teacher outputs, supervision, inherited solutions, and convenient metrics constrain feasibility or evidence but do not define the goal, reference truth, or success merely by availability; teacher agreement proves agreement, not correctness. Asset or code continuity is not task continuity. Correcting implementation or measuring the same goal more faithfully is normal revision; silently substituting an easier proxy or goal is not success. After material results, distinguish implementation/comparison failure, a bounded mechanism result, and support, refutation, or limits for the core proposition. Local effects support local claims; deepen them only when they materially support a still-worthwhile whole contribution. Preserve the original conclusion and valid assets; a supplied or surviving component stays provisional until independently assessed against serious alternatives. Factual refutation needs no approval; a material mainline, contribution, or completion change needs the user's decision, not repeated approval for ordinary in-task method changes. Method freedom never overrides explicitly fixed route, data, supervision, representation, information, evaluation, resource, or delivery constraints.",
-  "Choose the next action to realize, test, or strengthen a valuable, evidence-supported core contribution, not accumulate completed tasks. Support earns priority by removing a blocker, avoiding evidenced rework, or improving an agreed result; mere relevance is insufficient. Preserve necessary validity checks and urgent artifact protection. Compare serious candidates and simple alternatives by mechanism, assumptions, inspected evidence, predictions, and failure conditions; use theory, counterexamples, cross-domain hypotheses, or authorized diagnostics when informative. Before consequential implementation of a new claimed contribution, perform targeted same-granularity subtraction when it can change the design; do not turn exhaustive search into a prerequisite for an informative prototype or confirmed bounded work. Clarify definitions and design missing mechanisms. Once the scientific contract is clear enough for authorized work, translate it into necessary operations, one core producer-consumer path, and claim-matched evidence, then implement or test unknown effects without demanding prior proof.",
+  "Preserve necessary validity checks and urgent artifact protection while choosing core work. Compare serious candidates and simple alternatives by mechanism, assumptions, inspected evidence, predictions, and failure conditions; use theory, counterexamples, cross-domain hypotheses, or authorized diagnostics when informative. Before consequential implementation of a new claimed contribution, perform targeted same-granularity subtraction when it can change the design; do not turn exhaustive search into a prerequisite for an informative prototype or confirmed bounded work. Clarify definitions and design missing mechanisms. Once the scientific contract is clear enough for authorized work, translate it into necessary operations, one core producer-consumer path, and claim-matched evidence, then implement or test unknown effects without demanding prior proof.",
   "Use substantive results to rejudge the route and next investment. Credible positive signals are preliminary support for a key part of the core contribution from actual observations, valid derivations, or inspected materials, not green tests, successful runs, arbitrary score gains, or final sufficient evidence. Check credibility, contribution meaning, and important alternative explanations, then prioritize warranted deepening or proportionate expansion rather than perpetual peripheral diagnostics. Without a signal, distinguish not yet implemented or validly tested from implementation/evaluation defects and unsupported hypotheses; authorized core implementation need not wait for positive evidence. Reliable negative results, counterexamples, and eliminating wrong routes have knowledge and contribution value; never select samples, change criteria, or hide counterevidence to chase positivity. Compare repair, redesign, alternatives, discriminating evidence, or stopping by remaining benefit, information, future costs, opportunity cost, dependencies, and lost capabilities; past effort matters only through reusable capability or evidence, changed remaining cost, switching cost, or future options. Temporary regression may buy knowledge with grounds, limits, and reassessment; lack of metric gain alone is neither refutation nor a rollback rule. At uninformative plateaus consider evidence gaps, candidate-family limits, invalid evaluation, and refuted premises rather than more similar trials.",
   "Ground facts in inspected materials, sources, outputs, and artifacts; include counterevidence and unknowns. Citation identity, full-text inspection, and claim support are separate. Inspect decision-relevant implementation, data, configuration, environment, randomness, metrics, and analysis before interpreting anomalies. Valid execution, frozen protocols, and overall gains do not establish evaluation validity or a component's mechanism. Distinguish support, contradiction, insufficient evidence, and a comparison that cannot identify the contribution; preserve certainty, causality, scope, generality, quantitative qualifiers, and novelty unless evidence changes them. User preferences change goals or expression, not facts; notes and verdicts are context, not proof.",
   "Match resource and implementation choices to the actual task, necessary capability and scale, available CPU/GPU/accelerators, and explicit use constraints. Optimize total time to valid evidence or usable delivery, not code size, minimum compute, or a single utilization signal. Use the full reference for consequential end-to-end resource choices; authorized representative diagnostics and post-optimization semantic checks serve that decision, not every local task. Do not drop necessary capability for a toy path or add redundant hardware fallback without a real use requirement.",
@@ -15542,10 +15571,76 @@ function createReviewSnapshot(options2 = {}) {
 
 // src/core/review-workspace.mjs
 import crypto3 from "node:crypto";
-import fs3 from "node:fs";
+import fs4 from "node:fs";
 import os2 from "node:os";
+import path7 from "node:path";
+
+// src/core/package-metadata.mjs
+import fs3 from "node:fs";
 import path6 from "node:path";
+import { fileURLToPath } from "node:url";
+var injectedName = true ? "dove" : null;
+var injectedVersion = true ? "3.2.3" : null;
+function parseSemver(value2) {
+  const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
+  if (!match) return null;
+  const prerelease = match[4]?.split(".") ?? [];
+  if (prerelease.some((identifier) => /^\d+$/u.test(identifier) && identifier.length > 1 && identifier.startsWith("0"))) return null;
+  return { core: match.slice(1, 4), prerelease };
+}
+function compareNumericIdentifier(left, right) {
+  if (left.length !== right.length) return left.length < right.length ? -1 : 1;
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+function comparePrereleaseIdentifier(left, right) {
+  const leftNumeric = /^\d+$/u.test(left);
+  const rightNumeric = /^\d+$/u.test(right);
+  if (leftNumeric && rightNumeric) return compareNumericIdentifier(left, right);
+  if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+function comparePackageVersions(left, right) {
+  const leftParts = parseSemver(left);
+  const rightParts = parseSemver(right);
+  if (!leftParts || !rightParts) return null;
+  for (let index = 0; index < leftParts.core.length; index += 1) {
+    const order = compareNumericIdentifier(leftParts.core[index], rightParts.core[index]);
+    if (order !== 0) return order;
+  }
+  if (leftParts.prerelease.length === 0 || rightParts.prerelease.length === 0) {
+    if (leftParts.prerelease.length === rightParts.prerelease.length) return 0;
+    return leftParts.prerelease.length === 0 ? 1 : -1;
+  }
+  const count = Math.max(leftParts.prerelease.length, rightParts.prerelease.length);
+  for (let index = 0; index < count; index += 1) {
+    if (leftParts.prerelease[index] === void 0) return -1;
+    if (rightParts.prerelease[index] === void 0) return 1;
+    const order = comparePrereleaseIdentifier(leftParts.prerelease[index], rightParts.prerelease[index]);
+    if (order !== 0) return order;
+  }
+  return 0;
+}
+function classifyPackageCompatibility(candidate, expected) {
+  if (!candidate || !expected || candidate.name !== expected.name) return "identity-mismatch";
+  const order = comparePackageVersions(candidate.version, expected.version);
+  if (order === null) return "invalid-version";
+  if (order > 0) return "newer";
+  if (order < 0) return "older";
+  return "current";
+}
+function sourcePackage() {
+  const packagePath = path6.resolve(path6.dirname(fileURLToPath(import.meta.url)), "../..", "package.json");
+  return JSON.parse(fs3.readFileSync(packagePath, "utf8"));
+}
+var packageMetadata = injectedName && injectedVersion ? { name: injectedName, version: injectedVersion } : sourcePackage();
+if (typeof packageMetadata.name !== "string" || !packageMetadata.name) throw new Error("Dove package name is invalid.");
+if (!parseSemver(packageMetadata.version)) throw new Error("Dove package version is invalid.");
+var PACKAGE_NAME = packageMetadata.name;
+var PACKAGE_VERSION = packageMetadata.version;
+
+// src/core/review-workspace.mjs
 var DOVE_REVIEW_QUALITY_REFERENCE_PATH = ".dove-package/RESEARCH_QUALITY.md";
+var DOVE_REVIEW_GUIDANCE_SCHEMA = "dove.review.guidance.v1";
 var REVIEW_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$/u;
 var WINDOWS_RESERVED_NAMES = /* @__PURE__ */ new Set(["CON", "PRN", "AUX", "NUL", ...Array.from({ length: 9 }, (_, index) => `COM${index + 1}`), ...Array.from({ length: 9 }, (_, index) => `LPT${index + 1}`)]);
 function lstatOrNull(fsOps, targetPath) {
@@ -15563,23 +15658,45 @@ function realpathNative2(fsOps, targetPath) {
   return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
 }
 function pathInside(parentPath, childPath) {
-  const relative = path6.relative(parentPath, childPath);
-  return relative === "" || !relative.startsWith(`..${path6.sep}`) && relative !== ".." && !path6.isAbsolute(relative);
+  const relative = path7.relative(parentPath, childPath);
+  return relative === "" || !relative.startsWith(`..${path7.sep}`) && relative !== ".." && !path7.isAbsolute(relative);
 }
 function assertStateRootOutsideProject(stateRoot, projectRoot, fsOps) {
   if (projectRoot === void 0 || projectRoot === null) return;
-  const project = realpathNative2(fsOps, path6.resolve(projectRoot));
-  const candidate = path6.resolve(stateRoot);
+  const project = realpathNative2(fsOps, path7.resolve(projectRoot));
+  const candidate = path7.resolve(stateRoot);
   if (pathInside(project, candidate)) throw new Error("Dove review workspace state root must be outside the initialized project so the reviewer sees only copied listed materials.");
 }
 function assertResolvedStateRootOutsideProject(stateRoot, projectRoot, fsOps) {
   if (projectRoot === void 0 || projectRoot === null) return;
-  const project = realpathNative2(fsOps, path6.resolve(projectRoot));
+  const project = realpathNative2(fsOps, path7.resolve(projectRoot));
   const resolved = realpathNative2(fsOps, stateRoot);
   if (pathInside(project, resolved)) throw new Error("Dove review workspace state root must be outside the initialized project so the reviewer sees only copied listed materials.");
 }
 function sha2562(content) {
   return crypto3.createHash("sha256").update(content).digest("hex");
+}
+var REVIEW_GUIDANCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
+function normalizeGuidancePackage(value2, label) {
+  if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) throw new Error(`${label} package identity must be an object.`);
+  const name = value2.name;
+  const version = value2.version;
+  if (typeof name !== "string" || !name.trim() || name.includes("\0")) throw new Error(`${label} package name must be a non-empty string.`);
+  if (typeof version !== "string" || !version.trim() || version.includes("\0")) throw new Error(`${label} package version must be a non-empty string.`);
+  return { name, version };
+}
+function normalizeReviewGuidanceIdentity(value2, label = "Dove review package guidance") {
+  if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) throw new Error(`${label} identity must be an object.`);
+  if (value2.schema !== DOVE_REVIEW_GUIDANCE_SCHEMA) throw new Error(`${label} identity has an unsupported schema.`);
+  const packageIdentity = normalizeGuidancePackage(value2.package, label);
+  if (typeof value2.sha256 !== "string" || !REVIEW_GUIDANCE_DIGEST_PATTERN.test(value2.sha256)) throw new Error(`${label} identity must contain a SHA-256 digest.`);
+  return { schema: DOVE_REVIEW_GUIDANCE_SCHEMA, package: packageIdentity, sha256: value2.sha256 };
+}
+function normalizeReviewGuidance(value2) {
+  const identity = normalizeReviewGuidanceIdentity(value2);
+  if (!Buffer.isBuffer(value2.content)) throw new Error("Dove review package guidance must be bytes.");
+  if (sha2562(value2.content) !== identity.sha256) throw new Error("Dove review package guidance identity does not match its bytes.");
+  return { ...identity, content: value2.content };
 }
 function exactIsoTimestamp3(value2 = /* @__PURE__ */ new Date()) {
   const timestamp = value2 instanceof Date ? value2.toISOString() : value2;
@@ -15599,14 +15716,14 @@ function normalizeReviewId(value2, label = "Dove review id") {
 }
 function resolveReviewStateRoot(options2 = {}) {
   const env = options2.env ?? process.env;
-  const fsOps = options2.fsOps ?? fs3;
+  const fsOps = options2.fsOps ?? fs4;
   const explicit = options2.stateRoot ?? env.DOVE_REVIEW_STATE_ROOT;
   const xdgState = env.XDG_STATE_HOME;
   const home = env.HOME ?? os2.homedir();
   let stateRoot;
   if (typeof explicit === "string" && explicit.trim()) stateRoot = explicit;
-  else if (typeof xdgState === "string" && xdgState.trim()) stateRoot = path6.join(xdgState, "dove", "reviews");
-  else if (typeof home === "string" && home.trim()) stateRoot = path6.join(home, ".local", "state", "dove", "reviews");
+  else if (typeof xdgState === "string" && xdgState.trim()) stateRoot = path7.join(xdgState, "dove", "reviews");
+  else if (typeof home === "string" && home.trim()) stateRoot = path7.join(home, ".local", "state", "dove", "reviews");
   else throw new Error("Dove review workspace requires DOVE_REVIEW_STATE_ROOT, XDG_STATE_HOME, or HOME.");
   assertStateRootOutsideProject(stateRoot, options2.projectRoot, fsOps);
   const resolved = ensureRealDirectory(stateRoot, { fsOps, label: "Dove review state root" });
@@ -15614,16 +15731,16 @@ function resolveReviewStateRoot(options2 = {}) {
   return resolved;
 }
 function ensureRealDirectory(directoryPath, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs3;
+  const fsOps = options2.fsOps ?? fs4;
   const label = options2.label ?? "Directory";
   if (typeof directoryPath !== "string" || !directoryPath.trim() || directoryPath.includes("\0")) throw new Error(`${label} must name a directory.`);
-  const resolved = path6.resolve(directoryPath);
-  const parsed2 = path6.parse(resolved);
+  const resolved = path7.resolve(directoryPath);
+  const parsed2 = path7.parse(resolved);
   let current = parsed2.root;
-  const relative = path6.relative(parsed2.root, resolved);
-  const components = relative ? relative.split(path6.sep).filter(Boolean) : [];
+  const relative = path7.relative(parsed2.root, resolved);
+  const components = relative ? relative.split(path7.sep).filter(Boolean) : [];
   for (const component of components) {
-    current = path6.join(current, component);
+    current = path7.join(current, component);
     const stat = lstatOrNull(fsOps, current);
     if (stat === null) {
       fsOps.mkdirSync(current, { mode: 448 });
@@ -15636,12 +15753,12 @@ function ensureRealDirectory(directoryPath, options2 = {}) {
   return realpathNative2(fsOps, resolved);
 }
 function reviewWorkspaceName(reviewId, options2 = {}) {
-  const projectRoot = realpathNative2(options2.fsOps ?? fs3, path6.resolve(options2.projectRoot));
+  const projectRoot = realpathNative2(options2.fsOps ?? fs4, path7.resolve(options2.projectRoot));
   return `r-${sha2562(JSON.stringify([projectRoot, normalizeReviewId(reviewId)])).slice(0, 20)}`;
 }
 function reviewWorkspaceLocation(reviewId, options2 = {}) {
   const id = normalizeReviewId(reviewId);
-  const fsOps = options2.fsOps ?? fs3;
+  const fsOps = options2.fsOps ?? fs4;
   const stateRoot = resolveReviewStateRoot({ ...options2, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   const name = reviewWorkspaceName(id, options2);
@@ -15655,14 +15772,25 @@ function writeMaterialFiles(root, files, fsOps) {
   const anchor = openRootedFilesystem(root, { fsOps });
   for (const file of files) {
     const relativePath = anchor.normalize(file.path, "Dove review copied material path");
-    const parent = path6.posix.dirname(relativePath);
+    const parent = path7.posix.dirname(relativePath);
     if (parent !== ".") anchor.mkdir(parent, { recursive: true, mode: 448 });
     anchor.writeNewFile(relativePath, file.bytes, { mode: 384 });
   }
 }
+function createReviewGuidance(options2 = {}) {
+  const content = options2.content ?? Buffer.from(renderDoveResearchQualityReference(), "utf8");
+  if (!Buffer.isBuffer(content)) throw new Error("Dove review package guidance must be bytes.");
+  const identity = normalizeReviewGuidanceIdentity({
+    schema: options2.schema ?? DOVE_REVIEW_GUIDANCE_SCHEMA,
+    package: { name: options2.packageName ?? PACKAGE_NAME, version: options2.packageVersion ?? PACKAGE_VERSION },
+    sha256: sha2562(content)
+  });
+  return { ...identity, content };
+}
 function prepareReviewWorkspace(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs3;
+  const fsOps = options2.fsOps ?? fs4;
   if (!Array.isArray(options2.files)) throw new Error("Dove review workspace files must be an array.");
+  const guidance = normalizeReviewGuidance(options2.guidance ?? createReviewGuidance());
   if (options2.files.some((file) => typeof file.path === "string" && file.path.replace(/\\/gu, "/").split("/").includes(".dove-package"))) {
     throw new Error("Dove review package guidance must not be listed as user material.");
   }
@@ -15675,7 +15803,7 @@ function prepareReviewWorkspace(options2 = {}) {
   const stagingRoot = stateRootFs.displayPath(stagingName);
   try {
     writeMaterialFiles(stagingRoot, [
-      { path: DOVE_REVIEW_QUALITY_REFERENCE_PATH, bytes: Buffer.from(renderDoveResearchQualityReference(), "utf8") },
+      { path: DOVE_REVIEW_QUALITY_REFERENCE_PATH, bytes: guidance.content },
       ...options2.files
     ], fsOps);
     const existing = stateRootFs.tryLstat(name);
@@ -15699,13 +15827,13 @@ function prepareReviewWorkspace(options2 = {}) {
       throw promoteError;
     }
     if (backupCreated && options2.keepPreviousWorkspaceBackup === true) {
-      return { reviewId: id, stateRoot, workspaceRoot, previousWorkspaceBackupName: backupName };
+      return { reviewId: id, stateRoot, workspaceRoot, guidance: normalizeReviewGuidanceIdentity(guidance), previousWorkspaceBackupName: backupName };
     }
     try {
       if (backupCreated) stateRootFs.remove(backupName, { recursive: true, force: true });
     } catch {
     }
-    return { reviewId: id, stateRoot, workspaceRoot, previousWorkspaceBackupName: null };
+    return { reviewId: id, stateRoot, workspaceRoot, guidance: normalizeReviewGuidanceIdentity(guidance), previousWorkspaceBackupName: null };
   } catch (error) {
     try {
       if (stateRootFs.exists(stagingName)) stateRootFs.remove(stagingName, { recursive: true, force: true });
@@ -15739,7 +15867,7 @@ function listWorkspaceFiles(anchor, relativeDir = "") {
 }
 function finalizePreparedReviewWorkspace(workspace, options2 = {}) {
   if (!workspace?.previousWorkspaceBackupName) return;
-  const fsOps = options2.fsOps ?? fs3;
+  const fsOps = options2.fsOps ?? fs4;
   const stateRoot = resolveReviewStateRoot({ ...options2, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   try {
@@ -15749,7 +15877,7 @@ function finalizePreparedReviewWorkspace(workspace, options2 = {}) {
 }
 function restorePreparedReviewWorkspace(workspace, options2 = {}) {
   if (!workspace?.reviewId) return;
-  const fsOps = options2.fsOps ?? fs3;
+  const fsOps = options2.fsOps ?? fs4;
   const { name, stateRootFs } = reviewWorkspaceLocation(workspace.reviewId, { ...options2, fsOps, workspaceRoot: workspace.workspaceRoot });
   const current = stateRootFs.tryLstat(name);
   if (current !== null) {
@@ -15760,9 +15888,10 @@ function restorePreparedReviewWorkspace(workspace, options2 = {}) {
   stateRootFs.rename(workspace.previousWorkspaceBackupName, name);
 }
 function assertReviewWorkspaceMatchesSnapshot(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs3;
+  const fsOps = options2.fsOps ?? fs4;
   const snapshot = options2.snapshot;
   if (!snapshot || !Array.isArray(snapshot.materials)) throw new Error("Dove review snapshot is missing its material manifest.");
+  const guidance = normalizeReviewGuidanceIdentity(options2.guidance, "Dove review frozen package guidance");
   const { workspaceRoot } = reviewWorkspaceLocation(options2.reviewId, options2);
   const anchor = openRootedFilesystem(workspaceRoot, { fsOps });
   const expected = new Map(snapshot.materials.map((material) => [material.path, material]));
@@ -15770,8 +15899,8 @@ function assertReviewWorkspaceMatchesSnapshot(options2 = {}) {
     throw new Error("Dove review package guidance must not be listed as user material.");
   }
   const reference = anchor.readFile(DOVE_REVIEW_QUALITY_REFERENCE_PATH);
-  if (!reference.equals(Buffer.from(renderDoveResearchQualityReference(), "utf8"))) {
-    throw new Error(`Dove review package reference does not match canonical guidance: ${DOVE_REVIEW_QUALITY_REFERENCE_PATH}`);
+  if (sha2562(reference) !== guidance.sha256) {
+    throw new Error(`Dove review package reference does not match canonical guidance frozen for this review: ${DOVE_REVIEW_QUALITY_REFERENCE_PATH}`);
   }
   const actualPaths = listWorkspaceFiles(anchor).filter((file) => file !== DOVE_REVIEW_QUALITY_REFERENCE_PATH);
   const actualSet = new Set(actualPaths);
@@ -15788,8 +15917,8 @@ function assertReviewWorkspaceMatchesSnapshot(options2 = {}) {
 
 // src/core/file-set-transaction.mjs
 import crypto4 from "node:crypto";
-import fs4 from "node:fs";
-import path7 from "node:path";
+import fs5 from "node:fs";
+import path8 from "node:path";
 var MAX_CLEANUP_WARNINGS = 20;
 var ENTRY_FIELDS = /* @__PURE__ */ new Set(["root", "relativePath", "content", "encoding", "force", "delete", "deleteEmptyDirectory", "expectedState", "label"]);
 function errorMessage2(error) {
@@ -15826,10 +15955,10 @@ function expectedState(raw, index) {
 }
 function parentDirectories(relativePath) {
   const directories = [];
-  let current = path7.posix.dirname(relativePath);
+  let current = path8.posix.dirname(relativePath);
   while (current !== ".") {
     directories.push(current);
-    current = path7.posix.dirname(current);
+    current = path8.posix.dirname(current);
   }
   return directories.reverse();
 }
@@ -15858,7 +15987,7 @@ function removeNewTransactionParents(anchor, transaction) {
   }
 }
 function assertNoUnexpectedChildren(entry, resolved) {
-  const scheduledChildren = new Set(resolved.filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path7.posix.dirname(candidate.relativePath) === entry.relativePath).map((candidate) => path7.posix.basename(candidate.relativePath)));
+  const scheduledChildren = new Set(resolved.filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path8.posix.dirname(candidate.relativePath) === entry.relativePath).map((candidate) => path8.posix.basename(candidate.relativePath)));
   const unexpected = entry.anchor.readdir(entry.relativePath).map((child) => typeof child === "string" ? child : child.name).filter((child) => !scheduledChildren.has(child));
   if (unexpected.length > 0) {
     throw new Error(`Transactional directory deletion found an unscheduled child: ${entry.relativePath}/${unexpected.sort().join(`, ${entry.relativePath}/`)}.`);
@@ -15876,7 +16005,7 @@ function committedResult(entries, cleanupFailures) {
 }
 function writeFileSetTransaction(entries, options2 = {}) {
   if (!Array.isArray(entries)) throw new Error("Transactional write entries must be an array.");
-  const fsOps = options2.fsOps ?? fs4;
+  const fsOps = options2.fsOps ?? fs5;
   const transactionId = (options2.transactionId ?? crypto4.randomUUID()).replace(/[^a-z0-9._-]/giu, "-");
   const anchors = /* @__PURE__ */ new Map();
   const resolved = [];
@@ -15885,7 +16014,7 @@ function writeFileSetTransaction(entries, options2 = {}) {
   const promotions = [];
   const createdDirectories = /* @__PURE__ */ new Map();
   const anchorFor = (root) => {
-    const canonicalRoot2 = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path7.resolve(root)) : fsOps.realpathSync(path7.resolve(root));
+    const canonicalRoot2 = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path8.resolve(root)) : fsOps.realpathSync(path8.resolve(root));
     if (!anchors.has(canonicalRoot2)) anchors.set(canonicalRoot2, openRootedFilesystem(canonicalRoot2, { fsOps }));
     return anchors.get(canonicalRoot2);
   };
@@ -15933,8 +16062,8 @@ function writeFileSetTransaction(entries, options2 = {}) {
     }
     for (const [index, entry] of resolved.entries()) {
       if (entry.deleting) continue;
-      const parent = path7.posix.dirname(entry.relativePath);
-      const temporaryName = `.${path7.posix.basename(entry.relativePath)}.${transactionId}.${index}.tmp`;
+      const parent = path8.posix.dirname(entry.relativePath);
+      const temporaryName = `.${path8.posix.basename(entry.relativePath)}.${transactionId}.${index}.tmp`;
       entry.stagedPath = parent === "." ? temporaryName : `${parent}/${temporaryName}`;
       ensureParentDirectories(entry.anchor, entry.relativePath, createdDirectories.get(entry.anchor));
       entry.anchor.writeNewFile(entry.stagedPath, entry.content);
@@ -16022,69 +16151,6 @@ import path10 from "node:path";
 // src/core/project-installation-manifest.mjs
 import fs6 from "node:fs";
 import path9 from "node:path";
-
-// src/core/package-metadata.mjs
-import fs5 from "node:fs";
-import path8 from "node:path";
-import { fileURLToPath } from "node:url";
-var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.2.2" : null;
-function parseSemver(value2) {
-  const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
-  if (!match) return null;
-  const prerelease = match[4]?.split(".") ?? [];
-  if (prerelease.some((identifier) => /^\d+$/u.test(identifier) && identifier.length > 1 && identifier.startsWith("0"))) return null;
-  return { core: match.slice(1, 4), prerelease };
-}
-function compareNumericIdentifier(left, right) {
-  if (left.length !== right.length) return left.length < right.length ? -1 : 1;
-  return left === right ? 0 : left < right ? -1 : 1;
-}
-function comparePrereleaseIdentifier(left, right) {
-  const leftNumeric = /^\d+$/u.test(left);
-  const rightNumeric = /^\d+$/u.test(right);
-  if (leftNumeric && rightNumeric) return compareNumericIdentifier(left, right);
-  if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
-  return left === right ? 0 : left < right ? -1 : 1;
-}
-function comparePackageVersions(left, right) {
-  const leftParts = parseSemver(left);
-  const rightParts = parseSemver(right);
-  if (!leftParts || !rightParts) return null;
-  for (let index = 0; index < leftParts.core.length; index += 1) {
-    const order = compareNumericIdentifier(leftParts.core[index], rightParts.core[index]);
-    if (order !== 0) return order;
-  }
-  if (leftParts.prerelease.length === 0 || rightParts.prerelease.length === 0) {
-    if (leftParts.prerelease.length === rightParts.prerelease.length) return 0;
-    return leftParts.prerelease.length === 0 ? 1 : -1;
-  }
-  const count = Math.max(leftParts.prerelease.length, rightParts.prerelease.length);
-  for (let index = 0; index < count; index += 1) {
-    if (leftParts.prerelease[index] === void 0) return -1;
-    if (rightParts.prerelease[index] === void 0) return 1;
-    const order = comparePrereleaseIdentifier(leftParts.prerelease[index], rightParts.prerelease[index]);
-    if (order !== 0) return order;
-  }
-  return 0;
-}
-function classifyPackageCompatibility(candidate, expected) {
-  if (!candidate || !expected || candidate.name !== expected.name) return "identity-mismatch";
-  const order = comparePackageVersions(candidate.version, expected.version);
-  if (order === null) return "invalid-version";
-  if (order > 0) return "newer";
-  if (order < 0) return "older";
-  return "current";
-}
-function sourcePackage() {
-  const packagePath = path8.resolve(path8.dirname(fileURLToPath(import.meta.url)), "../..", "package.json");
-  return JSON.parse(fs5.readFileSync(packagePath, "utf8"));
-}
-var packageMetadata = injectedName && injectedVersion ? { name: injectedName, version: injectedVersion } : sourcePackage();
-if (typeof packageMetadata.name !== "string" || !packageMetadata.name) throw new Error("Dove package name is invalid.");
-if (!parseSemver(packageMetadata.version)) throw new Error("Dove package version is invalid.");
-var PACKAGE_NAME = packageMetadata.name;
-var PACKAGE_VERSION = packageMetadata.version;
 
 // src/core/schema.mjs
 var ARTIFACT_PATHS = Object.freeze({
@@ -16525,7 +16591,7 @@ function renderDoveAuthorStanceSection() {
 ${bullets([
     "The ordinary main session owns author-side scientific judgment and research collaboration whether or not it was started with `--agent dove`; explicit agent selection adds no higher judgment authority.",
     DOVE_RESEARCH_MAINLINE_ANCHORING,
-    "Choose the next action from the user's current confirmed goal, unfinished core capabilities or evidence, and overall completion meaning, not a branch name, latest task, executable inherited plan, mature module, or recently completed work. When forming or adopting a plan, adopting material results, making consequential implementation or experiment choices, or expanding investment, identify the core problem\u2013method\u2013contribution gap most worth resolving and compare direct progress with support by total path to a credible conclusion. Scientific core means the valuable problem, task-matched proposition, and intended contribution; engineering core means the necessary capability and actual producer-consumer behavior that realize that method, not the largest backlog or easiest acceptance target. Use the shared three expansion questions before major expansion; repeated corrections require revisiting the mistaken premise and changing the actual route or investment when warranted, not just the wording of the next plan. Being related to the goal is not enough: support should remove a real blocker, avoid evidenced rework, or directly improve an agreed result. Do not delay feasible core work because peripheral tasks are easier to finish, check, or report. Reuse settled context; inspect decision-relevant gaps, not the whole project at every tool action. Fixed route, capability, information, evaluation, and resource conditions bind; negotiable preferences guide tradeoffs. Known conflicts stop affected investment until an in-scope correction or necessary user decision, not independent work. Unknown effects permit authorized implementation when the proposition, method obligations, necessary capability, evaluation route, constraints, and resources are clear enough to guide it.",
+    "Own the next authorized action against the user's confirmed goal, unfinished core capability or evidence, and completion meaning; inherited tasks and mature modules are not priorities by default. The scientific core is the valuable problem, task-matched proposition, and intended contribution; the engineering core is the producer-consumer behavior needed to realize the method. Reuse settled context and inspect decision-relevant gaps, not the whole project at every tool action. Fixed route, capability, information, evaluation, and resource conditions bind; negotiable preferences guide tradeoffs. When a user correction reveals a shared mistaken premise, revisit every dependent active task and delegation, not just the named item; stop or pause stoppable work whose scientific premise or marginal value has failed before reporting or redirecting, and state any work that cannot be stopped. Preserve independent useful authorized work. Unknown effects permit core implementation when the proposition, necessary capability, evaluation route, constraints, and resources are clear enough to guide it.",
     "Delegate bounded questions with the relevant mainline, fixed constraints, negotiable choices, evidence, and authorization limits. Apply the shared result-adoption contract to returned plans, code, and conclusions without redoing every subtask; retain substantive research judgment rather than becoming a dispatcher. Answer decisive objections with inspected evidence or change dependent claims and investment; unresolved objections remain consequential. Agent completion, majority opinion, or concatenated reports are not scientific judgment. Bounded subagents investigate their question, not own the mainline or important user communication.",
     DOVE_RESEARCH_RESULT_ADOPTION,
     "Before the first consequential route, method, evaluation, implementation, delegation, artifact-adoption, or investment choice for the current request, and after a user correction or recurring repair or failure exposes a possibly shared mistaken premise, read `.dove/research/lessons/LESSONS.md` once if it exists unless it has already been checked for this question in the active context; then read only directly relevant or plausibly decision-changing linked Lessons. Reuse still-applicable Lessons instead of rereading them. Missing Lessons never blocks work or requires creating files, `.dove/research/RESEARCH.md` is not a prerequisite, and Lessons guide judgment rather than supply research evidence. Do not scan the broad research tree. Ordinary deterministic local repair, reproduction, implementation, or editing has no research-tree prerequisite.",
@@ -16703,6 +16769,7 @@ No reviewer report was generated. See \`backend.json\` for the backend error.
 }
 function makeRoundRecord(options2) {
   const paths = roundPaths(options2.reviewId, options2.round);
+  const guidance = options2.provenance === "imported" && (options2.guidance === void 0 || options2.guidance === null) ? null : normalizeReviewGuidanceIdentity(options2.guidance, "Dove review round guidance");
   return {
     round: options2.round,
     status: options2.status,
@@ -16716,6 +16783,7 @@ function makeRoundRecord(options2) {
     latestReportPath: options2.latestReportPath ?? paths.report,
     latestBackendPath: options2.latestBackendPath ?? paths.backend,
     materials: options2.materials,
+    guidance,
     sessionId: options2.sessionId ?? null,
     imported: options2.provenance === "imported",
     attempts: Array.isArray(options2.attempts) ? options2.attempts : []
@@ -16787,7 +16855,7 @@ function localBackendFailure(error, options2 = {}) {
     error: message
   };
 }
-function prepareRuntimeRound(projectRoot, record, snapshot, workspaceRoot, requestedSessionId, options2 = {}) {
+function prepareRuntimeRound(projectRoot, record, snapshot, workspaceRoot, requestedSessionId, guidance, options2 = {}) {
   const now = exactIsoTimestamp5(options2.now ?? /* @__PURE__ */ new Date());
   const existingRound = record.rounds.find((item) => item.round === snapshot.round);
   const roundRecord = existingRound ? { ...existingRound, status: "pending", updatedAt: now } : {
@@ -16799,7 +16867,8 @@ function prepareRuntimeRound(projectRoot, record, snapshot, workspaceRoot, reque
       venue: snapshot.venue,
       createdAt: now,
       updatedAt: now,
-      materials: snapshot.materials
+      materials: snapshot.materials,
+      guidance
     }),
     reportPath: null,
     backendPath: null,
@@ -16834,6 +16903,7 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
       sessionId: backend.sessionId ?? null
     })
   ] : Array.isArray(existingRound?.attempts) ? existingRound.attempts : [];
+  const roundGuidance = existingRound?.guidance ?? options2.guidance;
   const roundRecord = appendAttempt ? {
     ...existingRound,
     status,
@@ -16851,6 +16921,7 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
     createdAt: options2.roundCreatedAt ?? now,
     updatedAt: now,
     materials: snapshot.materials,
+    guidance: roundGuidance,
     latestReportPath: paths.report,
     latestBackendPath: paths.backend,
     sessionId: backend.sessionId ?? null,
@@ -17119,12 +17190,13 @@ function handoffReview(options2 = {}) {
     if (reviewDirectoryState.exists) throw new Error(`Dove review path already exists without a valid record: ${reviewBasePath(reviewId)}.`);
     const createdAt = exactIsoTimestamp5(options2.now ?? /* @__PURE__ */ new Date());
     const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round: 1, venue: options2.venue, materials: options2.materials, now: createdAt, fsOps });
-    const workspace = prepareReviewWorkspace({ reviewId, files, ...stateRootOptions({ ...options2, projectRoot }) });
+    const guidance = createReviewGuidance();
+    const workspace = prepareReviewWorkspace({ reviewId, files, guidance, ...stateRootOptions({ ...options2, projectRoot }) });
     const sessionId = options2.sessionId ?? crypto5.randomUUID();
     const prompt = promptForRound({ operation: "handoff", reviewId, round: 1, venue: options2.venue, snapshot });
     let record = newRecord({ reviewId, projectRoot, venue: options2.venue, createdAt, updatedAt: createdAt });
     try {
-      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, { ...options2, recordExpectedState: existingRecord.expectedState });
+      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, guidance, { ...options2, recordExpectedState: existingRecord.expectedState });
     } catch (error) {
       restorePreparedReviewWorkspace(workspace, stateRootOptions({ ...options2, projectRoot }));
       throw error;
@@ -17163,13 +17235,14 @@ function resumeReview(options2 = {}) {
     let workspace;
     let outcome;
     try {
-      workspace = assertReviewWorkspaceMatchesSnapshot({ reviewId, snapshot, ...stateRootOptions({ ...options2, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) });
+      const guidance = normalizeReviewGuidanceIdentity(existingRound.guidance, "Dove review frozen package guidance");
+      workspace = assertReviewWorkspaceMatchesSnapshot({ reviewId, snapshot, guidance, ...stateRootOptions({ ...options2, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) });
     } catch (error) {
       outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options2) };
     }
     if (workspace) {
       const prompt = promptForRound({ operation: "resume", reviewId, round, venue: record.venue, snapshot });
-      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, { ...options2, recordExpectedState: expectedState2 });
+      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, existingRound.guidance, { ...options2, recordExpectedState: expectedState2 });
       expectedState2 = fileState(projectRoot, reviewPath(reviewId), { fsOps });
       try {
         outcome = runClaudeReviewBackend({
@@ -17186,7 +17259,7 @@ function resumeReview(options2 = {}) {
       }
     }
     const reportBytes = reportBytesForOutcome(outcome);
-    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options2, round, roundCreatedAt: existingRound.createdAt ?? exactIsoTimestamp5(options2.now ?? /* @__PURE__ */ new Date()), recordExpectedState: expectedState2 });
+    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options2, round, guidance: existingRound.guidance, roundCreatedAt: existingRound.createdAt ?? exactIsoTimestamp5(options2.now ?? /* @__PURE__ */ new Date()), recordExpectedState: expectedState2 });
     return publicReviewResult("resume", projectRoot, written.record, written.round, { workspaceRoot: workspace?.workspaceRoot ?? null, latestReportPath: written.reportPath, latestBackendPath: written.backendPath });
   });
 }
@@ -17202,11 +17275,12 @@ function rerunReview(options2 = {}) {
     const createdAt = exactIsoTimestamp5(options2.now ?? /* @__PURE__ */ new Date());
     const venue = options2.venue ?? record.venue ?? null;
     const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round, venue, materials: options2.materials, now: createdAt, fsOps });
+    const guidance = createReviewGuidance();
     const workspaceOptions = { ...stateRootOptions({ ...options2, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) };
-    const workspace = prepareReviewWorkspace({ reviewId, files, keepPreviousWorkspaceBackup: true, ...workspaceOptions });
+    const workspace = prepareReviewWorkspace({ reviewId, files, guidance, keepPreviousWorkspaceBackup: true, ...workspaceOptions });
     const prompt = promptForRound({ operation: "rerun", reviewId, round, venue, snapshot });
     try {
-      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, { ...options2, recordExpectedState: expectedState2 });
+      record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, guidance, { ...options2, recordExpectedState: expectedState2 });
     } catch (error) {
       restorePreparedReviewWorkspace(workspace, workspaceOptions);
       throw error;
@@ -17228,7 +17302,7 @@ function rerunReview(options2 = {}) {
       outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options2) };
     }
     const reportBytes = reportBytesForOutcome(outcome);
-    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options2, round, roundCreatedAt: createdAt, recordExpectedState: expectedState2 });
+    const written = writeRuntimeRound(projectRoot, record, snapshot, outcome.backend, reportBytes, { ...options2, round, guidance, roundCreatedAt: createdAt, recordExpectedState: expectedState2 });
     return publicReviewResult("rerun", projectRoot, written.record, written.round, { workspaceRoot: workspace.workspaceRoot });
   });
 }
@@ -18302,10 +18376,22 @@ function inspectGitBranch(projectRoot, options2 = {}) {
     return null;
   }
 }
+var HTML_BLOCK_TAG = /^(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|pre|script|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)$/iu;
+function htmlBlockTag(line) {
+  const match = line.match(/^ {0,3}<([A-Za-z][A-Za-z0-9-]*)\b[^>]*>/u);
+  return match && HTML_BLOCK_TAG.test(match[1]) ? match[1].toLowerCase() : null;
+}
+function isBlockContinuation(line) {
+  return /^ {0,3}(?:>\s?|(?:[-+*]|\d+[.)])\s+)/u.test(line);
+}
+function isMainlineBoundary(line) {
+  return !(line ?? "").trim() || /^ {0,3}#{1,6}(?:[ \t]|$)/u.test(line ?? "") || /^ {0,3}(?:`{3,}|~{3,})/u.test(line ?? "") || /^ {0,3}(?:---|\.\.\.|-->)\s*$/u.test(line ?? "") || /^ {0,3}<!--/u.test(line ?? "");
+}
 function parseResearchMainline(markdown) {
   let fence = null;
   let frontmatter = false;
   let comment = false;
+  let htmlBlock = null;
   const matches = [];
   const lines = markdown.split(/\r?\n/u);
   for (const [index, line] of lines.entries()) {
@@ -18322,9 +18408,18 @@ function parseResearchMainline(markdown) {
       if (closing && closing[1][0] === fence[0] && closing[1].length >= fence.length) fence = null;
       continue;
     }
+    if (htmlBlock) {
+      if (new RegExp(`^ {0,3}</${htmlBlock}>[ \\t]*$`, "iu").test(line)) htmlBlock = null;
+      continue;
+    }
     const opening = !comment && line.match(/^ {0,3}(`{3,}|~{3,})/u);
     if (opening) {
       fence = opening[1];
+      continue;
+    }
+    const blockTag = !comment && htmlBlockTag(line);
+    if (blockTag) {
+      if (!new RegExp(`</${blockTag}>`, "iu").test(line)) htmlBlock = blockTag;
       continue;
     }
     const startsInComment = comment;
@@ -18332,9 +18427,13 @@ function parseResearchMainline(markdown) {
       if (marker[0] === "<!--") comment = true;
       else comment = false;
     }
-    if (startsInComment) continue;
-    if (line.startsWith("Mainline:") && !/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "")) {
-      matches.push(line.slice("Mainline:".length));
+    if (startsInComment || comment) continue;
+    if (line.startsWith("Mainline:")) {
+      const previousLine = lines[index - 1] ?? "";
+      if (/^Mainline:/u.test(previousLine)) return null;
+      const accepted = (index === 0 || isMainlineBoundary(previousLine)) && !isBlockContinuation(previousLine) && !/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "");
+      if (accepted) matches.push(line.slice("Mainline:".length));
+      if (matches.length > 1) return null;
     }
   }
   return matches.length === 1 && matches[0].startsWith(" ") ? oneLine(matches[0]) : null;
@@ -18647,18 +18746,18 @@ function contract(slug) {
     })
   });
   if (slug === "experiment") return capabilityContract({
-    ambientParticipation: "When empirical work or existing results matter, distinguish design, authorized execution, existing-result interpretation, and retrospective recording, then assess evaluation validity and result consequences without adopting a new mainline.",
+    ambientParticipation: "When empirical work or existing results matter, distinguish design, authorized execution, existing-result interpretation, and retrospective recording, then assess evaluation validity and result consequences. For newly authorized central execution that needs recording, save the prospective plan to the relevant Experiment document successfully before executing and append the actual result to that same document; this ordering does not itself authorize execution or apply to design-only, existing-result, retrospective, or exploratory diagnostic work.",
     purpose: "Design, execute, inspect, interpret, or record exploration, diagnostics, confirmatory experiments, and reproduction or delivery checks matched to the current goal.",
     when: "Use for experiment design, execution, analysis of existing results, retrospective recording, or empirical work needed for research understanding or the agreed capability and evidence.",
     responsibilities: [
       "Follow the actual request: design-only, execution, existing-result analysis, and retrospective recording are different tasks. A topic proposal needs a feasible validation approach with key assumptions, comparisons, and distinguishing outcomes, not default commands, numerical pass lines, schedules, or recovery procedures; an explicit full experiment-design request still needs an executable plan. Neither level of design detail authorizes execution; task-specific topic-selection restrictions remain local to that request.",
-      "Match the experiment to its purpose. Exploration may discover phenomena, test feasibility, or form explanations without a predeclared claim or predetermined code change; distinguish later interpretations from independent confirmation. Diagnostics locate a specific capability, correctness, information, or resource bottleneck and stop when there is enough information to act. Confirmatory work specifies the claim or question, relevant predictions, comparisons, alternative explanations, and judgment criteria before testing; it may keep implementation and protocol unchanged to obtain necessary evidence. Reproduction and delivery check the agreed behavior, conditions, reference, and actual use without reopening novelty by default. Temporary versus final use is separate from exploratory versus confirmatory evidence: accurately bounded exploratory findings may be final results, not retroactive confirmation. Select work by expected core-contribution benefit, decision-changing information or necessary evidence, total cost, evaluator validity, and comparability. Credible preliminary support favors checking alternatives and warranted deepening; absent support may call for implementing the untested core, not more peripheral diagnostics. Neither predicted gains nor positivity selects work; reliable negative findings remain valuable. After a material result, explain what was learned, what capability was established, or what required evidence was added, and use its consequences to choose the next authorized action.",
+      "Match the experiment to its purpose. Exploration may discover phenomena, test feasibility, or form explanations without a predeclared claim or predetermined code change; distinguish later interpretations from independent confirmation. Diagnostics locate a specific capability, correctness, information, or resource bottleneck and stop when there is enough information to act. Confirmatory work specifies the claim or question, relevant predictions, comparisons, alternative explanations, and judgment criteria before testing; it may keep implementation and protocol unchanged to obtain necessary evidence. Reproduction and delivery check the agreed behavior, conditions, reference, and actual use without reopening novelty by default. Temporary versus final use is separate from exploratory versus confirmatory evidence: accurately bounded exploratory findings may be final results, not retroactive confirmation. An authorized single-case diagnostic with a working input-to-result chain can test a mechanism's direction before multi-case robustness or paper-level sufficiency is established; do not block that information on later claim thresholds or count it as a confirmatory positive. Select work by expected core-contribution benefit, decision-changing information or necessary evidence, total cost, evaluator validity, and comparability. Credible preliminary support favors checking alternatives and warranted deepening; absent support may call for implementing the untested core, not more peripheral diagnostics. Neither predicted gains nor positivity selects work; reliable negative findings remain valuable. After a material result, explain what was learned, what capability was established, or what required evidence was added, and use its consequences to choose the next authorized action.",
       "Before expanding investment, apply the joint conditions for that purpose, checking relevant upper bounds, attainability, necessary scale and information, evaluation reliability, resources, and worthwhile benefit using existing material or authorized validation. An upper bound needs valid grounds for the actual metric, allowed information, and method space: one Oracle without gains is not a whole-space bound, nor one model's failure principled information insufficiency. Comparisons must allow the claimed core operation; fixed candidates cannot rule out candidate generation. No single successful check establishes that scaling will answer an important scientific uncertainty; unknown effects alone do not prevent authorized implementation needed to test a reasonably grounded mechanism.",
       "Keep specified design and working execution chain as work facts, not quality grades. Judge evaluation validity and evidence against the actual exploratory question, diagnostic purpose, confirmatory claim, or reproduction/delivery goal. A valid negative result can complete an experiment and advance knowledge without supporting the proposed method; merely nonsignificant results do not establish no effect. Report engineering and execution results separately from scientific evidence and its limits; a bounded check can finish without a scientific advance.",
       "Trace the evaluation chain from input through each method's actual output, the basis it is compared against, what the metric measures, and the final between-method comparison. Explicitly distinguish the real goal, actual output or estimand, baseline, reference or counterfactual, proxy, success condition, and the evidence connecting any proxy to the real goal. Available datasets, benchmarks, labels, supervision, teacher outputs, inherited outputs, and convenient evaluators do not acquire goal or reference authority through availability; teacher agreement establishes agreement, not truth or real-world usefulness. When a reference is used, establish its applicability to the target object and granularity; justify any proxy or method's own output used as an evaluation basis, not merely the file's existence. Correcting a metric, denominator, or baseline to measure the same target more faithfully is a normal in-task repair; changing the target output, proxy goal, comparison basis, or success meaning triggers scientific-task identity judgment rather than retroactively declaring success. More runs cannot repair a target or real-goal mismatch.",
       DOVE_RESEARCH_CANDIDATE_COVERAGE,
       "Where applicable, align the same evaluation units for paired comparisons, inspect differences and uncertainty, and account for sample dependence. Protect final-test independence when training, tuning, calibration, or method selection occurs.",
-      "Judge ablations from actual code, configuration, and outputs: beyond the named component, did information access, preprocessing, training budget, numerical scale, edit magnitude, or postprocessing also change? Distinguish the full implementation winning, a component's gain under the given control, and support for a scientific mechanism. A local effect supports only the corresponding local claim. Controls necessary to distinguish that claim from important alternatives are core evidence dependencies; add them with the method rather than treating them as optional cleanup, while refusing indiscriminate baseline or control matrices that answer no current claim. If controls cannot identify the core contribution, compare a suitable repair, evaluation redesign, an identifiable alternative mechanism or route, or stopping the branch; more runs do not repair identification. Keep the current conclusion within actual evidence while choosing the overall-best authorized action, rather than defaulting to minimal controls or claim narrowing.",
+      "Judge ablations from actual code, configuration, and outputs: beyond the named component, did information access, preprocessing, training budget, numerical scale, edit magnitude, or postprocessing also change? Distinguish the full implementation winning, a component's gain under the given control, and support for a scientific mechanism. A local effect supports only the corresponding local claim. Controls necessary to distinguish that claim from important alternatives are core evidence dependencies; add them with the method rather than treating them as optional cleanup, while refusing indiscriminate baseline or control matrices that answer no current claim. Before attributing a difference to the method, check that the actual control still has the claimed input, candidate support, budget, execution semantics, and, where relevant, historical positive-control milestones; a shared name or passing tests do not establish comparability. A non-equivalent control leaves a diagnostic or comparison failure, not a mechanism conclusion. Use milestones that correspond to events needed by a scientific downstream consumer, such as an admitted distinct candidate or a valid selector comparison, rather than service counts or completed records. If controls cannot identify the core contribution, compare a suitable repair, evaluation redesign, an identifiable alternative mechanism or route, or stopping the branch; more runs do not repair identification. Keep the current conclusion within actual evidence while choosing the overall-best authorized action, rather than defaulting to minimal controls or claim narrowing.",
       "Use `dove run start|status|resume|finalize|compare` when local execution tracking helps; state the judgment and metric or observation it can inform and what remains outside the receipt. A Run receipt establishes execution facts only; inspect actual outputs, configuration, and evaluation validity before Experiment interpretation and the main session's route judgment. The `.dove/runs/` journal and stdout/stderr are execution materials, not scientific explanation or research progress by themselves."
     ],
     actions: [
@@ -20210,7 +20309,7 @@ function prepareUninstall(start, options2 = {}) {
 function uninstallPreview(prepared) {
   const writtenPaths = prepared.entries.filter((entry) => entry.delete !== true).map((entry) => entry.relativePath);
   const removedPaths = prepared.entries.filter((entry) => entry.delete === true).map((entry) => entry.relativePath);
-  return {
+  const preview = {
     status: "ready",
     action: "uninstall",
     target: prepared.root,
@@ -20221,13 +20320,37 @@ function uninstallPreview(prepared) {
     preservedPaths: [".dove/research/**", ".dove/reviews/**", ".dove/runs/**", ".dove/install/DOCTOR.md"],
     confirmation: { required: true, default: false }
   };
+  Object.defineProperty(preview, "approvalState", {
+    value: prepared.entries.map((entry) => ({
+      path: entry.relativePath,
+      expectedState: entry.expectedState
+    })),
+    enumerable: false
+  });
+  return preview;
+}
+function uninstallPreviewScope(preview) {
+  return JSON.stringify({
+    target: preview.target,
+    hosts: preview.hosts,
+    writtenPaths: preview.writtenPaths,
+    removedPaths: preview.removedPaths,
+    changedPaths: preview.changedPaths,
+    preservedPaths: preview.preservedPaths,
+    approvalState: preview.approvalState
+  });
 }
 function previewProjectUninstall(start, options2 = {}) {
   return uninstallPreview(prepareUninstall(start, options2));
 }
 function uninstallProjectIntegration(start, options2 = {}) {
   if (options2.confirmed !== true) throw new Error("Dove uninstall requires confirmed: true after displaying the exact removal scope.");
+  if (!options2.preview || options2.preview.action !== "uninstall") throw new Error("Dove uninstall requires the approved uninstall preview.");
   const prepared = prepareUninstall(start, options2);
+  const currentPreview = uninstallPreview(prepared);
+  if (uninstallPreviewScope(currentPreview) !== uninstallPreviewScope(options2.preview)) {
+    throw new Error("Dove uninstall preview is stale; review the current removal scope and confirm again.");
+  }
   const transaction = writeFileSetTransaction(prepared.entries, transactionOptions(prepared.fsOps));
   return {
     status: "uninstalled",
@@ -20522,11 +20645,18 @@ function researchState(root, options2) {
     return { healthy: false, state: "invalid", mode: "invalid", error: messageFor2(error) };
   }
 }
+function shellQuote(value2) {
+  return `'${String(value2).replace(/'/gu, "'\\''")}'`;
+}
+function projectCommand(command3, target) {
+  return `${command3} --project ${shellQuote(target)}`;
+}
 function actionsFor(result) {
-  if (result.setup.mode === "uninitialized") return [{ kind: "init", command: "dove init" }];
-  if (result.setup.mode === "needs-update") return [{ kind: "update", command: "dove update" }];
+  const target = typeof result.target === "string" && result.target ? result.target : null;
+  if (result.setup.mode === "uninitialized") return [{ kind: "init", command: target ? projectCommand("dove init", target) : "dove init" }];
+  if (result.setup.mode === "needs-update") return [{ kind: "update", command: target ? projectCommand("dove update", target) : "dove update" }];
   if (result.setup.mode === "blocked" || result.projectIntegration.retiredHooks?.matchedPaths.length > 0) {
-    return [{ kind: "inspect", command: "dove doctor --json" }];
+    return [{ kind: "inspect", command: target ? projectCommand("dove doctor --json", target) : "dove doctor --json" }];
   }
   return [];
 }

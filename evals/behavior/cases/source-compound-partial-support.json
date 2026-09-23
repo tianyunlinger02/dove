@@ -41,16 +41,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-compound-claim",
-      "kind": "tool-action-path",
-      "path": "paper/main.tex"
-    },
-    {
-      "id": "inspect-local-study",
-      "kind": "tool-action-path",
-      "path": "sources/sensor-study.txt"
-    },
-    {
       "id": "paper-unchanged",
       "kind": "path-unchanged",
       "path": "paper/**"

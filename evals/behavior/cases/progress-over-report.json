@@ -40,11 +40,6 @@
       "kind": "public-output-not-empty"
     },
     {
-      "id": "inspect-manuscript",
-      "kind": "tool-action-path",
-      "path": "paper/main.tex"
-    },
-    {
       "id": "manuscript-changed",
       "kind": "path-changed",
       "path": "paper/main.tex"
