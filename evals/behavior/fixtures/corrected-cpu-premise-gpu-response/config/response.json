@@ -1,0 +1,10 @@
+{
+  "grid": [320, 320, 320],
+  "preflightGrid": [48, 48, 48],
+  "timeSteps": 900,
+  "preflightSteps": 60,
+  "sourceCount": 40,
+  "receiverCount": 16,
+  "spacingMm": 0.5,
+  "stepUs": 0.08
+}

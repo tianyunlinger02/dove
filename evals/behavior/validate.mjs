@@ -14,6 +14,8 @@ import {
   assertReceiptRecordShape,
   assertToolActionsShape,
   behaviorEvalShapeExamples,
+  correctionBudget,
+  correctionOutcome,
   createFixtureCliLauncher,
   createSnapshotRecord,
   evaluateHardExpectation,
@@ -108,6 +110,10 @@ function assertCase(testCase, file) {
   if (testCase.surface.entry === "slash-command") assert.equal(ALLOWED_SURFACE_COMMANDS.has(testCase.surface.command), true);
   else assert.equal(Object.hasOwn(testCase.surface, "command"), false);
   assertString(testCase.surface.prompt, "surface.prompt");
+  if (testCase.surface.correctionPrompt !== undefined) {
+    assert.equal(testCase.surface.entry, "ambient-prompt", "session correction uses ambient user turns");
+    assertString(testCase.surface.correctionPrompt, "surface.correctionPrompt");
+  }
 
   assert.equal(isObject(testCase.budgets), true);
   assert.ok(Number.isInteger(testCase.budgets.timeoutMs) && testCase.budgets.timeoutMs >= 30_000 && testCase.budgets.timeoutMs <= 900_000);
@@ -214,6 +220,45 @@ test("one offline spawn reaches a public successful terminal", (t) => {
   const evidence = parseEvidence(invoked.result.stdout, scratch);
   assert.match(evidence.publicText, /Offline synthetic answer/u);
   assert.equal(executionResult(invoked.result, evidence.streamRecords, invoked.maxBudgetUsd).status, "completed");
+});
+
+test("same-session correction uses one id and bounded second-turn budget/time, never resumes after failure", (t) => {
+  const scratch = fs.mkdtempSync(path.join(ROOT, "evals", "behavior", ".scratch-correction-"));
+  t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
+  const launcher = createFixtureCliLauncher(scratch);
+  const fake = path.join(scratch, "fake-cli.mjs");
+  const log = path.join(scratch, "calls.jsonl");
+  fs.writeFileSync(fake, `#!/usr/bin/env node\nimport fs from "node:fs";\nconst args = process.argv.slice(2);\nlet input = "";\nfor await (const chunk of process.stdin) input += chunk;\nconst resume = args.includes("--resume");\nconst id = args[args.indexOf(resume ? "--resume" : "--session-id") + 1];\nconst cap = Number(args[args.indexOf("--max-budget-usd") + 1]);\nfs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ resume, id, cap, input }) + "\\n");\nfor (const record of [\n  { type: "system", subtype: "init", session_id: id },\n  { type: "assistant", message: { role: "assistant", content: [{ type: "text", text: resume ? "Corrected route." : "Initial route." }] } },\n  { type: "result", subtype: input.includes("fail-first") ? "error" : "success", is_error: input.includes("fail-first"), total_cost_usd: 0.02, result: "Offline." }\n]) process.stdout.write(JSON.stringify(record) + "\\n");\n`);
+  fs.chmodSync(fake, 0o755);
+  const original = readJson(path.join(CASES_ROOT, "corrected-cpu-premise-gpu-response.json"));
+  const testCase = { ...original, surface: { ...original.surface, prompt: "initial user turn", correctionPrompt: "corrected user turn" } };
+  const options = parseArgs(["--claude-command", fake, "--max-budget-usd", "0.05"]);
+  const sessionId = "10000000-0000-4000-8000-000000000000";
+  const first = invokeClaude(testCase, options, scratch, launcher, { sessionId });
+  const initialRecords = parseEvidence(first.result.stdout, scratch).streamRecords;
+  const remaining = correctionBudget(first.result, initialRecords, 0.05, first.durationMs, 240000, sessionId);
+  assert.ok(remaining);
+  assert.ok(remaining.timeoutMs < 240000);
+  assert.equal(remaining.maxBudgetUsd, 0.03);
+  const second = invokeClaude(testCase, options, scratch, launcher, { sessionId, resume: true, prompt: `${testCase.surface.correctionPrompt}\n`, maxBudgetUsd: remaining.maxBudgetUsd, timeoutMs: remaining.timeoutMs });
+  const calls = fs.readFileSync(log, "utf8").trim().split("\n").map(JSON.parse);
+  assert.deepEqual(calls.map(({ resume, id, cap, input }) => ({ resume, id, cap, input })), [
+    { resume: false, id: sessionId, cap: 0.05, input: "initial user turn\n" },
+    { resume: true, id: sessionId, cap: 0.03, input: "corrected user turn\n" }
+  ]);
+  const combined = parseEvidence(`${first.result.stdout}\n${second.result.stdout}`, scratch);
+  assert.ok(combined.publicText.indexOf("Initial route.") < combined.publicText.indexOf("Corrected route."));
+  const resumedRecords = parseEvidence(second.result.stdout, scratch).streamRecords;
+  assert.equal(correctionOutcome(second.result, resumedRecords, 0.03, 0.05, sessionId).status, "completed");
+  assert.equal(correctionOutcome(second.result, resumedRecords.map((record) => record.type === "result" ? { ...record, total_cost_usd: undefined } : record), 0.03, 0.05, sessionId).status, "incomplete", "unknown second-turn spend is not a pass");
+  assert.equal(correctionOutcome(second.result, resumedRecords.map((record) => record.type === "result" ? { ...record, result: "" } : record), 0.03, 0.05, sessionId).status, "incomplete", "progress text without a final answer is not a pass");
+  const failed = invokeClaude({ ...testCase, surface: { ...testCase.surface, prompt: "fail-first" } }, options, scratch, launcher, { sessionId: "20000000-0000-4000-8000-000000000000" });
+  assert.equal(correctionBudget(failed.result, parseEvidence(failed.result.stdout, scratch).streamRecords, 0.05, failed.durationMs, 240000, "20000000-0000-4000-8000-000000000000"), null);
+  assert.equal(correctionBudget(first.result, initialRecords, 0.05, 240000, 240000, sessionId), null, "first-turn timeout stops correction");
+  assert.equal(correctionBudget({ ...first.result, status: null, signal: "SIGTERM" }, initialRecords, 0.05, first.durationMs, 240000, sessionId), null, "timed-out first spawn stops correction");
+  assert.equal(correctionBudget(first.result, initialRecords, 0.05, first.durationMs, 240000, "different-session"), null, "unverified session stops correction");
+  assert.equal(correctionBudget(first.result, initialRecords, 0.02, first.durationMs, 240000, sessionId), null, "exhausted budget stops correction");
+  assert.equal(fs.readFileSync(log, "utf8").trim().split("\n").length, 3, "failed first turn receives no continuation");
 });
 
 test("generic terminal rules reject failure, missing terminal, and budget interruption", () => {

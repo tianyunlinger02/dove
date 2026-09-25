@@ -1,0 +1,8 @@
+{
+  "reference_value": 5.0,
+  "reference_reading": 6.5,
+  "pairs": [
+    { "truth": 10.0, "target_reading": 11.5 },
+    { "truth": 20.0, "target_reading": 21.5 }
+  ]
+}

@@ -618,16 +618,17 @@ export function executionResult(result, streamRecords, maxBudgetUsd) {
   };
 }
 
-export function invokeClaude(testCase, options, workspaceRoot, fixtureCliPath) {
-  const maxBudgetUsd = effectiveMaxBudgetUsd(testCase, options);
+export function invokeClaude(testCase, options, workspaceRoot, fixtureCliPath, turn = {}) {
+  const maxBudgetUsd = turn.maxBudgetUsd ?? effectiveMaxBudgetUsd(testCase, options);
   const argv = ["--print", "--verbose", "--output-format", "stream-json", "--input-format", "text", "--permission-mode", options.permissionMode, "--max-budget-usd", String(maxBudgetUsd)];
   if (options.model) argv.push("--model", options.model);
+  if (turn.sessionId) argv.push(turn.resume ? "--resume" : "--session-id", turn.sessionId);
   const startedMs = Date.now();
   const result = spawnSync(options.claudeCommand, argv, {
     cwd: workspaceRoot,
-    input: casePrompt(testCase),
+    input: turn.prompt ?? casePrompt(testCase),
     encoding: "utf8",
-    timeout: testCase.budgets.timeoutMs,
+    timeout: turn.timeoutMs ?? testCase.budgets.timeoutMs,
     maxBuffer: 64 * 1024 * 1024,
     env: {
       ...process.env,
@@ -637,6 +638,32 @@ export function invokeClaude(testCase, options, workspaceRoot, fixtureCliPath) {
     }
   });
   return { argv, maxBudgetUsd, result, durationMs: Date.now() - startedMs };
+}
+
+export function correctionBudget(firstResult, firstRecords, capUsd, elapsedMs, timeoutMs, sessionId) {
+  const outcome = executionResult(firstResult, firstRecords, capUsd);
+  const initialized = firstRecords.some((record) => record.type === "system" && record.subtype === "init" && record.session_id === sessionId);
+  const firstCost = firstRecords.filter((record) => record.type === "result" && record.parent_tool_use_id == null).at(-1)?.total_cost_usd;
+  const remainingMs = timeoutMs - elapsedMs;
+  return outcome.status === "completed" && initialized && Number.isFinite(firstCost) && firstCost >= 0 && firstCost < capUsd && remainingMs > 0
+    ? { maxBudgetUsd: Number((capUsd - firstCost).toPrecision(12)), timeoutMs: remainingMs, firstCost } : null;
+}
+
+export function correctionOutcome(result, records, remainingBudgetUsd, totalBudgetUsd, sessionId) {
+  const outcome = executionResult(result, records, remainingBudgetUsd);
+  const terminal = records.filter((record) => record.type === "result" && record.parent_tool_use_id == null).at(-1);
+  const cost = terminal?.total_cost_usd;
+  // A resumed terminal may report cumulative session cost rather than this turn's cost.
+  if (Number.isFinite(cost) && cost > remainingBudgetUsd && cost <= totalBudgetUsd
+    && terminal?.subtype === "success" && terminal.is_error !== true && !terminal.errors?.length
+    && outcome.status === "failed" && result.status === 0) {
+    outcome.status = "incomplete";
+    outcome.budgetExceeded = null;
+  }
+  if (outcome.status === "completed" && (!Number.isFinite(cost)
+    || !records.some((record) => record.type === "system" && record.subtype === "init" && record.session_id === sessionId)
+    || typeof terminal.result !== "string" || !terminal.result.trim())) outcome.status = "incomplete";
+  return outcome;
 }
 
 function runOneAttempt(testCase, attempt, options) {
@@ -662,14 +689,47 @@ function runOneAttempt(testCase, attempt, options) {
   assertSnapshotRecordShape(before);
   writeJson(path.join(runRoot, "snapshot-before.json"), before);
 
-  const { argv, maxBudgetUsd: actualMaxBudgetUsd, result, durationMs } = invokeClaude(testCase, options, workspaceRoot, fixtureCliPath);
-  const stdout = result.stdout ?? "";
-  const stderr = result.stderr ?? "";
+  const actualMaxBudgetUsd = effectiveMaxBudgetUsd(testCase, options);
+  const sessionId = testCase.surface.correctionPrompt ? crypto.randomUUID() : null;
+  const firstStartedMs = Date.now();
+  const first = invokeClaude(testCase, options, workspaceRoot, fixtureCliPath, sessionId ? { sessionId } : {});
+  let stdout = first.result.stdout ?? "";
+  let stderr = first.result.stderr ?? "";
+  let result = first.result;
+  let outcome = executionResult(result, extractStreamRecords(stdout), actualMaxBudgetUsd);
+  let correctionDelivered = false;
+  if (sessionId) {
+    // The correction is a second user turn in the SAME Claude session, not another fresh attempt.
+    const firstRecords = extractStreamRecords(stdout);
+    const remaining = correctionBudget(first.result, firstRecords, actualMaxBudgetUsd, Date.now() - firstStartedMs, testCase.budgets.timeoutMs, sessionId);
+    if (remaining) {
+      writeJson(path.join(runRoot, "snapshot-at-correction.json"), snapshotProject(workspaceRoot, include, "workspace-at-correction"));
+      const secondTimeoutMs = testCase.budgets.timeoutMs - (Date.now() - firstStartedMs);
+      if (secondTimeoutMs <= 0) outcome.status = "incomplete";
+      else {
+        writeJson(path.join(runRoot, "correction.json"), { sessionId, prompt: testCase.surface.correctionPrompt, firstCostUsd: remaining.firstCost, remainingBudgetUsd: remaining.maxBudgetUsd, remainingTimeoutMs: secondTimeoutMs });
+        const second = invokeClaude(testCase, options, workspaceRoot, fixtureCliPath, {
+          sessionId, resume: true, prompt: `${testCase.surface.correctionPrompt}\n`,
+          maxBudgetUsd: remaining.maxBudgetUsd, timeoutMs: secondTimeoutMs
+        });
+        result = second.result;
+        correctionDelivered = true;
+        stdout += `\n${result.stdout ?? ""}`;
+        stderr += `\n${result.stderr ?? ""}`;
+        const secondRecords = extractStreamRecords(result.stdout ?? "");
+        outcome = correctionOutcome(result, secondRecords, remaining.maxBudgetUsd, actualMaxBudgetUsd, sessionId);
+        outcome.permissionDenials = [...executionResult(first.result, firstRecords, actualMaxBudgetUsd).permissionDenials, ...outcome.permissionDenials];
+      }
+    } else if (outcome.status === "completed") {
+      outcome.status = "incomplete"; // No verified session continuation or remaining budget/time.
+    }
+  }
   writeText(path.join(runRoot, "stream.jsonl"), stdout);
   writeText(path.join(runRoot, "stderr.log"), stderr);
 
   const evidence = parseEvidence(stdout, workspaceRoot);
-  writeText(path.join(runRoot, "public-output.md"), `${evidence.publicText}\n`);
+  const publicOutput = correctionDelivered ? parseEvidence(result.stdout ?? "", workspaceRoot).publicText : evidence.publicText;
+  writeText(path.join(runRoot, "public-output.md"), `${publicOutput}\n`);
   writeJson(path.join(runRoot, "tool-actions.json"), evidence.toolActions);
   assertToolActionsShape(evidence.toolActions);
 
@@ -679,10 +739,9 @@ function runOneAttempt(testCase, attempt, options) {
   const snapshotDiff = diffSnapshots(before, after);
   writeJson(path.join(runRoot, "snapshot-diff.json"), snapshotDiff);
 
-  const hardChecks = evaluateHardExpectations(testCase, { before, after, publicOutput: evidence.publicText, toolActions: evidence.toolActions, workspaceRoot });
+  const hardChecks = evaluateHardExpectations(testCase, { before, after, publicOutput, toolActions: evidence.toolActions, workspaceRoot });
   writeJson(path.join(runRoot, "hard-checks.json"), hardChecks);
 
-  const outcome = executionResult(result, evidence.streamRecords, actualMaxBudgetUsd);
   const completedAt = utcNow();
   const receipt = createReceiptRecord({
     runId,
@@ -706,7 +765,11 @@ function runOneAttempt(testCase, attempt, options) {
       snapshotAfter: relativeOutputPath(path.join(runRoot, "snapshot-after.json")),
       snapshotDiff: relativeOutputPath(path.join(runRoot, "snapshot-diff.json")),
       hardChecks: relativeOutputPath(path.join(runRoot, "hard-checks.json")),
-      receipt: relativeOutputPath(path.join(runRoot, "receipt.json"))
+      receipt: relativeOutputPath(path.join(runRoot, "receipt.json")),
+      ...(correctionDelivered ? {
+        correction: relativeOutputPath(path.join(runRoot, "correction.json")),
+        snapshotAtCorrection: relativeOutputPath(path.join(runRoot, "snapshot-at-correction.json"))
+      } : {})
     },
     init: { git: gitInit, dove: init },
     budgetOverrideMaxBudgetUsd: options.maxBudgetUsd,

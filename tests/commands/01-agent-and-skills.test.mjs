@@ -14,6 +14,7 @@ import * as publicCore from "../../src/core/index.mjs";
 import { renderDoveAuthorStanceSection, renderDoveReviewerStanceSection, renderDoveSharedResearchContractSection } from "../../src/core/dove-agent-persona.mjs";
 import { DOVE_AUTHOR_PREFERENCES_READ_TRIGGER, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS } from "../../src/core/dove-author-preferences.mjs";
 import {
+  DOVE_RESEARCH_ACTION_SPINE,
   DOVE_RESEARCH_CANDIDATE_COVERAGE,
   DOVE_RESEARCH_DECISION_CONSEQUENCE,
   DOVE_RESEARCH_RESULT_ADOPTION,
@@ -159,6 +160,34 @@ test("material decision consequences stay in standing and full quality guidance"
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /preserve independent useful authorized work/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /one grounded recommendation with its strongest objection, decisive test/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /stop or pause stoppable dependent work before extending it/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /Before the next dependent action after a material result or correction/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /update affected plan, tasks, delegation, resource route, claims, and artifacts/iu);
+});
+
+test("one author-side prediction-to-result contract feeds Research and Experiment", () => {
+  const shared = renderDoveSharedResearchContractSection();
+  const reference = renderDoveResearchQualityReference();
+  const research = COMMAND_SURFACE_BY_ID["dove.research"].contract;
+  const experiment = COMMAND_SURFACE_BY_ID["dove.experiment"].contract;
+  const researchWork = [...research.responsibilities, ...research.actions].join("\n");
+  const experimentWork = [...experiment.responsibilities, ...experiment.actions].join("\n");
+
+  for (const value of [shared, reference]) {
+    assert.match(value, /before testing/iu);
+    assert.match(value, /(?:effect|prediction)/iu);
+    assert.match(value, /same-information (?:comparator|alternative)/iu);
+    assert.match(value, /(?:scale only when grounded|scale when grounded)/iu);
+    assert.match(value, /(?:challenge|failure conditions)/iu);
+  }
+  assert.match(shared, /target, reference, baseline, metric, failure accounting, and permitted execution/iu);
+  assert.match(shared, /observation with the original expectation/iu);
+  assert.match(shared, /implementation, data, evaluation, control, and mechanism/iu);
+  assert.match(researchWork, /compare observation with any grounded prior prediction and rejudge the proposition/iu);
+  assert.match(experimentWork, /mechanism-based expected direction against a same-information comparator/iu);
+  assert.match(experimentWork, /applicable target\/reference, same-information comparator, identifying metric, failure denominator/iu);
+  assert.match(experimentWork, /Interpret results against the prior mechanism-based prediction/iu);
+  assert.match(experimentWork, /Exploration may discover phenomena[^.]*without a predeclared claim/iu);
+  assert.match(shared, /bounded tasks retain their scope/iu);
 });
 
 test("Experiment permits early diagnostics but rejects incomparable controls and proxy milestones", () => {
@@ -204,6 +233,9 @@ test("capabilities and bounded agents reuse one result-adoption contract", () =>
   assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /unresolved or unverified limits/iu);
   assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /useful work outside current authorization/iu);
   assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /return does not itself authorize/iu);
+  assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /next effective permitted action in the same work session/iu);
+  assert.match(renderDoveAuthorStanceSection(), /stop or pause stoppable dependent work[^.]*revise the affected plan, active tasks, delegated work, resource route/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /restriction on one run is not automatically a restriction on the future method/iu);
 });
 
 test("research entrances retain one spine and distinguish scientific goals from available implementation", () => {

@@ -149,6 +149,10 @@ export function assertFinalEntrypointWiring() {
   assert.match(rule, /without requiring `--agent dove` or a Skill/iu);
   assert.match(renderClaudeDoveAgent(), /no higher judgment authority/iu);
   assertCoreActionGuidance(rule, "ordinary Claude rule");
+  assert.match(rule, /expected direction against a same-information comparator/iu);
+  assert.match(rule, /observation with the original expectation/iu);
+  assert.match(rule, /stop or pause stoppable dependent work[^.]*revise the affected plan, active tasks, delegated work, resource route/iu);
+  assert.match(rule, /next effective permitted action in the same work session/iu);
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, 1, "author stance owns the preference read trigger");
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP).length - 1, 1, "author stance requires one main-agent bootstrap");
   assert.match(rule, /current host main agent must personally read/iu);
@@ -192,7 +196,11 @@ export function assertFinalEntrypointWiring() {
     for (const prefix of prefixes) {
       const value = `${prefix}\n\n${entry.content}`;
       assertSharedContractOnce(value, label);
-      if (["dove.research", "dove.experiment"].includes(entry.command.id)) assertCoreActionGuidance(value, label);
+      if (["dove.research", "dove.experiment"].includes(entry.command.id)) {
+        assertCoreActionGuidance(value, label);
+        assert.match(value, /expected direction against a same-information comparator/iu, label);
+        assert.match(value, /observation with the original expectation/iu, label);
+      }
       assert.doesNotMatch(value, /Workspace mainline/u);
       if (["dove.research", "dove.status"].includes(entry.command.id)) assert.match(value, /Mainline: <text>/u);
       for (const instruction of USER_RESPONSE_POLICY) {
