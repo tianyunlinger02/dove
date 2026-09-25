@@ -135,6 +135,22 @@ test("quality reference connects contribution signals to investment without posi
   assert.match(reference, /past effort matters only through/iu);
   assert.match(reference, /Contract correctness establishes implementation/iu);
   assert.match(reference, /discriminating observation establishes only the scientific claim/iu);
+  assert.match(reference, /decision-relevant complete slices of real production, downstream consumption, and proportionate verification/iu);
+  assert.match(reference, /repair shared causes, revise the design, extend the necessary capability, or stop dependent investment/iu);
+});
+
+test("iterative engineering joins producer and consumer feedback without minimizing the goal", () => {
+  const shared = renderDoveSharedResearchContractSection();
+  const author = renderDoveAuthorStanceSection();
+  assert.match(shared, /decision-relevant complete slices that connect real production, downstream consumption, and proportionate verification/iu);
+  assert.match(shared, /repair shared causes, revise the design, or extend the route toward the agreed capability and scale/iu);
+  assert.match(shared, /A slice need not be small/iu);
+  assert.match(shared, /runnable toy path or passing local check is not a final implementation/iu);
+  assert.match(author, /inspect actual producer-consumer behavior and failures/iu);
+  assert.match(author, /next authorized repair, design change, or capability extension/iu);
+  assert.match(author, /neither a locally green slice nor a diagnostic prototype completes the whole goal/iu);
+  assert.match(author, /bounded deliverables/iu);
+  assert.match(author, /respect file, execution, resource, publication, and destructive-action boundaries/iu);
 });
 
 test("material decision consequences stay in standing and full quality guidance", () => {

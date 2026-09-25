@@ -288,6 +288,16 @@ test("all declared material and hard-check paths enter snapshots", () => {
   }
 });
 
+test("iterative engineering fixture distinguishes a green smoke from broken downstream use", () => {
+  const cwd = path.join(FIXTURES_ROOT, "iterative-producer-consumer-feedback");
+  const smoke = spawnSync(process.execPath, ["checks/smoke.mjs"], { cwd, encoding: "utf8", timeout: 30_000 });
+  const downstream = spawnSync(process.execPath, ["checks/downstream.mjs"], { cwd, encoding: "utf8", timeout: 30_000 });
+  assert.equal(smoke.status, 0, smoke.stderr);
+  assert.match(smoke.stdout, /smoke: peak is positive/u);
+  assert.notEqual(downstream.status, 0, "the supplied consumer must expose the broken producer contract");
+  assert.match(downstream.stderr, /expected:[^\n]*800|800[^\n]*expected/iu);
+});
+
 test("central execution fixture captures prospective bytes before computing", (t) => {
   const scratch = fs.mkdtempSync(path.join(ROOT, "evals", "behavior", ".scratch-central-"));
   t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));

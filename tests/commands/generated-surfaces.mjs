@@ -99,6 +99,9 @@ function assertCoreActionGuidance(value, label) {
   assert.match(value, /scientific core is the valuable problem/iu, label);
   assert.match(value, /expected-best necessary engineering route/iu, label);
   assert.match(value, /prefer less code only when/iu, label);
+  assert.match(value, /decision-relevant complete slices that connect real production, downstream consumption, and proportionate verification/iu, label);
+  assert.match(value, /observed behavior to repair shared causes, revise the design, or extend the route/iu, label);
+  assert.match(value, /neither a locally green slice nor a diagnostic prototype completes the whole goal/iu, label);
   assert.match(value, /engineering core is the producer-consumer behavior/iu, label);
   assert.match(value, /one grounded recommendation with its strongest objection/iu, label);
   assert.match(value, /stop or pause stoppable/iu, label);
