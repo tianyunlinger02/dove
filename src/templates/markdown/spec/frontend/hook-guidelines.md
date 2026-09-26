@@ -39,4 +39,4 @@ Claude's managed `UserPromptSubmit` emits a deterministic short re-anchor on eve
 
 ## Prohibited and retired product integration
 
-Dove installs no hidden intake, ambient router, Stop scheduler, or per-tool scientific approval. Stop must not manufacture another research turn or write research state. Explicit lifecycle operations remove a retired prompt fragment only when still manifest-owned and digest-matching. Unowned legacy Stop/prompt entries and unknown files remain untouched; diagnostic recognition is not deletion authority.
+Dove installs no hidden intake, ambient router, blocking Stop scheduler, or per-tool scientific approval. The dormant compatibility `dove hook stop` command cannot know the user's active request from Stop input and emits no blocking or turn-continuation output; ordinary installation does not register it. Stop must not manufacture another research turn or write research state. Explicit lifecycle operations remove a retired prompt fragment only when still manifest-owned and digest-matching. Unowned legacy Stop/prompt entries and unknown files remain untouched; diagnostic recognition is not deletion authority.

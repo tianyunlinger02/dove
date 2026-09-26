@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import {
   DOVE_CLAUDE_SESSION_START_HOOK_ENTRY,
+  DOVE_CLAUDE_STOP_HOOK_ENTRY,
   DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY,
   DOVE_CLAUDE_SETTINGS_PATH,
   DOVE_CLAUDE_STATUS_LINE
@@ -22,6 +23,7 @@ import { generatedDoveAgentEntries } from "./dove-agent-definition.mjs";
 
 export const USER_PROMPT_SUBMIT_SELECTOR = "/hooks/UserPromptSubmit[dove-user-prompt-submit]";
 export const SESSION_START_SELECTOR = "/hooks/SessionStart[dove-session-start]";
+export const STOP_SELECTOR = "/hooks/Stop[dove-stop]";
 export const STATUS_LINE_SELECTOR = "/statusLine[dove-project-directory]";
 export const CLAUDE_HOST = "claude";
 
@@ -76,7 +78,7 @@ function assertManagedResourcePath(relativePath) {
   if (FORBIDDEN_RESOURCE_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) throw new Error(`Project integration resources must not install runtime bundles: ${relativePath}.`);
 }
 
-export function claudeResources() {
+export function claudeResources({ includeStopHook = false } = {}) {
   const agentEntries = generatedDoveAgentEntries().filter((entry) => entry.relativePath.startsWith(".claude/agents/"));
   const files = [
     ...generatedAdapterEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
@@ -113,6 +115,14 @@ export function claudeResources() {
     fragment: DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY,
     digest: semanticDigest(DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY)
   };
+  const stopHook = {
+    hostId: CLAUDE_HOST,
+    path: DOVE_CLAUDE_SETTINGS_PATH,
+    kind: "json-fragment",
+    selector: STOP_SELECTOR,
+    fragment: DOVE_CLAUDE_STOP_HOOK_ENTRY,
+    digest: semanticDigest(DOVE_CLAUDE_STOP_HOOK_ENTRY)
+  };
   const statusLine = {
     hostId: CLAUDE_HOST,
     path: DOVE_CLAUDE_SETTINGS_PATH,
@@ -145,7 +155,7 @@ export function claudeResources() {
     fragment: EXA_MCP_FRAGMENT,
     digest: semanticDigest(EXA_MCP_FRAGMENT)
   };
-  const resources = [...files, sessionStartHook, userPromptSubmitHook, statusLine, webFetchDeny, paperSearch, exa];
+  const resources = [...files, sessionStartHook, userPromptSubmitHook, ...(includeStopHook ? [stopHook] : []), statusLine, webFetchDeny, paperSearch, exa];
   if (new Set(resources.map(managedKey)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }
@@ -165,8 +175,8 @@ export function dshResources() {
   });
 }
 
-export function resourcesForHosts(hosts) {
-  const selected = [...claudeResources(), ...dshResources()].filter((entry) => hosts.includes(entry.hostId));
+export function resourcesForHosts(hosts, { includeStopHook = false } = {}) {
+  const selected = [...claudeResources({ includeStopHook }), ...dshResources()].filter((entry) => hosts.includes(entry.hostId));
   return [...new Map(selected.map((entry) => [managedKey(entry), entry])).values()].sort(compareManaged);
 }
 

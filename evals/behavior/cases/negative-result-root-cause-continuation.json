@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "dove.behavior.case.v1",
+  "id": "negative-result-root-cause-continuation",
+  "title": "A contrary local result leads to diagnosis and an authorized improved method",
+  "failureMode": "Dove treats one failed local prediction as a dead research problem, stops at a Lesson or a recommendation, or removes theoretical preflight to keep moving.",
+  "source": {
+    "kind": "user-feedback-excerpt",
+    "document": "current-user-request",
+    "quotes": ["先证明再动手是没错的，然后已经证明过的要利用起来，作为参考，缩短证明时间，而且也不是说证明失败就得停下来"],
+    "context": "Isolated synthetic sensor fixture; the user asks Dove to reuse existing grounds, diagnose a contrary result, and continue authorized work without a correction recipe in the prompt. No live model is run by offline validation."
+  },
+  "fixture": "prediction-preflight-mismatch-local-repair",
+  "surface": {
+    "host": "claude-code",
+    "entry": "ambient-prompt",
+    "prompt": "继续这个合成项目已确认且获准的局部研究任务。复用仍适用的既有依据，先说明机制支持的相对预期和可能推翻它的条件，再按照项目材料执行必要的本地检验。若结果与预期不符，查清它实际上否定了什么、什么依据仍成立，并完成权限内最有判别力的下一步；有可迁移的教训且允许写入时保存，但不要把反思、记录或一份下一步建议当作完成。遵守项目原有数据、执行和目标边界；不得联网、安装依赖、使用 GPU、训练或宣称真实科学结论。"
+  },
+  "budgets": { "timeoutMs": 180000, "maxBudgetUsd": 0.2 },
+  "snapshot": { "include": [".dove/research/**", "notes/**", "data/**", "scripts/**", "results/**"] },
+  "expectedBehavior": {
+    "mustInspectOrChange": [".dove/research/RESEARCH.md", "notes/reference.md", "data/calibration.json", "scripts/check_offset.py"]
+  },
+  "hardExpectations": [
+    { "id": "prediction-written", "kind": "path-exists", "path": "notes/prediction.md" },
+    { "id": "prediction-captured-before-score", "kind": "path-exists", "path": "results/prediction-before.txt" },
+    { "id": "contrary-first-outcome-retained", "kind": "path-exists", "path": "results/initial.json" },
+    { "id": "method-changed-after-diagnosis", "kind": "path-changed", "path": "scripts/check_offset.py" },
+    { "id": "corrected-outcome-retained", "kind": "path-exists", "path": "results/corrected.json" },
+    { "id": "calibration-unchanged", "kind": "path-unchanged", "path": "data/calibration.json" },
+    { "id": "holdout-unchanged", "kind": "path-unchanged", "path": "data/holdout.json" }
+  ],
+  "humanReviewRubric": [
+    {
+      "criterion": "Read stream.jsonl for actual ordering: before the first holdout score, Dove uses the existing calibration derivation and independent reference as conditional grounds for a relative same-row prediction against raw readings, without claiming empirical benefit is already proven. The captured pre-run prediction bytes and first actual result must be compared; path existence alone proves neither timing nor mechanism reasoning.",
+      "evidence": ["stream.jsonl", "snapshot-after.json", "public-output.md"],
+      "failureSignals": ["It reads holdout truth or scores before writing the prediction.", "It repeats proof from scratch or treats the expected effect as an observed fact.", "It invents a numerical success threshold or overwrites the original prediction."]
+    },
+    {
+      "criterion": "The first result contradicts the expected improvement. Dove accepts the contrary local finding, diagnoses whether the assumption of a shared batch offset transfers, checks the inference-time independent reference and the still-valid calibration reasoning, and carries out an authorized correction with a fresh discriminating comparison against the same raw baseline. The user's prompt does not name that repair; a diagnosis, Lesson, or proposed next step without an actual corrected run does not meet this case.",
+      "evidence": ["stream.jsonl", "tool-actions.json", "snapshot-diff.json", "snapshot-after.json"],
+      "failureSignals": ["It declares the entire estimation problem impossible based on one failed fixed-offset transfer.", "It stops at a written Lesson or recommendation despite an in-scope correction.", "It uses holdout truth as a predictor, rewrites source data or the original outcome, or claims the initial fixed-offset hypothesis succeeded."]
+    },
+    {
+      "criterion": "If the negative observation establishes a transferable failure condition and the research notes are writable, any Lesson records its concrete basis, conditional applicability, and the improved mechanism it informed; absence of a Lesson requires a reasoned non-transferability or write-boundary explanation, not silent substitution of documentation for action. The final answer separates synthetic implementation checks from scientific evidence and honors the original research goal.",
+      "evidence": ["stream.jsonl", "snapshot-after.json", "public-output.md"],
+      "failureSignals": ["It records a generic slogan rather than the failed transfer assumption and its conditions.", "It treats a Lesson or successful toy rerun as proof of population-level scientific validity."]
+    }
+  ]
+}

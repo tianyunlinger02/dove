@@ -2,15 +2,15 @@
 
 ## Delivery model
 
-Dove 3.2.5 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles. A global npm upgrade with lifecycle scripts enabled runs `postinstall` to safely refresh the package-owned integration of projects in the user's XDG config registry; it does not discover projects by scanning the home directory.
+Dove 3.2.6 is one host-neutral Node.js 22 npm artifact. It installs the `dove` executable for the current user. Consumer projects invoke `dove` from `PATH`; project initialization installs host-facing Markdown resources and software metadata, not copied runtime bundles. A global npm upgrade with lifecycle scripts enabled runs `postinstall` to safely refresh the package-owned integration of projects in the user's XDG config registry; it does not discover projects by scanning the home directory.
 
 The bare public npm package named `dove` is unrelated. Release instructions must use an exact trusted tarball, Git revision, or internal-registry package version.
 
-Dove 3.2.5 is source-available under the PolyForm Noncommercial License 1.0.0, not OSI-approved open-source software. Dove itself may be used only for purposes permitted by that license; this release does not offer or advertise a commercial-license path. Bundled third-party components retain their own MIT or ISC rights, recorded separately in `THIRD_PARTY_NOTICES.md`.
+Dove 3.2.6 is source-available under the PolyForm Noncommercial License 1.0.0, not OSI-approved open-source software. Dove itself may be used only for purposes permitted by that license; this release does not offer or advertise a commercial-license path. Bundled third-party components retain their own MIT or ISC rights, recorded separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Release inventory
 
-Every Dove 3.2.5 release contains:
+Every Dove 3.2.6 release contains:
 
 - **one Dove research agent** for supported agent hosts;
 - **9 optional specialist Skills**: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`;
@@ -44,7 +44,7 @@ Both references are installed once when both hosts are selected; no other `.dove
 
 Release projections live under `package-resources/hosts/...`, outside host-recognized repository roots. Installation uses bundled renderers to write canonical resources into consumer projects, not disk copies of these projections. OpenCode, Codex, Cursor, and shared Agents projections are not packaged.
 
-Claude support resources include the shared Dove rule, hidden Claude guidance Skills for pinned `dove-paper-search` and hosted Exa use, the managed SessionStart hook, and an optional managed `statusLine` fragment. The status line is installed only when the project has no existing line; it invokes the user-level CLI read-only. The managed `UserPromptSubmit` supplies a deterministic short re-anchor on every prompt: no classification, research reads/writes, permission decisions, or blocking. It adds no hidden intake, router, Stop scheduler, or per-tool scientific approval; DSH remains Skills-only.
+Claude support resources include the shared Dove rule, hidden Claude guidance Skills for pinned `dove-paper-search` and hosted Exa use, the managed SessionStart hook, and an optional managed `statusLine` fragment. The status line is installed only when the project has no existing line; it invokes the user-level CLI read-only. The managed `UserPromptSubmit` supplies a deterministic short re-anchor on every prompt: no classification, research reads/writes, permission decisions, or blocking. It adds no hidden intake, router, blocking Stop scheduler, or per-tool scientific approval; DSH remains Skills-only. The dormant compatibility `dove hook stop` command cannot infer the user's current request from a Stop event and emits no continuation output; ordinary installation does not register it. This prevents a bounded/read-only request from being spuriously prolonged, but does not enforce multi-round autonomy.
 
 Adapters are generated from canonical Dove workflow sources. They carry the same Dove agent behavior into installed projects: for a confirmed goal, Dove keeps selecting, performing, and absorbing the overall-best feasible mainline action until the goal is achieved or a real blocker is established. They use only tools the current host exposes and current user/project permissions allow. Do not edit generated projections independently. Adapter presence does not establish installation, registration, tool availability, project readiness, reviewer identity, or `dove-review` independence. Claude's Review command can call `dove review handoff|status|resume|rerun|import`; DSH has no equivalent recoverable isolated Claude Code context in this package and should not present one as available.
 

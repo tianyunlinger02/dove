@@ -174,6 +174,8 @@ test("material decision consequences stay in standing and full quality guidance"
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /close the round/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /stop dependent investment/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /preserve independent useful authorized work/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /Do not infer that no effective in-scope action remains from one poor local result, an unimplemented core, a convenient proxy/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /restriction that Dove inferred rather than the user fixed/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /one grounded recommendation with its strongest objection, decisive test/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /stop or pause stoppable dependent work before extending it/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /Before the next dependent action after a material result or correction/iu);
@@ -204,6 +206,30 @@ test("one author-side prediction-to-result contract feeds Research and Experimen
   assert.match(experimentWork, /Interpret results against the prior mechanism-based prediction/iu);
   assert.match(experimentWork, /Exploration may discover phenomena[^.]*without a predeclared claim/iu);
   assert.match(shared, /bounded tasks retain their scope/iu);
+});
+
+test("theory reuse and negative results lead to grounded repair rather than an invented stop", () => {
+  const shared = renderDoveSharedResearchContractSection();
+  const reference = renderDoveResearchQualityReference();
+  const author = renderDoveAuthorStanceSection();
+  const research = COMMAND_SURFACE_BY_ID["dove.research"].contract;
+  const lessons = COMMAND_SURFACE_BY_ID["dove.lessons"].contract;
+  const researchWork = [...research.responsibilities, ...research.actions].join("\n");
+  const lessonsWork = [...lessons.responsibilities, ...lessons.actions].join("\n");
+
+  assert.match(reference, /Reuse prior checked derivations, observations, near-neighbor findings/iu);
+  assert.match(reference, /check only changed assumptions or counterevidence/iu);
+  assert.match(reference, /original mechanism grounds, prediction, and their conditions/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /still-valid prior grounds/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /then act within authorization rather than only report/iu);
+  assert.match(shared, /one poor local result, an unimplemented core/iu);
+  assert.match(author, /prior checked derivations and results under their original conditions/iu);
+  assert.match(author, /mistaken premise or method limit/iu);
+  assert.match(author, /next permitted action rather than ending at the reflection or record/iu);
+  assert.match(researchWork, /reuse.*(?:checked|prior).*(?:derivation|result)/iu);
+  assert.match(researchWork, /root cause/iu);
+  assert.match(lessonsWork, /mistaken premise|root cause/iu);
+  assert.match(lessonsWork, /does not.*(?:repair|fix)/iu);
 });
 
 test("Experiment permits early diagnostics but rejects incomparable controls and proxy milestones", () => {

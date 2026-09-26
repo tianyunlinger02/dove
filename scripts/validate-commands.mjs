@@ -11,7 +11,9 @@ const COMMAND_TEST_FILES = Object.freeze([
   "tests/commands/02-generated-adapters.test.mjs",
   "tests/commands/03-ambient-docs-research-defaults.test.mjs",
   "tests/commands/04-cli-parser-renderers.test.mjs",
-  "tests/commands/05-interactive-setup.test.mjs"
+  "tests/commands/05-interactive-setup.test.mjs",
+  "tests/commands/stop-hook.test.mjs",
+  "tests/commands/stop-hook-installation.test.mjs"
 ]);
 
 const result = spawnSync(process.execPath, [

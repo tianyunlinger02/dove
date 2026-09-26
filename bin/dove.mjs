@@ -23,6 +23,7 @@ import {
 } from "../src/cli/terminal-output.mjs";
 import { parseUserPromptSubmitPayload, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../src/core/user-prompt-submit-hook.mjs";
 import { parseSessionStartPayload, sessionStartFailureOutput, sessionStartOutput } from "../src/core/session-start-hook.mjs";
+import { parseStopPayload, stopHookOutput } from "../src/core/stop-hook.mjs";
 import { renderDoveStatusLine } from "../src/core/statusline.mjs";
 import { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
 import { PROJECT_HOST_IDS } from "../src/core/host-registry.mjs";
@@ -186,10 +187,13 @@ function assertHookPayloadProject(payload, target) {
   if (cwdRoot !== target) throw new Error("Dove hook cwd 不属于声明的已初始化项目。");
 }
 
-async function readStdin() {
+async function readStdin(limit = Infinity) {
   let input = "";
   process.stdin.setEncoding("utf8");
-  for await (const chunk of process.stdin) input += chunk;
+  for await (const chunk of process.stdin) {
+    input += chunk;
+    if (input.length > limit) return null;
+  }
   return input;
 }
 
@@ -430,6 +434,11 @@ try {
 
   if (command === "hook") {
     const hookName = subcommand;
+    if (hookName === "stop") {
+      const output = stopHookOutput(parseStopPayload(await readStdin(64_000)));
+      if (output !== null) process.stdout.write(JSON.stringify(output));
+      process.exit(0);
+    }
     if (projectOption(options) === undefined) throw new Error(`dove hook ${hookName} 需要 --project <dir>。`);
     const input = await readStdin();
     if (hookName === "user-prompt-submit") {
@@ -465,7 +474,7 @@ try {
       process.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path.resolve(projectOption(options)) })}\n`);
       process.exit(0);
     }
-    throw new Error("dove hook only supports session-start, user-prompt-submit and statusline.");
+    throw new Error("dove hook only supports session-start, user-prompt-submit, statusline and stop.");
   }
 } catch (error) {
   operationalFailure(error, options);

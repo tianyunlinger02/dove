@@ -113,6 +113,9 @@ function assertCoreActionGuidance(value, label) {
   assert.match(value, /Credible positive signals are preliminary support/iu, label);
   assert.match(value, /core implementation need not wait for positive evidence/iu, label);
   assert.match(value, /never select samples, change criteria, or hide counterevidence/iu, label);
+  assert.match(value, /still-valid prior grounds/iu, label);
+  assert.match(value, /then act within authorization rather than only report/iu, label);
+  assert.match(value, /rather than only report a diagnosis, Lesson, or revised intention/iu, label);
 }
 
 export function assertFinalEntrypointWiring() {
@@ -238,6 +241,8 @@ export function assertRenderedCapabilityWiring(entry) {
     assert.match(value, /local effect supports only the local claim/iu, label);
     assert.match(value, /Judge continuation prospectively/iu, label);
     assert.match(value, /past work matters only through/iu, label);
+    assert.match(value, /(?:checked|prior).*(?:derivation|result)/iu, label);
+    assert.match(value, /root cause/iu, label);
   }
   if (entry.command.id === "dove.source") {
     assert.match(value, /Partial support is not support for the whole sentence/u, label);

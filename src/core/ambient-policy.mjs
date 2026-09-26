@@ -10,6 +10,12 @@ export const DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND = 'dove hook user-promp
 export const DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY = Object.freeze({
   hooks: Object.freeze([Object.freeze({ type: "command", command: DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, timeout: 10 })])
 });
+// Stop carries no current user prompt. This dormant optional resource cannot
+// infer authorization or prolong a bounded turn from the assistant's message.
+export const DOVE_CLAUDE_STOP_HOOK_COMMAND = 'dove hook stop --project "$CLAUDE_PROJECT_DIR"';
+export const DOVE_CLAUDE_STOP_HOOK_ENTRY = Object.freeze({
+  hooks: Object.freeze([Object.freeze({ type: "command", command: DOVE_CLAUDE_STOP_HOOK_COMMAND, timeout: 10 })])
+});
 export const DOVE_CLAUDE_STATUS_LINE_COMMAND = 'dove hook statusline --project "$CLAUDE_PROJECT_DIR"';
 export const DOVE_CLAUDE_STATUS_LINE = Object.freeze({
   type: "command",
@@ -44,6 +50,7 @@ function exactManagedHook(value, command) {
 function hookCommandMarkers(eventName) {
   if (eventName === "SessionStart") return ["dove hook session-start"];
   if (eventName === "UserPromptSubmit") return ["dove hook user-prompt-submit"];
+  if (eventName === "Stop") return ["dove hook stop"];
   throw new Error(`Unsupported Dove Claude hook event: ${eventName}.`);
 }
 
@@ -95,6 +102,15 @@ export function mergeClaudeUserPromptSubmitSettings(settings) {
   const merged = mergeManagedHook(entries ?? [], "UserPromptSubmit", DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY);
   if (!merged.changed) return { settings, changed: false };
   return { settings: { ...settings, hooks: { ...hooks, UserPromptSubmit: merged.entries } }, changed: true };
+}
+
+export function mergeClaudeStopSettings(settings) {
+  const hooks = assertClaudeSettingsShape(settings);
+  const entries = hooks.Stop;
+  if (entries !== undefined && !Array.isArray(entries)) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks.Stop must be an array.`);
+  const merged = mergeManagedHook(entries ?? [], "Stop", DOVE_CLAUDE_STOP_HOOK_COMMAND, DOVE_CLAUDE_STOP_HOOK_ENTRY);
+  if (!merged.changed) return { settings, changed: false };
+  return { settings: { ...settings, hooks: { ...hooks, Stop: merged.entries } }, changed: true };
 }
 
 export function renderClaudeAmbientRule() {

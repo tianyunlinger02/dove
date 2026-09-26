@@ -5,6 +5,7 @@ import {
   DOVE_CLAUDE_SETTINGS_PATH,
   DOVE_CLAUDE_STATUS_LINE,
   mergeClaudeSessionStartSettings,
+  mergeClaudeStopSettings,
   mergeClaudeUserPromptSubmitSettings
 } from "./ambient-policy.mjs";
 import {
@@ -30,6 +31,7 @@ import {
 import {
   SESSION_START_SELECTOR,
   STATUS_LINE_SELECTOR,
+  STOP_SELECTOR,
   USER_PROMPT_SUBMIT_SELECTOR,
   canonicalJson,
   compareManaged,
@@ -138,13 +140,16 @@ function exactRetiredDoveUserPromptSubmitHook(entry) {
     && hook.timeout === 10;
 }
 
-function inspectRetiredHooks(settings) {
+function inspectRetiredHooks(settings, oldEntries) {
   const matchedPaths = [];
+  const ownedStop = oldEntries.find((entry) => entry.selector === STOP_SELECTOR);
   for (const [eventName, matches] of [["Stop", exactLegacyDoveStopHook], ["UserPromptSubmit", exactRetiredDoveUserPromptSubmitHook]]) {
     const entries = settings.hooks?.[eventName];
     if (!Array.isArray(entries)) continue;
     for (const [index, entry] of entries.entries()) {
-      if (matches(entry)) matchedPaths.push(`${DOVE_CLAUDE_SETTINGS_PATH}#/hooks/${eventName}/${index}`);
+      if (matches(entry) && !(eventName === "Stop" && ownedStop?.digest === semanticDigest(entry))) {
+        matchedPaths.push(`${DOVE_CLAUDE_SETTINGS_PATH}#/hooks/${eventName}/${index}`);
+      }
     }
   }
   return { matchedPaths };
@@ -153,6 +158,7 @@ function inspectRetiredHooks(settings) {
 function hookCommandMarkers(eventName) {
   if (eventName === "SessionStart") return ["dove hook session-start"];
   if (eventName === "UserPromptSubmit") return ["dove hook user-prompt-submit"];
+  if (eventName === "Stop") return ["dove hook stop"];
   throw new Error(`Unsupported Dove Claude hook event: ${eventName}.`);
 }
 
@@ -215,6 +221,7 @@ function statusLineState(value) {
 function fragmentState(resource, value) {
   if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return hookFragmentState(value, "UserPromptSubmit");
   if (resource.selector === SESSION_START_SELECTOR) return hookFragmentState(value, "SessionStart");
+  if (resource.selector === STOP_SELECTOR) return hookFragmentState(value, "Stop");
   if (resource.selector === STATUS_LINE_SELECTOR) return statusLineState(value);
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) return webFetchDenyFragmentState(value);
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) return paperSearchMcpFragmentState(value);
@@ -231,6 +238,7 @@ function removeHookFragment(value, eventName) {
 function removeFragment(resource, value, current, options = {}) {
   if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return removeHookFragment(value, "UserPromptSubmit");
   if (resource.selector === SESSION_START_SELECTOR) return removeHookFragment(value, "SessionStart");
+  if (resource.selector === STOP_SELECTOR) return removeHookFragment(value, "Stop");
   if (resource.selector === STATUS_LINE_SELECTOR) {
     const next = { ...value };
     if (options.force === true || JSON.stringify(next.statusLine) === JSON.stringify(DOVE_CLAUDE_STATUS_LINE)) delete next.statusLine;
@@ -341,6 +349,7 @@ function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
 function addFragment(resource, value) {
   if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return mergeClaudeUserPromptSubmitSettings(value).settings;
   if (resource.selector === SESSION_START_SELECTOR) return mergeClaudeSessionStartSettings(value).settings;
+  if (resource.selector === STOP_SELECTOR) return mergeClaudeStopSettings(value).settings;
   if (resource.selector === STATUS_LINE_SELECTOR) return { ...value, statusLine: resource.fragment };
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) return mergeWebFetchDenyPermission(value).settings;
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) {
@@ -371,7 +380,7 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
   const original = parseSharedJson(observed, relativePath);
   // Diagnostic paths describe the original disk state, not planned cleanup or ownership.
   const retiredHooks = relativePath === DOVE_CLAUDE_SETTINGS_PATH && options.replacementPolicy === "inspect"
-    ? inspectRetiredHooks(original)
+    ? inspectRetiredHooks(original, oldEntries)
     : null;
   const desiredByKey = new Map(desiredEntries.map((entry) => [managedKey(entry), entry]));
   const oldByKey = new Map(oldEntries.map((entry) => [managedKey(entry), entry]));
@@ -402,7 +411,14 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
     }
     const current = fragmentState(resource, next);
 
-    if (oldEntry && !desired && resource.selector === USER_PROMPT_SUBMIT_SELECTOR) {
+    if (oldEntry && !desired && (resource.selector === USER_PROMPT_SUBMIT_SELECTOR || resource.selector === STOP_SELECTOR)) {
+      if (resource.selector === STOP_SELECTOR && (!current.exists || current.digest !== oldEntry.digest)) {
+        if (skipDrift) {
+          retainSkipped(resource, oldEntry);
+          continue;
+        }
+        throw driftError(resource, current.digest);
+      }
       if (!current.exists && shouldPreserveMissing(options)) {
         if (skipDrift) {
           retainSkipped(resource, oldEntry);
@@ -433,6 +449,8 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
     }
 
     if (!oldEntry) {
+      // An unowned Stop hook, even if byte-for-byte equal, is not deletion authority.
+      if (current.exists && resource.selector === STOP_SELECTOR) throw conflictError(desired);
       if (current.exists && current.digest === desired.digest) continue;
       if (current.exists) throw conflictError(desired);
       next = addFragment(desired, next);
@@ -519,7 +537,7 @@ export function planResource(root, desired, oldEntry, fsOps = fs, options = {}) 
 }
 
 export function assertManagedOwnership(manifest) {
-  const knownKeys = new Set(resourcesForHosts(manifest?.hosts ?? []).map(managedKey));
+  const knownKeys = new Set(resourcesForHosts(manifest?.hosts ?? [], { includeStopHook: true }).map(managedKey));
   for (const entry of manifest?.managed ?? []) {
     if (!knownKeys.has(managedKey(entry))) {
       throw new Error(`Dove project integration contains unknown ownership: ${entry.path}${entry.selector ? `#${entry.selector}` : ""}.`);
@@ -527,7 +545,7 @@ export function assertManagedOwnership(manifest) {
   }
 }
 
-export function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs, manifest = null, replacementPolicy = "safe" }) {
+export function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs, manifest = null, replacementPolicy = "safe", includeStopHook }) {
   if (manifest && ["identity-mismatch", "invalid-version", "newer"].includes(classifyPackageCompatibility(manifest.package, { name: packageName, version: packageVersion }))) {
     throw new Error("Dove project integration package is incompatible with the running CLI.");
   }
@@ -537,7 +555,10 @@ export function preparePlan({ root, hosts, packageName, packageVersion, now, fsO
   const replacedLocalEdits = [];
   const retainedManagedByKey = new Map();
   const omittedManagedKeys = new Set();
-  const desiredResources = resourcesForHosts(hosts).filter((entry) => {
+  // Stop has no user-scope signal and is not an ordinary installation resource.
+  // Explicit fixture selection can exercise lifecycle ownership; normal update
+  // retires exact previously owned fragments rather than retaining the hook.
+  const desiredResources = resourcesForHosts(hosts, { includeStopHook: includeStopHook === true }).filter((entry) => {
     if (oldByKey.has(managedKey(entry))) return true;
     if (entry.selector === STATUS_LINE_SELECTOR) {
       const observed = inspectRegularProjectFile(root, entry.path, fsOps);
