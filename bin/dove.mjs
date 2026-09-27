@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -21,7 +22,7 @@ import {
   renderUninstallInventory,
   terminalColorEnabled
 } from "../src/cli/terminal-output.mjs";
-import { parseUserPromptSubmitPayload, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../src/core/user-prompt-submit-hook.mjs";
+import { currentPromptGuidance, parseUserPromptSubmitPayload, userPromptSubmitAttentionOutput, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../src/core/user-prompt-submit-hook.mjs";
 import { parseSessionStartPayload, sessionStartFailureOutput, sessionStartOutput } from "../src/core/session-start-hook.mjs";
 import { parseStopPayload, stopHookOutput } from "../src/core/stop-hook.mjs";
 import { renderDoveStatusLine } from "../src/core/statusline.mjs";
@@ -182,9 +183,22 @@ function prepareHookProject(project) {
 
 function assertHookPayloadProject(payload, target) {
   if (payload?.cwd === undefined) return;
-  if (typeof payload.cwd !== "string" || !payload.cwd.trim()) throw new Error("Dove hook cwd 必须指向已初始化项目中的目录。");
-  const cwdRoot = resolveInstalledProjectRoot(payload.cwd, { hostIds: PROJECT_HOST_IDS });
-  if (cwdRoot !== target) throw new Error("Dove hook cwd 不属于声明的已初始化项目。");
+  if (typeof payload.cwd !== "string" || !payload.cwd.trim() || payload.cwd.includes("\0")) throw new Error("Dove hook cwd 必须指向已初始化项目中的目录。");
+  const cwd = fs.realpathSync(payload.cwd);
+  const stat = fs.statSync(cwd);
+  const relative = path.relative(target, cwd);
+  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error("Dove hook cwd 不属于声明的已初始化项目。");
+  }
+  // A nested package boundary need not be a new Dove project, but an actual
+  // nested Dove installation must not borrow its parent's hook guidance.
+  let directory = cwd;
+  while (directory !== target) {
+    if (fs.existsSync(path.join(directory, ".dove/install/manifest.json")) || fs.existsSync(path.join(directory, ".dove-install"))) {
+      throw new Error("Dove hook cwd 属于另一个项目集成。");
+    }
+    directory = path.dirname(directory);
+  }
 }
 
 async function readStdin(limit = Infinity) {
@@ -442,16 +456,27 @@ try {
     if (projectOption(options) === undefined) throw new Error(`dove hook ${hookName} 需要 --project <dir>。`);
     const input = await readStdin();
     if (hookName === "user-prompt-submit") {
+      let payload;
       try {
-        const output = userPromptSubmitOutput(parseUserPromptSubmitPayload(input));
-        process.stdout.write(JSON.stringify(output));
-        process.exit(0);
+        payload = parseUserPromptSubmitPayload(input);
       } catch (error) {
         process.stdout.write(JSON.stringify(userPromptSubmitFailureOutput(error)));
-        // Claude processes hook JSON only on exit 0. The systemMessage reports
-        // that the static re-anchor was not delivered; this hook performs no reads or writes.
         process.exit(0);
       }
+      try {
+        const target = prepareHookProject(projectOption(options));
+        assertHookPayloadProject(payload, target);
+        const inspected = inspectProjectIntegration(target, PACKAGE_OPTIONS);
+        if (inspected.status !== "current") {
+          process.stdout.write(JSON.stringify(userPromptSubmitAttentionOutput()));
+        } else {
+          process.stdout.write(JSON.stringify(userPromptSubmitOutput(payload, currentPromptGuidance(inspected.manifest))));
+        }
+      } catch {
+        // An invalid or unsafe installation does not authorize new project guidance.
+        process.stdout.write(JSON.stringify(userPromptSubmitAttentionOutput()));
+      }
+      process.exit(0);
     }
     if (hookName === "session-start") {
       try {

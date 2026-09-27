@@ -102,6 +102,6 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 
 - 公共文档、实现和生成文件必须与 [研究模型](RESEARCH_MODEL.md) 一致。
 - 工程实现必须保持一个权威 producer—consumer 路径及必要不变量和可见失败。合同测试只建立实现行为；claim-matched control 与评价只建立其实际识别的科学主张，二者不得互相替代。可执行原型、运行成功或沉没投入不得自动把候选升级为主方法；识别核心依赖所必需的 control 优先于从属 baseline 集合与基础设施。
-- 普通 Claude 会话通过项目 rule 直接共享并自然使用科研判断与能力方法；不得为这种 ambient participation 新增 hidden intake、router、mode、mandatory workflow、能力序列、研究／grading state、Stop 调度或逐工具科学审批。`UserPromptSubmit` 仅对每个 prompt 确定性提供短 re-anchor，无分类、研究读写、权限决定或阻塞。SessionStart 不变；安装或更新后活跃会话须重载，不能以磁盘集成证明实际加载。DSH 的显式入口仍只有 Skills，不获得隐式 hook。
+- 普通 Claude 会话通过项目 rule 直接共享并自然使用科研判断与能力方法；不得为这种 ambient participation 新增 hidden intake、router、mode、mandatory workflow、能力序列、研究／grading state、Stop 调度或逐工具科学审批。已有注册的 `UserPromptSubmit` 在每个 prompt 只读校验项目受管集成；当前时送入新版有界科研核心和 rule／参考文件指纹，异常时只作非阻塞诊断，无分类、研究读写、权限决定或阻塞。SessionStart 不变；成功更新后可在原对话下一条消息取得新指导，由当前主 agent 在必要时亲自补读完整 rule 和作者偏好。hook 注入、磁盘更新均不证明宿主 rule 热重载或实际采纳；旧 hook 未注册或宿主配置需完整加载时仍需新上下文。DSH 的显式入口仍只有 Skills，不获得隐式 hook。
 - `status` 必须只读；窄状态冲突只报告可见来源、影响范围及未决处，不静默裁决、写回、扩查或另选主线。
 - 软件检查保护实现和发布行为；不得把检查结果表述为科学正确、研究完成、可复现性、接收、独立审稿或 Dove 研究质量证明。

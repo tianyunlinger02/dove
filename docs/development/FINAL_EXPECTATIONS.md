@@ -8,7 +8,7 @@
 
 当前可见会话已经包含明确科研方向、证据、产物和未完成行动时，用户说“继续”应自然沿该上下文续接。可见上下文不足以确定要继续什么时，Dove 提出最小必要澄清，并说明澄清会改变什么行动。
 
-普通 Claude 主会话通过项目 rule 承担完整的共享科研判断、作者立场、结果采纳和持续主线责任，是首要且完整的 Dove 入口；它可在普通工作中自然采用相关能力方法，不要求用户先调用 agent 或 Skill。每 prompt 的确定性短 `UserPromptSubmit` re-anchor 只提醒回到当前目标，不分类、不读写研究、不决定权限或阻塞，也不替代共享判断。仍禁止 hidden intake、router、mode、research/grading state、mandatory workflow、Stop 和逐工具科学审批。`claude --agent dove` 与九个平级 Skills 都是可选快捷入口，无更高判断权威、能力前置地位或 Auto；有界独立调查可以使用 Dove subagent，但需要完整用户对话、重要澄清、跨能力采纳或持续主线责任的工作留在普通主会话。执行、写入、隔离审稿和对外动作仍遵守各自授权；无科研影响的普通任务不强加科研流程。
+普通 Claude 主会话通过项目 rule 承担完整的共享科研判断、作者立场、结果采纳和持续主线责任，是首要且完整的 Dove 入口；它可在普通工作中自然采用相关能力方法，不要求用户先调用 agent 或 Skill。已注册的每 prompt `UserPromptSubmit` 先只读核对受管集成；当前时交付新版有界科研核心和指导指纹，否则非阻塞地提示检查项目，不分类、不读写研究、不决定权限或阻塞，也不替代共享判断。仍禁止 hidden intake、router、mode、research/grading state、mandatory workflow、Stop 和逐工具科学审批。`claude --agent dove` 与九个平级 Skills 都是可选快捷入口，无更高判断权威、能力前置地位或 Auto；有界独立调查可以使用 Dove subagent，但需要完整用户对话、重要澄清、跨能力采纳或持续主线责任的工作留在普通主会话。执行、写入、隔离审稿和对外动作仍遵守各自授权；无科研影响的普通任务不强加科研流程。
 
 ## Dove 主动形成和检验路线
 
@@ -129,9 +129,9 @@ Dove 的作者上下文在论文准备过程中可以进行作者侧科学自检
 
 以上边界不收紧合法记录维护，不要求把每项有用支撑变成科学贡献，也不否认有依据的负结果价值。支撑工作是否值得做，与它是否已经改变科学认识分开判断。
 
-用户显式 update 会覆盖 manifest-owned 集成中的本地修改并提醒；SessionStart 完全只读，检查集成并按需以 `systemMessage` 提示显式 update，startup 和 `/clear` 另向当前主 agent提供完整作者偏好的读取引导，不同步任何资源、写配置或清理旧状态，也不把引导或安装伪装成已经读过。compact/resume 复用同一主上下文已读偏好，不无条件重读。Doctor 的集成状态仅为 `uninitialized`、`current`、`needs-update`、`blocked`；没有 adoption、旧 manifest migration 或 hot-sync 成功路径，未知文件保留。两者不改研究记录。Claude 项目没有既有 `statusLine` 时，Dove 安装只读双行显示：第一行使用宿主模型、总上下文容量、剩余上下文比例、可选的无标签青色主线正文、Git 分支和当前 Claude 会话时长，第二行仅绝对项目路径；仅非空 `NO_COLOR` 禁色。主线只来自根 `.dove/research/RESEARCH.md` 的唯一普通 `Mainline: <text>` 行，读取上限为 64 KiB；缺失、空白、重复、过大或不可读时省略，不扫描科研树或读取其他记录，不把分支或时长伪装成科学主线或累计科研工时。主线维护遵循[研究模型](RESEARCH_MODEL.md#项目与当前科研主线)，不为显示补写或迁移已有研究树，不改 fresh bootstrap 或 SessionStart。既有用户/Trellis line 不接管。短 prompt re-anchor 不改变以上 SessionStart 契约；安装或更新后活跃宿主会话须重载，不能把磁盘更新当作实际加载。DSH 仍只有 Skills，不获得 Claude hooks。
+用户显式 update 会覆盖 manifest-owned 集成中的本地修改并提醒；SessionStart 完全只读，检查集成并按需以 `systemMessage` 提示显式 update，startup 和 `/clear` 另向当前主 agent提供完整作者偏好的读取引导，不同步任何资源、写配置或清理旧状态，也不把引导或安装伪装成已经读过。compact/resume 复用同一主上下文已读偏好，不无条件重读。Doctor 的集成状态仅为 `uninitialized`、`current`、`needs-update`、`blocked`；没有 adoption、旧 manifest migration 或 hot-sync 成功路径，未知文件保留。两者不改研究记录。Claude 项目没有既有 `statusLine` 时，Dove 安装只读双行显示：第一行使用宿主模型、总上下文容量、剩余上下文比例、可选的无标签青色主线正文、Git 分支和当前 Claude 会话时长，第二行仅绝对项目路径；仅非空 `NO_COLOR` 禁色。主线只来自根 `.dove/research/RESEARCH.md` 的唯一普通 `Mainline: <text>` 行，读取上限为 64 KiB；缺失、空白、重复、过大或不可读时省略，不扫描科研树或读取其他记录，不把分支或时长伪装成科学主线或累计科研工时。主线维护遵循[研究模型](RESEARCH_MODEL.md#项目与当前科研主线)，不为显示补写或迁移已有研究树，不改 fresh bootstrap 或 SessionStart。既有用户/Trellis line 不接管。prompt hook 不改变以上 SessionStart 契约；已有有效注册并成功安全级联时，原会话下一条消息获得新版短核心和指纹，由主 agent 对不确定或变化的完整 rule／偏好亲自补读。这是注入当前上下文，不是宿主重载规则或证明模型已采纳；旧 hook、PATH 或宿主配置不可用时仍需刷新宿主上下文。DSH 仍只有 Skills，不获得 Claude hooks。
 
-全局 npm 升级启用 lifecycle scripts 时，可通过 `postinstall` 刷新用户 XDG 配置注册表中的项目集成；这不是 SessionStart 热同步。已有项目首次纳入注册表需按准确根路径执行 `dove projects import --project <root>... --sync`，以后可用 `dove projects sync` 重试、`dove projects status` 只读查看结果。不扫描整个主目录。自动同步只要发现任一托管本地修改或冲突，就零写入地跳过该项目，继续处理其他项目；显式 `dove update` 仍可告知并覆盖合法托管修改。任何同步均不改科研、Review 或 Run 记录，已打开的宿主会话仍须重载。
+全局 npm 升级启用 lifecycle scripts 时，可通过 `postinstall` 刷新用户 XDG 配置注册表中的项目集成；这不是 SessionStart 热同步。已有项目首次纳入注册表需按准确根路径执行 `dove projects import --project <root>... --sync`，以后可用 `dove projects sync` 重试、`dove projects status` 只读查看结果。不扫描整个主目录。自动同步只要发现任一托管本地修改或冲突，就零写入地跳过该项目，继续处理其他项目；显式 `dove update` 仍可告知并覆盖合法托管修改。任何同步均不改科研、Review 或 Run 记录；已打开的 Claude 会话能否在下一条消息取得当前指导取决于旧 prompt hook 是否仍有效、CLI 是否已更新及项目集成是否 current，不代表宿主重载全部资源。
 
 compact/resume 继续复用同一主上下文已读偏好，不无条件重读，并只提供事实卡：`RESEARCH.md` 是否存在及绝对修改时间；最新 Review 的 id、round、绝对更新时间和材料 currentness；最新 Run 的 id、绝对开始时间、status 和 exit。不读取研究 Markdown 正文、report 或 stdout/stderr logs，不猜主线；startup/clear 提供单独的偏好读取引导而无研究卡。卡片帮助定位记录，不恢复科研判断。
 

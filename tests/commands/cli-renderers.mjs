@@ -113,7 +113,7 @@ function assertDoveCliHelpRenderer() {
   assert.match(output, /真正的科研推进仍在一个 Dove agent 中完成/u);
   assert.match(output, /研究记录是研究者维护的普通 Markdown/u);
   assert.match(output, /Claude 接入管理只读 SessionStart hook，并在没有现有用户配置时安装只读 statusLine/u);
-  assert.match(output, /UserPromptSubmit 对每条 prompt 返回同一作者立场提醒/u);
+  assert.match(output, /UserPromptSubmit 只读检查当前项目的受管集成[\s\S]*有界科研指导和文件指纹/u);
   assert.match(output, /默认不安装 Stop hook[^\n]*无法获知用户本轮请求而放行/u);
   assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "projects", "review", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
   assert.match(output, /dove projects import --project <dir>/u);

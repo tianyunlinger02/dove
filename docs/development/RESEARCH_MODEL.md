@@ -6,7 +6,7 @@ Claude rule、DSH standalone Skills 和隔离 reviewer 常驻短核心；完整�
 
 每个全新的宿主主 agent 上下文都须在实质工作前亲自完整读取 `.dove/install/AUTHOR_PREFERENCES.md`，其唯一可编辑源是 [通用科研、工程与协作偏好](../AUTHOR_PREFERENCES.md)。普通 Claude 和显式 Dove 都由当前主 agent 本人读取，不能委派给 bounded subagent；Claude startup 和 `/clear` 接收只读 SessionStart 引导，DSH 在当前上下文首次使用作者侧 Skill 且尚未完整读取时履行要求。compact/resume 继续复用同一主上下文已读内容，不无条件重读；安装、引导或其他 agent 的读取都不能证明当前主 agent 已读。质量 reference 负责实质等级、当前用途联合条件和科研判断；偏好 reference 负责适用的科研、工程、写作与协作选择，不复制逐级判据。两者都不是每步全量清单、研究证据或权限来源，缺失时说明相关限制。隔离 reviewer 不获得作者偏好读取入口；DSH Status 保持只读呈现，不带作者立场及其偏好触发。
 
-普通 Claude 会话通过已安装的项目 rule 成为首要且完整的 Dove 入口，不要求 `--agent dove` 或 Skill 才能承担作者侧判断、自然采用相关能力方法或完成其工作。显式 agent 和九个 Skills 均只是可选快捷入口，无更高判断权威，不是能力前置条件、阶段、路由、授权或强制 handoff。宿主正常路由仍负责上下文分配，执行、写入、审稿交接和对外动作仍分别服从本次请求与显式授权。Claude 的 `UserPromptSubmit` 对每个 prompt 确定性提供短 re-anchor，不分类、不读写研究材料、不作权限决定、不阻塞，也不是 hidden intake、router、Stop 调度或逐工具科学审批。SessionStart 契约不变；安装或更新后活跃宿主会话须重载，磁盘更新不证明已加载。DSH 的显式入口仍只有 Skills，不增加 hook 或隐式调度。无科研影响的普通任务正常完成，不强行添加科研计划、评级或记录；实现、诊断、优化或交付科研路线的工程工作则仍承担与其影响相称的科学责任。
+普通 Claude 会话通过已安装的项目 rule 成为首要且完整的 Dove 入口，不要求 `--agent dove` 或 Skill 才能承担作者侧判断、自然采用相关能力方法或完成其工作。显式 agent 和九个 Skills 均只是可选快捷入口，无更高判断权威，不是能力前置条件、阶段、路由、授权或强制 handoff。宿主正常路由仍负责上下文分配，执行、写入、审稿交接和对外动作仍分别服从本次请求与显式授权。已有注册的 Claude `UserPromptSubmit` 由当前 CLI 定点只读校验受管集成；只有项目当前时才在每个 prompt 提供新版短核心、rule 和两份参考文件指纹，否则只给非阻塞诊断。不分类、不读写研究材料、不作权限决定、不阻塞，也不是 hidden intake、router、Stop 调度或逐工具科学审批。SessionStart 契约不变；成功升级且旧 hook 仍有效时，原主会话下一条消息可接收当前指导并亲自按需补读完整规则和偏好，无需为此丢弃对话；这并不热重载宿主 rule、Skills、工具和权限，也不证明已读或已采纳。旧 hook 不可用时完整宿主重载仍需新上下文。DSH 的显式入口仍只有 Skills，不增加 hook 或隐式调度。无科研影响的普通任务正常完成，不强行添加科研计划、评级或记录；实现、诊断、优化或交付科研路线的工程工作则仍承担与其影响相称的科学责任。
 
 ## 项目与当前科研主线
 
