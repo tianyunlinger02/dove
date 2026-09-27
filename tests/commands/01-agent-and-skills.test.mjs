@@ -19,6 +19,7 @@ import {
   DOVE_RESEARCH_CANDIDATE_COVERAGE,
   DOVE_RESEARCH_DECISION_CONSEQUENCE,
   DOVE_RESEARCH_RESULT_ADOPTION,
+  DOVE_RESEARCH_REFLECTION_CONTINUITY,
   DOVE_RESEARCH_SESSION_CONTINUATION,
   DOVE_RESEARCH_SHARED_CONTRACT_BULLETS,
   renderDoveResearchQualityReference,
@@ -72,6 +73,27 @@ test("Claude main-session continuation schedules only grounded one-shot work", (
   assert.match(reanchor, /CronCreate/iu);
   assert.match(reanchor, /not new permission/iu);
   assert.doesNotMatch(rule, /(?:invoke|use) \/dove:auto/iu);
+});
+
+test("sustained mainline reflection changes dependent action without making a reflection ledger", () => {
+  const shared = renderDoveSharedResearchContractSection();
+  const author = renderDoveAuthorStanceSection();
+  const rule = renderClaudeAmbientRule();
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /successive rounds revisit the same blocker/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /shared mistaken premise from unrelated defects/iu);
+  assert.match(author, /after context compaction/iu);
+  assert.match(author, /original prediction, and actual outcomes against the confirmed goal/iu);
+  assert.match(author, /pause further investment premised on a refuted assumption/iu);
+  assert.match(author, /do the best permitted core action or discriminating test/iu);
+  assert.match(author, /Do not interrupt useful iterative implementation solely because several rounds passed/iu);
+  assert.match(author, /actual work yields a reusable insight/iu);
+  assert.match(author, /Read-only, assessment-only, Status, explicitly no-record/iu);
+  assert.ok(rule.includes(author));
+  assert.match(shared, /successive rounds revisit the same blocker/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /active open-ended research after compact or resume/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /retained conversation and only relevant project evidence/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /Do not infer the mainline from latest records/iu);
+  assert.doesNotMatch(DOVE_RESEARCH_REFLECTION_CONTINUITY, /(?:read|scan) (?:private )?transcripts/iu);
 });
 
 test("Lessons supports bounded ambient use and content-driven first preservation", () => {

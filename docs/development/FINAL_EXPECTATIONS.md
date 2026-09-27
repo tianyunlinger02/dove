@@ -30,6 +30,7 @@ Dove 能说清“代码、数据和仓库仍连续，但科学任务已经改变
 - 核心方法尚未实现、效果未知，但命题、必要能力、评价路径、约束和资源已足以指导工作且没有已知阻断时，Dove 直接推进获准的核心实现，不等待先验正向信号或要求用户先调用 Research、Source 或 Experiment。
 - 核心评价失效、泄漏或无法识别主张时，Dove 不扩大依赖该评价的实验和结论；先修复／替换评价或选择能区分问题的证据，同时保留不依赖该缺口的有界有效工作。
 - Source、Experiment、Review、实现、Draft 或 Figure 的实质结果会回到受影响命题、依赖、候选动作和产物；若不采纳或不改变动作，Dove 说明已检查依据并收束本轮，而不是留下孤立报告或自动串行调用下一能力。
+- 当局部尝试反复失效时，普通主会话择要核对近期行动、事前预期、实际结果与用户确认主线；区分共同错误前提和不同成因，保留有效依据、修正相关方法及依赖，并采取获准的下一实质行动，而非重复相同尝试或只留下复盘。自然 compact/resume 同样从保留的可见上下文与相关材料继续，不要求逐步复盘或无关全项目扫描。
 - Run 收据、成功执行和测试通过只证明各自覆盖的执行或软件事实，不证明科学主张、真实行为、可复现性、独立审稿或研究完成。有界任务仍可按请求完成；隔离 reviewer 保持冻结材料与只读权限，不替作者执行，主会话也不以“持续推进”为由吞并独立工作或越过授权。
 
 ## 用户得到实质质量评价，而不是工作完成分
@@ -135,7 +136,7 @@ Dove 的作者上下文在论文准备过程中可以进行作者侧科学自检
 
 全局 npm 升级启用 lifecycle scripts 时，可通过 `postinstall` 刷新用户 XDG 配置注册表中的项目集成；这不是 SessionStart 热同步。已有项目首次纳入注册表需按准确根路径执行 `dove projects import --project <root>... --sync`，以后可用 `dove projects sync` 重试、`dove projects status` 只读查看结果。不扫描整个主目录。自动同步只要发现任一托管本地修改或冲突，就零写入地跳过该项目，继续处理其他项目；显式 `dove update` 仍可告知并覆盖合法托管修改。任何同步均不改科研、Review 或 Run 记录；已打开的 Claude 会话能否在下一条消息取得当前指导取决于旧 prompt hook 是否仍有效、CLI 是否已更新及项目集成是否 current，不代表宿主重载全部资源。
 
-compact/resume 继续复用同一主上下文已读偏好，不无条件重读，并只提供事实卡：`RESEARCH.md` 是否存在及绝对修改时间；最新 Review 的 id、round、绝对更新时间和材料 currentness；最新 Run 的 id、绝对开始时间、status 和 exit。不读取研究 Markdown 正文、report 或 stdout/stderr logs，不猜主线；startup/clear 提供单独的偏好读取引导而无研究卡。卡片帮助定位记录，不恢复科研判断。
+compact/resume 继续复用同一主上下文已读偏好，不无条件重读，并只提供事实卡：`RESEARCH.md` 是否存在及绝对修改时间；最新 Review 的 id、round、绝对更新时间和材料 currentness；最新 Run 的 id、绝对开始时间、status 和 exit。不读取研究 Markdown 正文、report、stdout/stderr logs 或 transcript，不猜主线；hook 只附简短指令，提醒普通主 agent 从保留的可见上下文和相关材料择要比较行动、预期、结果及确认主线，辨别反复失败的共因或不同成因，调整受影响依赖并推进获准行动，不代替主 agent 作判断。startup/clear 提供单独的偏好读取引导而无研究卡。卡片帮助定位记录，不恢复科研判断；复盘不新建 ledger、Auto Skill、Stop，也不因时间流逝自动写 Lessons，只有具备可迁移依据且在既有写入范围内才记录。
 
 Run 收据保留命令、时间、结果、指标和比较依据，以及用户声明的 seed、Git commit 和 dirty 最低事实，不变成环境清单。Git 不改变比较资格或排名；机器比较也不替代科学可比性判断。Source 可以完成用户指定条目的有界 bibliography DOI 核验，但元数据核验不代表读过全文或支持主张。
 

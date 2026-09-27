@@ -19,7 +19,7 @@ import { resourcesForHosts, STATUS_LINE_SELECTOR } from "../src/core/project-ins
 import { prepareResearchDefaults } from "../src/core/research-defaults.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
-import { renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
+import { DOVE_RESEARCH_REFLECTION_CONTINUITY, renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
 import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -301,9 +301,10 @@ function validateSessionFacts(root, executable) {
         assert.match(context, /Do not delegate/iu);
         assert.equal(context.length < 1200, true, "Startup bootstrap must remain a small instruction rather than embedded preference content.");
       } else {
-        assert.equal(context.split("\n").length, 5, "Continuation context stays limited to one header, three facts, and one preference line.");
+        assert.equal(context.split("\n").length, 6, "Continuation context stays limited to one header, three facts, and two instruction lines.");
         assert.match(context, /not the current research mainline/u);
-        assert.equal(context.endsWith(DOVE_AUTHOR_PREFERENCES_CONTINUITY), true);
+        assert.ok(context.includes(`${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n`));
+        assert.equal(context.endsWith(DOVE_RESEARCH_REFLECTION_CONTINUITY), true);
       }
       assert.doesNotMatch(context, /sha256|digest|report\.md|stdout\.log|stderr\.log|ago|minutes? later|DO_NOT_INJECT/iu);
       assert.doesNotMatch(context, /z-older|historical-material/u);
@@ -366,7 +367,8 @@ function validateSessionFacts(root, executable) {
       assert.match(facts, new RegExp(`RESEARCH\\.md: exists=yes; mtime=${oldTime}`, "u"));
       assert.ok(facts.includes(`Latest Review: id=a-latest; round=2; updatedAt=${reviewTime}; material currentness=current`));
       assert.ok(facts.includes(`Latest Run: id=a-latest; startedAt=${runTime}; status=failed; exit=7`));
-      assert.equal(facts.endsWith(DOVE_AUTHOR_PREFERENCES_CONTINUITY), true);
+      assert.ok(facts.includes(`${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n`));
+      assert.equal(facts.endsWith(DOVE_RESEARCH_REFLECTION_CONTINUITY), true);
     }
   }
 

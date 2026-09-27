@@ -6,6 +6,7 @@ import {
   DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS,
   renderDoveAuthorPreferencesBootstrap
 } from "./dove-author-preferences.mjs";
+import { DOVE_RESEARCH_REFLECTION_CONTINUITY } from "./dove-research-contract.mjs";
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 import { inspectLatestReviewFacts } from "./review-runtime.mjs";
 import { inspectLatestRunFacts } from "./run-record.mjs";
@@ -86,7 +87,7 @@ export function sessionStartOutput(payload, result = null, options = {}) {
   } else if (payload.source === "compact" || payload.source === "resume") {
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
-      additionalContext: `${sessionFacts(options.project, options)}\n${DOVE_AUTHOR_PREFERENCES_CONTINUITY}`
+      additionalContext: `${sessionFacts(options.project, options)}\n${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n${DOVE_RESEARCH_REFLECTION_CONTINUITY}`
     };
   }
   return Object.keys(output).length > 0 ? output : null;
