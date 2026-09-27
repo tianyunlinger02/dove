@@ -1,0 +1,8 @@
+{
+  "records": [
+    { "id": "A-1", "batch": "A", "reading": 11, "reference": 11, "truth": 10 },
+    { "id": "A-2", "batch": "A", "reading": 8, "reference": 8, "truth": 10 },
+    { "id": "B-1", "batch": "B", "reading": 22, "reference": 12, "truth": 20 },
+    { "id": "B-2", "batch": "B", "reading": 19, "reference": 9, "truth": 20 }
+  ]
+}

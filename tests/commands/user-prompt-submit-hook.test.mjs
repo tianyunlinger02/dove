@@ -48,6 +48,7 @@ test("prompt output is current short guidance, independent of prompt text and ho
   assert.match(context(expected), /problem → method → contribution/u);
   assert.match(context(expected), /multiple substantive rounds/u);
   assert.match(context(expected), /one nonrecurring same-session wake/iu);
+  assert.match(context(expected), /early in a long round/iu);
   assert.match(context(expected), /a wake is not new permission/iu);
   assert.match(context(expected), /personally read .claude\/rules\/dove.md/u);
   assert.match(context(expected), /Do not expand bounded or read-only requests/u);

@@ -1,0 +1,3 @@
+# Local check and remaining work (synthetic)
+
+The previous two fixed-offset edits removed the absolute error on A-1 and B-1, respectively. They also left an error of 3 on A-2 and B-2. The local improvement and its failure on the second rows were checked against the supplied observations, so the local fixed-offset strategy is not an established whole-batch correction. The agreed all-row and per-batch producer comparison remains unfinished. One suggestion was to run a new GPU model fit, but that action is outside the current authorization; the existing producer and local comparison do not require it.

@@ -67,10 +67,12 @@ test("Claude main-session continuation schedules only grounded one-shot work", (
   assert.equal(research.hostGuidance.dsh.includes(DOVE_RESEARCH_SESSION_CONTINUATION), false);
   assert.equal(renderDoveAuthorStanceSection().includes(DOVE_RESEARCH_SESSION_CONTINUATION), false);
   assert.equal(renderDoveSharedResearchContractSection().includes(DOVE_RESEARCH_SESSION_CONTINUATION), false);
-  for (const phrase of [/user-confirmed open-ended research goal/iu, /concrete, worthwhile, permitted next action/iu, /nonrecurring same-session continuation/iu, /not a new user request or permission/iu, /check newer user corrections and actual evidence/iu, /CronDelete only Dove's own pending wake/iu, /bounded status, read-only, design-only/iu, /denied permission/iu, /no effective in-scope action/iu, /session closes/iu]) {
+  for (const phrase of [/user-confirmed open-ended research goal/iu, /local diagnosis, Lesson, or blocked experiment does not close/iu, /permitted core work/iu, /has demonstrated delivery after a busy turn/iu, /one nonrecurring same-session continuation at the next available off-minute within a few minutes/iu, /need not be delayed to estimate when this round will finish/iu, /otherwise, before the final response/iu, /verify that scheduling succeeded/iu, /not a new user request or permission/iu, /newer user corrections, actual evidence, authorization/iu, /CronDelete only Dove's own pending wake/iu, /bounded status, read-only, design-only/iu, /denied permission/iu, /no other effective in-scope action/iu, /session closes/iu]) {
     assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, phrase);
   }
   assert.match(reanchor, /CronCreate/iu);
+  assert.match(reanchor, /one prohibited run does not prohibit other permitted work/iu);
+  assert.match(reanchor, /early in a long round/iu);
   assert.match(reanchor, /not new permission/iu);
   assert.doesNotMatch(rule, /(?:invoke|use) \/dove:auto/iu);
 });
@@ -349,19 +351,15 @@ test("prompt re-anchor is a short research reminder with bounded judgment", () =
   // This is injected each prompt, not another full standing contract.
   assert.ok(reminder.length < 900);
   assert.match(reminder, /problem → method → contribution/u);
-  assert.match(reminder, /one authorized action/iu);
-  assert.match(reminder, /user's live/iu);
-  assert.match(reminder, /fixed constraints/iu);
-  assert.match(reminder, /inspected evidence/iu);
-  assert.match(reminder, /completion meaning/iu);
-  assert.match(reminder, /stale tasks/iu);
-  assert.match(reminder, /one authorized action/iu);
-  assert.match(reminder, /producer-consumer path/iu);
-  assert.match(reminder, /prior positive evidence/iu);
-  assert.match(reminder, /refuted premise stops dependent investment/iu);
-  assert.match(reminder, /corrections change all affected tasks and delegation/iu);
-  assert.match(reminder, /bounded requests bounded/iu);
-  assert.match(reminder, /user's decision/iu);
+  assert.match(reminder, /authorized core action.*unfinished goal/iu);
+  assert.match(reminder, /local diagnosis or Lesson.*not core implementation/iu);
+  assert.match(reminder, /one prohibited run does not prohibit other permitted work/iu);
+  assert.match(reminder, /separate concrete permitted next action/iu);
+  assert.match(reminder, /busy-time wakes.*CronCreate.*within a few minutes/iu);
+  assert.match(reminder, /verify registration.*avoid duplicate wakes/iu);
+  assert.match(reminder, /wake is not new permission/iu);
+  assert.match(reminder, /bounded, read-only, design-only.*requests bounded/iu);
+  assert.match(reminder, /material goal changes belong to the user/iu);
 });
 
 test("retired abstractions do not return as public API", () => {
