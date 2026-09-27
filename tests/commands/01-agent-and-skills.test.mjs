@@ -12,12 +12,14 @@ import {
 } from "../../src/core/index.mjs";
 import * as publicCore from "../../src/core/index.mjs";
 import { renderDoveAuthorStanceSection, renderDoveReviewerStanceSection, renderDoveSharedResearchContractSection } from "../../src/core/dove-agent-persona.mjs";
+import { renderClaudeAmbientRule } from "../../src/core/ambient-policy.mjs";
 import { DOVE_AUTHOR_PREFERENCES_READ_TRIGGER, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS } from "../../src/core/dove-author-preferences.mjs";
 import {
   DOVE_RESEARCH_ACTION_SPINE,
   DOVE_RESEARCH_CANDIDATE_COVERAGE,
   DOVE_RESEARCH_DECISION_CONSEQUENCE,
   DOVE_RESEARCH_RESULT_ADOPTION,
+  DOVE_RESEARCH_SESSION_CONTINUATION,
   DOVE_RESEARCH_SHARED_CONTRACT_BULLETS,
   renderDoveResearchQualityReference,
   renderDoveResearchReanchor
@@ -53,6 +55,23 @@ test("public Dove capability and host surfaces remain explicit", () => {
     assert.ok(command.summary.trim());
     assert.ok(contractActions(command).length > 0);
   }
+});
+
+test("Claude main-session continuation schedules only grounded one-shot work", () => {
+  const rule = renderClaudeAmbientRule();
+  const research = COMMAND_SURFACE_BY_ID["dove.research"].contract;
+  const reanchor = renderDoveResearchReanchor();
+  assert.ok(rule.includes(DOVE_RESEARCH_SESSION_CONTINUATION));
+  assert.match(research.hostGuidance.claude.join("\n"), /project rule owns the same-session one-shot research continuation contract/iu);
+  assert.equal(research.hostGuidance.dsh.includes(DOVE_RESEARCH_SESSION_CONTINUATION), false);
+  assert.equal(renderDoveAuthorStanceSection().includes(DOVE_RESEARCH_SESSION_CONTINUATION), false);
+  assert.equal(renderDoveSharedResearchContractSection().includes(DOVE_RESEARCH_SESSION_CONTINUATION), false);
+  for (const phrase of [/user-confirmed open-ended research goal/iu, /concrete, worthwhile, permitted next action/iu, /nonrecurring same-session continuation/iu, /not a new user request or permission/iu, /check newer user corrections and actual evidence/iu, /CronDelete only Dove's own pending wake/iu, /bounded status, read-only, design-only/iu, /denied permission/iu, /no effective in-scope action/iu, /session closes/iu]) {
+    assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, phrase);
+  }
+  assert.match(reanchor, /CronCreate/iu);
+  assert.match(reanchor, /not new permission/iu);
+  assert.doesNotMatch(rule, /(?:invoke|use) \/dove:auto/iu);
 });
 
 test("Lessons supports bounded ambient use and content-driven first preservation", () => {

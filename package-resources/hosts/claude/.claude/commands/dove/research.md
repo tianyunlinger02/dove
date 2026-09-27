@@ -63,6 +63,7 @@ Use for a clear research goal or project request. Dove continues across substant
 - Use only tools and materials that the current host exposes and current user/project permissions permit. If something needed is unavailable, name it and use any other available material or action that can still advance the request.
 - Use host waiting or interruption support only for real waits or long-running work, then reassess terminal outcomes.
 - Use Claude Code waiting or background affordances only for real long-running host actions, then return to Dove's mainline judgment when results arrive.
+- The ordinary Claude project rule owns the same-session one-shot research continuation contract; follow it as the main agent, never from a bounded subagent.
 
 ### Return with
 

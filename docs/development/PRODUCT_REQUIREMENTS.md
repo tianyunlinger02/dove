@@ -8,7 +8,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - 九个公开 Skills 保持为：`research`、`status`、`source`、`experiment`、`draft`、`figure`、`review`、`rebuttal`、`lessons`；它们是同一个 Dove 的专项快捷入口，不是不同人格、固定阶段或独立工作流。
 - 有界独立科研调查可以使用 Dove subagent；需要完整对话、重要用户澄清、跨能力结果采纳或持续主线责任的工作留在普通主会话。宿主正常路由保持生效，执行、写入、隔离审稿和对外动作仍分别需要本次请求允许或显式授权。
 - 宿主常驻短核心，实质评级与重要研究决策主动读取完整 `.dove/install/RESEARCH_QUALITY.md`，复用已读内容，缺失则说明限制。隔离 reviewer 使用另供的 `.dove-package/RESEARCH_QUALITY.md`；两者均是包指导而非研究证据，不扩大权限或依赖 Lessons 才可达。
-- 默认多轮推进属于 Dove 本身；不得新增 Auto Skill、Auto command、隐藏后台任务或无界队列。
+- 默认多轮推进属于 Dove 本身；不得新增 Auto Skill、Auto command、隐藏后台任务或无界队列。仅普通 Claude 主会话在用户确认的开放式研究仍有具体有效获准行动时，可按宿主实际可用性使用原生 `CronCreate` 安排**一个近期一次性、仅本会话**的空闲续接；唤醒后先重查用户纠正、证据及授权，做实质下一步，再判断是否需要重新安排。有界／只读／仅设计、权限被拒、重要用户决策待定、已完成或无有效行动时不安排；必要时只取消自己待执行的唤醒。调度不新增权限、Stop hook、Auto Skill 或隐藏 ledger，不保证工具可用、唤醒交付或会话退出后的恢复；DSH 不提供此能力。
 - Claude Code 获得完整 Dove 集成；DeepSeek Harness 获得 project-local filesystem Skills only。
 
 ## 行为要求
@@ -96,7 +96,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - compact/resume 继续复用同一主上下文已读偏好，不无条件重读，并只提供只读事实卡：`RESEARCH.md` 存在性与绝对 mtime；最新 Review 的 id、round、绝对 `updatedAt` 与材料 currentness；最新 Run 的 id、绝对 `startedAt`、status 与 exit。缺失或不可读保留 `unavailable`。不读研究 Markdown 正文、report 或 stdout/stderr logs，不推断主线；startup/clear 只有单独的偏好读取引导，没有研究卡。
 - Reviewer workspace 使用短路径，避免嵌入项目目录层级；路径本身不证明隔离行为。
 - Run 收据除命令、时间、结果、指标和比较依据外，只保留显式 seed 与 Git commit/dirty 最低事实，不扩展为环境分类清单。Git 不改变比较资格或排名；机器比较不替代科学可比性判断。
-- 预算是资源判断和运行比较依据，不是预付额度，也不自动成为运行时强制硬上限；实际执行仍遵守用户明确限制、权限和显式超时。
+- 资源按研究目标与端到端实效择优，不以 CPU 优先为默认；预算是资源判断和运行比较依据，不是预付额度，也不自动成为运行时强制硬上限；实际执行仍遵守用户明确限制、权限和显式超时。
 
 ## 实现一致性
 

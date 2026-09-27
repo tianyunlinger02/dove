@@ -140,6 +140,7 @@ function contract(slug) {
     ],
     hostGuidance: hostGuidance({
       common: ["Use host waiting or interruption support only for real waits or long-running work, then reassess terminal outcomes."],
+      claude: ["The ordinary Claude project rule owns the same-session one-shot research continuation contract; follow it as the main agent, never from a bounded subagent."],
       dsh: ["Use only DSH-exposed project files and tools; if background work or isolated review is unavailable, say so and continue with feasible author-side work."]
     })
   });

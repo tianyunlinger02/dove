@@ -1,7 +1,7 @@
 import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "./dove-agent-persona.mjs";
 import { renderDoveAmbientParticipationSection } from "./command-manifest.mjs";
 import { USER_RESPONSE_POLICY } from "./user-response-policy.mjs";
-import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS } from "./dove-research-contract.mjs";
+import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS, DOVE_RESEARCH_SESSION_CONTINUATION } from "./dove-research-contract.mjs";
 
 export const DOVE_CLAUDE_SETTINGS_PATH = ".claude/settings.json";
 export const DOVE_CLAUDE_AMBIENT_RULE_PATH = ".claude/rules/dove.md";
@@ -125,6 +125,10 @@ ${renderDoveSharedResearchContractSection()}
 Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude}\`. Read relevant criteria at the decision triggers above for scoped quality and investment judgments. The separate author-preference reference linked in author stance is fully bootstrapped by the current host main agent in each fresh context, then reused for applicable research, engineering, writing, and collaboration choices; neither reference is research evidence.
 
 ${renderDoveAuthorStanceSection()}
+
+## Claude main-session continuation
+
+${DOVE_RESEARCH_SESSION_CONTINUATION}
 
 ${renderDoveAmbientParticipationSection()}
 

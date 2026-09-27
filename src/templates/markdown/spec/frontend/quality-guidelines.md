@@ -2,7 +2,7 @@
 
 ## Choose checks by impact
 
-Dove is a research agent, not a security project. Keep defensive engineering to the smallest mechanisms necessary for useful execution, truthful results, and practical continuation; hypothetical edge cases alone do not justify new infrastructure. Use the smallest checks that exercise the changed contract and its direct consumers. Add a focused real-interface check for runtime changes when authorized; a documentation-only change may need only link/terminology checks, mirror comparison, and scoped `git diff --check`. Do not run unrelated full gates by default. Current commands are declared in `package.json`; there are no separate lint/typecheck scripts to claim as passed.
+Dove is a research agent, not a security project. Keep defensive engineering to the smallest mechanisms necessary for useful execution, truthful results, and practical continuation; hypothetical edge cases alone do not justify new infrastructure. Use the smallest checks that exercise the changed contract and its direct consumers. Add a focused real-interface check for runtime changes when authorized; a documentation-only change may need only link/terminology checks, mirror comparison, and scoped `git diff --check`. For native-session scheduling documentation, check the open-ended/permission boundary, one-shot wake reassessment, and explicit host/session limits in prose; do not call `CronCreate` or run a real model merely to validate docs. Do not run unrelated full gates by default. Current commands are declared in `package.json`; there are no separate lint/typecheck scripts to claim as passed.
 
 | Changed surface | Relevant verification entry |
 |---|---|
