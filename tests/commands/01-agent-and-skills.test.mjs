@@ -67,12 +67,16 @@ test("Claude main-session continuation schedules only grounded one-shot work", (
   assert.equal(research.hostGuidance.dsh.includes(DOVE_RESEARCH_SESSION_CONTINUATION), false);
   assert.equal(renderDoveAuthorStanceSection().includes(DOVE_RESEARCH_SESSION_CONTINUATION), false);
   assert.equal(renderDoveSharedResearchContractSection().includes(DOVE_RESEARCH_SESSION_CONTINUATION), false);
-  for (const phrase of [/user-confirmed open-ended research goal/iu, /local diagnosis, Lesson, or blocked experiment does not close/iu, /permitted core work/iu, /has demonstrated delivery after a busy turn/iu, /one nonrecurring same-session continuation at the next available off-minute within a few minutes/iu, /need not be delayed to estimate when this round will finish/iu, /otherwise, before the final response/iu, /verify that scheduling succeeded/iu, /not a new user request or permission/iu, /newer user corrections, actual evidence, authorization/iu, /CronDelete only Dove's own pending wake/iu, /bounded status, read-only, design-only/iu, /denied permission/iu, /no other effective in-scope action/iu, /session closes/iu]) {
+  for (const phrase of [/user-confirmed open-ended research goal/iu, /local diagnosis, Lesson, or blocked experiment does not close/iu, /permitted core work/iu, /before the final response/iu, /one nonrecurring same-session continuation for a future off-minute within a few minutes, not the current minute/iu, /missed its minute without delivery, replace it with a future one-shot/iu, /verify the host's displayed next run is minutes away/iu, /not a new user request or permission/iu, /newer user corrections, actual evidence, authorization/iu, /CronDelete only Dove's own pending wake/iu, /bounded status, read-only, design-only/iu, /denied permission/iu, /no other effective in-scope action/iu, /session closes/iu]) {
     assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, phrase);
   }
   assert.match(reanchor, /CronCreate/iu);
   assert.match(reanchor, /one prohibited run does not prohibit other permitted work/iu);
-  assert.match(reanchor, /early in a long round/iu);
+  assert.match(reanchor, /user-confirmed open research/iu);
+  assert.match(reanchor, /separate concrete worthwhile next action remains/iu);
+  assert.match(reanchor, /otherwise blocked requests bounded/iu);
+  assert.match(reanchor, /future off-minute same-session wake/iu);
+  assert.match(reanchor, /replace missed wakes/iu);
   assert.match(reanchor, /not new permission/iu);
   assert.doesNotMatch(rule, /(?:invoke|use) \/dove:auto/iu);
 });
@@ -211,8 +215,10 @@ test("material decision consequences stay in standing and full quality guidance"
     assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, concept);
   }
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /realizes or tests a still-worthwhile authorized core proposition/iu);
-  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /restores necessary capability or evaluation validity/iu);
-  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /minimum decision-changing evidence/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /restores a necessary capability or evaluation validity/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /obtains decision-changing evidence/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /mere relevance, easy verification, and another local variant are not enough/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /distinguish any shared root cause from independent defects/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /completes an agreed bounded deliverable/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /close the round/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /stop dependent investment/iu);
@@ -330,8 +336,9 @@ test("research entrances retain one spine and distinguish scientific goals from 
   const dsh = research.find(({ hostId }) => hostId === "dsh").content;
   for (const context of [rule, `${rule}\n${claude}`, `${rule}\n${renderClaudeDoveAgent()}\n${claude}`, dsh, renderDoveResearchQualityReference()]) {
     assert.match(context, /problem → method → contribution/u);
-    assert.match(context, /total path/iu);
-    assert.match(context, /Controls, baselines, diagnostics/iu);
+    assert.match(context, /unfinished whole-goal result/iu);
+    assert.match(context, /remaining whole-route work and a serious simpler alternative with another local repair/iu);
+    assert.match(context, /controls, baselines, diagnostics/iu);
     assert.match(context, /Before major expansion/iu);
     assert.match(context, /shared mistaken premise/iu);
     assert.match(context, /all affected actions and delegation/iu);
@@ -354,9 +361,10 @@ test("prompt re-anchor is a short research reminder with bounded judgment", () =
   assert.match(reminder, /authorized core action.*unfinished goal/iu);
   assert.match(reminder, /local diagnosis or Lesson.*not core implementation/iu);
   assert.match(reminder, /one prohibited run does not prohibit other permitted work/iu);
-  assert.match(reminder, /separate concrete permitted next action/iu);
-  assert.match(reminder, /busy-time wakes.*CronCreate.*within a few minutes/iu);
-  assert.match(reminder, /verify registration.*avoid duplicate wakes/iu);
+  assert.match(reminder, /separate concrete worthwhile next action remains/iu);
+  assert.match(reminder, /CronCreate.*future off-minute same-session wake/iu);
+  assert.match(reminder, /host's next run is minutes away, not merely registered/iu);
+  assert.match(reminder, /avoid duplicates, replace missed wakes/iu);
   assert.match(reminder, /wake is not new permission/iu);
   assert.match(reminder, /bounded, read-only, design-only.*requests bounded/iu);
   assert.match(reminder, /material goal changes belong to the user/iu);
