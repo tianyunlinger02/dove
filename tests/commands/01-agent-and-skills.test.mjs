@@ -16,6 +16,7 @@ import { renderClaudeAmbientRule } from "../../src/core/ambient-policy.mjs";
 import { DOVE_AUTHOR_PREFERENCES_READ_TRIGGER, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS } from "../../src/core/dove-author-preferences.mjs";
 import {
   DOVE_RESEARCH_ACTION_SPINE,
+  DOVE_RESEARCH_DEFAULT_AUTONOMY,
   DOVE_RESEARCH_CANDIDATE_COVERAGE,
   DOVE_RESEARCH_DECISION_CONSEQUENCE,
   DOVE_RESEARCH_RESULT_ADOPTION,
@@ -63,6 +64,9 @@ test("Claude main-session continuation schedules only grounded one-shot work", (
   const research = COMMAND_SURFACE_BY_ID["dove.research"].contract;
   const reanchor = renderDoveResearchReanchor();
   assert.ok(rule.includes(DOVE_RESEARCH_SESSION_CONTINUATION));
+  assert.match(DOVE_RESEARCH_DEFAULT_AUTONOMY, /without a fixed turn or time limit/iu);
+  assert.match(DOVE_RESEARCH_DEFAULT_AUTONOMY, /Failure of one candidate, experiment, tool, or wake stops only dependent work, not the mainline/iu);
+  assert.match(DOVE_RESEARCH_DEFAULT_AUTONOMY, /compare core implementation, repair, serious alternatives, and discriminating evidence/iu);
   assert.match(research.hostGuidance.claude.join("\n"), /project rule owns the same-session one-shot research continuation contract/iu);
   assert.equal(research.hostGuidance.dsh.includes(DOVE_RESEARCH_SESSION_CONTINUATION), false);
   assert.equal(renderDoveAuthorStanceSection().includes(DOVE_RESEARCH_SESSION_CONTINUATION), false);
@@ -71,13 +75,18 @@ test("Claude main-session continuation schedules only grounded one-shot work", (
     assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, phrase);
   }
   assert.match(reanchor, /CronCreate/iu);
-  assert.match(reanchor, /one prohibited run does not prohibit other permitted work/iu);
+  assert.match(reanchor, /one prohibited run or unavailable wake does not prohibit other permitted work/iu);
   assert.match(reanchor, /user-confirmed open research/iu);
   assert.match(reanchor, /separate concrete worthwhile next action remains/iu);
+  assert.match(reanchor, /no native loop already paces it/iu);
   assert.match(reanchor, /otherwise blocked requests bounded/iu);
   assert.match(reanchor, /future off-minute same-session wake/iu);
   assert.match(reanchor, /replace missed wakes/iu);
   assert.match(reanchor, /not new permission/iu);
+  assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, /host-native goal\/task tracking/iu);
+  assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, /monitor an active long-running job for completion and failure/iu);
+  assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, /If the user has enabled a native loop/iu);
+  assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, /not evidence that the research mainline is blocked/iu);
   assert.doesNotMatch(rule, /(?:invoke|use) \/dove:auto/iu);
 });
 
@@ -362,7 +371,7 @@ test("prompt re-anchor is a short research reminder with bounded judgment", () =
   assert.match(reminder, /problem → method → contribution/u);
   assert.match(reminder, /authorized core action.*unfinished goal/iu);
   assert.match(reminder, /local diagnosis or Lesson.*not core implementation/iu);
-  assert.match(reminder, /one prohibited run does not prohibit other permitted work/iu);
+  assert.match(reminder, /one prohibited run or unavailable wake does not prohibit other permitted work/iu);
   assert.match(reminder, /separate concrete worthwhile next action remains/iu);
   assert.match(reminder, /CronCreate.*future off-minute same-session wake/iu);
   assert.match(reminder, /host's next run is minutes away, not merely registered/iu);
