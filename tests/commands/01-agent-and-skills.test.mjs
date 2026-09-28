@@ -211,6 +211,8 @@ test("material decision consequences stay in standing and full quality guidance"
   }
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /necessary dependency/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /use condition/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /change the affected working artifact and necessary downstream use before reporting completion/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /for a bounded assessment, recommend the next action without executing it/iu);
   for (const concept of [/decisive basis/iu, /affected claim or dependent investment/iu, /next authorized action/iu, /what result would change the judgment/iu]) {
     assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, concept);
   }
