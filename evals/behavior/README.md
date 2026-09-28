@@ -16,7 +16,7 @@ npm run behavior:eval -- --run-real --case stale-summary-current-manuscript
 - 默认使用当前 Claude Code 的模型配置；可用 `--model` 明确指定。非交互临时项目默认 `acceptEdits`，仍遵守实际宿主权限与安全 hook，不接受 bypass 模式。
 - 每次把 `min(case budget, --max-budget-usd override)` 作为 Claude 的 `--max-budget-usd` 传入。预算终止或公开费用超过该值均不是成功；不要自动增加预算取得通过。
 
-完整案例以 `--list` 为准。案例继续覆盖纯判断后停止、正文进展、理论路线前置、当前 Review、图的实质审查、外部 grounding 缺失、程序错误与科研负结果的区分、central execution 前置计划与同文档追加、本地 Source 复合主张，以及 Figure 修改、渲染、视觉检查和返回可编辑源文件。
+完整案例以 `--list` 为准。案例继续覆盖纯判断后停止、正文进展、理论路线前置、当前 Review、图的实质审查、外部 grounding 缺失、程序错误与科研负结果的区分、central execution 前置计划与同文档追加、本地 Source 复合主张，以及 Figure 修改、渲染、视觉检查和返回可编辑源文件。`ambient-bounded-framing-judgment` 用合成项目检验普通对话入口下的有界科研提问：提示不自带测试用禁令，人工核对回答是否按证据收束、是否擅自续行；离线校验只确认案例可加载，不证明模型实际收束，更不等于真实消费项目的行为观察。
 
 `corrected-cpu-premise-gpu-response` 是合成同会话更正案例：普通单条 prompt 只能描述历史，无法观察先委托再收到更正的先后行为。它在**显式授权的真实评估中**先发第一轮，再以相同 session id `--resume` 发第二轮，不是两个独立案例；第一轮失败、超时、未核验 session id 或耗尽预算便不发第二轮。第二轮共用剩余时间及费用上限；若 CLI 续接结果的费用可能是本轮值或累计值且无法确认，则标记 incomplete 而非宣称预算内通过。`correction.json` 记录更正提示、session id 与剩余上限，`snapshot-at-correction.json` 记录更正前材料；`stream.jsonl` 串接两个原始 CLI 输出，不伪造用户 stream 事件。人工按会话标识、轮次、快照、工具动作核对路线改动、独立单位修正及权限边界。离线 `behavior:validate` 仅以假 CLI 检查续接参数、先后顺序与预算/失败分支，不调用真实模型；它不验证真实宿主的续接行为或研究判断。非交互 `--print` 第一轮返回后才送更正，不能证明对**仍在运行中的**子代理实行即时取消；若第一轮未实际委托，不能称已验证委托工作被纠正。
 
