@@ -101,7 +101,7 @@ function isMainlineBoundary(line) {
     || /^ {0,3}<!--/u.test(line ?? "");
 }
 
-export function parseResearchMainline(markdown) {
+export function parseResearchMainline(markdown, options = {}) {
   let fence = null;
   let frontmatter = false;
   let comment = false;
@@ -148,6 +148,7 @@ export function parseResearchMainline(markdown) {
       const accepted = (index === 0 || isMainlineBoundary(previousLine))
         && !isBlockContinuation(previousLine)
         && !/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "");
+      if (accepted && options.uncertainFinalLine && index === lines.length - 2) return null;
       if (accepted) matches.push(line.slice("Mainline:".length));
       if (matches.length > 1) return null;
     }
@@ -161,20 +162,26 @@ export function inspectResearchMainline(projectRoot, options = {}) {
   let fd;
   try {
     const anchor = openRootedFilesystem(projectRoot, { fsOps });
-    const stat = anchor.inspectRegularFile(RESEARCH_DEFAULT_PATHS.overview);
-    if (stat.size > MAX_OVERVIEW_BYTES) return null;
+    anchor.inspectRegularFile(RESEARCH_DEFAULT_PATHS.overview);
     fd = fsOps.openSync(anchor.displayPath(RESEARCH_DEFAULT_PATHS.overview),
       fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0));
     if (!fsOps.fstatSync(fd).isFile()) return null;
-    const buffer = Buffer.alloc(MAX_OVERVIEW_BYTES + 1);
+    const buffer = Buffer.alloc(MAX_OVERVIEW_BYTES);
     let length = 0;
     while (length < buffer.length) {
       const count = fsOps.readSync(fd, buffer, length, buffer.length - length, null);
       if (count === 0) break;
       length += count;
     }
-    if (length > MAX_OVERVIEW_BYTES) return null;
-    return parseResearchMainline(new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, length)));
+    const incompleteSuffix = fsOps.fstatSync(fd).size > length;
+    const completeLength = incompleteSuffix ? buffer.lastIndexOf(0x0a, length - 1) + 1 : length;
+    if (completeLength === 0) return null;
+    const nextLine = buffer.toString("latin1", completeLength, length);
+    const uncertainFinalLine = incompleteSuffix && /^ {0,3}(?:=+[ \t\r]*|-+[ \t\r]*)?$/u.test(nextLine);
+    return parseResearchMainline(
+      new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, completeLength)),
+      { uncertainFinalLine }
+    );
   } catch {
     return null;
   } finally {

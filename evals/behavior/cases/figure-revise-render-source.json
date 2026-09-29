@@ -21,7 +21,7 @@
   },
   "budgets": {
     "timeoutMs": 180000,
-    "maxBudgetUsd": 0.2
+    "maxBudgetUsd": 2
   },
   "snapshot": {
     "include": [

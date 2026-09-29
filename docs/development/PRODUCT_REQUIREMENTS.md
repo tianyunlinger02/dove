@@ -6,7 +6,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 
 - 用户面对一个 Dove research agent。普通 Claude 主会话通过项目 rule 承担完整的共享科研判断、作者立场、结果采纳和持续主线责任，是首要且完整的入口；它可在普通工作中自然使用相关能力方法，不要求 `claude --agent dove` 或 Skill 调用。显式 agent 与 commands/Skills 只是快捷入口，无更高判断权威，不是能力前置条件、router、mode、stage、授权或 mandatory workflow。
 - 九个公开 Skills 保持为：`research`、`status`、`source`、`experiment`、`draft`、`figure`、`review`、`rebuttal`、`lessons`；它们是同一个 Dove 的专项快捷入口，不是不同人格、固定阶段或独立工作流。
-- 有界独立科研调查可以使用 Dove subagent；需要完整对话、重要用户澄清、跨能力结果采纳或持续主线责任的工作留在普通主会话。宿主正常路由保持生效，执行、写入、隔离审稿和对外动作仍分别需要本次请求允许或显式授权。
+- 有界独立科研调查可以使用 Dove subagent；需要完整对话、重要用户澄清、跨能力结果采纳或持续主线责任的工作留在普通主会话。主会话收到实质能力结果或更正后，比较其与原命题、未完成目标及当前授权，修改受影响的权威产物并检查真实下游使用，或执行更有辨别力的其他获准行动；不能以能力报告、诊断或计划代替执行。纯判断与有界只读请求按原范围停止。宿主正常路由保持生效，执行、写入、隔离审稿和对外动作仍分别需要本次请求允许或显式授权。
 - 宿主常驻短核心，实质评级与重要研究决策主动读取完整 `.dove/install/RESEARCH_QUALITY.md`，复用已读内容，缺失则说明限制。隔离 reviewer 使用另供的 `.dove-package/RESEARCH_QUALITY.md`；两者均是包指导而非研究证据，不扩大权限或依赖 Lessons 才可达。
 - 默认多轮推进属于 Dove 本身；不得新增 Auto Skill、Auto command、隐藏后台任务或无界队列。仅普通 Claude 主会话在用户确认的开放式研究仍有另一项具体有效获准行动、且没有宿主原生 loop 已安排该目标时，可按宿主实际可用性使用原生 `CronCreate` 安排**一个近期一次性、仅本会话**的续接；本轮先做获准的核心行动；结束前若确有另一项具体有效获准行动，安排未来几分钟内、非整点且非当前分钟的一次性唤醒，并核查宿主显示的下次执行确在几分钟后，而不只看注册成功；错过预定分钟却未交付时，替换为未来唤醒，不靠用户重复输入维持开放目标。唤醒后先重查用户纠正、实际证据、授权及剩余价值，做实质下一步，再判断是否需要重新安排。多轮没有固定时长或轮数，当前会话可连续推进；局部诊断、候选失败、Lesson、一次受限实验、工具不可用或唤醒无法交付只限制其依赖动作，不等于整体主线停工。应先比较仍可行的核心实现、评价修复、严肃替代和辨别性证据；仅在目标达到、关键用户决定或真实外部边界阻断全部范围内有效工作，或经决策相关检查已无当前条件下有效可行路线时，才收束整体主线。有界／只读／仅设计、无其他有效行动的权限拒绝、重要用户决策待定、已完成或无有效行动时不安排；必要时只取消自己待执行的唤醒。调度不新增权限、Stop hook、Auto Skill 或隐藏 ledger，不保证工具可用、唤醒交付或会话退出后的恢复；DSH 不提供此能力。
 - Claude Code 获得完整 Dove 集成；DeepSeek Harness 获得 project-local filesystem Skills only。
@@ -93,7 +93,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 
 - 显式 update 覆盖有效 manifest-owned 集成的本地修改，并在人类输出及 `replacedLocalEdits` JSON 中提醒；不覆盖用户自有文件或无关配置。
 - SessionStart 完全只读；集成非当前时可用 `systemMessage` 提示显式 update，startup 和 `/clear` 向当前主 agent（普通 Claude 或显式 Dove）交付完整作者偏好的读取引导，要求在实质工作前亲自读到 EOF，不能委派。不写资源、配置或清理状态；安装或引导不代表已经读过，也不追溯重载当前会话。集成仅四态 `uninitialized`、`current`、`needs-update`、`blocked`，不提供 adoption、旧 manifest migration 或热同步。
-- Claude 项目没有既有 `statusLine` 时，Dove 安装只读双行状态栏，第一行保留宿主模型、总上下文容量、剩余上下文比例、Git 分支和当前 Claude 会话时长，将原路径槽位换为无标签的青色主线正文；第二行仅绝对项目路径。仅非空 `NO_COLOR` 禁色，空字符串不禁色。仅定点读取根 `.dove/research/RESEARCH.md`（上限 64 KiB）的唯一普通 `Mainline: <text>` 行，缺失、空白、重复或不可读时省略，不扫描科研树，不从其他正文、branch 或最新 Mission/Run/Review 猜主线，不把会话时长当累计科研工时。主线维护边界见研究模型；不改 bootstrap、已有研究树或 SessionStart。既有用户/Trellis 状态栏不接管；Dove-owned 状态栏遵循显式 update/reinstall/uninstall ownership，并保留用户后续修改版本和无关配置。
+- Claude 项目没有既有 `statusLine` 时，Dove 安装只读双行状态栏，第一行保留宿主模型、总上下文容量、剩余上下文比例、Git 分支和当前 Claude 会话时长，将原路径槽位换为无标签的青色主线正文；第二行仅绝对项目路径。仅非空 `NO_COLOR` 禁色，空字符串不禁色。仅定点读取根 `.dove/research/RESEARCH.md` 的前 64 KiB，从完整已读行查找唯一普通 `Mainline: <text>` 行；文件超长仍可显示靠前主线，缺失、空白、前缀内重复、行在前缀外或不可读时省略，不扫描科研树，不从其他正文、branch 或最新 Mission/Run/Review 猜主线，不把会话时长当累计科研工时。主线维护边界见研究模型；不改 bootstrap、已有研究树或 SessionStart。既有用户/Trellis 状态栏不接管；Dove-owned 状态栏遵循显式 update/reinstall/uninstall ownership，并保留用户后续修改版本和无关配置。
 - compact/resume 继续复用同一主上下文已读偏好，不无条件重读，并只提供只读事实卡：`RESEARCH.md` 存在性与绝对 mtime；最新 Review 的 id、round、绝对 `updatedAt` 与材料 currentness；最新 Run 的 id、绝对 `startedAt`、status 与 exit。缺失或不可读保留 `unavailable`。不读研究 Markdown 正文、report、stdout/stderr logs 或 transcript，不推断主线；仅注入短指令，提醒普通主 agent 利用保留的可见上下文与相关材料择要比较行动、预期、结果和确认主线，判断局部失败是否共因、调整依赖并采取获准的下一行动，hook 自身不作科研判断。startup/clear 只有单独的偏好读取引导，没有研究卡。
 - Reviewer workspace 使用短路径，避免嵌入项目目录层级；路径本身不证明隔离行为。
 - Run 收据除命令、时间、结果、指标和比较依据外，只保留显式 seed 与 Git commit/dirty 最低事实，不扩展为环境分类清单。Git 不改变比较资格或排名；机器比较不替代科学可比性判断。

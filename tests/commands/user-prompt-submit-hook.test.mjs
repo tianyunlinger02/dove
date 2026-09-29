@@ -47,9 +47,10 @@ test("prompt output is current short guidance, independent of prompt text and ho
   assert.match(context(expected), /current project guidance \(verified on disk; not a Claude rule reload\)/u);
   assert.match(context(expected), /problem → method → contribution/u);
   assert.match(context(expected), /repeat without a fixed turn or time limit/u);
-  assert.match(context(expected), /one future off-minute same-session wake/iu);
-  assert.match(context(expected), /CronCreate one future off-minute same-session wake only if a separate concrete worthwhile next action remains/iu);
-  assert.match(context(expected), /a wake is not new permission/iu);
+  assert.match(context(expected), /compare new evidence or corrections with the original proposition/iu);
+  assert.match(context(expected), /choose and do the best authorized action now/iu);
+  assert.match(context(expected), /native loop or one future off-minute same-session CronCreate wake/iu);
+  assert.match(context(expected), /Scheduling grants no permission/iu);
   assert.match(context(expected), /personally read .claude\/rules\/dove.md/u);
   assert.match(context(expected), /Do not expand bounded or read-only requests/u);
   for (const fingerprint of guidance.fingerprints) assert.ok(context(expected).includes(fingerprint));

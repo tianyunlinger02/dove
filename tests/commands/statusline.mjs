@@ -155,7 +155,7 @@ export function assertResearchMainlineReadBoundary() {
           return fs.openSync(file, flags);
         };
         if (name === "readSync") return (fd, buffer, offset, length, position) => {
-          assert.ok(offset + length <= 64 * 1024 + 1, "bounded buffer even across partial reads");
+          assert.ok(offset + length <= 64 * 1024, "bounded buffer even across partial reads");
           const count = fs.readSync(fd, buffer, offset, Math.min(length, 7), position);
           bytesRead += count;
           return count;
@@ -175,16 +175,40 @@ export function assertResearchMainlineReadBoundary() {
     assert.equal(inspectResearchMainline(project, { fsOps: { ...fs, openSync() { throw new Error("unreadable"); } } }), null);
     writeOverview(Buffer.from([0xff, 0xfe]));
     assert.equal(inspectResearchMainline(project), null);
-    writeOverview("Mainline: Too large\n" + "x".repeat(64 * 1024));
-    assert.equal(inspectResearchMainline(project, { fsOps }), null);
-    assert.equal(opened.length, 1, "known oversized files are not opened");
+    const budget = 64 * 1024;
+    writeOverview("Mainline: Early goal\n" + "x".repeat(budget));
+    bytesRead = 0;
+    assert.equal(inspectResearchMainline(project, { fsOps }), "Early goal");
+    assert.equal(bytesRead, budget, "oversized overview reads only its prefix");
+    assert.equal(opened.length, 2, "oversized overview is opened once");
+    assert.equal(closed, 2);
     assert.equal(inspectResearchMainline(project, {
       fsOps: { ...fs, lstatSync(file) {
         const stat = fs.lstatSync(file);
         if (file === overview) stat.size = 1;
         return stat;
       } }
-    }), null, "reads remain bounded if the overview grows after stat");
+    }), "Early goal", "reads remain bounded if the overview grows after stat");
+    writeOverview("Mainline: First\n\nMainline: Second\n" + "x".repeat(budget));
+    assert.equal(inspectResearchMainline(project), null, "duplicate in inspected prefix is ambiguous");
+    writeOverview("Mainline: First\n" + "x".repeat(budget) + "\nMainline: Unread\n");
+    assert.equal(inspectResearchMainline(project), "First", "an unread suffix cannot establish a second mainline");
+    writeOverview("x".repeat(budget) + "\nMainline: Beyond budget\n");
+    assert.equal(inspectResearchMainline(project), null);
+    writeOverview("Mainline: Early\n" + "x".repeat(budget - Buffer.byteLength("Mainline: Early\n")) + "\nMainline: Partial\n");
+    assert.equal(inspectResearchMainline(project), "Early", "discard a cut-off last line");
+    writeOverview("Mainline: Early\n" + "x".repeat(budget - Buffer.byteLength("Mainline: Early\n") - 1) + "中\n");
+    assert.equal(inspectResearchMainline(project), "Early", "discard a cut-off UTF-8 character in the last line");
+    writeOverview("Mainline: Early\n" + "x".repeat(budget - Buffer.byteLength("Mainline: Early\n\nMainline: Par")) + "\nMainline: Partial\n");
+    assert.equal(inspectResearchMainline(project), "Early", "ignore an incomplete candidate at the prefix boundary");
+    writeOverview("x".repeat(budget - Buffer.byteLength("\n\nMainline: Edge\n")) + "\n\nMainline: Edge\n---\n");
+    assert.equal(inspectResearchMainline(project), null, "last complete line might be followed by a setext underline");
+    writeOverview("Mainline: Early\n" + "x".repeat(budget - Buffer.byteLength("Mainline: Early\n\nParagraph start\nMainline: Not a heading\n")) + "\nParagraph start\nMainline: Not a heading\n---\n");
+    assert.equal(inspectResearchMainline(project), "Early", "a paragraph continuation is not an ambiguous second candidate");
+    writeOverview("Mainline: Early\r\n" + "x".repeat(budget));
+    assert.equal(inspectResearchMainline(project), "Early", "CRLF remains a complete prefix line");
+    writeOverview("Mainline: Exact" + "x".repeat(budget - Buffer.byteLength("Mainline: Exact")));
+    assert.equal(inspectResearchMainline(project)?.startsWith("Exact"), true, "an exact-sized file may end without a newline");
     fs.unlinkSync(overview);
     fs.mkdirSync(overview);
     assert.equal(inspectResearchMainline(project), null, "directories are not display sources");
@@ -204,7 +228,7 @@ export function assertDoveStatusLineCli() {
   withStatusLineFixture(({ project, writeOverview }) => {
     const env = { ...process.env };
     delete env.NO_COLOR;
-    writeOverview("# Research\nMainline: 合成确认主线\n");
+    writeOverview("# Research\nMainline: 合成确认主线\n" + "历史记录\n".repeat(10_000));
     const payload = JSON.stringify({
       model: { display_name: "Synthetic model" },
       context_window: { context_window_size: 272_000, remaining_percentage: 24 },

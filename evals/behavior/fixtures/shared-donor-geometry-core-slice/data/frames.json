@@ -1,0 +1,20 @@
+{
+  "reference": {
+    "anchors": [{ "id": "A", "x": 0, "brightness": 10 }, { "id": "B", "x": 6, "brightness": 5 }],
+    "targetX": 4
+  },
+  "frames": [
+    {
+      "id": "shift-right",
+      "anchors": [{ "id": "A", "x": 3, "brightness": 4 }, { "id": "B", "x": 9, "brightness": 12 }],
+      "targetX": 7,
+      "referenceTargetX": 4
+    },
+    {
+      "id": "shift-left",
+      "anchors": [{ "id": "A", "x": -2, "brightness": 4 }, { "id": "B", "x": 4, "brightness": 12 }],
+      "targetX": 2,
+      "referenceTargetX": 4
+    }
+  ]
+}

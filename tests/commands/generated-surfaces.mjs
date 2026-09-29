@@ -114,7 +114,8 @@ function assertCoreActionGuidance(value, label) {
   assert.match(value, /core implementation need not wait for positive evidence/iu, label);
   assert.match(value, /never select samples, change criteria, or hide counterevidence/iu, label);
   assert.match(value, /still-valid prior grounds/iu, label);
-  assert.match(value, /then act within authorization rather than only report/iu, label);
+  assert.match(value, /perform the next effective authorized action rather than only report/iu, label);
+  assert.match(value, /causally distinct authorized action or evidence/iu, label);
   assert.match(value, /rather than only report a diagnosis, Lesson, or revised intention/iu, label);
 }
 
@@ -146,9 +147,10 @@ export function assertFinalEntrypointWiring() {
   assert.match(lessonsParticipation, /once within the active context/iu);
   assert.match(lessonsParticipation, /without waiting for an explicit command/iu);
   const experimentParticipation = COMMAND_SURFACES.find(({ id }) => id === "dove.experiment").contract.ambientParticipation;
-  assert.match(experimentParticipation, /save the prospective plan[^.]*before executing/iu);
+  assert.match(experimentParticipation, /existence does not select the next run or require completing a superseded control/iu);
+  assert.match(experimentParticipation, /save the selected run's prospective plan before executing/iu);
   assert.match(experimentParticipation, /does not itself authorize execution/iu);
-  assert.match(rule, /save the prospective plan[^.]*before executing/iu);
+  assert.match(rule, /save the selected run's prospective plan before executing/iu);
   assert.equal(rule.split("`.dove/research/lessons/LESSONS.md`").length - 1, 1, "ordinary Claude owns one bounded Lessons index trigger");
   assert.match(rule, /research Markdown other than Lessons only when/iu);
   assert.match(rule, /explicit `\/dove:lessons` invocation is not required/iu);
@@ -158,7 +160,8 @@ export function assertFinalEntrypointWiring() {
   assert.match(rule, /expected direction against a same-information comparator/iu);
   assert.match(rule, /observation with the original expectation/iu);
   assert.match(rule, /stop or pause stoppable dependent work[^.]*revise the affected plan, active tasks, delegated work, resource route/iu);
-  assert.match(rule, /next effective permitted action in the same work session/iu);
+  assert.match(rule, /Revise dependent work, then carry out the next effective permitted action in this session/iu);
+  assert.match(rule, /implement and inspect the actual downstream use, repair a necessary dependency, or seek discriminating evidence/iu);
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, 1, "author stance owns the preference read trigger");
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP).length - 1, 1, "author stance requires one main-agent bootstrap");
   assert.match(rule, /current host main agent must personally read/iu);
@@ -233,10 +236,11 @@ export function assertRenderedCapabilityWiring(entry) {
   const value = entry.content.slice(entry.content.indexOf("## How Dove approaches this work"));
   const label = `${entry.hostId} ${entry.command.id}`;
   if (entry.command.id === "dove.research") {
-    assert.match(value, /input-output capability is an engineering boundary/iu, label);
-    assert.match(value, /available data[^.\n]*provisional candidates rather than definitions of the goal or default method/iu, label);
-    assert.match(value, /simpler existing solution or no remaining research contribution/iu, label);
-    assert.match(value, /targeted near-neighbor subtraction/iu, label);
+    assert.match(value, /actual unmet need and completion meaning, not the nearest available implementation or old plan/iu, label);
+    assert.match(value, /prospective experiment or task[^.\n]*results obtained since it was written/iu, label);
+    assert.match(value, /retire work whose premise or decision value intervening results have defeated/iu, label);
+    assert.match(value, /retire work whose premise or decision value intervening results have defeated/iu, label);
+    assert.match(value, /carry the changed judgment into the next authorized action/iu, label);
     assert.match(value, /exhaustive search[^.\n]*prerequisite/iu, label);
     assert.match(value, /local effect supports only the local claim/iu, label);
     assert.match(value, /Judge continuation prospectively/iu, label);
@@ -253,9 +257,15 @@ export function assertRenderedCapabilityWiring(entry) {
     assert.match(value, /do not impose ground truth, paired designs, or train\/test splits/u, label);
     assert.ok(value.includes(DOVE_RESEARCH_CANDIDATE_COVERAGE), `${label}: canonical candidate coverage contract`);
     const actions = contractActions(entry.command);
+    const selection = actions.findIndex((action) => /Before taking up an inherited Experiment plan/iu.test(action));
     const plan = actions.findIndex((action) => /save the prospective plan/iu.test(action));
     const execution = actions.findIndex((action) => /Execute only when/iu.test(action));
-    assert.ok(plan >= 0 && execution > plan, `${label}: prospective persistence before execution`);
+    assert.ok(selection >= 0 && plan > selection && execution > plan, `${label}: reselect work before prospective persistence and execution`);
+    assert.match(actions[selection], /later evidence defeats the shared cause[^.]*retire that execution choice/iu, label);
+    assert.match(actions[selection], /control first when it is necessary for that use or its outcomes still distinguish the route/iu, label);
+    assert.match(actions[selection], /honor an explicitly user-fixed sequence/iu, label);
+    assert.match(value, /build with the method, not reasons to defer an unimplemented producer/iu, label);
+    assert.match(actions[plan], /A saved plan for a different, superseded run is not permission or a prerequisite/iu, label);
   }
   if (entry.command.id === "dove.review") {
     assert.ok(value.includes(DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS), `${label}: canonical review questions`);

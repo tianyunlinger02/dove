@@ -75,14 +75,11 @@ test("Claude main-session continuation schedules only grounded one-shot work", (
     assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, phrase);
   }
   assert.match(reanchor, /CronCreate/iu);
-  assert.match(reanchor, /one prohibited run or unavailable wake does not prohibit other permitted work/iu);
-  assert.match(reanchor, /user-confirmed open research/iu);
-  assert.match(reanchor, /separate concrete worthwhile next action remains/iu);
-  assert.match(reanchor, /no native loop already paces it/iu);
-  assert.match(reanchor, /otherwise blocked requests bounded/iu);
-  assert.match(reanchor, /future off-minute same-session wake/iu);
-  assert.match(reanchor, /replace missed wakes/iu);
-  assert.match(reanchor, /not new permission/iu);
+  assert.match(reanchor, /one run's limit as an exhausted goal/iu);
+  assert.match(reanchor, /separate concrete work remains before pausing open research/iu);
+  assert.match(reanchor, /native loop or one future off-minute same-session CronCreate wake/iu);
+  assert.match(reanchor, /verify its time and avoid duplicates/iu);
+  assert.match(reanchor, /Scheduling grants no permission/iu);
   assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, /host-native goal\/task tracking/iu);
   assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, /monitor an active long-running job for completion and failure/iu);
   assert.match(DOVE_RESEARCH_SESSION_CONTINUATION, /If the user has enabled a native loop/iu);
@@ -95,10 +92,15 @@ test("sustained mainline reflection changes dependent action without making a re
   const author = renderDoveAuthorStanceSection();
   const rule = renderClaudeAmbientRule();
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /successive rounds revisit the same blocker/iu);
-  assert.match(DOVE_RESEARCH_ACTION_SPINE, /shared mistaken premise from unrelated defects/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /premise shared by nearby candidates/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /causally distinct authorized action or evidence/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /not an indefinitely qualified or fully successful baseline before core implementation/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /Similar-looking failures with independent causes/iu);
   assert.match(author, /after context compaction/iu);
   assert.match(author, /original prediction, and actual outcomes against the confirmed goal/iu);
   assert.match(author, /pause further investment premised on a refuted assumption/iu);
+  assert.match(author, /nearby variant[^.]*changes the failed causal condition/iu);
+  assert.match(author, /better authorized core or independent action/iu);
   assert.match(author, /do the best permitted core action or discriminating test/iu);
   assert.match(author, /Do not interrupt useful iterative implementation solely because several rounds passed/iu);
   assert.match(author, /actual work yields a reusable insight/iu);
@@ -239,6 +241,7 @@ test("material decision consequences stay in standing and full quality guidance"
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /one grounded recommendation with its strongest objection, decisive test/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /stop or pause stoppable dependent work before extending it/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /Before the next dependent action after a material result or correction/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /next effective authorized action rather than only report/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /update affected plan, tasks, delegation, resource route, claims, and artifacts/iu);
 });
 
@@ -281,7 +284,7 @@ test("theory reuse and negative results lead to grounded repair rather than an i
   assert.match(reference, /check only changed assumptions or counterevidence/iu);
   assert.match(reference, /original mechanism grounds, prediction, and their conditions/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /still-valid prior grounds/iu);
-  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /then act within authorization rather than only report/iu);
+  assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /perform the next effective authorized action rather than only report/iu);
   assert.match(shared, /one poor local result, an unimplemented core/iu);
   assert.match(author, /prior checked derivations and results under their original conditions/iu);
   assert.match(author, /mistaken premise or method limit/iu);
@@ -335,7 +338,10 @@ test("capabilities and bounded agents reuse one result-adoption contract", () =>
   assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /unresolved or unverified limits/iu);
   assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /useful work outside current authorization/iu);
   assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /return does not itself authorize/iu);
-  assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /next effective permitted action in the same work session/iu);
+  assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /after any material capability result or correction, compare what the evidence actually settles with the entering proposition, unfinished goal, and current authorization/iu);
+  assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /Revise dependent work, then carry out the next effective permitted action in this session/iu);
+  assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /implement and inspect the actual downstream use, repair a necessary dependency, or seek discriminating evidence/iu);
+  assert.match(DOVE_RESEARCH_RESULT_ADOPTION, /If the request is bounded, a necessary user decision remains, or no effective in-scope action survives, stop/iu);
   assert.match(renderDoveAuthorStanceSection(), /stop or pause stoppable dependent work[^.]*revise the affected plan, active tasks, delegated work, resource route/iu);
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /restriction on one run is not automatically a restriction on the future method/iu);
 });
@@ -351,7 +357,7 @@ test("research entrances retain one spine and distinguish scientific goals from 
     assert.match(context, /remaining whole-route work and a serious simpler alternative with another local repair/iu);
     assert.match(context, /controls, baselines, diagnostics/iu);
     assert.match(context, /Before major expansion/iu);
-    assert.match(context, /shared mistaken premise/iu);
+    assert.match(context, /premise shared by nearby candidates/iu);
     assert.match(context, /all affected actions and delegation/iu);
     assert.match(context, /interface[^.\n]*(?:not by itself|do not by themselves)[^.\n]*(?:scientific|question|contribution)/iu);
     assert.match(context, /available (?:data|datasets)[^.\n]*(?:do not define|does not authorize[^.\n]*define) the goal/iu);
@@ -369,15 +375,15 @@ test("prompt re-anchor is a short research reminder with bounded judgment", () =
   // This is injected each prompt, not another full standing contract.
   assert.ok(reminder.length < 900);
   assert.match(reminder, /problem → method → contribution/u);
-  assert.match(reminder, /authorized core action.*unfinished goal/iu);
-  assert.match(reminder, /local diagnosis or Lesson.*not core implementation/iu);
-  assert.match(reminder, /one prohibited run or unavailable wake does not prohibit other permitted work/iu);
-  assert.match(reminder, /separate concrete worthwhile next action remains/iu);
-  assert.match(reminder, /CronCreate.*future off-minute same-session wake/iu);
-  assert.match(reminder, /host's next run is minutes away, not merely registered/iu);
-  assert.match(reminder, /avoid duplicates, replace missed wakes/iu);
-  assert.match(reminder, /wake is not new permission/iu);
-  assert.match(reminder, /bounded, read-only, design-only.*requests bounded/iu);
+  assert.match(reminder, /confirmed unfinished goal.*compare new evidence or corrections with the original proposition/iu);
+  assert.match(reminder, /choose and do the best authorized action now/iu);
+  assert.match(reminder, /changing the affected source and checking actual downstream use/iu);
+  assert.match(reminder, /diagnosis, capability return, plan, local check, or Lesson is not delivery/iu);
+  assert.match(reminder, /without inventing new approvals or treating one run's limit as an exhausted goal/iu);
+  assert.match(reminder, /native loop or one future off-minute same-session CronCreate wake/iu);
+  assert.match(reminder, /verify its time and avoid duplicates/iu);
+  assert.match(reminder, /Scheduling grants no permission/iu);
+  assert.match(reminder, /bounded, read-only, design-only, completed and genuinely blocked requests bounded/iu);
   assert.match(reminder, /material goal changes belong to the user/iu);
 });
 
