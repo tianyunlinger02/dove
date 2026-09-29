@@ -178,7 +178,7 @@ export function assertFinalEntrypointWiring() {
   assert.deepEqual(PAPER_SEARCH_MCP_FRAGMENT, {
     type: "stdio",
     command: "uvx",
-    args: ["--from", PAPER_SEARCH_PACKAGE_SPECIFIER, "paper-search-mcp"]
+    args: ["--from", PAPER_SEARCH_PACKAGE_SPECIFIER, "--with", "mcp<2", "paper-search-mcp"]
   });
   assert.deepEqual(EXA_MCP_FRAGMENT, { url: "https://mcp.exa.ai/mcp", type: "http" });
   assert.equal(WEB_FETCH_DENY_PERMISSION, "WebFetch");

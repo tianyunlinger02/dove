@@ -9,7 +9,7 @@ export const PAPER_SEARCH_SUPPORT_SKILL_PATH = ".claude/skills/dove-paper-search
 export const PAPER_SEARCH_MCP_FRAGMENT = Object.freeze({
   type: "stdio",
   command: "uvx",
-  args: Object.freeze(["--from", PAPER_SEARCH_PACKAGE_SPECIFIER, PAPER_SEARCH_PACKAGE])
+  args: Object.freeze(["--from", PAPER_SEARCH_PACKAGE_SPECIFIER, "--with", "mcp<2", PAPER_SEARCH_PACKAGE])
 });
 
 export function renderPaperSearchSupportSkill() {
