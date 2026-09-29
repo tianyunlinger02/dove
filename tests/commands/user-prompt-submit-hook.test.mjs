@@ -42,17 +42,15 @@ test("prompt output is current short guidance, independent of prompt text and ho
   const guidance = currentPromptGuidance(manifest);
   assert.equal(guidance.version, PACKAGE_VERSION);
   assert.equal(guidance.fingerprints.length, 3);
-  const expected = userPromptSubmitOutput(event(""), guidance);
+  const expected = userPromptSubmitOutput(event(""), guidance, { project });
   assert.ok(context(expected).length < 2_500);
-  assert.match(context(expected), /current project guidance \(verified on disk; not a Claude rule reload\)/u);
-  assert.match(context(expected), /problem → method → contribution/u);
-  assert.match(context(expected), /repeat without a fixed turn or time limit/u);
-  assert.match(context(expected), /compare new evidence or corrections with the original proposition/iu);
-  assert.match(context(expected), /choose and do the best authorized action now/iu);
-  assert.match(context(expected), /native loop or one future off-minute same-session CronCreate wake/iu);
-  assert.match(context(expected), /Scheduling grants no permission/iu);
-  assert.match(context(expected), /personally read .claude\/rules\/dove.md/u);
-  assert.match(context(expected), /Do not expand bounded or read-only requests/u);
+  assert.match(context(expected), /disk guidance, not rule reload/iu);
+  assert.match(context(expected), /No readable short identity card at \.dove\/research\/IDENTITY\.md/iu);
+  assert.match(context(expected), /do not infer a mainline from old notes or developer test prompts/iu);
+  assert.match(context(expected), /open goal, do the next core work now/iu);
+  assert.match(context(expected), /Only real blockers stop it/iu);
+  assert.match(context(expected), /On first use at these fingerprints, personally read the full rule and author preferences/iu);
+  assert.match(context(expected), /card is context, not a substitute for the user's latest words/iu);
   for (const fingerprint of guidance.fingerprints) assert.ok(context(expected).includes(fingerprint));
   const nested = path.join(project, "subpackage");
   fs.mkdirSync(path.join(nested, "node_modules"), { recursive: true });
@@ -72,6 +70,20 @@ test("prompt output is current short guidance, independent of prompt text and ho
     }
   }
   assert.deepEqual(fs.readFileSync(settingsPath), before, "prompt hook must not write integration");
+  const cardPath = path.join(project, ".dove/research/IDENTITY.md");
+  const card = "Mainline: 用户确认的合成主线\nRejected approach: synthetic CPU default\nNext core action: rerun on GPU\n";
+  fs.mkdirSync(path.dirname(cardPath), { recursive: true });
+  fs.writeFileSync(cardPath, card);
+  const cardBefore = fs.statSync(cardPath).mtimeMs;
+  for (const binary of binaries) {
+    const delivered = invoke(binary, project, event("status", { cwd: project }));
+    assert.ok(context(delivered).includes(card), "current identity card is delivered in full");
+    assert.match(context(delivered), /next core work now/iu);
+    assert.equal(fs.statSync(cardPath).mtimeMs, cardBefore, "hook does not write the card");
+  }
+  fs.writeFileSync(cardPath, "Mainline: Oversized\n" + "x".repeat(4096));
+  assert.match(context(invoke(binaries[0], project, event())), /No readable short identity card/iu);
+  assert.doesNotMatch(context(invoke(binaries[0], project, event())), /Oversized/iu);
   assert.equal(JSON.parse(before).hooks.UserPromptSubmit[0].hooks[0].command, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND);
   assert.equal(DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"');
 });
@@ -103,7 +115,7 @@ test("stale, drifted and unsafe project integration never yields verified guidan
   fs.writeFileSync(path.join(project, ".dove/install/RESEARCH_QUALITY.md"), fs.readFileSync(path.join(root, "package-resources/hosts/claude/.dove/install/RESEARCH_QUALITY.md")));
   fs.writeFileSync(manifestPath, `${JSON.stringify({ ...JSON.parse(original), package: { name: PACKAGE_NAME, version: "0.0.1" } })}\n`);
   updateProjectIntegration(project, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
-  assert.match(context(hook()), /verified on disk/u);
+  assert.match(context(hook()), /disk guidance, not rule reload/u);
 
   const settingsPath = path.join(project, ".claude/settings.json");
   const settingsBytes = fs.readFileSync(settingsPath);
@@ -116,9 +128,9 @@ test("stale, drifted and unsafe project integration never yields verified guidan
   const rule = path.join(project, ".claude/rules/dove.md");
   fs.appendFileSync(rule, "\nLocal edited rule\n");
   status();
-  assert.doesNotMatch(context(hook()), /Local edited rule|verified on disk/u);
+  assert.doesNotMatch(context(hook()), /Local edited rule|disk guidance, not rule reload/u);
   fs.writeFileSync(rule, fs.readFileSync(path.join(root, "package-resources/hosts/claude/.claude/rules/dove.md")));
-  assert.match(context(hook()), /verified on disk/u);
+  assert.match(context(hook()), /disk guidance, not rule reload/u);
 
   const reference = path.join(project, ".dove/install/AUTHOR_PREFERENCES.md");
   fs.rmSync(reference);
@@ -132,7 +144,7 @@ test("stale, drifted and unsafe project integration never yields verified guidan
   t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
   assert.deepEqual(hook(event("hello", { cwd: outside })), attention);
   assert.deepEqual(invoke(binaries[0], outside, event()), attention);
-  assert.match(context(hook()), /verified on disk/u);
+  assert.match(context(hook()), /disk guidance, not rule reload/u);
 });
 
 test("non-Claude project and malformed input remain nonblocking", (t) => {

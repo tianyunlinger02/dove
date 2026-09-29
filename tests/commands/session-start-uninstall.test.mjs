@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { sessionStartOutput } from "../../src/core/session-start-hook.mjs";
 import { DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP } from "../../src/core/dove-author-preferences.mjs";
@@ -25,6 +27,29 @@ test("SessionStart startup and clear anchor the canonical bootstrap to the valid
       assert.throws(() => sessionStartOutput({ source }, null, { project }), /absolute project root/u);
     }
   }
+});
+
+test("SessionStart compact and resume include the researcher-owned identity card without rewriting it", (t) => {
+  const scratch = fileURLToPath(new URL("../../.claude/tmp/", import.meta.url));
+  fs.mkdirSync(scratch, { recursive: true });
+  const project = fs.mkdtempSync(path.join(scratch, "dove-session-identity-"));
+  t.after(() => fs.rmSync(project, { recursive: true, force: true }));
+  const cardPath = path.join(project, ".dove/research/IDENTITY.md");
+  fs.mkdirSync(path.dirname(cardPath), { recursive: true });
+  const card = "Mainline: Synthetic user goal\nRejected approach: CPU default\nNext core action: run GPU check\n";
+  fs.writeFileSync(cardPath, card);
+  const before = fs.statSync(cardPath).mtimeMs;
+  for (const source of ["compact", "resume"]) {
+    const output = sessionStartOutput({ source }, { status: "current" }, { project });
+    const context = output.hookSpecificOutput.additionalContext;
+    assert.ok(context.includes(card));
+    assert.match(context, /latest correction/iu);
+    assert.doesNotMatch(context, /main agent must personally read.*beginning to end/iu);
+    assert.equal(fs.statSync(cardPath).mtimeMs, before);
+  }
+  fs.rmSync(cardPath);
+  assert.match(sessionStartOutput({ source: "compact" }, { status: "current" }, { project }).hookSpecificOutput.additionalContext,
+    /No readable short identity card/iu);
 });
 
 test("uninstall inventory separates deleted files from retained shared configuration edits", () => {

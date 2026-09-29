@@ -19,7 +19,6 @@ import {
   renderDoveSharedResearchContractSection
 } from "../../src/core/dove-agent-persona.mjs";
 import {
-  DOVE_RESEARCH_CANDIDATE_COVERAGE,
   DOVE_RESEARCH_QUALITY_CRITERIA,
   DOVE_RESEARCH_QUALITY_REFERENCE_PATHS,
   DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS,
@@ -94,29 +93,13 @@ function assertHostGuidanceProjection(entry) {
 }
 
 function assertCoreActionGuidance(value, label) {
-  assert.match(value, /unfinished core capability or evidence/iu, label);
-  assert.match(value, /Support takes priority only when it removes a real blocker/iu, label);
-  assert.match(value, /scientific core is the valuable problem/iu, label);
-  assert.match(value, /expected-best necessary engineering route/iu, label);
-  assert.match(value, /prefer less code only when/iu, label);
-  assert.match(value, /decision-relevant complete slices that connect real production, downstream consumption, and proportionate verification/iu, label);
-  assert.match(value, /observed behavior to repair shared causes, revise the design, or extend the route/iu, label);
-  assert.match(value, /neither a locally green slice nor a diagnostic prototype completes the whole goal/iu, label);
-  assert.match(value, /engineering core is the producer-consumer behavior/iu, label);
-  assert.match(value, /one grounded recommendation with its strongest objection/iu, label);
-  assert.match(value, /stop or pause stoppable/iu, label);
-  assert.match(value, /neither refuses nor expands/iu, label);
-  assert.match(value, /scientific contract is clear enough[^.\n]*implement the necessary core path/iu, label);
-  assert.match(value, /no fixed round count or per-step progress quota/iu, label);
-  assert.match(value, /Contract tests establish implementation behavior/iu, label);
-  assert.match(value, /claim-matched controls and evaluation establish only the scientific claim/iu, label);
-  assert.match(value, /Credible positive signals are preliminary support/iu, label);
-  assert.match(value, /core implementation need not wait for positive evidence/iu, label);
-  assert.match(value, /never select samples, change criteria, or hide counterevidence/iu, label);
-  assert.match(value, /still-valid prior grounds/iu, label);
-  assert.match(value, /perform the next effective authorized action rather than only report/iu, label);
-  assert.match(value, /causally distinct authorized action or evidence/iu, label);
-  assert.match(value, /rather than only report a diagnosis, Lesson, or revised intention/iu, label);
+  assert.match(value, /problem → method → contribution/u, label);
+  assert.match(value, /user’s actual goal/iu, label);
+  assert.match(value, /root cause is known, change the method/iu, label);
+  assert.match(value, /actual producer and consumer/iu, label);
+  assert.match(value, /confirmed mainline covers its core implementation, reruns, diagnosis, and suitable GPU work/iu, label);
+  assert.match(value, /final heldout confirmation needs a frozen/iu, label);
+  assert.match(value, /Report in plain language/iu, label);
 }
 
 export function assertFinalEntrypointWiring() {
@@ -135,33 +118,22 @@ export function assertFinalEntrypointWiring() {
   assert.equal(rule.split(participation).length - 1, 1, "ordinary Claude uses the canonical capability projection");
   assert.equal(participation.split("\n").filter((line) => line.startsWith("- Dove ")).length, COMMAND_SURFACES.length);
   assert.match(participation, /commands are shortcuts, not prerequisites/iu);
-  assert.match(participation, /never expands authorization/iu);
+  assert.match(participation, /main session retains judgment before and after delegation/iu);
   for (const command of COMMAND_SURFACES) {
     assert.equal(rule.split(command.contract.ambientParticipation).length - 1, 1, `${command.id}: one ambient participation sentence`);
   }
   const statusParticipation = COMMAND_SURFACES.find(({ id }) => id === "dove.status").contract.ambientParticipation;
   const lessonsParticipation = COMMAND_SURFACES.find(({ id }) => id === "dove.lessons").contract.ambientParticipation;
-  assert.match(statusParticipation, /explicitly asked/iu);
-  assert.match(statusParticipation, /read-only/iu);
-  assert.match(lessonsParticipation, /consequential choices or after corrections and recurring failures/iu);
-  assert.match(lessonsParticipation, /once within the active context/iu);
-  assert.match(lessonsParticipation, /without waiting for an explicit command/iu);
+  assert.match(statusParticipation, /status question from actual project evidence/iu);
+  assert.match(statusParticipation, /closing an active open goal/iu);
+  assert.match(lessonsParticipation, /after corrections and recurring failures/iu);
   const experimentParticipation = COMMAND_SURFACES.find(({ id }) => id === "dove.experiment").contract.ambientParticipation;
-  assert.match(experimentParticipation, /existence does not select the next run or require completing a superseded control/iu);
-  assert.match(experimentParticipation, /save the selected run's prospective plan before executing/iu);
-  assert.match(experimentParticipation, /does not itself authorize execution/iu);
-  assert.match(rule, /save the selected run's prospective plan before executing/iu);
-  assert.equal(rule.split("`.dove/research/lessons/LESSONS.md`").length - 1, 1, "ordinary Claude owns one bounded Lessons index trigger");
-  assert.match(rule, /research Markdown other than Lessons only when/iu);
-  assert.match(rule, /explicit `\/dove:lessons` invocation is not required/iu);
-  assert.match(rule, /without requiring `--agent dove` or a Skill/iu);
+  assert.match(experimentParticipation, /During development, inspect ground truth and rerun quickly/iu);
+  assert.match(experimentParticipation, /final confirmation/iu);
+  assert.match(rule, /identity card/iu);
+  assert.match(rule, /user correction/iu);
   assert.match(renderClaudeDoveAgent(), /no higher judgment authority/iu);
   assertCoreActionGuidance(rule, "ordinary Claude rule");
-  assert.match(rule, /expected direction against a same-information comparator/iu);
-  assert.match(rule, /observation with the original expectation/iu);
-  assert.match(rule, /stop or pause stoppable dependent work[^.]*revise the affected plan, active tasks, delegated work, resource route/iu);
-  assert.match(rule, /Revise dependent work, then carry out the next effective permitted action in this session/iu);
-  assert.match(rule, /implement and inspect the actual downstream use, repair a necessary dependency, or seek discriminating evidence/iu);
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, 1, "author stance owns the preference read trigger");
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP).length - 1, 1, "author stance requires one main-agent bootstrap");
   assert.match(rule, /current host main agent must personally read/iu);
@@ -207,11 +179,11 @@ export function assertFinalEntrypointWiring() {
       assertSharedContractOnce(value, label);
       if (["dove.research", "dove.experiment"].includes(entry.command.id)) {
         assertCoreActionGuidance(value, label);
-        assert.match(value, /expected direction against a same-information comparator/iu, label);
-        assert.match(value, /observation with the original expectation/iu, label);
+        assert.match(value, /ground truth/iu, label);
+        assert.match(value, /final heldout/iu, label);
       }
       assert.doesNotMatch(value, /Workspace mainline/u);
-      if (["dove.research", "dove.status"].includes(entry.command.id)) assert.match(value, /Mainline: <text>/u);
+      if (["dove.research", "dove.status"].includes(entry.command.id)) assert.match(value, /identity card/iu);
       for (const instruction of USER_RESPONSE_POLICY) {
         assert.equal(value.split(instruction).length - 1, 1, `${label}: one response-policy owner`);
         assert.equal(entry.content.includes(instruction), entry.hostId === "dsh");
@@ -236,36 +208,19 @@ export function assertRenderedCapabilityWiring(entry) {
   const value = entry.content.slice(entry.content.indexOf("## How Dove approaches this work"));
   const label = `${entry.hostId} ${entry.command.id}`;
   if (entry.command.id === "dove.research") {
-    assert.match(value, /actual unmet need and completion meaning, not the nearest available implementation or old plan/iu, label);
-    assert.match(value, /prospective experiment or task[^.\n]*results obtained since it was written/iu, label);
-    assert.match(value, /retire work whose premise or decision value intervening results have defeated/iu, label);
-    assert.match(value, /retire work whose premise or decision value intervening results have defeated/iu, label);
-    assert.match(value, /carry the changed judgment into the next authorized action/iu, label);
-    assert.match(value, /exhaustive search[^.\n]*prerequisite/iu, label);
-    assert.match(value, /local effect supports only the local claim/iu, label);
-    assert.match(value, /Judge continuation prospectively/iu, label);
-    assert.match(value, /past work matters only through/iu, label);
-    assert.match(value, /(?:checked|prior).*(?:derivation|result)/iu, label);
-    assert.match(value, /root cause/iu, label);
+    assert.match(value, /project identity card/iu, label);
+    assert.match(value, /carry out the next core action/iu, label);
+    assert.match(value, /root cause calls for a method change/iu, label);
+    assert.match(value, /final confirmation/iu, label);
   }
   if (entry.command.id === "dove.source") {
     assert.match(value, /Partial support is not support for the whole sentence/u, label);
     assert.match(value, /supported, contradicted, or uncovered/iu, label);
   }
   if (entry.command.id === "dove.experiment") {
-    assert.match(value, /Apply reference, pairing, and data-split reasoning only where it fits the study/u, label);
-    assert.match(value, /do not impose ground truth, paired designs, or train\/test splits/u, label);
-    assert.ok(value.includes(DOVE_RESEARCH_CANDIDATE_COVERAGE), `${label}: canonical candidate coverage contract`);
-    const actions = contractActions(entry.command);
-    const selection = actions.findIndex((action) => /Before taking up an inherited Experiment plan/iu.test(action));
-    const plan = actions.findIndex((action) => /save the prospective plan/iu.test(action));
-    const execution = actions.findIndex((action) => /Execute only when/iu.test(action));
-    assert.ok(selection >= 0 && plan > selection && execution > plan, `${label}: reselect work before prospective persistence and execution`);
-    assert.match(actions[selection], /later evidence defeats the shared cause[^.]*retire that execution choice/iu, label);
-    assert.match(actions[selection], /control first when it is necessary for that use or its outcomes still distinguish the route/iu, label);
-    assert.match(actions[selection], /honor an explicitly user-fixed sequence/iu, label);
-    assert.match(value, /build with the method, not reasons to defer an unimplemented producer/iu, label);
-    assert.match(actions[plan], /A saved plan for a different, superseded run is not permission or a prerequisite/iu, label);
+    assert.match(value, /No per-run prospective document, frozen development bank or one-shot quota/iu, label);
+    assert.match(value, /Only for final heldout confirmation, save the selected plan before executing/iu, label);
+    assert.match(value, /read-only or design-only request does not run experiments/iu, label);
   }
   if (entry.command.id === "dove.review") {
     assert.ok(value.includes(DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS), `${label}: canonical review questions`);
@@ -273,8 +228,8 @@ export function assertRenderedCapabilityWiring(entry) {
   }
   if (entry.command.id === "dove.figure") assert.match(value, /rerender and inspect/iu, label);
   if (entry.command.id === "dove.status") {
-    assert.match(value, /do not modify files/iu, label);
-    assert.doesNotMatch(value, /preserve the narrowest useful researcher-owned Lesson/iu, label);
+    assert.match(value, /explicit no-write instruction or host refusal still prohibits that write/iu, label);
+    assert.match(value, /ongoing mainline after answering/iu, label);
   }
   if (entry.command.id === "dove.lessons") {
     assert.match(value, /content-bearing "\.dove\/research\/lessons\/LESSONS\.md"/iu, label);

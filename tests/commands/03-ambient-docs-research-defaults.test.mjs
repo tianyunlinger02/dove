@@ -18,35 +18,22 @@ test("research bootstrap remains a minimal researcher-owned overview", () => {
     RESEARCH_DEFAULT_PATHS.overview
   ]);
   assert.deepEqual(RESEARCH_DEFAULT_DIRECTORY_PATHS, [RESEARCH_DEFAULT_PATHS.root]);
-  assert.match(RESEARCH_DEFAULT_DOCUMENTS[0].content, /researcher-owned entry/iu);
+  assert.match(RESEARCH_DEFAULT_DOCUMENTS[0].content, /Short entry to the project identity card/iu);
+  assert.match(RESEARCH_DEFAULT_DOCUMENTS[0].content, /Confirm the mainline with the user/iu);
+  assert.doesNotMatch(RESEARCH_DEFAULT_DOCUMENTS[0].content, /^Mainline:/mu);
 });
 
 test("author stance uses Lessons once at consequential triggers without burdening local work", () => {
   const stance = renderDoveAuthorStanceSection();
-  const overview = "`.dove/research/RESEARCH.md`";
-  const lessons = "`.dove/research/lessons/LESSONS.md`";
-  assert.equal(stance.split(overview).length - 1, 1);
-  assert.equal(stance.split(lessons).length - 1, 1);
-  assert.match(stance, /first consequential route, method, evaluation, implementation, delegation, artifact-adoption, or investment choice/iu);
-  assert.match(stance, /user correction or recurring repair or failure/iu);
-  assert.match(stance, /once if it exists unless it has already been checked for this question/iu);
-  assert.match(stance, /only directly relevant or plausibly decision-changing linked Lessons/iu);
-  assert.match(stance, /RESEARCH\.md[^.]*not a prerequisite/iu);
-  assert.match(stance, /Missing Lessons never blocks work or requires creating files/iu);
-  assert.match(stance, /Lessons guide judgment rather than supply research evidence/iu);
-  assert.match(stance, /Do not scan the broad research tree/iu);
-  assert.match(stance, /Ordinary deterministic local[^.]*no research-tree prerequisite/iu);
-  assert.match(stance, /research Markdown other than Lessons only when/iu);
-  assert.match(stance, /even if the research mainline, conclusion, decision, or priority did not change/iu);
-  assert.match(stance, /explicit `\/dove:lessons` invocation is not required/iu);
-  assert.match(stance, /routine progress, transient status, one-off tool failures, or non-transferable bugs/iu);
-  assert.match(stance, /Read-only, assessment-only, Status, explicitly no-record, or isolated-review work/iu);
-  assert.match(stance, /agreed bounded deliverables/iu);
-  assert.match(stance, /investment dependent on a scientific proposition/iu);
-  assert.match(stance, /Complete genuine bounded/iu);
-  assert.match(stance, /neither refuses nor expands/iu);
-  assert.match(stance, /Stop investment dependent on that justification/iu);
-  assert.match(stance, /preserving independently useful authorized work/iu);
+  assert.match(stance, /short researcher-owned `\.dove\/research\/IDENTITY\.md`/iu);
+  assert.match(stance, /Mainline: ` followed by one sentence in the user's words/iu);
+  assert.match(stance, /rejected approaches; user restrictions; current route; next core action; hard blocker/iu);
+  assert.match(stance, /Correct affected fields when the user corrects you, including during an assessment/iu);
+  assert.match(stance, /unless writing is explicitly forbidden or the host refuses/iu);
+  assert.match(stance, /Keep RESEARCH\.md a short entry to history/iu);
+  assert.match(stance, /Preserve transferable Lessons only when useful/iu);
+  assert.match(stance, /read-only assessment is not by itself a reason to forget the correction/iu);
+  assert.match(stance, /Respect an explicit no-write instruction/iu);
 });
 
 test("Trellis specs match their installed Markdown templates", () => {

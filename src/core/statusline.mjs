@@ -1,12 +1,8 @@
 import { spawnSync } from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { RESEARCH_DEFAULT_PATHS } from "./research-defaults.mjs";
-import { openRootedFilesystem } from "./rooted-filesystem.mjs";
-
-const MAX_OVERVIEW_BYTES = 64 * 1024;
+import { readDoveIdentityCard } from "./identity-card.mjs";
 const MAX_MAINLINE_CODE_POINTS = 80;
 
 const STATUS_SEPARATOR = " · ";
@@ -157,36 +153,8 @@ export function parseResearchMainline(markdown, options = {}) {
 }
 
 export function inspectResearchMainline(projectRoot, options = {}) {
-  if (!projectRoot) return null;
-  const fsOps = options.fsOps ?? fs;
-  let fd;
-  try {
-    const anchor = openRootedFilesystem(projectRoot, { fsOps });
-    anchor.inspectRegularFile(RESEARCH_DEFAULT_PATHS.overview);
-    fd = fsOps.openSync(anchor.displayPath(RESEARCH_DEFAULT_PATHS.overview),
-      fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0));
-    if (!fsOps.fstatSync(fd).isFile()) return null;
-    const buffer = Buffer.alloc(MAX_OVERVIEW_BYTES);
-    let length = 0;
-    while (length < buffer.length) {
-      const count = fsOps.readSync(fd, buffer, length, buffer.length - length, null);
-      if (count === 0) break;
-      length += count;
-    }
-    const incompleteSuffix = fsOps.fstatSync(fd).size > length;
-    const completeLength = incompleteSuffix ? buffer.lastIndexOf(0x0a, length - 1) + 1 : length;
-    if (completeLength === 0) return null;
-    const nextLine = buffer.toString("latin1", completeLength, length);
-    const uncertainFinalLine = incompleteSuffix && /^ {0,3}(?:=+[ \t\r]*|-+[ \t\r]*)?$/u.test(nextLine);
-    return parseResearchMainline(
-      new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, completeLength)),
-      { uncertainFinalLine }
-    );
-  } catch {
-    return null;
-  } finally {
-    if (fd !== undefined) fsOps.closeSync(fd);
-  }
+  const card = readDoveIdentityCard(projectRoot, options);
+  return card ? parseResearchMainline(card) : null;
 }
 
 export function renderDoveStatusLine(input, options = {}) {

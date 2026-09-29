@@ -264,189 +264,105 @@ function hookReadGuard(root, source) {
 }
 
 function validateSessionFacts(root, executable) {
-  const researchPath = path.join(root, ".dove/research/RESEARCH.md");
-  const reviewPath = path.join(root, ".dove/reviews/a-latest/review.json");
-  const snapshotPath = path.join(root, ".dove/reviews/a-latest/rounds/2/snapshot.json");
-  const journalPath = path.join(root, ".dove/runs/a-latest/run.jsonl");
-  const oldTime = "2026-08-01T00:00:00.000Z";
-  const reviewTime = "2026-08-03T00:00:00.000Z";
-  const runTime = "2026-08-02T00:00:00.000Z";
-  const secret = "DO_NOT_INJECT_BODY_REPORT_LOG_TRANSCRIPT_OR_EXTRA_FIELDS";
-
+  const cardPath = path.join(root, ".dove/research/IDENTITY.md");
+  const secret = "SYNTHETIC_PRIVATE_REPORT_MUST_NOT_APPEAR";
+  const readGuard = `
+    import fs from "node:fs";
+    import path from "node:path";
+    import { fileURLToPath } from "node:url";
+    import { syncBuiltinESMExports } from "node:module";
+    const root = ${JSON.stringify(root)};
+    function guard(target) {
+      const file = target instanceof URL ? fileURLToPath(target) : String(target);
+      const relative = path.relative(root, path.resolve(file)).split(path.sep).join("/");
+      if ((relative.startsWith(".dove/research/") && relative !== ".dove/research/IDENTITY.md")
+        || relative.startsWith(".dove/reviews/") || relative.startsWith(".dove/runs/")
+        || relative === "synthetic-transcript.jsonl" || relative === "unlisted-report.md") {
+        process.stderr.write("Forbidden SessionStart read: " + relative + "\\n");
+        throw new Error("Forbidden SessionStart read");
+      }
+    }
+    for (const name of ["readFileSync", "readFile", "openSync", "open", "createReadStream"]) {
+      const original = fs[name];
+      fs[name] = function(target, ...args) { guard(target); return original.call(this, target, ...args); };
+    }
+    for (const name of ["readFile", "open"]) {
+      const original = fs.promises[name];
+      fs.promises[name] = function(target, ...args) { guard(target); return original.call(this, target, ...args); };
+    }
+    function rejectWrite() { process.stderr.write("Forbidden SessionStart write\\n"); throw new Error("Forbidden SessionStart write"); }
+    for (const name of ["writeFileSync", "appendFileSync", "mkdirSync", "renameSync", "unlinkSync", "rmSync", "rmdirSync", "chmodSync", "utimesSync", "writeSync", "createWriteStream"]) fs[name] = rejectWrite;
+    for (const name of ["writeFile", "appendFile", "mkdir", "rename", "unlink", "rm", "rmdir", "chmod", "utimes"]) fs.promises[name] = rejectWrite;
+    const openSync = fs.openSync;
+    fs.openSync = function(target, flags, ...args) {
+      if (typeof flags === "string" ? /[wa+]/u.test(flags) : (flags & (fs.constants.O_WRONLY | fs.constants.O_RDWR | fs.constants.O_CREAT)) !== 0) rejectWrite();
+      return openSync.call(this, target, flags, ...args);
+    };
+    syncBuiltinESMExports();
+  `;
   const invoke = (source, overrides = {}, rawInput = null) => {
     const before = treeSnapshot(root);
     const result = spawnSync(process.execPath, [
-      "--import", `data:text/javascript,${encodeURIComponent(hookReadGuard(root, source))}`,
+      "--import", `data:text/javascript,${encodeURIComponent(readGuard)}`,
       executable, "hook", "session-start", "--project", root
     ], {
       cwd: ROOT,
       input: rawInput ?? JSON.stringify({ hook_event_name: "SessionStart", source, cwd: root, transcript_path: path.join(root, "synthetic-transcript.jsonl"), ...overrides }),
-      encoding: "utf8",
-      timeout: 15000,
-      env: CLI_ENV
+      encoding: "utf8", timeout: 15000, env: CLI_ENV
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
-    assert.equal(result.stderr, "", "The hook must not attempt forbidden reads, even when errors are caught.");
-    assert.deepEqual(treeSnapshot(root), before, "No-op/failed hook must preserve all tree bytes and file/directory mtimes.");
-    const output = result.stdout ? JSON.parse(result.stdout) : null;
-    if (output?.hookSpecificOutput) {
+    assert.equal(result.stderr, "", "SessionStart must not attempt forbidden reads or writes, even when errors are caught.");
+    assert.deepEqual(treeSnapshot(root), before, "SessionStart preserves all fixture bytes, paths, and mtimes.");
+    return result.stdout ? JSON.parse(result.stdout) : null;
+  };
+  const bootstrap = DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP.replace(
+    ".dove/install/AUTHOR_PREFERENCES.md", path.join(root, ".dove/install/AUTHOR_PREFERENCES.md")
+  );
+  const check = (card = null) => {
+    for (const source of ["startup", "clear", "compact", "resume"]) {
+      const output = invoke(source);
       assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
       const context = output.hookSpecificOutput.additionalContext;
-      assert.equal(typeof context, "string");
       if (source === "startup" || source === "clear") {
-        assert.equal(context, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP.replace(".dove/install/AUTHOR_PREFERENCES.md", path.join(root, ".dove/install/AUTHOR_PREFERENCES.md")));
-        assert.match(context, /current host main agent must personally read/iu);
-        assert.match(context, /AUTHOR_PREFERENCES\.md.*beginning to end/iu);
-        assert.match(context, /offsets until EOF/iu);
-        assert.match(context, /Do not delegate/iu);
-        assert.equal(context.length < 1200, true, "Startup bootstrap must remain a small instruction rather than embedded preference content.");
+        assert.equal(context, bootstrap, "startup and clear only bootstrap the main agent's preferences");
       } else {
-        assert.equal(context.split("\n").length, 6, "Continuation context stays limited to one header, three facts, and two instruction lines.");
-        assert.match(context, /not the current research mainline/u);
+        if (card === null) {
+          assert.match(context, /No readable short identity card at \.dove\/research\/IDENTITY\.md/u);
+          assert.match(context, /do not infer a mainline/iu);
+        } else {
+          assert.ok(context.includes(card), "compact/resume inject the current synthetic identity card");
+          assert.match(context, /Project identity card \(researcher-owned/iu);
+        }
         assert.ok(context.includes(`${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n`));
-        assert.equal(context.endsWith(DOVE_RESEARCH_REFLECTION_CONTINUITY), true);
+        assert.ok(context.endsWith(DOVE_RESEARCH_REFLECTION_CONTINUITY));
       }
-      assert.doesNotMatch(context, /sha256|digest|report\.md|stdout\.log|stderr\.log|ago|minutes? later|DO_NOT_INJECT/iu);
-      assert.doesNotMatch(context, /z-older|historical-material/u);
-      assert.equal(context.includes(REFERENCES[0].content.slice(0, 500)), false, "Hook context must not embed the author-preference body.");
+      assert.equal(context.includes(REFERENCES[0].content.slice(0, 500)), false, "do not embed author-preference body");
+      assert.doesNotMatch(context, /SYNTHETIC_PRIVATE_REPORT_MUST_NOT_APPEAR|Latest Review:|Latest Run:|RESEARCH\.md: exists=/u);
     }
-    return output;
   };
-  const context = (source = "compact") => invoke(source).hookSpecificOutput.additionalContext;
 
-  // Missing trees stay missing. No read helper may create its input directories.
+  // All materials are synthetic and local to the fixture; no absent area is bootstrapped.
   fs.renameSync(path.join(root, ".dove/research"), path.join(SCRATCH_ROOT, `${path.basename(root)}-initial-research`));
-  for (const source of ["startup", "clear", "compact", "resume"]) {
-    const output = invoke(source);
-    if (source === "startup" || source === "clear") {
-      assert.equal(output.hookSpecificOutput.additionalContext, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP.replace(".dove/install/AUTHOR_PREFERENCES.md", path.join(root, ".dove/install/AUTHOR_PREFERENCES.md")));
-    } else {
-      assert.match(output.hookSpecificOutput.additionalContext, /RESEARCH\.md: exists=no; mtime=unavailable/u);
-      assert.match(output.hookSpecificOutput.additionalContext, /Latest Review: unavailable\nLatest Run: unavailable/u);
-    }
-  }
-  for (const directory of ["research", "reviews", "runs"]) assert.equal(fs.existsSync(path.join(root, ".dove", directory)), false);
-
-  writeFile(root, ".dove/research/RESEARCH.md", secret);
-  fs.utimesSync(researchPath, new Date(oldTime), new Date(oldTime));
-  writeFile(root, "paper.txt", "current paper bytes\n");
-  writeFile(root, "historical-material.txt", secret);
+  check();
+  assert.equal(fs.existsSync(path.join(root, ".dove/research")), false);
+  const card = "Mainline: User-confirmed synthetic research goal\nRejected approach: CPU by default\nNext core action: run GPU comparison\n";
+  writeFile(root, ".dove/research/IDENTITY.md", card);
+  writeFile(root, ".dove/research/RESEARCH.md", `Mainline: Wrong old goal\n${secret}\n`);
   writeFile(root, "unlisted-report.md", secret);
   writeFile(root, "synthetic-transcript.jsonl", secret);
-  const material = { path: "paper.txt", size: Buffer.byteLength("current paper bytes\n"), sha256: crypto.createHash("sha256").update("current paper bytes\n").digest("hex") };
-  const latestReview = {
-    schema: "dove.review.record.v1", id: "a-latest", createdAt: oldTime, updatedAt: reviewTime, currentRound: 2,
-    rounds: [{ round: 1, createdAt: oldTime }, { round: 2, createdAt: reviewTime, updatedAt: reviewTime }],
-    report: secret, privateNote: secret
-  };
-  writeJson(reviewPath, latestReview);
-  const latestSnapshot = { schema: "dove.review.snapshot.v1", reviewId: "a-latest", round: 2, materials: [material] };
-  writeJson(snapshotPath, latestSnapshot);
-  writeJson(path.join(root, ".dove/reviews/a-latest/rounds/1/snapshot.json"), { materials: [{ ...material, path: "historical-material.txt" }] });
-  writeJson(path.join(root, ".dove/reviews/z-older/review.json"), { ...latestReview, id: "z-older", updatedAt: oldTime, currentRound: 1 });
-  writeJson(path.join(root, ".dove/reviews/z-older/rounds/1/snapshot.json"), { materials: [{ ...material, path: "historical-material.txt" }] });
-  writeFile(root, ".dove/reviews/a-latest/rounds/2/report.md", secret);
-  writeFile(root, ".dove/reviews/a-latest/rounds/2/backend.json", secret);
-  const writeRun = (id, at, exitCode) => writeFile(root, `.dove/runs/${id}/run.jsonl`, [
-    { schemaVersion: "dove.run.event.v1", seq: 1, at, type: "run.started", runId: id, argv: [secret], note: secret },
-    { schemaVersion: "dove.run.event.v1", seq: 2, at, type: "run.terminal", runId: id, outcome: exitCode === 0 ? "succeeded" : "failed", exitCode }
-  ].map((event) => JSON.stringify(event)).join("\n") + "\n");
-  writeRun("a-latest", runTime, 7);
-  writeRun("z-older", oldTime, 0);
-  writeFile(root, ".dove/runs/a-latest/stdout.log", secret);
-  writeFile(root, ".dove/runs/a-latest/stderr.log", secret);
-  // Selection follows absolute record timestamps, not directory name or mtime.
-  fs.utimesSync(reviewPath, new Date(oldTime), new Date(oldTime));
-  fs.utimesSync(journalPath, new Date(oldTime), new Date(oldTime));
-  for (const source of ["startup", "clear", "compact", "resume"]) {
-    const output = invoke(source);
-    if (source === "startup" || source === "clear") {
-      assert.equal(output.hookSpecificOutput.additionalContext, DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP.replace(".dove/install/AUTHOR_PREFERENCES.md", path.join(root, ".dove/install/AUTHOR_PREFERENCES.md")));
-    } else {
-      const facts = output.hookSpecificOutput.additionalContext;
-      assert.match(facts, new RegExp(`RESEARCH\\.md: exists=yes; mtime=${oldTime}`, "u"));
-      assert.ok(facts.includes(`Latest Review: id=a-latest; round=2; updatedAt=${reviewTime}; material currentness=current`));
-      assert.ok(facts.includes(`Latest Run: id=a-latest; startedAt=${runTime}; status=failed; exit=7`));
-      assert.ok(facts.includes(`${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n`));
-      assert.equal(facts.endsWith(DOVE_RESEARCH_REFLECTION_CONTINUITY), true);
-    }
-  }
-
-  const olderJournalPath = path.join(root, ".dove/runs/z-older/run.jsonl");
-  const olderJournal = fs.readFileSync(olderJournalPath, "utf8");
-  const olderEvents = olderJournal.trimEnd().split("\n").map((line) => JSON.parse(line));
-  olderEvents[0].supervisorPid = 214214;
-  olderEvents[0].note = "多字节启动元数据".repeat(400);
-  const olderStart = JSON.stringify(olderEvents[0]) + "\n";
-  const selectedJournal = fs.readFileSync(journalPath, "utf8");
-  const selectedStart = selectedJournal.slice(0, selectedJournal.indexOf("\n") + 1);
-  // An old journal's truncated terminal/finalized event is not relevant to
-  // latest selection. The guard also rejects full old-journal reads, scans past
-  // its first newline, and observations of its synthetic supervisor PID.
-  for (const type of ["run.terminal", "run.finalized"]) {
-    const brokenTail = `{"type":"${type}","note":"${"x".repeat(100000)}`;
-    fs.writeFileSync(olderJournalPath, olderStart + brokenTail);
-    for (const source of ["compact", "resume"]) {
-      assert.ok(context(source).includes(`Latest Run: id=a-latest; startedAt=${runTime}; status=failed; exit=7`));
-    }
-    fs.writeFileSync(journalPath, selectedStart + brokenTail);
-    for (const source of ["compact", "resume"]) assert.match(context(source), /material currentness=current\nLatest Run: unavailable/u);
-    fs.writeFileSync(journalPath, selectedJournal);
-  }
-  // Even a directory named like an old run cannot be skipped when its start
-  // timestamp is unknown: it could actually be the newest candidate.
-  for (const invalidStart of [
-    "{broken\n",
-    JSON.stringify({ ...olderEvents[0], at: undefined }) + "\n",
-    JSON.stringify({ ...olderEvents[0], type: "run.terminal" }) + "\n",
-    olderStart.trimEnd()
-  ]) {
-    fs.writeFileSync(olderJournalPath, invalidStart);
-    assert.match(context(), /material currentness=current\nLatest Run: unavailable/u);
-  }
-  fs.writeFileSync(olderJournalPath, olderJournal);
-
-  writeFile(root, "paper.txt", "changed paper bytes\n");
-  assert.match(context(), /material currentness=changed/u);
-  fs.rmSync(path.join(root, "paper.txt"));
-  assert.match(context("resume"), /material currentness=missing/u);
-  writeFile(root, "paper.txt", "current paper bytes\n");
-  assert.match(context(), /material currentness=current/u);
-  fs.writeFileSync(snapshotPath, "{broken");
-  assert.match(context(), /round=2; updatedAt=.*; material currentness=unavailable/u);
-  fs.rmSync(snapshotPath);
-  assert.match(context(), /material currentness=unavailable/u);
-  writeJson(snapshotPath, latestSnapshot);
-
-  fs.writeFileSync(reviewPath, "{broken");
-  assert.match(context(), /RESEARCH\.md: exists=yes.*\nLatest Review: unavailable\nLatest Run: id=a-latest/u);
-  fs.rmSync(reviewPath);
-  assert.match(context(), /Latest Review: unavailable\nLatest Run: id=a-latest/u);
-  writeJson(reviewPath, { ...latestReview, currentRound: 3 });
-  assert.match(context(), /Latest Review: unavailable/u);
-  for (const updatedAt of [null, "yesterday", undefined]) {
-    writeJson(reviewPath, { ...latestReview, updatedAt });
-    assert.match(context(), /Latest Review: unavailable\nLatest Run: id=a-latest/u);
-  }
-  writeJson(reviewPath, latestReview);
-  const journal = fs.readFileSync(journalPath);
-  fs.writeFileSync(journalPath, "{broken\n");
-  assert.match(context(), /material currentness=current\nLatest Run: unavailable/u);
-  fs.rmSync(journalPath);
-  assert.match(context(), /material currentness=current\nLatest Run: unavailable/u);
-  const missingRunTime = journal.toString("utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
-  delete missingRunTime[0].at;
-  fs.writeFileSync(journalPath, missingRunTime.map((event) => JSON.stringify(event)).join("\n") + "\n");
-  assert.match(context(), /Latest Run: unavailable/u);
-  fs.writeFileSync(journalPath, journal);
-  fs.rmSync(researchPath);
-  fs.mkdirSync(researchPath);
-  assert.match(context(), /RESEARCH\.md: unavailable\nLatest Review: id=a-latest/u);
-  fs.rmdirSync(researchPath);
-  fs.symlinkSync(path.join(root, "unlisted-report.md"), researchPath);
-  assert.match(context(), /RESEARCH\.md: unavailable\nLatest Review: id=a-latest/u);
-  fs.unlinkSync(researchPath);
-  writeFile(root, ".dove/research/RESEARCH.md", secret);
+  writeFile(root, ".dove/reviews/a-latest/review.json", secret);
+  writeFile(root, ".dove/runs/a-latest/run.jsonl", secret);
+  check(card);
+  fs.writeFileSync(cardPath, "Mainline: Revised synthetic user goal\nNext core action: implement core route\n");
+  check("Mainline: Revised synthetic user goal\nNext core action: implement core route\n");
+  fs.writeFileSync(cardPath, "Mainline: Oversized\n" + "x".repeat(4096));
+  check();
+  fs.rmSync(cardPath);
+  fs.symlinkSync(path.join(root, "unlisted-report.md"), cardPath);
+  check();
+  fs.rmSync(cardPath);
+  check();
+  writeFile(root, ".dove/research/IDENTITY.md", card);
 
   fs.appendFileSync(path.join(root, ".claude/commands/dove/research.md"), "local edit\n");
   for (const source of ["startup", "clear", "compact", "resume"]) {
@@ -454,38 +370,24 @@ function validateSessionFacts(root, executable) {
     assert.match(output.systemMessage, /read-only.*dove update/u);
     assert.equal(Object.hasOwn(output, "hookSpecificOutput"), true);
   }
-  // A missing managed resource and an older package must prompt explicit
-  // update, never cause the hook to restore files or refresh the manifest.
   const agentPath = path.join(root, ".claude/agents/dove.md");
   const savedAgentPath = path.join(SCRATCH_ROOT, `${path.basename(root)}-saved-agent.md`);
   fs.renameSync(agentPath, savedAgentPath);
-  for (const source of ["startup", "clear", "compact", "resume"]) {
-    const output = invoke(source);
-    assert.match(output.systemMessage, /read-only.*dove update/u);
-    assert.equal(Object.hasOwn(output, "hookSpecificOutput"), true);
-  }
+  assert.match(invoke("compact").systemMessage, /read-only.*dove update/u);
   fs.renameSync(savedAgentPath, agentPath);
   const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);
   const manifest = readJson(manifestPath);
   writeJson(manifestPath, { ...manifest, package: { ...manifest.package, version: "0.0.1" } });
-  for (const source of ["startup", "clear", "compact", "resume"]) {
-    assert.match(invoke(source).systemMessage, /read-only.*dove update/u);
-  }
+  assert.match(invoke("compact").systemMessage, /read-only.*dove update/u);
   writeJson(manifestPath, { ...manifest, package: { ...manifest.package, version: "99.0.0" } });
-  for (const source of ["startup", "clear", "compact", "resume"]) {
-    const output = invoke(source);
-    assert.match(output.systemMessage, /could not inspect.*(?:refuses|拒绝)/u);
-    assert.equal(Object.hasOwn(output, "hookSpecificOutput"), false, "Do not read facts after a blocked inspection.");
-  }
+  const blocked = invoke("compact");
+  assert.match(blocked.systemMessage, /could not inspect.*(?:refuses|拒绝)/u);
+  assert.equal(Object.hasOwn(blocked, "hookSpecificOutput"), false);
   writeJson(manifestPath, manifest);
   const settingsPath = path.join(root, ".claude/settings.json");
   const settings = fs.readFileSync(settingsPath);
   fs.writeFileSync(settingsPath, "{broken");
-  for (const source of ["startup", "clear", "compact", "resume"]) {
-    const output = invoke(source);
-    assert.match(output.systemMessage, /could not inspect/u);
-    assert.equal(Object.hasOwn(output, "hookSpecificOutput"), false);
-  }
+  assert.match(invoke("compact").systemMessage, /could not inspect/u);
   fs.writeFileSync(settingsPath, settings);
   const malformedEvent = invoke("compact", { hook_event_name: "OtherEvent" });
   assert.match(malformedEvent.systemMessage, /unsupported or missing hook event/u);

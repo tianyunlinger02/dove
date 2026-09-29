@@ -470,7 +470,7 @@ try {
         if (inspected.status !== "current") {
           process.stdout.write(JSON.stringify(userPromptSubmitAttentionOutput()));
         } else {
-          process.stdout.write(JSON.stringify(userPromptSubmitOutput(payload, currentPromptGuidance(inspected.manifest))));
+          process.stdout.write(JSON.stringify(userPromptSubmitOutput(payload, currentPromptGuidance(inspected.manifest), { project: target })));
         }
       } catch {
         // An invalid or unsafe installation does not authorize new project guidance.

@@ -21,31 +21,27 @@ These are flexible research considerations, not a required order or report templ
 
 ### What this is for
 
-Report where the research stands from the overview, relevant summaries, and directly needed linked context.
+Explain the current research position in plain language.
 
 ### When to use
 
-Use when the user asks where the research stands, what is active, or what should be considered next.
+Use when the user asks where the research stands, why it stopped, or what is being done next.
 
 ### What Dove will examine
 
-- Read only enough context to answer the status question.
-- Report the confirmed mainline, any provisional candidate, visible scientific-task identity changes and authorization basis, the entering proposition's current disposition, substantive progress, active problems, and decisions. Use existing materials to judge relevant substantive quality, evidence confidence, and current-purpose satisfaction; otherwise leave the rating undetermined. Distinguish scientific progress from enabling engineering and delivery facts, explaining what understanding, capability, or decision actually changed. A concise evaluation table may expose tradeoffs and unknowns without treating completed checks as high quality. Mention next priorities when relevant to the question.
-- Treat missing overviews, summaries, or links as ordinary document facts.
+- Answer plainly: what are we trying to make, is the core claim proved, what blocks it, and what core work is underway. Use actual evidence, not internal IDs or completion counts; give an evidence caveat briefly when needed.
 
 ### Scope and changes
 
-- For Status, only inspect and report; do not start validation or maintain documents to fill a missing level or evidence gap.
+- A material user correction updates the identity card even during assessment; an explicit no-write instruction or host refusal still prohibits that write.
 
 ### Ways Dove may proceed
 
-- Read `.dove/research/RESEARCH.md` when it exists, then only the summaries and linked details needed for the question. Use the visible conversation and only necessary current project materials to distinguish live work from durable research notes; report conflicts or stale notes without silently reconciling them. Report a candidate as confirmed mainline only when the visible context or research materials contain that decision; do not infer the mainline, promotion, or task continuity from a Git branch, latest Mission, code, Review, Run receipt, project name, or asset lineage alone. The optional unique ordinary `Mainline: <text>` line in the root research overview supplies the statusline display, not a completion certificate; if absent, empty, or ambiguous, leave that display unavailable rather than guessing or filling it. Status can still report an explicitly confirmed mainline from the visible context or research prose, distinguishing its basis and any conflict with the saved line. If an overview, summary, link, identity comparison, or authorization basis is absent, say so naturally and do not modify files or run validation to manufacture it.
-- Before the first consequential choice for the current request, or after a user correction or recurring repair or failure exposes a possibly shared mistaken premise, read ".dove/research/lessons/LESSONS.md" once if it exists unless it has already been checked for this question in the active context, then only directly relevant or plausibly decision-changing linked Lessons. Reuse still-applicable Lessons instead of rereading them mechanically. Read ".dove/research/RESEARCH.md" separately only when project context is still needed; it is not a prerequisite for Lessons. If Lessons materials are absent, continue without creating them. Treat Lessons as fallible guidance, never as evidence. Ordinary deterministic local work has no Lessons prerequisite.
+- Read the short project identity card when present, then only directly relevant evidence and the user's latest corrections. Note a conflict rather than silently promoting an old note or a test prompt to user confirmation. Return control to the ongoing mainline after answering; do not alter a user-created goal or loop.
 
 ### What this should not replace
 
-- Do not use Status as a sync, Doctor, migration, or research-document maintenance command.
-- Do not treat installed-file health, checks, run receipts, engineering receipts, or Markdown navigation as scientific progress.
+- Do not turn a status question into a new scientific route, or count a run receipt as proof of the core.
 
 ### Using host tools
 
@@ -54,4 +50,4 @@ Use when the user asks where the research stands, what is active, or what should
 
 ### Return with
 
-- For capability returns and bounded subagent results, convey only what is material to adoption: the motivating proposition or decision; actual inspected artifact, material, and version; decisive evidence and counterevidence; what judgment changed; unresolved or unverified limits; useful work outside current authorization; and the downstream decision or artifact affected. Use natural language, not a mandatory format. The main session verifies evidence applicability, conflicts, and authorization against its full user context, then changes affected claims, active work, and downstream artifacts when warranted; a return does not itself authorize them. As the main session for an active research goal, after any material capability result or correction, compare what the evidence actually settles with the entering proposition, unfinished goal, and current authorization. Revise dependent work, then carry out the next effective permitted action in this session before reporting completion: implement and inspect the actual downstream use, repair a necessary dependency, or seek discriminating evidence according to what the result can change, not because a plan, check, or nearby variant is available. If the request is bounded, a necessary user decision remains, or no effective in-scope action survives, stop at that boundary. A bounded subagent returns its scoped result instead of extending its own remit.
+- The main session checks capability and subagent results against the user’s original goal, actual evidence, and latest corrections. Apply material findings to the real working artifact and downstream use, then do the next core action; a completed subtask is not a completed goal. A bounded subagent reports its scoped evidence and does not expand the task.

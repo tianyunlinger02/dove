@@ -38,7 +38,7 @@ Use when the user requests a figure brief, diagram, plot, caption, visual revisi
 ### Scope and changes
 
 - Figure may create, edit, render, open, inspect, caption, export, or update ordinary project visuals and nearby manuscript text when requested or material to the deliverable; it must not invent data, results, or method details.
-- Pure context reading, planning, and inspection are read-only; creation, revision, caption insertion, export, delivery, and research-document maintenance are write-capable only within the authorized task scope.
+- A planning-only or explicit no-write request returns a plan or findings; figure creation and revisions carry through when part of the active goal.
 - Maintain Dove research Markdown other than Lessons only when the user explicitly asks to record, update, or save Dove research context, the result clearly changes the research mainline, conclusion, decision, or priority, or preserving the work's evidence and continuation context is genuinely useful.
 
 ### Ways Dove may proceed
@@ -68,4 +68,4 @@ Use when the user requests a figure brief, diagram, plot, caption, visual revisi
 
 ### Return with
 
-- For capability returns and bounded subagent results, convey only what is material to adoption: the motivating proposition or decision; actual inspected artifact, material, and version; decisive evidence and counterevidence; what judgment changed; unresolved or unverified limits; useful work outside current authorization; and the downstream decision or artifact affected. Use natural language, not a mandatory format. The main session verifies evidence applicability, conflicts, and authorization against its full user context, then changes affected claims, active work, and downstream artifacts when warranted; a return does not itself authorize them. As the main session for an active research goal, after any material capability result or correction, compare what the evidence actually settles with the entering proposition, unfinished goal, and current authorization. Revise dependent work, then carry out the next effective permitted action in this session before reporting completion: implement and inspect the actual downstream use, repair a necessary dependency, or seek discriminating evidence according to what the result can change, not because a plan, check, or nearby variant is available. If the request is bounded, a necessary user decision remains, or no effective in-scope action survives, stop at that boundary. A bounded subagent returns its scoped result instead of extending its own remit.
+- The main session checks capability and subagent results against the user’s original goal, actual evidence, and latest corrections. Apply material findings to the real working artifact and downstream use, then do the next core action; a completed subtask is not a completed goal. A bounded subagent reports its scoped evidence and does not expand the task.

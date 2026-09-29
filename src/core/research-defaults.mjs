@@ -25,7 +25,7 @@ export const RESEARCH_DEFAULT_PATHS = Object.freeze({
 export const RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
   Object.freeze({
     path: RESEARCH_DEFAULT_PATHS.overview,
-    content: "# Research\n\nThis researcher-owned entry keeps the current research mainline, material progress, important conclusions and limits, linked work, and next priorities concise and recoverable.\n"
+    content: "# Research\n\nShort entry to the project identity card (`IDENTITY.md`) and topic history. Confirm the mainline with the user before filling it in.\n"
   })
 ]);
 
