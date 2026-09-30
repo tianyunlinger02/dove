@@ -33,7 +33,7 @@ Use when the user asks where the research stands, why it stopped, or what is bei
 
 ### Scope and changes
 
-- A material user correction updates the identity card even during assessment; an explicit no-write instruction or host refusal still prohibits that write.
+- A material user correction updates only affected identity-card fields even during assessment, not an unchanged Mainline; an explicit no-write instruction or host refusal still prohibits that write.
 
 ### Ways Dove may proceed
 

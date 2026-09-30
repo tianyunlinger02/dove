@@ -39,7 +39,7 @@ Use when the user requests a figure brief, diagram, plot, caption, visual revisi
 
 - Figure may create, edit, render, open, inspect, caption, export, or update ordinary project visuals and nearby manuscript text when requested or material to the deliverable; it must not invent data, results, or method details.
 - A planning-only or explicit no-write request returns a plan or findings; figure creation and revisions carry through when part of the active goal.
-- Maintain Dove research Markdown other than Lessons only when the user explicitly asks to record, update, or save Dove research context, the result clearly changes the research mainline, conclusion, decision, or priority, or preserving the work's evidence and continuation context is genuinely useful.
+- Maintain Dove research Markdown other than Lessons only when the user explicitly asks to record, update, or save Dove research context, the result clearly changes a conclusion, route decision, or priority within the confirmed goal, or preserving the work's evidence and continuation context is genuinely useful.
 
 ### Ways Dove may proceed
 

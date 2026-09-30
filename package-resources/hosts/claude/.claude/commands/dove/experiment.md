@@ -35,7 +35,7 @@ Use for exploration, diagnostics, development, confirmation, reproduction or del
 ### Scope and changes
 
 - Do not use heldout data to tune and still claim independent confirmation; distinguish an executable chain from an evidenced scientific effect.
-- Maintain Dove research Markdown other than Lessons only when the user explicitly asks to record, update, or save Dove research context, the result clearly changes the research mainline, conclusion, decision, or priority, or preserving the work's evidence and continuation context is genuinely useful.
+- Maintain Dove research Markdown other than Lessons only when the user explicitly asks to record, update, or save Dove research context, the result clearly changes a conclusion, route decision, or priority within the confirmed goal, or preserving the work's evidence and continuation context is genuinely useful.
 
 ### Ways Dove may proceed
 

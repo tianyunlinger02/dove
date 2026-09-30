@@ -47,6 +47,12 @@ test("prompt output is current short guidance, independent of prompt text and ho
   assert.match(context(expected), /disk guidance, not rule reload/iu);
   assert.match(context(expected), /No readable short identity card at \.dove\/research\/IDENTITY\.md/iu);
   assert.match(context(expected), /do not infer a mainline from old notes or developer test prompts/iu);
+  assert.match(context(expected), /shorten an oversized card without changing its Mainline/iu);
+  assert.match(context(expected), /leave an unconfirmed Mainline unknown/iu);
+  assert.match(context(expected), /update only affected fields unless writing is forbidden/iu);
+  assert.match(context(expected), /Keep Mainline stable/iu);
+  assert.match(context(expected), /routine route or next-action changes do not rewrite it/iu);
+  assert.doesNotMatch(context(expected), /^Mainline:/mu, "missing card does not synthesize a goal");
   assert.match(context(expected), /open goal, do the next core work now/iu);
   assert.match(context(expected), /Only real blockers stop it/iu);
   assert.match(context(expected), /On first use at these fingerprints, personally read the full rule and author preferences/iu);
@@ -71,19 +77,40 @@ test("prompt output is current short guidance, independent of prompt text and ho
   }
   assert.deepEqual(fs.readFileSync(settingsPath), before, "prompt hook must not write integration");
   const cardPath = path.join(project, ".dove/research/IDENTITY.md");
-  const card = "Mainline: 用户确认的合成主线\nRejected approach: synthetic CPU default\nNext core action: rerun on GPU\n";
-  fs.mkdirSync(path.dirname(cardPath), { recursive: true });
+  assert.equal(fs.existsSync(cardPath), false, "missing card is not created by prompt delivery");
+  const mainline = "Mainline: 在固定信息预算下恢复缺失候选，证明端到端覆盖改善；以独立确认和可用方法交付为完成。";
+  const card = `${mainline}\nRejected approach: synthetic CPU default\nUser restrictions: use available GPU within the confirmed budget\nCurrent route: provisional candidate generator\nNext core action: inspect missing candidates\n`;
   fs.writeFileSync(cardPath, card);
   const cardBefore = fs.statSync(cardPath).mtimeMs;
+  const cardExpected = userPromptSubmitOutput(event(""), guidance, { project });
   for (const binary of binaries) {
-    const delivered = invoke(binary, project, event("status", { cwd: project }));
-    assert.ok(context(delivered).includes(card), "current identity card is delivered in full");
-    assert.match(context(delivered), /next core work now/iu);
-    assert.equal(fs.statSync(cardPath).mtimeMs, cardBefore, "hook does not write the card");
+    for (const prompt of ["/dove:status", "别再默认 CPU，这只是资源限制纠正。", "不要写任何文件，只回答状态。"]) {
+      const delivered = invoke(binary, project, event(prompt, { cwd: project }));
+      assert.deepEqual(delivered, cardExpected, "hook presents the same card rather than interpreting corrections or results");
+      assert.ok(context(delivered).includes(card), "current identity card is delivered in full without paraphrasing");
+      assert.equal(context(delivered).split(mainline).length - 1, 1, "Mainline appears once with its exact user wording");
+      assert.match(context(delivered), /corrections affect only relevant fields, not an unchanged Mainline/iu);
+      assert.match(context(delivered), /next core work now/iu);
+      assert.equal(fs.readFileSync(cardPath, "utf8"), card, "hook does not apply card corrections itself");
+      assert.equal(fs.statSync(cardPath).mtimeMs, cardBefore, "hook does not write the card");
+    }
   }
-  fs.writeFileSync(cardPath, "Mainline: Oversized\n" + "x".repeat(4096));
-  assert.match(context(invoke(binaries[0], project, event())), /No readable short identity card/iu);
-  assert.doesNotMatch(context(invoke(binaries[0], project, event())), /Oversized/iu);
+  const oversized = `${mainline}\n${"x".repeat(4096)}`;
+  fs.writeFileSync(cardPath, oversized);
+  const oversizedBefore = fs.statSync(cardPath).mtimeMs;
+  for (const binary of binaries) {
+    const delivered = invoke(binary, project, event());
+    assert.match(context(delivered), /No readable short identity card/iu);
+    assert.match(context(delivered), /shorten an oversized card without changing its Mainline/iu);
+    assert.doesNotMatch(context(delivered), /^Mainline:/mu, "oversized card is not partially read or reconstructed");
+    assert.equal(context(delivered).includes(mainline), false);
+    assert.equal(fs.readFileSync(cardPath, "utf8"), oversized, "hook does not shorten an oversized card itself");
+    assert.equal(fs.statSync(cardPath).mtimeMs, oversizedBefore);
+  }
+  fs.rmSync(cardPath);
+  for (const binary of binaries) assert.deepEqual(invoke(binary, project, event()), expected, "missing card still uses non-inference guidance");
+  assert.equal(fs.existsSync(cardPath), false, "hook never recreates a missing card");
+  assert.deepEqual(fs.readFileSync(settingsPath), before, "card delivery does not modify integration");
   assert.equal(JSON.parse(before).hooks.UserPromptSubmit[0].hooks[0].command, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND);
   assert.equal(DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"');
 });

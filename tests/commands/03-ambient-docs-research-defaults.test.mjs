@@ -28,7 +28,8 @@ test("author stance uses Lessons once at consequential triggers without burdenin
   assert.match(stance, /short researcher-owned `\.dove\/research\/IDENTITY\.md`/iu);
   assert.match(stance, /Mainline: ` followed by one sentence in the user's words/iu);
   assert.match(stance, /rejected approaches; user restrictions; current route; next core action; hard blocker/iu);
-  assert.match(stance, /Correct affected fields when the user corrects you, including during an assessment/iu);
+  assert.match(stance, /Correct only the fields the user actually corrected/iu);
+  assert.match(stance, /including during an assessment/iu);
   assert.match(stance, /unless writing is explicitly forbidden or the host refuses/iu);
   assert.match(stance, /Keep RESEARCH\.md a short entry to history/iu);
   assert.match(stance, /Preserve transferable Lessons only when useful/iu);

@@ -43,13 +43,21 @@ test("SessionStart compact and resume include the researcher-owned identity card
     const output = sessionStartOutput({ source }, { status: "current" }, { project });
     const context = output.hookSpecificOutput.additionalContext;
     assert.ok(context.includes(card));
+    assert.match(context, /corrections affect only relevant fields, not an unchanged Mainline/iu);
     assert.match(context, /latest correction/iu);
+    assert.match(context, /Route and next-action changes do not rewrite Mainline/iu);
     assert.doesNotMatch(context, /main agent must personally read.*beginning to end/iu);
+    assert.equal(fs.readFileSync(cardPath, "utf8"), card, "compact/resume presents rather than corrects the card");
     assert.equal(fs.statSync(cardPath).mtimeMs, before);
   }
   fs.rmSync(cardPath);
-  assert.match(sessionStartOutput({ source: "compact" }, { status: "current" }, { project }).hookSpecificOutput.additionalContext,
-    /No readable short identity card/iu);
+  for (const source of ["compact", "resume"]) {
+    const context = sessionStartOutput({ source }, { status: "current" }, { project }).hookSpecificOutput.additionalContext;
+    assert.match(context, /No readable short identity card/iu);
+    assert.match(context, /shorten an oversized card without changing its Mainline/iu);
+    assert.doesNotMatch(context, /^Mainline:/mu, "missing card is not reconstructed on continuation");
+    assert.equal(fs.existsSync(cardPath), false, "continuation never creates an identity card");
+  }
 });
 
 test("uninstall inventory separates deleted files from retained shared configuration edits", () => {

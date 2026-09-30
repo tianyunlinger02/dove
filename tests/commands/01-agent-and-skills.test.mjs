@@ -18,6 +18,8 @@ import {
   DOVE_RESEARCH_ACTION_SPINE,
   DOVE_RESEARCH_DEFAULT_AUTONOMY,
   DOVE_RESEARCH_DECISION_CONSEQUENCE,
+  DOVE_RESEARCH_MAINLINE_ANCHORING,
+  DOVE_RESEARCH_MAINTENANCE_TRIGGER,
   DOVE_RESEARCH_RESULT_ADOPTION,
   DOVE_RESEARCH_REFLECTION_CONTINUITY,
   DOVE_RESEARCH_SESSION_CONTINUATION,
@@ -63,14 +65,32 @@ test("open mainline continues through side questions, runs and wakes until compl
   assert.doesNotMatch(rule, /(?:invoke|use) \/dove:auto/iu);
 });
 
-test("short shared contract anchors correction, core implementation and standing authorization", () => {
+test("short shared contract keeps confirmed Mainline stable while methods and evidence change", () => {
   const shared = renderDoveSharedResearchContractSection();
   const author = renderDoveAuthorStanceSection();
   const rule = renderClaudeAmbientRule();
   assert.ok(rule.includes(shared) && rule.includes(author));
+  assert.ok(DOVE_RESEARCH_SHARED_CONTRACT_BULLETS.includes(DOVE_RESEARCH_MAINLINE_ANCHORING));
   assert.ok(DOVE_RESEARCH_SHARED_CONTRACT_BULLETS.includes(DOVE_RESEARCH_ACTION_SPINE));
   assert.ok(DOVE_RESEARCH_SHARED_CONTRACT_BULLETS.includes(DOVE_RESEARCH_DECISION_CONSEQUENCE));
+  assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /confirmed goal, intended contribution, and completion meaning/iu);
+  assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /not the current method, route, or next action/iu);
+  assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /wording unchanged/iu);
+  for (const trigger of [/routine progress/iu, /unrelated corrections/iu, /experiment results/iu, /subtask completion/iu]) {
+    assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, trigger);
+  }
+  assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /do not paraphrase/iu);
+  assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /only when the user explicitly changes/iu);
+  assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /card demonstrably misstates already-confirmed intent/iu);
+  assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /Within that goal and explicit constraints/iu);
+  assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /revise methods and next actions without renewed approval/iu);
+  assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /revise scientific claims with evidence/iu);
+  assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /Mentioning another direction does not adopt it/iu);
+  assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /unconfirmed directions provisional/iu);
+  assert.equal(renderDoveResearchQualityReference().split(DOVE_RESEARCH_MAINLINE_ANCHORING).length - 1, 1, "quality reference retains the Mainline contract once");
+  assert.equal(author.includes(DOVE_RESEARCH_MAINLINE_ANCHORING), false, "shared judgment, not author stance, owns Mainline anchoring");
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /user’s actual goal/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /current method remains revisable/iu);
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /change the real method and downstream artifact/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /root cause is known, change the method/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /actual producer and consumer/iu);
@@ -79,9 +99,14 @@ test("short shared contract anchors correction, core implementation and standing
   assert.match(shared, /public baselines and data, the mechanism and expected difference/iu);
   assert.match(author, /identity card/iu);
   assert.match(author, /Mainline: ` followed by one sentence in the user's words/iu);
-  assert.match(author, /Correct affected fields when the user corrects you, including during an assessment/iu);
+  assert.match(author, /Correct only the fields the user actually corrected/iu);
+  assert.match(author, /including during an assessment/iu);
   assert.match(author, /unless writing is explicitly forbidden or the host refuses/iu);
-  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /identity card/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /latest correction and observed results/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /user-confirmed goal and its identity card/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /Route and next-action changes do not rewrite Mainline/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /Fix affected work and continue the core task/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /do not mistake a latest note or a test prompt for a user decision/iu);
   assert.doesNotMatch(DOVE_RESEARCH_REFLECTION_CONTINUITY, /(?:read|scan) (?:private )?transcripts/iu);
 });
 
@@ -98,6 +123,13 @@ test("development iteration and final heldout confirmation have different eviden
   assert.match(experiment, /read-only or design-only request does not run experiments/iu);
   assert.match(research, /Known root cause calls for a method change/iu);
   assert.match(experiment, /GPU for repeated computation when it fits/iu);
+  assert.match(DOVE_RESEARCH_MAINTENANCE_TRIGGER, /user explicitly asks to record, update, or save/iu);
+  assert.match(DOVE_RESEARCH_MAINTENANCE_TRIGGER, /conclusion, route decision, or priority within the confirmed goal/iu);
+  assert.match(DOVE_RESEARCH_MAINTENANCE_TRIGGER, /evidence and continuation context is genuinely useful/iu);
+  assert.doesNotMatch(DOVE_RESEARCH_MAINTENANCE_TRIGGER, /changes the research mainline/iu);
+  for (const command of ["dove.research", "dove.source", "dove.experiment", "dove.draft", "dove.figure", "dove.rebuttal"]) {
+    assert.ok(COMMAND_SURFACE_BY_ID[command].contract.boundaries.some((boundary) => boundary.includes(DOVE_RESEARCH_MAINTENANCE_TRIGGER)), `${command}: maintenance within the confirmed goal`);
+  }
 });
 
 test("corrections are visible in identity card while Lessons remain optional and evidence-bound", () => {
@@ -105,6 +137,8 @@ test("corrections are visible in identity card while Lessons remain optional and
   const author = renderDoveAuthorStanceSection();
   assert.match(author, /user corrects recurring behavior.*identity card immediately/iu);
   assert.match(author, /read-only assessment is not by itself a reason to forget the correction/iu);
+  assert.match(author, /GPU correction changes restrictions, not Mainline/iu);
+  assert.match(author, /method failure changes the current route and next action, not the goal/iu);
   assert.match(lessons, /content-bearing "\.dove\/research\/lessons\/LESSONS\.md"/iu);
   assert.match(lessons, /do not bootstrap an empty directory or index during reading/iu);
   assert.match(lessons, /fallible guidance rather than evidence/iu);
@@ -117,8 +151,11 @@ test("status answers four plain questions without replacing the mainline", () =>
   assert.match(status, /what are we trying to make, is the core claim proved, what blocks it, and what core work is underway/iu);
   assert.match(status, /Read the short project identity card/iu);
   assert.match(status, /Return control to the ongoing mainline after answering/iu);
-  assert.match(status, /material user correction updates the identity card even during assessment/iu);
+  assert.match(status, /material user correction updates only affected identity-card fields/iu);
+  assert.match(status, /even during assessment, not an unchanged Mainline/iu);
   assert.match(status, /explicit no-write instruction or host refusal still prohibits that write/iu);
+  assert.match(work("dove.research"), /correct only affected fields/iu);
+  assert.match(work("dove.research"), /Route and next-action updates do not rewrite the confirmed Mainline/iu);
 });
 
 test("Dove exposes one Claude agent definition with bounded roles and result adoption", () => {
@@ -153,6 +190,7 @@ test("ordinary rule and standalone DSH Research preserve the shortened mainline 
   const claude = research.find(({ hostId }) => hostId === "claude").content;
   const dsh = research.find(({ hostId }) => hostId === "dsh").content;
   for (const context of [rule, `${rule}\n${claude}`, `${rule}\n${renderClaudeDoveAgent()}\n${claude}`, dsh]) {
+    assert.equal(context.split(DOVE_RESEARCH_MAINLINE_ANCHORING).length - 1, 1, "one shared Mainline owner in each host context");
     assert.match(context, /problem → method → contribution/u);
     assert.match(context, /identity card/iu);
     assert.match(context, /core (?:work|implementation)/iu);
@@ -164,8 +202,12 @@ test("ordinary rule and standalone DSH Research preserve the shortened mainline 
 test("per-prompt reminder stays short and does not replace the identity card", () => {
   const reminder = renderDoveResearchReanchor();
   assert.ok(reminder.length < 400);
-  assert.match(reminder, /identity card and latest user correction; update the card when corrected unless writing is forbidden/iu);
+  assert.match(reminder, /identity card and latest user correction/iu);
+  assert.match(reminder, /update only affected fields unless writing is forbidden/iu);
+  assert.match(reminder, /Keep Mainline stable/iu);
+  assert.match(reminder, /routine route or next-action changes do not rewrite it/iu);
   assert.match(reminder, /open goal, do the next core work now/iu);
+  assert.match(reminder, /bounded answer does not cancel it/iu);
   assert.match(reminder, /Only real blockers stop it/iu);
   assert.match(reminder, /wake does core work/iu);
 });

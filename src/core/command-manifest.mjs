@@ -123,7 +123,7 @@ function contract(slug) {
     ],
     actions: [
       relevantLessons,
-      "Check the project identity card against the user's latest words; correct it on a material user correction without replacing an explicitly no-write request. Rejudge affected work after results, change the real method, artifact and downstream use, then carry out the next core action. A saved old plan or local test green light does not choose the route.",
+      "Check the project identity card against the user's latest words; correct only affected fields without replacing an explicitly no-write request. Route and next-action updates do not rewrite the confirmed Mainline. Rejudge affected work after results, change the real method, artifact and downstream use, then carry out the next core action. A saved old plan or local test green light does not choose the route.",
       "Preserve useful work and evidence in ordinary project files; keep RESEARCH.md a short entry and the identity card a short current anchor. Stop the open goal only at its completion, a missing user resource or decision, or an actual error that cannot be repaired; do not delete a user-created goal or loop. For a bounded question, answer it within scope."
     ],
     boundaries: [
@@ -149,7 +149,7 @@ function contract(slug) {
     actions: [
       "Read the short project identity card when present, then only directly relevant evidence and the user's latest corrections. Note a conflict rather than silently promoting an old note or a test prompt to user confirmation. Return control to the ongoing mainline after answering; do not alter a user-created goal or loop."
     ],
-    boundaries: ["A material user correction updates the identity card even during assessment; an explicit no-write instruction or host refusal still prohibits that write."],
+    boundaries: ["A material user correction updates only affected identity-card fields even during assessment, not an unchanged Mainline; an explicit no-write instruction or host refusal still prohibits that write."],
     nonGoals: ["Do not turn a status question into a new scientific route, or count a run receipt as proof of the core."],
     clarification: []
   });

@@ -143,12 +143,12 @@ function renderBody(command, heading, hostId = null) {
   const contract = renderCapabilityContract(command, hostId);
   const responsePolicy = hostId === "dsh" ? USER_RESPONSE_POLICY.join("\n") : "";
   // Author stance owns the short preference read trigger for the eight author
-  // Skills. Status gets only inspection/reporting scope; Claude uses its rule.
+  // Skills. Status inspects/reports and retains user corrections; Claude uses its rule.
   const shared = hostId === "dsh" ? [
     responsePolicy,
     renderDoveSharedResearchContractSection(),
     `Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`. Read relevant criteria at the decision triggers above for scoped quality and investment judgments; it is guidance, not research evidence.`,
-    command.id === "dove.status" ? "For Status, use these principles only to inspect and report; do not execute research actions or maintain documents."
+    command.id === "dove.status" ? "For Status, use these principles only to inspect and report, except to retain the user's material correction in affected identity-card fields. Do not execute research actions or otherwise maintain documents; do not rewrite an unchanged Mainline. Respect explicit no-write instructions and host refusal."
       : renderDoveAuthorStanceSection()
   ].join("\n\n") : "";
   return [`# ${heading}`, purpose, args, examples.trim(), shared, contract].filter(Boolean).join("\n\n") + "\n";

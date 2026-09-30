@@ -38,7 +38,7 @@ Use when the user requests rebuttal, response, revision, or follow-up work from 
 ### Scope and changes
 
 - Rebuttal may modify ordinary project artifacts and research documents when requested or when revisions are the in-scope response; outward-facing submission or destructive action still requires explicit authorization.
-- Maintain Dove research Markdown other than Lessons only when the user explicitly asks to record, update, or save Dove research context, the result clearly changes the research mainline, conclusion, decision, or priority, or preserving the work's evidence and continuation context is genuinely useful.
+- Maintain Dove research Markdown other than Lessons only when the user explicitly asks to record, update, or save Dove research context, the result clearly changes a conclusion, route decision, or priority within the confirmed goal, or preserving the work's evidence and continuation context is genuinely useful.
 
 ### Ways Dove may proceed
 

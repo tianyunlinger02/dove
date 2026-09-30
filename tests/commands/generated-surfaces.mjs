@@ -19,6 +19,8 @@ import {
   renderDoveSharedResearchContractSection
 } from "../../src/core/dove-agent-persona.mjs";
 import {
+  DOVE_RESEARCH_MAINLINE_ANCHORING,
+  DOVE_RESEARCH_MAINTENANCE_TRIGGER,
   DOVE_RESEARCH_QUALITY_CRITERIA,
   DOVE_RESEARCH_QUALITY_REFERENCE_PATHS,
   DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS,
@@ -94,7 +96,10 @@ function assertHostGuidanceProjection(entry) {
 
 function assertCoreActionGuidance(value, label) {
   assert.match(value, /problem → method → contribution/u, label);
+  assert.match(value, /confirmed goal, intended contribution, and completion meaning/iu, label);
+  assert.match(value, /not the current method, route, or next action/iu, label);
   assert.match(value, /user’s actual goal/iu, label);
+  assert.match(value, /current method remains revisable/iu, label);
   assert.match(value, /root cause is known, change the method/iu, label);
   assert.match(value, /actual producer and consumer/iu, label);
   assert.match(value, /confirmed mainline covers its core implementation, reruns, diagnosis, and suitable GPU work/iu, label);
@@ -134,6 +139,10 @@ export function assertFinalEntrypointWiring() {
   assert.match(rule, /user correction/iu);
   assert.match(renderClaudeDoveAgent(), /no higher judgment authority/iu);
   assertCoreActionGuidance(rule, "ordinary Claude rule");
+  assertSharedContractOnce(rule, "ordinary Claude rule alone");
+  assert.equal(rule.split(DOVE_RESEARCH_MAINLINE_ANCHORING).length - 1, 1, "ordinary rule alone owns Mainline anchoring once");
+  assert.equal(renderDoveAuthorStanceSection().includes(DOVE_RESEARCH_MAINLINE_ANCHORING), false, "Mainline anchoring belongs to shared judgment, not author stance");
+  assert.equal(renderClaudeDoveAgent().includes(DOVE_RESEARCH_MAINLINE_ANCHORING), false, "optional agent does not duplicate the ordinary rule's Mainline contract");
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, 1, "author stance owns the preference read trigger");
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP).length - 1, 1, "author stance requires one main-agent bootstrap");
   assert.match(rule, /current host main agent must personally read/iu);
@@ -197,8 +206,13 @@ export function assertFinalEntrypointWiring() {
       assert.equal(value.split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, authorOwners, `${label}: preference trigger follows author stance`);
       assert.equal(value.split(DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[entry.hostId]).length - 1, authorOwners, `${label}: preference path follows author stance`);
       if (authorOwners === 0) {
+        const statusGuidance = entry.content.slice(0, entry.content.indexOf("## How Dove approaches this work"));
         assert.equal(value.includes("## Author stance"), false);
-        assert.match(value, /only to inspect and report/iu);
+        assert.match(statusGuidance, /only to inspect and report/iu, label);
+        assert.match(statusGuidance, /except to retain the user's material correction in affected identity-card fields/iu, label);
+        assert.match(statusGuidance, /Do not execute research actions or otherwise maintain documents/iu, label);
+        assert.match(statusGuidance, /do not rewrite an unchanged Mainline/iu, label);
+        assert.match(statusGuidance, /Respect explicit no-write instructions and host refusal/iu, label);
       }
     }
   }
@@ -207,8 +221,15 @@ export function assertFinalEntrypointWiring() {
 export function assertRenderedCapabilityWiring(entry) {
   const value = entry.content.slice(entry.content.indexOf("## How Dove approaches this work"));
   const label = `${entry.hostId} ${entry.command.id}`;
+  if (["dove.research", "dove.source", "dove.experiment", "dove.draft", "dove.figure", "dove.rebuttal"].includes(entry.command.id)) {
+    assert.ok(value.includes(DOVE_RESEARCH_MAINTENANCE_TRIGGER), `${label}: scoped maintenance trigger projection`);
+    assert.match(value, /conclusion, route decision, or priority within the confirmed goal/iu, label);
+  }
   if (entry.command.id === "dove.research") {
     assert.match(value, /project identity card/iu, label);
+    assert.match(value, /correct only affected fields/iu, label);
+    assert.match(value, /without replacing an explicitly no-write request/iu, label);
+    assert.match(value, /Route and next-action updates do not rewrite the confirmed Mainline/iu, label);
     assert.match(value, /carry out the next core action/iu, label);
     assert.match(value, /root cause calls for a method change/iu, label);
     assert.match(value, /final confirmation/iu, label);
@@ -228,6 +249,8 @@ export function assertRenderedCapabilityWiring(entry) {
   }
   if (entry.command.id === "dove.figure") assert.match(value, /rerender and inspect/iu, label);
   if (entry.command.id === "dove.status") {
+    assert.match(value, /material user correction updates only affected identity-card fields/iu, label);
+    assert.match(value, /even during assessment, not an unchanged Mainline/iu, label);
     assert.match(value, /explicit no-write instruction or host refusal still prohibits that write/iu, label);
     assert.match(value, /ongoing mainline after answering/iu, label);
   }
@@ -337,6 +360,7 @@ export function assertQualityReferenceResources() {
     assert.ok(PACKAGE_GENERATED_SUPPORT_PATHS.includes(entry.relativePath));
     assert.ok(HOST_ADAPTERS[entry.hostId].requiredPaths.includes(entry.destinationPath));
     assert.equal(entry.content, renderDoveResearchQualityReference());
+    assert.equal(entry.content.split(DOVE_RESEARCH_MAINLINE_ANCHORING).length - 1, 1, `${entry.hostId}: quality reference includes Mainline anchoring once`);
     assertGeneratedFileMatches(entry.relativePath, entry.content);
     const references = resourcesForHosts([entry.hostId]).filter(({ path: resourcePath }) => resourcePath.startsWith(".dove/"));
     assert.deepEqual(references.map(({ path }) => path), [".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY.md"]);

@@ -36,12 +36,12 @@ Use for an open research goal or a bounded research question; keep their complet
 
 ### Scope and changes
 
-- Maintain Dove research Markdown other than Lessons only when the user explicitly asks to record, update, or save Dove research context, the result clearly changes the research mainline, conclusion, decision, or priority, or preserving the work's evidence and continuation context is genuinely useful.
+- Maintain Dove research Markdown other than Lessons only when the user explicitly asks to record, update, or save Dove research context, the result clearly changes a conclusion, route decision, or priority within the confirmed goal, or preserving the work's evidence and continuation context is genuinely useful.
 
 ### Ways Dove may proceed
 
 - Before the first consequential choice for the current request, or after a user correction or recurring repair or failure exposes a possibly shared mistaken premise, read ".dove/research/lessons/LESSONS.md" once if it exists unless it has already been checked for this question in the active context, then only directly relevant or plausibly decision-changing linked Lessons. Reuse still-applicable Lessons instead of rereading them mechanically. Read ".dove/research/RESEARCH.md" separately only when project context is still needed; it is not a prerequisite for Lessons. If Lessons materials are absent, continue without creating them. Treat Lessons as fallible guidance, never as evidence. Ordinary deterministic local work has no Lessons prerequisite.
-- Check the project identity card against the user's latest words; correct it on a material user correction without replacing an explicitly no-write request. Rejudge affected work after results, change the real method, artifact and downstream use, then carry out the next core action. A saved old plan or local test green light does not choose the route.
+- Check the project identity card against the user's latest words; correct only affected fields without replacing an explicitly no-write request. Route and next-action updates do not rewrite the confirmed Mainline. Rejudge affected work after results, change the real method, artifact and downstream use, then carry out the next core action. A saved old plan or local test green light does not choose the route.
 - Preserve useful work and evidence in ordinary project files; keep RESEARCH.md a short entry and the identity card a short current anchor. Stop the open goal only at its completion, a missing user resource or decision, or an actual error that cannot be repaired; do not delete a user-created goal or loop. For a bounded question, answer it within scope.
 
 ### What this should not replace
