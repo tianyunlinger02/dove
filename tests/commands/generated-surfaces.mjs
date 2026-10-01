@@ -106,6 +106,15 @@ function assertCoreActionGuidance(value, label) {
   assert.match(value, /current method remains revisable/iu, label);
   assert.match(value, /root cause is known, change the method/iu, label);
   assert.match(value, /actual producer and consumer/iu, label);
+  assert.match(value, /cumulative trajectory.*actual code\/artifact changes/iu, label);
+  assert.match(value, /actions, predictions and outcomes/iu, label);
+  assert.match(value, /required capabilities and scope/iu, label);
+  assert.match(value, /previously rejected approaches/iu, label);
+  assert.match(value, /even when local results improve/iu, label);
+  assert.match(value, /building that capability.*case-specific patches/iu, label);
+  assert.match(value, /retain or revise the real implementation/iu, label);
+  assert.match(value, /dependent work and next action/iu, label);
+  assert.match(value, /not just records/iu, label);
   assert.match(value, /confirmed mainline covers its core implementation, reruns, diagnosis, and suitable GPU work/iu, label);
   assert.match(value, /final heldout confirmation needs a frozen/iu, label);
   assert.match(value, /Report in plain language/iu, label);

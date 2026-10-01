@@ -1,6 +1,6 @@
 {
   "name": "dove",
-  "version": "3.2.24",
+  "version": "3.2.25",
   "description": "Local-first Markdown research workflow for papers, experiments, figures, review, and revision.",
   "type": "module",
   "bin": {

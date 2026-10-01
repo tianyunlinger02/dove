@@ -44,8 +44,13 @@ test("SessionStart compact and resume include the researcher-owned identity card
     const context = output.hookSpecificOutput.additionalContext;
     assert.ok(context.includes(card));
     assert.match(context, /corrections affect only relevant fields, not an unchanged Mainline/iu);
-    assert.match(context, /latest correction/iu);
+    assert.match(context, /cumulative route/iu);
+    assert.match(context, /retained actions.*actual changes.*observed results/iu);
+    assert.match(context, /not just the latest correction/iu);
+    assert.match(context, /user-confirmed goal and its identity card/iu);
     assert.match(context, /Route and next-action changes do not rewrite Mainline/iu);
+    assert.match(context, /Apply the route judgment.*affected work/iu);
+    assert.match(context, /continue the core task/iu);
     assert.doesNotMatch(context, /main agent must personally read.*beginning to end/iu);
     assert.equal(fs.readFileSync(cardPath, "utf8"), card, "compact/resume presents rather than corrects the card");
     assert.equal(fs.statSync(cardPath).mtimeMs, before);
