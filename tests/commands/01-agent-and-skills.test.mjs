@@ -90,6 +90,13 @@ test("short shared contract keeps confirmed Mainline stable while methods and ev
   assert.equal(renderDoveResearchQualityReference().split(DOVE_RESEARCH_MAINLINE_ANCHORING).length - 1, 1, "quality reference retains the Mainline contract once");
   assert.equal(author.includes(DOVE_RESEARCH_MAINLINE_ANCHORING), false, "shared judgment, not author stance, owns Mainline anchoring");
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /user’s actual goal/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /every open-goal round/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /remaining whole-goal gap.*same confirmed Mainline/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /before acting, after results, and before ending/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /not only when changing direction/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /local batch or validation plan does not by itself complete/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /if requirements remain, do the next core work/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /Reuse settled context, not per-tool rescans, repeated reports, or renewed approval/iu);
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /current method remains revisable/iu);
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /change the real method and downstream artifact/iu);
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /root cause is known, change the method/iu);
@@ -205,10 +212,11 @@ test("per-prompt reminder stays short and does not replace the identity card", (
   assert.match(reminder, /identity card and latest user correction/iu);
   assert.match(reminder, /update only affected fields unless writing is forbidden/iu);
   assert.match(reminder, /Keep Mainline stable/iu);
-  assert.match(reminder, /routine route or next-action changes do not rewrite it/iu);
-  assert.match(reminder, /open goal, do the next core work now/iu);
-  assert.match(reminder, /bounded answer does not cancel it/iu);
-  assert.match(reminder, /Only real blockers stop it/iu);
+  assert.match(reminder, /Each open-goal round checks action, result and remaining gap against the same Mainline/iu);
+  assert.match(reminder, /do the next core work now/iu);
+  assert.match(reminder, /Stop at whole-goal completion or a hard blocker/iu);
+  assert.match(reminder, /not a local batch or plan/iu);
+  assert.match(reminder, /Side answers keep the goal/iu);
   assert.match(reminder, /wake does core work/iu);
 });
 

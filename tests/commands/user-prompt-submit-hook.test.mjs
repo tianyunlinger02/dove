@@ -51,10 +51,11 @@ test("prompt output is current short guidance, independent of prompt text and ho
   assert.match(context(expected), /leave an unconfirmed Mainline unknown/iu);
   assert.match(context(expected), /update only affected fields unless writing is forbidden/iu);
   assert.match(context(expected), /Keep Mainline stable/iu);
-  assert.match(context(expected), /routine route or next-action changes do not rewrite it/iu);
+  assert.match(context(expected), /Each open-goal round checks action, result and remaining gap against the same Mainline/iu);
   assert.doesNotMatch(context(expected), /^Mainline:/mu, "missing card does not synthesize a goal");
-  assert.match(context(expected), /open goal, do the next core work now/iu);
-  assert.match(context(expected), /Only real blockers stop it/iu);
+  assert.match(context(expected), /do the next core work now/iu);
+  assert.match(context(expected), /Stop at whole-goal completion or a hard blocker/iu);
+  assert.match(context(expected), /not a local batch or plan/iu);
   assert.match(context(expected), /On first use at these fingerprints, personally read the full rule and author preferences/iu);
   assert.match(context(expected), /card is context, not a substitute for the user's latest words/iu);
   for (const fingerprint of guidance.fingerprints) assert.ok(context(expected).includes(fingerprint));

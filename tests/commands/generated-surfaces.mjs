@@ -99,6 +99,10 @@ function assertCoreActionGuidance(value, label) {
   assert.match(value, /confirmed goal, intended contribution, and completion meaning/iu, label);
   assert.match(value, /not the current method, route, or next action/iu, label);
   assert.match(value, /user’s actual goal/iu, label);
+  assert.match(value, /every open-goal round/iu, label);
+  assert.match(value, /before acting, after results, and before ending/iu, label);
+  assert.match(value, /local batch or validation plan does not by itself complete/iu, label);
+  assert.match(value, /if requirements remain, do the next core work/iu, label);
   assert.match(value, /current method remains revisable/iu, label);
   assert.match(value, /root cause is known, change the method/iu, label);
   assert.match(value, /actual producer and consumer/iu, label);
