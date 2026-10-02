@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 import { DOVE_CLAUDE_STATUS_LINE } from "../src/core/ambient-policy.mjs";
 import {
   DOVE_AUTHOR_PREFERENCES_CONTINUITY,
-  DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP
+  renderDoveAuthorPreferencesBootstrap,
+  renderDoveAuthorPreferencesReference
 } from "../src/core/dove-author-preferences.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { initializeProjectIntegration, inspectProjectIntegration, updateProjectIntegration, previewProjectCompleteReinstall, completeReinstallProjectIntegration, previewProjectUninstall } from "../src/core/project-installation.mjs";
@@ -19,7 +20,7 @@ import { resourcesForHosts, STATUS_LINE_SELECTOR } from "../src/core/project-ins
 import { prepareResearchDefaults } from "../src/core/research-defaults.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
-import { DOVE_RESEARCH_REFLECTION_CONTINUITY, renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
+import { DOVE_RESEARCH_REFLECTION_CONTINUITY, renderDoveResearchQualityReference, renderDoveResearchQualityFullReference } from "../src/core/dove-research-contract.mjs";
 import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -31,9 +32,11 @@ const CLI_ENV = {
   npm_config_prefix: path.join(SCRATCH_ROOT, "installation-prefix")
 };
 const REFERENCES = [
-  [".dove/install/AUTHOR_PREFERENCES.md", fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8")],
-  [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()]
-].map(([relativePath, content]) => ({ path: relativePath, content: `${content.trimEnd()}\n` }));
+  [".dove/install/AUTHOR_PREFERENCES.md", renderDoveAuthorPreferencesReference()],
+  [".dove/install/AUTHOR_PREFERENCES_FULL.md", fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8")],
+  [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()],
+  [".dove/install/RESEARCH_QUALITY_FULL.md", renderDoveResearchQualityFullReference()]
+].map(([relativePath, content]) => ({ path: relativePath, content: `${content.trimEnd()}\n` })).sort((left, right) => left.path.localeCompare(right.path));
 const PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
 fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
 
@@ -315,8 +318,9 @@ function validateSessionFacts(root, executable) {
     assert.deepEqual(treeSnapshot(root), before, "SessionStart preserves all fixture bytes, paths, and mtimes.");
     return result.stdout ? JSON.parse(result.stdout) : null;
   };
-  const bootstrap = DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP.replace(
-    ".dove/install/AUTHOR_PREFERENCES.md", path.join(root, ".dove/install/AUTHOR_PREFERENCES.md")
+  const bootstrap = renderDoveAuthorPreferencesBootstrap(
+    path.join(root, ".dove/install/AUTHOR_PREFERENCES.md"),
+    path.join(root, ".dove/install/RESEARCH_QUALITY.md")
   );
   const check = (card = null) => {
     for (const source of ["startup", "clear", "compact", "resume"]) {
@@ -324,7 +328,7 @@ function validateSessionFacts(root, executable) {
       assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
       const context = output.hookSpecificOutput.additionalContext;
       if (source === "startup" || source === "clear") {
-        assert.equal(context, bootstrap, "startup and clear only bootstrap the main agent's preferences");
+        assert.equal(context, bootstrap, "startup and clear only bootstrap the main agent's two short summaries");
       } else {
         if (card === null) {
           assert.match(context, /No readable short identity card at \.dove\/research\/IDENTITY\.md/u);

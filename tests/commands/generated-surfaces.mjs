@@ -23,16 +23,20 @@ import {
   DOVE_RESEARCH_MAINTENANCE_TRIGGER,
   DOVE_RESEARCH_QUALITY_CRITERIA,
   DOVE_RESEARCH_QUALITY_REFERENCE_PATHS,
+  DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS,
   DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS,
   DOVE_RESEARCH_SHARED_CONTRACT_BULLETS,
-  renderDoveResearchQualityReference
+  renderDoveResearchQualityReference,
+  renderDoveResearchQualityFullReference
 } from "../../src/core/dove-research-contract.mjs";
 import { resourcesForHosts } from "../../src/core/project-installation-resources.mjs";
 import {
   DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP,
   DOVE_AUTHOR_PREFERENCES_READ_TRIGGER,
   DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS,
-  renderDoveAuthorPreferencesReference
+  DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS,
+  renderDoveAuthorPreferencesReference,
+  renderDoveAuthorPreferencesFullReference
 } from "../../src/core/dove-author-preferences.mjs";
 import { checkGeneratedAuthorPreferencesContent } from "../../scripts/generate-author-preferences.mjs";
 import {
@@ -106,18 +110,28 @@ function assertCoreActionGuidance(value, label) {
   assert.match(value, /current method remains revisable/iu, label);
   assert.match(value, /root cause is known, change the method/iu, label);
   assert.match(value, /actual producer and consumer/iu, label);
-  assert.match(value, /cumulative trajectory.*actual code\/artifact changes/iu, label);
-  assert.match(value, /actions, predictions and outcomes/iu, label);
-  assert.match(value, /required capabilities and scope/iu, label);
-  assert.match(value, /previously rejected approaches/iu, label);
-  assert.match(value, /even when local results improve/iu, label);
-  assert.match(value, /building that capability.*case-specific patches/iu, label);
-  assert.match(value, /retain or revise the real implementation/iu, label);
-  assert.match(value, /dependent work and next action/iu, label);
-  assert.match(value, /not just records/iu, label);
+  assert.match(value, /fresh read-only Dove context/iu, label);
+  assert.match(value, /dove review handoff --scope route --material <diff> --material <results> --json/u, label);
+  assert.match(value, /--scope design --material <design>/u, label);
+  assert.match(value, /actual diff since the last review/iu, label);
+  assert.match(value, /actual run results/iu, label);
+  assert.match(value, /not the process conversation/iu, label);
+  assert.match(value, /capability or case-specific patches/iu, label);
+  assert.match(value, /Mainline drift/iu, label);
+  assert.match(value, /Apply its findings to the real next action/iu, label);
+  assert.match(value, /remove or rework rejected patches/iu, label);
+  assert.match(value, /retain rejected approaches in the card/iu, label);
+  assert.match(value, /one-page design/iu, label);
+  assert.match(value, /public-baseline advantage/iu, label);
+  assert.match(value, /data\/model\/training\/evaluation/iu, label);
+  assert.match(value, /concrete predicted example/iu, label);
+  assert.match(value, /grounds for likely success and biggest risk/iu, label);
+  assert.match(value, /Revise an unsupported design/iu, label);
+  assert.match(value, /implement without renewed user approval/iu, label);
   assert.match(value, /confirmed mainline covers its core implementation, reruns, diagnosis, and suitable GPU work/iu, label);
   assert.match(value, /final heldout confirmation needs a frozen/iu, label);
-  assert.match(value, /Report in plain language/iu, label);
+  assert.match(value, /plain-language Quality line/iu, label);
+  assert.match(value, /Report what we are making/iu, label);
 }
 
 export function assertFinalEntrypointWiring() {
@@ -159,7 +173,9 @@ export function assertFinalEntrypointWiring() {
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, 1, "author stance owns the preference read trigger");
   assert.equal(renderDoveAuthorStanceSection().split(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP).length - 1, 1, "author stance requires one main-agent bootstrap");
   assert.match(rule, /current host main agent must personally read/iu);
-  assert.match(rule, /offsets until EOF/iu);
+  assert.match(rule, /personally read only the two short summaries/iu);
+  assert.doesNotMatch(rule, /offsets until EOF|completely from beginning to end/iu);
+  assert.match(rule, /Full references are on demand/iu);
   assert.match(rule, /Do not delegate this bootstrap read/iu);
   assert.equal(renderDoveSharedResearchContractSection().includes(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER), false, "shared judgment does not carry author-only guidance");
   assert.equal(renderDoveAgentInstructions().includes(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP), false, "bounded agent definition must not own the bootstrap");
@@ -195,7 +211,8 @@ export function assertFinalEntrypointWiring() {
     assert.equal(entry.content.includes(renderDoveAuthorStanceSection()), standaloneAuthor, `${label}: author stance projection`);
     assert.equal(entry.content.includes(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER), standaloneAuthor, `${label}: author-only preference entry`);
     assert.equal(entry.content.includes(DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP), standaloneAuthor, `${label}: main-agent bootstrap follows author stance`);
-    assert.equal(entry.content.includes(renderDoveAuthorPreferencesReference()), false, `${label}: full preferences stay in the installed reference`);
+    assert.equal(entry.content.includes(renderDoveAuthorPreferencesReference()), false, `${label}: the brief is read, not copied into each adapter`);
+    assert.equal(entry.content.includes(renderDoveAuthorPreferencesFullReference()), false, `${label}: full preferences stay on demand`);
     for (const prefix of prefixes) {
       const value = `${prefix}\n\n${entry.content}`;
       assertSharedContractOnce(value, label);
@@ -210,7 +227,8 @@ export function assertFinalEntrypointWiring() {
         assert.equal(value.split(instruction).length - 1, 1, `${label}: one response-policy owner`);
         assert.equal(entry.content.includes(instruction), entry.hostId === "dsh");
       }
-      assert.equal(value.split(DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[entry.hostId]).length - 1, 1);
+      assert.equal(value.split(DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[entry.hostId]).length - 1, 1, `${label}: one short quality reference`);
+      assert.equal(value.split(DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS[entry.hostId]).length - 1, 1, `${label}: full quality details stay on demand`);
       for (const criterion of DOVE_RESEARCH_QUALITY_CRITERIA) {
         assert.equal(value.includes(criterion), false, `${label}: detailed criteria stay on demand`);
       }
@@ -298,14 +316,18 @@ export function assertGeneratedAdapters() {
     claude: [
       ".claude/rules/dove.md",
       ".dove/install/RESEARCH_QUALITY.md",
+      ".dove/install/RESEARCH_QUALITY_FULL.md",
       ".dove/install/AUTHOR_PREFERENCES.md",
+      ".dove/install/AUTHOR_PREFERENCES_FULL.md",
       ".claude/skills/dove-paper-search/SKILL.md",
       ".claude/skills/dove-web-reader/SKILL.md",
       ".claude/settings.json"
     ],
     dsh: [
       ".dove/install/RESEARCH_QUALITY.md",
-      ".dove/install/AUTHOR_PREFERENCES.md"
+      ".dove/install/RESEARCH_QUALITY_FULL.md",
+      ".dove/install/AUTHOR_PREFERENCES.md",
+      ".dove/install/AUTHOR_PREFERENCES_FULL.md"
     ]
   };
   for (const hostId of PROJECT_HOST_IDS) {
@@ -343,46 +365,66 @@ export function assertGeneratedAdapters() {
 
 export function assertAuthorPreferencesResources() {
   const source = fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8");
+  const brief = renderDoveAuthorPreferencesReference();
   assert.deepEqual(checkGeneratedAuthorPreferencesContent(ROOT), []);
-  assert.equal(renderDoveAuthorPreferencesReference(), source);
+  assert.equal(renderDoveAuthorPreferencesFullReference(), source, "the full reference preserves the sole canonical author source");
+  assert.ok(brief.length < 1_000, "author bootstrap stays a short readable summary");
+  assert.match(brief, /AUTHOR_PREFERENCES_FULL\.md/u);
   const entries = generatedAuthorPreferencesReferenceEntries();
-  assert.deepEqual(entries.map(({ hostId }) => hostId), PROJECT_HOST_IDS);
+  assert.deepEqual(entries.map(({ hostId }) => hostId), PROJECT_HOST_IDS.flatMap((hostId) => [hostId, hostId]));
+  for (const hostId of PROJECT_HOST_IDS) {
+    assert.deepEqual(entries.filter((entry) => entry.hostId === hostId).map(({ destinationPath }) => destinationPath), [
+      DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId],
+      DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS[hostId]
+    ]);
+  }
   for (const entry of entries) {
-    assert.equal(entry.destinationPath, ".dove/install/AUTHOR_PREFERENCES.md");
-    assert.equal(entry.destinationPath, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[entry.hostId]);
     assert.equal(entry.relativePath, packageResourcePath(entry.hostId, entry.destinationPath));
     assert.ok(PACKAGE_GENERATED_SUPPORT_PATHS.includes(entry.relativePath));
     assert.ok(HOST_ADAPTERS[entry.hostId].requiredPaths.includes(entry.destinationPath));
-    assert.equal(entry.content, source);
-    assert.equal(fs.readFileSync(path.join(ROOT, entry.relativePath), "utf8"), source);
+    const expected = entry.destinationPath === DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[entry.hostId] ? brief : source;
+    assert.equal(entry.content, expected);
+    assert.equal(fs.readFileSync(path.join(ROOT, entry.relativePath), "utf8"), expected);
   }
   for (const hosts of [["claude"], ["dsh"], PROJECT_HOST_IDS]) {
     const references = resourcesForHosts(hosts).filter(({ path }) => path.startsWith(".dove/"));
-    assert.deepEqual(references.map(({ path }) => path), [".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY.md"]);
+    assert.deepEqual(references.map(({ path }) => path), [".dove/install/AUTHOR_PREFERENCES_FULL.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY_FULL.md", ".dove/install/RESEARCH_QUALITY.md"]);
     assert.ok(references.every(({ kind, selector }) => kind === "exclusive-file" && selector === null));
-    assert.equal(references[0].content, source);
+    assert.equal(references.find(({ path }) => path === ".dove/install/AUTHOR_PREFERENCES_FULL.md").content, source);
+    assert.equal(references.find(({ path }) => path === ".dove/install/AUTHOR_PREFERENCES.md").content, brief);
   }
 }
 
 export function assertQualityReferenceResources() {
+  const brief = renderDoveResearchQualityReference();
+  const full = renderDoveResearchQualityFullReference();
+  assert.ok(brief.length < 1_000, "quality bootstrap stays a short readable summary");
+  assert.match(brief, /RESEARCH_QUALITY_FULL\.md/u);
+  assert.equal(full.split(DOVE_RESEARCH_MAINLINE_ANCHORING).length - 1, 1, "full quality reference retains Mainline anchoring once");
+  for (const criterion of DOVE_RESEARCH_QUALITY_CRITERIA) {
+    assert.equal(full.split(criterion).length - 1, 1, "full quality reference retains each canonical detailed criterion");
+    assert.equal(brief.includes(criterion), false, "detailed criteria stay on demand");
+  }
   const entries = generatedResearchQualityReferenceEntries();
-  assert.deepEqual(entries.map(({ hostId }) => hostId), PROJECT_HOST_IDS);
+  assert.deepEqual(entries.map(({ hostId }) => hostId), PROJECT_HOST_IDS.flatMap((hostId) => [hostId, hostId]));
+  for (const hostId of PROJECT_HOST_IDS) {
+    assert.deepEqual(entries.filter((entry) => entry.hostId === hostId).map(({ destinationPath }) => destinationPath), [
+      DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId],
+      DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS[hostId]
+    ]);
+  }
   for (const entry of entries) {
-    assert.equal(entry.destinationPath, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[entry.hostId]);
     assert.equal(entry.relativePath, packageResourcePath(entry.hostId, entry.destinationPath));
     assert.ok(PACKAGE_GENERATED_SUPPORT_PATHS.includes(entry.relativePath));
     assert.ok(HOST_ADAPTERS[entry.hostId].requiredPaths.includes(entry.destinationPath));
-    assert.equal(entry.content, renderDoveResearchQualityReference());
-    assert.equal(entry.content.split(DOVE_RESEARCH_MAINLINE_ANCHORING).length - 1, 1, `${entry.hostId}: quality reference includes Mainline anchoring once`);
+    assert.equal(entry.content, entry.destinationPath === DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[entry.hostId] ? brief : full);
     assertGeneratedFileMatches(entry.relativePath, entry.content);
-    const references = resourcesForHosts([entry.hostId]).filter(({ path: resourcePath }) => resourcePath.startsWith(".dove/"));
-    assert.deepEqual(references.map(({ path }) => path), [".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY.md"]);
-    const quality = references.find(({ path }) => path === entry.destinationPath);
+    const quality = resourcesForHosts([entry.hostId]).find(({ path }) => path === entry.destinationPath);
     assert.equal(quality.kind, "exclusive-file");
+    assert.equal(quality.selector, null);
     assert.equal(quality.content, entry.content);
   }
-  assert.equal(
-    resourcesForHosts(PROJECT_HOST_IDS).filter(({ path: resourcePath }) => resourcePath === ".dove/install/RESEARCH_QUALITY.md").length,
-    1
-  );
+  for (const referencePath of [DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude, DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.claude]) {
+    assert.equal(resourcesForHosts(PROJECT_HOST_IDS).filter(({ path }) => path === referencePath).length, 1, "each quality reference is shared once across hosts");
+  }
 }

@@ -270,13 +270,14 @@ function validateRunTimeouts(project) {
     return;
   }
 
+  // Leave time for both CLI observations and heartbeat checks during grace.
   for (const [id, leaderIgnoresTerm, withChild, graceMs, earlyExit = false, naturalEnd = false] of [
-    ["timeout-leader-exits", false, true, 1000],
+    ["timeout-leader-exits", false, true, 4000],
     ["timeout-leader-ignores", true, true, 100],
     ["timeout-zero-grace", false, true, 0],
     ["timeout-group-gone", false, false, maxDelay],
     ["early-leader-natural", false, true, 100, true, true],
-    ["early-leader-deadline", false, true, 1000, true],
+    ["early-leader-deadline", false, true, 4000, true],
     ["early-leader-zero-grace", false, true, 0, true]
   ]) {
     const timeoutMs = earlyExit ? 4000 : 1200;

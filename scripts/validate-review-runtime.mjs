@@ -8,8 +8,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
-import { DOVE_REVIEW_QUALITY_REFERENCE_PATH, createReviewGuidance, reviewWorkspaceName } from "../src/core/review-workspace.mjs";
-import { DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS, renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
+import { DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH, DOVE_REVIEW_QUALITY_REFERENCE_PATH, createReviewGuidance, reviewWorkspaceName } from "../src/core/review-workspace.mjs";
+import { DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS, renderDoveResearchQualityFullReference, renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
+import { inspectLatestReviewFacts } from "../src/core/review-runtime.mjs";
+import { parseDoveCli } from "../src/cli/command-parser.mjs";
+import { renderDoveHelp } from "../src/cli/help-output.mjs";
+import { renderReviewResult } from "../src/cli/review-output.mjs";
 import { renderDoveAuthorStanceSection, renderDoveReviewerStanceSection, renderDoveSharedResearchContractSection } from "../src/core/dove-agent-persona.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import * as publicCore from "../src/core/index.mjs";
@@ -180,20 +184,20 @@ process.stdin.setEncoding("utf8");
 for await (const chunk of process.stdin) input += chunk;
 assert.doesNotMatch(input, /# Dove Agent/u);
 assert.match(input, /Independent dove-review task/u);
-assert.match(input, /Shared researcher judgment/u);
+const scope = input.match(/^Review scope: (paper|route|design)$/mu)[1];
+if (process.env.DOVE_FAKE_SCOPE) assert.equal(scope, process.env.DOVE_FAKE_SCOPE);
 assert.match(input, /Reviewer stance/u);
-assert.match(input, /research question/iu);
-assert.match(input, /field/iu);
-assert.match(input, /target venue/iu);
-assert.match(input, /strongest reasonable objection/iu);
-assert.match(input, /## Verdict/u);
-assert.match(input, /## Blocking issues/u);
-assert.match(input, /## Grounding basis/u);
-assert.match(input, /## Author-side next actions/u);
-// Check actual backend input against its owning renderers, not copied sentences.
-// Tool permissions and frozen-material/session behavior are checked separately.
-assert.ok(input.includes(${JSON.stringify(renderDoveSharedResearchContractSection())}));
-assert.ok(input.includes(${JSON.stringify(renderDoveReviewerStanceSection())}));
+// Check actual backend input against its owning renderer, not a prose rubric.
+const reviewerStances = ${JSON.stringify(Object.fromEntries(["paper", "route", "design"].map((scope) => [scope, renderDoveReviewerStanceSection(scope)])))};
+assert.ok(input.includes(reviewerStances[scope]));
+if (scope === "paper") {
+  assert.ok(input.includes(${JSON.stringify(renderDoveSharedResearchContractSection())}));
+  for (const heading of ["## Verdict", "## Blocking issues", "## Grounding basis", "## Author-side next actions"]) assert.ok(input.includes(heading));
+} else {
+  assert.equal(mode, "--session-id");
+  assert.equal(input.includes(${JSON.stringify(renderDoveSharedResearchContractSection())}), false);
+  assert.equal(input.includes(reviewerStances.paper), false);
+}
 assert.equal(input.includes(${JSON.stringify(renderDoveAuthorStanceSection())}), false);
 assert.equal(input.includes(${JSON.stringify(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER)}), false);
 assert.equal(input.includes(${JSON.stringify(renderDoveAuthorPreferencesReference())}), false);
@@ -204,11 +208,22 @@ assert.ok(input.includes(referencePath));
 assert.match(input, /package guidance/iu);
 assert.doesNotMatch(input, /sha256|[a-f0-9]{64}/iu);
 assert.equal(fs.readFileSync(path.join(process.cwd(), referencePath), "utf8"), process.env.DOVE_FAKE_GUIDANCE ?? ${JSON.stringify(renderDoveResearchQualityReference())});
+const fullReferencePath = ${JSON.stringify(DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH)};
+const guidancePaths = [referencePath];
+if (process.env.DOVE_FAKE_NO_FULL !== "1") {
+  assert.ok(input.includes(fullReferencePath));
+  assert.equal(fs.readFileSync(path.join(process.cwd(), fullReferencePath), "utf8"), process.env.DOVE_FAKE_FULL_GUIDANCE ?? ${JSON.stringify(renderDoveResearchQualityFullReference())});
+  guidancePaths.push(fullReferencePath);
+} else {
+  assert.equal(input.includes(fullReferencePath), false);
+}
 assert.doesNotMatch(input, /^## Author stance$/mu);
 
 const allowed = new Set();
 for (const match of input.matchAll(/^- (.+?) \\(\\d+ bytes\\)$/gmu)) allowed.add(match[1]);
-assert.equal(allowed.has(referencePath), false, "package guidance is not user material");
+for (const file of guidancePaths) assert.equal(allowed.has(file), false, "package guidance is not user material");
+if (scope !== "paper") assert.equal(allowed.has(".dove/research/IDENTITY.md"), true);
+if (process.env.DOVE_FAKE_MATERIALS) assert.deepEqual([...allowed].sort(), JSON.parse(process.env.DOVE_FAKE_MATERIALS).sort());
 const actual = [];
 const stack = [""];
 while (stack.length > 0) {
@@ -223,7 +238,7 @@ while (stack.length > 0) {
     else throw new Error("unsupported workspace path " + relativePath);
   }
 }
-assert.deepEqual(actual.sort(), [referencePath, ...allowed].sort());
+assert.deepEqual(actual.sort(), [...guidancePaths, ...allowed].sort());
 for (const file of actual) {
   assert.notEqual(path.basename(file), "AUTHOR_PREFERENCES.md");
   const content = fs.readFileSync(path.join(process.cwd(), file), "utf8");
@@ -236,7 +251,7 @@ for (const forbidden of ["private-note.md", "CLAUDE.md", ".claude/settings.json"
 }
 const sessionPath = path.join(process.env.DOVE_FAKE_SESSION_ROOT, sessionId + ".json");
 const materialBytes = Object.fromEntries(actual.map((file) => [file, fs.readFileSync(path.join(process.cwd(), file)).toString("hex")]));
-const exchange = { mode, round: Number(input.match(/^Round: (\\d+)$/mu)[1]), materialBytes };
+const exchange = { mode, scope, round: Number(input.match(/^Round: (\\d+)$/mu)[1]), materialBytes };
 if (process.env.DOVE_FAKE_LOG) fs.appendFileSync(process.env.DOVE_FAKE_LOG, JSON.stringify({ ...exchange, sessionId, cwd: process.cwd(), allowed: [...allowed].sort() }) + "\\n");
 if (mode === "--resume" && !fs.existsSync(sessionPath)) {
   process.stderr.write("requested reviewer session does not exist\\n");
@@ -302,6 +317,7 @@ try {
     "--json"
   ], env);
   assert.equal(handoff.command, "handoff");
+  assert.equal(handoff.scope, "paper");
   assert.equal(handoff.status, "completed", readJson(path.join(project, handoff.backendPath)).error);
   assert.equal(handoff.reviewId, reviewId);
   assert.equal(handoff.round, 1);
@@ -315,7 +331,8 @@ try {
   assert.deepEqual(record1.rounds[0].guidance, {
     schema: "dove.review.guidance.v1",
     package: { name: PACKAGE_NAME, version: PACKAGE_VERSION },
-    sha256: sha256(Buffer.from(renderDoveResearchQualityReference(), "utf8"))
+    sha256: sha256(Buffer.from(renderDoveResearchQualityReference(), "utf8")),
+    full: { sha256: sha256(Buffer.from(renderDoveResearchQualityFullReference(), "utf8")) }
   });
   assert.equal(record1.rounds[0].reportPath, `.dove/reviews/${reviewId}/rounds/1/report.md`);
   assert.equal(Object.hasOwn(record1.rounds[0], "reportSha256"), false);
@@ -332,7 +349,7 @@ try {
   assert.equal(backend1.argv.includes("--resume"), false);
 
   const copied1 = listFiles(handoff.workspaceRoot);
-  assert.deepEqual(copied1, [DOVE_REVIEW_QUALITY_REFERENCE_PATH, "paper/main.tex", "paper/result.pdf"]);
+  assert.deepEqual(copied1, [DOVE_REVIEW_QUALITY_REFERENCE_PATH, DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH, "paper/main.tex", "paper/result.pdf"]);
   assert.equal(copied1.includes("paper/private-note.md"), false);
   assert.equal(copied1.includes("CLAUDE.md"), false);
   assert.equal(copied1.includes("paper/CLAUDE.md"), false);
@@ -439,7 +456,7 @@ try {
   assert.equal(rerun.round, 2);
   assert.equal(rerun.sessionId, handoff.sessionId);
   assert.deepEqual(rerun.materials.map((item) => item.path), ["paper/main.tex", "paper/supplement.tex"]);
-  assert.deepEqual(listFiles(handoff.workspaceRoot), [DOVE_REVIEW_QUALITY_REFERENCE_PATH, "paper/main.tex", "paper/supplement.tex"]);
+  assert.deepEqual(listFiles(handoff.workspaceRoot), [DOVE_REVIEW_QUALITY_REFERENCE_PATH, DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH, "paper/main.tex", "paper/supplement.tex"]);
   const record2 = readJson(reviewRecordPath);
   assert.deepEqual(record2.rounds[0].guidance, record2.rounds[1].guidance);
   const backend2 = readJson(path.join(project, ".dove", "reviews", reviewId, "rounds", "2", "backend.json"));
@@ -497,7 +514,7 @@ try {
   assert.equal(failedRerunBackend.status, "failed");
   assert.equal(failedRerunBackend.requestedSessionId, handoff.sessionId);
   assert.equal(Object.hasOwn(failedRerunBackend, "sessionId"), false);
-  assert.deepEqual(listFiles(handoff.workspaceRoot), [DOVE_REVIEW_QUALITY_REFERENCE_PATH, "paper/failure-round.tex"]);
+  assert.deepEqual(listFiles(handoff.workspaceRoot), [DOVE_REVIEW_QUALITY_REFERENCE_PATH, DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH, "paper/failure-round.tex"]);
   assertReviewStatusReadOnly(project, env, ["review", "status", "--project", project, "--id", reviewId, "--json"], (value) => {
     assert.equal(value.currentRound, 4);
     assert.equal(value.materialCurrentness.overall, "current");
@@ -595,6 +612,106 @@ try {
   assert.deepEqual(history[3].materialBytes, invocations[3].materialBytes, "failed backend calls also advance reviewer history");
   assert.equal(invocations[1].sessionId, invocations[0].sessionId);
   assert.equal(invocations[2].sessionId, invocations[0].sessionId);
+
+  // Scope selection reuses the same frozen workspace and Read-only backend.
+  for (const scope of ["paper", "route", "design"]) {
+    assert.equal(parseDoveCli(["review", "handoff", "--scope", scope]).options.scope, scope);
+  }
+  assert.throws(() => parseDoveCli(["review", "handoff", "--scope", "other"]), /--scope/u);
+  for (const operation of ["resume", "rerun", "import"]) {
+    assert.throws(() => parseDoveCli(["review", operation, "--scope", "route"]), /--scope/u, "later calls inherit the recorded scope");
+  }
+  assert.ok(renderDoveHelp().includes("--scope paper|route|design"));
+  const judgmentProject = makeProject(tempRoot, "judgment-scopes");
+  const identityPath = ".dove/research/IDENTITY.md";
+  const identityBefore = "Mainline: Implement the requested shared solver, not sample-specific lookup.\nCompletion: Actual downstream use on the agreed inputs.\n";
+  writeFile(judgmentProject, identityPath, identityBefore);
+  writeFile(judgmentProject, "changes/previous.mjs", "export const solve = input => null;\n");
+  writeFile(judgmentProject, "changes/current.mjs", "export const solve = input => input.map(value => value * 2);\n");
+  const actualDiff = spawnSync("diff", ["-u", path.join(judgmentProject, "changes/previous.mjs"), path.join(judgmentProject, "changes/current.mjs")], { encoding: "utf8" });
+  assert.equal(actualDiff.status, 1, actualDiff.stderr);
+  writeFile(judgmentProject, "changes/actual.diff", actualDiff.stdout);
+  writeFile(judgmentProject, "results/actual.json", JSON.stringify({ input: [2, 3], output: [4, 6], expected: [4, 6] }));
+  writeFile(judgmentProject, "design/method.md", "# One-page method design\nBaseline: per-item lookup. Proposed: one shared mapping operation.\nData/model/training/evaluation: fixed input-output fixture, no learned parameters, compare all supplied items.\nPredicted example: [2, 3] becomes [4, 6]. Grounds: the same operation applies to each value. Risk: the real task may require a different relationship.\n");
+  assert.equal(inspectLatestReviewFacts({ project: judgmentProject }), null);
+  const paperFacts = jsonCli(["review", "handoff", "--project", judgmentProject, "--id", "paper-facts", "--material", "paper/main.tex", "--json"], env);
+  assert.equal(paperFacts.scope, "paper");
+  const rejectedPaperIdentity = cliReview(["review", "handoff", "--project", judgmentProject, "--id", "paper-identity", "--scope", "paper", "--material", identityPath, "--json"], env);
+  assert.notEqual(rejectedPaperIdentity.status, 0);
+  assert.match(rejectedPaperIdentity.stderr, /private or Dove-owned/u);
+
+  for (const scope of ["route", "design"]) {
+    const id = `${scope}-judgment`;
+    const explicit = scope === "route" ? ["changes/actual.diff", "results/actual.json"] : ["design/method.md"];
+    const selected = [identityPath, ...explicit].sort();
+    const scopeEnv = { ...env, DOVE_FAKE_SCOPE: scope, DOVE_FAKE_MATERIALS: JSON.stringify(selected), DOVE_FAKE_REPORT: `# ${scope} judgment\n\nSynthetic scoped return; not submission acceptance.\n` };
+    const argsFor = (operation) => ["review", operation, "--project", judgmentProject, "--id", id, "--json"];
+    const materialArgs = explicit.flatMap((file) => ["--material", file]);
+    writeFile(judgmentProject, identityPath, identityBefore);
+    const first = jsonCli([...argsFor("handoff"), "--scope", scope, ...materialArgs], scopeEnv);
+    assert.equal(first.status, "completed", readJson(path.join(judgmentProject, first.backendPath)).error);
+    assert.equal(first.scope, scope);
+    assert.deepEqual(first.materials.map((item) => item.path), selected);
+    assert.deepEqual(listFiles(first.workspaceRoot), [DOVE_REVIEW_QUALITY_REFERENCE_PATH, DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH, ...selected].sort());
+    const firstRecordPath = path.join(judgmentProject, ".dove/reviews", id, "review.json");
+    assert.equal(readJson(firstRecordPath).scope, scope);
+    assert.equal(readJson(path.join(judgmentProject, first.snapshotPath)).scope, scope);
+    const originalReport = fs.readFileSync(path.join(judgmentProject, first.reportPath));
+    const identityAfter = `${identityBefore}Next core action: Extend the shared mechanism.\n`;
+    writeFile(judgmentProject, identityPath, identityAfter);
+    const second = jsonCli(argsFor("resume"), scopeEnv);
+    assert.equal(second.status, "completed");
+    assert.equal(second.scope, scope);
+    assert.equal(second.round, 1);
+    assert.notEqual(second.sessionId, first.sessionId);
+    assert.deepEqual(fs.readFileSync(path.join(judgmentProject, first.reportPath)), originalReport);
+    assert.equal(fs.readFileSync(path.join(first.workspaceRoot, identityPath), "utf8"), identityBefore, "resume uses the frozen identity, not unsubmitted author edits");
+    assertReviewStatusReadOnly(judgmentProject, scopeEnv, argsFor("status"), (status) => {
+      assert.equal(status.scope, scope);
+      assert.equal(status.sessionId, second.sessionId);
+      assert.equal(status.rounds[0].scope, scope);
+      assert.equal(materialFact(status.materialCurrentness, identityPath).status, "changed", "the exact identity participates in currentness, not unsafe-path rejection");
+    });
+    const failed = jsonCli(argsFor("resume"), { ...scopeEnv, DOVE_FAKE_CLAUDE_FAIL: "1" }, { expectedStatus: 1 });
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.scope, scope);
+    assert.notEqual(failed.pendingExchange.requestedSessionId, second.sessionId);
+    const humanPending = renderReviewResult({ ...failed, command: "status", rounds: [] });
+    assert.match(humanPending, /全新只读会话/u);
+    assert.doesNotMatch(humanPending, /尝试原请求会话/u);
+    const third = jsonCli([...argsFor("rerun"), ...materialArgs], scopeEnv);
+    assert.equal(third.status, "completed", "a pending judgment does not block a new clean-session round");
+    assert.equal(third.scope, scope);
+    assert.equal(third.round, 2);
+    assert.equal(third.pendingExchange, null);
+    assert.equal(third.workspaceRoot, first.workspaceRoot);
+    assert.equal(fs.readFileSync(path.join(third.workspaceRoot, identityPath), "utf8"), identityAfter);
+    assert.match(renderReviewResult(third), /全新只读会话/u);
+    assert.doesNotMatch(renderReviewResult(third), /同一 reviewer session/u);
+    const finalRecord = readJson(firstRecordPath);
+    assert.equal(finalRecord.session.sessionId, third.sessionId);
+    assert.equal(finalRecord.rounds[1].sessionId, third.sessionId);
+    const calls = fs.readFileSync(fakeLog, "utf8").trim().split("\n").map(JSON.parse).filter((item) => item.cwd === first.workspaceRoot);
+    assert.deepEqual(calls.map((item) => [item.mode, item.scope, item.round]), [["--session-id", scope, 1], ["--session-id", scope, 1], ["--session-id", scope, 1], ["--session-id", scope, 2]]);
+    assert.equal(new Set(calls.map((item) => item.sessionId)).size, calls.length);
+    assert.deepEqual(calls[0].materialBytes, calls[1].materialBytes);
+    for (const call of calls) assert.equal(readJson(path.join(sessionRoot, `${call.sessionId}.json`)).history.length, 1, "no reviewer history is resumed");
+    for (const result of [first, second, failed, third]) {
+      const backend = readJson(path.join(judgmentProject, result.latestBackendPath ?? result.backendPath));
+      const expectedId = result.pendingExchange?.requestedSessionId ?? result.sessionId;
+      assert.equal(backend.requestedSessionId, expectedId);
+      assert.deepEqual(backend.argv.slice(-2), ["--session-id", expectedId]);
+      assert.equal(backend.resumed, false);
+    }
+    for (const [index, privatePath] of [".dove/research/notes.md", ".dove/install/AUTHOR_PREFERENCES.md"].entries()) {
+      const rejected = cliReview(["review", "handoff", "--project", judgmentProject, "--id", `${scope}-private-${index}`, "--scope", scope, "--material", privatePath, "--json"], scopeEnv);
+      assert.notEqual(rejected.status, 0);
+      assert.match(rejected.stderr, /private or Dove-owned/u);
+    }
+    assert.equal(inspectLatestReviewFacts({ project: judgmentProject }).reviewId, paperFacts.reviewId, "route/design judgments are not paper-review facts");
+  }
+  const judgmentStatus = jsonCli(["review", "status", "--project", judgmentProject, "--json"], env);
+  assert.deepEqual(judgmentStatus.reviews.map((item) => item.scope).sort(), ["design", "paper", "route"]);
 
   const firstRoundProject = makeProject(tempRoot, "first-round-recovery");
   const firstRoundOptions = { project: firstRoundProject, materials: ["paper/main.tex"], stateRoot, env };
@@ -937,11 +1054,15 @@ try {
     package: historicalGuidance.package,
     sha256: historicalGuidance.sha256
   };
+  // This older frozen paper round predates both scope metadata and the FULL file.
+  delete historicalRecord.scope;
+  delete historicalRecord.rounds[0].scope;
   writeJson(historicalRecordPath, historicalRecord);
   fs.writeFileSync(path.join(historicalFirst.workspaceRoot, DOVE_REVIEW_QUALITY_REFERENCE_PATH), historicalContent);
+  fs.unlinkSync(path.join(historicalFirst.workspaceRoot, DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH));
   const historicalResume = publicCore.resumeReview({
     ...historicalOptions,
-    env: { ...env, DOVE_FAKE_GUIDANCE: historicalContent.toString("utf8") }
+    env: { ...env, DOVE_FAKE_GUIDANCE: historicalContent.toString("utf8"), DOVE_FAKE_NO_FULL: "1" }
   });
   assert.equal(historicalResume.status, "completed");
   assertNoPublicHashFields(historicalResume);
@@ -961,7 +1082,8 @@ try {
   assert.deepEqual(historicalAfterRerun.rounds[1].guidance, {
     schema: currentGuidance.schema,
     package: currentGuidance.package,
-    sha256: currentGuidance.sha256
+    sha256: currentGuidance.sha256,
+    full: { sha256: currentGuidance.full.sha256 }
   });
   assert.deepEqual(
     fs.readFileSync(path.join(historicalRerun.workspaceRoot, DOVE_REVIEW_QUALITY_REFERENCE_PATH)),

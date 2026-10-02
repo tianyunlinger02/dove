@@ -32,15 +32,17 @@ function renderMaterialCurrentness(currentness, label = "当前轮次材料") {
   return lines;
 }
 
-function renderPendingExchange(pending) {
-  return pending ? [`待完成交换：轮次 ${terminalSafeText(pending.round)}；resume 将尝试原请求会话 ${terminalSafeText(pending.requestedSessionId)}，返回匹配后才确认继续成功；不会找回未保存的返回。`] : [];
+function renderPendingExchange(pending, scope) {
+  if (!pending) return [];
+  if (scope === "route" || scope === "design") return [`待完成交换：轮次 ${terminalSafeText(pending.round)}；resume 将用全新只读会话重新判断同一份冻结材料，不续接原会话，也不会找回未保存的返回。`];
+  return [`待完成交换：轮次 ${terminalSafeText(pending.round)}；resume 将尝试原请求会话 ${terminalSafeText(pending.requestedSessionId)}，返回匹配后才确认继续成功；不会找回未保存的返回。`];
 }
 
 export function renderReviewResult(result) {
   if (result.command === "status" && Array.isArray(result.reviews)) {
     const lines = ["Dove review 状态", "", `项目：${terminalSafeText(result.project)}`];
     if (result.reviews.length === 0) lines.push("", "尚无 .dove/reviews/** 记录。");
-    else lines.push("", ...result.reviews.map((review) => `- ${terminalSafeText(review.reviewId)}：${terminalSafeText(review.status)}，轮次 ${terminalSafeText(review.currentRound)}${review.sessionId ? `，会话 ${terminalSafeText(review.sessionId)}` : ""}${review.pendingExchange ? "，待完成交换（使用 resume）" : ""}`));
+    else lines.push("", ...result.reviews.map((review) => `- ${terminalSafeText(review.reviewId)}：${terminalSafeText(review.status)}，轮次 ${terminalSafeText(review.currentRound)}${review.sessionId ? `，会话 ${terminalSafeText(review.sessionId)}` : ""}，范围 ${terminalSafeText(review.scope ?? "paper")}${review.pendingExchange ? "，待完成交换（使用 resume）" : ""}`));
     return lines.join("\n");
   }
   if (result.command === "status") {
@@ -50,10 +52,11 @@ export function renderReviewResult(result) {
       "",
       `项目：${terminalSafeText(result.project)}`,
       `审阅记录：${terminalSafeText(result.reviewId)}`,
+      `范围：${terminalSafeText(result.scope ?? "paper")}`,
       `状态：${terminalSafeText(result.status)}`,
       `当前轮次：${terminalSafeText(result.currentRound)}`,
       `会话：${terminalSafeText(result.sessionId ?? "无")}`,
-      ...renderPendingExchange(result.pendingExchange),
+      ...renderPendingExchange(result.pendingExchange, result.scope),
       "",
       ...currentnessLines,
       "",
@@ -69,8 +72,8 @@ export function renderReviewResult(result) {
   }
   const heading = result.status === "failed" ? "Dove review 运行失败；未生成本次 reviewer 报告" : {
     handoff: "Dove review handoff 已完成",
-    resume: "Dove review 已恢复并更新当前轮次",
-    rerun: "Dove review 已在同一 reviewer session 中开始新的完整轮次",
+    resume: result.scope === "route" || result.scope === "design" ? "Dove review 已在全新只读会话中重新判断当前冻结轮次" : "Dove review 已恢复并更新当前轮次",
+    rerun: result.scope === "route" || result.scope === "design" ? "Dove review 已在全新只读会话中判断新的冻结轮次" : "Dove review 已在同一 reviewer session 中开始新的完整轮次",
     import: "Dove review return 已导入"
   }[result.command] ?? "Dove review 完成";
   const materialLines = (result.materials ?? []).map((material) => `- ${terminalSafeText(material.path)} (${terminalSafeText(material.size)} bytes)`);
@@ -79,11 +82,12 @@ export function renderReviewResult(result) {
     "",
     `项目：${terminalSafeText(result.project)}`,
     `审阅记录：${terminalSafeText(result.reviewId)}`,
+    `范围：${terminalSafeText(result.scope ?? "paper")}`,
     `轮次：${terminalSafeText(result.round)}`,
     `状态：${terminalSafeText(result.status)}`,
     `来源：${terminalSafeText(result.provenance)}`,
     `会话：${terminalSafeText(result.sessionId ?? "无")}`,
-    ...renderPendingExchange(result.pendingExchange),
+    ...renderPendingExchange(result.pendingExchange, result.scope),
     `报告：${terminalSafeText(result.latestReportPath ?? result.reportPath)}`,
     `后端记录：${terminalSafeText(result.latestBackendPath ?? result.backendPath)}`,
     "",

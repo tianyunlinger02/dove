@@ -43,6 +43,12 @@ export {
 } from "./web-access-integration.mjs";
 
 export * from "./dove-research-contract.mjs";
+export {
+  DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS,
+  DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS,
+  renderDoveAuthorPreferencesReference,
+  renderDoveAuthorPreferencesFullReference
+} from "./dove-author-preferences.mjs";
 
 export {
   DOVE_AGENT_SURFACES,

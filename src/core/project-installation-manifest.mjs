@@ -12,6 +12,12 @@ const PACKAGE_FIELDS = new Set(["name", "version"]);
 const RUNTIME_FIELDS = new Set(["mode"]);
 const MANAGED_FIELDS = new Set(["path", "kind", "selector", "digest"]);
 const MANAGED_KINDS = new Set(["exclusive-file", "json-fragment", "text-block"]);
+const MANAGED_REFERENCE_PATHS = new Set([
+  ".dove/install/RESEARCH_QUALITY.md",
+  ".dove/install/RESEARCH_QUALITY_FULL.md",
+  ".dove/install/AUTHOR_PREFERENCES.md",
+  ".dove/install/AUTHOR_PREFERENCES_FULL.md"
+]);
 const SHA256 = /^[a-f0-9]{64}$/u;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 
@@ -56,7 +62,7 @@ function canonicalProjectRelativePath(value, label) {
   if (normalized !== value || normalized === "." || normalized === ".." || normalized.startsWith("../") || value.includes("//") || value.endsWith("/")) {
     throw new Error(`${label} must be one canonical project-relative path: ${value}`);
   }
-  if ((value === ".dove" || value.startsWith(".dove/")) && value !== ".dove/install/RESEARCH_QUALITY.md" && value !== ".dove/install/AUTHOR_PREFERENCES.md") {
+  if ((value === ".dove" || value.startsWith(".dove/")) && !MANAGED_REFERENCE_PATHS.has(value)) {
     throw new Error(`${label} must not manage Dove research or installation state: ${value}`);
   }
   return value;
@@ -85,7 +91,7 @@ function validateManagedEntry(entry, index) {
   const label = `Project installation manifest managed[${index}]`;
   assertFields(entry, MANAGED_FIELDS, label);
   canonicalProjectRelativePath(entry.path, `${label}.path`);
-  if ((entry.path === ".dove/install/RESEARCH_QUALITY.md" || entry.path === ".dove/install/AUTHOR_PREFERENCES.md") && (entry.kind !== "exclusive-file" || entry.selector !== null)) {
+  if (MANAGED_REFERENCE_PATHS.has(entry.path) && (entry.kind !== "exclusive-file" || entry.selector !== null)) {
     throw new Error(`${label} must own ${path.posix.basename(entry.path)} as one exclusive file.`);
   }
   if (!MANAGED_KINDS.has(entry.kind)) throw new Error(`${label}.kind is unsupported: ${entry.kind}.`);

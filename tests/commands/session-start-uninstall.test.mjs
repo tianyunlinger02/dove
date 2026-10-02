@@ -11,16 +11,18 @@ import { renderUninstallInventory } from "../../src/cli/terminal-output.mjs";
 test("SessionStart startup and clear anchor the canonical bootstrap to the validated project root", () => {
   const project = path.resolve("synthetic project");
   const reference = path.join(project, ".dove/install/AUTHOR_PREFERENCES.md");
+  const qualityReference = path.join(project, ".dove/install/RESEARCH_QUALITY.md");
   for (const source of ["startup", "clear"]) {
     for (const status of ["current", "needs-update"]) {
       const output = sessionStartOutput({ source, cwd: path.join(project, "nested") }, { status }, { project });
       assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
       const context = output.hookSpecificOutput.additionalContext;
       assert.ok(context.includes(`\`${reference}\``));
-      assert.equal(context.replace(reference, ".dove/install/AUTHOR_PREFERENCES.md"), DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP);
-      assert.match(context, /main agent must personally read/u);
-      assert.match(context, /beginning to end/u);
-      assert.match(context, /offsets until EOF/u);
+      assert.ok(context.includes(`\`${qualityReference}\``));
+      assert.equal(context.replace(reference, ".dove/install/AUTHOR_PREFERENCES.md").replace(qualityReference, ".dove/install/RESEARCH_QUALITY.md"), DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP);
+      assert.match(context, /current host main agent must personally read only the two short summaries/u);
+      assert.match(context, /Full references are on demand/u);
+      assert.doesNotMatch(context, /offsets|EOF|beginning to end|_FULL\.md/u);
       assert.equal(Boolean(output.systemMessage), status !== "current");
     }
     for (const project of [undefined, "relative-project"]) {
@@ -44,14 +46,15 @@ test("SessionStart compact and resume include the researcher-owned identity card
     const context = output.hookSpecificOutput.additionalContext;
     assert.ok(context.includes(card));
     assert.match(context, /corrections affect only relevant fields, not an unchanged Mainline/iu);
-    assert.match(context, /cumulative route/iu);
-    assert.match(context, /retained actions.*actual changes.*observed results/iu);
-    assert.match(context, /not just the latest correction/iu);
-    assert.match(context, /user-confirmed goal and its identity card/iu);
+    assert.match(context, /identity card and actual work/iu);
+    assert.match(context, /recover the goal, last route review and next core action/iu);
+    assert.match(context, /If review is due/iu);
+    assert.match(context, /fresh read-only Dove context/iu);
+    assert.match(context, /not another self-reflection/iu);
     assert.match(context, /Route and next-action changes do not rewrite Mainline/iu);
-    assert.match(context, /Apply the route judgment.*affected work/iu);
-    assert.match(context, /continue the core task/iu);
-    assert.doesNotMatch(context, /main agent must personally read.*beginning to end/iu);
+    assert.match(context, /not mistake.*test prompt for a user decision/iu);
+    assert.match(context, /reuse the two short summaries already read here/iu);
+    assert.doesNotMatch(context, /offsets|EOF|beginning to end/iu);
     assert.equal(fs.readFileSync(cardPath, "utf8"), card, "compact/resume presents rather than corrects the card");
     assert.equal(fs.statSync(cardPath).mtimeMs, before);
   }

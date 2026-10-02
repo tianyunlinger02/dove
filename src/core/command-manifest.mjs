@@ -21,10 +21,11 @@ import {
   DOVE_RESEARCH_DEFAULT_AUTONOMY,
   DOVE_RESEARCH_CLARIFICATION,
   DOVE_RESEARCH_CANDIDATE_COVERAGE,
-  DOVE_RESEARCH_QUALITY_REFERENCE_PATHS
+  DOVE_RESEARCH_QUALITY_REFERENCE_PATHS,
+  DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS
 } from "./dove-research-contract.mjs";
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "./web-access-integration.mjs";
-import { DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS } from "./dove-author-preferences.mjs";
+import { DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS, DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS } from "./dove-author-preferences.mjs";
 
 export const PACKAGE_DOCUMENTATION_PATHS = ["README.md", "docs/README.md", "docs/AUTHOR_PREFERENCES.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"];
 export const PACKAGE_LEGAL_PATHS = ["LICENSE", "THIRD_PARTY_NOTICES.md"];
@@ -34,7 +35,9 @@ export const PROJECT_HOST_IDS = ["claude", "dsh"];
 export const DOVE_CLAUDE_AMBIENT_PROJECT_PATHS = Object.freeze([
   ".claude/rules/dove.md",
   DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude,
+  DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.claude,
   DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude,
+  DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS.claude,
   ".claude/skills/dove-paper-search/SKILL.md",
   ".claude/skills/dove-web-reader/SKILL.md",
   ".claude/settings.json"
@@ -47,7 +50,9 @@ export const PACKAGE_GENERATED_SUPPORT_PATHS = Object.freeze([
   `${PACKAGE_RESOURCE_ROOT}/claude/${EXA_WEB_SUPPORT_SKILL_PATH}`,
   ...PROJECT_HOST_IDS.flatMap((hostId) => [
     `${PACKAGE_RESOURCE_ROOT}/${hostId}/${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId]}`,
-    `${PACKAGE_RESOURCE_ROOT}/${hostId}/${DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId]}`
+    `${PACKAGE_RESOURCE_ROOT}/${hostId}/${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS[hostId]}`,
+    `${PACKAGE_RESOURCE_ROOT}/${hostId}/${DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId]}`,
+    `${PACKAGE_RESOURCE_ROOT}/${hostId}/${DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS[hostId]}`
   ])
 ]);
 export const HOST_DEFINITIONS = {
@@ -119,7 +124,7 @@ function contract(slug) {
       DOVE_RESEARCH_DEFAULT_AUTONOMY,
       "Read the short project identity card and current user correction before planning or delegating. Do not substitute a convenient component or a developer test prompt for the actual goal.",
       "Development may use available ground truth and rapid reruns without a frozen bank or prior Experiment document; save a prospective protocol and keep heldout independent only for final confirmation. Known root cause calls for a method change, missing prerequisite calls for solving it. A diagnostic is for choosing between actual repairs.",
-      "After important results, rate the eight applicable quality dimensions and write one short Quality line in the card; act on the weakest decision-changing gap, not an arbitrary lowest grade or unknown. With a submission goal, work backwards from the paper claim and periodically use Review to drop work that cannot support it. Answer progress questions plainly and return to the active goal."
+      "Apply the clean-context route or design review to actual work, then continue the core goal rather than stopping at its report."
     ],
     actions: [
       relevantLessons,
@@ -271,6 +276,13 @@ function contract(slug) {
     const reviewMaintenanceAction = maintainArea("reviews", "When the user supplies a `dove-review` return, user-pasted review opinion, clarification, rebuttal exchange, or asks to preserve self-check or handoff context, append the actual text faithfully to the corresponding Review document and associate it with the same review id and round when known. When useful for recovery, link the corresponding `.dove/reviews/` round report, frozen materials, and affected Claim, Experiment, Figure, Source, or manuscript locations. Do not revise author artifacts, start a new review, rewrite the return, or add author interpretation unless asked.");
     const semanticSections = [
       {
+        title: "Clean-context route and method-design judgment",
+        purpose: "Use a fresh read-only Dove context for the shared route/design review, without the author's process conversation.",
+        actions: [
+          "For route review, supply the exact identity card, actual code/artifact diff since the last review and actual run results. For design review, supply the identity card and one-page method design. Read the returned report and apply its conclusion to the next real implementation; retain rejected approaches in the plain-language card. These scoped judgments do not count as independent submission review."
+        ]
+      },
+      {
         title: "Author-side scientific self-check",
         purpose: DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
         actions: [
@@ -322,17 +334,17 @@ function contract(slug) {
       }
     ];
     return capabilityContract({
-      ambientParticipation: "When critique can change a paper or artifact judgment, self-check directly in author context and act on material findings; isolated review remains an explicit frozen-material handoff.",
-      purpose: "Use Review for author-side scientific self-check, delivery readiness, independent `dove-review` handoff, returned-review import, or existing context inspection.",
-      when: "Use when review can improve the paper, delivery facts matter, a near-submission paper is ready for `dove-review`, a returned review should be preserved, or existing Review context should be inspected.",
+      ambientParticipation: "Use a fresh read-only Dove context for route and new-method judgment, then change actual work; full-paper isolated review remains separate from author self-check and delivery readiness.",
+      purpose: "Use Review for clean-context route/design judgment, author self-check, delivery readiness, independent paper review, or returned-review context.",
+      when: "Use at the route/design review triggers, for paper or delivery judgment, or for existing review context.",
       boundaries: [
         "Review findings inform Dove's author-side judgment, not automatic acceptance or action; verify material findings against inspected evidence, then prioritize warranted Source, Experiment, Draft, Figure, Rebuttal or delivery work.",
         "Independent `dove-review` requires a real isolated, persistent, recoverable host context with a frozen near-submission material list."
       ],
       semanticSections,
       hostGuidance: hostGuidance({
-        claude: ["For `dove-review`, use `dove review handoff --project <project> --venue <venue> --material <path>...`, then `dove review resume --project <project> --id <id>` or `dove review rerun --project <project> --id <id> --material <path>...` for the same review id and reviewer session. Import user-provided returns with `dove review import --project <project> --id <id> --file <report.md>`. Only listed materials are copied into the isolated reviewer workspace, and Claude Code receives Read only."],
-        dsh: ["In DSH, use author-side Review or preserve a user-provided returned review unless the current host exposes equivalent isolated-review support."]
+        claude: ["For route/design judgment, use `dove review handoff --project <project> --scope route|design --material <path>... --json`; the current identity card is copied automatically. Supply actual diff/results for route or the one-page design for design, then read `reportPath` and act. Each judgment uses a fresh Read-only context. For full-paper `dove-review`, use `dove review handoff --project <project> --venue <venue> --material <path>...`, then `dove review resume --project <project> --id <id>` or `dove review rerun --project <project> --id <id> --material <path>...` for the same reviewer session. Import user returns with `dove review import --project <project> --id <id> --file <report.md>`."],
+        dsh: ["Use an exposed equivalent clean read-only context for route/design judgment; if unavailable, report that limitation, not self-check as independent judgment. Preserve user-provided review returns; paper review retains its isolated-context requirement."]
       })
     });
   }
@@ -429,7 +441,12 @@ export function commandAdapterPathsForHost(hostId) { return COMMAND_SURFACES.map
 export function allGeneratedCommandAdapterPaths() { return PROJECT_HOST_IDS.flatMap(commandAdapterPathsForHost); }
 export const HOST_ADAPTERS = Object.fromEntries(PROJECT_HOST_IDS.map((hostId) => {
   const commandPaths = commandAdapterPathsForHost(hostId);
-  const extraPaths = hostId === "claude" ? [...DOVE_CLAUDE_AMBIENT_PROJECT_PATHS] : [DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.dsh];
+  const extraPaths = hostId === "claude" ? [...DOVE_CLAUDE_AMBIENT_PROJECT_PATHS] : [
+    DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh,
+    DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh,
+    DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.dsh,
+    DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS.dsh
+  ];
   return [hostId, { label: HOST_DEFINITIONS[hostId].label, paths: [...commandPaths, ...extraPaths], requiredPaths: [...commandPaths, ...extraPaths], jsonChecks: HOST_DEFINITIONS[hostId].jsonChecks }];
 }));
 export const CURRENT_MANAGED_PATHS = Object.freeze({

@@ -16,8 +16,8 @@ Dove is one research agent. Ordinary Claude conversation in an initialized proje
 
 ## Keep these boundaries clear
 
-- The [two references with distinct read contracts](USAGE.md#short-core-and-two-reference-read-contracts) separate research quality criteria from author preferences. Quality guidance is consulted on demand; each fresh host main-agent context personally reads the full author preferences before substantive work. They are package guidance, not evidence, permissions, or optional Lessons.
+- The [quality and preference references](USAGE.md#short-core-and-two-reference-read-contracts) each have short Chinese essentials, personally read by every fresh host main-agent context before substantive work, and an on-demand `_FULL.md` companion. These four exact resources are package guidance, not evidence, permissions, or optional Lessons.
 - A confirmed research goal continues while useful authorized work remains; a bounded request can finish locally. There is no Auto Skill or command.
 - [Research Markdown](USAGE.md#research-markdown) is researcher-owned. Status is read-only, and lifecycle operations preserve existing research, review, and run records.
-- [Author-side self-check and isolated review](USAGE.md#review) have different evidence boundaries; a role label does not establish independence.
+- [Author-side self-check and isolated review](USAGE.md#review) have different evidence boundaries. Route/design use fresh Read-only Claude sessions and frozen scope inputs; paper keeps its persistent reviewer. Missing or refused runtime is a limitation, not self-check relabeled independent review.
 - Research participation, requested-work completion, and scientific progress are distinct. Source instructions, generated resources, installed disk state, currently loaded context, and observed behavior likewise support different claims; see [verification evidence](PACKAGING.md#verification-evidence).

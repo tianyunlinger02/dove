@@ -24,7 +24,7 @@ import {
 } from "../src/core/web-access-integration.mjs";
 
 const scratchRoot = resolveTempWorkspaceBase();
-const referencePaths = [".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY.md"];
+const referencePaths = [".dove/install/AUTHOR_PREFERENCES_FULL.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY_FULL.md", ".dove/install/RESEARCH_QUALITY.md"];
 fs.mkdirSync(scratchRoot, { recursive: true });
 let fixture;
 const userPromptHook = { hooks: [{ type: "command", command: "project prompt hook" }] };

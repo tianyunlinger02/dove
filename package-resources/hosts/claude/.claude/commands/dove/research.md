@@ -32,7 +32,7 @@ Use for an open research goal or a bounded research question; keep their complet
 - For a user-confirmed open goal, keep doing core work until the goal is met or a hard blocker remains: missing user resources, a material user decision, or an actual error that cannot be repaired. A diagnosis, record, low-information interval, or failed local attempt is not completion. A separate bounded or read-only request finishes at its requested answer; it does not cancel an existing goal.
 - Read the short project identity card and current user correction before planning or delegating. Do not substitute a convenient component or a developer test prompt for the actual goal.
 - Development may use available ground truth and rapid reruns without a frozen bank or prior Experiment document; save a prospective protocol and keep heldout independent only for final confirmation. Known root cause calls for a method change, missing prerequisite calls for solving it. A diagnostic is for choosing between actual repairs.
-- After important results, rate the eight applicable quality dimensions and write one short Quality line in the card; act on the weakest decision-changing gap, not an arbitrary lowest grade or unknown. With a submission goal, work backwards from the paper claim and periodically use Review to drop work that cannot support it. Answer progress questions plainly and return to the active goal.
+- Apply the clean-context route or design review to actual work, then continue the core goal rather than stopping at its report.
 
 ### Scope and changes
 

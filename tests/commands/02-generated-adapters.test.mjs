@@ -37,7 +37,7 @@ test("author preferences retain the full Markdown in generated and installed res
   assert.equal(module.DOVE_AUTHOR_PREFERENCES_CONTENT, content);
 });
 
-test("installation manifests own only the two exact Dove reference files", () => {
+test("installation manifests own only the four exact Dove summary and full reference files", () => {
   const hosts = ["claude", "dsh"];
   const input = {
     package: { name: "dove", version: "3.0.11" },
@@ -47,7 +47,7 @@ test("installation manifests own only the two exact Dove reference files", () =>
   };
   const manifest = createProjectInstallationManifest(input, { hostIds: hosts });
   assert.equal(manifest.revision, "2.0");
-  const referencePaths = [".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY.md"];
+  const referencePaths = [".dove/install/AUTHOR_PREFERENCES_FULL.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY_FULL.md", ".dove/install/RESEARCH_QUALITY.md"];
   assert.deepEqual(manifest.managed.filter(({ path }) => path.startsWith(".dove/")).map(({ path }) => path), referencePaths);
   for (const path of referencePaths) {
     for (const kind of ["json-fragment", "text-block"]) {

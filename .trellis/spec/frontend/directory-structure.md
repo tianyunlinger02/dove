@@ -7,7 +7,7 @@ Paths below are relative to the repository root unless labeled as consumer-proje
 | Responsibility | Canonical source |
 |---|---|
 | Shared scientific judgment, quality reference and stance rendering | `src/core/dove-research-contract.mjs`, `src/core/dove-agent-persona.mjs` |
-| Full author preferences and fresh-main-context read contract | `docs/AUTHOR_PREFERENCES.md` (sole editable content), `src/core/dove-author-preferences.mjs` (path, renderer, bootstrap/read trigger) |
+| Author-preference essentials, full detail and fresh-context read contract | `docs/AUTHOR_PREFERENCES.md` (unchanged sole full source), `src/core/dove-author-preferences.mjs` (paths, essentials/full renderers, bootstrap) |
 | Dove agent, ordinary Claude rule, response policy | `src/core/dove-agent-definition.mjs`, `src/core/ambient-policy.mjs`, `src/core/user-response-policy.mjs` |
 | Skill inventory and workflows | `src/core/command-manifest.mjs` |
 | Host and external-tool integration | `src/core/host-registry.mjs`, `src/core/paper-search-integration.mjs`, `src/core/web-access-integration.mjs` |
@@ -23,7 +23,7 @@ Paths below are relative to the repository root unless labeled as consumer-proje
 ## Projections and supporting directories
 
 - `scripts/generate-author-preferences.mjs` turns the full `docs/AUTHOR_PREFERENCES.md` into `src/core/dove-author-preferences-content.generated.mjs`; edit the Markdown owner, not the generated string module.
-- `scripts/generate-command-adapters-cli.mjs` orchestrates preference-content and host-resource generation. `scripts/generate-command-adapters.mjs` projects canonical behavior into `package-resources/hosts/claude/.claude/` (agent, commands, primary ordinary-conversation rule, hidden guidance Skills), `package-resources/hosts/dsh/.dsh/skills/`, and each host's `.dove/install/RESEARCH_QUALITY.md` and `.dove/install/AUTHOR_PREFERENCES.md` projections. `commands:check` checks drift without generating.
+- `scripts/generate-command-adapters-cli.mjs` orchestrates preference-content and host-resource generation. `scripts/generate-command-adapters.mjs` projects canonical behavior into `package-resources/hosts/claude/.claude/` (agent, commands, primary ordinary-conversation rule, hidden guidance Skills), `package-resources/hosts/dsh/.dsh/skills/`, and each host's four exact `.dove/install/` projections: `RESEARCH_QUALITY.md`, `RESEARCH_QUALITY_FULL.md`, `AUTHOR_PREFERENCES.md`, and `AUTHOR_PREFERENCES_FULL.md`. `commands:check` checks drift without generating.
 - Consumer installation uses bundled renderers to write canonical destinations, not disk copies of release projections. Generation, build, installation, active loading, and live behavior are separate facts; see [Quality Guidelines](./quality-guidelines.md).
 - `scripts/build-package.mjs` bundles `src/core/index.mjs` into `dist/index.mjs` and `bin/dove.mjs` into `bin/dove-package.mjs`. There is no research-state MCP bundle.
 - `tests/commands/`, `scripts/validate-*.mjs`, and `evals/behavior/` contain software checks and behavior-evaluation tooling.
@@ -37,9 +37,12 @@ Change the owning source first; generated adapters and bundles are projections, 
 ```text
 .dove/
   install/manifest.json       # software installation metadata
-  install/RESEARCH_QUALITY.md # package-managed quality reference
-  install/AUTHOR_PREFERENCES.md # package-managed author preferences
+  install/RESEARCH_QUALITY.md # short Chinese quality essentials
+  install/RESEARCH_QUALITY_FULL.md # preserved full quality detail
+  install/AUTHOR_PREFERENCES.md # short Chinese preference essentials
+  install/AUTHOR_PREFERENCES_FULL.md # preserved full preferences
   install/DOCTOR.md           # optional host-maintained Dove feedback
+  research/IDENTITY.md        # short researcher-owned plain-language card
   research/RESEARCH.md        # researcher-owned overview
   research/missions/          # optional Mission documents
   research/experiments/       # optional Experiment documents

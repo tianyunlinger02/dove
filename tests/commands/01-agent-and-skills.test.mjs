@@ -25,6 +25,7 @@ import {
   DOVE_RESEARCH_SESSION_CONTINUATION,
   DOVE_RESEARCH_SHARED_CONTRACT_BULLETS,
   renderDoveResearchQualityReference,
+  renderDoveResearchQualityFullReference,
   renderDoveResearchReanchor
 } from "../../src/core/dove-research-contract.mjs";
 import { generatedAdapterEntries, generatedClaudeAmbientProjectEntries } from "../../scripts/generate-command-adapters.mjs";
@@ -87,7 +88,7 @@ test("short shared contract keeps confirmed Mainline stable while methods and ev
   assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /revise scientific claims with evidence/iu);
   assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /Mentioning another direction does not adopt it/iu);
   assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /unconfirmed directions provisional/iu);
-  assert.equal(renderDoveResearchQualityReference().split(DOVE_RESEARCH_MAINLINE_ANCHORING).length - 1, 1, "quality reference retains the Mainline contract once");
+  assert.equal(renderDoveResearchQualityFullReference().split(DOVE_RESEARCH_MAINLINE_ANCHORING).length - 1, 1, "full quality reference retains the Mainline contract once");
   assert.equal(author.includes(DOVE_RESEARCH_MAINLINE_ANCHORING), false, "shared judgment, not author stance, owns Mainline anchoring");
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /user’s actual goal/iu);
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /every open-goal round/iu);
@@ -103,31 +104,32 @@ test("short shared contract keeps confirmed Mainline stable while methods and ev
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /actual producer and consumer/iu);
   assert.match(shared, /confirmed mainline covers its core implementation, reruns, diagnosis, and suitable GPU work/iu);
   assert.match(shared, /Only final heldout confirmation needs a frozen/iu);
-  assert.match(shared, /public baselines and data, the mechanism and expected difference/iu);
-  assert.match(shared, /important results.*periodically/iu);
-  assert.match(shared, /cumulative trajectory.*actual code\/artifact changes/iu);
-  assert.match(shared, /actions, predictions and outcomes/iu);
-  assert.match(shared, /required capabilities and scope/iu);
-  assert.match(shared, /previously rejected approaches/iu);
-  assert.match(shared, /even when local results improve/iu);
-  assert.match(shared, /building that capability.*case-specific patches/iu);
-  assert.match(shared, /retain or revise the real implementation/iu);
-  assert.match(shared, /dependent work and next action/iu);
-  assert.match(shared, /not just records/iu);
-  assert.match(shared, /valid local repairs.*necessary long implementation/iu);
-  assert.match(shared, /agreed path.*without waiting for proof/iu);
+  assert.match(shared, /important results.*several actual changes/iu);
+  assert.match(shared, /second correction of the same problem/iu);
+  assert.match(shared, /--scope route.*fresh read-only Dove context/iu);
+  assert.match(shared, /actual diff since the last review.*actual run results/iu);
+  assert.match(shared, /not the process conversation/iu);
+  assert.match(shared, /Apply its findings to the real next action/iu);
+  assert.match(shared, /remove or rework rejected patches/iu);
+  assert.match(shared, /retain rejected approaches in the card/iu);
+  assert.match(shared, /one-page design/iu);
+  assert.match(shared, /public-baseline advantage.*concrete predicted example/iu);
+  assert.match(shared, /grounds for likely success and biggest risk/iu);
+  assert.match(shared, /user-confirmed method needs no design review/iu);
+  assert.match(shared, /implement without renewed user approval/iu);
   assert.match(author, /identity card/iu);
   assert.match(author, /Mainline: ` followed by one sentence in the user's words/iu);
   assert.match(author, /Correct only the fields the user actually corrected/iu);
   assert.match(author, /including during an assessment/iu);
   assert.match(author, /unless writing is explicitly forbidden or the host refuses/iu);
-  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /cumulative route/iu);
-  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /retained actions.*actual changes.*observed results/iu);
-  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /not just the latest correction/iu);
-  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /user-confirmed goal and its identity card/iu);
+  assert.match(author, /few-hundred-word.*plain language/iu);
+  assert.match(author, /without internal abbreviations/iu);
+  assert.match(author, /Put process details in history/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /identity card and actual work/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /last route review and next core action/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /fresh read-only Dove context/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /not another self-reflection/iu);
   assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /Route and next-action changes do not rewrite Mainline/iu);
-  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /Apply the route judgment.*affected work/iu);
-  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /continue the core task/iu);
   assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /do not mistake a latest note or a test prompt for a user decision/iu);
   assert.doesNotMatch(DOVE_RESEARCH_REFLECTION_CONTINUITY, /(?:read|scan) (?:private )?transcripts/iu);
 });
@@ -204,6 +206,17 @@ test("reviewer guidance excludes author stance and private preference access", (
   }
   assert.match(renderDoveReviewerStanceSection(), /read-only/iu);
   assert.match(renderDoveReviewerStanceSection(), /listed frozen materials/iu);
+  for (const scope of ["route", "design"]) {
+    const reviewer = renderDoveReviewerStanceSection(scope);
+    assert.match(reviewer, /fresh, read-only context/iu);
+    assert.match(reviewer, /not the author's process conversation/iu);
+    assert.match(reviewer, /not independent submission review/iu);
+    assert.equal(reviewer.includes(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER), false);
+  }
+  assert.match(renderDoveReviewerStanceSection("route"), /actual diff and run results/iu);
+  assert.match(renderDoveReviewerStanceSection("route"), /generality is required only by the stated goal/iu);
+  assert.match(renderDoveReviewerStanceSection("design"), /one-page method design/iu);
+  assert.match(renderDoveReviewerStanceSection("design"), /grounds for likely success and biggest risk/iu);
 });
 
 test("ordinary rule and standalone DSH Research preserve the shortened mainline contract", () => {

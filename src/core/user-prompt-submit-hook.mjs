@@ -37,7 +37,7 @@ export function userPromptSubmitOutput(payload, guidance, options = {}) {
     throw new Error("Dove UserPromptSubmit hook requires a valid prompt event.");
   }
   if (!guidance) throw new Error("Dove UserPromptSubmit hook requires verified project guidance.");
-  const context = `Dove ${guidance.version} (disk guidance, not rule reload):\n${guidance.fingerprints.join("\n")}\n${identityCardContext(options.project, options)}\n${renderDoveResearchReanchor()}\nOn first use at these fingerprints, personally read the full rule and author preferences; otherwise reuse them. The card is context, not a substitute for the user's latest words.`;
+  const context = `Dove ${guidance.version} (disk guidance, not rule reload):\n${guidance.fingerprints.join("\n")}\n${identityCardContext(options.project, options)}\n${renderDoveResearchReanchor()}\nOn first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.`;
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",

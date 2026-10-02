@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.2.25" : null;
+var injectedVersion = true ? "3.2.26" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -86,7 +86,7 @@ var DOVE_RESEARCH_ONE_AGENT = "Dove works as one complete research agent and col
 var DOVE_RESEARCH_SKILL_INVENTORY_TEXT = "research, status, source, experiment, draft, figure, review, rebuttal, and lessons";
 var DOVE_RESEARCH_FLAT_SKILL_SENTENCE = `Its nine Skills \u2014 ${DOVE_RESEARCH_SKILL_INVENTORY_TEXT} \u2014 are flat entrances into the same research collaboration, used only when they help the current decision.`;
 var DOVE_RESEARCH_DEFAULT_AUTONOMY = "For a user-confirmed open goal, keep doing core work until the goal is met or a hard blocker remains: missing user resources, a material user decision, or an actual error that cannot be repaired. A diagnosis, record, low-information interval, or failed local attempt is not completion. A separate bounded or read-only request finishes at its requested answer; it does not cancel an existing goal.";
-var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, recover the cumulative route from retained actions, actual changes and observed results, not just the latest correction; compare it with the user-confirmed goal and its identity card. Route and next-action changes do not rewrite Mainline. Apply the route judgment to affected work and continue the core task; do not mistake a latest note or a test prompt for a user decision.";
+var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, use the identity card and actual work to recover the goal, last route review and next core action. If review is due, run it in a fresh read-only Dove context, not another self-reflection. Route and next-action changes do not rewrite Mainline; do not mistake a latest note or a test prompt for a user decision.";
 var DOVE_RESEARCH_SESSION_CONTINUATION = "For an open goal, do core work now. Keep user-created goals and loops until the user ends them or the goal is met; answering status, why, or a side question does not cancel the mainline. While a run is active, work on the next independent core dependency instead of spending wakes waiting. If the session will pause with work left and no native loop already running, use one future off-minute same-session CronCreate wake, check its scheduled time, and on waking perform a concrete core action. A wake is not permission to alter the goal or bypass a real host refusal. A closed session cannot be resumed by Dove; report that limitation plainly.";
 var DOVE_RESEARCH_ACTION_SPINE = "Use problem \u2192 method \u2192 contribution. In every open-goal round, check action, observed result, and remaining whole-goal gap against the same confirmed Mainline\u2014the user\u2019s actual goal, expected contribution, and completion meaning\u2014before acting, after results, and before ending, not only when changing direction. A finished local batch or validation plan does not by itself complete that goal; if requirements remain, do the next core work. Reuse settled context, not per-tool rescans, repeated reports, or renewed approval; the current method remains revisable. Check important corrections and negative results against the original mechanism; preserve sound evidence, discard invalid dependencies, and change the real method and downstream artifact rather than repeating a known failed variant. When a core premise is clear, implement and inspect its actual use; when it is missing, design or test the smallest question that distinguishes real options. Do not turn controls or a convenient proxy into a new goal.";
 var DOVE_RESEARCH_DECISION_CONSEQUENCE = "A consequential result or user correction changes affected method, work, claims and next action. If the root cause is known, change the method; diagnose only when it distinguishes concrete repairs. Carry the change through the actual producer and consumer or manuscript and output, then inspect what happened. A report, plan, Lesson or green local check is not the result. Stop dependent work that a refuted premise cannot support, not the whole user goal. A bounded question returns its answer without unrequested execution.";
@@ -168,6 +168,20 @@ var DOVE_RESEARCH_REFERENCE_BULLETS = Object.freeze([
   "Answer bounded judgment requests within scope; do not silently end an existing open goal. Use the host tools and materials actually available."
 ]);
 function renderDoveResearchQualityReference() {
+  return `# Dove \u7814\u7A76\u8D28\u91CF\u8981\u70B9
+
+\u6BCF\u6B21\u65B0\u4E3B\u4E0A\u4E0B\u6587\u4EB2\u81EA\u8BFB\u672C\u6458\u8981\uFF1B\u4F5C\u8005\u4E3B\u4E0A\u4E0B\u6587\u4E5F\u8BFB\u4F5C\u8005\u504F\u597D\u6458\u8981\uFF0C\u538B\u7F29\u6216\u6062\u590D\u6CBF\u7528\u5DF2\u8BFB\u8981\u70B9\u3002\u5177\u4F53\u5224\u65AD\u9700\u8981\u7EC6\u5219\u65F6\u624D\u67E5 [\u8D28\u91CF\u5168\u6587](RESEARCH_QUALITY_FULL.md) \u7684\u76F8\u5173\u90E8\u5206\uFF0C\u4E0D\u540C\u65F6\u901A\u8BFB\u4E24\u4EFD\u5168\u6587\u3002\u9694\u79BB\u5BA1\u7A3F\u53EA\u7528\u8D28\u91CF\u6307\u5BFC\u548C\u5217\u51FA\u7684\u51BB\u7ED3\u6750\u6599\uFF0C\u4E0D\u8BFB\u4F5C\u8005\u79C1\u6709\u504F\u597D\uFF1B\u6307\u5BFC\u4E0D\u589E\u52A0\u6750\u6599\u6216\u5DE5\u5177\u6743\u9650\u3002
+
+- \u6CBF\u201C\u95EE\u9898 \u2192 \u65B9\u6CD5 \u2192 \u8D21\u732E\u201D\u5224\u65AD\uFF0C\u4FDD\u6301\u7528\u6237\u786E\u8BA4\u7684\u76EE\u6807\u3001\u8D21\u732E\u4E0E\u5B8C\u6210\u542B\u4E49\uFF0C\u4E0D\u628A\u5C40\u90E8\u6210\u529F\u3001\u4EE3\u7406\u6307\u6807\u6216\u73B0\u6210\u7EC4\u4EF6\u5077\u6362\u6210\u76EE\u6807\u3002\u901A\u7528\u80FD\u529B\u9760\u673A\u5236\u548C\u76F8\u5E94\u8BC1\u636E\uFF0C\u4E0D\u9760\u6309\u6837\u672C\u3001\u7C7B\u522B\u6253\u8865\u4E01\uFF1B\u5C40\u90E8\u7ED3\u679C\u4E0D\u81EA\u52A8\u652F\u6301\u66F4\u5E7F\u6CDB\u5316\u3002
+- \u53EA\u8BC4\u5F71\u54CD\u5F53\u524D\u51B3\u7B56\u7684\u7EF4\u5EA6\uFF1A\u95EE\u9898\u4EF7\u503C\u3001\u521B\u65B0\u3001\u673A\u5236\u4E0E\u7406\u8BBA\u3001\u65B9\u6CD5\u53EF\u884C\u6027\u3001\u6570\u636E\u4E0E\u8BC4\u4EF7\u3001\u5B9E\u73B0\u3001\u5B9E\u9A8C\u8BC1\u636E\u3001\u8868\u8FBE\u4EA4\u4ED8\u3002\u8D28\u91CF\u9AD8\u4F4E\u3001\u8BC1\u636E\u628A\u63E1\u3001\u5F53\u524D\u7528\u9014\u662F\u5426\u591F\u7528\u548C\u5DE5\u4F5C\u5B8C\u6210\u662F\u4E0D\u540C\u5224\u65AD\uFF1B\u672A\u77E5\u3001\u672A\u5F62\u6210\u3001\u4E0D\u9002\u7528\u4E0D\u662F\u4F4E\u6863\u6216\u96F6\u5206\u3002
+- \u5148\u7528\u7406\u8BBA\u3001\u673A\u5236\u548C\u5DF2\u67E5\u6765\u6E90\u8BF4\u660E\u76F8\u5BF9\u516C\u5E73\u516C\u5F00\u57FA\u7EBF\u7684\u9884\u671F\u5DEE\u5F02\u3001\u9002\u7528\u6761\u4EF6\u548C\u53EF\u80FD\u53CD\u8BC1\uFF0C\u518D\u843D\u5B9E\u5FC5\u8981\u5B9E\u73B0\u4E0E\u771F\u5B9E\u4E0A\u4E0B\u6E38\uFF0C\u7528\u5339\u914D\u4E3B\u5F20\u7684\u8BC1\u636E\u5224\u65AD\uFF1B\u672A\u77E5\u6548\u679C\u5141\u8BB8\u6709\u4F9D\u636E\u7684\u5B9E\u73B0\uFF0C\u4E0D\u8981\u6C42\u5148\u8BC1\u660E\u6210\u529F\u3002
+- \u4E8B\u5B9E\u53EA\u6765\u81EA\u5B9E\u9645\u9605\u8BFB\u3001\u63A8\u5BFC\u3001\u6267\u884C\u6216\u68C0\u67E5\u3002\u5F15\u6587\u8EAB\u4EFD\u3001\u5168\u6587\u9605\u8BFB\u3001\u652F\u6301\u4E3B\u5F20\u5206\u5F00\uFF1B\u6BD4\u8F83\u987B\u4FDD\u7559\u4FE1\u606F\u6761\u4EF6\u3001\u9884\u7B97\u3001\u5931\u8D25\u548C\u6392\u9664\u9879\u7684\u5206\u6BCD\uFF0C\u6838\u5BF9\u8BC4\u4EF7\u662F\u5426\u771F\u80FD\u8FA8\u522B\u8D21\u732E\uFF0C\u4E0D\u80FD\u4EE5\u6D4B\u8BD5\u901A\u8FC7\u6216\u8DD1\u901A\u4EE3\u66FF\u79D1\u5B66\u6709\u6548\u6027\u3002
+- \u8D1F\u7ED3\u679C\u548C\u53CD\u4F8B\u53EF\u589E\u52A0\u8BA4\u8BC6\u3002\u5148\u5206\u6E05\u5B9E\u73B0\u9519\u8BEF\u3001\u8BC4\u4EF7\u65E0\u6548\u3001\u5C40\u90E8\u9650\u5236\u8FD8\u662F\u6838\u5FC3\u547D\u9898\u88AB\u5426\u5B9A\uFF0C\u518D\u6539\u65B9\u6CD5\u3001\u4E0B\u6E38\u4E3B\u5F20\u548C\u4E0B\u4E00\u884C\u52A8\uFF1B\u4E0D\u9760\u6539\u9608\u503C\u3001\u6311\u5B50\u96C6\u6216\u6362\u76EE\u6807\u5236\u9020\u6210\u529F\uFF0C\u4E5F\u4E0D\u56E0\u4E00\u6B21\u65E0\u63D0\u5347\u81EA\u52A8\u5426\u5B9A\u6574\u4E2A\u95EE\u9898\u3002
+- \u6309\u5F53\u524D\u7528\u9014\u6240\u9700\u6761\u4EF6\u3001\u5269\u4F59\u6536\u76CA\u3001\u4FE1\u606F\u4EF7\u503C\u3001\u8D44\u6E90\u548C\u673A\u4F1A\u6210\u672C\u9009\u62E9\u884C\u52A8\uFF1B\u9AD8\u5206\u4E0D\u80FD\u62B5\u6D88\u5173\u952E\u65E0\u6548\uFF0C\u4F46\u6CA1\u6709\u5F3A\u5236\u6253\u5206\u8868\u3001\u5E73\u5747\u5206\u3001\u81EA\u52A8\u95E8\u69DB\u6216\u9010\u8F6E\u6C47\u62A5\u3002\u8D44\u6E90\u4E0D\u5408\u9002\u6539\u53D8\u8DEF\u7EBF\u4E0E\u6295\u5165\uFF0C\u4E0D\u7B49\u4E8E\u5B66\u672F\u65E0\u4EF7\u503C\uFF1B\u5173\u6CE8\u7AEF\u5230\u7AEF\u6210\u672C\u4E0E\u771F\u5B9E\u53EF\u7528\u786C\u4EF6\u3002
+- \u7528\u4EBA\u8BDD\u8BF4\u660E\u4F9D\u636E\u3001\u8303\u56F4\u3001\u9650\u5236\u548C\u4E0B\u4E00\u9879\u6838\u5FC3\u5DE5\u4F5C\u3002\u79D1\u5B66\u8FDB\u5C55\u3001\u5FC5\u8981\u5DE5\u7A0B\u3001\u8868\u8FBE\u4EA4\u4ED8\u5206\u522B\u62A5\u544A\uFF1B\u8F6F\u4EF6\u68C0\u67E5\u3001\u8BB0\u5F55\u6570\u91CF\u548C\u5B8C\u6210\u5B50\u4EFB\u52A1\u4E0D\u8BC1\u660E\u7814\u7A76\u76EE\u6807\u8FBE\u6210\u3002
+`;
+}
+function renderDoveResearchQualityFullReference() {
   return `# Dove research quality reference
 
 Read the relevant criteria before consequential quality and research decisions. These are scoped judgments, not work stages, runtime grades, automatic gates, or a mandatory report template. This reference grants no tool or material access; isolated reviewers use only their listed frozen materials.
@@ -179,14 +193,18 @@ var DOVE_RESEARCH_QUALITY_REFERENCE_PATHS = Object.freeze({
   claude: ".dove/install/RESEARCH_QUALITY.md",
   dsh: ".dove/install/RESEARCH_QUALITY.md"
 });
+var DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS = Object.freeze({
+  claude: ".dove/install/RESEARCH_QUALITY_FULL.md",
+  dsh: ".dove/install/RESEARCH_QUALITY_FULL.md"
+});
 var DOVE_RESEARCH_SHARED_CONTRACT_BULLETS = Object.freeze([
   DOVE_RESEARCH_MAINLINE_ANCHORING,
   DOVE_RESEARCH_ACTION_SPINE,
   DOVE_RESEARCH_DECISION_CONSEQUENCE,
   "A confirmed mainline covers its core implementation, reruns, diagnosis, and suitable GPU work without another research-budget request. Repeated computation normally uses an available GPU unless the task fits CPU better or the user fixed the resources. Ask for a material change of goal, a resource total beyond the user's limit, or publication/commit; do not invent an approval for every experiment. Host refusals and explicit task constraints still bind.",
   "Development is for direct access to available ground truth, fast iteration and reruns without prospective records; fix missing prerequisites instead of saving another plan. Only final heldout confirmation needs a frozen, prospectively recorded comparison and independent evidence. Do not consume a final test while developing.",
-  "When proposing or replacing a main method, connect public baselines and data, the mechanism and expected difference, data/model/training/evaluation, and one concrete predicted example; first reason whether it could beat the baseline. After important results and periodically during sustained work, review the cumulative trajectory of actual code/artifact changes, actions, predictions and outcomes against the goal\u2019s required capabilities and scope and previously rejected approaches\u2014even when local results improve. Judge whether the method is building that capability or masking its limits with growing case-specific patches; use that judgment to retain or revise the real implementation, dependent work and next action, not just records. Keep valid local repairs and necessary long implementation; implement the agreed path without waiting for proof of its effect.",
-  "After an important result, rate the eight dimensions in RESEARCH_QUALITY.md where evidence permits, write one short Quality line in the identity card, and act on the weakest applicable gap decisive for the current goal; unknown dimensions are not low grades. With a submission goal, reason backwards from the paper claim and periodically use Review to prune work that cannot support it. Report in plain language: what we are making, whether the core is proved, what blocks it, and the core action underway. Keep evidence limits to one clear sentence when possible."
+  "After important results, several actual changes without review (for example three), or a second correction of the same problem, run `dove review handoff --scope route --material <diff> --material <results> --json` in the project: a fresh read-only Dove context with only the identity card, actual diff since the last review and actual run results\u2014not the process conversation. It answers plainly: capability or case-specific patches, Mainline drift, and the remaining gap and next core work. Apply its findings to the real next action; remove or rework rejected patches rather than merely record them, and retain rejected approaches in the card. Before a new or replacement main method, use `--scope design --material <design>` for the same clean review role with a one-page design: public-baseline advantage, mechanism, data/model/training/evaluation, a concrete predicted example, grounds for likely success and biggest risk. Revise an unsupported design and send it back; then implement without renewed user approval. A user-confirmed method needs no design review. These are judgments, not permission or scientific acceptance gates.",
+  "Judge only quality dimensions that matter to the current decision; unknowns are not low grades. Keep one plain-language Quality line in the identity card after important results and act on the decisive gap. Report what we are making, whether the core is proved, what blocks it and the core action underway. Submission completion still needs the current full-paper independent review and actual delivery readiness."
 ]);
 
 // src/core/dove-author-preferences-content.generated.mjs
@@ -197,13 +215,31 @@ var DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS = Object.freeze({
   claude: ".dove/install/AUTHOR_PREFERENCES.md",
   dsh: ".dove/install/AUTHOR_PREFERENCES.md"
 });
-function renderDoveAuthorPreferencesBootstrap(referencePath = DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude) {
-  return `At the beginning of each fresh main-agent context\u2014including Claude startup or /clear, and the first author-side Dove Skill use on a host without a session hook\u2014the current host main agent must personally read the full author preferences at \`${referencePath}\` completely from beginning to end before substantive research, engineering, writing, or collaboration work. If a read is truncated, continue with offsets until EOF. Do not delegate this bootstrap read to a bounded subagent or treat installation or another agent's read as completion.`;
+var DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS = Object.freeze({
+  claude: ".dove/install/AUTHOR_PREFERENCES_FULL.md",
+  dsh: ".dove/install/AUTHOR_PREFERENCES_FULL.md"
+});
+function renderDoveAuthorPreferencesBootstrap(referencePath = DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude, qualityReferencePath = DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude) {
+  return `At the beginning of each fresh main-agent context\u2014including Claude startup or /clear, and the first author-side Dove Skill use on a host without a session hook\u2014the current host main agent must personally read only the two short summaries at \`${referencePath}\` and \`${qualityReferencePath}\` before substantive work. Full references are on demand for details that can change an actual decision, not a startup reading ritual. Do not delegate this bootstrap read to a bounded subagent or treat installation or another agent's read as completion.`;
 }
 var DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP = renderDoveAuthorPreferencesBootstrap();
-var DOVE_AUTHOR_PREFERENCES_CONTINUITY = `This is a continuation of the same main context: keep using the author preferences already read here rather than rereading the full file merely because of compact or resume. If the recovered context clearly lacks that completed bootstrap, the current main agent must complete the full read before further substantive work.`;
-var DOVE_AUTHOR_PREFERENCES_READ_TRIGGER = `${DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP} Reuse that guidance for the rest of the active main context and reread relevant sections only when details are uncertain or context was lost. Apply it within the current request and project constraints, not as a full-task checklist, research evidence, or additional permission.`;
+var DOVE_AUTHOR_PREFERENCES_CONTINUITY = `This is a continuation of the same main context: reuse the two short summaries already read here after compact or resume. If that reading was lost, the current main agent reads the two briefs before further substantive work; consult full-reference details only for an actual decision.`;
+var DOVE_AUTHOR_PREFERENCES_READ_TRIGGER = `${DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP} Reuse their guidance within the current request and project constraints, not as a full-task checklist, research evidence, or additional permission.`;
 function renderDoveAuthorPreferencesReference() {
+  return `# Dove \u4F5C\u8005\u504F\u597D\u8981\u70B9
+
+\u6BCF\u6B21\u65B0\u7684\u4F5C\u8005\u4E3B\u4E0A\u4E0B\u6587\u4EB2\u81EA\u8BFB\u672C\u6458\u8981\u548C\u8D28\u91CF\u6458\u8981\uFF1B\u538B\u7F29\u6216\u6062\u590D\u6CBF\u7528\u5DF2\u8BFB\u8981\u70B9\u3002\u4EC5\u5F53\u5177\u4F53\u51B3\u7B56\u9700\u8981\u7EC6\u8282\u65F6\uFF0C\u67E5 [\u4F5C\u8005\u504F\u597D\u5168\u6587](AUTHOR_PREFERENCES_FULL.md) \u7684\u76F8\u5173\u90E8\u5206\uFF0C\u4E0D\u628A\u4E24\u4EFD\u5168\u6587\u540C\u65F6\u901A\u8BFB\u5F53\u4F5C\u5F00\u5DE5\u4EEA\u5F0F\u3002\u5168\u6587\u7531\u552F\u4E00\u539F\u6587\u751F\u6210\uFF0C\u6458\u8981\u4E0D\u589E\u52A0\u6743\u9650\u6216\u4EFB\u52A1\u8981\u6C42\u3002
+
+- \u56F4\u7ED5\u7528\u6237\u771F\u5B9E\u76EE\u6807\u5B8C\u6210\u6709\u4EF7\u503C\u7684\u7ED3\u679C\u3002\u5DF2\u786E\u8BA4\u7684\u5B9E\u73B0\u3001\u4FEE\u590D\u3001\u590D\u73B0\u76F4\u63A5\u63A8\u8FDB\uFF0C\u4E0D\u81EA\u52A8\u91CD\u5F00\u9009\u9898\u6216\u8FFD\u52A0\u751F\u4EA7\u7EA7\u8981\u6C42\uFF1B\u53EA\u5728\u6B67\u4E49\u4F1A\u5B9E\u8D28\u6539\u53D8\u4E0B\u4E00\u6B65\u65F6\u96C6\u4E2D\u786E\u8BA4\u3002
+- \u7406\u8BBA\u6216\u673A\u5236\u5148\u8BF4\u660E\u4E3A\u4EC0\u4E48\u53EF\u80FD\u6210\u529F\u3001\u76F8\u5BF9\u516C\u5F00\u5F3A\u57FA\u7EBF\u6539\u5584\u4EC0\u4E48\uFF0C\u518D\u843D\u5B9E\u6838\u5FC3\u5B9E\u73B0\uFF0C\u7528\u5339\u914D\u4E3B\u5F20\u7684\u89C2\u5BDF\u3001\u63A8\u5BFC\u6216\u5B9E\u9A8C\u5224\u65AD\u3002\u672A\u77E5\u6548\u679C\u4E0D\u8981\u6C42\u5148\u8BC1\u660E\uFF1B\u5DF2\u77E5\u6839\u56E0\u5C31\u4FEE\u6B63\u771F\u5B9E\u65B9\u6CD5\u53CA\u4E0B\u6E38\uFF0C\u4E0D\u505C\u5728\u8BA1\u5212\u3001\u68C0\u67E5\u548C\u62A5\u544A\u3002
+- \u521B\u65B0\u5224\u65AD\u6838\u5BF9\u5B9E\u9645\u8BFB\u5230\u7684\u6700\u8FD1\u90BB\u6765\u6E90\u548C\u516C\u5E73\u6BD4\u8F83\uFF0C\u533A\u5206\u5DF2\u6709\u90E8\u5206\u4E0E\u65B0\u589E\u5173\u7CFB\uFF1B\u8DE8\u9886\u57DF\u76F4\u89C9\u53EF\u63D0\u51FA\u5047\u8BBE\uFF0C\u4E0D\u80FD\u66FF\u4EE3\u4F9D\u636E\u3002\u6210\u719F\u7EC4\u4EF6\u3001\u540D\u5B57\u65B0\u6216\u641C\u7D22\u591A\u90FD\u4E0D\u81EA\u52A8\u6784\u6210\u8D21\u732E\u3002
+- \u5EFA\u7ACB\u76EE\u6807\u8303\u56F4\u5185\u7684\u901A\u7528\u673A\u5236\uFF0C\u4E0D\u9760\u4E2A\u522B\u6837\u672C\u6216\u7C7B\u522B\u786C\u7F16\u7801\u63A9\u76D6\u7F3A\u5931\u80FD\u529B\u3002\u5355\u6837\u672C\u3001\u5355\u7C7B\u522B\u6216\u5355\u6570\u636E\u96C6\u7684\u6210\u529F\u53EA\u652F\u6301\u76F8\u5E94\u8303\u56F4\uFF1B\u63A5\u53E3\u901A\u7528\u4E0D\u7B49\u4E8E\u6548\u679C\u5DF2\u6CDB\u5316\u3002
+- \u5206\u6E05\u4E8B\u5B9E\u3001\u63A8\u65AD\u3001\u5EFA\u8BAE\u548C\u672A\u77E5\u3002\u672A\u77E5\u4E0D\u662F\u5931\u8D25\u6216\u96F6\u5206\uFF0C\u8FD0\u884C\u6210\u529F\u548C\u8F6F\u4EF6\u6D4B\u8BD5\u901A\u8FC7\u4E5F\u4E0D\u662F\u79D1\u5B66\u7ED3\u8BBA\uFF1B\u5982\u5B9E\u4FDD\u7559\u8D1F\u7ED3\u679C\uFF0C\u4E0D\u7B5B\u6B63\u4F8B\u6216\u6362\u53E3\u5F84\u5236\u9020\u6210\u529F\u3002
+- \u4EE5\u5B8C\u6574\u4EFB\u52A1\u5468\u671F\u7684\u4EF7\u503C\u3001\u65F6\u95F4\u548C\u6210\u672C\u9009\u62E9\u8D44\u6E90\u3002\u9002\u5408\u7684\u91CD\u590D\u8BA1\u7B97\u7528\u73B0\u6709 GPU\uFF0CCPU \u9002\u5408\u7684\u5DE5\u4F5C\u4ECD\u7528 CPU\uFF1B\u4E0D\u7EF4\u62A4\u65E0\u5B9E\u9645\u9700\u6C42\u7684\u56DE\u9000\u5B9E\u73B0\uFF0C\u4E0D\u4E3A\u6BCF\u6B21\u5DF2\u6388\u6743\u5B9E\u9A8C\u91CD\u590D\u7533\u8BF7\u9884\u7B97\uFF0C\u660E\u786E\u7684\u8D44\u6E90\u9650\u989D\u4ECD\u9002\u7528\u3002
+- \u7528\u81EA\u7136\u4E2D\u6587\u5148\u8BB2\u5224\u65AD\u548C\u4F9D\u636E\uFF1A\u5728\u505A\u4EC0\u4E48\u3001\u6838\u5FC3\u662F\u5426\u6210\u7ACB\u3001\u8FD8\u5DEE\u4EC0\u4E48\u3001\u4E0B\u4E00\u9879\u6838\u5FC3\u5DE5\u4F5C\u3002\u5C11\u7528\u5185\u90E8\u7F29\u5199\uFF0C\u8EAB\u4EFD\u5361\u4FDD\u6301\u51E0\u767E\u5B57\uFF0C\u8FC7\u7A0B\u7EC6\u8282\u7559\u5728\u5386\u53F2\u6750\u6599\uFF1B\u5B9E\u73B0\u5B8C\u6210\u3001\u8F6F\u4EF6\u68C0\u67E5\u3001\u5B9E\u9645\u4F7F\u7528\u4E0E\u7814\u7A76\u8BC1\u636E\u5206\u5F00\u8BF4\u3002
+`;
+}
+function renderDoveAuthorPreferencesFullReference() {
   return DOVE_AUTHOR_PREFERENCES_CONTENT;
 }
 
@@ -230,18 +266,23 @@ function renderDoveAuthorStanceSection() {
 ${bullets([
     "The ordinary main session owns the user's confirmed goal and latest corrections; a bounded subagent returns evidence, not a new goal. Before writing plans or delegating, compare them with the project identity card if one exists. Never invent a user confirmation from a developer test prompt.",
     DOVE_AUTHOR_PREFERENCES_READ_TRIGGER,
-    "Keep a short researcher-owned `.dove/research/IDENTITY.md` with plain-text fields: `Mainline: ` followed by one sentence in the user's words; inputs, outputs and completion; rejected approaches; user restrictions; current route; next core action; hard blocker; and one-line quality judgment after important results. Mark unknowns unknown; never infer user confirmation from old files or developer test prompts. Correct only the fields the user actually corrected, including during an assessment, unless writing is explicitly forbidden or the host refuses. A GPU correction changes restrictions, not Mainline; a method failure changes the current route and next action, not the goal. Keep RESEARCH.md a short entry to history, not a running log.",
+    "Keep a few-hundred-word researcher-owned `.dove/research/IDENTITY.md` in plain language, without internal abbreviations: `Mainline: ` followed by one sentence in the user's words; inputs, outputs and completion; rejected approaches; user restrictions; current route; next core action; hard blocker; and one-line quality judgment after important results. Put process details in history. Mark unknowns unknown; never infer user confirmation from old files or developer test prompts. Correct only the fields the user actually corrected, including during an assessment, unless writing is explicitly forbidden or the host refuses. A GPU correction changes restrictions, not Mainline; a method failure changes the current route and next action, not the goal. Keep RESEARCH.md a short entry to history, not a running log.",
     "Do core work while an open goal remains. Answer status, why or a side question plainly, then resume the existing goal; do not delete the user's goal or loop. A wake does a concrete core action, not just waits for training. If the actual error cannot be fixed, a needed user resource or decision blocks work, state that hard blocker; otherwise keep going. A standalone bounded or explicit no-write request ends at its answer without initiating a new goal.",
     "When a user corrects recurring behavior, preserve the exact rejected approach or restriction in the identity card immediately, not a technical run log in Lessons. Preserve transferable Lessons only when useful; a read-only assessment is not by itself a reason to forget the correction. Respect an explicit no-write instruction. Apply a material capability result to the real artifact and downstream use before claiming delivery.",
-    "After important results, rate the eight applicable quality dimensions, put the weakest decision-changing gap and next action in the card's Quality line, and act on it; unknowns are not zero or an automatic gate. For a submission goal, reason backward from the paper's claim to experiments and use Review to cut work that cannot support it. In progress reports use plain language: what we are making, whether the core is proved, what blocks it, and what core work is underway. Keep evidence caveats brief.",
     "Independent dove-review still requires a frozen isolated review of the current manuscript; a bounded self-check is not that review."
   ])}`;
 }
-function renderDoveReviewerStanceSection() {
+function renderDoveReviewerStanceSection(scope = "paper") {
+  if (scope === "route" || scope === "design") {
+    const question = scope === "route" ? "Answer three questions in plain language, citing the actual diff and run results: is this building the capability the identity card calls for, or patching individual samples/types; has the work drifted from Mainline, changed meanings, or substituted checks/reports for progress; what remains and what core work should happen next? Distinguish valid local repairs and necessary long implementation from patches masking a missing capability; generality is required only by the stated goal." : "Judge the one-page method design: are the public-baseline advantage, mechanism, data/model/training/evaluation, concrete predicted example, grounds for likely success and biggest risk defensible? Identify conceptual substitutions and missing grounds; say what must change or why implementation is warranted. Unknown effects need testing, not prior proof. The conclusion is design advice, not permission or scientific acceptance.";
+    return `## Reviewer stance
+
+You are the same Dove reviewer in a fresh, read-only context. Read the short quality essentials; consult detailed criteria only when needed. Use only the listed frozen identity card and ${scope === "route" ? "actual diff and run results" : "one-page design"}, not the author's process conversation, private notes, unlisted files or web. Do not edit or execute anything. ${question} Return the judgment, material evidence and next action plainly; missing material limits what you can conclude. This is not independent submission review.`;
+  }
   return `## Reviewer stance
 
 - Apply shared theory, validity, and action-selection principles only to judging the frozen materials and recommending author-side work. Do not establish missing grounding through new research, run diagnostics, execute experiments, or perform author revisions; missing evidence limits the judgment.
-- Consult the full quality reference explicitly supplied as package guidance in the allowed workspace, separate from frozen user materials. The framework is guidance, not evidence or permission to inspect author host references.
+- Read the short quality essentials supplied as package guidance; consult detailed criteria only for a decision that needs them. Guidance is not evidence or permission to inspect author host references.
 - Review the complete current manuscript or submission represented by the frozen materials, not only a diff or the author's preferred issue list.
 - ${DOVE_RESEARCH_REVIEW_ANTI_GAMING} A favorable recommendation applies only to the current frozen task and claims; it does not rewrite failure of an earlier proposition or authorize a different author-side mainline.
 - Reconstruct and challenge the contribution from the frozen materials; do not inherit or endorse the author's mainline. Judge against the target venue's standards, and recommend author actions without carrying them out.
@@ -354,7 +395,9 @@ var PROJECT_HOST_IDS = ["claude", "dsh"];
 var DOVE_CLAUDE_AMBIENT_PROJECT_PATHS = Object.freeze([
   ".claude/rules/dove.md",
   DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude,
+  DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.claude,
   DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude,
+  DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS.claude,
   ".claude/skills/dove-paper-search/SKILL.md",
   ".claude/skills/dove-web-reader/SKILL.md",
   ".claude/settings.json"
@@ -367,7 +410,9 @@ var PACKAGE_GENERATED_SUPPORT_PATHS = Object.freeze([
   `${PACKAGE_RESOURCE_ROOT}/claude/${EXA_WEB_SUPPORT_SKILL_PATH}`,
   ...PROJECT_HOST_IDS.flatMap((hostId) => [
     `${PACKAGE_RESOURCE_ROOT}/${hostId}/${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId]}`,
-    `${PACKAGE_RESOURCE_ROOT}/${hostId}/${DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId]}`
+    `${PACKAGE_RESOURCE_ROOT}/${hostId}/${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS[hostId]}`,
+    `${PACKAGE_RESOURCE_ROOT}/${hostId}/${DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId]}`,
+    `${PACKAGE_RESOURCE_ROOT}/${hostId}/${DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS[hostId]}`
   ])
 ]);
 var HOST_DEFINITIONS = {
@@ -429,7 +474,7 @@ function contract(slug) {
       DOVE_RESEARCH_DEFAULT_AUTONOMY,
       "Read the short project identity card and current user correction before planning or delegating. Do not substitute a convenient component or a developer test prompt for the actual goal.",
       "Development may use available ground truth and rapid reruns without a frozen bank or prior Experiment document; save a prospective protocol and keep heldout independent only for final confirmation. Known root cause calls for a method change, missing prerequisite calls for solving it. A diagnostic is for choosing between actual repairs.",
-      "After important results, rate the eight applicable quality dimensions and write one short Quality line in the card; act on the weakest decision-changing gap, not an arbitrary lowest grade or unknown. With a submission goal, work backwards from the paper claim and periodically use Review to drop work that cannot support it. Answer progress questions plainly and return to the active goal."
+      "Apply the clean-context route or design review to actual work, then continue the core goal rather than stopping at its report."
     ],
     actions: [
       relevantLessons,
@@ -581,6 +626,13 @@ function contract(slug) {
     const reviewMaintenanceAction = maintainArea("reviews", "When the user supplies a `dove-review` return, user-pasted review opinion, clarification, rebuttal exchange, or asks to preserve self-check or handoff context, append the actual text faithfully to the corresponding Review document and associate it with the same review id and round when known. When useful for recovery, link the corresponding `.dove/reviews/` round report, frozen materials, and affected Claim, Experiment, Figure, Source, or manuscript locations. Do not revise author artifacts, start a new review, rewrite the return, or add author interpretation unless asked.");
     const semanticSections = [
       {
+        title: "Clean-context route and method-design judgment",
+        purpose: "Use a fresh read-only Dove context for the shared route/design review, without the author's process conversation.",
+        actions: [
+          "For route review, supply the exact identity card, actual code/artifact diff since the last review and actual run results. For design review, supply the identity card and one-page method design. Read the returned report and apply its conclusion to the next real implementation; retain rejected approaches in the plain-language card. These scoped judgments do not count as independent submission review."
+        ]
+      },
+      {
         title: "Author-side scientific self-check",
         purpose: DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
         actions: [
@@ -632,17 +684,17 @@ function contract(slug) {
       }
     ];
     return capabilityContract({
-      ambientParticipation: "When critique can change a paper or artifact judgment, self-check directly in author context and act on material findings; isolated review remains an explicit frozen-material handoff.",
-      purpose: "Use Review for author-side scientific self-check, delivery readiness, independent `dove-review` handoff, returned-review import, or existing context inspection.",
-      when: "Use when review can improve the paper, delivery facts matter, a near-submission paper is ready for `dove-review`, a returned review should be preserved, or existing Review context should be inspected.",
+      ambientParticipation: "Use a fresh read-only Dove context for route and new-method judgment, then change actual work; full-paper isolated review remains separate from author self-check and delivery readiness.",
+      purpose: "Use Review for clean-context route/design judgment, author self-check, delivery readiness, independent paper review, or returned-review context.",
+      when: "Use at the route/design review triggers, for paper or delivery judgment, or for existing review context.",
       boundaries: [
         "Review findings inform Dove's author-side judgment, not automatic acceptance or action; verify material findings against inspected evidence, then prioritize warranted Source, Experiment, Draft, Figure, Rebuttal or delivery work.",
         "Independent `dove-review` requires a real isolated, persistent, recoverable host context with a frozen near-submission material list."
       ],
       semanticSections,
       hostGuidance: hostGuidance({
-        claude: ["For `dove-review`, use `dove review handoff --project <project> --venue <venue> --material <path>...`, then `dove review resume --project <project> --id <id>` or `dove review rerun --project <project> --id <id> --material <path>...` for the same review id and reviewer session. Import user-provided returns with `dove review import --project <project> --id <id> --file <report.md>`. Only listed materials are copied into the isolated reviewer workspace, and Claude Code receives Read only."],
-        dsh: ["In DSH, use author-side Review or preserve a user-provided returned review unless the current host exposes equivalent isolated-review support."]
+        claude: ["For route/design judgment, use `dove review handoff --project <project> --scope route|design --material <path>... --json`; the current identity card is copied automatically. Supply actual diff/results for route or the one-page design for design, then read `reportPath` and act. Each judgment uses a fresh Read-only context. For full-paper `dove-review`, use `dove review handoff --project <project> --venue <venue> --material <path>...`, then `dove review resume --project <project> --id <id>` or `dove review rerun --project <project> --id <id> --material <path>...` for the same reviewer session. Import user returns with `dove review import --project <project> --id <id> --file <report.md>`."],
+        dsh: ["Use an exposed equivalent clean read-only context for route/design judgment; if unavailable, report that limitation, not self-check as independent judgment. Preserve user-provided review returns; paper review retains its isolated-context requirement."]
       })
     });
   }
@@ -743,7 +795,12 @@ function allGeneratedCommandAdapterPaths() {
 }
 var HOST_ADAPTERS = Object.fromEntries(PROJECT_HOST_IDS.map((hostId) => {
   const commandPaths = commandAdapterPathsForHost(hostId);
-  const extraPaths = hostId === "claude" ? [...DOVE_CLAUDE_AMBIENT_PROJECT_PATHS] : [DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.dsh];
+  const extraPaths = hostId === "claude" ? [...DOVE_CLAUDE_AMBIENT_PROJECT_PATHS] : [
+    DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh,
+    DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh,
+    DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.dsh,
+    DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS.dsh
+  ];
   return [hostId, { label: HOST_DEFINITIONS[hostId].label, paths: [...commandPaths, ...extraPaths], requiredPaths: [...commandPaths, ...extraPaths], jsonChecks: HOST_DEFINITIONS[hostId].jsonChecks }];
 }));
 var CURRENT_MANAGED_PATHS = Object.freeze({
@@ -873,7 +930,7 @@ This project rule is the primary Dove entry in ordinary Claude conversations. Ap
 
 ${renderDoveSharedResearchContractSection()}
 
-Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude}\`. Read relevant criteria at the decision triggers above for scoped quality and investment judgments. The separate author-preference reference linked in author stance is fully bootstrapped by the current host main agent in each fresh context, then reused for applicable research, engineering, writing, and collaboration choices; neither reference is research evidence.
+Full quality details (project-relative): \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.claude}\`. Consult relevant criteria only when an actual scoped quality or investment decision needs them. Author stance below owns the fresh main context's personal read of the two short summaries; reuse them after compact or resume, without reading both full references as a startup ritual. Neither guidance reference is research evidence.
 
 ${renderDoveAuthorStanceSection()}
 
@@ -1120,7 +1177,7 @@ function userPromptSubmitOutput(payload, guidance, options = {}) {
 ${guidance.fingerprints.join("\n")}
 ${identityCardContext(options.project, options)}
 ${renderDoveResearchReanchor()}
-On first use at these fingerprints, personally read the full rule and author preferences; otherwise reuse them. The card is context, not a substitute for the user's latest words.`;
+On first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.`;
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
@@ -1164,7 +1221,10 @@ function sessionStartOutput(payload, result = null, options = {}) {
     }
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
-      additionalContext: renderDoveAuthorPreferencesBootstrap(path3.join(options.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude))
+      additionalContext: renderDoveAuthorPreferencesBootstrap(
+        path3.join(options.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude),
+        path3.join(options.project, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude)
+      )
     };
   } else if (payload.source === "compact" || payload.source === "resume") {
     output.hookSpecificOutput = {
@@ -1869,6 +1929,12 @@ var PACKAGE_FIELDS = /* @__PURE__ */ new Set(["name", "version"]);
 var RUNTIME_FIELDS = /* @__PURE__ */ new Set(["mode"]);
 var MANAGED_FIELDS = /* @__PURE__ */ new Set(["path", "kind", "selector", "digest"]);
 var MANAGED_KINDS = /* @__PURE__ */ new Set(["exclusive-file", "json-fragment", "text-block"]);
+var MANAGED_REFERENCE_PATHS = /* @__PURE__ */ new Set([
+  ".dove/install/RESEARCH_QUALITY.md",
+  ".dove/install/RESEARCH_QUALITY_FULL.md",
+  ".dove/install/AUTHOR_PREFERENCES.md",
+  ".dove/install/AUTHOR_PREFERENCES_FULL.md"
+]);
 var SHA256 = /^[a-f0-9]{64}$/u;
 var SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 function plainObject4(value) {
@@ -1907,7 +1973,7 @@ function canonicalProjectRelativePath(value, label) {
   if (normalized !== value || normalized === "." || normalized === ".." || normalized.startsWith("../") || value.includes("//") || value.endsWith("/")) {
     throw new Error(`${label} must be one canonical project-relative path: ${value}`);
   }
-  if ((value === ".dove" || value.startsWith(".dove/")) && value !== ".dove/install/RESEARCH_QUALITY.md" && value !== ".dove/install/AUTHOR_PREFERENCES.md") {
+  if ((value === ".dove" || value.startsWith(".dove/")) && !MANAGED_REFERENCE_PATHS.has(value)) {
     throw new Error(`${label} must not manage Dove research or installation state: ${value}`);
   }
   return value;
@@ -1933,7 +1999,7 @@ function validateManagedEntry(entry, index) {
   const label = `Project installation manifest managed[${index}]`;
   assertFields(entry, MANAGED_FIELDS, label);
   canonicalProjectRelativePath(entry.path, `${label}.path`);
-  if ((entry.path === ".dove/install/RESEARCH_QUALITY.md" || entry.path === ".dove/install/AUTHOR_PREFERENCES.md") && (entry.kind !== "exclusive-file" || entry.selector !== null)) {
+  if (MANAGED_REFERENCE_PATHS.has(entry.path) && (entry.kind !== "exclusive-file" || entry.selector !== null)) {
     throw new Error(`${label} must own ${path7.posix.basename(entry.path)} as one exclusive file.`);
   }
   if (!MANAGED_KINDS.has(entry.kind)) throw new Error(`${label}.kind is unsupported: ${entry.kind}.`);
@@ -2193,7 +2259,7 @@ function renderBody(command, heading, hostId = null) {
   const shared = hostId === "dsh" ? [
     responsePolicy,
     renderDoveSharedResearchContractSection(),
-    `Full quality reference (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`. Read relevant criteria at the decision triggers above for scoped quality and investment judgments; it is guidance, not research evidence.`,
+    command.id === "dove.status" ? `Quality summary (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`; consult relevant details in \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\` only when the status judgment needs them. Guidance is not research evidence.` : `Full quality details (project-relative): \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\`. Consult relevant criteria only when an actual decision needs them; author stance below requires both short summaries in each fresh author main context. Reuse the briefs after compact or resume, not both full references as a startup ritual. Guidance is not research evidence.`,
     command.id === "dove.status" ? "For Status, use these principles only to inspect and report, except to retain the user's material correction in affected identity-card fields. Do not execute research actions or otherwise maintain documents; do not rewrite an unchanged Mainline. Respect explicit no-write instructions and host refusal." : renderDoveAuthorStanceSection()
   ].join("\n\n") : "";
   return [`# ${heading}`, purpose, args, examples.trim(), shared, contract2].filter(Boolean).join("\n\n") + "\n";
@@ -2239,20 +2305,26 @@ function generatedAdapterEntries() {
   })));
 }
 function generatedResearchQualityReferenceEntries() {
-  return PROJECT_HOST_IDS.map((hostId) => ({
+  return PROJECT_HOST_IDS.flatMap((hostId) => [
+    [DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId], renderDoveResearchQualityReference()],
+    [DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS[hostId], renderDoveResearchQualityFullReference()]
+  ].map(([destinationPath, content]) => ({
     hostId,
-    destinationPath: DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId],
-    relativePath: packageResourcePath(hostId, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId]),
-    content: renderDoveResearchQualityReference()
-  }));
+    destinationPath,
+    relativePath: packageResourcePath(hostId, destinationPath),
+    content
+  })));
 }
 function generatedAuthorPreferencesReferenceEntries() {
-  return PROJECT_HOST_IDS.map((hostId) => ({
+  return PROJECT_HOST_IDS.flatMap((hostId) => [
+    [DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId], renderDoveAuthorPreferencesReference()],
+    [DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS[hostId], renderDoveAuthorPreferencesFullReference()]
+  ].map(([destinationPath, content]) => ({
     hostId,
-    destinationPath: DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId],
-    relativePath: packageResourcePath(hostId, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId]),
-    content: renderDoveAuthorPreferencesReference()
-  }));
+    destinationPath,
+    relativePath: packageResourcePath(hostId, destinationPath),
+    content
+  })));
 }
 function generatedClaudeAmbientProjectEntries() {
   return [
@@ -2302,7 +2374,7 @@ function sameManaged(left, right) {
   return sortedLeft.length === sortedRight.length && sortedLeft.every((entry, index) => managedKey2(entry) === managedKey2(sortedRight[index]) && entry.digest === sortedRight[index].digest);
 }
 function assertManagedResourcePath(relativePath) {
-  if (relativePath === ".dove/install/RESEARCH_QUALITY.md" || relativePath === ".dove/install/AUTHOR_PREFERENCES.md") return;
+  if ([".dove/install/RESEARCH_QUALITY.md", ".dove/install/RESEARCH_QUALITY_FULL.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/AUTHOR_PREFERENCES_FULL.md"].includes(relativePath)) return;
   if (relativePath === ".dove" || relativePath.startsWith(".dove/")) throw new Error(`Project integration resources must not manage Dove workspace state: ${relativePath}.`);
   if (FORBIDDEN_RESOURCE_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) throw new Error(`Project integration resources must not install runtime bundles: ${relativePath}.`);
 }
@@ -3837,16 +3909,25 @@ function exactIsoTimestamp3(value = /* @__PURE__ */ new Date()) {
   if (typeof timestamp !== "string" || new Date(timestamp).toISOString() !== timestamp) throw new Error("Dove review snapshot timestamp must be an exact ISO timestamp.");
   return timestamp;
 }
-function normalizeMaterialPath(projectFs, rawPath) {
+var REVIEW_IDENTITY_MATERIAL_PATH = ".dove/research/IDENTITY.md";
+function normalizeReviewScope(scope = "paper") {
+  if (!["paper", "route", "design"].includes(scope)) throw new Error("Dove review scope must be paper, route, or design.");
+  return scope;
+}
+function isReviewMaterialDenied(relativePath, scope = "paper") {
+  if ((scope === "route" || scope === "design") && relativePath === REVIEW_IDENTITY_MATERIAL_PATH) return false;
+  return REVIEW_MATERIAL_DENY_PATTERNS.some((pattern) => pattern.test(relativePath));
+}
+function normalizeMaterialPath(projectFs, rawPath, scope) {
   const input = typeof rawPath === "string" ? rawPath : "";
   const normalized = projectFs.normalize(input, "Dove review material path");
-  if (REVIEW_MATERIAL_DENY_PATTERNS.some((pattern) => pattern.test(normalized))) {
+  if (isReviewMaterialDenied(normalized, scope)) {
     throw new Error(`Dove review material is private or Dove-owned and must not be copied: ${normalized}`);
   }
   return normalized;
 }
-function canonicalProjectFile(projectFs, rawPath) {
-  const relativePath = normalizeMaterialPath(projectFs, rawPath);
+function canonicalProjectFile(projectFs, rawPath, scope) {
+  const relativePath = normalizeMaterialPath(projectFs, rawPath, scope);
   const stat = projectFs.inspectRegularFile(relativePath);
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Dove review material must be a regular non-symlink file: ${relativePath}`);
   const absolutePath = projectFs.displayPath(relativePath);
@@ -3859,9 +3940,10 @@ function canonicalProjectFile(projectFs, rawPath) {
 function normalizeReviewMaterialList(materials, options = {}) {
   if (!Array.isArray(materials) || materials.length === 0) throw new Error("dove review requires at least one --material <path>.");
   const projectFs = openRootedFilesystem(options.projectRoot, { fsOps: options.fsOps ?? fs14 });
+  const scope = normalizeReviewScope(options.scope);
   const byPath = /* @__PURE__ */ new Map();
   for (const material of materials) {
-    const { relativePath } = canonicalProjectFile(projectFs, material);
+    const { relativePath } = canonicalProjectFile(projectFs, material, scope);
     if (!byPath.has(relativePath)) byPath.set(relativePath, relativePath);
   }
   return [...byPath.keys()].sort();
@@ -3870,11 +3952,13 @@ function createReviewSnapshot(options = {}) {
   const fsOps = options.fsOps ?? fs14;
   const projectRoot = fsOps.realpathSync.native?.(path13.resolve(options.projectRoot)) ?? fsOps.realpathSync(path13.resolve(options.projectRoot));
   const projectFs = openRootedFilesystem(projectRoot, { fsOps });
-  const materialPaths = normalizeReviewMaterialList(options.materials, { projectRoot, fsOps });
+  const scope = normalizeReviewScope(options.scope);
+  const selectedPaths = normalizeReviewMaterialList(options.materials, { projectRoot, fsOps, scope });
+  const materialPaths = scope === "paper" ? selectedPaths : normalizeReviewMaterialList([...selectedPaths, REVIEW_IDENTITY_MATERIAL_PATH], { projectRoot, fsOps, scope });
   const files = [];
   const manifest = [];
   for (const materialPath of materialPaths) {
-    const { relativePath } = canonicalProjectFile(projectFs, materialPath);
+    const { relativePath } = canonicalProjectFile(projectFs, materialPath, scope);
     const bytes = projectFs.readFile(relativePath);
     const digest = sha2563(bytes);
     manifest.push({ path: relativePath, size: bytes.length, sha256: digest });
@@ -3884,6 +3968,7 @@ function createReviewSnapshot(options = {}) {
     snapshot: {
       schema: "dove.review.snapshot.v1",
       reviewId: options.reviewId,
+      scope,
       round: options.round,
       projectRoot,
       venue: options.venue ?? null,
@@ -3900,6 +3985,7 @@ import fs15 from "node:fs";
 import os from "node:os";
 import path14 from "node:path";
 var DOVE_REVIEW_QUALITY_REFERENCE_PATH = ".dove-package/RESEARCH_QUALITY.md";
+var DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH = ".dove-package/RESEARCH_QUALITY_FULL.md";
 var DOVE_REVIEW_GUIDANCE_SCHEMA = "dove.review.guidance.v1";
 var REVIEW_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$/u;
 var WINDOWS_RESERVED_NAMES = /* @__PURE__ */ new Set(["CON", "PRN", "AUX", "NUL", ...Array.from({ length: 9 }, (_, index) => `COM${index + 1}`), ...Array.from({ length: 9 }, (_, index) => `LPT${index + 1}`)]);
@@ -3950,13 +4036,19 @@ function normalizeReviewGuidanceIdentity(value, label = "Dove review package gui
   if (value.schema !== DOVE_REVIEW_GUIDANCE_SCHEMA) throw new Error(`${label} identity has an unsupported schema.`);
   const packageIdentity = normalizeGuidancePackage(value.package, label);
   if (typeof value.sha256 !== "string" || !REVIEW_GUIDANCE_DIGEST_PATTERN.test(value.sha256)) throw new Error(`${label} identity must contain a SHA-256 digest.`);
-  return { schema: DOVE_REVIEW_GUIDANCE_SCHEMA, package: packageIdentity, sha256: value.sha256 };
+  const identity = { schema: DOVE_REVIEW_GUIDANCE_SCHEMA, package: packageIdentity, sha256: value.sha256 };
+  if (value.full !== void 0) {
+    if (typeof value.full?.sha256 !== "string" || !REVIEW_GUIDANCE_DIGEST_PATTERN.test(value.full.sha256)) throw new Error(`${label} full reference must contain a SHA-256 digest.`);
+    identity.full = { sha256: value.full.sha256 };
+  }
+  return identity;
 }
 function normalizeReviewGuidance(value) {
   const identity = normalizeReviewGuidanceIdentity(value);
   if (!Buffer.isBuffer(value.content)) throw new Error("Dove review package guidance must be bytes.");
   if (sha2564(value.content) !== identity.sha256) throw new Error("Dove review package guidance identity does not match its bytes.");
-  return { ...identity, content: value.content };
+  if (identity.full && (!Buffer.isBuffer(value.full.content) || sha2564(value.full.content) !== identity.full.sha256)) throw new Error("Dove review full package guidance identity does not match its bytes.");
+  return { ...identity, content: value.content, ...identity.full ? { full: { ...identity.full, content: value.full.content } } : {} };
 }
 function exactIsoTimestamp4(value = /* @__PURE__ */ new Date()) {
   const timestamp = value instanceof Date ? value.toISOString() : value;
@@ -4039,13 +4131,15 @@ function writeMaterialFiles(root, files, fsOps) {
 }
 function createReviewGuidance(options = {}) {
   const content = options.content ?? Buffer.from(renderDoveResearchQualityReference(), "utf8");
-  if (!Buffer.isBuffer(content)) throw new Error("Dove review package guidance must be bytes.");
+  const fullContent = options.fullContent ?? Buffer.from(renderDoveResearchQualityFullReference(), "utf8");
+  if (!Buffer.isBuffer(content) || !Buffer.isBuffer(fullContent)) throw new Error("Dove review package guidance must be bytes.");
   const identity = normalizeReviewGuidanceIdentity({
     schema: options.schema ?? DOVE_REVIEW_GUIDANCE_SCHEMA,
     package: { name: options.packageName ?? PACKAGE_NAME, version: options.packageVersion ?? PACKAGE_VERSION },
-    sha256: sha2564(content)
+    sha256: sha2564(content),
+    full: { sha256: sha2564(fullContent) }
   });
-  return { ...identity, content };
+  return { ...identity, content, full: { ...identity.full, content: fullContent } };
 }
 function prepareReviewWorkspace(options = {}) {
   const fsOps = options.fsOps ?? fs15;
@@ -4064,6 +4158,7 @@ function prepareReviewWorkspace(options = {}) {
   try {
     writeMaterialFiles(stagingRoot, [
       { path: DOVE_REVIEW_QUALITY_REFERENCE_PATH, bytes: guidance.content },
+      ...guidance.full ? [{ path: DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH, bytes: guidance.full.content }] : [],
       ...options.files
     ], fsOps);
     const existing = stateRootFs.tryLstat(name);
@@ -4162,7 +4257,13 @@ function assertReviewWorkspaceMatchesSnapshot(options = {}) {
   if (sha2564(reference) !== guidance.sha256) {
     throw new Error(`Dove review package reference does not match canonical guidance frozen for this review: ${DOVE_REVIEW_QUALITY_REFERENCE_PATH}`);
   }
-  const actualPaths = listWorkspaceFiles(anchor).filter((file) => file !== DOVE_REVIEW_QUALITY_REFERENCE_PATH);
+  const guidancePaths = /* @__PURE__ */ new Set([DOVE_REVIEW_QUALITY_REFERENCE_PATH]);
+  if (guidance.full) {
+    const fullReference = anchor.readFile(DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH);
+    if (sha2564(fullReference) !== guidance.full.sha256) throw new Error(`Dove review full package reference does not match canonical guidance frozen for this review: ${DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH}`);
+    guidancePaths.add(DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH);
+  }
+  const actualPaths = listWorkspaceFiles(anchor).filter((file) => !guidancePaths.has(file));
   const actualSet = new Set(actualPaths);
   for (const actualPath of actualPaths) {
     if (!expected.has(actualPath)) throw new Error(`Dove review workspace contains an unlisted file: ${actualPath}`);
@@ -4224,20 +4325,25 @@ function materialLines(snapshot) {
   return snapshot.materials.map((material) => `- ${material.path} (${material.size} bytes)`).join("\n");
 }
 function promptForRound(options) {
+  const scope = normalizeReviewScope(options.scope);
   const materialList = materialLines(options.snapshot);
-  const operationLine = options.operation === "resume" ? "Continue the current frozen round in this same reviewer session. Re-read the listed current materials as needed before updating the review." : options.operation === "rerun" ? "This is a new full-material round in the same reviewer session. Review the complete current submission again, not just a diff." : "This is the initial full-material review round for this isolated reviewer session.";
+  const operationLine = scope !== "paper" ? options.operation === "resume" ? "Judge this same frozen round again in a clean NEW reviewer session, with no previous reviewer or author conversation." : options.operation === "rerun" ? "Judge this newly frozen round in a clean NEW reviewer session, with no previous reviewer or author conversation." : "This is a clean NEW reviewer session, with no previous reviewer or author conversation." : options.operation === "resume" ? "Continue the current frozen round in this same reviewer session. Re-read the listed current materials as needed before updating the review." : options.operation === "rerun" ? "This is a new full-material round in the same reviewer session. Review the complete current submission again, not just a diff." : "This is the initial full-material review round for this isolated reviewer session.";
+  const fullReference = options.guidance?.full ? DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH : DOVE_REVIEW_QUALITY_REFERENCE_PATH;
+  const guidanceLine = options.guidance?.full ? `Quality summary (workspace-relative): \`${DOVE_REVIEW_QUALITY_REFERENCE_PATH}\`. Read it first. Full quality reference: \`${fullReference}\`; consult relevant details when they can change this scoped judgment.` : `Full quality reference (workspace-relative): \`${fullReference}\`. Read it proactively at the decision triggers above.`;
+  const selectedTask = scope === "route" ? "Judge the current goal in the identity card against the supplied actual code/artifact diff since the previous judgment and actual run-result files. These are author-selected files, not an automatically scanned history. A narrative of changes does not replace a true diff. Cite concrete diff hunks and result observations; if needed inputs are missing, say which conclusions remain undetermined." : scope === "design" ? "Judge the supplied one-page method design against the current goal in the identity card. Cite its concrete mechanism, baseline comparison, predicted example and grounds, separating predictions from observed results and identifying material missing inputs." : "Return Markdown only under these four top-level headings: `## Verdict`, `## Blocking issues`, `## Grounding basis`, and `## Author-side next actions`. Do not edit files and do not claim external acceptance or certification.";
   return `# Independent dove-review task
 
-${renderDoveSharedResearchContractSection()}
+${scope === "paper" ? `${renderDoveSharedResearchContractSection()}
 
-${renderDoveReviewerStanceSection()}
+` : ""}${renderDoveReviewerStanceSection(scope)}
 
-You are running in a separate Claude Code reviewer session for Dove's isolated \`dove-review\` path. Review only the copied materials in this workspace. Your available tool is Read, and the large files are intentionally not inlined here.
+You are the same Dove researcher in a separate Read-only Claude Code reviewer session. Review only the listed frozen copies in this workspace. Your available tool is Read; large files are intentionally not inlined here.
 
-Full quality reference (workspace-relative): \`${DOVE_REVIEW_QUALITY_REFERENCE_PATH}\`. Read it proactively at the decision triggers above. This fixed package guidance is not user material or research evidence and grants no additional tool or material access. All scientific grounding remains limited to the listed frozen materials.
+${guidanceLine} This fixed package guidance is not user material or research evidence and grants no additional tool or material access. All scientific grounding remains limited to the listed frozen materials.
 
-Target venue: ${options.venue ?? "not specified"}
-Review id: ${options.reviewId}
+Review scope: ${scope}
+${scope === "paper" ? `Target venue: ${options.venue ?? "not specified"}
+` : ""}Review id: ${options.reviewId}
 Round: ${options.round}
 
 ${operationLine}
@@ -4245,7 +4351,7 @@ ${operationLine}
 Frozen materials for this round:
 ${materialList || "- No project materials were listed for this imported-only record."}
 
-Return Markdown only under these four top-level headings: \`## Verdict\`, \`## Blocking issues\`, \`## Grounding basis\`, and \`## Author-side next actions\`. Do not edit files and do not claim external acceptance or certification.
+${selectedTask}
 `;
 }
 function normalizeProject(project, options = {}) {
@@ -4322,6 +4428,7 @@ function makeRoundRecord(options) {
   const guidance = options.provenance === "imported" && (options.guidance === void 0 || options.guidance === null) ? null : normalizeReviewGuidanceIdentity(options.guidance, "Dove review round guidance");
   return {
     round: options.round,
+    scope: normalizeReviewScope(options.scope),
     status: options.status,
     provenance: options.provenance,
     venue: options.venue ?? null,
@@ -4383,6 +4490,7 @@ function newRecord(options) {
   return {
     schema: REVIEW_RECORD_SCHEMA,
     id: options.reviewId,
+    scope: normalizeReviewScope(options.scope),
     projectRoot: options.projectRoot,
     venue: options.venue ?? null,
     createdAt: options.createdAt,
@@ -4411,6 +4519,7 @@ function prepareRuntimeRound(projectRoot, record, snapshot, workspaceRoot, reque
   const roundRecord = existingRound ? { ...existingRound, status: "pending", updatedAt: now } : {
     ...makeRoundRecord({
       reviewId: record.id,
+      scope: record.scope,
       round: snapshot.round,
       status: "pending",
       provenance: "runtime",
@@ -4464,6 +4573,7 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
     attempts
   } : makeRoundRecord({
     reviewId: record.id,
+    scope: record.scope,
     round,
     status,
     provenance: "runtime",
@@ -4488,7 +4598,8 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
   try {
     writeReviewFiles(projectRoot, writeEntries, options);
   } catch (error) {
-    throw new Error(`Dove review ${record.id} return was not saved. The frozen materials and exchange records are retained; resume attempts the requested session, but cannot recover this unsaved return. ${error.message}`, { cause: error });
+    const recovery = record.scope === "route" || record.scope === "design" ? "resume judges the retained frozen materials in a new session, but cannot recover this unsaved return" : "resume attempts the requested session, but cannot recover this unsaved return";
+    throw new Error(`Dove review ${record.id} return was not saved. The frozen materials and exchange records are retained; ${recovery}. ${error.message}`, { cause: error });
   }
   return { record: nextRecord, round: roundRecord, reportPath: paths.report, backendPath: paths.backend, snapshotPath: roundPaths(record.id, round).snapshot };
 }
@@ -4611,7 +4722,7 @@ function observedMaterialFact(material, options = {}) {
   } catch (error) {
     return { path: pathName, status: "changed", expected, observed: { exists: null, type: "invalid-path", size: null, sha256: null, error: error instanceof Error ? error.message : String(error) } };
   }
-  if (REVIEW_MATERIAL_DENY_PATTERNS.some((pattern) => pattern.test(relativePath))) {
+  if (isReviewMaterialDenied(relativePath, options.scope)) {
     return { path: relativePath, status: "changed", expected, observed: { exists: null, type: "unsafe-path", size: null, sha256: null } };
   }
   if (!options.observations.has(relativePath)) options.observations.set(relativePath, observeMaterialPath(options.anchor, relativePath));
@@ -4631,7 +4742,7 @@ function materialCurrentnessForRound(projectRoot, reviewId, round, options = {})
   if (materials.length === 0) return { overall: "unavailable", items: [] };
   const anchor = openRootedFilesystem(projectRoot, { fsOps: options.fsOps ?? fs16 });
   const observations = options.observations ?? /* @__PURE__ */ new Map();
-  const items = materials.map((material) => observedMaterialFact(material, { anchor, observations }));
+  const items = materials.map((material) => observedMaterialFact(material, { anchor, observations, scope: options.scope }));
   return { overall: materialOverall(items), items };
 }
 function publicText(value) {
@@ -4677,6 +4788,7 @@ function publicRound(round, options = {}) {
   const materialCurrentness = materialCurrentnessForRound(options.projectRoot, options.reviewId, round, options);
   return {
     round: Number.isSafeInteger(round.round) ? round.round : null,
+    scope: publicText(round.scope ?? options.scope ?? "paper"),
     status: publicText(round.status),
     provenance: publicText(round.provenance),
     venue: publicText(round.venue),
@@ -4714,6 +4826,7 @@ function publicReviewResult(kind, projectRoot, review, round, extras = {}) {
     status: publicText(review.status),
     project: projectRoot,
     reviewId: publicText(review.id),
+    scope: publicText(review.scope ?? "paper"),
     round: Number.isSafeInteger(roundNumber) ? roundNumber : null,
     venue: publicText(review.venue),
     sessionId: publicText(review.session?.sessionId),
@@ -4733,18 +4846,19 @@ function handoffReview(options = {}) {
   const fsOps = options.fsOps ?? fs16;
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id ?? createReviewId({ now: options.now }));
+  const scope = normalizeReviewScope(options.scope);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
     const existingRecord = readReviewRecordWithState(projectRoot, reviewId, { fsOps });
     if (existingRecord.record !== null) throw new Error(`Dove review record already exists: ${reviewPath(reviewId)}. Use resume or rerun.`);
     const reviewDirectoryState = fileState(projectRoot, reviewBasePath(reviewId), { fsOps });
     if (reviewDirectoryState.exists) throw new Error(`Dove review path already exists without a valid record: ${reviewBasePath(reviewId)}.`);
     const createdAt = exactIsoTimestamp5(options.now ?? /* @__PURE__ */ new Date());
-    const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round: 1, venue: options.venue, materials: options.materials, now: createdAt, fsOps });
+    const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, scope, round: 1, venue: options.venue, materials: options.materials, now: createdAt, fsOps });
     const guidance = createReviewGuidance();
     const workspace = prepareReviewWorkspace({ reviewId, files, guidance, ...stateRootOptions({ ...options, projectRoot }) });
-    const sessionId = options.sessionId ?? crypto6.randomUUID();
-    const prompt = promptForRound({ operation: "handoff", reviewId, round: 1, venue: options.venue, snapshot });
-    let record = newRecord({ reviewId, projectRoot, venue: options.venue, createdAt, updatedAt: createdAt });
+    const sessionId = scope === "paper" ? options.sessionId ?? crypto6.randomUUID() : crypto6.randomUUID();
+    const prompt = promptForRound({ operation: "handoff", reviewId, scope, round: 1, venue: options.venue, snapshot, guidance });
+    let record = newRecord({ reviewId, scope, projectRoot, venue: options.venue, createdAt, updatedAt: createdAt });
     try {
       record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, guidance, { ...options, recordExpectedState: existingRecord.expectedState });
     } catch (error) {
@@ -4777,7 +4891,8 @@ function resumeReview(options = {}) {
   const reviewId = normalizeReviewId(options.id);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
     let { record, expectedState: expectedState2 } = requireReviewRecordWithState(projectRoot, reviewId, { fsOps });
-    const sessionId = sessionIdOrThrow(record);
+    const scope = normalizeReviewScope(record.scope);
+    const sessionId = scope === "paper" ? sessionIdOrThrow(record) : crypto6.randomUUID();
     const round = record.currentRound;
     if (!Number.isInteger(round) || round < 1) throw new Error(`Dove review ${reviewId} has no current round to resume.`);
     const existingRound = assertCurrentRoundCanUseRuntime(record);
@@ -4791,14 +4906,14 @@ function resumeReview(options = {}) {
       outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options) };
     }
     if (workspace) {
-      const prompt = promptForRound({ operation: "resume", reviewId, round, venue: record.venue, snapshot });
+      const prompt = promptForRound({ operation: "resume", reviewId, scope, round, venue: record.venue, snapshot, guidance: existingRound.guidance });
       record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, existingRound.guidance, { ...options, recordExpectedState: expectedState2 });
       expectedState2 = fileState(projectRoot, reviewPath(reviewId), { fsOps });
       try {
         outcome = runClaudeReviewBackend({
           workspaceRoot: workspace.workspaceRoot,
           prompt,
-          session: { resumeSessionId: sessionId },
+          session: scope === "paper" ? { resumeSessionId: sessionId } : { sessionId },
           claudeCommand: options.claudeCommand,
           env: options.env,
           spawnSync: options.spawnSync,
@@ -4819,16 +4934,17 @@ function rerunReview(options = {}) {
   const reviewId = normalizeReviewId(options.id);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
     let { record, expectedState: expectedState2 } = requireReviewRecordWithState(projectRoot, reviewId, { fsOps });
-    if (record.pendingExchange) throw new Error(`Dove review ${reviewId} has a pending exchange; use resume before starting another round.`);
-    const sessionId = sessionIdOrThrow(record);
+    const scope = normalizeReviewScope(record.scope);
+    if (scope === "paper" && record.pendingExchange) throw new Error(`Dove review ${reviewId} has a pending exchange; use resume before starting another round.`);
+    const sessionId = scope === "paper" ? sessionIdOrThrow(record) : crypto6.randomUUID();
     const round = record.currentRound + 1;
     const createdAt = exactIsoTimestamp5(options.now ?? /* @__PURE__ */ new Date());
     const venue = options.venue ?? record.venue ?? null;
-    const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, round, venue, materials: options.materials, now: createdAt, fsOps });
+    const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, scope, round, venue, materials: options.materials, now: createdAt, fsOps });
     const guidance = createReviewGuidance();
     const workspaceOptions = { ...stateRootOptions({ ...options, projectRoot }), workspaceRoot: recordedWorkspaceRoot(projectRoot, record, { fsOps }) };
     const workspace = prepareReviewWorkspace({ reviewId, files, guidance, keepPreviousWorkspaceBackup: true, ...workspaceOptions });
-    const prompt = promptForRound({ operation: "rerun", reviewId, round, venue, snapshot });
+    const prompt = promptForRound({ operation: "rerun", reviewId, scope, round, venue, snapshot, guidance });
     try {
       record = prepareRuntimeRound(projectRoot, record, snapshot, workspace.workspaceRoot, sessionId, guidance, { ...options, recordExpectedState: expectedState2 });
     } catch (error) {
@@ -4842,7 +4958,7 @@ function rerunReview(options = {}) {
       outcome = runClaudeReviewBackend({
         workspaceRoot: workspace.workspaceRoot,
         prompt,
-        session: { resumeSessionId: sessionId },
+        session: scope === "paper" ? { resumeSessionId: sessionId } : { sessionId },
         claudeCommand: options.claudeCommand,
         env: options.env,
         spawnSync: options.spawnSync,
@@ -4869,6 +4985,7 @@ function importedSnapshot(options) {
     return createReviewSnapshot({
       projectRoot: options.projectRoot,
       reviewId: options.reviewId,
+      scope: options.scope,
       round: options.round,
       venue: options.venue,
       materials: options.materials,
@@ -4879,6 +4996,7 @@ function importedSnapshot(options) {
   return {
     schema: IMPORTED_SNAPSHOT_SCHEMA,
     reviewId: options.reviewId,
+    scope: normalizeReviewScope(options.scope),
     round: options.round,
     projectRoot: options.projectRoot,
     venue: options.venue ?? null,
@@ -4898,8 +5016,9 @@ function importReviewReturn(options = {}) {
     const createdAt = exactIsoTimestamp5(options.now ?? /* @__PURE__ */ new Date());
     const round = existing ? existing.currentRound + 1 : 1;
     const venue = options.venue ?? existing?.venue ?? null;
+    const scope = normalizeReviewScope(existing?.scope);
     const { sourceFile, bytes } = importFileBytes(options.file, { fsOps, cwd: options.cwd });
-    const snapshot = importedSnapshot({ projectRoot, reviewId, round, venue, materials: options.materials, createdAt, fsOps });
+    const snapshot = importedSnapshot({ projectRoot, reviewId, scope, round, venue, materials: options.materials, createdAt, fsOps });
     const backend = {
       schema: "dove.review.backend.v1",
       backend: null,
@@ -4914,6 +5033,7 @@ function importReviewReturn(options = {}) {
     const paths = roundPaths(reviewId, round);
     const roundRecord = makeRoundRecord({
       reviewId,
+      scope,
       round,
       status: "imported",
       provenance: "imported",
@@ -4926,7 +5046,7 @@ function importReviewReturn(options = {}) {
       sessionId: null,
       attempts: []
     });
-    const baseRecord = existing ?? newRecord({ reviewId, projectRoot, venue, createdAt, updatedAt: createdAt });
+    const baseRecord = existing ?? newRecord({ reviewId, scope, projectRoot, venue, createdAt, updatedAt: createdAt });
     const nextRecord = updateRecordForRound(baseRecord, roundRecord, { sessionId: baseRecord.session?.sessionId ?? null });
     writeReviewFiles(projectRoot, [
       { relativePath: paths.snapshot, content: serializeJson(snapshot), encoding: "utf8", expectedState: absentFileState() },
@@ -4952,12 +5072,13 @@ function inspectReviewStatus(options = {}) {
     const reviewId = normalizeReviewId(options.id);
     const record = requireReviewRecord(projectRoot, reviewId, { fsOps });
     const observations = /* @__PURE__ */ new Map();
-    const rounds = record.rounds.map((round) => publicRound(round, { projectRoot, reviewId, fsOps, observations }));
+    const rounds = record.rounds.map((round) => publicRound(round, { projectRoot, reviewId, fsOps, observations, scope: record.scope }));
     return {
       command: "status",
       status: publicText(record.status),
       project: projectRoot,
       reviewId,
+      scope: publicText(record.scope ?? "paper"),
       venue: publicText(record.venue),
       currentRound: Number.isSafeInteger(record.currentRound) ? record.currentRound : null,
       sessionId: publicText(record.session?.sessionId),
@@ -4970,6 +5091,7 @@ function inspectReviewStatus(options = {}) {
     const record = readReviewRecord(projectRoot, id, { fsOps });
     return record === null ? null : {
       reviewId: publicText(record.id),
+      scope: publicText(record.scope ?? "paper"),
       status: publicText(record.status),
       venue: publicText(record.venue),
       currentRound: Number.isSafeInteger(record.currentRound) ? record.currentRound : null,
@@ -5840,6 +5962,8 @@ export {
   COMMAND_SURFACES,
   COMMAND_SURFACE_BY_ID,
   DOVE_AGENT_SURFACES,
+  DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS,
+  DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS,
   DOVE_CLAUDE_SESSION_START_HOOK_COMMAND,
   DOVE_CLAUDE_STATUS_LINE,
   DOVE_CLAUDE_STATUS_LINE_COMMAND,
@@ -5867,6 +5991,7 @@ export {
   DOVE_RESEARCH_MAINTENANCE_TRIGGER,
   DOVE_RESEARCH_ONE_AGENT,
   DOVE_RESEARCH_QUALITY_CRITERIA,
+  DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS,
   DOVE_RESEARCH_QUALITY_REFERENCE_PATHS,
   DOVE_RESEARCH_REFLECTION_CONTINUITY,
   DOVE_RESEARCH_RESULT_ADOPTION,
@@ -5946,7 +6071,10 @@ export {
   renderClaudeAmbientRule,
   renderClaudeDoveAgent,
   renderDoveAgentInstructions,
+  renderDoveAuthorPreferencesFullReference,
+  renderDoveAuthorPreferencesReference,
   renderDoveAuthorStanceSection,
+  renderDoveResearchQualityFullReference,
   renderDoveResearchQualityReference,
   renderDoveResearchReanchor,
   renderDoveReviewerStanceSection,

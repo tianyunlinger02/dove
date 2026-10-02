@@ -10,7 +10,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { COMMAND_SURFACES, MANAGED_PACKAGE_PATHS, PACKAGE_BRAND_PATHS, PACKAGE_LEGAL_PATHS } from "../src/core/command-manifest.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "../src/core/web-access-integration.mjs";
-import { renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
+import { renderDoveResearchQualityReference, renderDoveResearchQualityFullReference } from "../src/core/dove-research-contract.mjs";
+import { renderDoveAuthorPreferencesReference } from "../src/core/dove-author-preferences.mjs";
 import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -231,16 +232,18 @@ function assertInstalledCli(installedBin, cwd) {
 
 function expectedReferences() {
   return [
-    [".dove/install/AUTHOR_PREFERENCES.md", fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8")],
-    [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()]
-  ].map(([relativePath, content]) => ({ path: relativePath, content: `${content.trimEnd()}\n` }));
+    [".dove/install/AUTHOR_PREFERENCES.md", renderDoveAuthorPreferencesReference()],
+    [".dove/install/AUTHOR_PREFERENCES_FULL.md", fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8")],
+    [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()],
+    [".dove/install/RESEARCH_QUALITY_FULL.md", renderDoveResearchQualityFullReference()]
+  ].map(([relativePath, content]) => ({ path: relativePath, content: `${content.trimEnd()}\n` })).sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function assertPackagedReferences(packageRoot) {
   assert.deepEqual(fs.readFileSync(path.join(packageRoot, "docs/AUTHOR_PREFERENCES.md")), fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md")));
   for (const host of ["claude", "dsh"]) {
     for (const reference of expectedReferences()) {
-      assert.equal(fs.readFileSync(path.join(packageRoot, "package-resources/hosts", host, reference.path), "utf8"), reference.content, `Packed ${host} reference must contain the full canonical text: ${reference.path}`);
+      assert.equal(fs.readFileSync(path.join(packageRoot, "package-resources/hosts", host, reference.path), "utf8"), reference.content, `Packed ${host} reference must preserve its canonical summary or full text: ${reference.path}`);
     }
   }
 }

@@ -5,7 +5,7 @@ import {
   DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS,
   renderDoveAuthorPreferencesBootstrap
 } from "./dove-author-preferences.mjs";
-import { DOVE_RESEARCH_REFLECTION_CONTINUITY } from "./dove-research-contract.mjs";
+import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS, DOVE_RESEARCH_REFLECTION_CONTINUITY } from "./dove-research-contract.mjs";
 import { identityCardContext } from "./identity-card.mjs";
 
 export function parseSessionStartPayload(input) {
@@ -36,7 +36,10 @@ export function sessionStartOutput(payload, result = null, options = {}) {
     }
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
-      additionalContext: renderDoveAuthorPreferencesBootstrap(path.join(options.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude))
+      additionalContext: renderDoveAuthorPreferencesBootstrap(
+        path.join(options.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude),
+        path.join(options.project, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude)
+      )
     };
   } else if (payload.source === "compact" || payload.source === "resume") {
     output.hookSpecificOutput = {

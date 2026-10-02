@@ -28,17 +28,29 @@ function exactIsoTimestamp(value = new Date()) {
   return timestamp;
 }
 
-function normalizeMaterialPath(projectFs, rawPath) {
+export const REVIEW_IDENTITY_MATERIAL_PATH = ".dove/research/IDENTITY.md";
+
+export function normalizeReviewScope(scope = "paper") {
+  if (!["paper", "route", "design"].includes(scope)) throw new Error("Dove review scope must be paper, route, or design.");
+  return scope;
+}
+
+export function isReviewMaterialDenied(relativePath, scope = "paper") {
+  if ((scope === "route" || scope === "design") && relativePath === REVIEW_IDENTITY_MATERIAL_PATH) return false;
+  return REVIEW_MATERIAL_DENY_PATTERNS.some((pattern) => pattern.test(relativePath));
+}
+
+function normalizeMaterialPath(projectFs, rawPath, scope) {
   const input = typeof rawPath === "string" ? rawPath : "";
   const normalized = projectFs.normalize(input, "Dove review material path");
-  if (REVIEW_MATERIAL_DENY_PATTERNS.some((pattern) => pattern.test(normalized))) {
+  if (isReviewMaterialDenied(normalized, scope)) {
     throw new Error(`Dove review material is private or Dove-owned and must not be copied: ${normalized}`);
   }
   return normalized;
 }
 
-function canonicalProjectFile(projectFs, rawPath) {
-  const relativePath = normalizeMaterialPath(projectFs, rawPath);
+function canonicalProjectFile(projectFs, rawPath, scope) {
+  const relativePath = normalizeMaterialPath(projectFs, rawPath, scope);
   const stat = projectFs.inspectRegularFile(relativePath);
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Dove review material must be a regular non-symlink file: ${relativePath}`);
   const absolutePath = projectFs.displayPath(relativePath);
@@ -52,9 +64,10 @@ function canonicalProjectFile(projectFs, rawPath) {
 export function normalizeReviewMaterialList(materials, options = {}) {
   if (!Array.isArray(materials) || materials.length === 0) throw new Error("dove review requires at least one --material <path>.");
   const projectFs = openRootedFilesystem(options.projectRoot, { fsOps: options.fsOps ?? fs });
+  const scope = normalizeReviewScope(options.scope);
   const byPath = new Map();
   for (const material of materials) {
-    const { relativePath } = canonicalProjectFile(projectFs, material);
+    const { relativePath } = canonicalProjectFile(projectFs, material, scope);
     if (!byPath.has(relativePath)) byPath.set(relativePath, relativePath);
   }
   return [...byPath.keys()].sort();
@@ -64,11 +77,14 @@ export function createReviewSnapshot(options = {}) {
   const fsOps = options.fsOps ?? fs;
   const projectRoot = fsOps.realpathSync.native?.(path.resolve(options.projectRoot)) ?? fsOps.realpathSync(path.resolve(options.projectRoot));
   const projectFs = openRootedFilesystem(projectRoot, { fsOps });
-  const materialPaths = normalizeReviewMaterialList(options.materials, { projectRoot, fsOps });
+  const scope = normalizeReviewScope(options.scope);
+  const selectedPaths = normalizeReviewMaterialList(options.materials, { projectRoot, fsOps, scope });
+  const materialPaths = scope === "paper" ? selectedPaths
+    : normalizeReviewMaterialList([...selectedPaths, REVIEW_IDENTITY_MATERIAL_PATH], { projectRoot, fsOps, scope });
   const files = [];
   const manifest = [];
   for (const materialPath of materialPaths) {
-    const { relativePath } = canonicalProjectFile(projectFs, materialPath);
+    const { relativePath } = canonicalProjectFile(projectFs, materialPath, scope);
     const bytes = projectFs.readFile(relativePath);
     const digest = sha256(bytes);
     manifest.push({ path: relativePath, size: bytes.length, sha256: digest });
@@ -78,6 +94,7 @@ export function createReviewSnapshot(options = {}) {
     snapshot: {
       schema: "dove.review.snapshot.v1",
       reviewId: options.reviewId,
+      scope,
       round: options.round,
       projectRoot,
       venue: options.venue ?? null,

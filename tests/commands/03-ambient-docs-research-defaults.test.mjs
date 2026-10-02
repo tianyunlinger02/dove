@@ -25,7 +25,9 @@ test("research bootstrap remains a minimal researcher-owned overview", () => {
 
 test("author stance uses Lessons once at consequential triggers without burdening local work", () => {
   const stance = renderDoveAuthorStanceSection();
-  assert.match(stance, /short researcher-owned `\.dove\/research\/IDENTITY\.md`/iu);
+  assert.match(stance, /few-hundred-word researcher-owned `\.dove\/research\/IDENTITY\.md`/iu);
+  assert.match(stance, /plain language, without internal abbreviations/iu);
+  assert.match(stance, /Put process details in history/iu);
   assert.match(stance, /Mainline: ` followed by one sentence in the user's words/iu);
   assert.match(stance, /rejected approaches; user restrictions; current route; next core action; hard blocker/iu);
   assert.match(stance, /Correct only the fields the user actually corrected/iu);

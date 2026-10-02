@@ -38,7 +38,7 @@ export const CLI_COMMAND_SPECS = Object.freeze({
   }),
   review: command([], {
     subcommands: {
-      handoff: command(reviewOptions),
+      handoff: command([...reviewOptions, value("--scope", { choices: ["paper", "route", "design"] })]),
       status: command([projectOption, value("--id"), ...outputOptions]),
       resume: command([projectOption, value("--id"), ...outputOptions]),
       rerun: command(reviewOptions),

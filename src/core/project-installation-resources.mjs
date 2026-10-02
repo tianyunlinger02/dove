@@ -73,7 +73,7 @@ export function sameManaged(left, right) {
 }
 
 function assertManagedResourcePath(relativePath) {
-  if (relativePath === ".dove/install/RESEARCH_QUALITY.md" || relativePath === ".dove/install/AUTHOR_PREFERENCES.md") return;
+  if ([".dove/install/RESEARCH_QUALITY.md", ".dove/install/RESEARCH_QUALITY_FULL.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/AUTHOR_PREFERENCES_FULL.md"].includes(relativePath)) return;
   if (relativePath === ".dove" || relativePath.startsWith(".dove/")) throw new Error(`Project integration resources must not manage Dove workspace state: ${relativePath}.`);
   if (FORBIDDEN_RESOURCE_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) throw new Error(`Project integration resources must not install runtime bundles: ${relativePath}.`);
 }

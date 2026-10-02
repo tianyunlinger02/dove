@@ -21,16 +21,22 @@ These are flexible research considerations, not a required order or report templ
 
 ### What this is for
 
-Use Review for author-side scientific self-check, delivery readiness, independent `dove-review` handoff, returned-review import, or existing context inspection.
+Use Review for clean-context route/design judgment, author self-check, delivery readiness, independent paper review, or returned-review context.
 
 ### When to use
 
-Use when review can improve the paper, delivery facts matter, a near-submission paper is ready for `dove-review`, a returned review should be preserved, or existing Review context should be inspected.
+Use at the route/design review triggers, for paper or delivery judgment, or for existing review context.
 
 ### Scope and changes
 
 - Review findings inform Dove's author-side judgment, not automatic acceptance or action; verify material findings against inspected evidence, then prioritize warranted Source, Experiment, Draft, Figure, Rebuttal or delivery work.
 - Independent `dove-review` requires a real isolated, persistent, recoverable host context with a frozen near-submission material list.
+
+### Clean-context route and method-design judgment
+
+Use a fresh read-only Dove context for the shared route/design review, without the author's process conversation.
+
+- For route review, supply the exact identity card, actual code/artifact diff since the last review and actual run results. For design review, supply the identity card and one-page method design. Read the returned report and apply its conclusion to the next real implementation; retain rejected approaches in the plain-language card. These scoped judgments do not count as independent submission review.
 
 ### Author-side scientific self-check
 
@@ -76,7 +82,7 @@ Import a returned review, preserve a user-pasted opinion, or inspect existing Re
 
 - Use only tools and materials that the current host exposes and current user/project permissions permit. If something needed is unavailable, name it and use any other available material or action that can still advance the request.
 - Use Claude Code waiting or background affordances only for real long-running host actions, then return to Dove's mainline judgment when results arrive.
-- For `dove-review`, use `dove review handoff --project <project> --venue <venue> --material <path>...`, then `dove review resume --project <project> --id <id>` or `dove review rerun --project <project> --id <id> --material <path>...` for the same review id and reviewer session. Import user-provided returns with `dove review import --project <project> --id <id> --file <report.md>`. Only listed materials are copied into the isolated reviewer workspace, and Claude Code receives Read only.
+- For route/design judgment, use `dove review handoff --project <project> --scope route|design --material <path>... --json`; the current identity card is copied automatically. Supply actual diff/results for route or the one-page design for design, then read `reportPath` and act. Each judgment uses a fresh Read-only context. For full-paper `dove-review`, use `dove review handoff --project <project> --venue <venue> --material <path>...`, then `dove review resume --project <project> --id <id>` or `dove review rerun --project <project> --id <id> --material <path>...` for the same reviewer session. Import user returns with `dove review import --project <project> --id <id> --file <report.md>`.
 
 ### Return with
 

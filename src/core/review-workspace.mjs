@@ -4,10 +4,11 @@ import os from "node:os";
 import path from "node:path";
 
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
-import { renderDoveResearchQualityReference } from "./dove-research-contract.mjs";
+import { renderDoveResearchQualityFullReference, renderDoveResearchQualityReference } from "./dove-research-contract.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "./package-metadata.mjs";
 
 export const DOVE_REVIEW_QUALITY_REFERENCE_PATH = ".dove-package/RESEARCH_QUALITY.md";
+export const DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH = ".dove-package/RESEARCH_QUALITY_FULL.md";
 export const DOVE_REVIEW_GUIDANCE_SCHEMA = "dove.review.guidance.v1";
 
 const REVIEW_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$/u;
@@ -69,14 +70,20 @@ export function normalizeReviewGuidanceIdentity(value, label = "Dove review pack
   if (value.schema !== DOVE_REVIEW_GUIDANCE_SCHEMA) throw new Error(`${label} identity has an unsupported schema.`);
   const packageIdentity = normalizeGuidancePackage(value.package, label);
   if (typeof value.sha256 !== "string" || !REVIEW_GUIDANCE_DIGEST_PATTERN.test(value.sha256)) throw new Error(`${label} identity must contain a SHA-256 digest.`);
-  return { schema: DOVE_REVIEW_GUIDANCE_SCHEMA, package: packageIdentity, sha256: value.sha256 };
+  const identity = { schema: DOVE_REVIEW_GUIDANCE_SCHEMA, package: packageIdentity, sha256: value.sha256 };
+  if (value.full !== undefined) {
+    if (typeof value.full?.sha256 !== "string" || !REVIEW_GUIDANCE_DIGEST_PATTERN.test(value.full.sha256)) throw new Error(`${label} full reference must contain a SHA-256 digest.`);
+    identity.full = { sha256: value.full.sha256 };
+  }
+  return identity;
 }
 
 function normalizeReviewGuidance(value) {
   const identity = normalizeReviewGuidanceIdentity(value);
   if (!Buffer.isBuffer(value.content)) throw new Error("Dove review package guidance must be bytes.");
   if (sha256(value.content) !== identity.sha256) throw new Error("Dove review package guidance identity does not match its bytes.");
-  return { ...identity, content: value.content };
+  if (identity.full && (!Buffer.isBuffer(value.full.content) || sha256(value.full.content) !== identity.full.sha256)) throw new Error("Dove review full package guidance identity does not match its bytes.");
+  return { ...identity, content: value.content, ...(identity.full ? { full: { ...identity.full, content: value.full.content } } : {}) };
 }
 
 function exactIsoTimestamp(value = new Date()) {
@@ -170,13 +177,15 @@ function writeMaterialFiles(root, files, fsOps) {
 
 export function createReviewGuidance(options = {}) {
   const content = options.content ?? Buffer.from(renderDoveResearchQualityReference(), "utf8");
-  if (!Buffer.isBuffer(content)) throw new Error("Dove review package guidance must be bytes.");
+  const fullContent = options.fullContent ?? Buffer.from(renderDoveResearchQualityFullReference(), "utf8");
+  if (!Buffer.isBuffer(content) || !Buffer.isBuffer(fullContent)) throw new Error("Dove review package guidance must be bytes.");
   const identity = normalizeReviewGuidanceIdentity({
     schema: options.schema ?? DOVE_REVIEW_GUIDANCE_SCHEMA,
     package: { name: options.packageName ?? PACKAGE_NAME, version: options.packageVersion ?? PACKAGE_VERSION },
-    sha256: sha256(content)
+    sha256: sha256(content),
+    full: { sha256: sha256(fullContent) }
   });
-  return { ...identity, content };
+  return { ...identity, content, full: { ...identity.full, content: fullContent } };
 }
 
 export function prepareReviewWorkspace(options = {}) {
@@ -196,6 +205,7 @@ export function prepareReviewWorkspace(options = {}) {
   try {
     writeMaterialFiles(stagingRoot, [
       { path: DOVE_REVIEW_QUALITY_REFERENCE_PATH, bytes: guidance.content },
+      ...(guidance.full ? [{ path: DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH, bytes: guidance.full.content }] : []),
       ...options.files
     ], fsOps);
     const existing = stateRootFs.tryLstat(name);
@@ -300,7 +310,13 @@ export function assertReviewWorkspaceMatchesSnapshot(options = {}) {
   if (sha256(reference) !== guidance.sha256) {
     throw new Error(`Dove review package reference does not match canonical guidance frozen for this review: ${DOVE_REVIEW_QUALITY_REFERENCE_PATH}`);
   }
-  const actualPaths = listWorkspaceFiles(anchor).filter((file) => file !== DOVE_REVIEW_QUALITY_REFERENCE_PATH);
+  const guidancePaths = new Set([DOVE_REVIEW_QUALITY_REFERENCE_PATH]);
+  if (guidance.full) {
+    const fullReference = anchor.readFile(DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH);
+    if (sha256(fullReference) !== guidance.full.sha256) throw new Error(`Dove review full package reference does not match canonical guidance frozen for this review: ${DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH}`);
+    guidancePaths.add(DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH);
+  }
+  const actualPaths = listWorkspaceFiles(anchor).filter((file) => !guidancePaths.has(file));
   const actualSet = new Set(actualPaths);
   for (const actualPath of actualPaths) {
     if (!expected.has(actualPath)) throw new Error(`Dove review workspace contains an unlisted file: ${actualPath}`);

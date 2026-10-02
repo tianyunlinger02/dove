@@ -396,6 +396,7 @@ try {
       project,
       id: options.id,
       venue: options.venue,
+      scope: options.scope,
       materials: reviewMaterials(options),
       file: options.file,
       env: process.env,

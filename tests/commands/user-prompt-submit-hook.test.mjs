@@ -56,7 +56,11 @@ test("prompt output is current short guidance, independent of prompt text and ho
   assert.match(context(expected), /do the next core work now/iu);
   assert.match(context(expected), /Stop at whole-goal completion or a hard blocker/iu);
   assert.match(context(expected), /not a local batch or plan/iu);
-  assert.match(context(expected), /On first use at these fingerprints, personally read the full rule and author preferences/iu);
+  assert.match(context(expected), /On first use at these fingerprints/iu);
+  assert.match(context(expected), /current main agent must personally read the current rule and the two short summaries/iu);
+  assert.match(context(expected), /author preferences and research quality/iu);
+  assert.match(context(expected), /Consult full references only for decision-relevant details/iu);
+  assert.doesNotMatch(context(expected), /offsets|EOF|read the full rule and author preferences/iu);
   assert.match(context(expected), /card is context, not a substitute for the user's latest words/iu);
   for (const fingerprint of guidance.fingerprints) assert.ok(context(expected).includes(fingerprint));
   const nested = path.join(project, "subpackage");
