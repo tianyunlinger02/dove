@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 
 export const DOVE_REVIEW_BACKEND_ID = "claude-code";
 
@@ -62,6 +64,17 @@ function claudeArgs(session) {
 export function runClaudeReviewBackend(options = {}) {
   const command = commandFromOptions(options);
   const { args, requestedSessionId, resumed } = claudeArgs(options.session ?? {});
+  if (options.scope === "route" || options.scope === "design") {
+    args[args.indexOf("--tools") + 1] = "Read,Glob";
+    const directories = new Set();
+    for (const material of options.materials ?? []) {
+      const relative = path.relative(options.workspaceRoot, material);
+      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        directories.add((options.fsOps ?? fs).statSync(material).isDirectory() ? material : path.dirname(material));
+      }
+    }
+    if (directories.size) args.push("--add-dir", ...directories);
+  }
   const startedAt = exactIsoTimestamp(options.now ?? new Date());
   const spawnOptions = {
     cwd: options.workspaceRoot,

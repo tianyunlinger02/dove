@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { DOVE_REVIEW_BACKEND_ID, runClaudeReviewBackend } from "./review-claude-backend.mjs";
-import { createReviewSnapshot, isReviewMaterialDenied, normalizeReviewScope } from "./review-snapshot.mjs";
+import { createReviewSnapshot, isReviewMaterialDenied, normalizeReviewScope, REVIEW_IDENTITY_MATERIAL_PATH } from "./review-snapshot.mjs";
 import { DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH, DOVE_REVIEW_QUALITY_REFERENCE_PATH, assertReviewWorkspaceMatchesSnapshot, createReviewGuidance, createReviewId, finalizePreparedReviewWorkspace, normalizeReviewGuidanceIdentity, normalizeReviewId, prepareReviewWorkspace, resolveReviewStateRoot, restorePreparedReviewWorkspace, reviewWorkspaceName } from "./review-workspace.mjs";
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
 import { resolveInstalledProjectRoot } from "./project-root.mjs";
@@ -59,30 +59,48 @@ function serializeJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-function materialLines(snapshot) {
-  return snapshot.materials.map((material) => `- ${material.path} (${material.size} bytes)`).join("\n");
+function liveScope(scope) {
+  return scope === "route" || scope === "design";
+}
+
+function liveReviewSubmission(projectRoot, materials, round, options = {}) {
+  if (!Array.isArray(materials) || materials.length === 0) throw new Error("dove review requires at least one --material <path>.");
+  const fsOps = options.fsOps ?? fs;
+  const paths = [...new Set([...materials, REVIEW_IDENTITY_MATERIAL_PATH].map((material) => {
+    if (typeof material !== "string" || !material.trim() || material.includes("\0")) throw new Error("Dove review material must name a file or directory.");
+    return path.resolve(projectRoot, material);
+  }))].sort();
+  for (const material of paths) {
+    const stat = fsOps.statSync(material);
+    if (!stat.isFile() && !stat.isDirectory()) throw new Error(`Dove review material must be a file or directory: ${material}`);
+  }
+  return { round, venue: options.venue ?? null, materials: paths.map((material) => ({ path: material })) };
+}
+
+function materialLines(snapshot, scope) {
+  return snapshot.materials.map((material) => liveScope(scope)
+    ? `- ${JSON.stringify(material.path)}`
+    : `- ${material.path} (${material.size} bytes)`).join("\n");
 }
 
 function promptForRound(options) {
   const scope = normalizeReviewScope(options.scope);
-  const materialList = materialLines(options.snapshot);
+  const materialList = materialLines(options.snapshot, scope);
   const operationLine = scope !== "paper"
-    ? options.operation === "resume"
-      ? "Judge this same frozen round again in a clean NEW reviewer session, with no previous reviewer or author conversation."
-      : options.operation === "rerun"
-        ? "Judge this newly frozen round in a clean NEW reviewer session, with no previous reviewer or author conversation."
-        : "This is a clean NEW reviewer session, with no previous reviewer or author conversation."
+    ? "Judge the latest actual contents at the listed live paths in a clean NEW reviewer session, with no previous reviewer or author conversation."
     : options.operation === "resume"
       ? "Continue the current frozen round in this same reviewer session. Re-read the listed current materials as needed before updating the review."
       : options.operation === "rerun"
         ? "This is a new full-material round in the same reviewer session. Review the complete current submission again, not just a diff."
         : "This is the initial full-material review round for this isolated reviewer session.";
   const fullReference = options.guidance?.full ? DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH : DOVE_REVIEW_QUALITY_REFERENCE_PATH;
-  const guidanceLine = options.guidance?.full
-    ? `Quality summary (workspace-relative): \`${DOVE_REVIEW_QUALITY_REFERENCE_PATH}\`. Read it first. Full quality reference: \`${fullReference}\`; consult relevant details when they can change this scoped judgment.`
-    : `Full quality reference (workspace-relative): \`${fullReference}\`. Read it proactively at the decision triggers above.`;
+  const guidanceLine = liveScope(scope)
+    ? `Quality summary (absolute path): \`${options.guidance.summaryPath}\`. Read it first. Full quality reference: \`${options.guidance.fullPath}\`; consult relevant details when they can change this scoped judgment.`
+    : options.guidance?.full
+      ? `Quality summary (workspace-relative): \`${DOVE_REVIEW_QUALITY_REFERENCE_PATH}\`. Read it first. Full quality reference: \`${fullReference}\`; consult relevant details when they can change this scoped judgment.`
+      : `Full quality reference (workspace-relative): \`${fullReference}\`. Read it proactively at the decision triggers above.`;
   const selectedTask = scope === "route"
-    ? "Judge the current goal in the identity card against the supplied actual code/artifact diff since the previous judgment and actual run-result files. These are author-selected files, not an automatically scanned history. A narrative of changes does not replace a true diff. Cite concrete diff hunks and result observations; if needed inputs are missing, say which conclusions remain undetermined."
+    ? "Judge the current goal in the identity card against the supplied cumulative candidate, change, prediction and actual-result trajectory. Read the selected files and directories directly; these are author-selected paths, not an automatically scanned history. A narrative of changes does not replace supplied actual diffs or results. Cite concrete material observations; if needed inputs are missing, say which conclusions remain undetermined."
     : scope === "design"
       ? "Judge the supplied one-page method design against the current goal in the identity card. Cite its concrete mechanism, baseline comparison, predicted example and grounds, separating predictions from observed results and identifying material missing inputs."
       : "Return Markdown only under these four top-level headings: `## Verdict`, `## Blocking issues`, `## Grounding basis`, and `## Author-side next actions`. Do not edit files and do not claim external acceptance or certification.";
@@ -90,9 +108,9 @@ function promptForRound(options) {
 
 ${scope === "paper" ? `${renderDoveSharedResearchContractSection()}\n\n` : ""}${renderDoveReviewerStanceSection(scope)}
 
-You are the same Dove researcher in a separate Read-only Claude Code reviewer session. Review only the listed frozen copies in this workspace. Your available tool is Read; large files are intentionally not inlined here.
+You are the same Dove researcher in a separate Read-only Claude Code reviewer session. ${liveScope(scope) ? "Read only the listed live files and directories. Use Read for file contents and Glob to list files within supplied directories; do not inspect unlisted paths. Materials are not copied or inlined." : "Review only the listed frozen copies in this workspace. Your available tool is Read; large files are intentionally not inlined here."}
 
-${guidanceLine} This fixed package guidance is not user material or research evidence and grants no additional tool or material access. All scientific grounding remains limited to the listed frozen materials.
+${guidanceLine} This ${liveScope(scope) ? "package guidance" : "fixed package guidance"} is not user material or research evidence and grants no additional tool or material access. All scientific grounding remains limited to the listed ${liveScope(scope) ? "live paths" : "frozen materials"}.
 
 Review scope: ${scope}
 ${scope === "paper" ? `Target venue: ${options.venue ?? "not specified"}\n` : ""}Review id: ${options.reviewId}
@@ -100,7 +118,7 @@ Round: ${options.round}
 
 ${operationLine}
 
-Frozen materials for this round:
+${liveScope(scope) ? "Live material paths (absolute, JSON-quoted):" : "Frozen materials for this round:"}
 ${materialList || "- No project materials were listed for this imported-only record."}
 
 ${selectedTask}
@@ -140,7 +158,7 @@ function readReviewRecordWithState(projectRoot, reviewId, options = {}) {
     || !Array.isArray(value.rounds) || !Number.isSafeInteger(value.currentRound) || value.currentRound < 0) {
     throw new Error(`Dove review record is not a valid Dove review record: ${pathName}`);
   }
-  return { record: value, expectedState: { exists: true, type: "file", sha256: sha256(bytes), mode: stat.mode & 0o7777 } };
+  return { record: value, expectedState: liveScope(value.scope) ? undefined : { exists: true, type: "file", sha256: sha256(bytes), mode: stat.mode & 0o7777 } };
 }
 
 function readReviewRecord(projectRoot, reviewId, options = {}) {
@@ -167,6 +185,20 @@ function readSnapshot(projectRoot, reviewId, round, options = {}) {
 }
 
 function writeReviewFiles(projectRoot, files, options = {}) {
+  if (liveScope(options.scope)) {
+    const anchor = openRootedFilesystem(projectRoot, { fsOps: options.fsOps ?? fs });
+    for (const file of files) {
+      anchor.mkdir(path.posix.dirname(file.relativePath), { recursive: true, mode: 0o700 });
+      const temporary = `${file.relativePath}.${crypto.randomUUID()}.tmp`;
+      try {
+        anchor.writeNewFile(temporary, file.content, { encoding: file.encoding });
+        anchor.rename(temporary, file.relativePath);
+      } finally {
+        anchor.unlink(temporary, { force: true });
+      }
+    }
+    return;
+  }
   const entries = files.map((file) => ({
     root: projectRoot,
     relativePath: file.relativePath,
@@ -186,7 +218,8 @@ function reportBytesForOutcome(outcome) {
 
 function makeRoundRecord(options) {
   const paths = roundPaths(options.reviewId, options.round);
-  const guidance = options.provenance === "imported" && (options.guidance === undefined || options.guidance === null)
+  const scope = normalizeReviewScope(options.scope);
+  const guidance = liveScope(scope) || options.provenance === "imported" && (options.guidance === undefined || options.guidance === null)
     ? null
     : normalizeReviewGuidanceIdentity(options.guidance, "Dove review round guidance");
   return {
@@ -197,13 +230,13 @@ function makeRoundRecord(options) {
     venue: options.venue ?? null,
     createdAt: options.createdAt,
     updatedAt: options.updatedAt,
-    snapshotPath: paths.snapshot,
+    ...(liveScope(scope) ? {} : { snapshotPath: paths.snapshot }),
     reportPath: paths.report,
     backendPath: paths.backend,
     latestReportPath: options.latestReportPath ?? paths.report,
     latestBackendPath: options.latestBackendPath ?? paths.backend,
     materials: options.materials,
-    guidance,
+    ...(liveScope(scope) ? {} : { guidance }),
     sessionId: options.sessionId ?? null,
     imported: options.provenance === "imported",
     attempts: Array.isArray(options.attempts) ? options.attempts : []
@@ -235,7 +268,8 @@ function upsertRound(record, roundRecord) {
 }
 
 function recordStatusFromRound(roundRecord) {
-  if (roundRecord.provenance === "imported") return "imported";
+  const provenance = liveScope(roundRecord.scope) ? roundRecord.attempts?.at(-1)?.provenance ?? roundRecord.provenance : roundRecord.provenance;
+  if (provenance === "imported") return "imported";
   return roundRecord.status;
 }
 
@@ -303,8 +337,8 @@ function prepareRuntimeRound(projectRoot, record, snapshot, workspaceRoot, reque
     pendingExchange: { round: snapshot.round, workspaceRoot, requestedSessionId }
   };
   const entries = [{ relativePath: reviewPath(record.id), content: serializeJson(nextRecord), expectedState: options.recordExpectedState }];
-  if (!existingRound) entries.unshift({ relativePath: roundRecord.snapshotPath, content: serializeJson(snapshot), expectedState: absentFileState() });
-  writeReviewFiles(projectRoot, entries, options);
+  if (!existingRound && !liveScope(record.scope)) entries.unshift({ relativePath: roundRecord.snapshotPath, content: serializeJson(snapshot), expectedState: absentFileState() });
+  writeReviewFiles(projectRoot, entries, { ...options, scope: record.scope });
   return nextRecord;
 }
 
@@ -358,19 +392,19 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
     });
   const nextRecord = updateRecordForRound(record, roundRecord, { sessionId: backend.sessionId });
   if (backend.status === "completed") delete nextRecord.pendingExchange;
-  const recordState = options.recordExpectedState ?? fileState(projectRoot, reviewPath(record.id), options);
+  const recordState = liveScope(record.scope) ? undefined : options.recordExpectedState ?? fileState(projectRoot, reviewPath(record.id), options);
   const writeEntries = [
     { relativePath: paths.report, content: reportBytes, expectedState: absentFileState() },
     { relativePath: paths.backend, content: serializeJson(backend), encoding: "utf8", expectedState: absentFileState() },
     { relativePath: reviewPath(record.id), content: serializeJson(nextRecord), encoding: "utf8", expectedState: recordState }
   ];
   try {
-    writeReviewFiles(projectRoot, writeEntries, options);
+    writeReviewFiles(projectRoot, writeEntries, { ...options, scope: record.scope });
   } catch (error) {
-    const recovery = record.scope === "route" || record.scope === "design"
-      ? "resume judges the retained frozen materials in a new session, but cannot recover this unsaved return"
+    const recovery = liveScope(record.scope)
+      ? "resume judges the latest listed live materials in a new session, but cannot recover this unsaved return"
       : "resume attempts the requested session, but cannot recover this unsaved return";
-    throw new Error(`Dove review ${record.id} return was not saved. The frozen materials and exchange records are retained; ${recovery}. ${error.message}`, { cause: error });
+    throw new Error(`Dove review ${record.id} return was not saved. The ${liveScope(record.scope) ? "listed paths" : "frozen materials"} and exchange records are retained; ${recovery}. ${error.message}`, { cause: error });
   }
   return { record: nextRecord, round: roundRecord, reportPath: paths.report, backendPath: paths.backend, snapshotPath: roundPaths(record.id, round).snapshot };
 }
@@ -409,7 +443,8 @@ function stateRootOptions(options = {}) {
     fsOps: options.fsOps ?? fs,
     env: options.env ?? process.env,
     ...(options.stateRoot ? { stateRoot: options.stateRoot } : {}),
-    ...(options.projectRoot ? { projectRoot: options.projectRoot } : {})
+    ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
+    ...(options.scope ? { scope: options.scope } : {})
   };
 }
 
@@ -432,10 +467,12 @@ function ensureLockRoot(stateRootFs) {
 
 function acquireReviewMutationLock(reviewId, options = {}) {
   const fsOps = options.fsOps ?? fs;
-  const stateRoot = resolveReviewStateRoot(stateRootOptions(options));
+  const scope = options.scope ?? readReviewRecord(options.projectRoot, reviewId, { fsOps })?.scope;
+  const stateRoot = liveScope(scope) ? options.projectRoot : resolveReviewStateRoot(stateRootOptions(options));
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
-  const lockRoot = ensureLockRoot(stateRootFs);
-  const lockPath = `${lockRoot}/${reviewWorkspaceName(reviewId, options)}.lock`;
+  if (liveScope(scope)) stateRootFs.mkdir(".dove/reviews/.locks", { recursive: true, mode: 0o700 });
+  const lockRoot = liveScope(scope) ? ".dove/reviews/.locks" : ensureLockRoot(stateRootFs);
+  const lockPath = `${lockRoot}/${liveScope(scope) ? normalizeReviewId(reviewId) : reviewWorkspaceName(reviewId, options)}.lock`;
   try {
     stateRootFs.mkdir(lockPath, { mode: 0o700 });
   } catch (error) {
@@ -536,7 +573,7 @@ function publicText(value) {
 function publicMaterial(material) {
   return {
     path: publicText(material?.path),
-    size: Number.isSafeInteger(material?.size) ? material.size : null
+    ...(Object.hasOwn(material ?? {}, "size") ? { size: Number.isSafeInteger(material?.size) ? material.size : null } : {})
   };
 }
 
@@ -575,21 +612,22 @@ function publicMaterials(materials) {
 }
 
 function publicRound(round, options = {}) {
-  const materialCurrentness = materialCurrentnessForRound(options.projectRoot, options.reviewId, round, options);
+  const scoped = liveScope(round.scope ?? options.scope);
+  const materialCurrentness = scoped ? null : materialCurrentnessForRound(options.projectRoot, options.reviewId, round, options);
   return {
     round: Number.isSafeInteger(round.round) ? round.round : null,
     scope: publicText(round.scope ?? options.scope ?? "paper"),
     status: publicText(round.status),
     provenance: publicText(round.provenance),
     venue: publicText(round.venue),
-    snapshotPath: publicText(round.snapshotPath),
+    ...(scoped ? {} : { snapshotPath: publicText(round.snapshotPath) }),
     reportPath: publicText(round.reportPath),
     backendPath: publicText(round.backendPath),
     latestReportPath: publicText(round.latestReportPath ?? round.reportPath),
     latestBackendPath: publicText(round.latestBackendPath ?? round.backendPath),
     sessionId: publicText(round.sessionId),
     materials: publicMaterials(round.materials),
-    materialCurrentness: publicMaterialCurrentness(materialCurrentness),
+    ...(scoped ? {} : { materialCurrentness: publicMaterialCurrentness(materialCurrentness) }),
     imported: round.imported === true,
     attempts: Array.isArray(round.attempts) ? round.attempts.map((attempt) => ({
       attempt: Number.isSafeInteger(attempt?.attempt) ? attempt.attempt : null,
@@ -623,8 +661,8 @@ function publicReviewResult(kind, projectRoot, review, round, extras = {}) {
     venue: publicText(review.venue),
     sessionId: publicText(review.session?.sessionId),
     pendingExchange: publicPendingExchange(review),
-    provenance: publicText(round?.provenance),
-    snapshotPath: publicText(round?.snapshotPath),
+    provenance: publicText(liveScope(review.scope) ? round?.attempts?.at(-1)?.provenance ?? round?.provenance : round?.provenance),
+    ...(liveScope(review.scope) ? {} : { snapshotPath: publicText(round?.snapshotPath) }),
     reportPath: publicText(round?.reportPath),
     backendPath: publicText(round?.backendPath),
     materials: publicMaterials(round?.materials)
@@ -635,17 +673,52 @@ function publicReviewResult(kind, projectRoot, review, round, extras = {}) {
   return result;
 }
 
+function runLiveReview(projectRoot, record, operation, materials, options = {}) {
+  const round = operation === "handoff" ? 1 : operation === "resume" ? record.currentRound : record.currentRound + 1;
+  const submission = liveReviewSubmission(projectRoot, materials, round, options);
+  const workspace = prepareReviewWorkspace({ projectRoot, scope: record.scope, fsOps: options.fsOps });
+  const sessionId = crypto.randomUUID();
+  const prompt = promptForRound({ operation, reviewId: record.id, scope: record.scope, round, snapshot: submission, guidance: workspace.guidance });
+  const pending = prepareRuntimeRound(projectRoot, record, submission, workspace.workspaceRoot, sessionId, null, options);
+  let outcome;
+  try {
+    outcome = runClaudeReviewBackend({
+      workspaceRoot: workspace.workspaceRoot,
+      scope: record.scope,
+      materials: submission.materials.map((material) => material.path),
+      fsOps: options.fsOps,
+      prompt,
+      session: { sessionId },
+      claudeCommand: options.claudeCommand,
+      env: options.env,
+      spawnSync: options.spawnSync,
+      timeout: options.timeout
+    });
+  } catch (error) {
+    outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options) };
+  }
+  const written = writeRuntimeRound(projectRoot, pending, submission, outcome.backend, reportBytesForOutcome(outcome), { ...options, round });
+  return publicReviewResult(operation, projectRoot, written.record, written.round, {
+    workspaceRoot: workspace.workspaceRoot,
+    ...(operation === "resume" ? { latestReportPath: written.reportPath, latestBackendPath: written.backendPath } : {})
+  });
+}
+
 export function handoffReview(options = {}) {
   const fsOps = options.fsOps ?? fs;
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id ?? createReviewId({ now: options.now }));
   const scope = normalizeReviewScope(options.scope);
-  return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
+  return withReviewMutationLock(reviewId, { ...options, projectRoot, scope }, () => {
     const existingRecord = readReviewRecordWithState(projectRoot, reviewId, { fsOps });
     if (existingRecord.record !== null) throw new Error(`Dove review record already exists: ${reviewPath(reviewId)}. Use resume or rerun.`);
     const reviewDirectoryState = fileState(projectRoot, reviewBasePath(reviewId), { fsOps });
     if (reviewDirectoryState.exists) throw new Error(`Dove review path already exists without a valid record: ${reviewBasePath(reviewId)}.`);
     const createdAt = exactIsoTimestamp(options.now ?? new Date());
+    if (liveScope(scope)) {
+      const record = newRecord({ reviewId, scope, projectRoot, createdAt, updatedAt: createdAt });
+      return runLiveReview(projectRoot, record, "handoff", options.materials, options);
+    }
     const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, scope, round: 1, venue: options.venue, materials: options.materials, now: createdAt, fsOps });
     const guidance = createReviewGuidance();
     const workspace = prepareReviewWorkspace({ reviewId, files, guidance, ...stateRootOptions({ ...options, projectRoot }) });
@@ -689,6 +762,10 @@ export function resumeReview(options = {}) {
     const sessionId = scope === "paper" ? sessionIdOrThrow(record) : crypto.randomUUID();
     const round = record.currentRound;
     if (!Number.isInteger(round) || round < 1) throw new Error(`Dove review ${reviewId} has no current round to resume.`);
+    if (liveScope(scope)) {
+      const current = record.rounds.find((item) => item.round === round);
+      return runLiveReview(projectRoot, record, "resume", current?.materials?.map((material) => material.path), options);
+    }
     const existingRound = assertCurrentRoundCanUseRuntime(record);
     const snapshot = readSnapshot(projectRoot, reviewId, round, { fsOps });
     let workspace;
@@ -730,6 +807,7 @@ export function rerunReview(options = {}) {
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
     let { record, expectedState } = requireReviewRecordWithState(projectRoot, reviewId, { fsOps });
     const scope = normalizeReviewScope(record.scope);
+    if (liveScope(scope)) return runLiveReview(projectRoot, record, "rerun", options.materials, options);
     if (scope === "paper" && record.pendingExchange) throw new Error(`Dove review ${reviewId} has a pending exchange; use resume before starting another round.`);
     const sessionId = scope === "paper" ? sessionIdOrThrow(record) : crypto.randomUUID();
     const round = record.currentRound + 1;
@@ -816,7 +894,9 @@ export function importReviewReturn(options = {}) {
     const venue = options.venue ?? existing?.venue ?? null;
     const scope = normalizeReviewScope(existing?.scope);
     const { sourceFile, bytes } = importFileBytes(options.file, { fsOps, cwd: options.cwd });
-    const snapshot = importedSnapshot({ projectRoot, reviewId, scope, round, venue, materials: options.materials, createdAt, fsOps });
+    const snapshot = liveScope(scope)
+      ? options.materials?.length ? liveReviewSubmission(projectRoot, options.materials, round, { fsOps }) : { round, materials: [] }
+      : importedSnapshot({ projectRoot, reviewId, scope, round, venue, materials: options.materials, createdAt, fsOps });
     const backend = {
       schema: "dove.review.backend.v1",
       backend: null,
@@ -847,11 +927,11 @@ export function importReviewReturn(options = {}) {
     const baseRecord = existing ?? newRecord({ reviewId, scope, projectRoot, venue, createdAt, updatedAt: createdAt });
     const nextRecord = updateRecordForRound(baseRecord, roundRecord, { sessionId: baseRecord.session?.sessionId ?? null });
     writeReviewFiles(projectRoot, [
-      { relativePath: paths.snapshot, content: serializeJson(snapshot), encoding: "utf8", expectedState: absentFileState() },
+      ...(!liveScope(scope) ? [{ relativePath: paths.snapshot, content: serializeJson(snapshot), encoding: "utf8", expectedState: absentFileState() }] : []),
       { relativePath: paths.report, content: bytes, expectedState: absentFileState() },
       { relativePath: paths.backend, content: serializeJson(backend), encoding: "utf8", expectedState: absentFileState() },
       { relativePath: reviewPath(reviewId), content: serializeJson(nextRecord), encoding: "utf8", expectedState }
-    ], options);
+    ], { ...options, scope });
     return publicReviewResult("import", projectRoot, nextRecord, roundRecord, { sourceFile });
   });
 }
@@ -918,7 +998,7 @@ export function inspectReviewStatus(options = {}) {
       currentRound: Number.isSafeInteger(record.currentRound) ? record.currentRound : null,
       sessionId: publicText(record.session?.sessionId),
       pendingExchange: publicPendingExchange(record),
-      materialCurrentness: rounds.find((round) => round.round === record.currentRound)?.materialCurrentness ?? publicMaterialCurrentness(null),
+      ...(liveScope(record.scope) ? {} : { materialCurrentness: rounds.find((round) => round.round === record.currentRound)?.materialCurrentness ?? publicMaterialCurrentness(null) }),
       rounds
     };
   }

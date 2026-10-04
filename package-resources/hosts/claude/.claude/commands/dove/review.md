@@ -36,7 +36,7 @@ Use at the route/design review triggers, for paper or delivery judgment, or for 
 
 Use a fresh read-only Dove context for the shared route/design review, without the author's process conversation.
 
-- For route review, supply the exact identity card, actual code/artifact diff since the last review and actual run results. For design review, supply the identity card and one-page method design. Read the returned report and apply its conclusion to the next real implementation; retain rejected approaches in the plain-language card. These scoped judgments do not count as independent submission review.
+- For route review, supply the identity card and the cumulative candidate/change/prediction/result sequence for this stretch, with actual artifacts. Judge the method family's remaining value and shared failure causes, not each candidate in isolation. Design review uses the card and one-page main-method design. Apply the return to actual work; keep rejected approaches in the card. Neither is independent submission review.
 
 ### Author-side scientific self-check
 
@@ -82,7 +82,7 @@ Import a returned review, preserve a user-pasted opinion, or inspect existing Re
 
 - Use only tools and materials that the current host exposes and current user/project permissions permit. If something needed is unavailable, name it and use any other available material or action that can still advance the request.
 - Use Claude Code waiting or background affordances only for real long-running host actions, then return to Dove's mainline judgment when results arrive.
-- For route/design judgment, use `dove review handoff --project <project> --scope route|design --material <path>... --json`; the current identity card is copied automatically. Supply actual diff/results for route or the one-page design for design, then read `reportPath` and act. Each judgment uses a fresh Read-only context. For full-paper `dove-review`, use `dove review handoff --project <project> --venue <venue> --material <path>...`, then `dove review resume --project <project> --id <id>` or `dove review rerun --project <project> --id <id> --material <path>...` for the same reviewer session. Import user returns with `dove review import --project <project> --id <id> --file <report.md>`.
+- Route/design: `dove review handoff --project <project> --scope route|design --material <path>... --json`. Identity is included; files/directories and absolute paths are read directly, without SHA/snapshots. Route uses cumulative candidate/results; design uses the one-page main-method design. Read `reportPath` and act; each uses a fresh Read-only context. Paper: `dove review handoff --project <project> --venue <venue> --material <path>...`; `dove review resume --project <project> --id <id>` and `dove review rerun --project <project> --id <id> --material <path>...` retain the same reviewer. Import: `dove review import --project <project> --id <id> --file <report.md>`.
 
 ### Return with
 

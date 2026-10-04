@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.2.26" : null;
+var injectedVersion = true ? "3.2.27" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -86,7 +86,7 @@ var DOVE_RESEARCH_ONE_AGENT = "Dove works as one complete research agent and col
 var DOVE_RESEARCH_SKILL_INVENTORY_TEXT = "research, status, source, experiment, draft, figure, review, rebuttal, and lessons";
 var DOVE_RESEARCH_FLAT_SKILL_SENTENCE = `Its nine Skills \u2014 ${DOVE_RESEARCH_SKILL_INVENTORY_TEXT} \u2014 are flat entrances into the same research collaboration, used only when they help the current decision.`;
 var DOVE_RESEARCH_DEFAULT_AUTONOMY = "For a user-confirmed open goal, keep doing core work until the goal is met or a hard blocker remains: missing user resources, a material user decision, or an actual error that cannot be repaired. A diagnosis, record, low-information interval, or failed local attempt is not completion. A separate bounded or read-only request finishes at its requested answer; it does not cancel an existing goal.";
-var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, use the identity card and actual work to recover the goal, last route review and next core action. If review is due, run it in a fresh read-only Dove context, not another self-reflection. Route and next-action changes do not rewrite Mainline; do not mistake a latest note or a test prompt for a user decision.";
+var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, use the identity card and actual work to recover the goal, cumulative method-family trajectory and next core action. If review is due, run it in a fresh read-only Dove context, not another self-reflection. Route and next-action changes do not rewrite Mainline; do not mistake a latest note or a test prompt for a user decision.";
 var DOVE_RESEARCH_SESSION_CONTINUATION = "For an open goal, do core work now. Keep user-created goals and loops until the user ends them or the goal is met; answering status, why, or a side question does not cancel the mainline. While a run is active, work on the next independent core dependency instead of spending wakes waiting. If the session will pause with work left and no native loop already running, use one future off-minute same-session CronCreate wake, check its scheduled time, and on waking perform a concrete core action. A wake is not permission to alter the goal or bypass a real host refusal. A closed session cannot be resumed by Dove; report that limitation plainly.";
 var DOVE_RESEARCH_ACTION_SPINE = "Use problem \u2192 method \u2192 contribution. In every open-goal round, check action, observed result, and remaining whole-goal gap against the same confirmed Mainline\u2014the user\u2019s actual goal, expected contribution, and completion meaning\u2014before acting, after results, and before ending, not only when changing direction. A finished local batch or validation plan does not by itself complete that goal; if requirements remain, do the next core work. Reuse settled context, not per-tool rescans, repeated reports, or renewed approval; the current method remains revisable. Check important corrections and negative results against the original mechanism; preserve sound evidence, discard invalid dependencies, and change the real method and downstream artifact rather than repeating a known failed variant. When a core premise is clear, implement and inspect its actual use; when it is missing, design or test the smallest question that distinguishes real options. Do not turn controls or a convenient proxy into a new goal.";
 var DOVE_RESEARCH_DECISION_CONSEQUENCE = "A consequential result or user correction changes affected method, work, claims and next action. If the root cause is known, change the method; diagnose only when it distinguishes concrete repairs. Carry the change through the actual producer and consumer or manuscript and output, then inspect what happened. A report, plan, Lesson or green local check is not the result. Stop dependent work that a refuted premise cannot support, not the whole user goal. A bounded question returns its answer without unrequested execution.";
@@ -203,7 +203,7 @@ var DOVE_RESEARCH_SHARED_CONTRACT_BULLETS = Object.freeze([
   DOVE_RESEARCH_DECISION_CONSEQUENCE,
   "A confirmed mainline covers its core implementation, reruns, diagnosis, and suitable GPU work without another research-budget request. Repeated computation normally uses an available GPU unless the task fits CPU better or the user fixed the resources. Ask for a material change of goal, a resource total beyond the user's limit, or publication/commit; do not invent an approval for every experiment. Host refusals and explicit task constraints still bind.",
   "Development is for direct access to available ground truth, fast iteration and reruns without prospective records; fix missing prerequisites instead of saving another plan. Only final heldout confirmation needs a frozen, prospectively recorded comparison and independent evidence. Do not consume a final test while developing.",
-  "After important results, several actual changes without review (for example three), or a second correction of the same problem, run `dove review handoff --scope route --material <diff> --material <results> --json` in the project: a fresh read-only Dove context with only the identity card, actual diff since the last review and actual run results\u2014not the process conversation. It answers plainly: capability or case-specific patches, Mainline drift, and the remaining gap and next core work. Apply its findings to the real next action; remove or rework rejected patches rather than merely record them, and retain rejected approaches in the card. Before a new or replacement main method, use `--scope design --material <design>` for the same clean review role with a one-page design: public-baseline advantage, mechanism, data/model/training/evaluation, a concrete predicted example, grounds for likely success and biggest risk. Revise an unsupported design and send it back; then implement without renewed user approval. A user-confirmed method needs no design review. These are judgments, not permission or scientific acceptance gates.",
+  "After family-level important results or several candidates in one method family without a positive signal, run `dove review handoff --scope route --material <trajectory> --json`: a fresh read-only Dove context with the identity card and that stretch's cumulative candidate/change/prediction/result sequence\u2014not just the latest candidate or process conversation. It judges whether the family is still worth pursuing, shared failure causes, patches or Mainline drift, and next core work. Apply findings to actual work, rework rejected patches and retain rejected approaches in the card. Do not review every candidate. Before a new or replacement main method\u2014not ordinary variants\u2014use `--scope design --material <design>` with a one-page design: public-baseline advantage, mechanism, data/model/training/evaluation, concrete predicted example, likely-success grounds and biggest risk. Revise unsupported designs and send them back; then implement without renewed user approval. User-confirmed methods need no design review. These are judgments, not permission or scientific acceptance gates.",
   "Judge only quality dimensions that matter to the current decision; unknowns are not low grades. Keep one plain-language Quality line in the identity card after important results and act on the decisive gap. Report what we are making, whether the core is proved, what blocks it and the core action underway. Submission completion still needs the current full-paper independent review and actual delivery readiness."
 ]);
 
@@ -274,10 +274,10 @@ ${bullets([
 }
 function renderDoveReviewerStanceSection(scope = "paper") {
   if (scope === "route" || scope === "design") {
-    const question = scope === "route" ? "Answer three questions in plain language, citing the actual diff and run results: is this building the capability the identity card calls for, or patching individual samples/types; has the work drifted from Mainline, changed meanings, or substituted checks/reports for progress; what remains and what core work should happen next? Distinguish valid local repairs and necessary long implementation from patches masking a missing capability; generality is required only by the stated goal." : "Judge the one-page method design: are the public-baseline advantage, mechanism, data/model/training/evaluation, concrete predicted example, grounds for likely success and biggest risk defensible? Identify conceptual substitutions and missing grounds; say what must change or why implementation is warranted. Unknown effects need testing, not prior proof. The conclusion is design advice, not permission or scientific acceptance.";
+    const question = scope === "route" ? "Judge the cumulative candidate, change, prediction and actual-result sequence over this stretch, not just the latest candidate. Is this method family still worth pursuing, and what shared cause explains its failures? Is it building the required capability or cycling through patches, drifting from Mainline or substituting checks/reports for progress? What core work should happen next? Cite the sequence, retain valid local repairs and necessary long implementation; generality is required only by the stated goal." : "Judge the one-page method design: are the public-baseline advantage, mechanism, data/model/training/evaluation, concrete predicted example, grounds for likely success and biggest risk defensible? Identify conceptual substitutions and missing grounds; say what must change or why implementation is warranted. Unknown effects need testing, not prior proof. The conclusion is design advice, not permission or scientific acceptance.";
     return `## Reviewer stance
 
-You are the same Dove reviewer in a fresh, read-only context. Read the short quality essentials; consult detailed criteria only when needed. Use only the listed frozen identity card and ${scope === "route" ? "actual diff and run results" : "one-page design"}, not the author's process conversation, private notes, unlisted files or web. Do not edit or execute anything. ${question} Return the judgment, material evidence and next action plainly; missing material limits what you can conclude. This is not independent submission review.`;
+You are the same Dove reviewer in a fresh, read-only context. Read the short quality essentials; consult detailed criteria only when needed. Read only the listed identity card and ${scope === "route" ? "cumulative trajectory and actual results" : "one-page design"}, not the author's process conversation, unlisted files or web. Do not edit or execute anything. ${question} Return the judgment, material evidence and next action plainly; missing material limits what you can conclude. This is not independent submission review.`;
   }
   return `## Reviewer stance
 
@@ -629,7 +629,7 @@ function contract(slug) {
         title: "Clean-context route and method-design judgment",
         purpose: "Use a fresh read-only Dove context for the shared route/design review, without the author's process conversation.",
         actions: [
-          "For route review, supply the exact identity card, actual code/artifact diff since the last review and actual run results. For design review, supply the identity card and one-page method design. Read the returned report and apply its conclusion to the next real implementation; retain rejected approaches in the plain-language card. These scoped judgments do not count as independent submission review."
+          "For route review, supply the identity card and the cumulative candidate/change/prediction/result sequence for this stretch, with actual artifacts. Judge the method family's remaining value and shared failure causes, not each candidate in isolation. Design review uses the card and one-page main-method design. Apply the return to actual work; keep rejected approaches in the card. Neither is independent submission review."
         ]
       },
       {
@@ -693,7 +693,7 @@ function contract(slug) {
       ],
       semanticSections,
       hostGuidance: hostGuidance({
-        claude: ["For route/design judgment, use `dove review handoff --project <project> --scope route|design --material <path>... --json`; the current identity card is copied automatically. Supply actual diff/results for route or the one-page design for design, then read `reportPath` and act. Each judgment uses a fresh Read-only context. For full-paper `dove-review`, use `dove review handoff --project <project> --venue <venue> --material <path>...`, then `dove review resume --project <project> --id <id>` or `dove review rerun --project <project> --id <id> --material <path>...` for the same reviewer session. Import user returns with `dove review import --project <project> --id <id> --file <report.md>`."],
+        claude: ["Route/design: `dove review handoff --project <project> --scope route|design --material <path>... --json`. Identity is included; files/directories and absolute paths are read directly, without SHA/snapshots. Route uses cumulative candidate/results; design uses the one-page main-method design. Read `reportPath` and act; each uses a fresh Read-only context. Paper: `dove review handoff --project <project> --venue <venue> --material <path>...`; `dove review resume --project <project> --id <id>` and `dove review rerun --project <project> --id <id> --material <path>...` retain the same reviewer. Import: `dove review import --project <project> --id <id> --file <report.md>`."],
         dsh: ["Use an exposed equivalent clean read-only context for route/design judgment; if unavailable, report that limitation, not self-check as independent judgment. Preserve user-provided review returns; paper review retains its isolated-context requirement."]
       })
     });
@@ -2482,8 +2482,8 @@ function desiredManaged(resources) {
 }
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path17) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path17 === "$" ? key : `${path17}.${key}`}.`);
+function duplicateKeyError(label, key, path18) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path18 === "$" ? key : `${path18}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -2519,7 +2519,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path17) {
+  function parseArray(path18) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -2528,7 +2528,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path17}[${itemIndex}]`);
+      parseValue(`${path18}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -2540,7 +2540,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path17) {
+  function parseObject(path18) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -2550,12 +2550,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path17);
+      if (keys.has(key)) duplicateKeyError(label, key, path18);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path17 === "$" ? `$.${key}` : `${path17}.${key}`);
+      parseValue(path18 === "$" ? `$.${key}` : `${path18}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -2566,11 +2566,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path17) {
+  function parseValue(path18) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path17);
-    else if (character === "[") parseArray(path17);
+    if (character === "{") parseObject(path18);
+    else if (character === "[") parseArray(path18);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -3774,6 +3774,8 @@ function inspectProjectDoctor(start, options = {}) {
 // src/core/review-claude-backend.mjs
 import { spawnSync as spawnSync2 } from "node:child_process";
 import crypto3 from "node:crypto";
+import fs14 from "node:fs";
+import path13 from "node:path";
 var DOVE_REVIEW_BACKEND_ID = "claude-code";
 var BASE_CLAUDE_ARGS = Object.freeze([
   "--safe-mode",
@@ -3831,6 +3833,17 @@ function claudeArgs(session) {
 function runClaudeReviewBackend(options = {}) {
   const command = commandFromOptions(options);
   const { args, requestedSessionId, resumed } = claudeArgs(options.session ?? {});
+  if (options.scope === "route" || options.scope === "design") {
+    args[args.indexOf("--tools") + 1] = "Read,Glob";
+    const directories = /* @__PURE__ */ new Set();
+    for (const material of options.materials ?? []) {
+      const relative = path13.relative(options.workspaceRoot, material);
+      if (relative === ".." || relative.startsWith(`..${path13.sep}`) || path13.isAbsolute(relative)) {
+        directories.add((options.fsOps ?? fs14).statSync(material).isDirectory() ? material : path13.dirname(material));
+      }
+    }
+    if (directories.size) args.push("--add-dir", ...directories);
+  }
   const startedAt = exactIsoTimestamp2(options.now ?? /* @__PURE__ */ new Date());
   const spawnOptions = {
     cwd: options.workspaceRoot,
@@ -3886,8 +3899,8 @@ function runClaudeReviewBackend(options = {}) {
 
 // src/core/review-snapshot.mjs
 import crypto4 from "node:crypto";
-import fs14 from "node:fs";
-import path13 from "node:path";
+import fs15 from "node:fs";
+import path14 from "node:path";
 var REVIEW_MATERIAL_DENY_PATTERNS = Object.freeze([
   /(?:^|\/)CLAUDE\.md$/u,
   /(?:^|\/)\.git(?:\/|$)/u,
@@ -3932,14 +3945,14 @@ function canonicalProjectFile(projectFs, rawPath, scope) {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Dove review material must be a regular non-symlink file: ${relativePath}`);
   const absolutePath = projectFs.displayPath(relativePath);
   const canonical = projectFs.fsOps.realpathSync.native?.(absolutePath) ?? projectFs.fsOps.realpathSync(absolutePath);
-  const relative = path13.relative(projectFs.root, canonical);
-  if (relative === "" || relative === ".." || relative.startsWith(`..${path13.sep}`) || path13.isAbsolute(relative)) throw new Error(`Dove review material must stay inside the initialized project: ${relativePath}`);
-  if (relative.split(path13.sep).join("/") !== relativePath) throw new Error(`Dove review material path must be canonical project-relative form: ${rawPath}`);
+  const relative = path14.relative(projectFs.root, canonical);
+  if (relative === "" || relative === ".." || relative.startsWith(`..${path14.sep}`) || path14.isAbsolute(relative)) throw new Error(`Dove review material must stay inside the initialized project: ${relativePath}`);
+  if (relative.split(path14.sep).join("/") !== relativePath) throw new Error(`Dove review material path must be canonical project-relative form: ${rawPath}`);
   return { relativePath, absolutePath };
 }
 function normalizeReviewMaterialList(materials, options = {}) {
   if (!Array.isArray(materials) || materials.length === 0) throw new Error("dove review requires at least one --material <path>.");
-  const projectFs = openRootedFilesystem(options.projectRoot, { fsOps: options.fsOps ?? fs14 });
+  const projectFs = openRootedFilesystem(options.projectRoot, { fsOps: options.fsOps ?? fs15 });
   const scope = normalizeReviewScope(options.scope);
   const byPath = /* @__PURE__ */ new Map();
   for (const material of materials) {
@@ -3949,8 +3962,8 @@ function normalizeReviewMaterialList(materials, options = {}) {
   return [...byPath.keys()].sort();
 }
 function createReviewSnapshot(options = {}) {
-  const fsOps = options.fsOps ?? fs14;
-  const projectRoot = fsOps.realpathSync.native?.(path13.resolve(options.projectRoot)) ?? fsOps.realpathSync(path13.resolve(options.projectRoot));
+  const fsOps = options.fsOps ?? fs15;
+  const projectRoot = fsOps.realpathSync.native?.(path14.resolve(options.projectRoot)) ?? fsOps.realpathSync(path14.resolve(options.projectRoot));
   const projectFs = openRootedFilesystem(projectRoot, { fsOps });
   const scope = normalizeReviewScope(options.scope);
   const selectedPaths = normalizeReviewMaterialList(options.materials, { projectRoot, fsOps, scope });
@@ -3981,9 +3994,9 @@ function createReviewSnapshot(options = {}) {
 
 // src/core/review-workspace.mjs
 import crypto5 from "node:crypto";
-import fs15 from "node:fs";
+import fs16 from "node:fs";
 import os from "node:os";
-import path14 from "node:path";
+import path15 from "node:path";
 var DOVE_REVIEW_QUALITY_REFERENCE_PATH = ".dove-package/RESEARCH_QUALITY.md";
 var DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH = ".dove-package/RESEARCH_QUALITY_FULL.md";
 var DOVE_REVIEW_GUIDANCE_SCHEMA = "dove.review.guidance.v1";
@@ -4004,18 +4017,18 @@ function realpathNative3(fsOps, targetPath) {
   return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
 }
 function pathInside(parentPath, childPath) {
-  const relative = path14.relative(parentPath, childPath);
-  return relative === "" || !relative.startsWith(`..${path14.sep}`) && relative !== ".." && !path14.isAbsolute(relative);
+  const relative = path15.relative(parentPath, childPath);
+  return relative === "" || !relative.startsWith(`..${path15.sep}`) && relative !== ".." && !path15.isAbsolute(relative);
 }
 function assertStateRootOutsideProject(stateRoot, projectRoot, fsOps) {
   if (projectRoot === void 0 || projectRoot === null) return;
-  const project = realpathNative3(fsOps, path14.resolve(projectRoot));
-  const candidate = path14.resolve(stateRoot);
+  const project = realpathNative3(fsOps, path15.resolve(projectRoot));
+  const candidate = path15.resolve(stateRoot);
   if (pathInside(project, candidate)) throw new Error("Dove review workspace state root must be outside the initialized project so the reviewer sees only copied listed materials.");
 }
 function assertResolvedStateRootOutsideProject(stateRoot, projectRoot, fsOps) {
   if (projectRoot === void 0 || projectRoot === null) return;
-  const project = realpathNative3(fsOps, path14.resolve(projectRoot));
+  const project = realpathNative3(fsOps, path15.resolve(projectRoot));
   const resolved = realpathNative3(fsOps, stateRoot);
   if (pathInside(project, resolved)) throw new Error("Dove review workspace state root must be outside the initialized project so the reviewer sees only copied listed materials.");
 }
@@ -4068,14 +4081,14 @@ function normalizeReviewId(value, label = "Dove review id") {
 }
 function resolveReviewStateRoot(options = {}) {
   const env = options.env ?? process.env;
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const explicit = options.stateRoot ?? env.DOVE_REVIEW_STATE_ROOT;
   const xdgState = env.XDG_STATE_HOME;
   const home = env.HOME ?? os.homedir();
   let stateRoot;
   if (typeof explicit === "string" && explicit.trim()) stateRoot = explicit;
-  else if (typeof xdgState === "string" && xdgState.trim()) stateRoot = path14.join(xdgState, "dove", "reviews");
-  else if (typeof home === "string" && home.trim()) stateRoot = path14.join(home, ".local", "state", "dove", "reviews");
+  else if (typeof xdgState === "string" && xdgState.trim()) stateRoot = path15.join(xdgState, "dove", "reviews");
+  else if (typeof home === "string" && home.trim()) stateRoot = path15.join(home, ".local", "state", "dove", "reviews");
   else throw new Error("Dove review workspace requires DOVE_REVIEW_STATE_ROOT, XDG_STATE_HOME, or HOME.");
   assertStateRootOutsideProject(stateRoot, options.projectRoot, fsOps);
   const resolved = ensureRealDirectory(stateRoot, { fsOps, label: "Dove review state root" });
@@ -4083,16 +4096,16 @@ function resolveReviewStateRoot(options = {}) {
   return resolved;
 }
 function ensureRealDirectory(directoryPath, options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const label = options.label ?? "Directory";
   if (typeof directoryPath !== "string" || !directoryPath.trim() || directoryPath.includes("\0")) throw new Error(`${label} must name a directory.`);
-  const resolved = path14.resolve(directoryPath);
-  const parsed = path14.parse(resolved);
+  const resolved = path15.resolve(directoryPath);
+  const parsed = path15.parse(resolved);
   let current = parsed.root;
-  const relative = path14.relative(parsed.root, resolved);
-  const components = relative ? relative.split(path14.sep).filter(Boolean) : [];
+  const relative = path15.relative(parsed.root, resolved);
+  const components = relative ? relative.split(path15.sep).filter(Boolean) : [];
   for (const component of components) {
-    current = path14.join(current, component);
+    current = path15.join(current, component);
     const stat = lstatOrNull5(fsOps, current);
     if (stat === null) {
       fsOps.mkdirSync(current, { mode: 448 });
@@ -4105,12 +4118,12 @@ function ensureRealDirectory(directoryPath, options = {}) {
   return realpathNative3(fsOps, resolved);
 }
 function reviewWorkspaceName(reviewId, options = {}) {
-  const projectRoot = realpathNative3(options.fsOps ?? fs15, path14.resolve(options.projectRoot));
+  const projectRoot = realpathNative3(options.fsOps ?? fs16, path15.resolve(options.projectRoot));
   return `r-${sha2564(JSON.stringify([projectRoot, normalizeReviewId(reviewId)])).slice(0, 20)}`;
 }
 function reviewWorkspaceLocation(reviewId, options = {}) {
   const id = normalizeReviewId(reviewId);
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   const name = reviewWorkspaceName(id, options);
@@ -4124,7 +4137,7 @@ function writeMaterialFiles(root, files, fsOps) {
   const anchor = openRootedFilesystem(root, { fsOps });
   for (const file of files) {
     const relativePath = anchor.normalize(file.path, "Dove review copied material path");
-    const parent = path14.posix.dirname(relativePath);
+    const parent = path15.posix.dirname(relativePath);
     if (parent !== ".") anchor.mkdir(parent, { recursive: true, mode: 448 });
     anchor.writeNewFile(relativePath, file.bytes, { mode: 384 });
   }
@@ -4142,7 +4155,17 @@ function createReviewGuidance(options = {}) {
   return { ...identity, content, full: { ...identity.full, content: fullContent } };
 }
 function prepareReviewWorkspace(options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
+  if (options.scope === "route" || options.scope === "design") {
+    const projectRoot = realpathNative3(fsOps, path15.resolve(options.projectRoot));
+    return {
+      workspaceRoot: projectRoot,
+      guidance: {
+        summaryPath: path15.join(projectRoot, ".dove/install/RESEARCH_QUALITY.md"),
+        fullPath: path15.join(projectRoot, ".dove/install/RESEARCH_QUALITY_FULL.md")
+      }
+    };
+  }
   if (!Array.isArray(options.files)) throw new Error("Dove review workspace files must be an array.");
   const guidance = normalizeReviewGuidance(options.guidance ?? createReviewGuidance());
   if (options.files.some((file) => typeof file.path === "string" && file.path.replace(/\\/gu, "/").split("/").includes(".dove-package"))) {
@@ -4222,7 +4245,7 @@ function listWorkspaceFiles(anchor, relativeDir = "") {
 }
 function finalizePreparedReviewWorkspace(workspace, options = {}) {
   if (!workspace?.previousWorkspaceBackupName) return;
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const stateRoot = resolveReviewStateRoot({ ...options, fsOps });
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
   try {
@@ -4232,7 +4255,7 @@ function finalizePreparedReviewWorkspace(workspace, options = {}) {
 }
 function restorePreparedReviewWorkspace(workspace, options = {}) {
   if (!workspace?.reviewId) return;
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const { name, stateRootFs } = reviewWorkspaceLocation(workspace.reviewId, { ...options, fsOps, workspaceRoot: workspace.workspaceRoot });
   const current = stateRootFs.tryLstat(name);
   if (current !== null) {
@@ -4243,7 +4266,7 @@ function restorePreparedReviewWorkspace(workspace, options = {}) {
   stateRootFs.rename(workspace.previousWorkspaceBackupName, name);
 }
 function assertReviewWorkspaceMatchesSnapshot(options = {}) {
-  const fsOps = options.fsOps ?? fs15;
+  const fsOps = options.fsOps ?? fs16;
   const snapshot = options.snapshot;
   if (!snapshot || !Array.isArray(snapshot.materials)) throw new Error("Dove review snapshot is missing its material manifest.");
   const guidance = normalizeReviewGuidanceIdentity(options.guidance, "Dove review frozen package guidance");
@@ -4278,8 +4301,8 @@ function assertReviewWorkspaceMatchesSnapshot(options = {}) {
 
 // src/core/review-runtime.mjs
 import crypto6 from "node:crypto";
-import fs16 from "node:fs";
-import path15 from "node:path";
+import fs17 from "node:fs";
+import path16 from "node:path";
 var REVIEW_RECORD_SCHEMA = "dove.review.record.v1";
 var IMPORTED_SNAPSHOT_SCHEMA = "dove.review.imported-snapshot.v1";
 var LOCAL_BACKEND_ID = "dove-review-runtime";
@@ -4321,25 +4344,41 @@ function serializeJson(value) {
   return `${JSON.stringify(value, null, 2)}
 `;
 }
-function materialLines(snapshot) {
-  return snapshot.materials.map((material) => `- ${material.path} (${material.size} bytes)`).join("\n");
+function liveScope(scope) {
+  return scope === "route" || scope === "design";
+}
+function liveReviewSubmission(projectRoot, materials, round, options = {}) {
+  if (!Array.isArray(materials) || materials.length === 0) throw new Error("dove review requires at least one --material <path>.");
+  const fsOps = options.fsOps ?? fs17;
+  const paths = [...new Set([...materials, REVIEW_IDENTITY_MATERIAL_PATH].map((material) => {
+    if (typeof material !== "string" || !material.trim() || material.includes("\0")) throw new Error("Dove review material must name a file or directory.");
+    return path16.resolve(projectRoot, material);
+  }))].sort();
+  for (const material of paths) {
+    const stat = fsOps.statSync(material);
+    if (!stat.isFile() && !stat.isDirectory()) throw new Error(`Dove review material must be a file or directory: ${material}`);
+  }
+  return { round, venue: options.venue ?? null, materials: paths.map((material) => ({ path: material })) };
+}
+function materialLines(snapshot, scope) {
+  return snapshot.materials.map((material) => liveScope(scope) ? `- ${JSON.stringify(material.path)}` : `- ${material.path} (${material.size} bytes)`).join("\n");
 }
 function promptForRound(options) {
   const scope = normalizeReviewScope(options.scope);
-  const materialList = materialLines(options.snapshot);
-  const operationLine = scope !== "paper" ? options.operation === "resume" ? "Judge this same frozen round again in a clean NEW reviewer session, with no previous reviewer or author conversation." : options.operation === "rerun" ? "Judge this newly frozen round in a clean NEW reviewer session, with no previous reviewer or author conversation." : "This is a clean NEW reviewer session, with no previous reviewer or author conversation." : options.operation === "resume" ? "Continue the current frozen round in this same reviewer session. Re-read the listed current materials as needed before updating the review." : options.operation === "rerun" ? "This is a new full-material round in the same reviewer session. Review the complete current submission again, not just a diff." : "This is the initial full-material review round for this isolated reviewer session.";
+  const materialList = materialLines(options.snapshot, scope);
+  const operationLine = scope !== "paper" ? "Judge the latest actual contents at the listed live paths in a clean NEW reviewer session, with no previous reviewer or author conversation." : options.operation === "resume" ? "Continue the current frozen round in this same reviewer session. Re-read the listed current materials as needed before updating the review." : options.operation === "rerun" ? "This is a new full-material round in the same reviewer session. Review the complete current submission again, not just a diff." : "This is the initial full-material review round for this isolated reviewer session.";
   const fullReference = options.guidance?.full ? DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH : DOVE_REVIEW_QUALITY_REFERENCE_PATH;
-  const guidanceLine = options.guidance?.full ? `Quality summary (workspace-relative): \`${DOVE_REVIEW_QUALITY_REFERENCE_PATH}\`. Read it first. Full quality reference: \`${fullReference}\`; consult relevant details when they can change this scoped judgment.` : `Full quality reference (workspace-relative): \`${fullReference}\`. Read it proactively at the decision triggers above.`;
-  const selectedTask = scope === "route" ? "Judge the current goal in the identity card against the supplied actual code/artifact diff since the previous judgment and actual run-result files. These are author-selected files, not an automatically scanned history. A narrative of changes does not replace a true diff. Cite concrete diff hunks and result observations; if needed inputs are missing, say which conclusions remain undetermined." : scope === "design" ? "Judge the supplied one-page method design against the current goal in the identity card. Cite its concrete mechanism, baseline comparison, predicted example and grounds, separating predictions from observed results and identifying material missing inputs." : "Return Markdown only under these four top-level headings: `## Verdict`, `## Blocking issues`, `## Grounding basis`, and `## Author-side next actions`. Do not edit files and do not claim external acceptance or certification.";
+  const guidanceLine = liveScope(scope) ? `Quality summary (absolute path): \`${options.guidance.summaryPath}\`. Read it first. Full quality reference: \`${options.guidance.fullPath}\`; consult relevant details when they can change this scoped judgment.` : options.guidance?.full ? `Quality summary (workspace-relative): \`${DOVE_REVIEW_QUALITY_REFERENCE_PATH}\`. Read it first. Full quality reference: \`${fullReference}\`; consult relevant details when they can change this scoped judgment.` : `Full quality reference (workspace-relative): \`${fullReference}\`. Read it proactively at the decision triggers above.`;
+  const selectedTask = scope === "route" ? "Judge the current goal in the identity card against the supplied cumulative candidate, change, prediction and actual-result trajectory. Read the selected files and directories directly; these are author-selected paths, not an automatically scanned history. A narrative of changes does not replace supplied actual diffs or results. Cite concrete material observations; if needed inputs are missing, say which conclusions remain undetermined." : scope === "design" ? "Judge the supplied one-page method design against the current goal in the identity card. Cite its concrete mechanism, baseline comparison, predicted example and grounds, separating predictions from observed results and identifying material missing inputs." : "Return Markdown only under these four top-level headings: `## Verdict`, `## Blocking issues`, `## Grounding basis`, and `## Author-side next actions`. Do not edit files and do not claim external acceptance or certification.";
   return `# Independent dove-review task
 
 ${scope === "paper" ? `${renderDoveSharedResearchContractSection()}
 
 ` : ""}${renderDoveReviewerStanceSection(scope)}
 
-You are the same Dove researcher in a separate Read-only Claude Code reviewer session. Review only the listed frozen copies in this workspace. Your available tool is Read; large files are intentionally not inlined here.
+You are the same Dove researcher in a separate Read-only Claude Code reviewer session. ${liveScope(scope) ? "Read only the listed live files and directories. Use Read for file contents and Glob to list files within supplied directories; do not inspect unlisted paths. Materials are not copied or inlined." : "Review only the listed frozen copies in this workspace. Your available tool is Read; large files are intentionally not inlined here."}
 
-${guidanceLine} This fixed package guidance is not user material or research evidence and grants no additional tool or material access. All scientific grounding remains limited to the listed frozen materials.
+${guidanceLine} This ${liveScope(scope) ? "package guidance" : "fixed package guidance"} is not user material or research evidence and grants no additional tool or material access. All scientific grounding remains limited to the listed ${liveScope(scope) ? "live paths" : "frozen materials"}.
 
 Review scope: ${scope}
 ${scope === "paper" ? `Target venue: ${options.venue ?? "not specified"}
@@ -4348,20 +4387,20 @@ Round: ${options.round}
 
 ${operationLine}
 
-Frozen materials for this round:
+${liveScope(scope) ? "Live material paths (absolute, JSON-quoted):" : "Frozen materials for this round:"}
 ${materialList || "- No project materials were listed for this imported-only record."}
 
 ${selectedTask}
 `;
 }
 function normalizeProject(project, options = {}) {
-  return resolveInstalledProjectRoot(project ?? options.cwd ?? process.cwd(), { fsOps: options.fsOps ?? fs16 });
+  return resolveInstalledProjectRoot(project ?? options.cwd ?? process.cwd(), { fsOps: options.fsOps ?? fs17 });
 }
 function absentFileState() {
   return { exists: false, type: "absent", sha256: null, mode: null };
 }
 function fileState(projectRoot, relativePath, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const stat = anchor.tryLstat(relativePath);
   if (!stat) return absentFileState();
@@ -4372,7 +4411,7 @@ function fileState(projectRoot, relativePath, options = {}) {
   return { exists: true, type: "file", sha256: sha2565(bytes), mode: stat.mode & 4095 };
 }
 function readReviewRecordWithState(projectRoot, reviewId, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const pathName = reviewPath(reviewId);
   const stat = anchor.tryLstat(pathName);
@@ -4383,7 +4422,7 @@ function readReviewRecordWithState(projectRoot, reviewId, options = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) || value.schema !== REVIEW_RECORD_SCHEMA || value.id !== normalizeReviewId(reviewId) || !Array.isArray(value.rounds) || !Number.isSafeInteger(value.currentRound) || value.currentRound < 0) {
     throw new Error(`Dove review record is not a valid Dove review record: ${pathName}`);
   }
-  return { record: value, expectedState: { exists: true, type: "file", sha256: sha2565(bytes), mode: stat.mode & 4095 } };
+  return { record: value, expectedState: liveScope(value.scope) ? void 0 : { exists: true, type: "file", sha256: sha2565(bytes), mode: stat.mode & 4095 } };
 }
 function readReviewRecord(projectRoot, reviewId, options = {}) {
   return readReviewRecordWithState(projectRoot, reviewId, options).record;
@@ -4397,7 +4436,7 @@ function requireReviewRecord(projectRoot, reviewId, options = {}) {
   return requireReviewRecordWithState(projectRoot, reviewId, options).record;
 }
 function readSnapshot(projectRoot, reviewId, round, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const pathName = roundPaths(reviewId, round).snapshot;
   const value = JSON.parse(anchor.readFile(pathName).toString("utf8"));
@@ -4405,6 +4444,20 @@ function readSnapshot(projectRoot, reviewId, round, options = {}) {
   return value;
 }
 function writeReviewFiles(projectRoot, files, options = {}) {
+  if (liveScope(options.scope)) {
+    const anchor = openRootedFilesystem(projectRoot, { fsOps: options.fsOps ?? fs17 });
+    for (const file of files) {
+      anchor.mkdir(path16.posix.dirname(file.relativePath), { recursive: true, mode: 448 });
+      const temporary = `${file.relativePath}.${crypto6.randomUUID()}.tmp`;
+      try {
+        anchor.writeNewFile(temporary, file.content, { encoding: file.encoding });
+        anchor.rename(temporary, file.relativePath);
+      } finally {
+        anchor.unlink(temporary, { force: true });
+      }
+    }
+    return;
+  }
   const entries = files.map((file) => ({
     root: projectRoot,
     relativePath: file.relativePath,
@@ -4414,7 +4467,7 @@ function writeReviewFiles(projectRoot, files, options = {}) {
     ...file.expectedState ? { expectedState: file.expectedState } : {},
     label: "Dove review record path"
   }));
-  return writeFileSetTransaction(entries, { fsOps: options.fsOps ?? fs16, transactionBase: ".dove/reviews/.transactions" });
+  return writeFileSetTransaction(entries, { fsOps: options.fsOps ?? fs17, transactionBase: ".dove/reviews/.transactions" });
 }
 function reportBytesForOutcome(outcome) {
   if (outcome.status === "completed") return Buffer.from(outcome.report, "utf8");
@@ -4425,7 +4478,8 @@ No reviewer report was generated. See \`backend.json\` for the backend error.
 }
 function makeRoundRecord(options) {
   const paths = roundPaths(options.reviewId, options.round);
-  const guidance = options.provenance === "imported" && (options.guidance === void 0 || options.guidance === null) ? null : normalizeReviewGuidanceIdentity(options.guidance, "Dove review round guidance");
+  const scope = normalizeReviewScope(options.scope);
+  const guidance = liveScope(scope) || options.provenance === "imported" && (options.guidance === void 0 || options.guidance === null) ? null : normalizeReviewGuidanceIdentity(options.guidance, "Dove review round guidance");
   return {
     round: options.round,
     scope: normalizeReviewScope(options.scope),
@@ -4434,13 +4488,13 @@ function makeRoundRecord(options) {
     venue: options.venue ?? null,
     createdAt: options.createdAt,
     updatedAt: options.updatedAt,
-    snapshotPath: paths.snapshot,
+    ...liveScope(scope) ? {} : { snapshotPath: paths.snapshot },
     reportPath: paths.report,
     backendPath: paths.backend,
     latestReportPath: options.latestReportPath ?? paths.report,
     latestBackendPath: options.latestBackendPath ?? paths.backend,
     materials: options.materials,
-    guidance,
+    ...liveScope(scope) ? {} : { guidance },
     sessionId: options.sessionId ?? null,
     imported: options.provenance === "imported",
     attempts: Array.isArray(options.attempts) ? options.attempts : []
@@ -4468,7 +4522,8 @@ function upsertRound(record, roundRecord) {
   return [...existing, roundRecord].sort((left, right) => left.round - right.round);
 }
 function recordStatusFromRound(roundRecord) {
-  if (roundRecord.provenance === "imported") return "imported";
+  const provenance = liveScope(roundRecord.scope) ? roundRecord.attempts?.at(-1)?.provenance ?? roundRecord.provenance : roundRecord.provenance;
+  if (provenance === "imported") return "imported";
   return roundRecord.status;
 }
 function updateRecordForRound(record, roundRecord, options = {}) {
@@ -4539,8 +4594,8 @@ function prepareRuntimeRound(projectRoot, record, snapshot, workspaceRoot, reque
     pendingExchange: { round: snapshot.round, workspaceRoot, requestedSessionId }
   };
   const entries = [{ relativePath: reviewPath(record.id), content: serializeJson(nextRecord), expectedState: options.recordExpectedState }];
-  if (!existingRound) entries.unshift({ relativePath: roundRecord.snapshotPath, content: serializeJson(snapshot), expectedState: absentFileState() });
-  writeReviewFiles(projectRoot, entries, options);
+  if (!existingRound && !liveScope(record.scope)) entries.unshift({ relativePath: roundRecord.snapshotPath, content: serializeJson(snapshot), expectedState: absentFileState() });
+  writeReviewFiles(projectRoot, entries, { ...options, scope: record.scope });
   return nextRecord;
 }
 function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, options = {}) {
@@ -4589,17 +4644,17 @@ function writeRuntimeRound(projectRoot, record, snapshot, backend, reportBytes, 
   });
   const nextRecord = updateRecordForRound(record, roundRecord, { sessionId: backend.sessionId });
   if (backend.status === "completed") delete nextRecord.pendingExchange;
-  const recordState = options.recordExpectedState ?? fileState(projectRoot, reviewPath(record.id), options);
+  const recordState = liveScope(record.scope) ? void 0 : options.recordExpectedState ?? fileState(projectRoot, reviewPath(record.id), options);
   const writeEntries = [
     { relativePath: paths.report, content: reportBytes, expectedState: absentFileState() },
     { relativePath: paths.backend, content: serializeJson(backend), encoding: "utf8", expectedState: absentFileState() },
     { relativePath: reviewPath(record.id), content: serializeJson(nextRecord), encoding: "utf8", expectedState: recordState }
   ];
   try {
-    writeReviewFiles(projectRoot, writeEntries, options);
+    writeReviewFiles(projectRoot, writeEntries, { ...options, scope: record.scope });
   } catch (error) {
-    const recovery = record.scope === "route" || record.scope === "design" ? "resume judges the retained frozen materials in a new session, but cannot recover this unsaved return" : "resume attempts the requested session, but cannot recover this unsaved return";
-    throw new Error(`Dove review ${record.id} return was not saved. The frozen materials and exchange records are retained; ${recovery}. ${error.message}`, { cause: error });
+    const recovery = liveScope(record.scope) ? "resume judges the latest listed live materials in a new session, but cannot recover this unsaved return" : "resume attempts the requested session, but cannot recover this unsaved return";
+    throw new Error(`Dove review ${record.id} return was not saved. The ${liveScope(record.scope) ? "listed paths" : "frozen materials"} and exchange records are retained; ${recovery}. ${error.message}`, { cause: error });
   }
   return { record: nextRecord, round: roundRecord, reportPath: paths.report, backendPath: paths.backend, snapshotPath: roundPaths(record.id, round).snapshot };
 }
@@ -4620,7 +4675,7 @@ function recordedWorkspaceRoot(projectRoot, record, options = {}) {
   if (record.pendingExchange) return record.pendingExchange.workspaceRoot;
   const round = record.rounds.find((item) => item.provenance === "runtime" && item.sessionId === record.session.sessionId);
   if (!round) throw new Error("Dove review session has no recorded runtime workspace.");
-  const anchor = openRootedFilesystem(projectRoot, { fsOps: options.fsOps ?? fs16 });
+  const anchor = openRootedFilesystem(projectRoot, { fsOps: options.fsOps ?? fs17 });
   const attempt = round.attempts.findLast((item) => item.status === "completed");
   const backendPath = attempt?.backendPath ?? round.backendPath;
   const backend = JSON.parse(anchor.readFile(backendPath).toString("utf8"));
@@ -4631,10 +4686,11 @@ function recordedWorkspaceRoot(projectRoot, record, options = {}) {
 }
 function stateRootOptions(options = {}) {
   return {
-    fsOps: options.fsOps ?? fs16,
+    fsOps: options.fsOps ?? fs17,
     env: options.env ?? process.env,
     ...options.stateRoot ? { stateRoot: options.stateRoot } : {},
-    ...options.projectRoot ? { projectRoot: options.projectRoot } : {}
+    ...options.projectRoot ? { projectRoot: options.projectRoot } : {},
+    ...options.scope ? { scope: options.scope } : {}
   };
 }
 function ensureLockRoot(stateRootFs) {
@@ -4654,11 +4710,13 @@ function ensureLockRoot(stateRootFs) {
   return lockRoot;
 }
 function acquireReviewMutationLock(reviewId, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
-  const stateRoot = resolveReviewStateRoot(stateRootOptions(options));
+  const fsOps = options.fsOps ?? fs17;
+  const scope = options.scope ?? readReviewRecord(options.projectRoot, reviewId, { fsOps })?.scope;
+  const stateRoot = liveScope(scope) ? options.projectRoot : resolveReviewStateRoot(stateRootOptions(options));
   const stateRootFs = openRootedFilesystem(stateRoot, { fsOps });
-  const lockRoot = ensureLockRoot(stateRootFs);
-  const lockPath = `${lockRoot}/${reviewWorkspaceName(reviewId, options)}.lock`;
+  if (liveScope(scope)) stateRootFs.mkdir(".dove/reviews/.locks", { recursive: true, mode: 448 });
+  const lockRoot = liveScope(scope) ? ".dove/reviews/.locks" : ensureLockRoot(stateRootFs);
+  const lockPath = `${lockRoot}/${liveScope(scope) ? normalizeReviewId(reviewId) : reviewWorkspaceName(reviewId, options)}.lock`;
   try {
     stateRootFs.mkdir(lockPath, { mode: 448 });
   } catch (error) {
@@ -4700,7 +4758,7 @@ function observeMaterialPath(anchor, relativePath) {
     if (!stat.isFile()) return { ...observed, type: "special" };
     const absolutePath = anchor.displayPath(relativePath);
     const canonical = anchor.fsOps.realpathSync.native?.(absolutePath) ?? anchor.fsOps.realpathSync(absolutePath);
-    if (path15.relative(anchor.root, canonical).split(path15.sep).join("/") !== relativePath) {
+    if (path16.relative(anchor.root, canonical).split(path16.sep).join("/") !== relativePath) {
       throw new Error(`Dove review material path must be canonical project-relative form: ${relativePath}`);
     }
     const bytes = anchor.fsOps.readFileSync(absolutePath);
@@ -4740,7 +4798,7 @@ function materialCurrentnessForRound(projectRoot, reviewId, round, options = {})
   }
   const materials = Array.isArray(snapshot.materials) ? snapshot.materials : [];
   if (materials.length === 0) return { overall: "unavailable", items: [] };
-  const anchor = openRootedFilesystem(projectRoot, { fsOps: options.fsOps ?? fs16 });
+  const anchor = openRootedFilesystem(projectRoot, { fsOps: options.fsOps ?? fs17 });
   const observations = options.observations ?? /* @__PURE__ */ new Map();
   const items = materials.map((material) => observedMaterialFact(material, { anchor, observations, scope: options.scope }));
   return { overall: materialOverall(items), items };
@@ -4751,7 +4809,7 @@ function publicText(value) {
 function publicMaterial(material) {
   return {
     path: publicText(material?.path),
-    size: Number.isSafeInteger(material?.size) ? material.size : null
+    ...Object.hasOwn(material ?? {}, "size") ? { size: Number.isSafeInteger(material?.size) ? material.size : null } : {}
   };
 }
 function publicObservedMaterialFact(observed = {}) {
@@ -4785,21 +4843,22 @@ function publicMaterials(materials) {
   return Array.isArray(materials) ? materials.map(publicMaterial) : [];
 }
 function publicRound(round, options = {}) {
-  const materialCurrentness = materialCurrentnessForRound(options.projectRoot, options.reviewId, round, options);
+  const scoped = liveScope(round.scope ?? options.scope);
+  const materialCurrentness = scoped ? null : materialCurrentnessForRound(options.projectRoot, options.reviewId, round, options);
   return {
     round: Number.isSafeInteger(round.round) ? round.round : null,
     scope: publicText(round.scope ?? options.scope ?? "paper"),
     status: publicText(round.status),
     provenance: publicText(round.provenance),
     venue: publicText(round.venue),
-    snapshotPath: publicText(round.snapshotPath),
+    ...scoped ? {} : { snapshotPath: publicText(round.snapshotPath) },
     reportPath: publicText(round.reportPath),
     backendPath: publicText(round.backendPath),
     latestReportPath: publicText(round.latestReportPath ?? round.reportPath),
     latestBackendPath: publicText(round.latestBackendPath ?? round.backendPath),
     sessionId: publicText(round.sessionId),
     materials: publicMaterials(round.materials),
-    materialCurrentness: publicMaterialCurrentness(materialCurrentness),
+    ...scoped ? {} : { materialCurrentness: publicMaterialCurrentness(materialCurrentness) },
     imported: round.imported === true,
     attempts: Array.isArray(round.attempts) ? round.attempts.map((attempt) => ({
       attempt: Number.isSafeInteger(attempt?.attempt) ? attempt.attempt : null,
@@ -4831,8 +4890,8 @@ function publicReviewResult(kind, projectRoot, review, round, extras = {}) {
     venue: publicText(review.venue),
     sessionId: publicText(review.session?.sessionId),
     pendingExchange: publicPendingExchange(review),
-    provenance: publicText(round?.provenance),
-    snapshotPath: publicText(round?.snapshotPath),
+    provenance: publicText(liveScope(review.scope) ? round?.attempts?.at(-1)?.provenance ?? round?.provenance : round?.provenance),
+    ...liveScope(review.scope) ? {} : { snapshotPath: publicText(round?.snapshotPath) },
     reportPath: publicText(round?.reportPath),
     backendPath: publicText(round?.backendPath),
     materials: publicMaterials(round?.materials)
@@ -4842,17 +4901,51 @@ function publicReviewResult(kind, projectRoot, review, round, extras = {}) {
   }
   return result;
 }
+function runLiveReview(projectRoot, record, operation, materials, options = {}) {
+  const round = operation === "handoff" ? 1 : operation === "resume" ? record.currentRound : record.currentRound + 1;
+  const submission = liveReviewSubmission(projectRoot, materials, round, options);
+  const workspace = prepareReviewWorkspace({ projectRoot, scope: record.scope, fsOps: options.fsOps });
+  const sessionId = crypto6.randomUUID();
+  const prompt = promptForRound({ operation, reviewId: record.id, scope: record.scope, round, snapshot: submission, guidance: workspace.guidance });
+  const pending = prepareRuntimeRound(projectRoot, record, submission, workspace.workspaceRoot, sessionId, null, options);
+  let outcome;
+  try {
+    outcome = runClaudeReviewBackend({
+      workspaceRoot: workspace.workspaceRoot,
+      scope: record.scope,
+      materials: submission.materials.map((material) => material.path),
+      fsOps: options.fsOps,
+      prompt,
+      session: { sessionId },
+      claudeCommand: options.claudeCommand,
+      env: options.env,
+      spawnSync: options.spawnSync,
+      timeout: options.timeout
+    });
+  } catch (error) {
+    outcome = { status: "failed", report: null, sessionId: null, backend: localBackendFailure(error, options) };
+  }
+  const written = writeRuntimeRound(projectRoot, pending, submission, outcome.backend, reportBytesForOutcome(outcome), { ...options, round });
+  return publicReviewResult(operation, projectRoot, written.record, written.round, {
+    workspaceRoot: workspace.workspaceRoot,
+    ...operation === "resume" ? { latestReportPath: written.reportPath, latestBackendPath: written.backendPath } : {}
+  });
+}
 function handoffReview(options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id ?? createReviewId({ now: options.now }));
   const scope = normalizeReviewScope(options.scope);
-  return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
+  return withReviewMutationLock(reviewId, { ...options, projectRoot, scope }, () => {
     const existingRecord = readReviewRecordWithState(projectRoot, reviewId, { fsOps });
     if (existingRecord.record !== null) throw new Error(`Dove review record already exists: ${reviewPath(reviewId)}. Use resume or rerun.`);
     const reviewDirectoryState = fileState(projectRoot, reviewBasePath(reviewId), { fsOps });
     if (reviewDirectoryState.exists) throw new Error(`Dove review path already exists without a valid record: ${reviewBasePath(reviewId)}.`);
     const createdAt = exactIsoTimestamp5(options.now ?? /* @__PURE__ */ new Date());
+    if (liveScope(scope)) {
+      const record2 = newRecord({ reviewId, scope, projectRoot, createdAt, updatedAt: createdAt });
+      return runLiveReview(projectRoot, record2, "handoff", options.materials, options);
+    }
     const { snapshot, files } = createReviewSnapshot({ projectRoot, reviewId, scope, round: 1, venue: options.venue, materials: options.materials, now: createdAt, fsOps });
     const guidance = createReviewGuidance();
     const workspace = prepareReviewWorkspace({ reviewId, files, guidance, ...stateRootOptions({ ...options, projectRoot }) });
@@ -4886,7 +4979,7 @@ function handoffReview(options = {}) {
   });
 }
 function resumeReview(options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
@@ -4895,6 +4988,10 @@ function resumeReview(options = {}) {
     const sessionId = scope === "paper" ? sessionIdOrThrow(record) : crypto6.randomUUID();
     const round = record.currentRound;
     if (!Number.isInteger(round) || round < 1) throw new Error(`Dove review ${reviewId} has no current round to resume.`);
+    if (liveScope(scope)) {
+      const current = record.rounds.find((item) => item.round === round);
+      return runLiveReview(projectRoot, record, "resume", current?.materials?.map((material) => material.path), options);
+    }
     const existingRound = assertCurrentRoundCanUseRuntime(record);
     const snapshot = readSnapshot(projectRoot, reviewId, round, { fsOps });
     let workspace;
@@ -4929,12 +5026,13 @@ function resumeReview(options = {}) {
   });
 }
 function rerunReview(options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
     let { record, expectedState: expectedState2 } = requireReviewRecordWithState(projectRoot, reviewId, { fsOps });
     const scope = normalizeReviewScope(record.scope);
+    if (liveScope(scope)) return runLiveReview(projectRoot, record, "rerun", options.materials, options);
     if (scope === "paper" && record.pendingExchange) throw new Error(`Dove review ${reviewId} has a pending exchange; use resume before starting another round.`);
     const sessionId = scope === "paper" ? sessionIdOrThrow(record) : crypto6.randomUUID();
     const round = record.currentRound + 1;
@@ -4974,8 +5072,8 @@ function rerunReview(options = {}) {
 }
 function importFileBytes(filePath, options = {}) {
   if (typeof filePath !== "string" || !filePath.trim() || filePath.includes("\0")) throw new Error("dove review import requires --file <path>.");
-  const fsOps = options.fsOps ?? fs16;
-  const resolved = path15.resolve(options.cwd ?? process.cwd(), filePath);
+  const fsOps = options.fsOps ?? fs17;
+  const resolved = path16.resolve(options.cwd ?? process.cwd(), filePath);
   const stat = fsOps.lstatSync(resolved);
   if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`Dove review import file must be a regular non-symlink file: ${resolved}`);
   return { sourceFile: resolved, bytes: fsOps.readFileSync(resolved) };
@@ -4990,7 +5088,7 @@ function importedSnapshot(options) {
       venue: options.venue,
       materials: options.materials,
       now: options.createdAt,
-      fsOps: options.fsOps ?? fs16
+      fsOps: options.fsOps ?? fs17
     }).snapshot;
   }
   return {
@@ -5006,7 +5104,7 @@ function importedSnapshot(options) {
   };
 }
 function importReviewReturn(options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const projectRoot = normalizeProject(options.project, options);
   const reviewId = normalizeReviewId(options.id);
   return withReviewMutationLock(reviewId, { ...options, projectRoot }, () => {
@@ -5018,7 +5116,7 @@ function importReviewReturn(options = {}) {
     const venue = options.venue ?? existing?.venue ?? null;
     const scope = normalizeReviewScope(existing?.scope);
     const { sourceFile, bytes } = importFileBytes(options.file, { fsOps, cwd: options.cwd });
-    const snapshot = importedSnapshot({ projectRoot, reviewId, scope, round, venue, materials: options.materials, createdAt, fsOps });
+    const snapshot = liveScope(scope) ? options.materials?.length ? liveReviewSubmission(projectRoot, options.materials, round, { fsOps }) : { round, materials: [] } : importedSnapshot({ projectRoot, reviewId, scope, round, venue, materials: options.materials, createdAt, fsOps });
     const backend = {
       schema: "dove.review.backend.v1",
       backend: null,
@@ -5049,16 +5147,16 @@ function importReviewReturn(options = {}) {
     const baseRecord = existing ?? newRecord({ reviewId, scope, projectRoot, venue, createdAt, updatedAt: createdAt });
     const nextRecord = updateRecordForRound(baseRecord, roundRecord, { sessionId: baseRecord.session?.sessionId ?? null });
     writeReviewFiles(projectRoot, [
-      { relativePath: paths.snapshot, content: serializeJson(snapshot), encoding: "utf8", expectedState: absentFileState() },
+      ...!liveScope(scope) ? [{ relativePath: paths.snapshot, content: serializeJson(snapshot), encoding: "utf8", expectedState: absentFileState() }] : [],
       { relativePath: paths.report, content: bytes, expectedState: absentFileState() },
       { relativePath: paths.backend, content: serializeJson(backend), encoding: "utf8", expectedState: absentFileState() },
       { relativePath: reviewPath(reviewId), content: serializeJson(nextRecord), encoding: "utf8", expectedState: expectedState2 }
-    ], options);
+    ], { ...options, scope });
     return publicReviewResult("import", projectRoot, nextRecord, roundRecord, { sourceFile });
   });
 }
 function reviewRecordsDirectory(projectRoot, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const anchor = openRootedFilesystem(projectRoot, { fsOps });
   const stat = anchor.tryLstat(".dove/reviews");
   if (!stat) return [];
@@ -5066,7 +5164,7 @@ function reviewRecordsDirectory(projectRoot, options = {}) {
   return anchor.readdir(".dove/reviews", { withFileTypes: true }).filter((entry) => !entry.name.startsWith(".") && entry.isDirectory() && !entry.isSymbolicLink()).map((entry) => entry.name).sort();
 }
 function inspectReviewStatus(options = {}) {
-  const fsOps = options.fsOps ?? fs16;
+  const fsOps = options.fsOps ?? fs17;
   const projectRoot = normalizeProject(options.project, options);
   if (options.id !== void 0 && options.id !== null) {
     const reviewId = normalizeReviewId(options.id);
@@ -5083,7 +5181,7 @@ function inspectReviewStatus(options = {}) {
       currentRound: Number.isSafeInteger(record.currentRound) ? record.currentRound : null,
       sessionId: publicText(record.session?.sessionId),
       pendingExchange: publicPendingExchange(record),
-      materialCurrentness: rounds.find((round) => round.round === record.currentRound)?.materialCurrentness ?? publicMaterialCurrentness(null),
+      ...liveScope(record.scope) ? {} : { materialCurrentness: rounds.find((round) => round.round === record.currentRound)?.materialCurrentness ?? publicMaterialCurrentness(null) },
       rounds
     };
   }
@@ -5108,8 +5206,8 @@ function reviewStateLocation(options = {}) {
 
 // src/core/run-record.mjs
 import crypto7 from "node:crypto";
-import fs17 from "node:fs";
-import path16 from "node:path";
+import fs18 from "node:fs";
+import path17 from "node:path";
 import process3 from "node:process";
 
 // src/core/run-environment.mjs
@@ -5280,7 +5378,7 @@ function normalizeRunId(value) {
   return value;
 }
 function normalizeRunProject(project, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   return resolveInstalledProjectRoot(project ?? options.cwd ?? process3.cwd(), { fsOps });
 }
 function runRelativePaths(runId) {
@@ -5297,17 +5395,17 @@ function runAbsolutePaths(projectRoot, runId) {
   const relative = runRelativePaths(runId);
   return {
     ...relative,
-    absoluteRunDirectory: path16.join(projectRoot, relative.runDirectory),
-    absoluteJournalPath: path16.join(projectRoot, relative.journalPath),
-    absoluteStdoutPath: path16.join(projectRoot, relative.stdoutPath),
-    absoluteStderrPath: path16.join(projectRoot, relative.stderrPath)
+    absoluteRunDirectory: path17.join(projectRoot, relative.runDirectory),
+    absoluteJournalPath: path17.join(projectRoot, relative.journalPath),
+    absoluteStdoutPath: path17.join(projectRoot, relative.stdoutPath),
+    absoluteStderrPath: path17.join(projectRoot, relative.stderrPath)
   };
 }
 function ensureRunsRoot(projectRoot, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
-  const doveRoot = path16.join(projectRoot, ARTIFACT_PATHS.doveRoot);
+  const fsOps = options.fsOps ?? fs18;
+  const doveRoot = path17.join(projectRoot, ARTIFACT_PATHS.doveRoot);
   assertRealDirectory(fsOps, doveRoot, "Dove workspace root");
-  const runsRoot = path16.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const runsRoot = path17.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull6(fsOps, runsRoot);
   if (stat !== null) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -5323,7 +5421,7 @@ function ensureRunsRoot(projectRoot, options = {}) {
   return runsRoot;
 }
 function reserveRunDirectory(options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const projectRoot = normalizeRunProject(options.project, options);
   const runId = normalizeRunId(options.id ?? createRunId({ now: options.now }));
   ensureRunsRoot(projectRoot, { fsOps });
@@ -5338,13 +5436,13 @@ function reserveRunDirectory(options = {}) {
   return { projectRoot, runId, paths };
 }
 function requireRunDirectory(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const paths = runAbsolutePaths(projectRoot, runId);
   assertRealDirectory(fsOps, paths.absoluteRunDirectory, "Dove run directory");
   return paths;
 }
 function tryRunDirectory(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const paths = runAbsolutePaths(projectRoot, runId);
   const stat = lstatOrNull6(fsOps, paths.absoluteRunDirectory);
   if (stat === null) return null;
@@ -5352,9 +5450,9 @@ function tryRunDirectory(projectRoot, runId, options = {}) {
   return paths;
 }
 function acquireRunMutationLock(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const paths = requireRunDirectory(projectRoot, runId, { fsOps });
-  const lockPath = path16.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
+  const lockPath = path17.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
   for (let attempt = 0; attempt <= RUN_LOCK_WAIT_MS / RUN_LOCK_RETRY_MS; attempt += 1) {
     try {
       fsOps.mkdirSync(lockPath, { mode: 448 });
@@ -5376,7 +5474,7 @@ function validateRunEvent(value, expectedRunId, expectedSeq, label) {
   return value;
 }
 function readRunEvents(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const id = normalizeRunId(runId);
   const paths = requireRunDirectory(projectRoot, id, { fsOps });
   assertRegularFile(fsOps, paths.absoluteJournalPath, "Dove run journal");
@@ -5391,7 +5489,7 @@ function readRunEvents(projectRoot, runId, options = {}) {
   });
 }
 function tryReadRunEvents(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const id = normalizeRunId(runId);
   const paths = tryRunDirectory(projectRoot, id, { fsOps });
   if (paths === null) return null;
@@ -5401,7 +5499,7 @@ function tryReadRunEvents(projectRoot, runId, options = {}) {
 }
 function appendRunEvents(projectRoot, runId, items, options = {}) {
   if (!Array.isArray(items) || items.length === 0) throw new Error("Dove run event append requires at least one event item.");
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const id = normalizeRunId(runId);
   const lock = acquireRunMutationLock(projectRoot, id, { fsOps });
   try {
@@ -5633,8 +5731,8 @@ function summarizeRun(projectRoot, runId, options = {}) {
   return summarizeStatus(projectRoot, normalizeRunId(runId), events);
 }
 function runsRootEntries(projectRoot, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
-  const runsRoot = path16.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const fsOps = options.fsOps ?? fs18;
+  const runsRoot = path17.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull6(fsOps, runsRoot);
   if (stat === null) return [];
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -5644,7 +5742,7 @@ function runsRootEntries(projectRoot, options = {}) {
   }).sort();
 }
 function listRunSummaries(options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const projectRoot = normalizeRunProject(options.project, options);
   const group = normalizeRunGroup(options.group);
   const runs = [];
@@ -5658,7 +5756,7 @@ function listRunSummaries(options = {}) {
   return { command: "status", status: "ok", project: projectRoot, group, runs };
 }
 function inspectRunStatus(options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const projectRoot = normalizeRunProject(options.project, options);
   if (options.id !== void 0 && options.id !== null) {
     if (options.group !== void 0 && options.group !== null) throw new Error("Use only one of --id or --group for dove run status.");
@@ -5668,7 +5766,7 @@ function inspectRunStatus(options = {}) {
   return listRunSummaries({ ...options, fsOps, project: projectRoot });
 }
 function appendReconciledInterrupted(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const id = normalizeRunId(runId);
   const event = appendRunEvent(projectRoot, id, "run.reconciled", {
     outcome: "interrupted",
@@ -5695,7 +5793,7 @@ function appendReconciledInterrupted(projectRoot, runId, options = {}) {
   return { event, summary: summarizeRun(projectRoot, id, { fsOps }) };
 }
 function appendFinalizedRun(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const root = normalizeRunProject(projectRoot, { fsOps, cwd: options.cwd });
   const id = normalizeRunId(runId);
   const event = appendRunEvent(root, id, "run.finalized", (events) => {
@@ -5736,7 +5834,7 @@ function selectedRunIds(projectRoot, options = {}) {
   return [.../* @__PURE__ */ new Set([...explicitIds, ...byGroup])].sort();
 }
 function compareRuns(options = {}) {
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const projectRoot = normalizeRunProject(options.project, options);
   const runIds = selectedRunIds(projectRoot, { ...options, fsOps });
   if (runIds.length === 0) {
@@ -5795,7 +5893,7 @@ function compareRuns(options = {}) {
 
 // src/core/run-supervisor.mjs
 import { spawn } from "node:child_process";
-import fs18 from "node:fs";
+import fs19 from "node:fs";
 import process4 from "node:process";
 var SUPERVISOR_ENTRY = "__dove-run-supervisor";
 var SUPERVISOR_READY_TIMEOUT_MS = 1e4;
@@ -5872,7 +5970,7 @@ async function configureSupervisorAndWait(child, payload, acceptedTypes) {
   }
   return await result;
 }
-function removeEmptyReservedRunDirectory(paths, fsOps = fs18) {
+function removeEmptyReservedRunDirectory(paths, fsOps = fs19) {
   try {
     const entries = fsOps.readdirSync(paths.absoluteRunDirectory);
     if (entries.length === 0) fsOps.rmdirSync(paths.absoluteRunDirectory);

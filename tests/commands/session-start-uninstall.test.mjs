@@ -47,7 +47,7 @@ test("SessionStart compact and resume include the researcher-owned identity card
     assert.ok(context.includes(card));
     assert.match(context, /corrections affect only relevant fields, not an unchanged Mainline/iu);
     assert.match(context, /identity card and actual work/iu);
-    assert.match(context, /recover the goal, last route review and next core action/iu);
+    assert.match(context, /recover the goal, cumulative method-family trajectory and next core action/iu);
     assert.match(context, /If review is due/iu);
     assert.match(context, /fresh read-only Dove context/iu);
     assert.match(context, /not another self-reflection/iu);

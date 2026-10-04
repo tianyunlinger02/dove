@@ -381,6 +381,18 @@ function assertReviewResultRenderer() {
   assert.match(imported, /无；这是导入的外部返回记录/u);
   assert.match(imported, /按用户提供文件原样保存/u);
 
+  const liveStatus = renderReviewResult({
+    command: "status", scope: "route", currentRound: 1,
+    rounds: [{ round: 1, provenance: "runtime", materials: [{ path: "/workspace/.claude-tmp/trajectory" }] }]
+  });
+  assert.match(liveStatus, /实时材料/u);
+  assert.match(liveStatus, /status 不读取或校验材料快照/u);
+  assert.match(liveStatus, /\/workspace\/\.claude-tmp\/trajectory/u);
+  assert.doesNotMatch(liveStatus, /frozen snapshot|材料版本关系|bytes/u);
+  const liveResume = renderReviewResult({ command: "resume", scope: "design", materials: [{ path: "/workspace/design" }] });
+  assert.match(liveResume, /全新只读会话/u);
+  assert.match(liveResume, /实时材料路径/u);
+  assert.doesNotMatch(liveResume, /冻结|bytes/u);
   const safe = renderReviewResult({
     command: "status",
     project: "/workspace" + String.fromCharCode(0) + "bad",

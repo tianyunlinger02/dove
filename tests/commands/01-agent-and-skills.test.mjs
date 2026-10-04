@@ -104,18 +104,20 @@ test("short shared contract keeps confirmed Mainline stable while methods and ev
   assert.match(DOVE_RESEARCH_DECISION_CONSEQUENCE, /actual producer and consumer/iu);
   assert.match(shared, /confirmed mainline covers its core implementation, reruns, diagnosis, and suitable GPU work/iu);
   assert.match(shared, /Only final heldout confirmation needs a frozen/iu);
-  assert.match(shared, /important results.*several actual changes/iu);
-  assert.match(shared, /second correction of the same problem/iu);
+  assert.match(shared, /important results or several candidates in one method family without a positive signal/iu);
+  assert.doesNotMatch(shared, /several actual changes without review|second correction of the same problem/iu);
   assert.match(shared, /--scope route.*fresh read-only Dove context/iu);
-  assert.match(shared, /actual diff since the last review.*actual run results/iu);
-  assert.match(shared, /not the process conversation/iu);
-  assert.match(shared, /Apply its findings to the real next action/iu);
-  assert.match(shared, /remove or rework rejected patches/iu);
+  assert.match(shared, /cumulative candidate\/change\/prediction\/result sequence/iu);
+  assert.match(shared, /not just the latest candidate or process conversation/iu);
+  assert.match(shared, /family is still worth pursuing, shared failure causes/iu);
+  assert.match(shared, /Apply findings to actual work, rework rejected patches/iu);
   assert.match(shared, /retain rejected approaches in the card/iu);
+  assert.match(shared, /Do not review every candidate/iu);
+  assert.match(shared, /main method—not ordinary variants/iu);
   assert.match(shared, /one-page design/iu);
   assert.match(shared, /public-baseline advantage.*concrete predicted example/iu);
-  assert.match(shared, /grounds for likely success and biggest risk/iu);
-  assert.match(shared, /user-confirmed method needs no design review/iu);
+  assert.match(shared, /likely-success grounds and biggest risk/iu);
+  assert.match(shared, /User-confirmed methods need no design review/iu);
   assert.match(shared, /implement without renewed user approval/iu);
   assert.match(author, /identity card/iu);
   assert.match(author, /Mainline: ` followed by one sentence in the user's words/iu);
@@ -126,7 +128,7 @@ test("short shared contract keeps confirmed Mainline stable while methods and ev
   assert.match(author, /without internal abbreviations/iu);
   assert.match(author, /Put process details in history/iu);
   assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /identity card and actual work/iu);
-  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /last route review and next core action/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /cumulative method-family trajectory and next core action/iu);
   assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /fresh read-only Dove context/iu);
   assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /not another self-reflection/iu);
   assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /Route and next-action changes do not rewrite Mainline/iu);
@@ -213,7 +215,9 @@ test("reviewer guidance excludes author stance and private preference access", (
     assert.match(reviewer, /not independent submission review/iu);
     assert.equal(reviewer.includes(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER), false);
   }
-  assert.match(renderDoveReviewerStanceSection("route"), /actual diff and run results/iu);
+  assert.match(renderDoveReviewerStanceSection("route"), /cumulative trajectory and actual results/iu);
+  assert.match(renderDoveReviewerStanceSection("route"), /method family still worth pursuing.*shared cause/iu);
+  assert.match(renderDoveReviewerStanceSection("route"), /not just the latest candidate/iu);
   assert.match(renderDoveReviewerStanceSection("route"), /generality is required only by the stated goal/iu);
   assert.match(renderDoveReviewerStanceSection("design"), /one-page method design/iu);
   assert.match(renderDoveReviewerStanceSection("design"), /grounds for likely success and biggest risk/iu);

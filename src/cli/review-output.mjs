@@ -34,11 +34,12 @@ function renderMaterialCurrentness(currentness, label = "当前轮次材料") {
 
 function renderPendingExchange(pending, scope) {
   if (!pending) return [];
-  if (scope === "route" || scope === "design") return [`待完成交换：轮次 ${terminalSafeText(pending.round)}；resume 将用全新只读会话重新判断同一份冻结材料，不续接原会话，也不会找回未保存的返回。`];
+  if (scope === "route" || scope === "design") return [`待完成交换：轮次 ${terminalSafeText(pending.round)}；resume 将用全新只读会话重新读取所列路径的最新材料，不续接原会话，也不会找回未保存的返回。`];
   return [`待完成交换：轮次 ${terminalSafeText(pending.round)}；resume 将尝试原请求会话 ${terminalSafeText(pending.requestedSessionId)}，返回匹配后才确认继续成功；不会找回未保存的返回。`];
 }
 
 export function renderReviewResult(result) {
+  const scoped = result.scope === "route" || result.scope === "design";
   if (result.command === "status" && Array.isArray(result.reviews)) {
     const lines = ["Dove review 状态", "", `项目：${terminalSafeText(result.project)}`];
     if (result.reviews.length === 0) lines.push("", "尚无 .dove/reviews/** 记录。");
@@ -46,7 +47,9 @@ export function renderReviewResult(result) {
     return lines.join("\n");
   }
   if (result.command === "status") {
-    const currentnessLines = renderMaterialCurrentness(result.materialCurrentness, "当前轮次材料版本关系");
+    const currentnessLines = scoped
+      ? ["所列路径为实时材料；status 不读取或校验材料快照。", ...(result.rounds?.find((round) => round.round === result.currentRound)?.materials ?? []).map((material) => `  - ${terminalSafeText(material.path)}`)]
+      : renderMaterialCurrentness(result.materialCurrentness, "当前轮次材料版本关系");
     return [
       "Dove review 状态",
       "",
@@ -60,7 +63,7 @@ export function renderReviewResult(result) {
       "",
       ...currentnessLines,
       "",
-      "报告中的 verdict 是对应 frozen snapshot 的历史判断；status 不解析报告文字来猜 PASS/REVISE。",
+      scoped ? "报告是当次直接读取材料后的历史判断，不代表文件此后的变化；status 不解析报告文字来猜 PASS/REVISE。" : "报告中的 verdict 是对应 frozen snapshot 的历史判断；status 不解析报告文字来猜 PASS/REVISE。",
       "",
       ...(result.rounds ?? []).map((round) => {
         const latest = round.latestReportPath ?? round.reportPath;
@@ -72,11 +75,11 @@ export function renderReviewResult(result) {
   }
   const heading = result.status === "failed" ? "Dove review 运行失败；未生成本次 reviewer 报告" : {
     handoff: "Dove review handoff 已完成",
-    resume: result.scope === "route" || result.scope === "design" ? "Dove review 已在全新只读会话中重新判断当前冻结轮次" : "Dove review 已恢复并更新当前轮次",
-    rerun: result.scope === "route" || result.scope === "design" ? "Dove review 已在全新只读会话中判断新的冻结轮次" : "Dove review 已在同一 reviewer session 中开始新的完整轮次",
+    resume: scoped ? "Dove review 已在全新只读会话中重新读取当前路径并判断" : "Dove review 已恢复并更新当前轮次",
+    rerun: scoped ? "Dove review 已在全新只读会话中读取所选实时材料并判断" : "Dove review 已在同一 reviewer session 中开始新的完整轮次",
     import: "Dove review return 已导入"
   }[result.command] ?? "Dove review 完成";
-  const materialLines = (result.materials ?? []).map((material) => `- ${terminalSafeText(material.path)} (${terminalSafeText(material.size)} bytes)`);
+  const materialLines = (result.materials ?? []).map((material) => scoped ? `- ${terminalSafeText(material.path)}` : `- ${terminalSafeText(material.path)} (${terminalSafeText(material.size)} bytes)`);
   return [
     heading,
     "",
@@ -91,9 +94,9 @@ export function renderReviewResult(result) {
     `报告：${terminalSafeText(result.latestReportPath ?? result.reportPath)}`,
     `后端记录：${terminalSafeText(result.latestBackendPath ?? result.backendPath)}`,
     "",
-    "冻结材料：",
+    scoped ? "实时材料路径：" : "冻结材料：",
     ...(materialLines.length > 0 ? materialLines : ["- 无；这是导入的外部返回记录"]),
     "",
-    result.command === "import" ? "导入内容按用户提供文件原样保存；未声称由 Dove runtime reviewer 生成。" : "Reviewer 只接收本轮冻结材料；不会读取私有 transcript。"
+    result.command === "import" ? "导入内容按用户提供文件原样保存；未声称由 Dove runtime reviewer 生成。" : scoped ? "Reviewer 只读取所列文件或目录的最新内容及单独的质量指导；不会读取作者对话。" : "Reviewer 只接收本轮冻结材料；不会读取私有 transcript。"
   ].join("\n");
 }

@@ -52,7 +52,7 @@ Change the owning source first; generated adapters and bundles are projections, 
   research/lessons/           # optional advisory Lessons
   reviews/<review-id>/        # runtime exchange records
     review.json
-    rounds/<round>/           # snapshot.json, backend.json, report.md
+    rounds/<round>/           # backend.json, report.md; paper also snapshot.json
   runs/<run-id>/              # run.jsonl, stdout.log, stderr.log
   archive/                   # legacy/user-owned material when present
 ```

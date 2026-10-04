@@ -190,6 +190,18 @@ export function createReviewGuidance(options = {}) {
 
 export function prepareReviewWorkspace(options = {}) {
   const fsOps = options.fsOps ?? fs;
+  if (options.scope === "route" || options.scope === "design") {
+    // Launch at the project root: the local Claude launcher derives its socket
+    // temp path from the Git root (or cwd without Git), not from child TMPDIR.
+    const projectRoot = realpathNative(fsOps, path.resolve(options.projectRoot));
+    return {
+      workspaceRoot: projectRoot,
+      guidance: {
+        summaryPath: path.join(projectRoot, ".dove/install/RESEARCH_QUALITY.md"),
+        fullPath: path.join(projectRoot, ".dove/install/RESEARCH_QUALITY_FULL.md")
+      }
+    };
+  }
   if (!Array.isArray(options.files)) throw new Error("Dove review workspace files must be an array.");
   const guidance = normalizeReviewGuidance(options.guidance ?? createReviewGuidance());
   if (options.files.some((file) => typeof file.path === "string" && file.path.replace(/\\/gu, "/").split("/").includes(".dove-package"))) {

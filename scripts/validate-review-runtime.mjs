@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
-import { DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH, DOVE_REVIEW_QUALITY_REFERENCE_PATH, createReviewGuidance, reviewWorkspaceName } from "../src/core/review-workspace.mjs";
+import { DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH, DOVE_REVIEW_QUALITY_REFERENCE_PATH, createReviewGuidance, prepareReviewWorkspace, reviewWorkspaceName } from "../src/core/review-workspace.mjs";
 import { DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS, renderDoveResearchQualityFullReference, renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
 import { inspectLatestReviewFacts } from "../src/core/review-runtime.mjs";
 import { parseDoveCli } from "../src/cli/command-parser.mjs";
@@ -165,7 +165,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const args = process.argv.slice(2);
-const expectedPrefix = ["--safe-mode", "--setting-sources", "local", "--strict-mcp-config", "--disable-slash-commands", "--tools", "Read", "--permission-mode", "dontAsk", "--input-format", "text", "--print", "--output-format", "json"];
+const expectedPrefix = ["--safe-mode", "--setting-sources", "local", "--strict-mcp-config", "--disable-slash-commands", "--tools", args[6], "--permission-mode", "dontAsk", "--input-format", "text", "--print", "--output-format", "json"];
 assert.deepEqual(args.slice(0, expectedPrefix.length), expectedPrefix);
 for (const forbidden of ["--bare", "--fork-session", "--no-session-persistence", "--continue"]) assert.equal(args.includes(forbidden), false, forbidden);
 assert.equal(args.includes("Bash"), false);
@@ -177,7 +177,7 @@ assert.ok(mode === "--session-id" || mode === "--resume", mode);
 const sessionId = args[expectedPrefix.length + 1];
 assert.equal(typeof sessionId, "string");
 assert.ok(sessionId.length > 0);
-assert.equal(args.length, expectedPrefix.length + 2);
+const extraArgs = args.slice(expectedPrefix.length + 2);
 
 let input = "";
 process.stdin.setEncoding("utf8");
@@ -185,6 +185,8 @@ for await (const chunk of process.stdin) input += chunk;
 assert.doesNotMatch(input, /# Dove Agent/u);
 assert.match(input, /Independent dove-review task/u);
 const scope = input.match(/^Review scope: (paper|route|design)$/mu)[1];
+assert.equal(args[6], scope === "paper" ? "Read" : "Read,Glob");
+if (scope === "paper") assert.deepEqual(extraArgs, []);
 if (process.env.DOVE_FAKE_SCOPE) assert.equal(scope, process.env.DOVE_FAKE_SCOPE);
 assert.match(input, /Reviewer stance/u);
 // Check actual backend input against its owning renderer, not a prose rubric.
@@ -203,12 +205,12 @@ assert.equal(input.includes(${JSON.stringify(DOVE_AUTHOR_PREFERENCES_READ_TRIGGE
 assert.equal(input.includes(${JSON.stringify(renderDoveAuthorPreferencesReference())}), false);
 assert.equal(input.includes(${JSON.stringify(AUTHOR_PREFERENCES_SENTINEL)}), false);
 assert.doesNotMatch(input, /AUTHOR_PREFERENCES\\.md/u);
-const referencePath = ${JSON.stringify(DOVE_REVIEW_QUALITY_REFERENCE_PATH)};
+const referencePath = scope === "paper" ? ${JSON.stringify(DOVE_REVIEW_QUALITY_REFERENCE_PATH)} : ".dove/install/RESEARCH_QUALITY.md";
 assert.ok(input.includes(referencePath));
 assert.match(input, /package guidance/iu);
 assert.doesNotMatch(input, /sha256|[a-f0-9]{64}/iu);
 assert.equal(fs.readFileSync(path.join(process.cwd(), referencePath), "utf8"), process.env.DOVE_FAKE_GUIDANCE ?? ${JSON.stringify(renderDoveResearchQualityReference())});
-const fullReferencePath = ${JSON.stringify(DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH)};
+const fullReferencePath = scope === "paper" ? ${JSON.stringify(DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH)} : ".dove/install/RESEARCH_QUALITY_FULL.md";
 const guidancePaths = [referencePath];
 if (process.env.DOVE_FAKE_NO_FULL !== "1") {
   assert.ok(input.includes(fullReferencePath));
@@ -220,17 +222,27 @@ if (process.env.DOVE_FAKE_NO_FULL !== "1") {
 assert.doesNotMatch(input, /^## Author stance$/mu);
 
 const allowed = new Set();
-for (const match of input.matchAll(/^- (.+?) \\(\\d+ bytes\\)$/gmu)) allowed.add(match[1]);
+if (scope === "paper") {
+  for (const match of input.matchAll(/^- (.+?) \\(\\d+ bytes\\)$/gmu)) allowed.add(match[1]);
+} else {
+  for (const match of input.matchAll(/^- (\".*\")$/gmu)) allowed.add(JSON.parse(match[1]));
+  assert.equal(allowed.has(path.join(process.cwd(), ".dove/research/IDENTITY.md")), true);
+  assert.match(input, /latest actual contents/u);
+  assert.doesNotMatch(input, /frozen copies|Frozen materials for this round/u);
+  if (process.env.DOVE_FAKE_ADD_DIRS) assert.deepEqual(extraArgs, ["--add-dir", ...JSON.parse(process.env.DOVE_FAKE_ADD_DIRS)]);
+  else assert.deepEqual(extraArgs, []);
+}
 for (const file of guidancePaths) assert.equal(allowed.has(file), false, "package guidance is not user material");
-if (scope !== "paper") assert.equal(allowed.has(".dove/research/IDENTITY.md"), true);
 if (process.env.DOVE_FAKE_MATERIALS) assert.deepEqual([...allowed].sort(), JSON.parse(process.env.DOVE_FAKE_MATERIALS).sort());
 const actual = [];
-const stack = [""];
+const stack = scope === "paper" ? [""] : [...allowed].filter(file => fs.statSync(file).isDirectory());
+if (scope !== "paper") actual.push(...guidancePaths, ...[...allowed].filter(file => fs.statSync(file).isFile()));
 while (stack.length > 0) {
   const current = stack.pop();
-  for (const entry of fs.readdirSync(path.join(process.cwd(), current), { withFileTypes: true })) {
-    const relativePath = current ? current + "/" + entry.name : entry.name;
-    const target = path.join(process.cwd(), relativePath);
+  const directory = path.resolve(process.cwd(), current);
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const relativePath = current ? path.join(current, entry.name) : entry.name;
+    const target = path.resolve(process.cwd(), relativePath);
     const stat = fs.lstatSync(target);
     assert.equal(stat.isSymbolicLink(), false, "workspace symlink " + relativePath);
     if (stat.isDirectory()) stack.push(relativePath);
@@ -238,10 +250,10 @@ while (stack.length > 0) {
     else throw new Error("unsupported workspace path " + relativePath);
   }
 }
-assert.deepEqual(actual.sort(), [...guidancePaths, ...allowed].sort());
+if (scope === "paper") assert.deepEqual(actual.sort(), [...guidancePaths, ...allowed].sort());
 for (const file of actual) {
   assert.notEqual(path.basename(file), "AUTHOR_PREFERENCES.md");
-  const content = fs.readFileSync(path.join(process.cwd(), file), "utf8");
+  const content = fs.readFileSync(path.resolve(process.cwd(), file), "utf8");
   assert.equal(content.includes(${JSON.stringify(AUTHOR_PREFERENCES_SENTINEL)}), false);
   assert.equal(content.includes(${JSON.stringify(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER)}), false);
   assert.equal(content.includes(${JSON.stringify(renderDoveAuthorPreferencesReference())}), false);
@@ -250,8 +262,8 @@ for (const forbidden of ["private-note.md", "CLAUDE.md", ".claude/settings.json"
   if (!allowed.has(forbidden)) assert.equal(actual.includes(forbidden), false, forbidden);
 }
 const sessionPath = path.join(process.env.DOVE_FAKE_SESSION_ROOT, sessionId + ".json");
-const materialBytes = Object.fromEntries(actual.map((file) => [file, fs.readFileSync(path.join(process.cwd(), file)).toString("hex")]));
-const exchange = { mode, scope, round: Number(input.match(/^Round: (\\d+)$/mu)[1]), materialBytes };
+const materialBytes = Object.fromEntries(actual.map((file) => [file, fs.readFileSync(path.resolve(process.cwd(), file)).toString("hex")]));
+const exchange = { mode, scope, reviewId: input.match(/^Review id: (.+)$/mu)[1], round: Number(input.match(/^Round: (\\d+)$/mu)[1]), materialBytes };
 if (process.env.DOVE_FAKE_LOG) fs.appendFileSync(process.env.DOVE_FAKE_LOG, JSON.stringify({ ...exchange, sessionId, cwd: process.cwd(), allowed: [...allowed].sort() }) + "\\n");
 if (mode === "--resume" && !fs.existsSync(sessionPath)) {
   process.stderr.write("requested reviewer session does not exist\\n");
@@ -613,7 +625,7 @@ try {
   assert.equal(invocations[1].sessionId, invocations[0].sessionId);
   assert.equal(invocations[2].sessionId, invocations[0].sessionId);
 
-  // Scope selection reuses the same frozen workspace and Read-only backend.
+  // Scoped judgment reads selected live paths, with a clean session each time.
   for (const scope of ["paper", "route", "design"]) {
     assert.equal(parseDoveCli(["review", "handoff", "--scope", scope]).options.scope, scope);
   }
@@ -622,6 +634,12 @@ try {
     assert.throws(() => parseDoveCli(["review", operation, "--scope", "route"]), /--scope/u, "later calls inherit the recorded scope");
   }
   assert.ok(renderDoveHelp().includes("--scope paper|route|design"));
+  const launcherSuffix = "/.claude-tmp/sessions/session-0123456789abcdef/tmp";
+  for (const [projectRoot, expectedBytes] of [["/home/nvme01/design2garmentcode-impl-main", 91], ["/home/nvme01/modify2garmentcode", 81]]) {
+    const selected = prepareReviewWorkspace({ scope: "route", projectRoot, fsOps: { realpathSync: file => file } });
+    assert.equal(selected.workspaceRoot, projectRoot);
+    assert.equal(Buffer.byteLength(selected.workspaceRoot + launcherSuffix), expectedBytes);
+  }
   const judgmentProject = makeProject(tempRoot, "judgment-scopes");
   const identityPath = ".dove/research/IDENTITY.md";
   const identityBefore = "Mainline: Implement the requested shared solver, not sample-specific lookup.\nCompletion: Actual downstream use on the agreed inputs.\n";
@@ -640,11 +658,21 @@ try {
   assert.notEqual(rejectedPaperIdentity.status, 0);
   assert.match(rejectedPaperIdentity.stderr, /private or Dove-owned/u);
 
+  const externalTrajectory = path.join(tempRoot, "external-trajectory");
+  writeFile(externalTrajectory, "run.json", "{\"candidate\":1,\"result\":\"negative\"}\n");
+  writeFile(judgmentProject, ".claude-tmp/trajectory/history.md", "Candidate sequence and observed failures.\n");
+  writeFile(judgmentProject, ".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference());
+  writeFile(judgmentProject, ".dove/install/RESEARCH_QUALITY_FULL.md", renderDoveResearchQualityFullReference());
   for (const scope of ["route", "design"]) {
     const id = `${scope}-judgment`;
-    const explicit = scope === "route" ? ["changes/actual.diff", "results/actual.json"] : ["design/method.md"];
-    const selected = [identityPath, ...explicit].sort();
-    const scopeEnv = { ...env, DOVE_FAKE_SCOPE: scope, DOVE_FAKE_MATERIALS: JSON.stringify(selected), DOVE_FAKE_REPORT: `# ${scope} judgment\n\nSynthetic scoped return; not submission acceptance.\n` };
+    const explicit = scope === "route" ? [path.join(judgmentProject, "changes/actual.diff"), "results/actual.json", ".claude-tmp/trajectory", externalTrajectory] : [path.join(judgmentProject, "design")];
+    const selected = [identityPath, ...explicit].map(file => path.resolve(judgmentProject, file)).sort();
+    const scopeEnv = {
+      ...env, DOVE_REVIEW_STATE_ROOT: path.join(judgmentProject, ".claude-tmp/review-workspace"),
+      DOVE_FAKE_SCOPE: scope, DOVE_FAKE_MATERIALS: JSON.stringify(selected),
+      ...(scope === "route" ? { DOVE_FAKE_ADD_DIRS: JSON.stringify([externalTrajectory]) } : {}),
+      DOVE_FAKE_REPORT: `# ${scope} judgment\n\nSynthetic scoped return; not submission acceptance.\n`
+    };
     const argsFor = (operation) => ["review", operation, "--project", judgmentProject, "--id", id, "--json"];
     const materialArgs = explicit.flatMap((file) => ["--material", file]);
     writeFile(judgmentProject, identityPath, identityBefore);
@@ -652,26 +680,40 @@ try {
     assert.equal(first.status, "completed", readJson(path.join(judgmentProject, first.backendPath)).error);
     assert.equal(first.scope, scope);
     assert.deepEqual(first.materials.map((item) => item.path), selected);
-    assert.deepEqual(listFiles(first.workspaceRoot), [DOVE_REVIEW_QUALITY_REFERENCE_PATH, DOVE_REVIEW_QUALITY_FULL_REFERENCE_PATH, ...selected].sort());
+    assert.equal(first.workspaceRoot, judgmentProject, "scoped launch uses the project root, not a deep copied workspace");
     const firstRecordPath = path.join(judgmentProject, ".dove/reviews", id, "review.json");
     assert.equal(readJson(firstRecordPath).scope, scope);
-    assert.equal(readJson(path.join(judgmentProject, first.snapshotPath)).scope, scope);
+    assert.equal(Object.hasOwn(first, "snapshotPath"), false);
+    assertNoPublicHashFields(readJson(firstRecordPath), "stored live-scope record");
+    assert.deepEqual(first.materials, selected.map(file => ({ path: file })));
     const originalReport = fs.readFileSync(path.join(judgmentProject, first.reportPath));
     const identityAfter = `${identityBefore}Next core action: Extend the shared mechanism.\n`;
     writeFile(judgmentProject, identityPath, identityAfter);
+    const changedMaterial = path.join(judgmentProject, scope === "route" ? "results/actual.json" : "design/method.md");
+    fs.appendFileSync(changedMaterial, "\nUpdated actual material for the next judgment.\n");
     const second = jsonCli(argsFor("resume"), scopeEnv);
     assert.equal(second.status, "completed");
     assert.equal(second.scope, scope);
     assert.equal(second.round, 1);
     assert.notEqual(second.sessionId, first.sessionId);
     assert.deepEqual(fs.readFileSync(path.join(judgmentProject, first.reportPath)), originalReport);
-    assert.equal(fs.readFileSync(path.join(first.workspaceRoot, identityPath), "utf8"), identityBefore, "resume uses the frozen identity, not unsubmitted author edits");
+    assert.equal(fs.readFileSync(path.join(first.workspaceRoot, identityPath), "utf8"), identityAfter, "resume reads the latest live identity");
     assertReviewStatusReadOnly(judgmentProject, scopeEnv, argsFor("status"), (status) => {
       assert.equal(status.scope, scope);
       assert.equal(status.sessionId, second.sessionId);
       assert.equal(status.rounds[0].scope, scope);
-      assert.equal(materialFact(status.materialCurrentness, identityPath).status, "changed", "the exact identity participates in currentness, not unsafe-path rejection");
+      assert.equal(Object.hasOwn(status, "materialCurrentness"), false);
+      assert.equal(Object.hasOwn(status.rounds[0], "materialCurrentness"), false);
+      assert.equal(Object.hasOwn(status.rounds[0], "snapshotPath"), false);
     });
+    const metadataOnlyStatus = publicCore.inspectReviewStatus({ project: judgmentProject, id, fsOps: {
+      ...fs,
+      readFileSync(file, ...args) {
+        assert.ok([path.join(judgmentProject, ".dove/install/manifest.json"), firstRecordPath].includes(String(file)), "live status reads only installation and exchange metadata");
+        return fs.readFileSync(file, ...args);
+      }
+    } });
+    assert.equal(metadataOnlyStatus.scope, scope);
     const failed = jsonCli(argsFor("resume"), { ...scopeEnv, DOVE_FAKE_CLAUDE_FAIL: "1" }, { expectedStatus: 1 });
     assert.equal(failed.status, "failed");
     assert.equal(failed.scope, scope);
@@ -691,23 +733,33 @@ try {
     const finalRecord = readJson(firstRecordPath);
     assert.equal(finalRecord.session.sessionId, third.sessionId);
     assert.equal(finalRecord.rounds[1].sessionId, third.sessionId);
-    const calls = fs.readFileSync(fakeLog, "utf8").trim().split("\n").map(JSON.parse).filter((item) => item.cwd === first.workspaceRoot);
+    const calls = fs.readFileSync(fakeLog, "utf8").trim().split("\n").map(JSON.parse).filter((item) => item.reviewId === id);
     assert.deepEqual(calls.map((item) => [item.mode, item.scope, item.round]), [["--session-id", scope, 1], ["--session-id", scope, 1], ["--session-id", scope, 1], ["--session-id", scope, 2]]);
     assert.equal(new Set(calls.map((item) => item.sessionId)).size, calls.length);
-    assert.deepEqual(calls[0].materialBytes, calls[1].materialBytes);
+    assert.equal(Buffer.from(calls[0].materialBytes[path.join(judgmentProject, identityPath)], "hex").toString("utf8"), identityBefore);
+    assert.equal(Buffer.from(calls[1].materialBytes[path.join(judgmentProject, identityPath)], "hex").toString("utf8"), identityAfter);
+    assert.notEqual(calls[0].materialBytes[changedMaterial], calls[1].materialBytes[changedMaterial], "resume reads latest actual selected materials, including directory contents");
     for (const call of calls) assert.equal(readJson(path.join(sessionRoot, `${call.sessionId}.json`)).history.length, 1, "no reviewer history is resumed");
     for (const result of [first, second, failed, third]) {
       const backend = readJson(path.join(judgmentProject, result.latestBackendPath ?? result.backendPath));
       const expectedId = result.pendingExchange?.requestedSessionId ?? result.sessionId;
       assert.equal(backend.requestedSessionId, expectedId);
-      assert.deepEqual(backend.argv.slice(-2), ["--session-id", expectedId]);
+      assert.equal(backend.argv[backend.argv.indexOf("--session-id") + 1], expectedId);
       assert.equal(backend.resumed, false);
     }
-    for (const [index, privatePath] of [".dove/research/notes.md", ".dove/install/AUTHOR_PREFERENCES.md"].entries()) {
-      const rejected = cliReview(["review", "handoff", "--project", judgmentProject, "--id", `${scope}-private-${index}`, "--scope", scope, "--material", privatePath, "--json"], scopeEnv);
-      assert.notEqual(rejected.status, 0);
-      assert.match(rejected.stderr, /private or Dove-owned/u);
-    }
+    const importedScope = jsonCli([...argsFor("import"), "--file", importedReturn, ...materialArgs], scopeEnv);
+    assert.equal(importedScope.provenance, "imported");
+    assert.equal(Object.hasOwn(importedScope, "snapshotPath"), false);
+    const resumedImport = jsonCli(argsFor("resume"), scopeEnv);
+    assert.equal(readJson(path.join(judgmentProject, resumedImport.latestBackendPath)).status, "completed");
+    assert.equal(resumedImport.status, "completed");
+    assert.equal(resumedImport.provenance, "runtime");
+    assert.notEqual(resumedImport.sessionId, third.sessionId);
+    assert.deepEqual(fs.readFileSync(path.join(judgmentProject, importedScope.reportPath)), fs.readFileSync(importedReturn));
+    const exchangeFiles = listFiles(path.join(judgmentProject, ".dove/reviews", id));
+    assert.equal(exchangeFiles.some(file => file.endsWith("snapshot.json")), false);
+    assert.equal(exchangeFiles.every(file => ["review.json", "report.md", "backend.json"].includes(path.basename(file))), true, "no copied materials or extra manifest");
+    assertNoPublicHashFields(readJson(firstRecordPath), "stored scoped history");
     assert.equal(inspectLatestReviewFacts({ project: judgmentProject }).reviewId, paperFacts.reviewId, "route/design judgments are not paper-review facts");
   }
   const judgmentStatus = jsonCli(["review", "status", "--project", judgmentProject, "--json"], env);
