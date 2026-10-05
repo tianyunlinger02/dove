@@ -50,7 +50,7 @@ Use when existing or newly learned guidance could inspire current or subsequent 
 
 ### When Dove needs input
 
-- Ask when unresolved ambiguity in the goal, artifact, evaluation, scope or key tradeoff would materially change the next action; otherwise use reasonable in-scope defaults.
+- Ask once for unresolved goal/claim, deployment input/output or resource changes. The mentor decides evaluation repairs and engineering defaults; without reply continue independent authorized work, not repeated questions or assumed consent.
 
 ### Using host tools
 

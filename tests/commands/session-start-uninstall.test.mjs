@@ -2,9 +2,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
-import { sessionStartOutput } from "../../src/core/session-start-hook.mjs";
+import { sessionStartOutput, userOriginalSourceContext } from "../../src/core/session-start-hook.mjs";
 import { DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP } from "../../src/core/dove-author-preferences.mjs";
 import { renderUninstallInventory } from "../../src/cli/terminal-output.mjs";
 
@@ -31,41 +30,83 @@ test("SessionStart startup and clear anchor the canonical bootstrap to the valid
   }
 });
 
-test("SessionStart compact and resume include the researcher-owned identity card without rewriting it", (t) => {
-  const scratch = fileURLToPath(new URL("../../.claude/tmp/", import.meta.url));
-  fs.mkdirSync(scratch, { recursive: true });
-  const project = fs.mkdtempSync(path.join(scratch, "dove-session-identity-"));
-  t.after(() => fs.rmSync(project, { recursive: true, force: true }));
+test("SessionStart compact and resume include the researcher-owned identity card without rewriting it", () => {
+  const project = "/virtual-session-project";
   const cardPath = path.join(project, ".dove/research/IDENTITY.md");
-  fs.mkdirSync(path.dirname(cardPath), { recursive: true });
-  const card = "Mainline: Synthetic user goal\nRejected approach: CPU default\nNext core action: run GPU check\n";
-  fs.writeFileSync(cardPath, card);
-  const before = fs.statSync(cardPath).mtimeMs;
+  const card = "Current round: rounds/003-brief.md\nRound status: ongoing\nMainline: Synthetic user goal\n";
+  let cardBytes = Buffer.from(card);
+  const reads = [];
+  const directories = new Set([project, path.join(project, ".dove"), path.dirname(cardPath)]);
+  const fsOps = {
+    realpathSync: (target) => target,
+    lstatSync(target) {
+      const isFile = target === cardPath && cardBytes !== null;
+      if (!isFile && !directories.has(target)) throw Object.assign(new Error("absent"), { code: "ENOENT" });
+      return { isSymbolicLink: () => false, isDirectory: () => directories.has(target), isFile: () => isFile };
+    },
+    readFileSync(target) {
+      assert.equal(target, cardPath, "continuation reads only the identity card, not the transcript or old history");
+      reads.push(target);
+      return cardBytes;
+    },
+    writeFileSync: () => assert.fail("SessionStart must not write")
+  };
   for (const source of ["compact", "resume"]) {
-    const output = sessionStartOutput({ source }, { status: "current" }, { project });
+    const payload = { source, transcript_path: "/never-read-transcript" };
+    const output = sessionStartOutput(payload, { status: "current" }, { project, fsOps });
+    assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
     const context = output.hookSpecificOutput.additionalContext;
-    assert.ok(context.includes(card));
+    assert.ok(context.includes(card.trimEnd()));
     assert.match(context, /corrections affect only relevant fields, not an unchanged Mainline/iu);
-    assert.match(context, /identity card and actual work/iu);
-    assert.match(context, /recover the goal, cumulative method-family trajectory and next core action/iu);
-    assert.match(context, /If review is due/iu);
-    assert.match(context, /fresh read-only Dove context/iu);
-    assert.match(context, /not another self-reflection/iu);
-    assert.match(context, /Route and next-action changes do not rewrite Mainline/iu);
-    assert.match(context, /not mistake.*test prompt for a user decision/iu);
+    assert.match(context, /identity card, EVAL\.md and current brief.*resume it or call the mentor/iu);
+    assert.match(context, /dated user originals since the last mentor reading, not execution summaries/iu);
+    assert.match(context, /Keep Mainline unchanged/iu);
     assert.match(context, /reuse the two short summaries already read here/iu);
-    assert.doesNotMatch(context, /offsets|EOF|beginning to end/iu);
-    assert.equal(fs.readFileSync(cardPath, "utf8"), card, "compact/resume presents rather than corrects the card");
-    assert.equal(fs.statSync(cardPath).mtimeMs, before);
+    assert.ok(context.endsWith(userOriginalSourceContext(payload)));
+    assert.equal(cardBytes.toString(), card, "continuation presents rather than corrects the card");
   }
-  fs.rmSync(cardPath);
+  assert.deepEqual(reads, [cardPath, cardPath]);
+  cardBytes = null;
   for (const source of ["compact", "resume"]) {
-    const context = sessionStartOutput({ source }, { status: "current" }, { project }).hookSpecificOutput.additionalContext;
+    const context = sessionStartOutput({ source }, { status: "current" }, { project, fsOps }).hookSpecificOutput.additionalContext;
     assert.match(context, /No readable short identity card/iu);
-    assert.match(context, /shorten an oversized card without changing its Mainline/iu);
+    assert.match(context, /Do not infer a mainline from old notes/iu);
+    assert.match(context, /Create one for a confirmed goal when writing is permitted/iu);
     assert.doesNotMatch(context, /^Mainline:/mu, "missing card is not reconstructed on continuation");
-    assert.equal(fs.existsSync(cardPath), false, "continuation never creates an identity card");
+    assert.equal(cardBytes, null, "continuation never creates an identity card");
   }
+  assert.deepEqual(reads, [cardPath, cardPath]);
+});
+
+test("user-original source helper returns only a source hint without reading or copying history", (t) => {
+  const read = t.mock.method(fs, "readFileSync", () => assert.fail("source hint must not read any file"));
+  for (const transcript_path of [undefined, null, "", 42, {}]) {
+    assert.equal(userOriginalSourceContext({ transcript_path }), "");
+  }
+  const transcript_path = '/unread/用户 "source"\n.jsonl';
+  const payload = { transcript_path, prompt: "CURRENT_USER_BODY_NOT_TO_COPY", transcript: "PARENT_HISTORY_NOT_TO_COPY" };
+  const before = { ...payload };
+  const hint = userOriginalSourceContext(payload);
+  assert.ok(hint.includes(JSON.stringify(transcript_path)));
+  assert.match(hint, /mentor.*last-read date\/range.*dated user originals.*not execution records/iu);
+  assert.match(hint, /current user's exact words.*not yet in the file/iu);
+  assert.match(hint, /sources in the brief, not a new ledger/iu);
+  assert.doesNotMatch(hint, /CURRENT_USER_BODY_NOT_TO_COPY|PARENT_HISTORY_NOT_TO_COPY|\d{4}-\d{2}-\d{2}/u);
+  assert.deepEqual(payload, before);
+  assert.equal(read.mock.callCount(), 0);
+});
+
+test("SessionStart startup and clear append the original-user pointer without reading its source", (t) => {
+  const read = t.mock.method(fs, "readFileSync", () => assert.fail("startup source handoff must not read files"));
+  const project = "/virtual-session-project";
+  for (const source of ["startup", "clear"]) {
+    const payload = { source, transcript_path: "/never-read-transcript" };
+    const base = sessionStartOutput({ source }, { status: "current" }, { project });
+    const output = sessionStartOutput(payload, { status: "current" }, { project });
+    assert.equal(output.hookSpecificOutput.additionalContext, base.hookSpecificOutput.additionalContext + userOriginalSourceContext(payload));
+    assert.equal(output.systemMessage, undefined);
+  }
+  assert.equal(read.mock.callCount(), 0);
 });
 
 test("uninstall inventory separates deleted files from retained shared configuration edits", () => {

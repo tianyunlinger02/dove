@@ -109,9 +109,9 @@ function contract(slug) {
     purpose: "Start or continue the mentor-led round loop.",
     when: "Use for research progression; bounded questions remain bounded.",
     actions: [
-      `Call ${DOVE_RESEARCH_MENTOR_NAME} in a fresh read-only context with the identity card, EVAL, recent briefs/results and actual changes, not the execution conversation. Save its brief verbatim; follow its hypothesis, predicted columns and result-based completion.`
+      `Call ${DOVE_RESEARCH_MENTOR_NAME} fresh and read-only with dated user-original sources/range since its last reading, the current user's exact words, specified norms, identity card, EVAL, recent brief/result, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent. Save its brief verbatim; inception precedes EVAL. Follow the versioned method brief; report evaluator flaws and objections in the result.`
     ],
-    boundaries: ["The mentor may change methods within Mainline and fixed constraints. Goal changes, exceeding user resources or an unworkable whole mainline need the user's decision."]
+    boundaries: ["The mentor decides methods and engineering within Mainline and user resources. Only goal/claim, deployment input/output or resource changes need the user's decision; ask once and continue independent authorized defaults if unanswered."]
   });
   if (slug === "status") return capabilityContract({
     ambientParticipation: "Read the card, latest EVAL rows and current brief; answer four plain sentences, then return to the round.",
@@ -155,11 +155,11 @@ function contract(slug) {
     })
   });
   if (slug === "experiment") return capabilityContract({
-    ambientParticipation: "Develop freely with ground truth and reruns; only final heldout confirmation freezes and registers a one-use comparison.",
+    ambientParticipation: "Develop freely; evaluate fixed method versions and use fresh unseen test data after a tested method changes.",
     purpose: "Run and interpret experiments within a round.",
     when: "Use for development, diagnostics, confirmation, reproduction or existing-result analysis.",
     actions: [
-      "Use actual outputs and failure denominators; fix known causes and use suitable available compute. Put results in the round result and EVAL.md, preserving predictions; do not add experiments/ records."
+      "Use actual outputs and failure denominators; change code as a new method version and rerun it fully. For unlearnable methods first test single-example overfitting, before larger data/evaluators. Report evaluator flaws and objections in the round result, do not fix EVAL yourself; execute the mentor's protocol repair and all-history recomputation. Put measured results in EVAL, not new experiments/ records."
     ],
     boundaries: ["Read-only or design-only requests do not execute. Heldout used for tuning is no longer independent final evidence."]
   });
@@ -298,7 +298,7 @@ const SURFACES = [
   ["research", "Start or continue the mentor-led research rounds from the identity card and evaluation table."],
   ["status", "Report what we have made, whether the core is demonstrated, what blocks it and which round is underway."],
   ["source", "Use when external sources, citation identity, DOI checks, or bounded bibliography verification can change the research judgment."],
-  ["experiment", "Develop with ground truth and quick reruns; freeze and register only the final heldout confirmation."],
+  ["experiment", "Develop quickly; evaluate fixed method versions and redraw unseen test data after a tested method changes."],
   ["draft", "Use when the user names a draft/artifact to write or revise, with available evidence prioritized over polishing."],
   ["figure", "Use when data or mechanism logic must become an actual checked figure with caption, text, and claim alignment."],
   ["review", "Review a specified paper in a clean read-only context, or inspect author self-check, delivery or returned opinions."],

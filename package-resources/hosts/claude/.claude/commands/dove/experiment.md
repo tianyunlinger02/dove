@@ -1,11 +1,11 @@
 ---
-description: "Develop with ground truth and quick reruns; freeze and register only the final heldout confirmation."
+description: "Develop quickly; evaluate fixed method versions and redraw unseen test data after a tested method changes."
 argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
 ---
 
 # dove.experiment
 
-Develop with ground truth and quick reruns; freeze and register only the final heldout confirmation.
+Develop quickly; evaluate fixed method versions and redraw unseen test data after a tested method changes.
 
 ## Request
 
@@ -33,11 +33,11 @@ Use for development, diagnostics, confirmation, reproduction or existing-result 
 
 ### Ways Dove may proceed
 
-- Use actual outputs and failure denominators; fix known causes and use suitable available compute. Put results in the round result and EVAL.md, preserving predictions; do not add experiments/ records.
+- Use actual outputs and failure denominators; change code as a new method version and rerun it fully. For unlearnable methods first test single-example overfitting, before larger data/evaluators. Report evaluator flaws and objections in the round result, do not fix EVAL yourself; execute the mentor's protocol repair and all-history recomputation. Put measured results in EVAL, not new experiments/ records.
 
 ### When Dove needs input
 
-- Ask when unresolved ambiguity in the goal, artifact, evaluation, scope or key tradeoff would materially change the next action; otherwise use reasonable in-scope defaults.
+- Ask once for unresolved goal/claim, deployment input/output or resource changes. The mentor decides evaluation repairs and engineering defaults; without reply continue independent authorized work, not repeated questions or assumed consent.
 
 ### Using host tools
 

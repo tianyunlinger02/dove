@@ -22,7 +22,7 @@ test("research bootstrap indexes the three core records without prepopulating re
   assert.equal(RESEARCH_DEFAULT_PATHS.roundsDirectory, ".dove/research/rounds");
   const overview = RESEARCH_DEFAULT_DOCUMENTS[0].content;
   for (const name of ["IDENTITY.md", "EVAL.md", "rounds/"]) assert.ok(overview.includes(name));
-  assert.match(overview, /Confirm the mainline and evaluation with the user/iu);
+  assert.match(overview, /Confirm inception.*user's originals first.*then.*mentor.*evaluation/iu);
   assert.match(overview, /short index.*history/iu);
   assert.doesNotMatch(overview, /^Mainline:/mu);
 });
@@ -30,8 +30,12 @@ test("research bootstrap indexes the three core records without prepopulating re
 test("new round records keep human briefs attributable and old histories in place", () => {
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /IDENTITY\.md, EVAL\.md and rounds\/NNN-brief\.md plus NNN-result\.md/u);
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /Author: mentor \/ user \/ external/u);
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /user or external task instructions are round briefs/iu);
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /changed files, evaluation values and prediction versus actual/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /method version and dated user sources/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /priority is user > external > mentor.*direct user tasks/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /one code version.*changes.*new version and full rerun/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /Replaced briefs.*author and reason/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /changed files, values, prediction versus actual/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /对本轮说明的反驳\/事实更正.*mentor answers that first/iu);
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /missions\/, experiments\/ and claims\/.*without migration or new entries/iu);
   assert.match(renderDoveAuthorStanceSection(), /Preserve reusable Lessons only when useful/iu);
 });

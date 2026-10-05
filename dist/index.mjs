@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.3.0" : null;
+var injectedVersion = true ? "3.3.1" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -84,20 +84,20 @@ var DOVE_RESEARCH_AGENT_DESCRIPTION = "Use Dove for an explicit research session
 var DOVE_RESEARCH_AGENT_RESPONSIBILITY = "Collaborate on real research decisions as one complete Dove research agent.";
 var DOVE_RESEARCH_ONE_AGENT = "Dove is one research collaborator; isolated contexts provide independent judgment, not different personas.";
 var DOVE_RESEARCH_FLAT_SKILL_SENTENCE = "Its nine flat Skills \u2014 research, status, source, experiment, draft, figure, review, rebuttal, and lessons \u2014 are optional entrances, not stages or permissions.";
-var DOVE_RESEARCH_MAINLINE_ANCHORING = "Mainline is the user's confirmed goal, intended contribution, and completion meaning, not the current method or next action. Keep its wording unchanged unless the user changes those commitments or the card misstates confirmed intent. The mentor may change methods and routes within that mainline and explicit constraints without renewed approval; claims change with evidence. Unconfirmed directions remain provisional.";
-var DOVE_RESEARCH_ACTION_SPINE = "Use problem \u2192 method \u2192 contribution. Execute the current round brief through its EVAL result, then call the mentor for the next round; a plan or smoke test is not that result.";
+var DOVE_RESEARCH_MAINLINE_ANCHORING = "Mainline is the user's confirmed goal, contribution and completion meaning, not a method or next action. Keep its wording unless the user changes it or it misstates their originals. The mentor changes methods within that goal and sourced user constraints without approval; claims follow evidence. Unconfirmed directions stay provisional.";
+var DOVE_RESEARCH_ACTION_SPINE = "Use problem \u2192 method \u2192 contribution. Inception establishes the user-confirmed goal; method rounds end at EVAL results, not plans or smoke tests, then return to the mentor.";
 var DOVE_RESEARCH_DECISION_CONSEQUENCE = "Apply material results and corrections to the real method, producer and consumer, claims, and artifacts. Repair a known cause; use diagnostics to distinguish uncertain repairs. Preserve valid negative findings and stop only the work that depends on a refuted premise.";
 var DOVE_RESEARCH_RESULT_ADOPTION = "The author main session applies scoped results to actual work and downstream use within the user's goal and latest corrections. A bounded subagent returns evidence without taking over the goal; subtask completion is not goal completion.";
-var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, read the identity card, EVAL.md and current round brief; resume that round, or call the mentor if none is active. Reuse inspected evidence, not private transcripts or a new self-review. Do not rewrite an unchanged Mainline.";
-var DOVE_RESEARCH_ROUND_CYCLE = "Read `.dove/research/IDENTITY.md`, `EVAL.md` and the current round brief. Execute an ongoing round until its evaluation result, save the result and call `dove-mentor`; save its next brief verbatim and continue. When adopting or resuming a brief, set Current round to its path and Round status to ongoing; after its result, mark completed. With no current round, call the mentor. Answer status or side questions, then return to the round; an explicit discussion-only or stop request pauses it. Bounded requests stay bounded.";
-var DOVE_RESEARCH_ROUND_RECORDS = "Keep new core records in IDENTITY.md, EVAL.md and rounds/NNN-brief.md plus NNN-result.md. Each brief starts with Author: mentor / user / external (\u5BFC\u5E08 / \u7528\u6237 / \u5916\u90E8); user or external task instructions are round briefs too. Results name changed files, evaluation values and prediction versus actual. Keep RESEARCH.md a short history index; leave existing missions/, experiments/ and claims/ in place without migration or new entries.";
-var DOVE_RESEARCH_EVALUATION = "The first mentor proposes the evaluation script, dev/test split and key columns, including an unseen style/category or equivalent generalization column; reuse an existing evaluation. The user confirms this completion standard once; save its script, split and metrics in the identity card's Completion field. Later changes also need confirmation. Append time, round and measured values to EVAL.md after every round. After important results, the mentor\u2014not the main session\u2014adds the eight-dimensional paper-quality assessment there and uses its weakest decisive dimension in the next brief.";
-var DOVE_RESEARCH_EXPERIMENT_ITERATION = "During development, inspect available ground truth, change the method and rerun freely; no per-run plan or registration is needed. Only final heldout confirmation freezes the selected method and comparison, records the claim, control, data, metric and interpretation prospectively in the round brief, then uses the heldout once. Development results are not independent final evidence.";
-var DOVE_RESEARCH_CORRECTION_RECORDING = "Keep the identity card to a few hundred words. Put Current round: rounds/NNN-brief.md and Round status: ongoing / paused / completed at the top, followed by Mainline, inputs/outputs/completion, restrictions and rejected approaches, and Recent corrections. Update only affected content when the user corrects it, unless writing is forbidden. When recording a recurring correction, use `dove projects status --json` for registered roots and compare only relevant Recent corrections in their cards. If it recurs across projects, ask in one sentence whether to add it to AUTHOR_PREFERENCES; do not edit global preferences automatically.";
+var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, read the identity card, EVAL.md and current brief; resume it or call the mentor. Pass dated user originals since the last mentor reading, not execution summaries. Keep Mainline unchanged.";
+var DOVE_RESEARCH_ROUND_CYCLE = "Read `.dove/research/IDENTITY.md`, `EVAL.md` and the current brief. Call `dove-mentor` when no round is active, at inception/handover, after a result, rule-based self-stop, stalled EVAL or repeated zero family gain; include user originals and raw outputs. Save its brief verbatim: inception ends with user confirmation, method rounds with EVAL results. Set Current round and Round status: ongoing; completed at its end. Return after side answers; explicit discussion-only/stop pauses. Bounded requests stay bounded.";
+var DOVE_RESEARCH_ROUND_RECORDS = "Use IDENTITY.md, EVAL.md and rounds/NNN-brief.md plus NNN-result.md. Briefs name Author: mentor / user / external (\u5BFC\u5E08 / \u7528\u6237 / \u5916\u90E8), method version and dated user sources; priority is user > external > mentor, including direct user tasks. A method round is one code version: changes require a new version and full rerun. Replaced briefs name the author and reason. Results record changed files, values, prediction versus actual and \u5BF9\u672C\u8F6E\u8BF4\u660E\u7684\u53CD\u9A73/\u4E8B\u5B9E\u66F4\u6B63; the mentor answers that first. Keep RESEARCH.md a short history index; leave missions/, experiments/ and claims/ without migration or new entries.";
+var DOVE_RESEARCH_EVALUATION = "Confirm inception once from dated user originals and specified norms before defining EVAL. Its first data row is a same-input strong baseline; columns cover every user metric, unseen data, train-test gap and paper selling points with general metrics. Unmeasured is not achieved. Save script/split/metrics in Completion; record time, version, protocol/split and values each round. Report evaluator flaws to the mentor: it revises the protocol and assigns all-history recomputation; only changed goal meaning needs the user. Important-result eight-dimensional scores come from the mentor, not self-rating.";
+var DOVE_RESEARCH_EXPERIMENT_ITERATION = "Develop freely with ground truth and reruns, without per-run registration. Test a fixed method version; changed code means a new version and full rerun. Preserve old versions for ablation and equal comparison budgets. After test use, a changed method needs a fresh unseen test draw and same-set baselines, not retuning on old test evidence. Final confirmation records claim/control/data/metric in its brief and uses heldout once.";
+var DOVE_RESEARCH_CORRECTION_RECORDING = "Keep the card short: Current round: rounds/NNN-brief.md; Round status: ongoing / paused / completed; Mainline; deployment inputs/outputs; Completion; user restrictions/Recent corrections as verbatim quotes + date + source only. Put method rejections in briefs, not user restrictions. Correct affected fields without rewriting an unchanged Mainline or forbidden writes. For recurring corrections, `dove projects status --json` locates registered cards; compare relevant quotes only and ask once about AUTHOR_PREFERENCES, never edit it automatically.";
 function renderDoveResearchReanchor() {
-  return "Read the identity card, EVAL.md and current round brief. Execute the round to its evaluation result, then call the mentor. Keep Mainline stable; retain the latest user correction. Explicit discussion-only or stop requests pause the round.";
+  return "Read the identity card, EVAL.md and current brief. Inception confirms the goal; execute method rounds to an evaluation result, then call the mentor. Keep Mainline stable and dated user originals. Explicit discussion-only or stop requests pause the round.";
 }
-var DOVE_RESEARCH_CLARIFICATION = "Ask when unresolved ambiguity in the goal, artifact, evaluation, scope or key tradeoff would materially change the next action; otherwise use reasonable in-scope defaults.";
+var DOVE_RESEARCH_CLARIFICATION = "Ask once for unresolved goal/claim, deployment input/output or resource changes. The mentor decides evaluation repairs and engineering defaults; without reply continue independent authorized work, not repeated questions or assumed consent.";
 var DOVE_RESEARCH_CROSS_DOMAIN_INTUITION = "Use literature, adjacent fields, mathematics, physical reasoning and analogies to invent testable mechanisms; seek where the analogy fails rather than collecting citations.";
 var DOVE_RESEARCH_ACTUAL_MATERIAL_FACT_BOUNDARY = "State project methods, experiment procedures, result numbers, citation content, and source facts only from material actually read, retrieved, executed, or inspected; use general knowledge only for hypotheses and search directions.";
 var DOVE_RESEARCH_CANDIDATE_COVERAGE = "Separate candidate generation or reachability, selection on the same candidates, and end-to-end effect. Fixed candidates cannot assess generation; successful intersections cannot represent the full task. State how failed, missing, invalid and excluded cases enter the denominator.";
@@ -134,12 +134,12 @@ var DOVE_RESEARCH_REFERENCE_BULLETS = Object.freeze([
 function renderDoveResearchQualityReference() {
   return `# Dove \u7814\u7A76\u8D28\u91CF\u8981\u70B9
 
-\u6BCF\u4E2A\u65B0\u4E3B\u4E0A\u4E0B\u6587\u4EB2\u81EA\u8BFB\u672C\u6458\u8981\u548C\u4F5C\u8005\u504F\u597D\u6458\u8981\uFF1B\u538B\u7F29\u6216\u6062\u590D\u590D\u7528\u3002\u9700\u8981\u7EC6\u5219\u65F6\u624D\u67E5 [\u8D28\u91CF\u5168\u6587](RESEARCH_QUALITY_FULL.md)\u3002\u5BFC\u5E08\u548C\u72EC\u7ACB\u5BA1\u7A3F\u53EA\u8BFB\u6307\u5B9A\u6750\u6599\u53CA\u8D28\u91CF\u6307\u5BFC\uFF0C\u4E0D\u8BFB\u4F5C\u8005\u79C1\u6709\u5BF9\u8BDD\uFF1B\u6307\u5BFC\u4E0D\u662F\u8BC1\u636E\u6216\u6743\u9650\u3002
+\u6BCF\u4E2A\u65B0\u4E3B\u4E0A\u4E0B\u6587\u4EB2\u81EA\u8BFB\u672C\u6458\u8981\u548C\u4F5C\u8005\u504F\u597D\u6458\u8981\uFF1B\u538B\u7F29\u6216\u6062\u590D\u590D\u7528\u3002\u9700\u8981\u7EC6\u5219\u65F6\u624D\u67E5 [\u8D28\u91CF\u5168\u6587](RESEARCH_QUALITY_FULL.md)\u3002\u5BFC\u5E08\u6838\u5BF9\u6307\u5B9A\u7528\u6237\u539F\u8BDD\uFF0C\u4E0D\u8BFB\u6267\u884C\u8005\u5BF9\u8BDD\uFF1B\u72EC\u7ACB\u5BA1\u7A3F\u53EA\u8BFB\u6307\u5B9A\u7A3F\u4EF6\u548C\u4F9D\u636E\u3002\u6307\u5BFC\u4E0D\u662F\u8BC1\u636E\u6216\u6743\u9650\u3002
 
 - \u6CBF\u201C\u95EE\u9898 \u2192 \u65B9\u6CD5 \u2192 \u8D21\u732E\u201D\u5224\u65AD\uFF1B\u76EE\u6807\u3001\u8D21\u732E\u4E0E\u5B8C\u6210\u6807\u51C6\u4E0D\u56E0\u65B9\u4FBF\u7684\u7EC4\u4EF6\u6216\u4EE3\u7406\u6307\u6807\u6539\u53D8\u3002\u673A\u5236\u662F\u5426\u5F62\u6210\u901A\u7528\u80FD\u529B\uFF0C\u7531\u76F8\u5E94\u8BC1\u636E\u548C\u6CDB\u5316\u5217\u5224\u65AD\uFF0C\u4E0D\u9760\u4E2A\u6848\u8865\u4E01\u3002
 - \u516B\u7EF4\u662F\u95EE\u9898\u4EF7\u503C\u3001\u521B\u65B0\u3001\u673A\u5236\u7406\u8BBA\u3001\u65B9\u6CD5\u53EF\u884C\u6027\u3001\u6570\u636E\u8BC4\u4EF7\u3001\u5B9E\u73B0\u3001\u5B9E\u9A8C\u8BC1\u636E\u3001\u8868\u8FBE\u4EA4\u4ED8\uFF1B\u5B9E\u8D28\u8D28\u91CF\u3001\u4F9D\u636E\u628A\u63E1\u3001\u7528\u9014\u662F\u5426\u591F\u7528\u3001\u5DE5\u4F5C\u5B8C\u6210\u5206\u522B\u8BF4\u660E\u3002\u672A\u77E5\u3001\u672A\u5F62\u6210\u3001\u4E0D\u9002\u7528\u4E0D\u586B\u96F6\u3002
 - \u91CD\u8981\u65B9\u6CD5\u5148\u6709\u673A\u5236\u4F9D\u636E\u4E0E\u76F8\u5BF9\u516C\u5E73\u57FA\u7EBF\u7684\u53EF\u533A\u5206\u9884\u6D4B\uFF0C\u518D\u5B9E\u73B0\u4E0E\u68C0\u9A8C\uFF1B\u672A\u77E5\u6548\u679C\u4E0D\u8981\u6C42\u5148\u8BC1\u660E\u6210\u529F\u3002\u4E8B\u5B9E\u548C\u5F15\u6587\u53EA\u7528\u5B9E\u9645\u8BFB\u5230\u3001\u63A8\u5BFC\u3001\u6267\u884C\u6216\u68C0\u67E5\u7684\u6750\u6599\u3002
-- \u4FDD\u7559\u4FE1\u606F\u6761\u4EF6\u3001\u9884\u7B97\u3001\u5931\u8D25\u5206\u6BCD\u548C\u53CD\u8BC1\uFF1B\u8DD1\u901A\u6216\u6D4B\u8BD5\u5168\u7EFF\u4E0D\u8BC1\u660E\u79D1\u5B66\u6709\u6548\u3002\u5F00\u53D1\u76F4\u63A5\u770B\u771F\u503C\u3001\u91CD\u8DD1\uFF0C\u53EA\u6709\u6700\u7EC8\u786E\u8BA4\u51BB\u7ED3\u3001\u4E8B\u524D\u767B\u8BB0\u5E76\u7528 heldout \u4E00\u6B21\u3002
+- \u4FDD\u7559\u4FE1\u606F\u6761\u4EF6\u3001\u9884\u7B97\u3001\u5931\u8D25\u5206\u6BCD\u548C\u53CD\u8BC1\uFF1B\u8DD1\u901A\u4E0D\u8BC1\u660E\u79D1\u5B66\u6709\u6548\u3002\u5F00\u53D1\u53EF\u770B\u771F\u503C\u91CD\u8DD1\uFF1B\u65B9\u6CD5\u53D8\u5219\u65B0\u7248\u672C\u5168\u91CF\u8DD1\uFF0C\u7528\u8FC7\u6D4B\u8BD5\u540E\u91CD\u62BD\u672A\u89C1\u96C6\u4E0E\u540C\u96C6\u5BF9\u7167\u3002\u8BC4\u6D4B\u9519\u8BEF\u7531\u5BFC\u5E08\u4FEE\u6B63\u3001\u6267\u884C\u8005\u91CD\u7B97\u5386\u53F2\uFF0C\u4E0D\u9760\u6362\u76EE\u6807\u901A\u8FC7\u3002
 - \u6BCF\u8F6E\u5B9E\u6D4B\u5199 EVAL.md\uFF1B\u91CD\u8981\u7ED3\u679C\u7531\u5BFC\u5E08\u5199\u516B\u7EF4\u8BC4\u5206\uFF0C\u6700\u5F31\u4E14\u51B3\u5B9A\u6027\u7684\u7EF4\u5EA6\u8FDB\u5165\u4E0B\u4E00\u8F6E\u8BF4\u660E\uFF0C\u4E3B\u4F1A\u8BDD\u4E0D\u91CD\u590D\u81EA\u8BC4\u3002\u5206\u6570\u4E0D\u5E73\u5747\uFF0C\u4E0D\u662F\u5F55\u7528\u6982\u7387\u6216\u5BA1\u6279\u95E8\u3002
 - \u8D1F\u7ED3\u679C\u53EF\u589E\u52A0\u8BA4\u8BC6\uFF1B\u5206\u6E05\u5B9E\u73B0\u9519\u8BEF\u3001\u8BC4\u4EF7\u65E0\u6548\u548C\u547D\u9898\u88AB\u5426\u5B9A\u3002\u79D1\u5B66\u8FDB\u5C55\u3001\u5FC5\u8981\u5DE5\u7A0B\u4E0E\u8868\u8FBE\u4EA4\u4ED8\u5206\u522B\u62A5\u544A\uFF0C\u4E0D\u7528\u8BB0\u5F55\u3001\u8BA1\u5212\u6216\u5192\u70DF\u6D4B\u8BD5\u4EE3\u66FF\u7ED3\u679C\u3002
 `;
@@ -176,7 +176,7 @@ var DOVE_RESEARCH_SHARED_CONTRACT_BULLETS = Object.freeze([
   DOVE_RESEARCH_ROUND_CYCLE,
   DOVE_RESEARCH_ROUND_RECORDS,
   DOVE_RESEARCH_EVALUATION,
-  "A confirmed mainline covers core implementation, reruns, diagnosis and suitable GPU use within the user's resource limits. Ask for changed goals, resources beyond those limits or outward actions; do not invent approval per experiment. Explicit task constraints and host refusals remain binding.",
+  "Within the goal and resources, the mentor decides engineering defaults. Ask once for goal/claim, deployment input/output or resource changes; without reply continue authorized independent defaults, never assume consent. Outward actions and host refusals keep their boundaries.",
   DOVE_RESEARCH_EXPERIMENT_ITERATION,
   DOVE_RESEARCH_REVIEW_DUAL_COMPLETION
 ]);
@@ -232,7 +232,7 @@ function renderDoveAuthorStanceSection() {
   return `## Author stance
 
 ${bullets([
-    "The ordinary main session owns the full user conversation, necessary clarification and author execution. It saves mentor briefs verbatim, performs the round and records actual results; bounded subagents do not take over the goal. Never infer user confirmation from old notes or test prompts.",
+    "The main session owns user conversation and author execution, saves mentor briefs verbatim and records actual results. Bounded subagents do not take over the goal; old notes, test prompts and silence do not imply user confirmation.",
     DOVE_AUTHOR_PREFERENCES_READ_TRIGGER,
     DOVE_RESEARCH_CORRECTION_RECORDING,
     "Keep corrections even during assessment unless writing is expressly forbidden; a resource correction does not rewrite Mainline. Preserve reusable Lessons only when useful, not routine progress or a substitute for repair. Independent paper review uses a clean read-only context and the specified current manuscript and results; author self-check is not independent review."
@@ -351,29 +351,54 @@ ${renderDoveAgentInstructions()}`;
 function renderClaudeDoveMentorAgent() {
   return `---
 name: ${DOVE_RESEARCH_MENTOR_NAME}
-description: \u7528\u72EC\u7ACB\u4E0A\u4E0B\u6587\u5BF9\u7167\u8BC4\u6D4B\u7ED3\u679C\u548C\u5B9E\u9645\u6539\u52A8\uFF0C\u5224\u65AD\u4E0A\u4E00\u8F6E\u5E76\u63D0\u51FA\u4E0B\u4E00\u8F6E\u79D1\u7814\u8BF4\u660E\u3002
+description: \u4ECE\u7528\u6237\u539F\u8BDD\u91CD\u5EFA\u7ACB\u9879\uFF0C\u62BD\u67E5\u4EA7\u7269\u548C\u8BC4\u6D4B\uFF0C\u5224\u65AD\u65B9\u6CD5\u7248\u672C\u5E76\u7ED9\u51FA\u4E0B\u4E00\u8F6E\u8BF4\u660E\u3002
 tools: Read, Grep, Glob
 ---
 
 # Dove \u5BFC\u5E08
 
-\u4F60\u662F\u540C\u4E00\u4E2A Dove \u7814\u7A76\u8005\u7684\u4E00\u6B21\u72EC\u7ACB\u5224\u65AD\uFF0C\u4E0D\u662F\u65B0\u7684\u7528\u6237\u8EAB\u4EFD\u6216\u5BA1\u6279\u8005\u3002\u4E3B\u4F1A\u8BDD\u6BCF\u6B21\u901A\u8FC7 Claude \u539F\u751F Agent \u53D1\u8D77\u5168\u65B0\u4E0A\u4E0B\u6587\uFF0C\u4E0D resume\uFF0C\u4E0D\u4F20\u6267\u884C\u8FC7\u7A0B\u5BF9\u8BDD\uFF0C\u4E5F\u4E0D\u901A\u8FC7 CLI \u542F\u52A8\u6A21\u578B\u3002
+\u4F60\u662F\u540C\u4E00\u4E2A Dove \u7814\u7A76\u8005\u7684\u4E00\u6B21\u72EC\u7ACB\u5224\u65AD\uFF0C\u4E0D\u662F\u5BA1\u6279\u8005\u3002\u6BCF\u6B21\u539F\u751F Agent \u8C03\u7528\u662F\u5168\u65B0\u4E0A\u4E0B\u6587\uFF0C\u4E0D resume\uFF0C\u4E0D\u5E26\u6267\u884C\u8FC7\u7A0B\u5BF9\u8BDD\uFF0C\u4E0D\u7528\u6267\u884C\u8005\u8F6C\u8FF0\u4EE3\u66FF\u7528\u6237\u539F\u8BDD\uFF0C\u4E0D\u901A\u8FC7 CLI \u542F\u52A8\u6A21\u578B\u3002\u53EA\u7528 Read/Grep/Glob\uFF0C\u4E0D\u8BA1\u7B97\u3001\u4E0D\u6539\u6587\u4EF6\uFF1B\u6240\u9700\u642D\u8BC4\u6D4B\u3001\u91CD\u7B97\u3001\u663E\u8457\u6027\u68C0\u9A8C\u90FD\u5199\u8FDB\u8BF4\u660E\u4EA4\u7ED9\u6267\u884C\u8005\u3002
 
-\u53EA\u7528 Read/Grep/Glob \u8BFB\u53D6\u4E3B\u4F1A\u8BDD\u660E\u786E\u5217\u51FA\u7684\u6750\u6599\uFF1A\u9879\u76EE\u8EAB\u4EFD\u5361\uFF08\u542B\u7528\u6237\u6700\u8FD1\u7EA0\u6B63\uFF09\u3001EVAL.md\u3001\u6700\u8FD1\u82E5\u5E72\u8F6E\u7684 brief/result\uFF0C\u4EE5\u53CA\u8FD9\u4E9B\u8F6E\u6B21\u7684\u5B9E\u9645 diff \u6216\u53D8\u66F4\u6587\u4EF6\u3002Glob/Grep \u4E5F\u53EA\u5728\u6240\u5217\u8303\u56F4\u5185\u4F7F\u7528\u3002\u4E0D\u8981\u8BFB\u53D6\u6267\u884C\u5BF9\u8BDD\u3001transcript\u3001\u5BBF\u4E3B\u8BBE\u7F6E\u3001\u4F5C\u8005\u504F\u597D\u3001\u65E7\u5BA1\u7A3F\u610F\u89C1\u6216\u5176\u4ED6\u672A\u5217\u6750\u6599\uFF1B\u4E0D\u6267\u884C\u547D\u4EE4\u3001\u4E0D\u6539\u6587\u4EF6\u3001\u4E0D\u81EA\u884C\u6269\u5C55\u8C03\u67E5\u3002\u6750\u6599\u4E0D\u8DB3\u65F6\u8BF4\u6E05\u54EA\u9879\u5224\u65AD\u672A\u77E5\uFF0C\u4E0D\u628A\u8BF4\u660E\u4E2D\u7684\u53D9\u8FF0\u5F53\u6210\u5B9E\u9645\u6539\u52A8\u6216\u7ED3\u679C\u3002\u4E0D\u8981\u6C42\u51BB\u7ED3\u3001\u590D\u5236\u6216\u54C8\u5E0C\u6750\u6599\u3002
+## \u5148\u8BFB\u8C01\u8BF4\u4E86\u4EC0\u4E48
 
-\u8FD4\u56DE\u4E00\u9875\u4EE5\u5185\u7684\u5927\u767D\u8BDD\u8BF4\u660E\uFF0C\u5F00\u5934\u6807\u6CE8\u201C\u4F5C\u8005\uFF1A\u5BFC\u5E08\u201D\uFF0C\u8986\u76D6\uFF1A
+\u6750\u6599\u7531\u4E3B\u4F1A\u8BDD\u6307\u5B9A\uFF1A\u7528\u6237\u539F\u8BDD\u6765\u6E90\u53CA\u65E5\u671F/\u8303\u56F4\u3001\u7528\u6237\u6307\u5B9A\u7684\u89C4\u8303\u6587\u6863\u3001\u8EAB\u4EFD\u5361\u3001EVAL.md\u3001\u6700\u8FD1\u51E0\u8F6E brief/result\u3001\u5B9E\u9645 diff/\u53D8\u66F4\u6587\u4EF6\u548C\u539F\u59CB\u4EA7\u7269\u3002\u7ACB\u9879/\u63A5\u624B\u6309\u65E5\u671F\u91CD\u8BFB\u76F8\u5173\u7528\u6237\u539F\u8BDD\uFF1B\u6BCF\u8F6E\u5F00\u59CB\u8BFB\u4E0A\u8F6E\u4EE5\u6765\u7684\u539F\u8BDD\uFF0C\u4E0D\u53EA\u8BFB\u6267\u884C\u8005\u603B\u7ED3\u3002\u4E3B\u4F1A\u8BDD\u63D0\u4F9B\u5BBF\u4E3B\u7ED9\u51FA\u7684\u539F\u8BDD\u6E90\u8DEF\u5F84\u548C\u4E0A\u6B21\u8BFB\u5230\u7684\u65E5\u671F/\u8303\u56F4\uFF1B\u7528 Grep/Read \u5B9A\u4F4D\u5E76\u786E\u8BA4\u5176\u4E2D\u771F\u5B9E\u7528\u6237\u6D88\u606F\uFF0C\u53EA\u8BFB\u7528\u6237\u5199\u7684\u6B63\u6587\uFF0C\u6392\u9664\u5143\u6D88\u606F\u3001\u5B50\u4F1A\u8BDD\u3001\u5DE5\u5177\u8FD4\u56DE\u3001\u7CFB\u7EDF/\u5BBF\u4E3B\u6CE8\u5165\u53CA assistant \u6267\u884C\u8BB0\u5F55\uFF0C\u4E0D\u628A\u6574\u4E2A transcript \u5F53\u6750\u6599\u3002\u5F53\u524D\u7528\u6237\u6D88\u606F\u53EF\u80FD\u5C1A\u672A\u843D\u76D8\uFF0C\u4E3B\u4F1A\u8BDD\u4E00\u5E76\u63D0\u4F9B\u5F53\u524D\u539F\u6587\uFF0C\u4E0D\u7528\u6267\u884C\u8005\u6982\u62EC\u8865\u4F4D\u3002\u6CA1\u6709\u539F\u8BDD\u6E90\u65F6\uFF0C\u53EA\u7528\u7528\u6237\u63D0\u4F9B\u7684\u539F\u6587\u6216\u5E26\u65E5\u671F\u51FA\u5904\u7684\u9010\u5B57\u5F15\u6587\uFF0C\u660E\u786E\u4E0D\u80FD\u6838\u5BF9\u7684\u90E8\u5206\uFF0C\u4E0D\u80FD\u628A\u8F6C\u8FF0\u5F53\u539F\u8BDD\u3002
 
-1. **\u4E0A\u4E00\u8F6E\u600E\u6837\u4E86**\uFF1A\u5F15\u7528 EVAL \u7684\u8F6E\u6B21\u3001\u5217\u540D\u548C\u5B9E\u9645\u6570\u503C\uFF0C\u5BF9\u7167\u4E0A\u4E00\u8F6E\u9884\u6D4B\uFF1B\u6307\u51FA\u54EA\u4E9B\u5B9E\u73B0\u5E26\u6765\u901A\u7528\u80FD\u529B\uFF0C\u54EA\u4E9B\u53EA\u662F\u6309\u67D0\u4E2A\u6837\u672C\u3001\u8863\u578B\u3001\u88C1\u7247\u786C\u7F16\u7801\u6216\u5206\u652F\u7684\u8865\u4E01\u3002\u6CDB\u5316\u8981\u6C42\u4EE5\u8EAB\u4EFD\u5361\u7684\u76EE\u6807\u4E3A\u51C6\uFF0C\u5408\u7406\u5C40\u90E8\u4FEE\u590D\u4E0D\u7B49\u4E8E\u65E0\u6548\u8865\u4E01\u3002\u7ED3\u5408\u6700\u8FD1\u51E0\u8F6E\u5B9E\u9645\u6539\u52A8\u548C\u7ED3\u679C\uFF0C\u8BF4\u660E\u8FD9\u4E00\u65CF\u65B9\u6CD5\u7684\u5171\u540C\u6210\u8D25\u539F\u56E0\u3001\u8FD8\u6709\u6CA1\u6709\u7EE7\u7EED\u4EF7\u503C\uFF0C\u4E0D\u53EA\u70B9\u8BC4\u6700\u65B0\u5019\u9009\u3002
-2. **\u4E0B\u4E00\u8F6E\u505A\u4EC0\u4E48**\uFF1A\u7ED9\u51FA\u8981\u9A8C\u8BC1\u7684\u5047\u8BBE\u3001\u5177\u4F53\u65B9\u6CD5\u3001\u4E3A\u4EC0\u4E48\u6709\u5E0C\u671B\u594F\u6548\uFF0C\u4EE5\u53CA EVAL \u54EA\u4E00\u5217\u9884\u671F\u51FA\u73B0\u4EC0\u4E48\u6570\u503C\u6216\u8303\u56F4\u3002\u9884\u6D4B\u5FC5\u987B\u6807\u4E3A\u9884\u6D4B\uFF0C\u5E76\u8BF4\u660E\u4F9D\u636E\u548C\u4E0D\u786E\u5B9A\u6027\uFF0C\u4E0D\u80FD\u4F2A\u9020\u89C2\u6D4B\u6216\u53D1\u660E\u901A\u8FC7\u7EBF\u3002\u8FD9\u8F6E\u505A\u5B8C\u5FC5\u987B\u5728 EVAL \u4E0A\u5F97\u5230\u4E00\u4E2A\u7ED3\u679C\uFF0C\u4E0D\u662F\u5192\u70DF\u6D4B\u8BD5\u3001\u8BA1\u5212\u6216\u68C0\u67E5\u901A\u8FC7\uFF1B\u8D1F\u7ED3\u679C\u4E5F\u7B97\u8FD9\u4E00\u8F6E\u7ED3\u679C\u3002\u5DF2\u77E5\u5171\u540C\u539F\u56E0\u5C31\u8BA9\u4E0B\u4E00\u8F6E\u6539\u53D8\u65B9\u6CD5\uFF0C\u4E0D\u518D\u91CD\u590D\u540C\u65CF\u8865\u4E01\u3002
-3. **\u6216\u8005\u7ED3\u675F/\u95EE\u7528\u6237**\uFF1A\u76EE\u6807\u5DF2\u8FBE\u6210\u65F6\u5F15\u7528\u5B8C\u6210\u6807\u51C6\u548C\u5BF9\u5E94\u7ED3\u679C\uFF1B\u53EA\u6709\u6539\u76EE\u6807/\u5B8C\u6210\u6807\u51C6\u3001\u8D85\u51FA\u7528\u6237\u8D44\u6E90\u3001\u6216\u6574\u6761\u4E3B\u7EBF\u8D70\u4E0D\u901A\u9700\u8981\u7528\u6237\u51B3\u5B9A\u65F6\u624D\u63D0\u51FA\u5177\u4F53\u51B3\u7B56\u3002\u4E3B\u7EBF\u5185\u53EF\u4EE5\u6362\u65B9\u6CD5\u6216\u8DEF\u7EBF\uFF0C\u5199\u6E05\u539F\u56E0\u5373\u53EF\uFF0C\u4E0D\u91CD\u65B0\u7D22\u53D6\u6279\u51C6\u3002
+\u8EAB\u4EFD\u5361\u201C\u7528\u6237\u9650\u5236/\u7EA0\u6B63\u201D\u53EA\u6536\u539F\u8BDD\uFF0B\u65E5\u671F\uFF0B\u51FA\u5904\uFF1B\u6CA1\u6709\u7528\u6237\u51FA\u5904\u7684\u81EA\u52A0\u7814\u7A76\u7981\u4EE4\uFF0C\u5728\u8BF4\u660E\u4E2D\u660E\u786E\u64A4\u9500\u3002\u539F\u8BDD\u4E0D\u53EF\u8BBF\u95EE\u662F\u672A\u77E5\uFF0C\u4E0D\u662F\u6388\u6743\uFF1B\u5BBF\u4E3B\u5DE5\u5177\u62D2\u7EDD\u4E5F\u4E0D\u662F\u4F60\u53EF\u64A4\u9500\u7684\u7814\u7A76\u9650\u5236\u3002\u7528\u6237\u76F4\u63A5\u7ED9\u4E3B\u4F1A\u8BDD\u7684\u4EFB\u52A1\u4E5F\u662F\u201C\u4F5C\u8005\uFF1A\u7528\u6237\u201D\u7684\u8BF4\u660E\uFF0C\u4F18\u5148\u7EA7\uFF1A\u7528\u6237 > \u5916\u90E8 > \u5BFC\u5E08\u3002\u53EA\u8BFB\u5217\u51FA\u7684\u6750\u6599\uFF0C\u4E0D\u8BFB\u4F5C\u8005\u504F\u597D\u3001\u5BBF\u4E3B\u8BBE\u7F6E\u6216\u65E7\u5BA1\u7A3F\uFF0C\u4E0D\u81EA\u884C\u6269\u5C55\u8C03\u67E5\uFF1B\u6BCF\u8F6E\u62BD\u67E5\u539F\u59CB\u56FE/\u6587\u4EF6\uFF0C\u4E0D\u80FD\u53EA\u4FE1\u8868\u548C\u7ED3\u679C\u53D9\u8FF0\u3002
 
-\u82E5\u5C1A\u672A\u786E\u8BA4\u8BC4\u6D4B\uFF0C\u7B2C\u4E00\u4EFD\u8BF4\u660E\u63D0\u51FA\u6CBF\u7528\u7684\u8BC4\u6D4B\u811A\u672C\u3001dev/test \u5212\u5206\u548C\u5173\u952E\u6307\u6807\uFF0C\u81F3\u5C11\u4E00\u5217\u8861\u91CF\u672A\u89C1\u7C7B\u522B\u6216\u6837\u672C\u7684\u6CDB\u5316\uFF1B\u4EA4\u7ED9\u7528\u6237\u786E\u8BA4\u4E00\u6B21\uFF0C\u4E0D\u80FD\u81EA\u884C\u628A\u5EFA\u8BAE\u5F53\u6210\u5DF2\u786E\u8BA4\u6807\u51C6\u3002\u82E5\u8BC4\u6D4B\u8FD8\u65E0\u6CD5\u8FD0\u884C\uFF0C\u5C31\u8BF4\u660E\u7F3A\u5931\u6761\u4EF6\u548C\u672C\u8F6E\u8981\u8865\u9F50\u7684\u8BC4\u6D4B\u7ED3\u679C\uFF0C\u800C\u4E0D\u662F\u7F16\u9020\u6570\u503C\u3002
+## \u7ACB\u9879\u5728\u8BC4\u6D4B\u4E4B\u524D
 
-\u5728\u91CD\u8981\u7ED3\u679C\u540E\uFF0C\u8FD4\u56DE EVAL \u8BBA\u6587\u5C42\u9762\u8868\u7684\u516B\u7EF4\u8BC4\u5206\u3001\u7406\u7531\u548C\u4F9D\u636E\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u539F\u6837\u4FDD\u5B58\uFF1A\u95EE\u9898\u4EF7\u503C\u3001\u521B\u65B0\u6027\u3001\u673A\u5236/\u7406\u8BBA\u3001\u65B9\u6CD5\u53EF\u884C\u6027\u3001\u6570\u636E/\u8BC4\u6D4B\u3001\u5B9E\u73B0\u3001\u5B9E\u9A8C/\u8BC1\u636E\u3001\u8868\u8FBE/\u4EA4\u4ED8\u3002\u5B9E\u73B0\u7528 1\u20133\uFF0C\u5176\u4F59\u7528 1\u20134\uFF1B\u6309\u4E0B\u5217 Dove \u5224\u636E\u8BC4\u5206\uFF0C\u4E0D\u8981\u6C42\u9879\u76EE\u5728 EVAL \u91CC\u53E6\u5B58\u4E00\u4EFD\u5224\u636E\u3002\u672A\u77E5\u3001\u672A\u5F62\u6210\u548C\u4E0D\u9002\u7528\u4E0D\u8BC4\u5206\uFF0C\u4E0D\u5F53\u4F5C\u6700\u4F4E\u5206\u6216\u96F6\uFF1B\u4E0D\u5E73\u5747\u5E8F\u6570\u6216\u6362\u6210\u5F55\u7528\u6982\u7387\u3002\u6700\u5F31\u4E14\u51B3\u5B9A\u6027\u7684\u7EF4\u5EA6\u8FDB\u5165\u4E0B\u4E00\u8F6E\u8BF4\u660E\uFF0C\u4E0D\u8BA9\u5DE5\u7A0B\u68C0\u67E5\u5192\u5145\u79D1\u7814\u8FDB\u5C55\u3002
+\u4E3B\u7EBF\u786E\u8BA4/\u63A5\u624B\u7684\u7B2C\u4E00\u8F6E\u662F\u201C\u7ACB\u9879\u201D\uFF1A\u6309\u65E5\u671F\u4ECE\u7528\u6237\u539F\u8BDD\u548C\u6307\u5B9A\u89C4\u8303\u6587\u6863\u91CD\u5EFA\u90E8\u7F72\u65F6\u5B9E\u9645\u8F93\u5165\u3001\u6240\u9700\u8F93\u51FA\u3001\u521B\u65B0\u70B9\u3001\u57FA\u7EBF\u7C7B\u522B\u53CA\u201C\u4E0D\u662F\u4EC0\u4E48\u201D\u3002\u65E7\u5386\u53F2\u4F5C\u53CD\u4F8B\uFF0C\u4E0D\u81EA\u52A8\u7EE7\u627F\u4E3A\u9650\u5236\u3002\u5148\u53D1\u6563\u6709\u5BBD\u5EA6\u7684\u5019\u9009\uFF0C\u518D\u5BA1\u67E5\u95EE\u9898/\u65B9\u6CD5/\u8D21\u732E\uFF1B\u8D44\u6E90\u7F3A\u53E3\u65E9\u4EA4\u7528\u6237\u3002\u8FD4\u56DE\u7ACB\u9879\u7ED3\u8BBA\u8BA9\u7528\u6237\u786E\u8BA4\u4E00\u6B21\uFF0C\u518D\u5B9A EVAL\uFF0C\u4E0D\u7528\u4E00\u5F20\u65E7\u8868\u66FF\u4EE3\u7ACB\u9879\uFF0C\u4E5F\u4E0D\u81EA\u52A8\u91CD\u505A\u5DF2\u7ECF\u786E\u8BA4\u7684\u7ACB\u9879\u3002
+
+## \u8BC4\u6D4B\u53EF\u4EE5\u7EA0\u9519\uFF0C\u4E0D\u53EF\u4EE5\u6362\u76EE\u6807
+
+EVAL \u7B2C\u4E00\u6761\u6570\u636E\u884C\u662F\u540C\u8F93\u5165\u5F3A\u57FA\u7EBF\u7684\u5B8C\u6574\u7ED3\u679C\uFF1B\u5217\u8986\u76D6\u672A\u89C1\u6570\u636E\u3001\u8BAD\u7EC3-\u6D4B\u8BD5\u5DEE\u8DDD\u3001\u8BBA\u6587\u5356\u70B9\u53CA\u7528\u6237\u63D0\u8FC7\u7684\u6BCF\u4E00\u4E2A\u6307\u6807\u3002\u7528\u6CA1\u6709\u6837\u672C/\u7C7B\u522B\u7279\u4F8B\u7684\u901A\u7528\u6307\u6807\uFF0C\u6CA1\u6D4B\u7684\u4E0D\u7B97\u8FBE\u6807\u3002\u4EE5\u7528\u6237\u786E\u8BA4\u7684\u89C4\u8303\u4E3A\u51C6\uFF0C\u4E0D\u80FD\u628A\u67D0\u4E00\u5BF9\u6837\u672C\u5F53\u6574\u4E2A\u8BC4\u6D4B\u3002\u5404\u65B9\u6CD5\u7684\u9884\u7B97\u3001\u8F93\u5165\u6761\u4EF6\u548C\u5931\u8D25\u5206\u6BCD\u53EF\u6BD4\uFF0C\u5D29\u6E83\u3001\u7F3A\u8F93\u51FA\u4E0D\u80FD\u6084\u6084\u8DF3\u8FC7\u3002
+
+\u6267\u884C\u8005\u5728\u7ED3\u679C\u91CC\u62A5\u544A\u8BC4\u6D4B\u95EE\u9898\uFF0C\u4E0D\u81EA\u884C\u4FEE\u6539\u8BC4\u6D4B\u3002\u4F60\u8BCA\u65AD\u5E76\u4FEE\u6B63\u534F\u8BAE\uFF0C\u5728\u8BF4\u660E\u4E2D\u5B89\u6392\u6267\u884C\u8005\u91CD\u7B97\u5168\u90E8\u5386\u53F2\u65B9\u6CD5\u884C\uFF1BEVAL \u6807\u660E\u534F\u8BAE\u4E0E\u6D4B\u8BD5\u5212\u5206\uFF0C\u65B0\u534F\u8BAE\u4E0B\u5B8C\u6574\u91CD\u7B97\uFF0C\u4E0D\u6DF7\u7528\u65B0\u65E7\u6570\u503C\u3002\u4FEE\u8BC4\u4EF7\u5668\u4E0D\u7B49\u4E8E\u6362\u65B9\u6CD5\uFF0C\u5148\u7528\u4FDD\u7559\u7684\u539F\u59CB\u4EA7\u7269\u91CD\u7B97\uFF0C\u7F3A\u4EA7\u7269\u65F6\u5B89\u6392\u76F8\u5E94\u5386\u53F2\u65B9\u6CD5\u91CD\u8DD1\u3002\u53EA\u6709\u6539\u53D8\u76EE\u6807/\u4E3B\u5F20\u542B\u4E49\u6216\u90E8\u7F72\u8F93\u5165\u8F93\u51FA\u624D\u627E\u7528\u6237\uFF0C\u4E0D\u4E3A\u8BC4\u4EF7\u5668\u4FEE\u590D\u518D\u5BA1\u6279\u3002\u6D4B\u8BD5\u96C6\u7528\u8FC7\u540E\u65B9\u6CD5\u518D\u53D8\uFF0C\u5B89\u6392\u4ECE\u672A\u7528\u4E8E\u5F00\u53D1\u6216\u5DF2\u7528\u6D4B\u8BD5\u7684\u6570\u636E\u4E2D\u91CD\u62BD\u6D4B\u8BD5\u96C6\uFF0C\u5E76\u8BA9\u57FA\u7EBF/\u5BF9\u7167\u540C\u96C6\u91CD\u7B97\uFF1B\u65E7\u6D4B\u8BD5\u53EA\u4F5C\u5386\u53F2/\u5F00\u53D1\u8BC1\u636E\u3002\u6CA1\u6709\u65B0\u6570\u636E\u5C31\u8BF4\u660E\u72EC\u7ACB\u8BC1\u636E\u7F3A\u53E3\uFF0C\u4E0D\u5047\u79F0\u201C\u672A\u89C1\u201D\u3002
+
+## \u6BCF\u8F6E\u5148\u56DE\u5E94\uFF0C\u518D\u5224\u65AD\u4E09\u5C42
+
+\u5148\u56DE\u5E94\u7ED3\u679C\u4E2D\u7684\u201C\u5BF9\u672C\u8F6E\u8BF4\u660E\u7684\u53CD\u9A73/\u4E8B\u5B9E\u66F4\u6B63\u201D\uFF0C\u627F\u8BA4\u6216\u7528\u5B9E\u9645\u4F9D\u636E\u53CD\u9A73\uFF0C\u4E0D\u80FD\u8DF3\u8FC7\u3002\u5F15\u7528 EVAL \u5217\u540D\u3001\u9884\u6D4B\u548C\u5B9E\u9645\u6570\u503C\uFF0C\u518D\u5224\u65AD\uFF1A
+1. \u8FD9\u4E00\u65CF\u65B9\u6CD5\u8FD8\u503C\u4E0D\u503C\u5F97\u7EE7\u7EED\uFF0C\u5171\u540C\u539F\u56E0\u662F\u4EC0\u4E48\uFF1B\u540C\u65CF\u8FDE\u7EED\u65E0\u51C0\u589E\u5C31\u6362\u65CF\uFF0C\u4E0D\u518D\u5FAA\u73AF\u8865\u4E01\u3002
+2. \u6539\u52A8\u5E26\u6765\u901A\u7528\u80FD\u529B\u8FD8\u662F\u8865\u4E01\uFF1A\u9488\u5BF9\u54EA\u7C7B\u5931\u8D25\uFF0C\u672A\u89C1\u6570\u636E\u5217\u662F\u5426\u53D8\u5316\uFF0C\u800C\u4E0D\u662F\u67D0\u4E00\u4EF6\u662F\u5426\u8C03\u901A\u3002
+3. \u95EE\u9898/\u65B9\u6CD5/\u8D21\u732E\u662F\u5426\u7AD9\u5F97\u4F4F\uFF1A\u68C0\u67E5\u654F\u611F\u6027\u3001\u5BF9\u7167\u5F3A\u5F31\u3001\u8BBE\u5B9A\u73B0\u5B9E\u6027\uFF1B\u533A\u5206\u8865\u8BC1\u636E\u7684\u201C\u9A8C\u8BC1\u201D\u548C\u6539\u53D8\u673A\u5236/\u80FD\u529B\u7684\u201C\u771F\u8865\u5F3A\u201D\uFF0C\u4E0D\u9ED8\u8BA4\u6536\u7A84\u4E3B\u5F20\u3002\u4E0D\u8981\u4E3A\u5355\u4EF6\u6837\u672C\u51FA\u9886\u57DF\u5DE5\u827A\u4E3B\u610F\u3002
+
+## \u4E0B\u4E00\u8F6E\u8BF4\u660E\u7684\u56FA\u5B9A\u5199\u6CD5
+
+\u8FD4\u56DE\u4E00\u9875\u4EE5\u5185\u7684\u5927\u767D\u8BDD\uFF0C\u5F00\u5934\u201C\u4F5C\u8005\uFF1A\u5BFC\u5E08\u201D\uFF0C\u6CE8\u660E\u8F6E\u6B21\u3001\u65B9\u6CD5\u7248\u672C\u3001\u6240\u7528\u539F\u8BDD\u65E5\u671F/\u51FA\u5904\u53CA\u672C\u6B21\u5224\u65AD\u3002\u65B9\u6CD5\u8F6E\u6B21\u56FA\u5B9A\u5199\u516D\u9879\uFF1A**\u539F\u56E0\u8BCA\u65AD\uFF1B\u672C\u8F6E\u552F\u4E00\u6539\u52A8\uFF1B\u5BF9\u7167\u4E0E\u9884\u7B97\uFF1B\u7981\u8BFB\u8F93\u5165\uFF1B\u6570\u5B57\u95E8\u69DB\uFF1B\u5931\u8D25\u6C47\u62A5\u683C\u5F0F**\u3002\u628A\u5047\u8BBE\u3001\u4E3A\u4EC0\u4E48\u6709\u671B\u594F\u6548\u548C EVAL \u6307\u5B9A\u5217\u7684\u6570\u503C\u9884\u6D4B\u5199\u8FDB\u5BF9\u5E94\u9879\uFF0C\u9884\u6D4B\u6CE8\u660E\u4F9D\u636E\u548C\u4E0D\u786E\u5B9A\u6027\uFF0C\u95E8\u69DB\u6CBF\u7528\u7528\u6237\u76EE\u6807\uFF0C\u672A\u5B9A\u7684\u6807\u4E3A\u5EFA\u8BAE\u3002\u5931\u8D25\u987B\u8BF4\u5361\u5728\u54EA\u4E00\u6B65\uFF0C\u4E3E 1\u20132 \u4E2A\u539F\u59CB\u4F8B\u5B50\uFF1B\u7ED3\u679C\u4E0D\u53EA\u662F\u8BA1\u5212\u6216\u5192\u70DF\u6D4B\u8BD5\u3002
+
+\u4E00\u8F6E=\u4E00\u4E2A\u65B9\u6CD5\u7248\u672C\uFF1B\u8BC4\u6D4B\u671F\u95F4\u7248\u672C\u5185\u4EE3\u7801\u4E0D\u6539\uFF0C\u6539\u4EE3\u7801\u5C31\u65B0\u7248\u672C\u3001\u5168\u91CF\u91CD\u8DD1\uFF0C\u4E0D\u628A\u5355\u6B3E\u4FEE\u8865\u7B97\u5168\u8F6E\u7ED3\u679C\u3002\u65E7\u65B9\u6CD5\u4FDD\u7559\u4F5C\u6D88\u878D\uFF0C\u5404\u5BF9\u7167\u540C\u9884\u7B97\u3002\u5141\u8BB8\u4E2D\u9014\u66FF\u6362\u672C\u8F6E\u8BF4\u660E\uFF0C\u6807\u6CE8\u539F\u56E0\u548C\u4F5C\u8005\uFF1B\u82E5\u65B9\u6CD5\u4EE3\u7801\u53D8\u5316\u5219\u8F6C\u65B0\u7248\u672C\uFF0C\u4E0D\u80FD\u7528\u6539\u8BF4\u660E\u63A9\u76D6\u3002\u5BF9\u201C\u5B66\u4E0D\u52A8\u201D\u7684\u9879\u76EE\uFF0C\u7ACB\u9879\u540E\u7684\u7B2C\u4E00\u4E2A\u65B9\u6CD5\u8F6E\u6B21\u56FA\u5B9A\u5148\u505A\u5355\u4EF6\u8FC7\u62DF\u5408/\u4ECE\u7A7A\u72B6\u6001\u590D\u73B0\u53EF\u5B66\u4E60\u6027\uFF0C\u4E0D\u80FD\u628A\u6269\u6570\u636E\u3001\u5EFA\u5927\u8BC4\u4EF7\u5668\u7B49\u6392\u5728\u7B2C\u4E00\u6B21\u68C0\u9A8C\u524D\u3002
+
+\u5B8C\u6210\u4E00\u8F6E\u540E\u7ED9\u4E0B\u4E00\u8F6E\uFF1B\u8FDE\u7EED\u51E0\u8F6E EVAL \u6CA1\u65B0\u884C\u65F6\u8BCA\u65AD\u4E3A\u4EC0\u4E48\u672A\u5F62\u6210\u7ED3\u679C\u5E76\u6539\u4E0B\u4E00\u8F6E\uFF0C\u4E0D\u8865\u9020\u6570\u636E\u3002\u6267\u884C\u8005\u56E0\u201C\u8FDD\u80CC\u539F\u5219/\u9700\u8981\u65B0\u673A\u5236/\u89C4\u5219\u4E0D\u5141\u8BB8\u201D\u81EA\u884C\u505C\u4E0B\uFF0C\u4E5F\u8C03\u7528\u4F60\u6838\u5BF9\u89C4\u5219\u6765\u6E90\u3002\u82E5\u4E0A\u4E0B\u6587\u6458\u8981\u5927\u534A\u662F\u7981\u4EE4\uFF0C\u53EF\u5EFA\u8BAE\u7528\u6237\u6E05\u7A7A\uFF0C\u518D\u6309\u8EAB\u4EFD\u5361\u3001\u7528\u6237\u539F\u8BDD\u548C\u5F53\u524D\u8BF4\u660E\u91CD\u53D1\uFF1B\u4E0D\u81EA\u884C\u6E05\u7A7A\u6216\u64A4\u9500\u5BBF\u4E3B\u6743\u9650\u3002
+
+## \u627E\u7528\u6237\uFF0C\u4E0D\u53CD\u590D\u7B49\u7528\u6237
+
+\u53EA\u4E3A\u76EE\u6807/\u4E3B\u5F20\u3001\u90E8\u7F72\u8F93\u5165\u8F93\u51FA\u6539\u53D8\u6216\u8D44\u6E90\u8D85\u51FA\u627E\u7528\u6237\uFF1B\u6570\u636E\u89C4\u6A21\u3001\u4E0B\u8F7D\u65B9\u5F0F\u3001\u52A0\u901F\u7B49\u5DF2\u6388\u6743\u8303\u56F4\u5185\u7684\u5DE5\u7A0B\u51B3\u5B9A\u76F4\u63A5\u5B9A\uFF0C\u4E0D\u53D1\u9009\u62E9\u9898\u3002\u540C\u4E00\u5F85\u51B3\u4E8B\u9879\u53EA\u95EE\u4E00\u6B21\uFF0C\u5199\u6E05\u9ED8\u8BA4\uFF1B\u6CA1\u56DE\u590D\u7EE7\u7EED\u4E0D\u4F9D\u8D56\u8BE5\u51B3\u5B9A\u7684\u5DF2\u6388\u6743\u9ED8\u8BA4\u5DE5\u4F5C\uFF0C\u4E0D\u53CD\u590D\u50AC\u95EE\uFF0C\u4E0D\u628A\u6C89\u9ED8\u5F53\u540C\u610F\u6539\u76EE\u6807\u6216\u8D8A\u8FC7\u8D44\u6E90/\u5BBF\u4E3B\u6743\u9650\u3002\u76EE\u6807\u5B8C\u6210\u8981\u5F15\u7528\u5168\u90E8\u6307\u6807\uFF0C\u672A\u91CF\u7684\u4E0D\u80FD\u79F0\u8FBE\u6807\u3002
+
+\u91CD\u8981\u7ED3\u679C\u540E\u8FD4\u56DE\u516B\u7EF4\u8BC4\u5206\u3001\u7406\u7531\u548C\u5B9E\u9645\u4F9D\u636E\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u4FDD\u5B58\u5230 EVAL\uFF1A\u5B9E\u73B0 1\u20133\uFF0C\u5176\u4F59 1\u20134\u3002\u672A\u77E5\u3001\u672A\u5F62\u6210\u3001\u4E0D\u9002\u7528\u4E0D\u8BC4\u5206\uFF1B\u4E0D\u5E73\u5747\u5E8F\u6570\u6216\u6362\u6210\u5F55\u7528\u6982\u7387\u3002\u6700\u5F31\u4E14\u51B3\u5B9A\u6027\u7684\u7EF4\u5EA6\u8FDB\u5165\u4E0B\u4E00\u8F6E\uFF0C\u5DE5\u7A0B\u68C0\u67E5\u4E0D\u662F\u79D1\u7814\u8FDB\u5C55\u3002
 
 ${DOVE_RESEARCH_QUALITY_CRITERIA.map((criterion) => `- ${criterion}`).join("\n")}
 
-\u672B\u5C3E\u5217\u51FA\u201C\u5B9E\u9645\u8BFB\u8FC7\u7684\u6587\u4EF6\u201D\uFF08\u9700\u8981\u65F6\u6CE8\u660E\u53EA\u8BFB\u4E86\u54EA\u4E9B\u90E8\u5206\uFF09\u3002\u4E3B\u4F1A\u8BDD\u628A\u4F60\u7684\u8FD4\u56DE\u539F\u6837\u4FDD\u5B58\u4E3A .dove/research/rounds/NNN-brief.md\uFF1B\u4F60\u53EA\u8FD4\u56DE\u8BF4\u660E\uFF0C\u4E0D\u81EA\u5DF1\u4FDD\u5B58\u6216\u6267\u884C\u3002`;
+\u672B\u5C3E\u5217\u51FA\u201C\u5B9E\u9645\u8BFB\u8FC7\u7684\u6587\u4EF6\u201D\u548C\u7528\u6237\u539F\u8BDD\u8303\u56F4\u3002\u4E3B\u4F1A\u8BDD\u5C06\u4F60\u7684\u8BF4\u660E\u539F\u6837\u4FDD\u5B58\u4E3A .dove/research/rounds/NNN-brief.md\uFF1B\u4F60\u53EA\u8FD4\u56DE\u8BF4\u660E\uFF0C\u4E0D\u4FDD\u5B58\u6216\u6267\u884C\u3002`;
 }
 function renderClaudeDoveReviewAgent() {
   return `---
@@ -483,9 +508,9 @@ function contract(slug) {
     purpose: "Start or continue the mentor-led round loop.",
     when: "Use for research progression; bounded questions remain bounded.",
     actions: [
-      `Call ${DOVE_RESEARCH_MENTOR_NAME} in a fresh read-only context with the identity card, EVAL, recent briefs/results and actual changes, not the execution conversation. Save its brief verbatim; follow its hypothesis, predicted columns and result-based completion.`
+      `Call ${DOVE_RESEARCH_MENTOR_NAME} fresh and read-only with dated user-original sources/range since its last reading, the current user's exact words, specified norms, identity card, EVAL, recent brief/result, actual diff/files and raw artifacts\u2014not execution conversation or paraphrased user intent. Save its brief verbatim; inception precedes EVAL. Follow the versioned method brief; report evaluator flaws and objections in the result.`
     ],
-    boundaries: ["The mentor may change methods within Mainline and fixed constraints. Goal changes, exceeding user resources or an unworkable whole mainline need the user's decision."]
+    boundaries: ["The mentor decides methods and engineering within Mainline and user resources. Only goal/claim, deployment input/output or resource changes need the user's decision; ask once and continue independent authorized defaults if unanswered."]
   });
   if (slug === "status") return capabilityContract({
     ambientParticipation: "Read the card, latest EVAL rows and current brief; answer four plain sentences, then return to the round.",
@@ -529,11 +554,11 @@ function contract(slug) {
     })
   });
   if (slug === "experiment") return capabilityContract({
-    ambientParticipation: "Develop freely with ground truth and reruns; only final heldout confirmation freezes and registers a one-use comparison.",
+    ambientParticipation: "Develop freely; evaluate fixed method versions and use fresh unseen test data after a tested method changes.",
     purpose: "Run and interpret experiments within a round.",
     when: "Use for development, diagnostics, confirmation, reproduction or existing-result analysis.",
     actions: [
-      "Use actual outputs and failure denominators; fix known causes and use suitable available compute. Put results in the round result and EVAL.md, preserving predictions; do not add experiments/ records."
+      "Use actual outputs and failure denominators; change code as a new method version and rerun it fully. For unlearnable methods first test single-example overfitting, before larger data/evaluators. Report evaluator flaws and objections in the round result, do not fix EVAL yourself; execute the mentor's protocol repair and all-history recomputation. Put measured results in EVAL, not new experiments/ records."
     ],
     boundaries: ["Read-only or design-only requests do not execute. Heldout used for tuning is no longer independent final evidence."]
   });
@@ -671,7 +696,7 @@ var SURFACES = [
   ["research", "Start or continue the mentor-led research rounds from the identity card and evaluation table."],
   ["status", "Report what we have made, whether the core is demonstrated, what blocks it and which round is underway."],
   ["source", "Use when external sources, citation identity, DOI checks, or bounded bibliography verification can change the research judgment."],
-  ["experiment", "Develop with ground truth and quick reruns; freeze and register only the final heldout confirmation."],
+  ["experiment", "Develop quickly; evaluate fixed method versions and redraw unseen test data after a tested method changes."],
   ["draft", "Use when the user names a draft/artifact to write or revise, with available evidence prioritized over polishing."],
   ["figure", "Use when data or mechanism logic must become an actual checked figure with caption, text, and claim alignment."],
   ["review", "Review a specified paper in a clean read-only context, or inspect author self-check, delivery or returned opinions."],
@@ -1076,6 +1101,61 @@ function identityCardContext(project, options = {}) {
 ${card.text}${reminder}`;
 }
 
+// src/core/session-start-hook.mjs
+import path3 from "node:path";
+function parseSessionStartPayload(input) {
+  let payload;
+  try {
+    payload = JSON.parse(input);
+  } catch {
+    throw new Error("Dove SessionStart hook received malformed JSON.");
+  }
+  if (payload?.hook_event_name !== "SessionStart") {
+    throw new Error("Dove SessionStart hook received an unsupported or missing hook event.");
+  }
+  return payload;
+}
+function systemMessage(message) {
+  return { systemMessage: message };
+}
+function userOriginalSourceContext(payload) {
+  if (typeof payload.transcript_path !== "string" || !payload.transcript_path) return "";
+  return `
+User-original source: ${JSON.stringify(payload.transcript_path)}. Give the mentor its last-read date/range and dated user originals, not execution records. Include the current user's exact words if not yet in the file; retain sources in the brief, not a new ledger.`;
+}
+function sessionStartOutput(payload, result = null, options = {}) {
+  const output = {};
+  if (result && result.status !== "current") {
+    output.systemMessage = "Dove project integration needs attention. SessionStart is read-only; run dove update explicitly to update supported manifest-owned integration. If blocked, inspect dove doctor --json before changing files.";
+  }
+  if (payload.source === "startup" || payload.source === "clear") {
+    if (typeof options.project !== "string" || !path3.isAbsolute(options.project)) {
+      throw new Error("Dove SessionStart bootstrap requires an explicit absolute project root.");
+    }
+    output.hookSpecificOutput = {
+      hookEventName: "SessionStart",
+      additionalContext: renderDoveAuthorPreferencesBootstrap(
+        path3.join(options.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude),
+        path3.join(options.project, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude)
+      )
+    };
+  } else if (payload.source === "compact" || payload.source === "resume") {
+    output.hookSpecificOutput = {
+      hookEventName: "SessionStart",
+      additionalContext: `${identityCardContext(options.project, options)}
+${DOVE_AUTHOR_PREFERENCES_CONTINUITY}
+${DOVE_RESEARCH_REFLECTION_CONTINUITY}`
+    };
+  }
+  if (output.hookSpecificOutput) output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload);
+  return Object.keys(output).length > 0 ? output : null;
+}
+function sessionStartFailureOutput(error) {
+  const raw = error instanceof Error ? error.message : String(error);
+  const message = raw.replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
+  return systemMessage(`Dove SessionStart could not inspect project integration (read-only): ${message} Run dove update explicitly for supported integration, or dove doctor --json to inspect blocked state.`);
+}
+
 // src/core/user-prompt-submit-hook.mjs
 var PROMPT_GUIDANCE_PATHS = Object.freeze([
   DOVE_CLAUDE_AMBIENT_RULE_PATH,
@@ -1103,7 +1183,7 @@ function userPromptSubmitOutput(payload, guidance, options = {}) {
 ${guidance.fingerprints.join("\n")}
 ${identityCardContext(options.project, options)}
 ${renderDoveResearchReanchor()}
-On first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.`;
+On first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.${userOriginalSourceContext(payload)}`;
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
@@ -1117,55 +1197,6 @@ function userPromptSubmitFailureOutput(error) {
   return {
     systemMessage: `Dove UserPromptSubmit could not deliver its read-only guidance: ${message}`
   };
-}
-
-// src/core/session-start-hook.mjs
-import path3 from "node:path";
-function parseSessionStartPayload(input) {
-  let payload;
-  try {
-    payload = JSON.parse(input);
-  } catch {
-    throw new Error("Dove SessionStart hook received malformed JSON.");
-  }
-  if (payload?.hook_event_name !== "SessionStart") {
-    throw new Error("Dove SessionStart hook received an unsupported or missing hook event.");
-  }
-  return payload;
-}
-function systemMessage(message) {
-  return { systemMessage: message };
-}
-function sessionStartOutput(payload, result = null, options = {}) {
-  const output = {};
-  if (result && result.status !== "current") {
-    output.systemMessage = "Dove project integration needs attention. SessionStart is read-only; run dove update explicitly to update supported manifest-owned integration. If blocked, inspect dove doctor --json before changing files.";
-  }
-  if (payload.source === "startup" || payload.source === "clear") {
-    if (typeof options.project !== "string" || !path3.isAbsolute(options.project)) {
-      throw new Error("Dove SessionStart bootstrap requires an explicit absolute project root.");
-    }
-    output.hookSpecificOutput = {
-      hookEventName: "SessionStart",
-      additionalContext: renderDoveAuthorPreferencesBootstrap(
-        path3.join(options.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude),
-        path3.join(options.project, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude)
-      )
-    };
-  } else if (payload.source === "compact" || payload.source === "resume") {
-    output.hookSpecificOutput = {
-      hookEventName: "SessionStart",
-      additionalContext: `${identityCardContext(options.project, options)}
-${DOVE_AUTHOR_PREFERENCES_CONTINUITY}
-${DOVE_RESEARCH_REFLECTION_CONTINUITY}`
-    };
-  }
-  return Object.keys(output).length > 0 ? output : null;
-}
-function sessionStartFailureOutput(error) {
-  const raw = error instanceof Error ? error.message : String(error);
-  const message = raw.replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
-  return systemMessage(`Dove SessionStart could not inspect project integration (read-only): ${message} Run dove update explicitly for supported integration, or dove doctor --json to inspect blocked state.`);
 }
 
 // src/core/statusline.mjs
@@ -1341,7 +1372,7 @@ var RESEARCH_DEFAULT_PATHS = Object.freeze({
 var RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
   Object.freeze({
     path: RESEARCH_DEFAULT_PATHS.overview,
-    content: "# Research\n\nCurrent work uses `IDENTITY.md`, `EVAL.md`, and `rounds/` (briefs and results). Confirm the mainline and evaluation with the user before filling them in. Keep this file a short index to existing history; leave historical missions, experiments, and claims in place.\n"
+    content: "# Research\n\nCurrent work uses `IDENTITY.md`, `EVAL.md`, and `rounds/` (briefs and results). Confirm inception from the user's originals first, then let the mentor define the evaluation. Keep this file a short index to existing history; leave historical missions, experiments, and claims in place.\n"
   })
 ]);
 var RESEARCH_DEFAULT_DIRECTORY_PATHS = Object.freeze([RESEARCH_ROOT]);

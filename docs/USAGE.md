@@ -1,6 +1,6 @@
 # Usage
 
-Dove advances a user-confirmed research goal through short round briefs and actual evaluation results. The main session executes; a fresh read-only mentor judges the result and proposes the next round. Mainline confirmation covers core implementation, reruns, diagnosis, and suitable GPU use within your resource limits. Changing the goal or completion standard, exceeding those limits, and publishing/submitting externally still need your decision. Ordinary questions and bounded requests retain their scope.
+Dove advances a user-confirmed research goal through short round briefs and actual evaluation results. The main session executes; a fresh read-only mentor judges the result and proposes the next round. Confirmation covers core implementation, reruns, diagnosis, and engineering decisions within your resource limits. Ask once only when the goal, intended claim or deployment inputs/outputs must change, or resources would exceed those limits; evaluator corrections within the same goal do not need renewed approval. Ordinary questions and bounded requests retain their scope and existing authorization.
 
 ## Start using Dove
 
@@ -17,7 +17,7 @@ The bare public npm package name `dove` is unrelated. Use an exact trusted artif
 - **Ordinary Claude conversation is the primary and complete Dove entrance.** Start `claude` in the initialized project. The project rule supplies shared judgment and author stance; the main session owns clarification, execution, the confirmed mainline, and adoption of results.
 - **`claude --agent dove`** is an optional explicit author-side entrance, with no higher judgment authority.
 - **Bounded Dove subagents** can investigate independent questions. Work needing the full user conversation, consequential clarification, or ongoing ownership stays in the main session.
-- **`dove-mentor` and `dove-review`** are native Claude subagents for independent judgment, not additional personas or Skills. Every call uses a fresh context, only `Read`/`Grep`/`Glob`, and specified materials; no execution conversation or resumed history is supplied.
+- **`dove-mentor` and `dove-review`** are native Claude subagents for independent judgment, not additional personas or Skills. Every call uses a fresh context, only `Read`/`Grep`/`Glob`, and specified materials; no execution conversation or resumed history is supplied. The mentor alone reads genuine user records from the specified host source, not executor paraphrases; paper review has no transcript access.
 - **`/dove:*` commands** are nine flat capability shortcuts, not stages or permission grants. DSH receives project-local filesystem Skills only, without Claude agents or hooks. There is no Auto command.
 
 | Skill | Use it for |
@@ -45,7 +45,7 @@ Both hosts install four exact package-managed resources:
 | `.dove/install/AUTHOR_PREFERENCES.md` | Short Chinese author-side essentials; the same fresh-context read applies. |
 | `.dove/install/AUTHOR_PREFERENCES_FULL.md` | Preserved full preferences, consulted as needed. [Author preferences](AUTHOR_PREFERENCES.md) remains the sole editable full source. |
 
-Claude startup and `/clear` deliver the two-essentials bootstrap; DSH applies it on first author-side Skill use if not already read in that context. Compact/resume reuses that context's reading. Do not delegate the main agent's read or require full companions through EOF each time. Installation, hook delivery, and another agent's read do not prove application. These references are guidance, not evidence, permissions, or Lessons. Bounded subagents receive relevant constraints; DSH Status has no author stance or bootstrap. Mentor and reviewer access remains limited to their specified materials, not author preferences or private conversation.
+Claude startup and `/clear` deliver the two-essentials bootstrap; DSH applies it on first author-side Skill use if not already read in that context. Compact/resume reuses that context's reading. Do not delegate the main agent's read or require full companions through EOF each time. Installation, hook delivery, and another agent's read do not prove application. These references are guidance, not evidence, permissions, or Lessons. Bounded subagents receive relevant constraints; DSH Status has no author stance or bootstrap. Mentor and reviewer access remains limited to their specified materials, without private author preferences; the mentor's original-user source exception does not grant access to the full execution conversation or unrelated private transcripts.
 
 ## Scope, plans, and progress
 
@@ -53,7 +53,7 @@ Keep the user's confirmed `Mainline` and completion meaning stable. Methods may 
 
 Choose work for the real problem and intended contribution, not an inherited interface, available dataset, convenient proxy, mature implementation, or easiest test. Theory, relevant sources, simpler alternatives, and distinguishing predictions inform method choice; exhaustive search or prior positive results are not prerequisites for authorized core implementation. Controls and infrastructure serve the contribution. A smoke test establishes software behavior, not completion of a research round or the whole goal.
 
-The mentor compares prediction with actual results and recent changes, including the generalization column. It distinguishes a reusable capability from sample-specific branches or hardcoding, identifies shared causes across recent attempts, and chooses repair, redesign, another method, or discriminating evidence. Valid local repairs remain useful; generality is relative to the confirmed target, not universality. Within that target, the mentor can change methods or routes without renewed approval, explaining why in the brief.
+The mentor reads raw outputs every round and judges three levels: whether this method family remains worthwhile; whether it adds general capability or a patch, using failure classes and unseen-data results; and whether the problem, method and contribution stand, including sensitivity, strong controls and realistic deployment assumptions. It distinguishes verification from genuine strengthening, does not default to narrowing the claim, and does not propose single-sample domain craft fixes. Within the confirmed goal, it can change methods or engineering choices directly, explaining why in the brief.
 
 The main session applies material findings to affected methods, evaluation, code, claims, manuscripts, figures, and current work. A capability report or saved record is not adoption. Negative results can advance understanding and end a round without establishing an effective method. Useful engineering or delivery can complete a bounded request without producing new scientific evidence. Software checks, actual research results, and completion of the user's goal remain separate claims.
 
@@ -69,6 +69,12 @@ rounds/
   NNN-result.md
 ```
 
+### Kickoff and original-user grounding
+
+On mainline confirmation or takeover, the first round reconstructs the project from the user's original words in date order and user-designated normative documents: actual deployment inputs/outputs, intended innovation/contribution, baseline categories, completion meaning and non-goals. Old history supplies counterexamples, not inherited constraints. Generate broad candidates before critique, and surface resource gaps early. The user confirms this reconstruction once; only then does the mentor define EVAL, without a second evaluation approval.
+
+At kickoff/takeover and every round start, the fresh mentor reads genuine user records, not executor retellings. Main-session SessionStart/UserPromptSubmit hooks expose only the host's `transcript_path` source path; they do not read/copy transcripts or automatically parse user history. The main session supplies that path, the last-read date/range and the current user's original text, which may not yet be persisted. The mentor uses Grep/Read to select relevant user-authored bodies, in date order initially and since the preceding round thereafter. Exclude meta messages, subagent conversations, host/system injections, self-wake summaries, tool results and assistant/executor text, even if wrapped in a user event. Do not inherit or read the full parent execution conversation. Record source, dates and last-read/since-previous-round range in the brief, not a new ledger. A source that cannot be accessed leaves provenance unknown; it does not revoke confirmed restrictions or host refusals. Restrictions established to be executor-added without user grounding are explicitly revoked in the mentor's brief.
+
 ### Identity card
 
 Keep `IDENTITY.md` to a few hundred plain-language words. Put the current round fields at the top, inside the first 4096 bytes:
@@ -79,25 +85,27 @@ Round status: ongoing
 Mainline: <the user's confirmed wording>
 ```
 
-`Round status` is `ongoing`, `paused`, or `completed`. The card also keeps inputs/outputs, the confirmed completion standard, constraints and rejected approaches, recent user corrections, and any hard blocker. Current method and next work belong in the linked brief, not a growing card. Change Mainline only when the user changes those commitments or the card demonstrably misstates already-confirmed intent.
+`Round status` is `ongoing`, `paused`, or `completed`. The card also keeps deployment inputs/outputs, the confirmed completion meaning, sourced user restrictions, recent user corrections, and any hard blocker. User restrictions/corrections contain only original user quotations, dates and source references, not executor paraphrases or invented prohibitions. Current method, rejected methods and next work belong in the linked brief, not card prohibitions. Change Mainline only when the user changes those commitments or the card demonstrably misstates already-confirmed intent.
 
 Claude shows the card on valid prompts and after compact/resume. If it exceeds 4KB, the hook presents the first 4KB and asks for shortening; it does not treat the card as absent. Missing or unreadable cards remain missing, not inferred from old records. The main session shortens the card without changing confirmed intent, leaving measurements in `EVAL.md` and round details in `rounds/`.
 
 A user correction updates only affected card content, including during Status or assessment work, unless writing is expressly forbidden or refused. If the same type of correction appears in another registered project's identity card, ask once in plain language whether to add it to global `AUTHOR_PREFERENCES`. This is a suggestion, never an automatic global edit; package-installed preference copies are not the editable source.
 
-### Fixed evaluation table
+### Evaluation table
 
-After the mainline is confirmed, the first mentor proposes an evaluation script, dev/test split, and key metric columns. At least one column measures unseen styles/categories or the project's equivalent generalization condition. Reuse a valid existing benchmark instead of building a second evaluator. The user confirms this completion standard once; record it in the identity card. Later changes also need confirmation.
+After the one kickoff confirmation, the mentor defines the evaluation script, dev/test split and columns from all confirmed user requirements, reusing valid existing evaluation. The first measured row is a complete strong same-input baseline. Columns include every user-mentioned metric, unseen data, train-test gap and the paper-selling advantage, such as cases where the baseline fails and the method succeeds. Use task-general metrics rather than sample/domain exceptions. An unmeasured requirement is not satisfied. Keep a short reference to the script, split and metrics in the card's Completion field.
 
-Each round appends one row to `EVAL.md`: time, round, and measured values under the agreed protocol. Status and mentor judgments cite these rows directly. Keep predictions distinct from observations, retain negative results, and mark unavailable measurements unknown rather than invent values.
+Each method round appends time, round, method version and measured values to `EVAL.md`; identify the protocol, split and test draw so incompatible results are not mixed. Keep predictions in briefs, retain negative results, and mark missing measurements unknown. If the executor finds evaluator problems, it reports them in the result rather than changing the protocol itself. The mentor corrects evaluation and assigns recomputation of every historical method/baseline row under the new protocol in the same columns: reuse retained raw artifacts first and rerun historical versions only where needed. Preserve old method versions as ablations and distinguish superseded protocol results from current comparisons. A protocol correction alone is not a method change; only a correction changing the goal's meaning needs the user. Once test data have been used, a changed method requires a fresh draw from data never used in development or prior tests, not a reshuffle of old tests, with all comparison rows on that common draw.
 
 After important results, the mentor supplies a paper-level assessment in `EVAL.md`: problem value, novelty, mechanism/theory, method/feasibility, data/evaluation, implementation, experiment/evidence, and expression/delivery. The main session saves the read-only mentor's returned assessment; it does not duplicate it with another self-rating. Include scope, reasons, evidence, and unknowns. Unknown or not-applicable is not zero, and ordinal grades are not acceptance probabilities. The weakest decisive dimension shapes the next brief.
 
 ### Round briefs and results
 
-A brief is at most one page in plain language. Start it with `Author: mentor / user / external` (导师 / 用户 / 外部), using the actual author. User or external task instructions are round briefs too, not a separate new Mission record. Save mentor briefs verbatim.
+A brief is at most one page in plain language. Start it with `Author: mentor / user / external` (导师 / 用户 / 外部), using the actual author. Direct user messages to the host count as user-authored instructions; priority is user > external > mentor. Save mentor briefs verbatim. A brief may be replaced mid-round with its actual author and reason identified, without creating another ledger.
 
-The brief states the hypothesis, concrete method, why it may work, the expected value or range in named evaluation columns, and the result that ends this round. Predictions need grounds and uncertainty; do not manufacture numerical pass lines. The main session executes until that evaluation result, then writes a few-line `NNN-result.md`: changed files, measured values, and prediction versus actual. Append the corresponding `EVAL.md` row and call the mentor for the next brief. A negative measured result ends a round; a plan, successful launch, or smoke test does not.
+A method brief states the diagnosed cause, hypothesis/mechanism, this version's single change with everything else fixed, controls and equal budgets, forbidden inputs, grounded numeric thresholds/predictions in named EVAL columns, and failure reporting that identifies the blocked step with one or two examples. The mentor is read-only; evaluator construction, historical recomputation and significance tests are assigned to the executor in the brief. If the project cannot learn, the first method version after kickoff is a single-example overfit test, before larger data or evaluator construction.
+
+One method round is one method version. Code stays unchanged within that version; changing it starts a new version and requires full evaluation, not a single-sample repair result. Retain previous versions as ablations. The main session runs until a measured result, then writes `NNN-result.md` with changed files, version, values, prediction versus actual, evaluator problems and a fixed `Objections to this brief / factual corrections` section, even if empty. The next mentor first responds to that section. Append the EVAL row and continue. A negative measured result ends a method round; a plan, successful launch or smoke test does not. Kickoff instead ends at the user's confirmation and does not yet require EVAL numbers.
 
 `RESEARCH.md` becomes a short history index. Existing `missions/`, `experiments/`, and `claims/` remain where they are, byte-preserved by installation and updates; do not migrate, delete, or add new core records there. New experiment details go in round results or their linked actual artifacts. Source documents, authored review returns, Lessons, `DOCTOR.md`, and `.dove/runs/**` keep their distinct uses. Initialization still creates only minimal `RESEARCH.md` when no research tree exists; existing trees are untouched even without an overview.
 
@@ -107,7 +115,7 @@ Lessons retain their separate reusable-value standard: check the index once for 
 
 A status or side answer returns to the active round. If the user explicitly asks for discussion only or to stop, the main session sets `Round status: paused` before ending; the hook does not write that change. Mark completed work appropriately and resume only within the user's current request and authorization.
 
-Claude's managed read-only Stop hook blocks once when the identity card says a round is ongoing and no `dove-mentor` call occurred in the current turn. It asks the main session to write the round result and call the mentor. If `stop_hook_active` is true, it immediately allows stopping. It checks host tool-call events, not conversation meaning, and neither analyzes nor sends conversation content to the mentor. Missing or unreadable transcript evidence allows stopping. There is no tracking file, extra tool hook, background scheduler, or new permission.
+Claude's managed read-only Stop hook blocks once when the identity card says a round is ongoing and no `dove-mentor` call occurred in the current turn. It asks the main session to write the round result and call the mentor. If `stop_hook_active` is true, it immediately allows stopping. It checks host tool-call events, not conversation meaning, and neither analyzes nor sends conversation content to the mentor. This metadata check is separate from the main hooks' source-path handoff. Missing or unreadable transcript evidence allows stopping. There is no tracking file, extra tool hook, background scheduler, or new permission.
 
 ## Tools and sources
 
@@ -117,7 +125,7 @@ Dove uses only tools the current host exposes and the project permits. Claude pr
 
 ### Research
 
-Use `/dove:research` to start or continue the round cycle: read the identity card, evaluation table, and current brief; execute the active round, or call `dove-mentor` if none is active. Save the result and evaluation row, obtain the next brief, and continue within the confirmed goal. The mentor returns completion with cited evidence or a concrete user decision when the goal/completion standard must change, resources would be exceeded, or the whole mainline has no workable route. A bounded research question still finishes at its requested answer.
+Use `/dove:research` to start or continue the round cycle: begin with kickoff on confirmation/takeover; otherwise read the identity card, evaluation table and current brief, execute the active method round or call `dove-mentor` if none is active. Save the result and evaluation row, obtain the next brief and continue within the confirmed goal. Engineering choices proceed directly; the mentor asks once for a goal/claim/deployment-input-output change or resources beyond your limit. Without a reply, continue only the already-authorized default portion, not the proposed departure, and do not repeatedly ask. A bounded research question still finishes at its requested answer. Mentor intervention triggers are described in the [Research Model](development/RESEARCH_MODEL.md#导师与轮次循环).
 
 ### Status
 
@@ -135,7 +143,7 @@ Ordinary source work stays proportional. Explicit systematic review, meta-analys
 
 ### Experiment
 
-Use `/dove:experiment` for experiment work within a round. Development may inspect ground truth, iterate quickly, diagnose, and rerun without a pre-filed plan. Fix known causes in the method; diagnostics serve concrete choices rather than defer a known repair. Only final heldout confirmation freezes and preregisters the selected method/protocol for a one-time comparison. Development observations are not independent heldout confirmation.
+Use `/dove:experiment` for experiment work within a method-version round. Development may inspect available ground truth, diagnose and rerun without per-run registration; method/code changes create a new version and full evaluation, and changing a method after test use requires a fresh test draw. Fix known causes rather than defer a repair. Only final heldout confirmation freezes and preregisters the selected method/protocol for a one-time comparison. Development observations are not independent heldout confirmation.
 
 Design-only stays read-only and delivers a plan with unverified limits; analyze existing results directly and keep retrospective recording retrospective. Exploration can form hypotheses without a predeclared claim; reproduction/delivery checks the agreed capability without reopening novelty. Trace real inputs, outputs, references/proxies, metrics, failures, exclusions, and denominators. Inspect actual ablation changes before claiming a component or mechanism effect. Record actual outcomes in the round result and `EVAL.md`, not new `experiments/` entries.
 

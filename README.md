@@ -4,7 +4,7 @@
 
 Dove helps you move a research project forward: read sources, build methods, run experiments, interpret evidence, write and revise papers, make figures, review the work, and respond to criticism.
 
-For a confirmed research goal, the main session executes a short round brief until its evaluation result, then asks a fresh read-only `dove-mentor` context to judge the result and propose the next round. The mentor can change methods within the goal; changing the goal or completion standard, exceeding your resources, or publishing/submitting externally still needs your decision. Ordinary questions and bounded tasks finish within their scope.
+For a confirmed research goal, the main session executes a short round brief until its evaluation result, then asks a fresh read-only `dove-mentor` context to judge the result and propose the next round. The mentor can change methods within the goal; changing the goal, intended claim or deployment inputs/outputs, or exceeding your resources still needs your decision. Ordinary questions and bounded tasks finish within their scope.
 
 ## Start
 
@@ -45,7 +45,7 @@ Every fresh main-agent context personally reads the short Chinese quality and au
 Research context is ordinary researcher-owned Markdown under `.dove/research/`:
 
 - **`IDENTITY.md`** — the stable user-confirmed `Mainline`, completion standard, constraints, recent corrections, and a link to the current round. Keep `Current round: rounds/NNN-brief.md` and `Round status: ongoing / paused / completed` at the top, within the first 4KB.
-- **`EVAL.md`** — the agreed evaluation script, dev/test split, key metrics, and one row per round. The user confirms the evaluation once, including at least one unseen-style/category or equivalent generalization column; later changes also need confirmation. Reuse existing project evaluation. After important results, the mentor supplies the eight-dimensional paper-quality assessment here; its weakest decisive dimension informs the next brief.
+- **`EVAL.md`** — the agreed evaluation script, dev/test split, key metrics, and one row per round. After one user-confirmed kickoff reconstruction, the mentor defines evaluation for all user metrics and generalization, correcting it with all historical rows recomputed; only a change to the goal's meaning needs renewed user confirmation. Reuse existing project evaluation. After important results, the mentor supplies the eight-dimensional paper-quality assessment here; its weakest decisive dimension informs the next brief.
 - **`rounds/`** — `NNN-brief.md` states the hypothesis, why it may work, predicted evaluation values, and the result that ends the round. Its author is mentor, user, or external. The main session saves mentor briefs verbatim and writes `NNN-result.md` in a few lines: changed files, actual evaluation values, and prediction versus actual, plus one new `EVAL.md` row. Negative results count; a plan or smoke test does not.
 
 `RESEARCH.md` is a short history index. Existing `missions/`, `experiments/`, and `claims/` stay in place without migration or deletion; new core work goes into rounds rather than new entries in those directories. Sources, Reviews, Lessons, `DOCTOR.md`, and local run receipts retain their distinct uses. Initialization still creates only the minimal `RESEARCH.md` entry when no research tree exists.

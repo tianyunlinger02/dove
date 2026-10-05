@@ -2,6 +2,7 @@ import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS, renderDoveResearchReanchor } fro
 import { DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS } from "./dove-author-preferences.mjs";
 import { DOVE_CLAUDE_AMBIENT_RULE_PATH } from "./ambient-policy.mjs";
 import { identityCardContext } from "./identity-card.mjs";
+import { userOriginalSourceContext } from "./session-start-hook.mjs";
 
 export const PROMPT_GUIDANCE_PATHS = Object.freeze([
   DOVE_CLAUDE_AMBIENT_RULE_PATH,
@@ -37,7 +38,7 @@ export function userPromptSubmitOutput(payload, guidance, options = {}) {
     throw new Error("Dove UserPromptSubmit hook requires a valid prompt event.");
   }
   if (!guidance) throw new Error("Dove UserPromptSubmit hook requires verified project guidance.");
-  const context = `Dove ${guidance.version} (disk guidance, not rule reload):\n${guidance.fingerprints.join("\n")}\n${identityCardContext(options.project, options)}\n${renderDoveResearchReanchor()}\nOn first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.`;
+  const context = `Dove ${guidance.version} (disk guidance, not rule reload):\n${guidance.fingerprints.join("\n")}\n${identityCardContext(options.project, options)}\n${renderDoveResearchReanchor()}\nOn first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.${userOriginalSourceContext(payload)}`;
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",

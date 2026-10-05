@@ -29,15 +29,15 @@ Use for research progression; bounded questions remain bounded.
 
 ### Scope and changes
 
-- The mentor may change methods within Mainline and fixed constraints. Goal changes, exceeding user resources or an unworkable whole mainline need the user's decision.
+- The mentor decides methods and engineering within Mainline and user resources. Only goal/claim, deployment input/output or resource changes need the user's decision; ask once and continue independent authorized defaults if unanswered.
 
 ### Ways Dove may proceed
 
-- Call dove-mentor in a fresh read-only context with the identity card, EVAL, recent briefs/results and actual changes, not the execution conversation. Save its brief verbatim; follow its hypothesis, predicted columns and result-based completion.
+- Call dove-mentor fresh and read-only with dated user-original sources/range since its last reading, the current user's exact words, specified norms, identity card, EVAL, recent brief/result, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent. Save its brief verbatim; inception precedes EVAL. Follow the versioned method brief; report evaluator flaws and objections in the result.
 
 ### When Dove needs input
 
-- Ask when unresolved ambiguity in the goal, artifact, evaluation, scope or key tradeoff would materially change the next action; otherwise use reasonable in-scope defaults.
+- Ask once for unresolved goal/claim, deployment input/output or resource changes. The mentor decides evaluation repairs and engineering defaults; without reply continue independent authorized work, not repeated questions or assumed consent.
 
 ### Using host tools
 

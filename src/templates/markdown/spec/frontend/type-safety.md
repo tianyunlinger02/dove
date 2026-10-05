@@ -21,7 +21,7 @@ Dove uses Node.js ESM JavaScript (`.mjs`), Node.js `>=22`. Validate software-own
 
 ## Read-only judgments
 
-Each mentor or paper-review call starts a fresh host-native subagent with `Read`, `Grep`, and `Glob`; do not resume its previous conversation. Supply selected material paths, not the author's process transcript. The mentor returns a round brief for the main session to save unchanged; the reviewer lists files actually read. Neither writes, launches experiments, nor grants permission. There are no review SHA snapshots, external workspaces, socket launchers, or machine-parsed acceptance states. Preserve historical review exchange files in place. Scientific responsibilities are in [Component Guidelines](./component-guidelines.md).
+Each mentor or paper-review call starts a fresh host-native subagent with `Read`, `Grep`, and `Glob`; do not resume its previous conversation. Supply selected material paths, not the author's execution conversation; the mentor may inspect only specified genuine user originals with dates/ranges, while paper review has no transcript access. The mentor returns a round brief for the main session to save unchanged; the reviewer lists files actually read. Neither writes, launches experiments, nor grants permission. There are no review SHA snapshots, external workspaces, socket launchers, or machine-parsed acceptance states. Preserve historical review exchange files in place. Scientific responsibilities are in [Component Guidelines](./component-guidelines.md).
 
 ## Run receipts
 

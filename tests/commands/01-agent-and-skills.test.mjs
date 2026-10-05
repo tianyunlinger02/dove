@@ -16,7 +16,11 @@ import {
 } from "../../src/core/dove-agent-persona.mjs";
 import { renderClaudeAmbientRule } from "../../src/core/ambient-policy.mjs";
 import { DOVE_RESEARCH_RESULT_ADOPTION, renderDoveResearchQualityFullReference } from "../../src/core/dove-research-contract.mjs";
-import { generatedAdapterEntries } from "../../scripts/generate-command-adapters.mjs";
+import {
+  generatedAdapterEntries,
+  generatedClaudeAmbientProjectEntries,
+  generatedDoveAgentSurfaceEntries
+} from "../../scripts/generate-command-adapters.mjs";
 
 const SKILLS = ["dove.research", "dove.status", "dove.source", "dove.experiment", "dove.draft", "dove.figure", "dove.review", "dove.rebuttal", "dove.lessons"];
 
@@ -48,40 +52,66 @@ test("rule and nine capability descriptions are materially shorter than 3.2.27",
   }
 });
 
+test("Dove agent projection does not exceed its pre-amendment character or byte budget", () => {
+  const entry = generatedDoveAgentSurfaceEntries().find(({ destinationPath }) => destinationPath === ".claude/agents/dove.md");
+  assert.ok(entry);
+  assert.equal(entry.content, renderClaudeDoveAgent());
+  // The writer keeps exactly one final newline; extra renderer newlines are not projected.
+  const projected = `${entry.content.trimEnd()}\n`;
+  const characters = [...projected].length;
+  const bytes = Buffer.byteLength(projected, "utf8");
+  assert.ok(characters <= 1_301, `agent: ${characters} characters exceeds the 1301-character baseline`);
+  assert.ok(bytes <= 1_301, `agent: ${bytes} bytes exceeds the 1301-byte baseline`);
+});
+
+test("Dove ambient rule projection does not exceed its pre-amendment character or byte budget", () => {
+  const entry = generatedClaudeAmbientProjectEntries().find(({ destinationPath }) => destinationPath === ".claude/rules/dove.md");
+  assert.ok(entry);
+  assert.equal(entry.content, renderClaudeAmbientRule());
+  const projected = `${entry.content.trimEnd()}\n`;
+  const characters = [...projected].length;
+  const bytes = Buffer.byteLength(projected, "utf8");
+  assert.ok(characters <= 9_786, `ambient rule: ${characters} characters exceeds the 9786-character baseline`);
+  assert.ok(bytes <= 9_826, `ambient rule: ${bytes} bytes exceeds the 9826-byte baseline`);
+});
+
 test("rounds run to EVAL results and preserve explicit pauses and necessary user decisions", () => {
   const shared = renderDoveSharedResearchContractSection();
   const research = work("dove.research");
-  assert.match(shared, /Execute an ongoing round until its evaluation result/iu);
-  assert.match(shared, /save the result and call `dove-mentor`/iu);
-  assert.match(shared, /save its next brief verbatim and continue/iu);
-  assert.match(shared, /status or side questions.*return to the round/iu);
-  assert.match(shared, /discussion-only or stop request pauses/iu);
+  assert.match(shared, /Inception.*user-confirmed goal.*method rounds.*EVAL results.*mentor/iu);
+  assert.match(shared, /Call `dove-mentor` when no round is active/iu);
+  assert.match(shared, /Save its brief verbatim.*inception.*user confirmation.*method rounds.*EVAL results/iu);
+  assert.match(shared, /Return after side answers/iu);
+  assert.match(shared, /discussion-only\/stop pauses/iu);
   assert.match(shared, /Bounded requests stay bounded/iu);
-  assert.match(research, /change methods within Mainline/iu);
-  assert.match(research, /Goal changes, exceeding user resources or an unworkable whole mainline.*user's decision/iu);
+  assert.match(research, /mentor decides methods and engineering within Mainline and user resources/iu);
+  assert.match(research, /Only goal\/claim, deployment input\/output or resource changes.*user's decision/iu);
+  assert.match(research, /ask once.*independent authorized defaults if unanswered/iu);
   assert.doesNotMatch(renderClaudeAmbientRule(), /CronCreate|--scope (?:route|design)/u);
 });
 
 test("mentor predicts evaluation columns and owns evidence-grounded quality assessment", () => {
   const mentor = renderClaudeDoveMentorAgent();
   assert.match(mentor, /^tools: Read, Grep, Glob$/mu);
-  assert.match(mentor, /全新上下文，不 resume，不传执行过程对话/u);
-  assert.match(mentor, /EVAL\.md.*brief\/result.*diff/u);
-  assert.match(mentor, /上一轮预测/u);
-  assert.match(mentor, /EVAL 哪一列.*数值或范围/u);
-  assert.match(mentor, /未见类别或样本的泛化/u);
-  assert.match(mentor, /最弱且决定性的维度进入下一轮说明/u);
+  assert.match(mentor, /全新上下文.*不 resume.*不带执行过程对话.*不用执行者转述代替用户原话/u);
+  assert.match(mentor, /EVAL\.md.*brief\/result.*diff.*原始产物/u);
+  assert.match(mentor, /引用 EVAL 列名、预测和实际数值/u);
+  assert.match(mentor, /EVAL 指定列的数值预测.*依据和不确定性/u);
+  assert.match(mentor, /通用能力还是补丁.*未见数据列/u);
+  assert.match(mentor, /八维评分.*理由和实际依据.*主会话保存到 EVAL/u);
+  assert.match(mentor, /最弱且决定性的维度进入下一轮/u);
   assert.match(renderDoveResearchQualityFullReference(), /mentor writes eight-dimensional quality scores in EVAL\.md/iu);
   assert.match(renderDoveResearchQualityFullReference(), /main session does not duplicate that self-assessment/iu);
 });
 
 test("development iteration stays free while final heldout confirmation remains one-use", () => {
   const experiment = `${renderDoveSharedResearchContractSection()}\n${work("dove.experiment")}`;
-  assert.match(experiment, /ground truth.*rerun freely/iu);
-  assert.match(experiment, /no per-run plan or registration/iu);
-  assert.match(experiment, /final heldout confirmation freezes/iu);
-  assert.match(experiment, /prospectively in the round brief.*heldout once/iu);
-  assert.match(experiment, /round result and EVAL\.md/iu);
+  assert.match(experiment, /Develop freely.*ground truth and reruns.*without per-run registration/iu);
+  assert.match(experiment, /fixed method version.*changed code.*new version and full rerun/iu);
+  assert.match(experiment, /After test use.*changed method.*fresh unseen test draw.*same-set baselines/iu);
+  assert.match(experiment, /Final confirmation.*claim\/control\/data\/metric.*brief.*heldout once/iu);
+  assert.match(experiment, /Heldout used for tuning is no longer independent final evidence/iu);
+  assert.match(experiment, /measured results in EVAL.*not new experiments\/ records/iu);
   assert.match(experiment, /Read-only or design-only requests do not execute/iu);
 });
 

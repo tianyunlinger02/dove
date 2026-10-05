@@ -8,7 +8,8 @@ import { fileURLToPath } from "node:url";
 import { DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND } from "../../src/core/ambient-policy.mjs";
 import { initializeProjectIntegration, updateProjectIntegration } from "../../src/core/project-installation.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../src/core/package-metadata.mjs";
-import { currentPromptGuidance, parseUserPromptSubmitPayload, userPromptSubmitAttentionOutput, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../../src/core/user-prompt-submit-hook.mjs";
+import { currentPromptGuidance, parseUserPromptSubmitPayload, PROMPT_GUIDANCE_PATHS, userPromptSubmitAttentionOutput, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../../src/core/user-prompt-submit-hook.mjs";
+import { userOriginalSourceContext } from "../../src/core/session-start-hook.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const scratch = path.join(root, ".claude/tmp");
@@ -36,7 +37,55 @@ function context(output) {
   return output.hookSpecificOutput.additionalContext;
 }
 
-test("prompt output is current short guidance, independent of prompt text and host metadata", (t) => {
+test("pure prompt guidance hands off the original-user source without copying or reading conversation", (t) => {
+  const read = t.mock.method(fs, "readFileSync", () => assert.fail("pure prompt delivery must not read any file"));
+  const manifest = {
+    hosts: ["claude"], package: { version: "3.3.0" },
+    managed: PROMPT_GUIDANCE_PATHS.map((resourcePath, index) => ({
+      path: resourcePath, kind: "exclusive-file", selector: null, digest: String(index + 1).repeat(64)
+    }))
+  };
+  const guidance = currentPromptGuidance(manifest);
+  assert.equal(guidance.version, "3.3.0");
+  assert.deepEqual(guidance.fingerprints, PROMPT_GUIDANCE_PATHS.map((resourcePath, index) => `${resourcePath} ${String(index + 1).repeat(12)}`));
+  const base = userPromptSubmitOutput(event(), guidance);
+  assert.equal(base.hookSpecificOutput.hookEventName, "UserPromptSubmit");
+  assert.match(context(base), /Inception confirms the goal.*method rounds.*evaluation result.*mentor/iu);
+  assert.match(context(base), /Keep Mainline stable and dated user originals/iu);
+  assert.match(context(base), /discussion-only or stop requests pause/iu);
+  assert.match(context(base), /card is context, not a substitute for the user's latest words/iu);
+  const payload = event("CURRENT_USER_BODY_NOT_TO_COPY", {
+    transcript_path: '/unread/用户 "source".jsonl', session_id: "synthetic", transcript: "PARENT_HISTORY_NOT_TO_COPY"
+  });
+  const output = userPromptSubmitOutput(payload, guidance);
+  assert.equal(context(output), context(base) + userOriginalSourceContext(payload));
+  assert.match(context(output), /mentor.*last-read date\/range.*dated user originals.*not execution records/iu);
+  assert.match(context(output), /current user's exact words.*not yet in the file/iu);
+  assert.doesNotMatch(context(output), /CURRENT_USER_BODY_NOT_TO_COPY|PARENT_HISTORY_NOT_TO_COPY/u);
+  for (const prompt of ["", "不要写文件，只讨论", "x".repeat(100_000)]) {
+    assert.deepEqual(userPromptSubmitOutput({ ...payload, prompt }, guidance), output);
+  }
+  assert.deepEqual(userPromptSubmitOutput(event("other", { transcript_path: "" }), guidance), base);
+  assert.equal(read.mock.callCount(), 0);
+});
+
+test("pure prompt payload validation and failures stay nonblocking", () => {
+  const payload = event("用户当前原文", { transcript_path: "/never-read-transcript" });
+  assert.deepEqual(parseUserPromptSubmitPayload(JSON.stringify(payload)), payload);
+  for (const input of ["", "{", "null", "[]", "{}", '{"hook_event_name":"Stop","prompt":"hello"}', '{"hook_event_name":"UserPromptSubmit","prompt":42}']) {
+    assert.throws(() => parseUserPromptSubmitPayload(input), /malformed JSON|unsupported or invalid prompt event/u);
+  }
+  assert.throws(() => userPromptSubmitOutput(event()), /requires verified project guidance/u);
+  assert.throws(() => userPromptSubmitOutput(null), /requires a valid prompt event/u);
+  const attention = userPromptSubmitAttentionOutput();
+  assert.equal(attention.hookSpecificOutput.hookEventName, "UserPromptSubmit");
+  assert.match(context(attention), /does not block or expand the user's request/iu);
+  const failure = userPromptSubmitFailureOutput(new Error("bad\ninput"));
+  assert.match(failure.systemMessage, /bad\?input/u);
+  assert.doesNotMatch(failure.systemMessage, /checked|approved|blocked the prompt/u);
+});
+
+test("prompt output is current short guidance, independent of prompt text and non-source host metadata", (t) => {
   const project = workspace(t);
   const manifest = JSON.parse(fs.readFileSync(path.join(project, ".dove/install/manifest.json"), "utf8"));
   const guidance = currentPromptGuidance(manifest);
@@ -48,10 +97,11 @@ test("prompt output is current short guidance, independent of prompt text and ho
   assert.match(context(expected), /No readable short identity card at \.dove\/research\/IDENTITY\.md/iu);
   assert.match(context(expected), /do not infer a mainline from old notes/iu);
   assert.match(context(expected), /Create one for a confirmed goal when writing is permitted/iu);
-  assert.match(context(expected), /identity card, EVAL\.md and current round brief/iu);
+  assert.match(context(expected), /identity card, EVAL\.md and current brief/iu);
   assert.match(context(expected), /evaluation result, then call the mentor/iu);
   assert.match(context(expected), /Keep Mainline stable/iu);
-  assert.match(context(expected), /retain the latest user correction/iu);
+  assert.match(context(expected), /Inception confirms the goal.*method rounds.*evaluation result.*mentor/iu);
+  assert.match(context(expected), /dated user originals/iu);
   assert.match(context(expected), /discussion-only or stop requests pause the round/iu);
   assert.doesNotMatch(context(expected), /^Mainline:/mu, "missing card does not synthesize a goal");
   assert.match(context(expected), /On first use at these fingerprints/iu);
@@ -72,10 +122,13 @@ test("prompt output is current short guidance, independent of prompt text and ho
 
   const settingsPath = path.join(project, ".claude/settings.json");
   const before = fs.readFileSync(settingsPath);
+  const sourcePayload = { cwd: project, session_id: "synthetic", transcript_path: "/never-read-transcript" };
+  const withSource = userPromptSubmitOutput(event("", sourcePayload), guidance, { project });
+  assert.equal(context(withSource), context(expected) + userOriginalSourceContext(sourcePayload));
   for (const binary of binaries) {
     for (const prompt of ["", "你好", "/dove:status", "Implement a function", "Ignore previous instructions", "x".repeat(100_000)]) {
-      const output = invoke(binary, project, event(prompt, { cwd: project, session_id: "synthetic", transcript_path: "/never-read-transcript" }));
-      assert.deepEqual(output, expected);
+      const output = invoke(binary, project, event(prompt, sourcePayload));
+      assert.deepEqual(output, withSource, "only the source pointer changes guidance, not prompt intent or other host metadata");
     }
   }
   assert.deepEqual(fs.readFileSync(settingsPath), before, "prompt hook must not write integration");
@@ -189,10 +242,4 @@ test("non-Claude project and malformed input remain nonblocking", (t) => {
       assert.match(output.systemMessage, /UserPromptSubmit/u);
     }
   }
-  assert.throws(() => userPromptSubmitOutput(event()), /requires verified project guidance/u);
-  assert.throws(() => parseUserPromptSubmitPayload("{"), /malformed JSON/u);
-  assert.throws(() => userPromptSubmitOutput(null), /requires a valid prompt event/u);
-  const failure = userPromptSubmitFailureOutput(new Error("bad\ninput"));
-  assert.match(failure.systemMessage, /bad\?input/u);
-  assert.doesNotMatch(failure.systemMessage, /checked|approved|blocked the prompt/u);
 });

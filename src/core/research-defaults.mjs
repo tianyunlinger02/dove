@@ -19,7 +19,7 @@ export const RESEARCH_DEFAULT_PATHS = Object.freeze({
 export const RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
   Object.freeze({
     path: RESEARCH_DEFAULT_PATHS.overview,
-    content: "# Research\n\nCurrent work uses `IDENTITY.md`, `EVAL.md`, and `rounds/` (briefs and results). Confirm the mainline and evaluation with the user before filling them in. Keep this file a short index to existing history; leave historical missions, experiments, and claims in place.\n"
+    content: "# Research\n\nCurrent work uses `IDENTITY.md`, `EVAL.md`, and `rounds/` (briefs and results). Confirm inception from the user's originals first, then let the mentor define the evaluation. Keep this file a short index to existing history; leave historical missions, experiments, and claims in place.\n"
   })
 ]);
 

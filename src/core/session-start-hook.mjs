@@ -25,6 +25,11 @@ function systemMessage(message) {
   return { systemMessage: message };
 }
 
+export function userOriginalSourceContext(payload) {
+  if (typeof payload.transcript_path !== "string" || !payload.transcript_path) return "";
+  return `\nUser-original source: ${JSON.stringify(payload.transcript_path)}. Give the mentor its last-read date/range and dated user originals, not execution records. Include the current user's exact words if not yet in the file; retain sources in the brief, not a new ledger.`;
+}
+
 export function sessionStartOutput(payload, result = null, options = {}) {
   const output = {};
   if (result && result.status !== "current") {
@@ -47,6 +52,7 @@ export function sessionStartOutput(payload, result = null, options = {}) {
       additionalContext: `${identityCardContext(options.project, options)}\n${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n${DOVE_RESEARCH_REFLECTION_CONTINUITY}`
     };
   }
+  if (output.hookSpecificOutput) output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload);
   return Object.keys(output).length > 0 ? output : null;
 }
 
