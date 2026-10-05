@@ -155,7 +155,7 @@ stopSettings.hooks.Stop = [
 fs.writeFileSync(stopSettingsPath, `${JSON.stringify(stopSettings, null, 2)}\n`);
 uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
 const stopCleanedSettings = JSON.parse(fs.readFileSync(stopSettingsPath, "utf8"));
-assert.deepEqual(stopCleanedSettings.hooks.Stop, stopSettings.hooks.Stop);
+assert.deepEqual(stopCleanedSettings.hooks.Stop, [stopSettings.hooks.Stop[0]]);
 
 reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
@@ -163,7 +163,7 @@ const nonArrayStopSettingsPath = path.join(fixture, ".claude", "settings.json");
 const nonArrayStopSettings = JSON.parse(fs.readFileSync(nonArrayStopSettingsPath, "utf8"));
 nonArrayStopSettings.hooks.Stop = "user-owned-stop";
 fs.writeFileSync(nonArrayStopSettingsPath, `${JSON.stringify(nonArrayStopSettings, null, 2)}\n`);
-uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
+assert.throws(() => previewProjectUninstall(fixture), /hooks\.Stop must be an array/u);
 const nonArrayStopCleanedSettings = JSON.parse(fs.readFileSync(nonArrayStopSettingsPath, "utf8"));
 assert.equal(nonArrayStopCleanedSettings.hooks.Stop, "user-owned-stop");
 

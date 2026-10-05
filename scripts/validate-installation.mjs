@@ -322,7 +322,7 @@ function validateSessionFacts(root, executable) {
     path.join(root, ".dove/install/AUTHOR_PREFERENCES.md"),
     path.join(root, ".dove/install/RESEARCH_QUALITY.md")
   );
-  const check = (card = null) => {
+  const check = (card = null, truncated = false) => {
     for (const source of ["startup", "clear", "compact", "resume"]) {
       const output = invoke(source);
       assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
@@ -336,6 +336,11 @@ function validateSessionFacts(root, executable) {
         } else {
           assert.ok(context.includes(card), "compact/resume inject the current synthetic identity card");
           assert.match(context, /Project identity card \(researcher-owned/iu);
+          if (truncated) {
+            assert.doesNotMatch(context, /No readable short identity card/iu);
+            assert.match(context, /exceeds 4KB/iu);
+            assert.match(context, /shorten it without changing Mainline/iu);
+          }
         }
         assert.ok(context.includes(`${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n`));
         assert.ok(context.endsWith(DOVE_RESEARCH_REFLECTION_CONTINUITY));
@@ -359,8 +364,9 @@ function validateSessionFacts(root, executable) {
   check(card);
   fs.writeFileSync(cardPath, "Mainline: Revised synthetic user goal\nNext core action: implement core route\n");
   check("Mainline: Revised synthetic user goal\nNext core action: implement core route\n");
-  fs.writeFileSync(cardPath, "Mainline: Oversized\n" + "x".repeat(4096));
-  check();
+  const oversizedCard = "Mainline: Oversized\n" + "x".repeat(4096);
+  fs.writeFileSync(cardPath, oversizedCard);
+  check(oversizedCard.slice(0, 4096), true);
   fs.rmSync(cardPath);
   fs.symlinkSync(path.join(root, "unlisted-report.md"), cardPath);
   check();
@@ -638,7 +644,7 @@ writeJson(settingsPath, settings);
 before = treeSnapshot(retiredRoot);
 const retiredDoctor = assertDoctorReadOnly(retiredRoot);
 assert.equal(retiredDoctor.projectIntegration.state, "current");
-assert.equal(retiredDoctor.projectIntegration.retiredHooks.matchedPaths.length, 2);
+assert.equal(retiredDoctor.projectIntegration.retiredHooks.matchedPaths.length, 1);
 updateProjectIntegration(retiredRoot, PACKAGE_OPTIONS);
 assert.deepEqual(treeSnapshot(retiredRoot), before);
 const retiredManifestPath = path.join(retiredRoot, INSTALLATION_MANIFEST_PATH);

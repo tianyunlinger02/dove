@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
-import { readDoveIdentityCard } from "./identity-card.mjs";
+import { parseDoveCurrentRound, readDoveIdentityCard } from "./identity-card.mjs";
 const MAX_MAINLINE_CODE_POINTS = 80;
 
 const STATUS_SEPARATOR = " · ";
@@ -94,7 +94,8 @@ function isMainlineBoundary(line) {
     || /^ {0,3}#{1,6}(?:[ \t]|$)/u.test(line ?? "")
     || /^ {0,3}(?:`{3,}|~{3,})/u.test(line ?? "")
     || /^ {0,3}(?:---|\.\.\.|-->)\s*$/u.test(line ?? "")
-    || /^ {0,3}<!--/u.test(line ?? "");
+    || /^ {0,3}<!--/u.test(line ?? "")
+    || /^(?:Current round|Round status):/u.test(line ?? "");
 }
 
 export function parseResearchMainline(markdown, options = {}) {
@@ -165,9 +166,10 @@ export function renderDoveStatusLine(input, options = {}) {
   const remaining = remainingValue === null ? null : Math.min(100, Math.round(remainingValue));
   const duration = formatSessionDuration(payload.cost?.total_duration_ms);
   const project = options.projectRoot ? oneLine(path.resolve(options.projectRoot)) : null;
+  const card = readDoveIdentityCard(options.projectRoot, options) ?? "";
   const mainline = shortMainline(Object.hasOwn(options, "mainline")
     ? options.mainline
-    : inspectResearchMainline(options.projectRoot, options));
+    : parseResearchMainline(card));
   const noColorValue = (options.env ?? process.env).NO_COLOR;
   const noColor = typeof noColorValue === "string" && noColorValue.length > 0;
   const branch = Object.hasOwn(options, "branch")
@@ -179,6 +181,9 @@ export function renderDoveStatusLine(input, options = {}) {
   else if (capacity) parts.push(`ctx ${capacity}`);
   if (remaining !== null) parts.push(`ctx ${remaining}%`);
   if (mainline) parts.push(noColor ? mainline : `\x1b[36m${mainline}\x1b[0m`);
+  const round = parseDoveCurrentRound(card);
+  const roundNumber = round?.brief.match(/(?:^|\/)0*(\d+)-brief\.md(?:\)|$)/u)?.[1];
+  if (roundNumber) parts.push(`第${Number(roundNumber)}轮`);
   if (branch) parts.push(branch);
   if (duration) parts.push(duration);
   const session = parts.length > 0 ? parts.join(STATUS_SEPARATOR) : "Dove";

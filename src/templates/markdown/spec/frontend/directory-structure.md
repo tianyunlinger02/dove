@@ -16,7 +16,8 @@ Paths below are relative to the repository root unless labeled as consumer-proje
 | Lifecycle, diagnostics and product SessionStart | `src/core/dove-lifecycle.mjs`, `src/core/project-doctor.mjs`, `src/core/session-start-hook.mjs` |
 | Project boundary and safe writes | `src/core/project-root.mjs`, `src/core/rooted-filesystem.mjs`, `src/core/file-set-transaction.mjs` |
 | Research bootstrap and document helpers | `src/core/research-defaults.mjs`, `src/core/research-documents.mjs` |
-| Isolated review | `src/core/review-runtime.mjs`, `src/core/review-snapshot.mjs`, `src/core/review-workspace.mjs`, `src/core/review-claude-backend.mjs` |
+| Fresh read-only mentor and paper reviewer | `src/core/dove-agent-definition.mjs`, `src/core/dove-agent-persona.mjs` |
+| Identity-card presentation and one Stop reminder | `src/core/identity-card.mjs`, `src/core/stop-hook.mjs` |
 | Local execution receipts | `src/core/run-record.mjs`, `src/core/run-supervisor.mjs`, `src/core/run-environment.mjs` |
 | Package identity and runtime requirements | `package.json`, `src/core/package-metadata.mjs` |
 
@@ -43,18 +44,18 @@ Change the owning source first; generated adapters and bundles are projections, 
   install/AUTHOR_PREFERENCES_FULL.md # preserved full preferences
   install/DOCTOR.md           # optional host-maintained Dove feedback
   research/IDENTITY.md        # short researcher-owned plain-language card
-  research/RESEARCH.md        # researcher-owned overview
-  research/missions/          # optional Mission documents
-  research/experiments/       # optional Experiment documents
+  research/EVAL.md            # agreed evaluation and per-round measurements
+  research/rounds/            # NNN-brief.md (named author), NNN-result.md
+  research/RESEARCH.md        # short index to history
+  research/missions/          # preserved historical Mission documents
+  research/experiments/       # preserved historical Experiment documents
   research/sources/           # optional Source documents
   research/reviews/           # optional authored Review documents
-  research/claims/            # optional Claim documents
+  research/claims/            # preserved historical Claim documents
   research/lessons/           # optional advisory Lessons
-  reviews/<review-id>/        # runtime exchange records
-    review.json
-    rounds/<round>/           # backend.json, report.md; paper also snapshot.json
+  reviews/                   # preserved historical review-runtime exchanges
   runs/<run-id>/              # run.jsonl, stdout.log, stderr.log
   archive/                   # legacy/user-owned material when present
 ```
 
-Drafts, code, datasets, figures, source captures, and rebuttals stay in ordinary project locations. Reviewer workspaces are separate from durable exchange records. See [State Management](./state-management.md) for ownership and optional-document rules, and [Type Safety](./type-safety.md) for path constraints.
+Drafts, code, datasets, figures, source captures, and rebuttals stay in ordinary project locations. Mentor and review use host-native read-only contexts, not separate filesystem workspaces. See [State Management](./state-management.md) for ownership and optional-document rules, and [Type Safety](./type-safety.md) for path constraints.

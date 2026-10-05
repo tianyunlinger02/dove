@@ -122,15 +122,6 @@ function sameKeys(value, keys) {
   return plainObject(value) && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
 }
 
-function exactLegacyDoveStopHook(entry) {
-  if (!sameKeys(entry, ["hooks"]) || !Array.isArray(entry.hooks) || entry.hooks.length !== 1) return false;
-  const hook = entry.hooks[0];
-  return sameKeys(hook, ["command", "timeout", "type"])
-    && hook.type === "command"
-    && hook.command === 'dove hook stop --project "$CLAUDE_PROJECT_DIR"'
-    && hook.timeout === 10;
-}
-
 function exactRetiredDoveUserPromptSubmitHook(entry) {
   if (!sameKeys(entry, ["hooks"]) || !Array.isArray(entry.hooks) || entry.hooks.length !== 1) return false;
   const hook = entry.hooks[0];
@@ -140,17 +131,10 @@ function exactRetiredDoveUserPromptSubmitHook(entry) {
     && hook.timeout === 10;
 }
 
-function inspectRetiredHooks(settings, oldEntries) {
+function inspectRetiredHooks(settings) {
   const matchedPaths = [];
-  const ownedStop = oldEntries.find((entry) => entry.selector === STOP_SELECTOR);
-  for (const [eventName, matches] of [["Stop", exactLegacyDoveStopHook], ["UserPromptSubmit", exactRetiredDoveUserPromptSubmitHook]]) {
-    const entries = settings.hooks?.[eventName];
-    if (!Array.isArray(entries)) continue;
-    for (const [index, entry] of entries.entries()) {
-      if (matches(entry) && !(eventName === "Stop" && ownedStop?.digest === semanticDigest(entry))) {
-        matchedPaths.push(`${DOVE_CLAUDE_SETTINGS_PATH}#/hooks/${eventName}/${index}`);
-      }
-    }
+  for (const [index, entry] of (settings.hooks?.UserPromptSubmit ?? []).entries()) {
+    if (exactRetiredDoveUserPromptSubmitHook(entry)) matchedPaths.push(`${DOVE_CLAUDE_SETTINGS_PATH}#/hooks/UserPromptSubmit/${index}`);
   }
   return { matchedPaths };
 }
@@ -380,7 +364,7 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
   const original = parseSharedJson(observed, relativePath);
   // Diagnostic paths describe the original disk state, not planned cleanup or ownership.
   const retiredHooks = relativePath === DOVE_CLAUDE_SETTINGS_PATH && options.replacementPolicy === "inspect"
-    ? inspectRetiredHooks(original, oldEntries)
+    ? inspectRetiredHooks(original)
     : null;
   const desiredByKey = new Map(desiredEntries.map((entry) => [managedKey(entry), entry]));
   const oldByKey = new Map(oldEntries.map((entry) => [managedKey(entry), entry]));
@@ -537,7 +521,9 @@ export function planResource(root, desired, oldEntry, fsOps = fs, options = {}) 
 }
 
 export function assertManagedOwnership(manifest) {
-  const knownKeys = new Set(resourcesForHosts(manifest?.hosts ?? [], { includeStopHook: true }).map(managedKey));
+  const knownKeys = new Set(resourcesForHosts(manifest?.hosts ?? []).map(managedKey));
+  // Recognize this retired package file only so its manifest-owned copy can be removed.
+  knownKeys.add(managedKey({ path: ".claude/agents/dove-reviewer.md", kind: "exclusive-file", selector: null }));
   for (const entry of manifest?.managed ?? []) {
     if (!knownKeys.has(managedKey(entry))) {
       throw new Error(`Dove project integration contains unknown ownership: ${entry.path}${entry.selector ? `#${entry.selector}` : ""}.`);
@@ -545,7 +531,7 @@ export function assertManagedOwnership(manifest) {
   }
 }
 
-export function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs, manifest = null, replacementPolicy = "safe", includeStopHook }) {
+export function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs, manifest = null, replacementPolicy = "safe" }) {
   if (manifest && ["identity-mismatch", "invalid-version", "newer"].includes(classifyPackageCompatibility(manifest.package, { name: packageName, version: packageVersion }))) {
     throw new Error("Dove project integration package is incompatible with the running CLI.");
   }
@@ -555,10 +541,7 @@ export function preparePlan({ root, hosts, packageName, packageVersion, now, fsO
   const replacedLocalEdits = [];
   const retainedManagedByKey = new Map();
   const omittedManagedKeys = new Set();
-  // Stop has no user-scope signal and is not an ordinary installation resource.
-  // Explicit fixture selection can exercise lifecycle ownership; normal update
-  // retires exact previously owned fragments rather than retaining the hook.
-  const desiredResources = resourcesForHosts(hosts, { includeStopHook: includeStopHook === true }).filter((entry) => {
+  const desiredResources = resourcesForHosts(hosts).filter((entry) => {
     if (oldByKey.has(managedKey(entry))) return true;
     if (entry.selector === STATUS_LINE_SELECTOR) {
       const observed = inspectRegularProjectFile(root, entry.path, fsOps);

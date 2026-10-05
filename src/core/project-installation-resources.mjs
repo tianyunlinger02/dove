@@ -78,7 +78,7 @@ function assertManagedResourcePath(relativePath) {
   if (FORBIDDEN_RESOURCE_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) throw new Error(`Project integration resources must not install runtime bundles: ${relativePath}.`);
 }
 
-export function claudeResources({ includeStopHook = false } = {}) {
+export function claudeResources() {
   const agentEntries = generatedDoveAgentEntries().filter((entry) => entry.relativePath.startsWith(".claude/agents/"));
   const files = [
     ...generatedAdapterEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
@@ -155,7 +155,7 @@ export function claudeResources({ includeStopHook = false } = {}) {
     fragment: EXA_MCP_FRAGMENT,
     digest: semanticDigest(EXA_MCP_FRAGMENT)
   };
-  const resources = [...files, sessionStartHook, userPromptSubmitHook, ...(includeStopHook ? [stopHook] : []), statusLine, webFetchDeny, paperSearch, exa];
+  const resources = [...files, sessionStartHook, userPromptSubmitHook, stopHook, statusLine, webFetchDeny, paperSearch, exa];
   if (new Set(resources.map(managedKey)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }
@@ -175,8 +175,8 @@ export function dshResources() {
   });
 }
 
-export function resourcesForHosts(hosts, { includeStopHook = false } = {}) {
-  const selected = [...claudeResources({ includeStopHook }), ...dshResources()].filter((entry) => hosts.includes(entry.hostId));
+export function resourcesForHosts(hosts) {
+  const selected = [...claudeResources(), ...dshResources()].filter((entry) => hosts.includes(entry.hostId));
   return [...new Map(selected.map((entry) => [managedKey(entry), entry])).values()].sort(compareManaged);
 }
 

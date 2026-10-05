@@ -15,7 +15,7 @@ import { renderDoveAuthorPreferencesReference } from "../src/core/dove-author-pr
 import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "installation:validate", "uninstall:validate", "review-runtime:validate", "runs:validate", "behavior:validate", "behavior:eval", "package:validate", "check", "release:check"];
+const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "installation:validate", "uninstall:validate", "review:validate", "runs:validate", "behavior:validate", "behavior:eval", "package:validate", "check", "release:check"];
 const PRODUCTION_DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "bundleDependencies", "bundledDependencies"];
 const REQUIRED_PACKAGE_KEYWORDS = ["research", "academic-writing", "experiments", "claude-code", "markdown", "cli"];
 const THIRD_PARTY_LICENSES = new Set(["MIT", "ISC"]);
@@ -461,7 +461,8 @@ assertPackageMetadata();
 assertBrandInventory();
 assertLegalInventory(bundledPackageNames);
 assertLockfile();
-assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "review-runtime:validate"), true);
+assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "review-runtime:validate"), false);
+assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "review:validate"), true);
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "runs:validate"), true);
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "behavior:validate"), true);
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "behavior:eval"), true);

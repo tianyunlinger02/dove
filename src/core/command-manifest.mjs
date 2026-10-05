@@ -1,30 +1,21 @@
 import {
   DOVE_RESEARCH_ACTUAL_MATERIAL_FACT_BOUNDARY,
   DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY,
-  DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF,
   DOVE_RESEARCH_RESULT_ADOPTION,
-  DOVE_RESEARCH_ADVANCE,
   DOVE_RESEARCH_FIGURE_CAPABILITY_BOUNDARY,
   DOVE_RESEARCH_FIGURE_EVIDENCE_BOUNDARY,
-  DOVE_RESEARCH_FRAME,
   DOVE_RESEARCH_MAINTENANCE_TRIGGER,
+  DOVE_RESEARCH_MENTOR_NAME,
+  DOVE_RESEARCH_REVIEW_AGENT_NAME,
   DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY,
   DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
   DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS,
-  DOVE_RESEARCH_REVIEW_DUAL_COMPLETION,
-  DOVE_RESEARCH_REVIEW_ISOLATED_PERSISTENT,
-  DOVE_RESEARCH_REVIEW_NEGATIVE_CONTINUITY,
-  DOVE_RESEARCH_REVIEW_NO_INDEPENDENT_STATUS_CLAIM,
-  DOVE_RESEARCH_REVIEW_ANTI_GAMING,
-  DOVE_RESEARCH_REVIEW_RETURN_PROVENANCE,
-  DOVE_RESEARCH_REVIEW_VERSION_CURRENCY,
-  DOVE_RESEARCH_DEFAULT_AUTONOMY,
   DOVE_RESEARCH_CLARIFICATION,
-  DOVE_RESEARCH_CANDIDATE_COVERAGE,
   DOVE_RESEARCH_QUALITY_REFERENCE_PATHS,
   DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS
 } from "./dove-research-contract.mjs";
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "./web-access-integration.mjs";
+import { DOVE_AGENT_SURFACES } from "./dove-agent-definition.mjs";
 import { DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS, DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS } from "./dove-author-preferences.mjs";
 
 export const PACKAGE_DOCUMENTATION_PATHS = ["README.md", "docs/README.md", "docs/AUTHOR_PREFERENCES.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"];
@@ -44,7 +35,7 @@ export const DOVE_CLAUDE_AMBIENT_PROJECT_PATHS = Object.freeze([
 ]);
 export const PACKAGE_RESOURCE_ROOT = "package-resources/hosts";
 export const PACKAGE_GENERATED_SUPPORT_PATHS = Object.freeze([
-  `${PACKAGE_RESOURCE_ROOT}/claude/.claude/agents/dove.md`,
+  ...Object.values(DOVE_AGENT_SURFACES).map((agentPath) => `${PACKAGE_RESOURCE_ROOT}/claude/${agentPath}`),
   `${PACKAGE_RESOURCE_ROOT}/claude/.claude/rules/dove.md`,
   `${PACKAGE_RESOURCE_ROOT}/claude/.claude/skills/dove-paper-search/SKILL.md`,
   `${PACKAGE_RESOURCE_ROOT}/claude/${EXA_WEB_SUPPORT_SKILL_PATH}`,
@@ -85,11 +76,8 @@ const LESSONS_VALUE_STANDARD = "could inspire current or subsequent work, improv
 const relevantLessons = `Before the first consequential choice for the current request, or after a user correction or recurring repair or failure exposes a possibly shared mistaken premise, read ".dove/research/lessons/LESSONS.md" once if it exists unless it has already been checked for this question in the active context, then only directly relevant or plausibly decision-changing linked Lessons. Reuse still-applicable Lessons instead of rereading them mechanically. Read ".dove/research/RESEARCH.md" separately only when project context is still needed; it is not a prerequisite for Lessons. If Lessons materials are absent, continue without creating them. Treat Lessons as fallible guidance, never as evidence. Ordinary deterministic local work has no Lessons prerequisite.`;
 
 const AREA = Object.freeze({
-  missions: Object.freeze({ directory: "missions", summary: "MISSIONS.md" }),
-  experiments: Object.freeze({ directory: "experiments", summary: "EXPERIMENTS.md" }),
   sources: Object.freeze({ directory: "sources", summary: "SOURCES.md" }),
   reviews: Object.freeze({ directory: "reviews", summary: "REVIEWS.md" }),
-  claims: Object.freeze({ directory: "claims", summary: "CLAIMS.md" }),
   lessons: Object.freeze({ directory: "lessons", summary: "LESSONS.md" })
 });
 
@@ -103,7 +91,7 @@ function readArea(area, purpose) {
 }
 
 function maintainArea(area, instruction) {
-  return `${instruction} Use ordinary Markdown links and readable project-relative artifact paths only when useful for recovery, and keep the note as human prose rather than a structured store. Update only the narrowest relevant research document. Update \`${areaPath(area)}\` only when its own links or synthesis materially change. Update \`.dove/research/RESEARCH.md\` only for a project-level mainline, conclusion, navigation, or priority change.`;
+  return `${instruction} Use ordinary Markdown links and readable artifact paths, not a structured store. Keep new core records in the identity card, EVAL and rounds; preserve useful source material, reviewer returns and Lessons under their own existing scope. Update \`${areaPath(area)}\` only when its links or synthesis change, and RESEARCH.md only as a short history index.`;
 }
 
 function capabilityContract(options) {
@@ -117,45 +105,22 @@ function capabilityContract(options) {
 
 function contract(slug) {
   if (slug === "research") return capabilityContract({
-    ambientParticipation: "For a confirmed open goal, compare material results with the user's actual mainline and latest correction, do the next core work, and keep going until completion or a hard blocker.",
-    purpose: "Advance the user's real research goal through method, implementation, evidence and delivery.",
-    when: "Use for an open research goal or a bounded research question; keep their completion conditions distinct.",
-    responsibilities: [
-      DOVE_RESEARCH_DEFAULT_AUTONOMY,
-      "Read the short project identity card and current user correction before planning or delegating. Do not substitute a convenient component or a developer test prompt for the actual goal.",
-      "Development may use available ground truth and rapid reruns without a frozen bank or prior Experiment document; save a prospective protocol and keep heldout independent only for final confirmation. Known root cause calls for a method change, missing prerequisite calls for solving it. A diagnostic is for choosing between actual repairs.",
-      "Apply the clean-context route or design review to actual work, then continue the core goal rather than stopping at its report."
-    ],
+    ambientParticipation: "Read the identity card and EVAL; execute the current round to its result, then call the mentor and continue.",
+    purpose: "Start or continue the mentor-led round loop.",
+    when: "Use for research progression; bounded questions remain bounded.",
     actions: [
-      relevantLessons,
-      "Check the project identity card against the user's latest words; correct only affected fields without replacing an explicitly no-write request. Route and next-action updates do not rewrite the confirmed Mainline. Rejudge affected work after results, change the real method, artifact and downstream use, then carry out the next core action. A saved old plan or local test green light does not choose the route.",
-      "Preserve useful work and evidence in ordinary project files; keep RESEARCH.md a short entry and the identity card a short current anchor. Stop the open goal only at its completion, a missing user resource or decision, or an actual error that cannot be repaired; do not delete a user-created goal or loop. For a bounded question, answer it within scope."
+      `Call ${DOVE_RESEARCH_MENTOR_NAME} in a fresh read-only context with the identity card, EVAL, recent briefs/results and actual changes, not the execution conversation. Save its brief verbatim; follow its hypothesis, predicted columns and result-based completion.`
     ],
-    boundaries: [
-      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
-    ],
-    nonGoals: [
-      "Do not treat status, a diagnosis, a Lesson, or a running training job as completion of the open goal.",
-      "Do not create a separate autonomy Skill, mandatory research ledger, or one-chance development experiment."
-    ],
-    hostGuidance: hostGuidance({
-      common: ["When a run is active, use the wait for real completion while pursuing an independent core dependency."],
-      claude: ["Keep the main session's native goal and loop; its wake acts on a core task rather than merely waiting."],
-      dsh: ["Use only exposed host tools; state actual host and session limits without changing the user goal."]
-    })
+    boundaries: ["The mentor may change methods within Mainline and fixed constraints. Goal changes, exceeding user resources or an unworkable whole mainline need the user's decision."]
   });
   if (slug === "status") return capabilityContract({
-    ambientParticipation: "Answer a status question from actual project evidence; do not mistake answering it for closing an active open goal.",
-    purpose: "Explain the current research position in plain language.",
-    when: "Use when the user asks where the research stands, why it stopped, or what is being done next.",
-    responsibilities: [
-      "Answer plainly: what are we trying to make, is the core claim proved, what blocks it, and what core work is underway. Use actual evidence, not internal IDs or completion counts; give an evidence caveat briefly when needed."
-    ],
+    ambientParticipation: "Read the card, latest EVAL rows and current brief; answer four plain sentences, then return to the round.",
+    purpose: "Explain progress in four plain sentences.",
+    when: "Use when the user asks where research stands.",
     actions: [
-      "Read the short project identity card when present, then only directly relevant evidence and the user's latest corrections. Note a conflict rather than silently promoting an old note or a test prompt to user confirmation. Return control to the ongoing mainline after answering; do not alter a user-created goal or loop."
+      "Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Say: what we have made; whether the core is demonstrated; what blocks it; which round is underway. Quote actual values when useful; missing evidence stays unknown."
     ],
-    boundaries: ["A material user correction updates only affected identity-card fields even during assessment, not an unchanged Mainline; an explicit no-write instruction or host refusal still prohibits that write."],
-    nonGoals: ["Do not turn a status question into a new scientific route, or count a run receipt as proof of the core."],
+    boundaries: ["Status reads and reports, without new experiments or a new route. Retain a user's correction in affected card fields unless writing is forbidden; then return to the ongoing round."],
     clarification: []
   });
   if (slug === "source") return capabilityContract({
@@ -190,23 +155,13 @@ function contract(slug) {
     })
   });
   if (slug === "experiment") return capabilityContract({
-    ambientParticipation: "During development, inspect ground truth and rerun quickly to repair the core method; reserve frozen, prospective and one-use heldout comparisons for final confirmation.",
-    purpose: "Develop, test and interpret the method; distinguish quick iteration from final independent evidence.",
-    when: "Use for exploration, diagnostics, development, confirmation, reproduction or delivery checks.",
-    responsibilities: [
-      "Develop against available data, fix prerequisites and change a known flawed method rather than preserving every iteration as a new opportunity. Select diagnostics only to distinguish concrete repairs. Keep result numbers and denominators grounded in inspected outputs.",
-      "For final heldout confirmation, freeze the method and comparison first, record the intended claim, control, data, metric and interpretation before opening the heldout, then report actual results and limits. Prior development observations are not independent final evidence. A read-only or design-only request does not run experiments."
-    ],
+    ambientParticipation: "Develop freely with ground truth and reruns; only final heldout confirmation freezes and registers a one-use comparison.",
+    purpose: "Run and interpret experiments within a round.",
+    when: "Use for development, diagnostics, confirmation, reproduction or existing-result analysis.",
     actions: [
-      relevantLessons,
-      "During development, use the actual producer and consumer, inspect result and ground truth, revise the method and rerun. No per-run prospective document, frozen development bank or one-shot quota is required. Use the available GPU for repeated computation when it fits the task and resources.",
-      "Only for final heldout confirmation, save the selected plan before executing; afterward append actual results to that document without rewriting predictions. Analyze existing results as existing results, not a fabricated prior plan. Stop dependent claims when their comparison is invalid; continue the real core work."
+      "Use actual outputs and failure denominators; fix known causes and use suitable available compute. Put results in the round result and EVAL.md, preserving predictions; do not add experiments/ records."
     ],
-    boundaries: [
-      "Do not use heldout data to tune and still claim independent confirmation; distinguish an executable chain from an evidenced scientific effect.",
-      `Maintain Dove research Markdown other than Lessons only when ${DOVE_RESEARCH_MAINTENANCE_TRIGGER}.`
-    ],
-    nonGoals: ["No development one-chance budget, automatic plan file per iteration, or unfounded positive-result claim."]
+    boundaries: ["Read-only or design-only requests do not execute. Heldout used for tuning is no longer independent final evidence."]
   });
   if (slug === "draft") return capabilityContract({
     ambientParticipation: "When text or delivery is material, align claims with inspected evidence and carry edits through the authoritative source and build/export to the inspected deliverable.",
@@ -225,7 +180,7 @@ function contract(slug) {
       relevantLessons,
       `Read the target and relevant material, then draft, assess, create, or revise the ordinary artifact when the deliverable requires it. ${DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY} Propagate edits through the real build or export path and inspect the actual output before claiming the artifact is current; assessment-only requests return findings without edits.`,
       "Run the checks needed for the requested artifact, fix in-scope issues, and report remaining material issues, scope limits, or user choices.",
-      maintainArea("claims", "Create or revise a naturally named Claim document only when an important research claim needs durable treatment; when useful for recovery, link supporting or challenging Source, Experiment, Figure, and manuscript locations without copying evidence into a claim store.")
+      "When a claim needs durable context, record its evidence and limits in the current round result and link actual artifacts; keep existing claims/ notes as history without adding or rewriting them."
     ],
     boundaries: [
       "Draft may create or edit ordinary project artifacts requested by the user or needed for the bounded deliverable; destructive, outward-facing, or submission actions still need explicit authorization.",
@@ -255,7 +210,7 @@ function contract(slug) {
       "Open or view the actual rendered figure, not just filenames or thumbnails, at realistic final dimensions and in manuscript context when available. Check the chain from source data or mechanism logic to visual encoding, rendered panels, labels, units, legends, caption, nearby text, layout fit, and manuscript claim; flag mismatches rather than treating figure existence or size as success.",
       "For revision, make targeted changes to the editable source, plotting code, SVG/vector structure, raster edits, labels, layout, annotations, caption, nearby manuscript text, or export settings; rerender and inspect the updated figure before delivery. Material changes to evidence, encoding, caption, or claim alignment make affected prior same-version Review judgments historical; this does not authorize a review rerun.",
       "Deliver the final figure file and caption together with the route-native editable source, such as plotting code and data reference, SVG/vector source, layered or editable image source, or the mixed raster plus SVG/vector composition that allows later modification.",
-      "When useful for recovery, use ordinary Markdown links and readable project-relative artifact paths to link the rendered figure, route-native editable source, plot code and data, or source visual from the relevant Mission, Experiment, or Claim. Keep these as human-readable notes, not a structured figure store. Update summaries only for material synthesis or priority changes."
+      "When useful for recovery, link the rendered figure, route-native editable source, plot code and data, or source visual in the current round result using ordinary Markdown links and readable project-relative artifact paths. Leave historical missions/, experiments/ and claims/ records and summaries untouched; do not create a structured figure store."
     ],
     boundaries: [
       "Figure may create, edit, render, open, inspect, caption, export, or update ordinary project visuals and nearby manuscript text when requested or material to the deliverable; it must not invent data, results, or method details.",
@@ -268,84 +223,24 @@ function contract(slug) {
     ]
   });
   if (slug === "review") {
-    const reviewContextReadAction = readArea("reviews", "the review work");
-    const reviewGroundingAction = "For whole-paper author-side self-check or `dove-review` handoff preparation, inspect the current full paper and the venue or literature context that can change the judgment. Use current official venue sources for formal requirements and inspected relevant published work for novelty, positioning, evidence norms, experiment presentation, and reader expectations; published practice does not replace official rules. Distinguish material merely found from material retrieved, inspected, and used. Import, context inspection, or bounded local review does not trigger venue or paper search by itself.";
-    const reviewerPerspectiveAction = `${DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS} Also check citation identity, claim support, changes in claim strength, unsupported facts, anomalous results, and whether the current paper silently replaced an earlier problem, output, baseline, real goal, contribution, or success condition when relevant. ${DOVE_RESEARCH_REVIEW_ANTI_GAMING} A favorable judgment applies to the current task and claims only; it neither erases an earlier proposition's failure nor authorizes a different author-side mainline. For local paragraph, figure, citation, or method review, stay inside the requested scope and do not force the full-paper four questions or start an independent handoff. Return concrete findings with evidence, consequence, useful response, and delivery readiness kept separate. Classify impact as ‘核心问题’ (constrains the core goal), ‘分支问题’ (constrains affected dependent work), or ‘局部问题’ (local quality); state evidence sufficiency separately rather than equating missing evidence with refutation or repair effort with severity.`;
-    const deliveryReviewAction = "When delivery review is requested or genuinely limiting, inspect the actual venue-facing package against those requirements and report remaining delivery gaps.";
-    const reviewHandoffAction = `${DOVE_RESEARCH_REVIEW_FROZEN_HANDOFF} Include the grounding inspected above for the intended frozen-material judgment. Preserve the purpose, target venue, complete frozen material list, reviewer prompt, known host limits, and returned report location in the Review context. Give the reviewer only those listed materials, with Read-only access and no web, MCP, private author conversations, or unlisted files. Use an isolated, persistent, recoverable reviewer context when the host provides one; resume or rerun later whole-paper rounds for the same review id and reviewer session. If grounding is missing, the reviewer should limit venue or literature conclusions to the listed materials; if the runtime is unavailable, say so and continue feasible author-side work without counting it as independent review.`;
-    const reviewMaintenanceAction = maintainArea("reviews", "When the user supplies a `dove-review` return, user-pasted review opinion, clarification, rebuttal exchange, or asks to preserve self-check or handoff context, append the actual text faithfully to the corresponding Review document and associate it with the same review id and round when known. When useful for recovery, link the corresponding `.dove/reviews/` round report, frozen materials, and affected Claim, Experiment, Figure, Source, or manuscript locations. Do not revise author artifacts, start a new review, rewrite the return, or add author interpretation unless asked.");
-    const semanticSections = [
-      {
-        title: "Clean-context route and method-design judgment",
-        purpose: "Use a fresh read-only Dove context for the shared route/design review, without the author's process conversation.",
-        actions: [
-          "For route review, supply the identity card and the cumulative candidate/change/prediction/result sequence for this stretch, with actual artifacts. Judge the method family's remaining value and shared failure causes, not each candidate in isolation. Design review uses the card and one-page main-method design. Apply the return to actual work; keep rejected approaches in the card. Neither is independent submission review."
-        ]
-      },
-      {
-        title: "Author-side scientific self-check",
-        purpose: DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
-        actions: [
-          reviewGroundingAction,
-          reviewerPerspectiveAction
-        ],
-        boundaries: [
-          "Author-side self-check critiques and advises; later changes remain Dove author-side work."
-        ]
-      },
-      {
-        title: "Delivery readiness",
-        purpose: DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY,
-        actions: [
-          deliveryReviewAction
-        ]
-      },
-      {
-        title: "Independent `dove-review`",
-        purpose: DOVE_RESEARCH_REVIEW_DUAL_COMPLETION,
-        responsibilities: [
-          DOVE_RESEARCH_REVIEW_ISOLATED_PERSISTENT,
-          "Each isolated runtime round reviews the whole current frozen paper, not only a diff, with the same four full-paper questions above. The reviewer returns Markdown under Verdict, Blocking issues, Grounding basis, and Author-side next actions.",
-          DOVE_RESEARCH_REVIEW_NEGATIVE_CONTINUITY,
-          DOVE_RESEARCH_REVIEW_VERSION_CURRENCY,
-          DOVE_RESEARCH_REVIEW_RETURN_PROVENANCE
-        ],
-        actions: [
-          reviewHandoffAction
-        ],
-        boundaries: [
-          "Earlier author-side Reviews, handoffs, code, raw outputs, and working figures are not supplied automatically; a resumed reviewer context retains its own review history. Do not restart it to avoid prior objections.",
-          DOVE_RESEARCH_REVIEW_NO_INDEPENDENT_STATUS_CLAIM
-        ]
-      },
-      {
-        title: "Returned review or existing context",
-        purpose: "Import a returned review, preserve a user-pasted opinion, or inspect existing Review context without creating a new exchange.",
-        responsibilities: [
-          "For import, preserve the actual return faithfully with known context, round, venue, and material scope; for inspection, read only the Review context needed for the question."
-        ],
-        actions: [
-          reviewMaintenanceAction,
-          reviewContextReadAction
-        ],
-        boundaries: [
-          "Import and inspection do not automatically begin author response, revision, venue search, paper search, or a new handoff."
-        ]
-      }
-    ];
     return capabilityContract({
-      ambientParticipation: "Use a fresh read-only Dove context for route and new-method judgment, then change actual work; full-paper isolated review remains separate from author self-check and delivery readiness.",
-      purpose: "Use Review for clean-context route/design judgment, author self-check, delivery readiness, independent paper review, or returned-review context.",
-      when: "Use at the route/design review triggers, for paper or delivery judgment, or for existing review context.",
-      boundaries: [
-        "Review findings inform Dove's author-side judgment, not automatic acceptance or action; verify material findings against inspected evidence, then prioritize warranted Source, Experiment, Draft, Figure, Rebuttal or delivery work.",
-        "Independent `dove-review` requires a real isolated, persistent, recoverable host context with a frozen near-submission material list."
+      ambientParticipation: "Use a clean read-only paper-review context on specified materials; mentor rounds own method and route judgment.",
+      purpose: "Assess a paper, local artifact, delivery readiness or an existing reviewer return.",
+      when: "Use for paper judgment or review context, not mentor-led round decisions.",
+      actions: [
+        DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS,
+        `For independent review, call ${DOVE_RESEARCH_REVIEW_AGENT_NAME} in a clean read-only context with the current manuscript, its cited results and relevant inspected venue/literature material. It reads only specified files with Read/Grep/Glob, not the author's execution conversation; no frozen snapshot or review CLI is needed. Whole-paper review reads the full current version; local review stays local.`,
+        "Request a concise Markdown judgment, blocking issues, cited evidence and author-side next actions, listing the files actually read. Missing grounding limits the judgment. After substantive changes, request a fresh full-version review; an old recommendation remains historical.",
+        "Keep actual reviewer returns faithful, with known venue and materials; distinguish user-pasted opinions from independent work actually performed. Preserve useful returns in the current round result or ordinary project files, not a runtime exchange store. Inspection or preservation alone does not start revision or another review."
       ],
-      semanticSections,
-      hostGuidance: hostGuidance({
-        claude: ["Route/design: `dove review handoff --project <project> --scope route|design --material <path>... --json`. Identity is included; files/directories and absolute paths are read directly, without SHA/snapshots. Route uses cumulative candidate/results; design uses the one-page main-method design. Read `reportPath` and act; each uses a fresh Read-only context. Paper: `dove review handoff --project <project> --venue <venue> --material <path>...`; `dove review resume --project <project> --id <id>` and `dove review rerun --project <project> --id <id> --material <path>...` retain the same reviewer. Import: `dove review import --project <project> --id <id> --file <report.md>`."],
-        dsh: ["Use an exposed equivalent clean read-only context for route/design judgment; if unavailable, report that limitation, not self-check as independent judgment. Preserve user-provided review returns; paper review retains its isolated-context requirement."]
-      })
+      responsibilities: [
+        DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
+        DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY
+      ],
+      boundaries: [
+        "Findings are reasoned objections, not empirical evidence or automatic acceptance. Assess cited grounds and address material concerns through author-side work; self-check does not certify independent review.",
+        "Use an exposed equivalent clean read-only context on other hosts; if unavailable, report the limitation. Do not add hashes, frozen gates, persistent reviewer sessions or approval steps."
+      ]
     });
   }
   if (slug === "rebuttal") return capabilityContract({
@@ -357,12 +252,12 @@ function contract(slug) {
       "Finding understood, response path grounded, needed revisions implemented, and effect checked are processing facts, not resolution grades. Judge whether the underlying concern is resolved, reduced, or still limiting, and whether the response improves the whole argument without new scientific defects. Compare local repair, shared-cause redesign, alternative routes, or further evidence when appropriate rather than defaulting to the smallest reply. A written response does not establish that the issue is resolved, and author self-check does not mean reviewer acceptance.",
       "Compare original claim, reviewer interpretation, planned response, and revised claim so certainty, causality, scope, quantitative qualifiers, novelty, contribution, problem, output, baseline, real goal, proxy, and success meaning do not change silently. Reviewer objections can reveal a better task, but they do not automatically authorize a succession of easier tasks; preserve the original proposition's disposition and independently judge any materially different candidate before mainline promotion.",
       "Use Source for new citations and Experiment for new results; leave unchecked source content, project facts, methods, results, and field facts unconfirmed.",
-      "When fixable deficiencies are in scope, improve evidence, analysis, manuscript text, figures, captions, tables, supplements, highlights, or venue-facing files—not just response tone. Treat a review as current only for the same complete manuscript and listed materials; after substantive evidence, claim, method, figure, or venue-facing changes, decide whether a fresh `dove review rerun` is needed before relying on the old recommendation."
+      "When fixable deficiencies are in scope, improve evidence, analysis, manuscript text, figures, captions, tables, supplements, highlights, or venue-facing files—not just response tone. Treat a review as current only for the same complete manuscript and listed materials; after substantive evidence, claim, method, figure, or venue-facing changes, decide whether a fresh read-only paper review is needed before relying on the old recommendation."
     ],
     actions: [
       readArea("reviews", "the relevant returned review"),
       relevantLessons,
-      "Read the Review document, same review id and round when available, the reviewed material list, current material state, and actual artifacts. For each material finding, identify the source, experiment, method, analysis, expression, figure, venue-fit, or scientific-task identity problem. For new citations, verify identity and inspected-content support through Source; for new results, inspect actual Experiment materials before using them in the response. Then draft the response and make requested revisions that resolve, reduce, or honestly bound it while preserving accurate claim strength and professional author voice. Do not chase acceptance through cosmetic-only changes, selective evidence, hidden counterevidence, unjustified narrowing, or a sequence of unacknowledged task changes. If the warranted response materially changes the confirmed mainline, intended contribution, or completion meaning, preserve the old proposition's conclusion, independently assess the candidate, and obtain the user's decision before adopting it. Do not rerun review for cosmetic or response-only edits; use `dove review rerun` when substantive evidence, claim scope, method, figure, result interpretation, venue-facing materials, or completion judgment changed enough that the old recommendation no longer covers the current full version.",
+      "Read the Review document, same review id and round when available, the reviewed material list, current material state, and actual artifacts. For each material finding, identify the source, experiment, method, analysis, expression, figure, venue-fit, or scientific-task identity problem. For new citations, verify identity and inspected-content support through Source; for new results, inspect actual Experiment materials before using them in the response. Then draft the response and make requested revisions that resolve, reduce, or honestly bound it while preserving accurate claim strength and professional author voice. Do not chase acceptance through cosmetic-only changes, selective evidence, hidden counterevidence, unjustified narrowing, or a sequence of unacknowledged task changes. If the warranted response materially changes the confirmed mainline, intended contribution, or completion meaning, preserve the old proposition's conclusion, independently assess the candidate, and obtain the user's decision before adopting it. Do not rerun review for cosmetic or response-only edits; use read-only paper review when substantive evidence, claim scope, method, figure, result interpretation, venue-facing materials, or completion judgment changed enough that the old recommendation no longer covers the current full version.",
       `Check that each response and requested revision addresses a real finding. ${DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY} Propagate requested revisions through the real build or export path and inspect the output before claiming the revised artifact is current; fix in-scope issues or report remaining material limits and user choices.`,
       maintainArea("reviews", "When worth preserving, append the author response, requested revisions, resulting decisions, unresolved issues, and follow-up to the same Review document or directly affected research document, and, when useful for recovery, link the originating Review return plus any newly used Source, Experiment, Figure, or ordinary artifact paths.")
     ],
@@ -400,13 +295,13 @@ function contract(slug) {
 }
 
 const SURFACES = [
-  ["research", "Use when a confirmed or provisional research goal needs Dove to choose and carry out the next substantive in-scope action."],
-  ["status", "Use when the user asks where the research stands, without turning software health, receipts, or navigation into research progress."],
+  ["research", "Start or continue the mentor-led research rounds from the identity card and evaluation table."],
+  ["status", "Report what we have made, whether the core is demonstrated, what blocks it and which round is underway."],
   ["source", "Use when external sources, citation identity, DOI checks, or bounded bibliography verification can change the research judgment."],
-  ["experiment", "Use for exploration, diagnostics, confirmation, reproduction, or delivery checks, including design, execution, existing-result analysis, and retrospective recording."],
+  ["experiment", "Develop with ground truth and quick reruns; freeze and register only the final heldout confirmation."],
   ["draft", "Use when the user names a draft/artifact to write or revise, with available evidence prioritized over polishing."],
   ["figure", "Use when data or mechanism logic must become an actual checked figure with caption, text, and claim alignment."],
-  ["review", "Use for whole-paper author self-check, delivery review, isolated `dove-review`, returned-review import, or bounded local review."],
+  ["review", "Review a specified paper in a clean read-only context, or inspect author self-check, delivery or returned opinions."],
   ["rebuttal", "Use when review findings require current evidence, possible reruns, author response, or evidence-backed revision."],
   ["lessons", "Use when reusable research guidance should be read or preserved without recording routine progress twice."],
 ];

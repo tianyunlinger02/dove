@@ -133,20 +133,13 @@ function inspectIntegration(start, options) {
 }
 
 function researchState(root, options) {
-  if (!root) return { healthy: false, state: "unavailable", mode: "unavailable", error: "Project root is unavailable." };
+  if (!root) return { healthy: false, state: "unavailable", error: "Project root is unavailable." };
   try {
     const inspected = (options.inspectResearchDocuments ?? inspectResearchDocuments)(root, { fsOps: options.fsOps });
     if (!plainObject(inspected)) throw new Error("Research document inspection returned an invalid result.");
-    const mode = inspected.state === "absent"
-      ? "absent"
-      : inspected.state === "previous-research-format"
-        ? "previous-research-format"
-        : inspected.healthy === true
-          ? "current"
-          : "invalid";
-    return { ...inspected, mode, healthy: inspected.healthy === true };
+    return { ...inspected, healthy: inspected.healthy === true };
   } catch (error) {
-    return { healthy: false, state: "invalid", mode: "invalid", error: messageFor(error) };
+    return { healthy: false, state: "invalid", error: messageFor(error) };
   }
 }
 

@@ -7,6 +7,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { build } from "esbuild";
+import { cleanupTempWorkspace, createTempWorkspace } from "./temp-workspace.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
@@ -147,9 +148,7 @@ async function buildAll(outputRoot, write) {
 }
 
 async function checkBuild() {
-  const tempBase = path.join(PACKAGE_ROOT, ".claude", "tmp", "package-build-checks");
-  fs.mkdirSync(tempBase, { recursive: true });
-  const tempRoot = fs.mkdtempSync(path.join(tempBase, "dove-package-build-"));
+  const tempRoot = createTempWorkspace("dove-package-build-");
   try {
     const { outputFiles, proof } = await buildAll(tempRoot, false);
     console.error(`Package build proof: ${JSON.stringify(proof)}`);
@@ -162,8 +161,7 @@ async function checkBuild() {
     }
     console.error("Package bundles are up to date.");
   } finally {
-    fs.rmSync(tempRoot, { recursive: true, force: true });
-    try { fs.rmdirSync(tempBase); } catch (error) { if (error?.code !== "ENOTEMPTY" && error?.code !== "ENOENT") throw error; }
+    cleanupTempWorkspace(tempRoot);
   }
 }
 

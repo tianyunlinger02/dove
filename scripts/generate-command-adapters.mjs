@@ -7,7 +7,7 @@ import {
   DOVE_CLAUDE_AMBIENT_RULE_PATH,
   renderClaudeAmbientRule
 } from "../src/core/ambient-policy.mjs";
-import { generatedDoveAgentEntries } from "../src/core/dove-agent-definition.mjs";
+import { DOVE_AGENT_SURFACES, generatedDoveAgentEntries } from "../src/core/dove-agent-definition.mjs";
 import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "../src/core/dove-agent-persona.mjs";
 import { USER_RESPONSE_POLICY } from "../src/core/user-response-policy.mjs";
 import {
@@ -80,47 +80,13 @@ function renderHostGuidance(contract, hostId) {
   return renderListSection("Using host tools", values);
 }
 
-function renderSemanticSection(section) {
-  const items = [
-    ...(Array.isArray(section.responsibilities) ? section.responsibilities : []),
-    ...(Array.isArray(section.actions) ? section.actions : []),
-    ...(Array.isArray(section.boundaries) ? section.boundaries : []),
-    ...(Array.isArray(section.nonGoals) ? section.nonGoals : [])
-  ].filter(Boolean);
-  const blocks = [
-    `### ${section.title}`,
-    section.purpose ? String(section.purpose) : "",
-    section.description ? String(section.description) : "",
-    items.length > 0 ? renderBullets(items) : ""
-  ].filter(Boolean);
-  return blocks.join("\n\n");
-}
-
 function renderReturnWith(contract) {
   return renderListSection("Return with", contract.returnWith);
-}
-
-function renderSemanticCapabilityContract(command, hostId = null) {
-  const contract = command.contract;
-  const sections = [
-    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.",
-    `### What this is for\n\n${contract.purpose}`,
-    `### When to use\n\n${contract.when}`,
-    renderListSection("Scope and changes", contract.boundaries),
-    ...contract.semanticSections.map(renderSemanticSection),
-    renderListSection("When Dove needs input", contract.clarification),
-    renderHostGuidance(contract, hostId),
-    renderReturnWith(contract)
-  ].filter(Boolean);
-  return sections.join("\n\n");
 }
 
 function renderCapabilityContract(command, hostId = null) {
   const contract = command.contract;
   if (!contract) return "";
-  if (Array.isArray(contract.semanticSections) && contract.semanticSections.length > 0) {
-    return renderSemanticCapabilityContract(command, hostId);
-  }
   const sections = [
     "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.",
     `### What this is for\n\n${contract.purpose}`,
@@ -248,7 +214,7 @@ export function generatedDoveAgentSurfaceEntries() {
 
 function existingGeneratedDoveAgentPaths(root) {
   return [
-    packageResourcePath("claude", ".claude/agents/dove.md"),
+    ...Object.values(DOVE_AGENT_SURFACES).map((relativePath) => packageResourcePath("claude", relativePath)),
     packageResourcePath("claude", ".claude/agents/dove-reviewer.md")
   ].filter((relativePath) => fs.existsSync(path.join(root, relativePath))).sort();
 }

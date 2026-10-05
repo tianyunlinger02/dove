@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { CLI_COMMAND_SPECS, parseDoveCli } from "../../src/cli/command-parser.mjs";
 import { renderDoveHelp } from "../../src/cli/help-output.mjs";
 import { renderProjectIntegrationResult } from "../../src/cli/project-integration-output.mjs";
-import { renderReviewResult } from "../../src/cli/review-output.mjs";
 import { renderRunMetric, renderRunResult } from "../../src/cli/run-output.mjs";
 import {
   DOVE_PIXEL_ART,
@@ -11,7 +10,6 @@ import {
   renderDoveLifecycleResult,
   renderDovePixelArt
 } from "../../src/cli/terminal-output.mjs";
-import { normalizeReviewId } from "../../src/core/review-workspace.mjs";
 
 function assertRuntimeCli() {
   assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "init"));
@@ -20,7 +18,7 @@ function assertRuntimeCli() {
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "mcp"), false, "CLI must not expose the retired MCP server");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "migrate-research"), false, "CLI must not expose format migration");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "export-research"), false, "CLI must not expose the retired legacy export command");
-  assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "review"), "CLI must expose explicit isolated review handoff runtime");
+  assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "review"), false, "Review is a native read-only Agent, not a CLI model or record runtime");
   assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "run"), "CLI must expose detached experiment run receipts");
 
   const assertParserShape = (value) => {
@@ -41,24 +39,6 @@ function assertRuntimeCli() {
     assert.equal(caught.jsonRequested, jsonRequested, "parser error jsonRequested must reflect only flags before '--'");
   };
 
-  assert.deepEqual(assertParserShape(parseDoveCli(["review", "handoff", "--project=/workspace", "--venue", "TestConf", "--material", "paper/main.tex", "--material=build/main.pdf", "--id", "review-1", "--json"])), {
-    command: "review",
-    subcommand: "handoff",
-    options: { project: "/workspace", venue: "TestConf", material: ["paper/main.tex", "build/main.pdf"], id: "review-1", json: true },
-    passthrough: []
-  });
-  for (const subcommand of ["handoff", "rerun"]) {
-    assert.equal(CLI_COMMAND_SPECS.review.subcommands[subcommand].options.some((option) => option.name === "--file"), false);
-    for (const fileOption of [["--file", "return.md"], ["--file=return.md"]]) {
-      assertParserError(["review", subcommand, "--project=/workspace", "--json", ...fileOption], /Dove 不支持这个参数：--file/u, true);
-    }
-  }
-  assert.deepEqual(assertParserShape(parseDoveCli(["review", "import", "--project=/workspace", "--id", "review-1", "--file=return.md", "--venue", "TestConf", "--material", "paper/main.tex"])), {
-    command: "review",
-    subcommand: "import",
-    options: { project: "/workspace", id: "review-1", file: "return.md", venue: "TestConf", material: ["paper/main.tex"] },
-    passthrough: []
-  });
   assert.deepEqual(parseDoveCli(["hook", "user-prompt-submit", "--project=/workspace"]), {
     command: "hook", subcommand: "user-prompt-submit", options: { project: "/workspace" }, passthrough: []
   });
@@ -97,25 +77,22 @@ function assertRuntimeCli() {
   for (const command of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
     assertParserError([command], new RegExp(`Dove 不支持这个命令：${command}`), false);
   }
-  assertParserError(["review"], /review 只接受这些子命令/iu, false);
-  assertParserError(["review", "unknown"], /review 只接受这些子命令/iu, false);
+  assertParserError(["review"], /Dove 不支持这个命令：review/iu, false);
+  assertParserError(["review", "handoff", "--json"], /Dove 不支持这个命令：review/iu, true);
 }
 
 function assertDoveCliHelpRenderer() {
   const output = renderDoveHelp();
   assert.match(output, /^dove\n/u);
   assert.match(output, /dove init \[--project <dir>\] \[--host <host>\.\.\.\] \[--json\|--format json\]/u);
-  assert.match(output, /dove review handoff --project <dir> --venue <venue> --material <path>\.\.\./u);
+  assert.doesNotMatch(output, /dove review (?:handoff|resume|rerun|status|import|report)/u);
   assert.match(output, /dove run start --project <dir>.*--seed <short-text>.* -- <command> \[args\.\.\.\]/u);
   assert.match(output, /dove hook session-start --project <dir>/u);
   assert.match(output, /dove hook user-prompt-submit --project <dir>/u);
-  assert.match(output, /doctor、review、run 与 hook 等项目级命令/u);
-  assert.match(output, /真正的科研推进仍在一个 Dove agent 中完成/u);
-  assert.match(output, /研究记录是研究者维护的普通 Markdown/u);
-  assert.match(output, /Claude 接入管理只读 SessionStart hook，并在没有现有用户配置时安装只读 statusLine/u);
-  assert.match(output, /UserPromptSubmit 只读检查当前项目的受管集成[\s\S]*有界科研指导和文件指纹/u);
-  assert.match(output, /默认不安装 Stop hook[^\n]*无法获知用户本轮请求而放行/u);
-  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "projects", "review", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "projects", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
+  for (const command of Object.keys(CLI_COMMAND_SPECS)) {
+    assert.ok(output.includes(`dove ${command}`), `${command}: help exposes the parser's public commands`);
+  }
   assert.match(output, /dove projects import --project <dir>/u);
   assert.match(output, /dove projects sync/u);
 }
@@ -167,9 +144,10 @@ function assertProjectIntegrationRenderer() {
   assert.match(output, /已覆盖 1 个 manifest-owned 本地编辑/u);
   assert.match(output, /\.claude\/settings\?\.json#\/hooks\/SessionStart\[dove-session-start\]/u);
   assert.match(output, /SessionStart 完全只读，不会修改这些本地编辑/u);
-  assert.match(output, /当前主 agent（普通 Claude 或显式 Dove）亲自完整读取/u);
+  assert.match(output, /主 agent.*读取两个短要点/u);
   assert.match(output, /安装本身不代表模型已经读过/u);
-  assert.match(output, /已经打开的主 agent.*现在应先完整读取/u);
+  assert.match(output, /现有主 agent.*补读/u);
+  assert.match(output, /missions.*experiments.*claims.*保留原地/u);
   const warningOutput = renderProjectIntegrationResult("update", {
     status: "updated",
     target: "/workspace/example-project",
@@ -227,8 +205,8 @@ function assertProjectIntegrationRenderer() {
     writtenPaths: [".dove/install/manifest.json"]
   }, { stream: { isTTY: false }, env: {} });
   assert.match(dshOnly, /DSH 没有 SessionStart/u);
-  assert.match(dshOnly, /当前主 agent若尚未读取，必须先亲自完整读取/u);
-  assert.doesNotMatch(dshOnly, /普通 Claude 或显式 Dove/u);
+  assert.match(dshOnly, /主 agent.*读取两个短要点/u);
+  assert.doesNotMatch(dshOnly, /Claude startup/u);
 
   for (const hosts of [["claude"], ["dsh"], ["claude", "dsh"]]) {
     const alreadyInitialized = renderProjectIntegrationResult("init", {
@@ -237,7 +215,7 @@ function assertProjectIntegrationRenderer() {
       hosts,
       writtenPaths: []
     }, { stream: { isTTY: false }, env: {} });
-    assert.match(alreadyInitialized, /未安装或刷新作者偏好/u);
+    assert.match(alreadyInitialized, /未刷新.*要点或宿主引导/u);
     assert.match(alreadyInitialized, /不能据此确认/u);
     assert.match(alreadyInitialized, /dove update/u);
     assert.match(alreadyInitialized, /安装本身不代表模型已经读过/u);
@@ -248,9 +226,9 @@ function assertProjectIntegrationRenderer() {
     status: "reinstalled",
     hosts: ["claude"]
   }, { stream: { isTTY: false }, env: {} });
-  assert.match(claudeReinstall, /当前已打开的主 agent现在应亲自完整读取/u);
-  assert.match(claudeReinstall, /新开 Claude 会话或在现有会话中 \/clear/u);
-  assert.match(claudeReinstall, /安装本身不代表已经读过/u);
+  assert.match(claudeReinstall, /AUTHOR_PREFERENCES\.md/u);
+  assert.match(claudeReinstall, /Claude.*(?:会话|clear)/u);
+  assert.match(claudeReinstall, /安装本身不代表.*读过/u);
   const warningReinstall = renderDoveLifecycleResult("reinstall", {
     status: "reinstalled",
     hosts: ["claude"],
@@ -265,144 +243,6 @@ function assertProjectIntegrationRenderer() {
   }, { stream: { isTTY: false }, env: {} });
   assert.match(dshReinstall, /DSH 没有 SessionStart/u);
   assert.doesNotMatch(dshReinstall, /新开 Claude 会话/u);
-}
-
-function assertReviewResultRenderer() {
-  assert.equal(normalizeReviewId("review-20260904-a1b2c3"), "review-20260904-a1b2c3");
-  for (const unsafeId of ["CON", "review.", "review-", "review/1", " review", ".."]) {
-    assert.throws(() => normalizeReviewId(unsafeId), /path-safe|must not use a reserved device name|must start and end/iu, `${unsafeId} must not be accepted as a review id`);
-  }
-
-  const emptyStatus = renderReviewResult({ command: "status", project: "/workspace/example-project", reviews: [] });
-  assert.match(emptyStatus, /Dove review 状态/u);
-  assert.match(emptyStatus, /尚无 \.dove\/reviews\/\*\* 记录/u);
-
-  const listStatus = renderReviewResult({
-    command: "status",
-    project: "/workspace/example-project",
-    reviews: [{ reviewId: "review-1", status: "completed", currentRound: 2, sessionId: "session-1" }]
-  });
-  assert.match(listStatus, /review-1：completed，轮次 2，会话 session-1/u);
-
-  const detailedStatus = renderReviewResult({
-    command: "status",
-    project: "/workspace/example-project",
-    reviewId: "review-1",
-    status: "completed",
-    currentRound: 2,
-    sessionId: null,
-    materialCurrentness: {
-      overall: "changed",
-      items: [
-        { path: "paper/main.tex", status: "changed", expected: { size: 123, sha256: "a".repeat(64) }, observed: { exists: true, type: "file", size: 124, sha256: "b".repeat(64) } },
-        { path: "paper/link.tex", status: "changed", expected: { size: 123, sha256: "a".repeat(64) }, observed: { exists: true, type: "symlink" } }
-      ]
-    },
-    rounds: [{ round: 1, status: "completed", provenance: "runtime", reportPath: ".dove/reviews/review-1/rounds/1/report.md", latestReportPath: ".dove/reviews/review-1/rounds/1/report-imported.md", materialCurrentness: { overall: "missing", items: [] } }]
-  });
-  assert.match(detailedStatus, /审阅记录：review-1/u);
-  assert.match(detailedStatus, /会话：无/u);
-  assert.match(detailedStatus, /当前轮次材料版本关系：changed/u);
-  assert.match(detailedStatus, /paper\/main\.tex：changed（snapshot 123 bytes；observed file 124 bytes）/u);
-  assert.match(detailedStatus, /paper\/link\.tex：changed（snapshot 123 bytes；observed symlink \(not followed\)）/u);
-  assert.match(detailedStatus, /verdict 是对应 frozen snapshot 的历史判断/u);
-  assert.match(detailedStatus, /不解析报告文字来猜 PASS\/REVISE/u);
-  assert.doesNotMatch(detailedStatus, /^Review：|^Session：|^Backend：/mu);
-  assert.match(detailedStatus, /轮次 1：completed（runtime），报告 \.dove\/reviews\/review-1\/rounds\/1\/report-imported\.md/u);
-  assert.match(detailedStatus, /原始报告保留在 \.dove\/reviews\/review-1\/rounds\/1\/report\.md/u);
-  assert.match(detailedStatus, /材料 missing/u);
-
-  const unavailableStatus = renderReviewResult({
-    command: "status",
-    project: "/workspace/example-project",
-    reviewId: "review-1",
-    materialCurrentness: { overall: "unavailable", items: [], error: "ENOENT: snapshot" + String.fromCharCode(7) + ".json" },
-    rounds: []
-  });
-  assert.match(unavailableStatus, /材料版本检查失败：ENOENT: snapshot\?\.json/u);
-  assert.doesNotMatch(unavailableStatus, /无 frozen materials 可比较/u);
-  const noMaterialsStatus = renderReviewResult({
-    command: "status",
-    materialCurrentness: { overall: "unavailable", items: [] },
-    rounds: []
-  });
-  assert.match(noMaterialsStatus, /无 frozen materials 可比较/u);
-
-  const handoff = renderReviewResult({
-    command: "handoff",
-    project: "/workspace/example-project",
-    reviewId: "review-1",
-    round: 1,
-    status: "waiting",
-    provenance: "runtime",
-    sessionId: "session-1",
-    reportPath: ".dove/reviews/review-1/rounds/1/report.md",
-    backendPath: ".dove/reviews/review-1/rounds/1/backend.json",
-    materials: [{ path: "paper/main.tex", size: 123 }, { path: "paper/unsafe" + String.fromCharCode(7) + ".tex", size: "bad" + String.fromCharCode(0) }]
-  });
-  assert.match(handoff, /Dove review handoff 已完成/u);
-  assert.match(handoff, /paper\/main\.tex \(123 bytes\)/u);
-  assert.match(handoff, /paper\/unsafe\?\.tex \(bad\? bytes\)/u);
-  assert.match(handoff, /Reviewer 只接收本轮冻结材料/u);
-
-  for (const command of ["handoff", "resume", "rerun"]) {
-    const failed = renderReviewResult({
-      command,
-      status: "failed",
-      project: "/workspace/example-project",
-      reviewId: "review-1",
-      round: 1,
-      provenance: "runtime",
-      materials: []
-    });
-    assert.match(failed, /^Dove review 运行失败；未生成本次 reviewer 报告/u);
-    assert.match(failed, /状态：failed/u);
-    assert.doesNotMatch(failed, /handoff 已完成|已恢复并更新|已在同一 reviewer session 中开始/u);
-  }
-  const failedStatus = renderReviewResult({ command: "status", status: "failed", reviewId: "review-1", rounds: [] });
-  assert.match(failedStatus, /^Dove review 状态/u);
-  assert.doesNotMatch(failedStatus, /运行失败；未生成本次/u);
-  const completedNegativeReview = renderReviewResult({ command: "handoff", status: "completed", report: "## Verdict\nREVISE", materials: [] });
-  assert.match(completedNegativeReview, /^Dove review handoff 已完成/u);
-
-  const imported = renderReviewResult({
-    command: "import",
-    project: "/workspace/example-project",
-    reviewId: "review-1",
-    round: 2,
-    status: "imported",
-    provenance: "imported",
-    sessionId: null,
-    reportPath: ".dove/reviews/review-1/rounds/2/report.md",
-    backendPath: ".dove/reviews/review-1/rounds/2/backend.json",
-    materials: []
-  });
-  assert.match(imported, /Dove review return 已导入/u);
-  assert.match(imported, /无；这是导入的外部返回记录/u);
-  assert.match(imported, /按用户提供文件原样保存/u);
-
-  const liveStatus = renderReviewResult({
-    command: "status", scope: "route", currentRound: 1,
-    rounds: [{ round: 1, provenance: "runtime", materials: [{ path: "/workspace/.claude-tmp/trajectory" }] }]
-  });
-  assert.match(liveStatus, /实时材料/u);
-  assert.match(liveStatus, /status 不读取或校验材料快照/u);
-  assert.match(liveStatus, /\/workspace\/\.claude-tmp\/trajectory/u);
-  assert.doesNotMatch(liveStatus, /frozen snapshot|材料版本关系|bytes/u);
-  const liveResume = renderReviewResult({ command: "resume", scope: "design", materials: [{ path: "/workspace/design" }] });
-  assert.match(liveResume, /全新只读会话/u);
-  assert.match(liveResume, /实时材料路径/u);
-  assert.doesNotMatch(liveResume, /冻结|bytes/u);
-  const safe = renderReviewResult({
-    command: "status",
-    project: "/workspace" + String.fromCharCode(0) + "bad",
-    reviews: [{ reviewId: "review" + String.fromCharCode(7) + "bad", status: "ok", currentRound: 1 }]
-  });
-  assert.match(safe, /\?/u);
-  for (const character of safe) {
-    const code = character.codePointAt(0);
-    assert.ok(code === 10 || code >= 32, "review renderer must replace non-newline control characters");
-  }
 }
 
 function assertRunResultRenderer() {
@@ -502,12 +342,6 @@ function assertCliParserAdditionalCases() {
     options: { project: "/workspace", id: ["run-a", "run-b"] },
     passthrough: []
   });
-  assert.deepEqual(assertParserShape(parseDoveCli(["review", "status", "--project", "/workspace", "--id", "review-1", "--format", "json"])), {
-    command: "review",
-    subcommand: "status",
-    options: { project: "/workspace", id: "review-1", format: "json" },
-    passthrough: []
-  });
 
   for (const [argv, pattern, jsonRequested] of [
     [["--help", "extra"], /--help 后面不接受其他参数/iu, false],
@@ -535,6 +369,5 @@ export function assertCliParserAndRenderers() {
   assertDoveCliHelpRenderer();
   assertDoveMascotRenderer();
   assertProjectIntegrationRenderer();
-  assertReviewResultRenderer();
   assertRunResultRenderer();
 }

@@ -1,7 +1,7 @@
 import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "./dove-agent-persona.mjs";
 import { renderDoveAmbientParticipationSection } from "./command-manifest.mjs";
 import { USER_RESPONSE_POLICY } from "./user-response-policy.mjs";
-import { DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS, DOVE_RESEARCH_SESSION_CONTINUATION } from "./dove-research-contract.mjs";
+import { DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS } from "./dove-research-contract.mjs";
 
 export const DOVE_CLAUDE_SETTINGS_PATH = ".claude/settings.json";
 export const DOVE_CLAUDE_AMBIENT_RULE_PATH = ".claude/rules/dove.md";
@@ -10,8 +10,7 @@ export const DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND = 'dove hook user-promp
 export const DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY = Object.freeze({
   hooks: Object.freeze([Object.freeze({ type: "command", command: DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, timeout: 10 })])
 });
-// Stop carries no current user prompt. This dormant optional resource cannot
-// infer authorization or prolong a bounded turn from the assistant's message.
+// Stop reminds the active round once; it does not schedule future work.
 export const DOVE_CLAUDE_STOP_HOOK_COMMAND = 'dove hook stop --project "$CLAUDE_PROJECT_DIR"';
 export const DOVE_CLAUDE_STOP_HOOK_ENTRY = Object.freeze({
   hooks: Object.freeze([Object.freeze({ type: "command", command: DOVE_CLAUDE_STOP_HOOK_COMMAND, timeout: 10 })])
@@ -120,15 +119,13 @@ ${USER_RESPONSE_POLICY.join("\n")}
 
 This project rule is the primary Dove entry in ordinary Claude conversations. Apply its judgment to relevant research, engineering, experiment, writing, and collaboration work without requiring \`--agent dove\` or a Skill. This is scoped collaboration, not a separate Auto mode or permission to expand the request. Complete ordinary tasks with no research impact normally, without imposing research planning, grading, or records.
 
+When running as dove-mentor or dove-review, follow that subagent's read-only material scope; the author-side bootstrap and round execution below do not apply.
+
 ${renderDoveSharedResearchContractSection()}
 
 Full quality details (project-relative): \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.claude}\`. Consult relevant criteria only when an actual scoped quality or investment decision needs them. Author stance below owns the fresh main context's personal read of the two short summaries; reuse them after compact or resume, without reading both full references as a startup ritual. Neither guidance reference is research evidence.
 
 ${renderDoveAuthorStanceSection()}
-
-## Claude main-session continuation
-
-${DOVE_RESEARCH_SESSION_CONTINUATION}
 
 ${renderDoveAmbientParticipationSection()}
 

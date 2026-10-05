@@ -2,22 +2,16 @@ import fs from "node:fs";
 
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
+import { DOVE_IDENTITY_CARD_PATH } from "./identity-card.mjs";
 
 const RESEARCH_ROOT = ARTIFACT_PATHS.researchDocumentsDir;
 
 export const RESEARCH_DEFAULT_PATHS = Object.freeze({
   root: RESEARCH_ROOT,
   overview: ARTIFACT_PATHS.researchOverview,
-  missionsDirectory: `${RESEARCH_ROOT}/missions`,
-  missionsSummary: `${RESEARCH_ROOT}/missions/MISSIONS.md`,
-  experimentsDirectory: `${RESEARCH_ROOT}/experiments`,
-  experimentsSummary: `${RESEARCH_ROOT}/experiments/EXPERIMENTS.md`,
-  sourcesDirectory: `${RESEARCH_ROOT}/sources`,
-  sourcesSummary: `${RESEARCH_ROOT}/sources/SOURCES.md`,
-  reviewsDirectory: `${RESEARCH_ROOT}/reviews`,
-  reviewsSummary: `${RESEARCH_ROOT}/reviews/REVIEWS.md`,
-  claimsDirectory: `${RESEARCH_ROOT}/claims`,
-  claimsSummary: `${RESEARCH_ROOT}/claims/CLAIMS.md`,
+  identity: DOVE_IDENTITY_CARD_PATH,
+  evaluation: `${RESEARCH_ROOT}/EVAL.md`,
+  roundsDirectory: `${RESEARCH_ROOT}/rounds`,
   lessonsDirectory: `${RESEARCH_ROOT}/lessons`,
   lessonsSummary: ARTIFACT_PATHS.researchLessons
 });
@@ -25,7 +19,7 @@ export const RESEARCH_DEFAULT_PATHS = Object.freeze({
 export const RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
   Object.freeze({
     path: RESEARCH_DEFAULT_PATHS.overview,
-    content: "# Research\n\nShort entry to the project identity card (`IDENTITY.md`) and topic history. Confirm the mainline with the user before filling it in.\n"
+    content: "# Research\n\nCurrent work uses `IDENTITY.md`, `EVAL.md`, and `rounds/` (briefs and results). Confirm the mainline and evaluation with the user before filling them in. Keep this file a short index to existing history; leave historical missions, experiments, and claims in place.\n"
   })
 ]);
 

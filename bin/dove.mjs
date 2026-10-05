@@ -12,7 +12,6 @@ import { renderDoveDoctor } from "../src/cli/doctor-output.mjs";
 import { renderDoveHelp } from "../src/cli/help-output.mjs";
 import { runInteractiveDoveSetup } from "../src/cli/interactive-setup.mjs";
 import { renderProjectIntegrationResult } from "../src/cli/project-integration-output.mjs";
-import { renderReviewResult } from "../src/cli/review-output.mjs";
 import { renderRunResult } from "../src/cli/run-output.mjs";
 import {
   isInteractiveTerminal,
@@ -37,7 +36,6 @@ import { readProjectInstallationManifest } from "../src/core/project-installatio
 import { resolveExactInstalledProjectRoot, resolveInstalledProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
 import { appendFinalizedRun, compareRuns, inspectRunStatus } from "../src/core/run-record.mjs";
 import { isRunSupervisorInvocation, resumeRun, runSupervisorMain, startDetachedRunSupervisor } from "../src/core/run-supervisor.mjs";
-import { handoffReview, importReviewReturn, inspectReviewStatus, rerunReview, resumeReview } from "../src/core/review-runtime.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,10 +49,6 @@ function projectOption(options) {
 
 function selectedHosts(options) {
   return options.host ?? undefined;
-}
-
-function reviewMaterials(options) {
-  return Array.isArray(options.material) && options.material.length > 0 ? options.material : undefined;
 }
 
 function runIds(options) {
@@ -106,11 +100,6 @@ function writeIntegrationResult(command, result, options) {
 function writeLifecycleResult(command, result, options) {
   if (wantsJson(options)) writeJson(integrationResult(result));
   else console.log(renderDoveLifecycleResult(command, result, { stream: process.stdout, env: process.env }));
-}
-
-function writeReviewResult(result, options) {
-  if (wantsJson(options)) writeJson(result);
-  else console.log(renderReviewResult(result));
 }
 
 function writeRunResult(result, options) {
@@ -390,40 +379,6 @@ try {
     process.exit(result.staticChecksPassed ? 0 : 1);
   }
 
-  if (command === "review") {
-    const project = projectOption(options) ?? process.cwd();
-    const common = {
-      project,
-      id: options.id,
-      venue: options.venue,
-      scope: options.scope,
-      materials: reviewMaterials(options),
-      file: options.file,
-      env: process.env,
-      cwd: process.cwd()
-    };
-    let result;
-    if (subcommand === "handoff") {
-      result = handoffReview(common);
-    } else if (subcommand === "status") {
-      result = inspectReviewStatus(common);
-    } else if (subcommand === "resume") {
-      if (!common.id) throw new Error("dove review resume 需要 --id <review-id>。");
-      result = resumeReview(common);
-    } else if (subcommand === "rerun") {
-      if (!common.id) throw new Error("dove review rerun 需要 --id <review-id>。");
-      result = rerunReview(common);
-    } else if (subcommand === "import") {
-      if (!common.id) throw new Error("dove review import 需要 --id <review-id>。");
-      if (!common.file) throw new Error("dove review import 需要 --file <report.md>。");
-      result = importReviewReturn(common);
-    } else {
-      throw new Error("dove review 只接受 handoff、status、resume、rerun 或 import。");
-    }
-    writeReviewResult(result, options);
-    process.exit(subcommand !== "status" && result.status === "failed" ? 1 : 0);
-  }
-
   if (command === "run") {
     const common = runCommonOptions(options);
     let result;
@@ -450,7 +405,7 @@ try {
   if (command === "hook") {
     const hookName = subcommand;
     if (hookName === "stop") {
-      const output = stopHookOutput(parseStopPayload(await readStdin(64_000)));
+      const output = await stopHookOutput(parseStopPayload(await readStdin(64_000)), { project: projectOption(options) });
       if (output !== null) process.stdout.write(JSON.stringify(output));
       process.exit(0);
     }

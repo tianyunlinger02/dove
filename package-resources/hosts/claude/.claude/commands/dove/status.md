@@ -1,11 +1,11 @@
 ---
-description: "Use when the user asks where the research stands, without turning software health, receipts, or navigation into research progress."
+description: "Report what we have made, whether the core is demonstrated, what blocks it and which round is underway."
 argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
 ---
 
 # dove.status
 
-Use when the user asks where the research stands, without turning software health, receipts, or navigation into research progress.
+Report what we have made, whether the core is demonstrated, what blocks it and which round is underway.
 
 ## Request
 
@@ -21,27 +21,19 @@ These are flexible research considerations, not a required order or report templ
 
 ### What this is for
 
-Explain the current research position in plain language.
+Explain progress in four plain sentences.
 
 ### When to use
 
-Use when the user asks where the research stands, why it stopped, or what is being done next.
-
-### What Dove will examine
-
-- Answer plainly: what are we trying to make, is the core claim proved, what blocks it, and what core work is underway. Use actual evidence, not internal IDs or completion counts; give an evidence caveat briefly when needed.
+Use when the user asks where research stands.
 
 ### Scope and changes
 
-- A material user correction updates only affected identity-card fields even during assessment, not an unchanged Mainline; an explicit no-write instruction or host refusal still prohibits that write.
+- Status reads and reports, without new experiments or a new route. Retain a user's correction in affected card fields unless writing is forbidden; then return to the ongoing round.
 
 ### Ways Dove may proceed
 
-- Read the short project identity card when present, then only directly relevant evidence and the user's latest corrections. Note a conflict rather than silently promoting an old note or a test prompt to user confirmation. Return control to the ongoing mainline after answering; do not alter a user-created goal or loop.
-
-### What this should not replace
-
-- Do not turn a status question into a new scientific route, or count a run receipt as proof of the core.
+- Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Say: what we have made; whether the core is demonstrated; what blocks it; which round is underway. Quote actual values when useful; missing evidence stays unknown.
 
 ### Using host tools
 
@@ -50,4 +42,4 @@ Use when the user asks where the research stands, why it stopped, or what is bei
 
 ### Return with
 
-- The main session checks capability and subagent results against the user’s original goal, actual evidence, and latest corrections. Apply material findings to the real working artifact and downstream use, then do the next core action; a completed subtask is not a completed goal. A bounded subagent reports its scoped evidence and does not expand the task.
+- The author main session applies scoped results to actual work and downstream use within the user's goal and latest corrections. A bounded subagent returns evidence without taking over the goal; subtask completion is not goal completion.

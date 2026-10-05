@@ -1,41 +1,29 @@
 # Installation
 
-Dove uses a two-stage installation model:
+Dove has two installation steps: install an exact trusted npm artifact for the current user, then initialize each target project. Later global upgrades may refresh registered projects; Dove never selects projects by scanning your home directory.
 
-1. install the Dove npm artifact for the current user so `dove` is available on that user's `PATH`; and
-2. initialize each project explicitly with the host integration Dove should manage. Later global upgrades can refresh registered projects automatically; initial project selection is never inferred from a home-directory scan.
-
-The matching Dove release is not currently available under the bare public npm name `dove`, which is occupied by an unrelated package. Use only an exact package specifier supplied by a trusted Dove release channel, such as a packed tarball, Git commit/tag specifier, or internal-registry specifier tied to the exact source revision.
-
-Do not use bare `npm install -g dove` or bare `npx dove` as a trusted Dove entry point.
+The bare public npm name `dove` belongs to an unrelated package. Do not use bare `npm install -g dove` or `npx dove`. Use a trusted tarball, exact Git revision/tag, or internal-registry specifier tied to the intended source.
 
 ## Requirements
 
-- Node.js `>=22`
-- npm
+- Node.js `>=22` and npm
 - Claude Code or DeepSeek Harness (`dsh`)
 
-Dove supports only these two hosts. Claude Code receives the complete project integration. DSH receives nine project-local filesystem Skills under `.dsh/skills/dove-*/SKILL.md`; Dove does not claim DSH slash commands, hooks, MCP, or a static agent surface without a future Cordis plugin.
+Claude receives complete project integration. DSH receives nine project-local filesystem Skills under `.dsh/skills/dove-*/SKILL.md`, not Claude agents, hooks, permissions, or MCP declarations.
 
 ## 1. One-time user installation
-
-Install the exact Dove artifact for the current user according to the npm prefix policy used on that machine:
 
 ```bash
 npm install --global <exact-dove-package-specifier>
 ```
 
-The user-level npm installation installs the `dove` executable into the current user's npm binary path. A **global upgrade**, when npm runs lifecycle scripts, also uses `postinstall` to synchronize only projects already registered by this user. This can write package-managed project integration, but not research, review, or run state. It does not edit shell startup files, user/global Claude or MCP configuration, credentials, or project research state.
+The executable uses the current user's npm binary path. Dove does not edit shell startup files, user/global host or MCP configuration, credentials, or research state. If the npm binary directory is not on `PATH`, configure it through normal system administration.
 
-The registry lives at `$XDG_CONFIG_HOME/dove/projects.json` (or `~/.config/dove/projects.json` when `XDG_CONFIG_HOME` is unset). Dove never scans the home directory to discover projects. Freshly initialized projects are registered for later upgrades; projects initialized before this registry feature need a one-time import with their exact roots (below). The registry is not a research record.
-
-If the npm binary directory is not already on `PATH`, configure the environment through the user's normal system administration process. Dove does not edit shell configuration on the user's behalf.
+With npm lifecycle scripts enabled, a global install/upgrade runs `postinstall` to refresh package-managed integration in projects already registered by this user. The registry is `$XDG_CONFIG_HOME/dove/projects.json`, or `~/.config/dove/projects.json` when unset; it is installation metadata, not a research record.
 
 ## 2. Project initialization
 
-From the target project root, run bare `dove` for guided setup. After choosing Install, select one or more supported platforms from the checkbox menu; Claude Code is selected initially, and DeepSeek Harness may be selected alone or together with Claude.
-
-For explicit non-interactive initialization:
+From the target root, run bare `dove` for guided setup. Install offers a host checkbox menu, initially selecting Claude Code; choose Claude, DSH, or both. Explicit setup is also available:
 
 ```bash
 dove init --host claude
@@ -43,139 +31,135 @@ dove init --host dsh
 dove init --host claude --host dsh
 ```
 
-Claude Code receives the complete integration described below. DSH receives the nine Dove filesystem Skills and no Claude permissions or MCP projection. `dove init` installs project integration and the minimal researcher-owned research entry. It may write:
+Claude integration includes:
 
-- `.dove/install/manifest.json` and four exact shared resources: short `RESEARCH_QUALITY.md` and `AUTHOR_PREFERENCES.md` essentials, plus preserved `RESEARCH_QUALITY_FULL.md` and `AUTHOR_PREFERENCES_FULL.md` detail;
-- project-local Claude commands under `.claude/commands/dove/`;
-- the project-local Dove agent at `.claude/agents/dove.md`;
-- the project-local Dove shared researcher judgment rule;
-- the project-local `SessionStart` and short `UserPromptSubmit` re-anchor hook registrations;
-- the hidden Claude guidance Skill for pinned `dove-paper-search` plus its MCP declaration for scholarly paper discovery, download, and full-text reading;
-- the hidden Claude guidance Skill for hosted Exa plus its MCP declaration for ordinary webpage bodies, documentation pages, venue pages, and known URLs;
-- the project-scoped `permissions.deny` entry for built-in `WebFetch`, while leaving `WebSearch` available; and
-- the minimal `.dove/research/RESEARCH.md` Markdown entry when no research tree exists.
+- `.claude/rules/dove.md` for ordinary main-session collaboration;
+- `.claude/agents/dove.md` for the optional author-side entrance, plus native read-only `.claude/agents/dove-mentor.md` and `.claude/agents/dove-review.md`;
+- nine optional commands under `.claude/commands/dove/`;
+- managed `SessionStart`, `UserPromptSubmit`, and the narrow round-completion `Stop` hook;
+- a read-only Dove `statusLine` only if the project has no existing line;
+- hidden guidance Skills and project MCP declarations for pinned `dove-paper-search` and hosted Exa; and
+- a project `permissions.deny` entry for built-in `WebFetch`, leaving `WebSearch` available.
 
-It must preserve unrelated project configuration and preflight the complete managed write set before changing files.
+Both hosts share `.dove/install/manifest.json` and four exact references: short `RESEARCH_QUALITY.md` and `AUTHOR_PREFERENCES.md`, with preserved `RESEARCH_QUALITY_FULL.md` and `AUTHOR_PREFERENCES_FULL.md` companions. No folder-wide ownership follows.
 
-Bare `dove` is the project lifecycle menu. In an unconfigured interactive project it offers Install and then a Claude Code / DeepSeek Harness checkbox menu, with Claude selected initially and at least one platform required. Setup distinguishes `uninitialized`, `current`, `needs-update`, and `blocked`; initialized projects expose safe update or platform changes when applicable, Complete Reinstall, uninstall, details, and exit. If valid manifest-owned integration needs refreshing, the first screen gives a concise explanation and offers explicit update and details; it does not dump the full Doctor panel or silently overwrite files. Unsupported or ambiguous state offers diagnosis rather than adoption or repair. Complete Reinstall and uninstall show their real scope and require an explicit default-No confirmation, while `.dove/research/**`, `.dove/reviews/**`, `.dove/runs/**`, and `DOCTOR.md` remain preserved. `NO_COLOR=1` disables ANSI styling, redirected or piped output is clean text without the mascot, and `--json` or `--format json` emits only the direct machine-readable integration result.
+If no research tree exists, init creates only the minimal researcher-owned `.dove/research/RESEARCH.md` entry. It does not create an identity card, evaluation, or round on the user's behalf. Existing research directories remain untouched even without an overview. Research work maintains `IDENTITY.md`, `EVAL.md`, and `rounds/`; existing `missions/`, `experiments/`, and `claims/` stay in place without migration or deletion. See [Usage](USAGE.md#research-markdown).
 
-`dove init` must not:
+Setup preflights the complete managed write set and preserves unrelated configuration. It does not copy runtime bundles into project `bin/`, `dist/`, `mcp/`, or `scripts/`, write an absolute installed-CLI path, approve trust, install dependencies, or repair/migrate unknown legacy material. There is no `dove install` command or `--platform` option.
 
-- copy the Dove runtime into project `bin/`, `dist/`, `mcp/`, or `scripts/` directories;
-- write an absolute path to the installed CLI;
-- write user/global host configuration or shell files;
-- approve MCP trust or write credentials;
-- use or install a fallback runtime; or
-- silently import, migrate, repair, or delete legacy state.
-
-There is no `dove install` command and no `--platform` option.
+Bare `dove` classifies integration as `uninitialized`, `current`, `needs-update`, or `blocked` and shows appropriate lifecycle actions. Update/platform changes are explicit; Complete Reinstall and uninstall preview their scope and default to No. Technical Doctor details stay behind View details. Redirected output is plain Chinese without mascot or ANSI; `--json`/`--format json` returns a direct machine-readable result.
 
 ## Registered projects and global upgrades
 
-For projects initialized before registration was available, supply exact project roots once; `--sync` imports them and refreshes the registered set now:
+For older initialized projects, register exact roots once and optionally synchronize now:
 
 ```bash
 dove projects import --project <root>... --sync
 ```
 
-For registered projects, recover or retry a skipped upgrade with `dove projects sync`. Inspect registration and the last synchronization result without writing with `dove projects status`. Neither command discovers arbitrary projects; import uses only paths you explicitly provide. An ordinary `dove init` registers its project for future global upgrades. If registration reports an occupied `.registry-lock` after an interrupted operation, inspect that exact path and confirm no registration is active before manually removing the stale empty lock directory; Dove does not guess that an occupied lock is safe to steal.
+Use `dove projects sync` to retry the registered set and read-only `dove projects status` to inspect registration and the last report. Neither discovers arbitrary projects. If a stale registration lock is reported, inspect the exact path and confirm no registration is active before manually removing it; Dove does not steal an occupied lock.
 
-On a global npm install/upgrade **with lifecycle scripts enabled**, `postinstall` attempts the same safe sync for registered projects. It preflights each project's full managed write plan: any owned local drift, missing managed resource, or conflict (including an edited or removed paper-search MCP fragment) blocks that **entire project with zero writes**, even if other managed files need updating. Other registered projects continue. This is deliberately stricter than explicit `dove update`, which may replace valid manifest-owned local edits and names them. Neither automatic nor bulk sync adopts unknown files or changes `.dove/research/**`, `.dove/reviews/**`, or `.dove/runs/**`.
+Automatic/bulk sync preflights each project's complete owned write set. Any owned drift, missing resource, or conflict—including edited/removed MCP fragments—blocks that entire project with zero writes; other registered projects continue. Explicit `dove update` is different: it may replace valid manifest-owned edits and reports them. Neither operation changes `.dove/research/**`, historical `.dove/reviews/**`, `.dove/runs/**`, or ordinary project artifacts.
 
-Read the reported per-project outcomes and use `dove projects status` after an upgrade, especially if npm suppresses lifecycle output. `npm install --global --foreground-scripts <exact-dove-package-specifier>` displays it immediately; `--ignore-scripts` skips `postinstall` and **does not cascade**. If one project has already committed its refresh and another fails, the operation reports partial success and exits zero rather than asking npm to roll back a partially applied install; errors before any project commits can return nonzero. Resolve blocked projects deliberately with explicit `dove update` if overwriting their owned edits is intended, then retry `dove projects sync`. An already-open Claude session whose Dove `UserPromptSubmit` hook was registered and still invokes the updated `dove` on `PATH` can receive current short guidance on its next real prompt after a successful project sync, provided the read-only integration check finishes within the host hook timeout; then its main agent can read the validated current rule and short essentials, consulting relevant full detail on demand, in that same conversation. This is hook context delivery, not a host rule reload or proof of reading. If the hook was not previously loaded, the CLI path is stale, sync was skipped, or host tools/settings changed, use the appropriate host reload or fresh context; neither sync nor SessionStart reloads a live context.
+npm may hide lifecycle output; `npm install --global --foreground-scripts <exact-dove-package-specifier>` shows it. `--ignore-scripts` disables cascading. If one project has already refreshed and another fails, partial success exits zero to avoid npm rolling back a partly applied operation; failures before any project commits may exit nonzero. Read the per-project outcomes and inspect `dove projects status` after upgrades.
+
+Disk refresh is not host reload. An already-open Claude context with a working registered Dove prompt hook resolving the new CLI can receive verified current guidance on its next real prompt, then personally read changed rule/essentials as needed. Complete hook, agent, tool, permission, or configuration loading may require a fresh context; `/reload-skills` reloads only optional Skills. Installation, matching versions, and hook output do not prove model adoption.
 
 ## Dove agent and ordinary entry
 
-After initialization, start ordinary `claude` in the target project and describe the task. The installed surfaces have these roles:
+Start ordinary `claude` in the initialized project and describe the task. The rule is the primary complete entrance, not a prompt router. `claude --agent dove` and the nine flat Skills add no authority or permissions. The main session owns the full user conversation, clarification, execution, and adoption of delegated findings.
 
-- `.claude/rules/dove.md` is the primary Dove entrance in ordinary Claude conversations, carrying shared judgment and author stance. It is not a per-prompt router or a separate agent session.
-- `.claude/agents/dove.md` supports optional `claude --agent dove` sessions and bounded subagent investigations. Selecting it adds no higher judgment authority. The ordinary main session retains full-conversation work, important clarification, and mainline ownership before and after delegation.
-- `.claude/commands/dove/*.md` are nine optional flat capability shortcuts, not additional researchers or authority levels.
+`dove-mentor` and `dove-review` share Dove's identity but use fresh native Claude contexts with only `Read`, `Grep`, and `Glob`. They read explicitly supplied materials and return findings; they do not receive the execution conversation, resume history, edit files, or launch commands. The mentor reads the identity/evaluation/recent rounds and actual changes; paper review reads the specified current manuscript and cited results. The old `dove review` CLI and frozen-material/model-launch runtime are removed; `/dove:review` remains a Skill.
 
-The Claude rule and standalone DSH Skills carry a short core rather than full references. Both hosts install short Chinese quality/preference essentials and their preserved full companions as four exact package-managed files, not folder-wide ownership, Lessons, evidence, or permission. Read triggers and applicability are defined in [Usage](USAGE.md#short-core-and-two-reference-read-contracts). Isolated review receives only its separate canonical quality guidance, not author-preference access. Ordinary tasks with no research impact do not require research planning, grading, or records.
-
-Dove's flat Skills are `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`. They are optional specialist shortcuts, not separate personalities, stages, or an autonomy switch. Users can tell Dove the goal directly; default multi-round research progression does not require an Auto command.
-
-Claude's already-registered `UserPromptSubmit` invokes the current CLI at each prompt, read-only verifies full managed integration and delivers the short project identity card, a bounded current research core, and current guidance when current; stale or unsafe integration receives only a nonblocking diagnostic. The main agent reads both short essentials itself when not already read in the current context and consults full detail only as needed. This does not classify prompts, read other research records or write research, decide permissions, or block submission. Hidden intake, ambient regex routing, Stop scheduling, and per-tool scientific approval remain prohibited. The host handles ordinary routing, and the same Dove model chooses whether to answer, clarify, or use optional capabilities. Confirmed research goals use Dove's in-scope progression; ordinary and bounded requests retain their actual scope. An ordinary Claude main session may optionally use host-native `CronCreate` for one near-term one-shot same-session wake only when a user-confirmed open-ended goal has a separate concrete permitted next action; before ending, register a future off-minute wake and verify the host displays a next run minutes away rather than merely successful registration or scheduling the current minute. If its scheduled minute passes without delivery, replace that stale job with a future wake; overdue jobs are not assumed to fire on idle. It must recheck corrections, evidence, authorization and remaining value on waking before acting or rescheduling. This is not installed integration, a permission grant, a Stop hook, an Auto Skill, or durable recovery: host tool availability and delivery are not guaranteed, session exit ends the opportunity, and DSH has no such continuation. Bounded/read-only/design-only work, permission denial with no other effective work, important user decisions, completion, or no effective action do not warrant a wake; cancel only its own pending wake.
+Every fresh main context personally reads both short Chinese quality/preference essentials before substantive work. Full companions are consulted for relevant detail, not read through EOF by default. Claude startup and `/clear` deliver this bootstrap; DSH applies it on first author-side Skill use if needed. Compact/resume reuses the same context's reading. Installed copies are guidance, not evidence, Lessons, permissions, or the editable preference source. See [Usage](USAGE.md#short-core-and-two-reference-read-contracts).
 
 ## Project runtime invocation
 
-Project configuration invokes the user-installed `dove` command by name. It does not point to a copied bundle or an absolute installation path.
+Managed project settings invoke the user-installed `dove` by name on `PATH`, not a copied bundle or absolute installation path.
 
-The Claude `SessionStart` hook uses the equivalent of:
+### SessionStart and UserPromptSubmit
 
 ```text
 dove hook session-start --project <project-root>
+dove hook user-prompt-submit --project <project-root>
 ```
 
-`SessionStart` uses the user-installed `dove` on `PATH` for read-only project integration inspection. It never writes integration, research, review or run files, shared configuration, or cleanup state. Non-current integration may produce a `systemMessage` suggesting explicit `dove update`; unsupported or ambiguous state requires diagnosis. Startup and `/clear` also deliver a small bootstrap requiring the current host main agent—ordinary Claude or explicit Dove—to personally read both short Chinese essentials before substantive work, not their full companions through EOF. Installing the reference or emitting that instruction does not prove that the agent read or applied it. SessionStart inspection does not retroactively reload already-active Claude rules. An already-registered UserPromptSubmit hook can instead deliver updated, verified short guidance to the next prompt in the same conversation and direct the current main agent to read the current short essentials when needed and relevant full detail on demand. This does not reload the host's hook registry or prove a read; without a working prior hook, use a fresh host context to load the changed integration.
+SessionStart inspects integration read-only. Non-current integration may produce a `systemMessage` suggesting explicit `dove update`; unsupported or ambiguous state requires diagnosis. It never synchronizes, writes research/configuration, or cleans up files. Startup/clear adds the two-essentials bootstrap; compact/resume presents the bounded identity card and round-continuity reminder. It does not reconstruct the mainline from old overview/review/run timestamps or transcripts.
 
-Only `compact` and `resume` receive the short researcher-owned `.dove/research/IDENTITY.md` card read-only, with author-preference continuity and a brief route-recovery reminder. They do not scan `RESEARCH.md`, Review metadata, Run journals, reports, or logs; missing or unreadable identity is not inferred from old notes. The main agent continues from the identity card and actual evidence without rewriting Mainline, using clean-context review at material triggers rather than timed self-review. Compact/resume reuses both essentials already read in that main context; full detail remains on demand. The hook delivers context; it does not read transcripts, choose scientific actions, create a ledger, Auto Skill, or Stop behavior, or prove the agent acted. `startup` and `clear` receive the separate preference bootstrap, not the identity card.
+UserPromptSubmit verifies current managed integration and presents the project-owned identity card and bounded current guidance on each prompt. Stale/unsafe integration receives a nonblocking diagnostic. It does not classify prompts, write research, decide permissions, or block submission.
 
-The managed `UserPromptSubmit` current-guidance check invokes `dove hook user-prompt-submit` through the user-installed CLI. `/reload-skills` can rescan optional Claude commands/Skills, not the project rule; check `/hooks` for active hook registration when needed. A new host context remains the reliable boundary for complete rule and host configuration loading. Explicit lifecycle operations manage that fragment separately from retired exact old Dove prompt entries; retirement requires manifest ownership and an exact match. Unrelated user or Trellis prompt hooks are preserved. SessionStart remains read-only, with its separate startup/clear bootstrap and compact/resume identity-card delivery.
+Keep `Current round` and `Round status` at the top of `IDENTITY.md`, within its first 4KB. If the card is longer, presentation retains the first 4KB and asks for shortening; it is not reported missing. The main session—not a hook—maintains the card and reads the linked brief and evaluation. Missing/unreadable identity is not inferred from history.
 
-Dove does not install a Claude `Stop` hook by default. A dormant compatibility `dove hook stop --project <dir>` command exists, but emits no stop-block or turn-continuation output: Claude's Stop input has the final assistant message, not the current user request, so it cannot safely distinguish premature sign-off from a correct bounded report. Existing manifest-owned Stop fragments are retired only when they match their ownership digest; edited, missing, or ambiguous fragments are reported rather than silently adopted or removed. Unowned Stop fragments remain untouched. Neither a disk update nor retirement unloads hooks from an already-active Claude session; reload it to pick up changed integration. If `.claude/settings.json` has no existing `statusLine`, Claude integration installs the manifest-owned read-only command `dove hook statusline --project "$CLAUDE_PROJECT_DIR"`. Its first line displays host model/context facts, the optional mainline text in cyan without a label, Git branch, and current-session duration; its second line is only the absolute project path. Only a nonempty `NO_COLOR` disables color. It reads the short `.dove/research/IDENTITY.md` card for a single unambiguous ordinary `Mainline: <text>` line. Unavailable or ambiguous mainlines are omitted without guessing or backfilling. It does not scan research documents or read Mission, Review, Run, or transcripts; the branch is not a confirmed scientific mainline and session duration is not cumulative research time. See [Usage](USAGE.md#research-markdown) for the optional line's maintenance boundary. A pre-existing user or Trellis status line is preserved and not adopted, and therefore is not recorded in Dove's manifest. If a user-level `~/.claude/settings.json` line invokes an unsupported Dove command, inspect that `statusLine.command` and the `dove` on the host PATH; project update and doctor do not repair or take ownership of user-level settings. Explicit update/reinstall may restore a locally edited Dove-owned line and report the replacement; host removal or uninstall removes a still-owned line while preserving a user-modified one.
-The `dove-paper-search` MCP declaration launches pinned `paper-search-mcp==0.1.4` through user-provided `uvx` with `mcp<2`, which its server imports require, for scholarly paper discovery, DOI metadata lookup, download, and full-text reading. When a DOI affects identity, its `get_crossref_paper_by_doi` tool is preferred over fuzzy title search if exposed and permitted; MCP or network failure leaves identity unknown rather than triggering CLI, `curl`, or custom-fetch substitution. The Exa declaration uses the hosted remote MCP server at `https://mcp.exa.ai/mcp` with `.mcp.json` server shape `{ "url": "https://mcp.exa.ai/mcp", "type": "http" }` for ordinary webpage bodies, documentation pages, venue pages, and known URLs. Built-in `WebSearch` remains available for search discovery; built-in `WebFetch` is denied in project-scoped Claude permissions. If scholarly material is relevant but `dove-paper-search` is not exposed or not permitted by current user/project approvals, or ordinary webpage bodies are relevant but Exa is not exposed or not permitted by current user/project approvals, Dove names the missing material and continues with the specific current materials or actions that can still inform the question, such as WebSearch discovery, Exa where ordinary webpage body is relevant, `dove-paper-search` where scholarly material is relevant, local project material, user-provided material, theory, experiment, or analysis. Dove does not install packages, approve project trust, write credentials, or provide CLI, shell, `curl`, or ad hoc fetch-script substitutions for web retrieval.
+### Narrow Stop reminder
+
+```text
+dove hook stop --project <project-root>
+```
+
+The read-only managed Stop hook blocks once only when the card identifies an ongoing round and the current turn has no `dove-mentor` call. It asks the main session to save the round result and call the mentor. `stop_hook_active: true` immediately allows stopping; missing/unreadable transcript evidence also allows it. The hook checks host tool-call events without analyzing or sending conversation content to a model. It creates no tracking file or extra tool hook and writes no research state.
+
+If the user explicitly asks to discuss only or stop, the main session sets `Round status: paused` before ending. This reminder replaces the old scheduling/continuation mechanism; it is not a background scheduler, new permission, or scientific completion gate.
+
+### Status line
+
+When `.claude/settings.json` has no existing `statusLine`, Dove installs read-only `dove hook statusline --project "$CLAUDE_PROJECT_DIR"`. The first line shows host model/context facts, optional unlabeled cyan Mainline and current round number, Git branch, and current-session duration; the second contains only the absolute project path. A nonempty `NO_COLOR` disables color. Mainline comes from one unambiguous ordinary `Mainline: <text>` line in the bounded card, never a branch or latest record. Branch and duration are not research conclusions.
+
+Existing user/Trellis status lines remain unowned and unchanged. Explicit update/reinstall may restore a modified Dove-owned line and report it; uninstall removes it only when still owned. Project lifecycle commands do not repair a user-level `~/.claude/settings.json` line; inspect its command and the host's `dove` on `PATH` if it invokes an unsupported command.
+
+### External source tools
+
+`dove-paper-search` launches `paper-search-mcp==0.1.4` through user-provided `uvx` with `mcp<2`. It supports scholarly discovery, DOI lookup, download, and full-text reading. Prefer `get_crossref_paper_by_doi` when DOI identity matters and the tool is exposed/permitted.
+
+Exa uses hosted `https://mcp.exa.ai/mcp` with `{ "url": "https://mcp.exa.ai/mcp", "type": "http" }` for ordinary webpages, documentation, venue pages, and known URLs. `WebSearch` remains discovery-only; project permissions deny built-in `WebFetch`. Declaration does not approve trust or prove connectivity. When access is unavailable, name the gap and use relevant permitted local/user materials or other available tools. Do not substitute shell, `curl`, or custom-fetch scripts, install dependencies, or approve access on the user's behalf.
 
 ## Integration manifest
 
-Within `.dove/install/`, Dove manages its manifest and four exact resources: `RESEARCH_QUALITY.md`, `RESEARCH_QUALITY_FULL.md`, `AUTHOR_PREFERENCES.md`, and `AUTHOR_PREFERENCES_FULL.md`, not the whole directory. The manifest records initialized hosts and the integration contract needed by `update` and `doctor`. Other files, including optional researcher feedback `DOCTOR.md`, are not package-owned.
-
-The manifest is not research evidence and must not contain substantive research artifacts. Users should not hand-edit managed integration files.
+`.dove/install/manifest.json` records installed hosts and ownership of declared integration resources. It is software metadata, not research evidence. Within that directory only the manifest and four exact reference files are managed; optional host-maintained `DOCTOR.md` feedback and unknown files are not package-owned.
 
 ## Update
-
-Run from an already initialized project:
 
 ```bash
 dove update
 ```
 
-`dove update` reads `.dove/install/manifest.json` and refreshes only the hosts already recorded there. For valid manifest-owned Dove integration resources, explicit update replaces local edits, names them in the human output, and reports them as `replacedLocalEdits` in JSON. This does not authorize replacing unowned files or unrelated configuration; use user-owned locations for customizations you need to keep.
+Update refreshes only the recorded hosts (or an explicitly requested supported host change) under valid ownership. It replaces local edits to valid manifest-owned Dove resources and lists them in human output and `replacedLocalEdits` JSON. Keep customizations in user-owned locations. Unowned files and unrelated settings remain protected.
 
-If the manifest is absent, malformed, unsupported, contradictory, unsafe, or contains unknown ownership state, `dove update` fails closed. It must not reconstruct a manifest from generated adapters, hooks, MCP declarations, status-line settings, or copied runtime.
-
-There is no adoption or revision-1.0 migration path. Update and Complete Reinstall require a valid current installation manifest and never clean up unknown installation files or legacy directories. For an already initialized project, update refreshes only package-managed integration. It does not create missing summaries, complete navigation, replace Lessons materials, or rewrite `.dove/research/**`; existing research documents remain researcher-owned.
+Absent, malformed, unsupported, contradictory, unsafe, or unknown manifest ownership blocks update. There is no adoption or old-manifest migration path. Update does not reconstruct ownership from copied adapters or runtime, create missing summaries, normalize links, or overwrite existing research. Historical `missions/`, `experiments/`, and `claims/` remain in place.
 
 ## Uninstall
 
-Run `dove uninstall` from an initialized project. Dove first shows the exact removal scope and defaults to No. After confirmation it removes manifest-owned host files, the Dove SessionStart and short UserPromptSubmit hooks, retired exact Dove prompt hook entries when recorded by the manifest, permission and MCP fragments, `.dove/install/manifest.json`, and the four manifest-owned references `.dove/install/RESEARCH_QUALITY.md`, `.dove/install/RESEARCH_QUALITY_FULL.md`, `.dove/install/AUTHOR_PREFERENCES.md`, and `.dove/install/AUTHOR_PREFERENCES_FULL.md`. It preserves `.dove/research/**`, `.dove/reviews/**`, `.dove/runs/**`, `.dove/install/DOCTOR.md`, all legacy markers and unknown installation files, unrelated host settings, unrelated hooks, unrelated MCP servers, any pre-existing user-owned `permissions.deny` entry for `WebFetch`, and ordinary project files. If no conflicting installation residue remains, a project retaining only researcher-owned context is then classified as uninitialized rather than offered an update. Preserved unknown files under `.dove/install/` or an unsupported legacy installation directory can still leave setup blocked; uninstall does not delete them to force an uninitialized state. Drift, symlinks, or changed transaction preconditions block replacement; caught promotion failures trigger rollback. If restoration fails, Dove keeps the transaction root and backups and reports their absolute paths. This does not promise crash recovery or filesystem-wide atomicity.
+`dove uninstall` previews exact managed removal and defaults to No. After confirmation it removes still-owned host files/fragments, hooks, permission/MCP entries, manifest, and four reference files. It preserves research, historical review exchanges, run receipts, `DOCTOR.md`, ordinary files, unrelated settings/hooks/MCP servers, pre-existing WebFetch denials, and unknown/legacy material.
+
+A project retaining only researcher-owned context can become uninitialized; unknown installation residue may still leave setup blocked. Drift, symlinks, or changed transaction preconditions block replacement. Caught promotion failures roll back; if restoration fails, Dove retains backups/transaction roots and reports their absolute paths. This does not promise crash recovery or filesystem-wide atomicity. Reinstall uses the same ownership protections to rebuild integration, never research.
 
 ## Doctor
-
-Run from the project root:
 
 ```bash
 dove doctor
 ```
 
-Doctor is read-only. Project integration has four states: `uninitialized` (no installation manifest), `current` (managed integration matches), `needs-update` (valid ownership with refreshable differences), and `blocked` (invalid, unsupported, or ambiguous integration). These are software states, not research grades or a migration workflow. Doctor reports separate static dimensions rather than collapsing them into one package check:
+Doctor is read-only and reports separate facts:
 
-- **user CLI** — the current program's package version and whether its runtime files are present;
-- **project integration** — the project integration package version recorded in `.dove/install/manifest.json`, separately from the validity and currentness of managed resources, paths needing explicit update, and manifest-owned local edits update would replace; a missing recorded version stays unknown, not filled from the program version; and
-- **research state** — whether ordinary `.dove/research/` Markdown is present, missing, malformed, or legacy.
+- **user CLI** — the running package version and runtime-file presence;
+- **project integration** — recorded package version, resource currentness, paths needing update, and owned edits update would replace; and
+- **research state** — ordinary Markdown presence/readability or legacy markers.
 
-Matching program and manifest package versions do not establish matching resource bytes. Resource inspection still uses the managed inventory and comparisons among recorded, current project, and packaged digests; these are internal software facts, not research evidence.
+Its states are `uninitialized`, `current`, `needs-update`, and `blocked`, not research grades. Equal package versions do not establish equal resource bytes. Ownership digests are internal software facts, not scientific evidence. Doctor reports only attributable retired hook fragments under exact ownership rules, not a comprehensive scan of custom/global hooks.
 
-Doctor reports only retired Dove `Stop` / `UserPromptSubmit` remnants actually identified by the existing exact-match ownership rules, with a traceable location and reason. This is not a comprehensive scan of custom hooks: user-rewritten or unattributable entries are not certified clean. Inspection does not remove entries, expand lifecycle deletion authority, or scan user/global settings; the ownership and local-edit protections above still apply.
-
-The current session's actual loaded resources remain unknown to the CLI, even after an explicit disk update. Doctor does not probe live Claude readiness, MCP approval or connectivity, hosted Exa availability, runtime reviewer behavior, or scientific correctness; healthy disk integration does not show that scientific judgment occurred. Legacy runtime copied into project `bin/`, `dist/`, `mcp/`, or `scripts/` locations is preserved in place; Dove no longer exposes an automatic export, migration, deletion, or runtime fallback path for that data.
+Loaded session state remains unknown to the CLI. Doctor does not certify native mentor/reviewer behavior, MCP approval/connectivity, scientific correctness, or research completion. Copied legacy runtime remains in place; no automatic export, migration, deletion, or fallback is provided.
 
 ## Managed versus user-owned files
 
-The ownership boundary is strict:
+- **Managed** — manifest, four exact references, and declared host resources/fragments.
+- **Researcher-owned** — `IDENTITY.md`, `EVAL.md`, rounds, short history index, historical missions/experiments/claims, Sources, Reviews, Lessons, and ordinary project artifacts.
+- **Preserved runtime history** — `.dove/reviews/**` and `.dove/runs/**`; preservation does not reactivate the old review runtime.
+- **Unowned** — `DOCTOR.md`, consumer `README.md`/`docs/*`, unrelated host settings/hooks, and unknown files.
 
-- `.dove/install/manifest.json`, the four exact `.dove/install/RESEARCH_QUALITY.md`, `.dove/install/RESEARCH_QUALITY_FULL.md`, `.dove/install/AUTHOR_PREFERENCES.md`, and `.dove/install/AUTHOR_PREFERENCES_FULL.md` files, and declared host integration resources are Dove-managed. Other `.dove/install/` files, including `DOCTOR.md`, remain outside managed resource ownership.
-- `.dove/research/` is ordinary researcher-owned Markdown context.
-- `.dove/reviews/` holds explicit isolated review exchange records and is preserved across reinstall and uninstall.
-- `.dove/runs/` holds local execution receipts for Dove run supervisors and is preserved across update, read-only SessionStart, reinstall, and uninstall.
-- the project's `README.md`, `docs/*`, unrelated host settings, and unrelated hooks remain user-owned.
-
-Init and update never copy, read, overwrite, or delete the consumer project's public documentation.
+Init/update never copy, read, overwrite, or delete a consumer project's public docs. All lifecycle operations preserve existing research history without moving it.
 
 ## Source-checkout validation
 
-The following commands are maintainer-only and run from a Dove source checkout, not as consumer installation or daily-use paths:
+Maintainer-only commands, not consumer entry paths:
 
 ```bash
 npm run commands:check
@@ -185,4 +169,4 @@ npm run release:check
 npm run pack:dry-run
 ```
 
-Do not use `npx dove` or `node ./bin/dove-package.mjs` as a consumer path. Do not regenerate adapters or other generated artifacts during ordinary installation or documentation validation.
+Documentation validation does not regenerate artifacts, initialize test projects, or write tests into real research. Do not use `npx dove` or `node ./bin/dove-package.mjs` as a consumer path. See [Packaging](PACKAGING.md#verification-evidence) for evidence boundaries.

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { renderDoveAuthorStanceSection } from "../../src/core/dove-agent-persona.mjs";
+import { DOVE_RESEARCH_ROUND_RECORDS } from "../../src/core/dove-research-contract.mjs";
 import {
   RESEARCH_DEFAULT_DIRECTORY_PATHS,
   RESEARCH_DEFAULT_DOCUMENTS,
@@ -13,30 +14,26 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-test("research bootstrap remains a minimal researcher-owned overview", () => {
-  assert.deepEqual(RESEARCH_DEFAULT_DOCUMENTS.map(({ path: documentPath }) => documentPath), [
-    RESEARCH_DEFAULT_PATHS.overview
-  ]);
+test("research bootstrap indexes the three core records without prepopulating research state", () => {
+  assert.deepEqual(RESEARCH_DEFAULT_DOCUMENTS.map(({ path: documentPath }) => documentPath), [RESEARCH_DEFAULT_PATHS.overview]);
   assert.deepEqual(RESEARCH_DEFAULT_DIRECTORY_PATHS, [RESEARCH_DEFAULT_PATHS.root]);
-  assert.match(RESEARCH_DEFAULT_DOCUMENTS[0].content, /Short entry to the project identity card/iu);
-  assert.match(RESEARCH_DEFAULT_DOCUMENTS[0].content, /Confirm the mainline with the user/iu);
-  assert.doesNotMatch(RESEARCH_DEFAULT_DOCUMENTS[0].content, /^Mainline:/mu);
+  assert.equal(RESEARCH_DEFAULT_PATHS.identity, ".dove/research/IDENTITY.md");
+  assert.equal(RESEARCH_DEFAULT_PATHS.evaluation, ".dove/research/EVAL.md");
+  assert.equal(RESEARCH_DEFAULT_PATHS.roundsDirectory, ".dove/research/rounds");
+  const overview = RESEARCH_DEFAULT_DOCUMENTS[0].content;
+  for (const name of ["IDENTITY.md", "EVAL.md", "rounds/"]) assert.ok(overview.includes(name));
+  assert.match(overview, /Confirm the mainline and evaluation with the user/iu);
+  assert.match(overview, /short index.*history/iu);
+  assert.doesNotMatch(overview, /^Mainline:/mu);
 });
 
-test("author stance uses Lessons once at consequential triggers without burdening local work", () => {
-  const stance = renderDoveAuthorStanceSection();
-  assert.match(stance, /few-hundred-word researcher-owned `\.dove\/research\/IDENTITY\.md`/iu);
-  assert.match(stance, /plain language, without internal abbreviations/iu);
-  assert.match(stance, /Put process details in history/iu);
-  assert.match(stance, /Mainline: ` followed by one sentence in the user's words/iu);
-  assert.match(stance, /rejected approaches; user restrictions; current route; next core action; hard blocker/iu);
-  assert.match(stance, /Correct only the fields the user actually corrected/iu);
-  assert.match(stance, /including during an assessment/iu);
-  assert.match(stance, /unless writing is explicitly forbidden or the host refuses/iu);
-  assert.match(stance, /Keep RESEARCH\.md a short entry to history/iu);
-  assert.match(stance, /Preserve transferable Lessons only when useful/iu);
-  assert.match(stance, /read-only assessment is not by itself a reason to forget the correction/iu);
-  assert.match(stance, /Respect an explicit no-write instruction/iu);
+test("new round records keep human briefs attributable and old histories in place", () => {
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /IDENTITY\.md, EVAL\.md and rounds\/NNN-brief\.md plus NNN-result\.md/u);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /Author: mentor \/ user \/ external/u);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /user or external task instructions are round briefs/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /changed files, evaluation values and prediction versus actual/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /missions\/, experiments\/ and claims\/.*without migration or new entries/iu);
+  assert.match(renderDoveAuthorStanceSection(), /Preserve reusable Lessons only when useful/iu);
 });
 
 test("Trellis specs match their installed Markdown templates", () => {

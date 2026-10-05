@@ -27,13 +27,11 @@ function retiredHookLines(result) {
 
 function researchLine(result, color) {
   const research = result.workspaceState;
-  const text = research?.mode === "absent"
-    ? "RESEARCH.md 尚未建立"
-    : research?.mode === "previous-research-format"
-      ? "发现旧版 JSON 科研记录；原地保留，不自动转换或删除"
-      : research?.healthy
-        ? "Markdown 外层可读"
-        : "Markdown 外层无法安全读取";
+  const text = research?.state === "absent"
+    ? "研究文档尚未建立"
+    : research?.healthy
+      ? "Markdown 外层可读"
+      : "Markdown 外层无法安全读取";
   return `${terminalStyle("研究文档", "dim", { color })}  ${text}`;
 }
 

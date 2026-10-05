@@ -1,10 +1,8 @@
 # Dove command output samples
 
-These samples show output shape only. They are examples, not response templates or scientific guarantees.
+These examples show output shapes, not mandatory templates, live project observations, or scientific guarantees. Human CLI prose is Chinese; commands, paths, JSON keys, and enums remain exact. JSON modes return one direct result without a prose wrapper. Piped output omits mascot art and ANSI styling.
 
-## Interactive project setup
-
-Bare `dove` should give a concise project setup result and a next step.
+## Project setup
 
 ```text
 Dove 已在此项目启用
@@ -12,93 +10,163 @@ Dove 已在此项目启用
 项目  example-project
 宿主  Claude Code
 
-✓ Dove agent 与 9 个可选入口已安装
-✓ Claude 项目提示、主 agent SessionStart 偏好读取与来源阅读支持已配置
+✓ Dove 与 9 个可选专项入口已安装；导师和论文审稿使用原生只读子 agent
+✓ SessionStart、UserPromptSubmit 与单次轮次 Stop 提醒已配置；状态栏空缺时安装只读显示
+✓ 论文检索 MCP 与网页 Exa MCP 已声明
 ✓ 最小研究入口 RESEARCH.md 已建立
 ✓ 项目集成记录已建立
 
-后续研究 overview 与主题文档由研究者按需维护。
-完整作者偏好已安装；当前主 agent若正在执行此命令，应立即亲自完整读取。普通 shell 用户请新开 Claude 会话或在现有会话中 /clear。安装本身不代表已经读过。
+科研记录由主会话维护：IDENTITY.md、EVAL.md、rounds/。已有 missions、experiments、claims 保留原地。
+两个中文短要点已安装；当前主 agent 在实质工作前亲自读取，完整内容仅按需查阅。安装本身不代表模型已经读过。
 
-下一步  进入 Claude Code，直接提出科研请求；普通 Claude 或显式 Dove 都由当前主 agent本人读取偏好，/dove:* 只是可选专项入口。首次使用外部论文或网页阅读能力时，宿主可能请求你的批准。
+下一步  从项目进入 Claude Code，直接说明目标；/dove:* 是可选快捷入口。外部来源工具的批准仍由你决定。
 ```
 
-Piped output should omit mascot art and ANSI styling while keeping the same human summary. Human CLI output is Chinese while commands, paths, technical names, JSON keys, and enums remain exact. Explicit JSON modes should return one direct machine-readable result with no prose wrapper. For `dove run start`, flags after `--` belong to the target command and do not request Dove JSON output.
+If the research tree already exists, setup reports that it was preserved, not that a missing overview was created. Init/update output describes integration, not an already-confirmed goal or completed research round.
 
-## Dove agent excerpt
+## Ordinary conversation
 
-Ordinary Claude conversation is the primary Dove entrance through the project rule's shared judgment and author stance. `claude --agent dove` is optional and adds no higher judgment authority; a bounded independent investigation may use a Dove subagent, but work needing the full conversation, important user clarification, or ongoing mainline ownership stays in the ordinary main session. The installed agent file is generated from the canonical behavior; the following is illustrative, not a literal excerpt or proof of live behavior:
+Ordinary Claude is the complete primary entrance. The optional agent/Skills add no authority or permissions. A question in an active round can be answered without closing it:
+
+```text
+用户：现在为什么还没做好？
+
+已有开发集结果，但未见类别这一列没有改善，核心泛化还没证明。最近两轮只修了已见样本，继续加同类分支不能回答目标。我会把实际改动和结果交给导师，让下一轮针对共同原因换方法。
+```
+
+A bounded explanation-only request can finish without research records or execution. If the user explicitly asks to pause:
+
+```text
+用户：先别做，只讨论。
+
+我先暂停当前轮次，身份卡的 Round status 已改为 paused。这次只讨论原因，不继续运行或修改方法。
+```
+
+Only say the card changed if the write actually happened. An explicit no-write instruction or refused write stays a reported limit, not an invented update.
+
+## One-time evaluation confirmation
+
+The numbers and evaluator below are hypothetical, not facts from a consumer project:
+
+```text
+导师建议沿用 scripts/evaluate.py：开发集用于迭代，未见类别保留为泛化列，最终 test 只用于一次确认。EVAL 记录开发集成功率、未见类别成功率和耗时。
+
+这张表将作为完成标准；你确认一次即可，以后换指标、划分或标准也需要你确认。我不会把这个建议当成已经确认。
+```
+
+## Mentor brief
+
+The fresh read-only mentor receives identity/recent corrections, evaluation, recent briefs/results, and actual diffs or changed files—not the execution conversation. Its return is at most one page. The main session saves it verbatim as the next brief. Shape-only example:
+
+```text
+作者：导师
+
+上一轮：开发集成功率从 74% 到 81%，未见类别仍为 46%。原预测未见类别会到 55%，实际没对上。读到的改动只给两类输入加分支，没解决跨类别对应关系；继续这族补丁价值不大。
+
+下一轮：用共享对应关系替换类别分支，检验失败是否来自局部规则无法组合。依据是失败样例在相同连接处出错，而不是类别本身不同。预测开发集保持约 80%，未见类别到 55–60%；这是待验证预测，不是已观测结果或通过线。
+
+完成标志：按已确认协议跑完这两列，把实际值写进 EVAL。负结果也算本轮结果；单元测试通过不算。方法仍在已确认主线和资源内，不需重新批准。
+
+实际读过的文件：IDENTITY.md、EVAL.md、rounds/002-brief.md、rounds/002-result.md、src/mapping.py。
+```
+
+The mentor's paper-level eight-dimensional assessment belongs in `EVAL.md` after important results. The main session saves that returned judgment rather than duplicating it with a self-score. Missing evidence remains unknown, not zero.
+
+## Round result and evaluation row
+
+The result is a few lines, not another long report. Hypothetical example:
+
+```text
+改动：src/mapping.py 移除类别分支，使用共享连接映射；scripts/evaluate.py 未改。
+结果：开发集 80%，未见类别 57%；完整输出见 artifacts/round-003.json。
+预测对照：开发集约 80%、未见类别 55–60%，本轮实际落在预测范围；还未完成最终 heldout 确认。
+```
+
+Append one measured row under the agreed columns:
 
 ```markdown
-# Dove Agent
-
-Dove works as one complete research agent. Its nine Skills — research, status, source, experiment, draft, figure, review, rebuttal, and lessons — are flat entrances into the same research collaboration.
-
-## Research judgment
-
-Dove starts from the real research question, current or provisional route, user need, key uncertainty, and decision that matters. It uses theory, related work, adjacent fields, mathematical or physical analysis, analogies, and project evidence to generate and test route ideas.
-
-## Evidence, scope, and follow-through
-
-- Treat hunches, negative results, and near misses as hypotheses or diagnostic signals to validate.
-- Preserve the project's user-confirmed current research mainline while another effective in-scope action remains.
+| Time | Round | Dev success | Unseen-category success |
+|---|---|---|---|
+| 2026-10-05 | 003 | 80% | 57% |
 ```
 
-## Ordinary prompt answer
+Briefs identify their actual author as mentor, user, or external. New core records use `rounds/`, not new `missions/`, `experiments/`, or `claims/` entries. Historical files stay in place; `RESEARCH.md` is only a short history index.
 
-A non-slash research prompt may receive a direct Dove-style answer. The answer should lead with judgment and useful action, not internal bookkeeping.
+## Four-sentence status
+
+Status reads the card, last evaluation rows, and current brief, without running evaluation or filling unknowns:
 
 ```text
-用户：现在怎么办？
-
-Dove-style answer:
-当前最重要的判断是 X。我的 hunch 是 Y，但它还只是由 A/B 两个信号支持的假设。下一步不该先跑大实验，而该先检查 Z，因为它最能区分两个候选解释。除非你要我执行，我会停在无副作用的判断和建议上。
+共享映射已实现，开发集结果为 80%。
+未见类别从 46% 到 57%，有进展，但还没达到已确认的整体完成标准。
+当前卡点是长尾连接失败，最终 heldout 结论尚未取得。
+正在执行导师给出的下一轮，针对共同失败原因改对应关系，再按同一评测表取结果。
 ```
 
-## Skill result
+A status answer does not end an ongoing round unless the user explicitly asks to pause. Do not infer scientific progress from a Git branch, successful run, timestamp, or test pass.
 
-A slash command is a capability entrance. The final answer should state the result, evidence, and next useful action.
+## Bounded identity and compact/resume
+
+Keep the current fields at the top of the card, within its first 4KB:
 
 ```text
-/dove:experiment 分析这个实验结果
+Current round: rounds/004-brief.md
+Round status: ongoing
+Mainline: <用户确认的原话>
 ```
 
-Expected shape:
+Compact/resume presents this same short card and continuity guidance, not a timestamp summary of old Mission/Review/Run records. If overlong, the beginning remains visible:
 
 ```text
-结论：这个结果支持路线 A 继续，但还不足以排除路线 B。
-
-关键依据：
-- 指标 1 的改善发生在目标条件下，而不是只发生在方便 proxy 上。
-- 失败样例集中在长尾输入，说明机制可能仍依赖数据分布。
-
-下一步：
-先做一个最小区分检查：固定输入分布，只替换机制组件，并排查实现、配置、指标和分析脚本是否能解释差异。如果差异仍存在，再记录为实验结果；否则不要扩大结论。
+Identity card exceeds 4KB; the beginning is shown, not a missing card. Read the full card when needed and shorten it without changing Mainline; keep round details in rounds/ and measurements in EVAL.md.
 ```
 
-## Research Markdown maintenance
+Startup/clear instead supplies the two-essentials read bootstrap. Hooks present context; they do not prove reading, write research, or perform mentor judgment.
 
-When a result changes the research direction or has real recovery value, Dove may record it in ordinary Markdown.
+## One-time Stop reminder
+
+When an ongoing round has no mentor call in the current turn, the managed Stop hook can ask once:
 
 ```text
-这个实验把问题从“方法是否有效”推进到“增益是否来自机制组件”。需要更新对应 Experiment document 和 RESEARCH.md。
+当前轮次仍在进行中。请保存本轮结果并调用 dove-mentor，再根据返回继续、暂停或说明完成。
 ```
 
-When nothing important changes, the answer can say so and avoid writing:
+`stop_hook_active: true` permits stopping without another block. Missing/unreadable transcript evidence also permits stopping. The hook checks host tool-call events without analyzing or transmitting conversation content, and writes no tracking or research file. Explicit discussion-only/stop requests are handled by the main session setting the card to paused, not by hook classification.
+
+## Repeated cross-project correction
+
+The suggestion is one sentence, not an automatic preference edit:
 
 ```text
-这只是一次解释性回答，没有改变当前判断、决策，也没有后续恢复价值；不更新 Markdown。
+其他已注册项目也出现过“不要按样本写特例”的纠正，要不要把它加进全局 AUTHOR_PREFERENCES？
 ```
 
-Shape-only link example:
+## Paper review
 
-```markdown
-更新了 [mechanism ablation](experiments/mechanism-ablation.md)，其中引用项目材料 `data/ablation/results.csv`、`figures/mechanism-ablation.svg` 和 `.dove/runs/run-20260903-a1b2c3d4/run.jsonl`。这些路径帮助恢复现场；它们不是 ID、frontmatter、backlink audit 或一致性矩阵。
+Author-side self-check keeps its boundary clear:
+
+```text
+这是作者侧科学自检，不是独立 dove-review。Figure 3 支持趋势，但当前材料不足以证明因果机制；需要检查能区分替代解释的证据。
 ```
+
+Native `dove-review` reads the specified current manuscript and cited results with only Read/Grep/Glob in a fresh context. No frozen snapshot or persistent runtime is needed. A shape-only return:
+
+```text
+总体判断：当前证据还不足以支持全文的机制主张。
+
+实质问题：第 4 节把整套方法增益解释为组件因果效应，但 Table 2 的两个实现还改变了输入信息。需要匹配信息条件的比较，或把结论限定到实际识别的整套方法效果。
+
+依据：paper/main.tex 第 4 节；results/ablation.csv 的 input 条件。
+建议作者：先判断比较是否能识别该主张，再选择有效补证据或修订，不能用格式检查代替。
+
+实际读过的文件：paper/main.tex、build/main.pdf、results/ablation.csv。
+```
+
+The main session preserves the actual return when useful and assesses its objections before authorized response/revision. A supplied external review retains its real provenance. Revisions need a fresh review of the full current version; an old recommendation is historical, not current acceptance. Unavailable native review is stated, not replaced by relabeled self-check.
 
 ## Run receipt output
 
-A `dove run` receipt records local execution facts before Dove interprets the result scientifically.
+`dove run` records execution facts, not scientific conclusions:
 
 ```text
 Dove run 已启动
@@ -116,76 +184,17 @@ stdout：.dove/runs/run-20260903-a1b2c3d4/stdout.log
 stderr：.dove/runs/run-20260903-a1b2c3d4/stderr.log
 ```
 
-`start` records an explicitly declared seed plus minimum Git facts: commit and dirty `true`/`false`/`null`, not an environment inventory. `status` is read-only and `resume` never reruns a target. `compare` ranks only compatible terminal finalized runs with matching metric, budget, data, evaluator, and resource basis; Git facts do not change comparability or ranking.
-
-## Compact/resume facts card
-
-This shape-only example matches the fields emitted by SessionStart after compact/resume; it is not evidence from a live project:
-
-```text
-Dove SessionStart facts (read-only). Latest Review (by updatedAt) and Run (by startedAt) are not the current research mainline.
-RESEARCH.md: exists=yes; mtime=2026-09-05T08:00:00.000Z
-Latest Review: id=review-20260902-a1b2c3d4; round=1; updatedAt=2026-09-05T08:10:00.000Z; material currentness=changed
-Latest Run: id=run-20260903-a1b2c3d4; startedAt=2026-09-05T08:20:00.000Z; status=succeeded; exit=0
-```
-
-Missing or unreadable facts remain `unavailable`. No research Markdown body, review report, stdout/stderr log, mainline summary, or next-step recommendation is included. Startup/clear emits no research card. A read-only `systemMessage` may say that project integration needs attention and point to explicit `dove update` or `dove doctor --json`; an inspection failure reports that SessionStart could not inspect integration. SessionStart never replaces local edits or synchronizes files; explicit `dove update` performs supported package-managed replacement and reports affected paths.
-
-## Review output
-
-Author-side self-check should be clear about its scope:
-
-```text
-这是作者侧科学自检，不是独立 dove-review。
-
-主要问题：
-1. 贡献与最近的 X 工作区分仍不够清楚。
-2. Figure 3 支撑了趋势，但不足以证明因果机制。
-
-建议：先补一段 related-work 定位，并做一个能区分机制解释与 baseline artifact 的诊断检查。
-```
-
-Isolated `dove-review` uses the same researcher in a reviewer position, not another persona. It asks whether the method answers the question, field judgment is correct, the paper fits the venue, and what strongest reasonable objection needs answering. Its requested Markdown headings are `Verdict`, `Blocking issues`, `Grounding basis`, and `Author-side next actions`; the runtime does not parse them as acceptance state.
-
-A `dove-review` handoff result should point to frozen materials and the actual report, not summarize a private transcript. Public human and CLI JSON results omit SHA fields; internal JSON receipts support byte comparisons only.
-
-```text
-Dove review handoff 已完成
-
-审阅记录：review-20260902-a1b2c3d4
-轮次：1
-状态：completed
-会话：00000000-0000-4000-8000-000000000000
-报告：.dove/reviews/review-20260902-a1b2c3d4/rounds/1/report.md
-后端记录：.dove/reviews/review-20260902-a1b2c3d4/rounds/1/backend.json
-
-冻结材料：
-- paper/main.tex (12345 bytes)
-- build/main.pdf (45678 bytes)
-- supplement/supplement.pdf (23456 bytes)
-
-Reviewer 只接收本轮冻结材料；不会读取私有 transcript。
-```
-
-A `dove review status --id <id>` result should show how the frozen snapshot relates to the current project without parsing the report as a verdict source.
-
-```text
-当前轮次材料版本关系：changed
-  - paper/main.tex：changed（snapshot 12345 bytes；observed file 12400 bytes）
-  - build/main.pdf：current（snapshot 45678 bytes；observed file 45678 bytes）
-
-报告中的 verdict 是对应 frozen snapshot 的历史判断；status 不解析报告文字来猜 PASS/REVISE。
-```
+`status` is read-only; `resume` never reruns a target. `compare` ranks only compatible terminal finalized runs by metric/budget/data/evaluator/resource basis. Git facts do not change ranking. For `start`, flags after `--` belong to the target command, not Dove output selection.
 
 ## Error result
 
-Errors should be direct and actionable. Parser errors use natural Chinese while preserving the exact command or flag names.
+Parser errors preserve exact command/flag names while explaining plainly:
 
 ```text
 Dove 不能继续：--direction 只接受 min 或 max。
 ```
 
-When JSON was requested before `--`, the error remains clean JSON:
+If JSON was requested before `--`:
 
 ```json
 {
@@ -194,12 +203,9 @@ When JSON was requested before `--`, the error remains clean JSON:
 }
 ```
 
-Operational errors should give the same direct shape:
+Operational errors name the real limit and next step without exposing private transcripts or irrelevant internal fields:
 
 ```text
-Dove 不能继续：当前项目没有有效的 `.dove/install/manifest.json`，所以无法判断 Dove 管理的项目集成。
-
-下一步：如果这是目标项目，请显式运行 `dove init --host claude`；如果不是，不要从这里推断或修复 Dove 安装。
+Dove 不能继续：当前项目没有有效的 .dove/install/manifest.json，无法判断 Dove 管理的项目集成。
+下一步：确认这是目标项目后，显式运行 dove init --host claude；不要从这里推断或修复其他项目的安装。
 ```
-
-Do not expose private transcripts or irrelevant internal fields in user-facing output.

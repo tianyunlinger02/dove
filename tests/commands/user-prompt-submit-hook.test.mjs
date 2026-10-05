@@ -46,16 +46,14 @@ test("prompt output is current short guidance, independent of prompt text and ho
   assert.ok(context(expected).length < 2_500);
   assert.match(context(expected), /disk guidance, not rule reload/iu);
   assert.match(context(expected), /No readable short identity card at \.dove\/research\/IDENTITY\.md/iu);
-  assert.match(context(expected), /do not infer a mainline from old notes or developer test prompts/iu);
-  assert.match(context(expected), /shorten an oversized card without changing its Mainline/iu);
-  assert.match(context(expected), /leave an unconfirmed Mainline unknown/iu);
-  assert.match(context(expected), /update only affected fields unless writing is forbidden/iu);
+  assert.match(context(expected), /do not infer a mainline from old notes/iu);
+  assert.match(context(expected), /Create one for a confirmed goal when writing is permitted/iu);
+  assert.match(context(expected), /identity card, EVAL\.md and current round brief/iu);
+  assert.match(context(expected), /evaluation result, then call the mentor/iu);
   assert.match(context(expected), /Keep Mainline stable/iu);
-  assert.match(context(expected), /Each open-goal round checks action, result and remaining gap against the same Mainline/iu);
+  assert.match(context(expected), /retain the latest user correction/iu);
+  assert.match(context(expected), /discussion-only or stop requests pause the round/iu);
   assert.doesNotMatch(context(expected), /^Mainline:/mu, "missing card does not synthesize a goal");
-  assert.match(context(expected), /do the next core work now/iu);
-  assert.match(context(expected), /Stop at whole-goal completion or a hard blocker/iu);
-  assert.match(context(expected), /not a local batch or plan/iu);
   assert.match(context(expected), /On first use at these fingerprints/iu);
   assert.match(context(expected), /current main agent must personally read the current rule and the two short summaries/iu);
   assert.match(context(expected), /author preferences and research quality/iu);
@@ -95,7 +93,7 @@ test("prompt output is current short guidance, independent of prompt text and ho
       assert.ok(context(delivered).includes(card), "current identity card is delivered in full without paraphrasing");
       assert.equal(context(delivered).split(mainline).length - 1, 1, "Mainline appears once with its exact user wording");
       assert.match(context(delivered), /corrections affect only relevant fields, not an unchanged Mainline/iu);
-      assert.match(context(delivered), /next core work now/iu);
+      assert.match(context(delivered), /evaluation result, then call the mentor/iu);
       assert.equal(fs.readFileSync(cardPath, "utf8"), card, "hook does not apply card corrections itself");
       assert.equal(fs.statSync(cardPath).mtimeMs, cardBefore, "hook does not write the card");
     }
@@ -105,10 +103,10 @@ test("prompt output is current short guidance, independent of prompt text and ho
   const oversizedBefore = fs.statSync(cardPath).mtimeMs;
   for (const binary of binaries) {
     const delivered = invoke(binary, project, event());
-    assert.match(context(delivered), /No readable short identity card/iu);
-    assert.match(context(delivered), /shorten an oversized card without changing its Mainline/iu);
-    assert.doesNotMatch(context(delivered), /^Mainline:/mu, "oversized card is not partially read or reconstructed");
-    assert.equal(context(delivered).includes(mainline), false);
+    assert.doesNotMatch(context(delivered), /No readable short identity card/iu);
+    assert.match(context(delivered), /exceeds 4KB/iu);
+    assert.match(context(delivered), /shorten it without changing Mainline/iu);
+    assert.equal(context(delivered).includes(mainline), true, "oversized card retains the exact mainline");
     assert.equal(fs.readFileSync(cardPath, "utf8"), oversized, "hook does not shorten an oversized card itself");
     assert.equal(fs.statSync(cardPath).mtimeMs, oversizedBefore);
   }

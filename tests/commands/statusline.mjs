@@ -112,8 +112,8 @@ export function assertResearchMainlineReadBoundary() {
     writeCard("Mainline: First\nMainline: Second\n");
     assert.equal(inspectResearchMainline(project), null, "ambiguous card mainline is omitted");
     writeCard("Mainline: Oversized\n" + "x".repeat(4096));
-    assert.equal(readDoveIdentityCard(project), null, "oversized card is not injected");
-    assert.equal(inspectResearchMainline(project), null);
+    assert.equal(Buffer.byteLength(readDoveIdentityCard(project)), 4096, "oversized card keeps its beginning");
+    assert.equal(inspectResearchMainline(project), "Oversized");
     fs.rmSync(card);
     fs.mkdirSync(card);
     assert.equal(inspectResearchMainline(project), null, "directory is not a card");

@@ -58,7 +58,6 @@ export {
 export {
   renderDoveAgentInstructions,
   renderDoveAuthorStanceSection,
-  renderDoveReviewerStanceSection,
   renderDoveSharedResearchContractSection
 } from "./dove-agent-persona.mjs";
 export {
@@ -80,10 +79,6 @@ export {
 } from "./project-installation.mjs";
 export { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "./dove-lifecycle.mjs";
 export { inspectProjectDoctor } from "./project-doctor.mjs";
-export { DOVE_REVIEW_BACKEND_ID } from "./review-claude-backend.mjs";
-export { REVIEW_MATERIAL_DENY_PATTERNS, normalizeReviewMaterialList } from "./review-snapshot.mjs";
-export { assertReviewWorkspaceMatchesSnapshot, createReviewId, normalizeReviewId, prepareReviewWorkspace, resolveReviewStateRoot } from "./review-workspace.mjs";
-export { handoffReview, importReviewReturn, inspectReviewStatus, rerunReview, resumeReview, reviewStateLocation } from "./review-runtime.mjs";
 export {
   RUNS_DIRECTORY_PATH,
   RUN_EVENT_SCHEMA_VERSION,

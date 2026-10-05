@@ -2,22 +2,23 @@
 
 <img src="../dove.png" alt="Dove pixel-art pigeon carrying a branch" width="320">
 
-Dove is one research agent. Ordinary Claude conversation in an initialized project is its primary entrance; `claude --agent dove` and nine flat Skills are optional, with no higher judgment authority. Ordinary tasks with no research impact do not acquire a research workflow.
+Dove is one research agent. Ordinary Claude conversation in an initialized project is its primary entrance; `claude --agent dove` and nine flat Skills are optional. A fresh read-only mentor judges each round's evaluation result and proposes the next brief. Ordinary and bounded tasks retain their scope.
 
 ## Guides
 
-- [Installation](INSTALL.md) owns trusted package installation, Claude Code and DSH setup, permissions, managed-file ownership, lifecycle operations, and Doctor.
-- [Usage](USAGE.md) owns everyday entry modes, scoped research behavior, the nine Skills, research Markdown, local run receipts, and Review.
+- [Installation](INSTALL.md) owns trusted package installation, Claude Code and DSH setup, hooks, permissions, managed-file ownership, lifecycle operations, and Doctor.
+- [Usage](USAGE.md) owns the mentor/round cycle, three core research records, evaluation, nine Skills, native paper review, and local run receipts.
 - [Capability matrix](CAPABILITY_MATRIX.md) summarizes capabilities and host availability, not another workflow or grading rubric.
 - [Output samples](DOVE_COMMAND_OUTPUT_SAMPLES.md) shows output shapes without imposing response templates.
-- [Packaging](PACKAGING.md) owns source-to-generated-resource relationships, package inventory, and release checks.
-- [Author preferences](AUTHOR_PREFERENCES.md) is the sole editable source for complete cross-project research, engineering, writing, and collaboration preferences; installed copies are generated references, not researcher-owned Lessons. The generation procedure belongs in [Packaging](PACKAGING.md#runtime-bundles).
-- [Development docs](development/README.md) index the stable Dove vision, research model, product requirements, and expected behavior. [Research model](development/RESEARCH_MODEL.md) gives the full intended scientific semantics; public guides summarize rather than duplicate its criteria.
+- [Packaging](PACKAGING.md) owns source-to-resource relationships, package inventory, and release checks.
+- [Author preferences](AUTHOR_PREFERENCES.md) is the sole editable source for full cross-project preferences; installed copies are generated references, not Lessons. Generation belongs in [Packaging](PACKAGING.md#runtime-bundles).
+- [Development docs](development/README.md) index the Dove vision, research model, and product requirements; current public behavior is described in Usage.
 
 ## Keep these boundaries clear
 
-- The [quality and preference references](USAGE.md#short-core-and-two-reference-read-contracts) each have short Chinese essentials, personally read by every fresh host main-agent context before substantive work, and an on-demand `_FULL.md` companion. These four exact resources are package guidance, not evidence, permissions, or optional Lessons.
-- A confirmed research goal continues while useful authorized work remains; a bounded request can finish locally. There is no Auto Skill or command.
-- [Research Markdown](USAGE.md#research-markdown) is researcher-owned. Status is read-only, and lifecycle operations preserve existing research, review, and run records.
-- [Author-side self-check and isolated review](USAGE.md#review) have different evidence boundaries. Route/design use fresh Read-only Claude sessions and directly read supplied artifacts; paper keeps its frozen materials and persistent reviewer. Missing or refused runtime is a limitation, not self-check relabeled independent review.
-- Research participation, requested-work completion, and scientific progress are distinct. Source instructions, generated resources, installed disk state, currently loaded context, and observed behavior likewise support different claims; see [verification evidence](PACKAGING.md#verification-evidence).
+- New core records are `IDENTITY.md`, `EVAL.md`, and round briefs/results. Historical `missions/`, `experiments/`, and `claims/` remain in place without migration or deletion. Lifecycle operations preserve researcher-owned files.
+- Evaluation is a user-confirmed completion standard with a generalization column, not a software test gate. Mentor quality assessments and actual measurements belong in `EVAL.md`.
+- `dove-mentor` and `dove-review` are fresh native Claude contexts limited to `Read`/`Grep`/`Glob` on specified materials, not new personas or a CLI review runtime. Self-check is not independent paper review.
+- The [quality and preference references](USAGE.md#short-core-and-two-reference-read-contracts) have short essentials and on-demand full companions. Fresh main contexts personally read the essentials; installation does not prove reading.
+- A narrow Stop hook reminds the main session once to finish the round result and call the mentor. An explicit discussion-only or stop request pauses the round; no Auto Skill or background scheduler is added.
+- Source, Draft, Figure, Rebuttal, and Lessons are unchanged by this structure. Requested-work completion, scientific progress, and [software verification evidence](PACKAGING.md#verification-evidence) remain separate claims.

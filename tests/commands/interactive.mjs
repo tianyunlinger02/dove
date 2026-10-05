@@ -126,7 +126,7 @@ export async function assertInteractiveLifecycleMenus() {
           state: "blocked",
           manifest: { hosts: ["claude"] }
         },
-        workspaceState: { mode: "current", healthy: true },
+        workspaceState: { state: "current", healthy: true },
         actions: [{ kind: "inspect", command: `dove doctor --json --project '${target.replace(/'/gu, "'\\''")}'` }],
         setup: { mode: "blocked", reason: "blocked", allowedActions: ["details", "exit"] }
       }),
