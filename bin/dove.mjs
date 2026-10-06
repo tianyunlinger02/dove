@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { confirm } from "@inquirer/prompts";
 
 import { parseDoveCli } from "../src/cli/command-parser.mjs";
+import { DEFAULT_DASHBOARD_BIND, DEFAULT_DASHBOARD_PORT, startDashboardServer } from "../src/cli/dashboard-server.mjs";
 import { renderDoveDoctor } from "../src/cli/doctor-output.mjs";
 import { renderDoveHelp } from "../src/cli/help-output.mjs";
 import { runInteractiveDoveSetup } from "../src/cli/interactive-setup.mjs";
@@ -25,10 +26,11 @@ import { currentPromptGuidance, parseUserPromptSubmitPayload, userPromptSubmitAt
 import { parseSessionStartPayload, sessionStartFailureOutput, sessionStartOutput } from "../src/core/session-start-hook.mjs";
 import { parseStopPayload, stopHookOutput } from "../src/core/stop-hook.mjs";
 import { renderDoveStatusLine } from "../src/core/statusline.mjs";
+import { collectDashboard, readProjectDocument } from "../src/core/dashboard-data.mjs";
 import { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
 import { PROJECT_HOST_IDS } from "../src/core/host-registry.mjs";
 import { importProjectRoots, inspectRegisteredProjects, syncRegisteredProjects } from "../src/core/project-cascade.mjs";
-import { changeRegisteredProjects, readLastProjectSync } from "../src/core/project-registry.mjs";
+import { changeRegisteredProjects, readLastProjectSync, readRegisteredProjects } from "../src/core/project-registry.mjs";
 import { classifyPackageCompatibility, PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { initializeProjectIntegration, inspectProjectIntegration, previewProjectCompleteReinstall } from "../src/core/project-installation.mjs";
@@ -367,6 +369,21 @@ try {
     else console.log(JSON.stringify(result, null, 2));
     if (subcommand === "sync") warnSyncResult(result);
     process.exit(0);
+  }
+
+  if (command === "dashboard") {
+    const collect = () => collectDashboard({ ...PACKAGE_OPTIONS, packageVersion: PACKAGE_VERSION });
+    if (wantsJson(options)) {
+      process.stdout.write(`${JSON.stringify(collect(), null, 2)}\n`, () => process.exit(0));
+      await new Promise(() => {});
+    }
+    const port = options.port === undefined ? DEFAULT_DASHBOARD_PORT : Number(options.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`--port 需要 1 到 65535 之间的整数：${options.port}`);
+    const bind = options.bind ?? DEFAULT_DASHBOARD_BIND;
+    await startDashboardServer({ collect, listRoots: () => readRegisteredProjects(PACKAGE_OPTIONS), readDocument: readProjectDocument, bind, port });
+    console.log(`Dove 科研面板（只读）：http://${bind}:${port}/   Ctrl+C 退出`);
+    if (bind === DEFAULT_DASHBOARD_BIND) console.log(`从自己电脑打开：ssh -N -L ${port}:127.0.0.1:${port} <服务器>，再访问 http://localhost:${port}/`);
+    await new Promise(() => {});
   }
 
   if (command === "doctor") {

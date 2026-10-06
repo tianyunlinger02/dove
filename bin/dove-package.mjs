@@ -1128,15 +1128,15 @@ var require_route = __commonJS({
       };
     }
     function wrapConversion(toModel, graph) {
-      const path18 = [graph[toModel].parent, toModel];
+      const path19 = [graph[toModel].parent, toModel];
       let fn = conversions[graph[toModel].parent][toModel];
       let cur = graph[toModel].parent;
       while (graph[cur].parent) {
-        path18.unshift(graph[cur].parent);
+        path19.unshift(graph[cur].parent);
         fn = link(conversions[graph[cur].parent][cur], fn);
         cur = graph[cur].parent;
       }
-      fn.conversion = path18;
+      fn.conversion = path19;
       return fn;
     }
     module.exports = function(fromModel) {
@@ -7632,10 +7632,10 @@ var require_lib2 = __commonJS({
     exports.analyse = analyse;
     var detectFile = (filepath, opts = {}) => new Promise((resolve, reject) => {
       let fd;
-      const fs19 = (0, node_1.default)();
+      const fs20 = (0, node_1.default)();
       const handler = (err, buffer) => {
         if (fd) {
-          fs19.closeSync(fd);
+          fs20.closeSync(fd);
         }
         if (err) {
           reject(err);
@@ -7647,9 +7647,9 @@ var require_lib2 = __commonJS({
       };
       const sampleSize = (opts === null || opts === void 0 ? void 0 : opts.sampleSize) || 0;
       if (sampleSize > 0) {
-        fd = fs19.openSync(filepath, "r");
+        fd = fs20.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(sampleSize);
-        fs19.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
+        fs20.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
           if (err) {
             handler(err, null);
           } else {
@@ -7661,22 +7661,22 @@ var require_lib2 = __commonJS({
         });
         return;
       }
-      fs19.readFile(filepath, handler);
+      fs20.readFile(filepath, handler);
     });
     exports.detectFile = detectFile;
     var detectFileSync = (filepath, opts = {}) => {
-      const fs19 = (0, node_1.default)();
+      const fs20 = (0, node_1.default)();
       if (opts && opts.sampleSize) {
-        const fd = fs19.openSync(filepath, "r");
+        const fd = fs20.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(opts.sampleSize);
-        const bytesRead = fs19.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
+        const bytesRead = fs20.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
         if (bytesRead < opts.sampleSize) {
           sample = sample.subarray(0, bytesRead);
         }
-        fs19.closeSync(fd);
+        fs20.closeSync(fd);
         return (0, exports.detect)(sample);
       }
-      return (0, exports.detect)(fs19.readFileSync(filepath));
+      return (0, exports.detect)(fs20.readFileSync(filepath));
     };
     exports.detectFileSync = detectFileSync;
     exports.default = {
@@ -11477,8 +11477,8 @@ var require_lib3 = __commonJS({
 });
 
 // bin/dove.mjs
-import fs18 from "node:fs";
-import path17 from "node:path";
+import fs19 from "node:fs";
+import path18 from "node:path";
 import process7 from "node:process";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
@@ -13910,6 +13910,7 @@ var CLI_COMMAND_SPECS = Object.freeze({
   reinstall: command([projectOption, ...outputOptions]),
   uninstall: command([projectOption, ...outputOptions]),
   doctor: command([projectOption, ...outputOptions]),
+  dashboard: command([value("--port"), value("--bind"), ...outputOptions]),
   projects: command([], {
     subcommands: {
       import: command([value("--project", { repeatable: true, dedupe: true }), boolean("--sync"), ...outputOptions]),
@@ -14095,6 +14096,362 @@ function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
   } catch (error) {
     throw attachJsonRequested(error, jsonRequested);
   }
+}
+
+// src/cli/dashboard-server.mjs
+import http from "node:http";
+var DEFAULT_DASHBOARD_PORT = 7788;
+var DEFAULT_DASHBOARD_BIND = "127.0.0.1";
+function createDashboardServer({ collect, listRoots, readDocument }) {
+  return http.createServer((request, response) => {
+    const url = new URL(request.url ?? "/", "http://localhost");
+    if (request.method !== "GET") {
+      response.writeHead(405, { allow: "GET" }).end();
+      return;
+    }
+    if (url.pathname === "/") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+      response.end(renderDashboardHtml());
+      return;
+    }
+    if (url.pathname === "/api/dashboard") {
+      try {
+        const body = JSON.stringify(collect());
+        response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+        response.end(body);
+      } catch (error) {
+        response.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+      }
+      return;
+    }
+    if (url.pathname === "/api/doc") {
+      const root = url.searchParams.get("project");
+      const file = url.searchParams.get("name");
+      const known = typeof root === "string" && (listRoots?.() ?? []).includes(root);
+      const doc = known ? readDocument(root, file) : null;
+      if (!doc) {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      response.end(JSON.stringify(doc));
+      return;
+    }
+    response.writeHead(404).end();
+  });
+}
+function startDashboardServer({ collect, listRoots, readDocument, bind = DEFAULT_DASHBOARD_BIND, port = DEFAULT_DASHBOARD_PORT }) {
+  const server = createDashboardServer({ collect, listRoots, readDocument });
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, bind, () => {
+      server.off("error", reject);
+      resolve(server);
+    });
+  });
+}
+function renderDashboardHtml() {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dove \u79D1\u7814\u9762\u677F</title>
+<style>
+:root {
+  --bg: #f6f7f4; --panel: #ffffff; --ink: #1f2a2e; --muted: #66737a; --line: #e2e6e1;
+  --accent: #4f7a3a; --accent-soft: #e6efdf; --warn: #a36a12; --warn-soft: #f8ecd7;
+  --done: #3c6e91; --done-soft: #e1ecf4; --pause: #7a7f85; --pause-soft: #eceeef;
+  --mentor: #6b4fa0; --mentor-soft: #ece6f6; --user: #b04a3a; --user-soft: #f7e3df;
+  --external: #2f7f7a; --external-soft: #dff0ee; --code: #f1f3ef; --shadow: 0 1px 2px rgba(20,30,20,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151a1c; --panel: #1d2427; --ink: #e5ebe8; --muted: #93a19c; --line: #2c3539;
+    --accent: #8fbf74; --accent-soft: #263321; --warn: #e0a64a; --warn-soft: #3a2e1b;
+    --done: #7fb2d6; --done-soft: #1f2e39; --pause: #a3a8ad; --pause-soft: #2a2f33;
+    --mentor: #b9a3e6; --mentor-soft: #2c2540; --user: #ec8f7f; --user-soft: #3b2420;
+    --external: #79cfc7; --external-soft: #1c3533; --code: #232b2e; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #151a1c; --panel: #1d2427; --ink: #e5ebe8; --muted: #93a19c; --line: #2c3539;
+  --accent: #8fbf74; --accent-soft: #263321; --warn: #e0a64a; --warn-soft: #3a2e1b;
+  --done: #7fb2d6; --done-soft: #1f2e39; --pause: #a3a8ad; --pause-soft: #2a2f33;
+  --mentor: #b9a3e6; --mentor-soft: #2c2540; --user: #ec8f7f; --user-soft: #3b2420;
+  --external: #79cfc7; --external-soft: #1c3533; --code: #232b2e; --shadow: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; }
+header.top { display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+header.top .brand { font-weight: 700; font-size: 16px; }
+header.top .meta { color: var(--muted); font-size: 12px; margin-left: auto; }
+header.top button { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 6px; padding: 3px 9px; cursor: pointer; font: inherit; font-size: 12px; }
+.layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: calc(100vh - 49px); }
+aside { border-right: 1px solid var(--line); padding: 14px; overflow-y: auto; }
+.project { display: block; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; cursor: pointer; color: inherit; font: inherit; box-shadow: var(--shadow); }
+.project.active { border-color: var(--accent); outline: 2px solid var(--accent-soft); }
+.project .row { display: flex; align-items: center; gap: 8px; }
+.project .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project .main { color: var(--muted); font-size: 12.5px; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.project .foot { color: var(--muted); font-size: 12px; margin-top: 6px; display: flex; justify-content: space-between; gap: 8px; }
+.chip { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 999px; white-space: nowrap; font-weight: 600; }
+.chip.ongoing { background: var(--accent-soft); color: var(--accent); }
+.chip.paused { background: var(--pause-soft); color: var(--pause); }
+.chip.completed { background: var(--done-soft); color: var(--done); }
+.chip.none { background: var(--warn-soft); color: var(--warn); }
+.chip.mentor { background: var(--mentor-soft); color: var(--mentor); }
+.chip.user { background: var(--user-soft); color: var(--user); }
+.chip.external { background: var(--external-soft); color: var(--external); }
+.chip.other { background: var(--pause-soft); color: var(--pause); }
+main { padding: 20px 28px 60px; min-width: 0; }
+.empty { color: var(--muted); padding: 40px 0; }
+h1.title { margin: 0; font-size: 22px; }
+.path { color: var(--muted); font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
+.mainline { margin: 12px 0 18px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; box-shadow: var(--shadow); }
+.mainline .label { color: var(--muted); font-size: 12px; display: block; margin-bottom: 2px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 22px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; box-shadow: var(--shadow); min-width: 0; }
+.tile .k { color: var(--muted); font-size: 12px; }
+.tile .v { font-size: 16px; font-weight: 600; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+section { margin-bottom: 26px; }
+section > h2 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: baseline; gap: 8px; }
+section > h2 .sub { color: var(--muted); font-size: 12px; font-weight: 400; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow); }
+.tablewrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; box-shadow: var(--shadow); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 600; }
+tr.latest td { background: var(--accent-soft); }
+td.num { font-variant-numeric: tabular-nums; }
+.round { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; box-shadow: var(--shadow); }
+.round .head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; flex-wrap: wrap; }
+.round .no { font-weight: 700; }
+.round .rtitle { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.round .time { color: var(--muted); font-size: 12px; }
+.round .tabs { display: flex; gap: 6px; }
+.round .tabs button { border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 12px; cursor: pointer; }
+.round .tabs button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.round .tabs button:disabled { opacity: .45; cursor: default; }
+.round .body { border-top: 1px solid var(--line); padding: 12px 16px; }
+.round.current { border-color: var(--accent); }
+.md h1, .md h2, .md h3, .md h4 { font-size: 14.5px; margin: 14px 0 6px; }
+.md p { margin: 6px 0; }
+.md ul, .md ol { margin: 6px 0; padding-left: 22px; }
+.md code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+.md pre { background: var(--code); padding: 10px 12px; border-radius: 8px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; }
+.md blockquote { margin: 6px 0; padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted); }
+.md table { margin: 8px 0; }
+details summary { cursor: pointer; color: var(--muted); }
+.note { color: var(--muted); font-size: 12px; margin-top: 6px; }
+select.mobile { display: none; }
+@media (max-width: 820px) {
+  .layout { grid-template-columns: 1fr; }
+  aside { display: none; }
+  select.mobile { display: block; width: calc(100% - 32px); margin: 12px 16px 0; padding: 8px; font: inherit; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; }
+  main { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="brand">\u{1F54A} Dove \u79D1\u7814\u9762\u677F</span>
+  <span class="meta" id="meta">\u52A0\u8F7D\u4E2D\u2026</span>
+  <button id="theme" title="\u5207\u6362\u660E\u6697">\u660E/\u6697</button>
+  <button id="reload">\u5237\u65B0</button>
+</header>
+<select class="mobile" id="picker" aria-label="\u9009\u62E9\u9879\u76EE"></select>
+<div class="layout">
+  <aside id="list"></aside>
+  <main id="view"><div class="empty">\u52A0\u8F7D\u4E2D\u2026</div></main>
+</div>
+<script>
+const STATUS = { ongoing: ["ongoing", "\u8FDB\u884C\u4E2D"], "\u8FDB\u884C\u4E2D": ["ongoing", "\u8FDB\u884C\u4E2D"], paused: ["paused", "\u5DF2\u6682\u505C"], "\u6682\u505C": ["paused", "\u5DF2\u6682\u505C"], completed: ["completed", "\u5DF2\u5B8C\u6210"], "\u5B8C\u6210": ["completed", "\u5DF2\u5B8C\u6210"] };
+const AUTHOR = { mentor: "\u5BFC\u5E08", user: "\u7528\u6237", external: "\u5916\u90E8", other: "\u5176\u4ED6" };
+let data = null;
+let selected = decodeURIComponent(location.hash.slice(1)) || null;
+const open = new Map();
+
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+function ago(ms) {
+  if (!ms) return "\u65E0\u8BB0\u5F55";
+  const s = Math.max(0, (Date.now() - ms) / 1000);
+  if (s < 90) return "\u521A\u521A";
+  if (s < 3600) return Math.round(s / 60) + " \u5206\u949F\u524D";
+  if (s < 86400 * 2) return Math.round(s / 3600) + " \u5C0F\u65F6\u524D";
+  return Math.round(s / 86400) + " \u5929\u524D";
+}
+function statusChip(status) {
+  const hit = status ? STATUS[String(status).trim().toLowerCase()] || STATUS[String(status).trim()] : null;
+  return hit ? '<span class="chip ' + hit[0] + '">' + hit[1] + '</span>' : '<span class="chip none">\u65E0\u8FDB\u884C\u4E2D\u8F6E\u6B21</span>';
+}
+function authorChip(author) {
+  return author ? '<span class="chip ' + author + '">' + AUTHOR[author] + '</span>' : '<span class="chip other">\u672A\u6807\u4F5C\u8005</span>';
+}
+function inline(text) {
+  return esc(text)
+    .replace(/\`([^\`]+)\`/g, "<code>$1</code>")
+    .replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>")
+    .replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, "$1");
+}
+function md(text) {
+  const lines = String(text || "").split(/\\r?\\n/);
+  let html = "", list = null, para = [], i = 0;
+  const flush = () => { if (para.length) { html += "<p>" + inline(para.join(" ")) + "</p>"; para = []; } if (list) { html += "</" + list + ">"; list = null; } };
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^\\s*\`\`\`/.test(line)) {
+      flush(); const buf = []; i++;
+      while (i < lines.length && !/^\\s*\`\`\`/.test(lines[i])) buf.push(lines[i++]);
+      html += "<pre><code>" + esc(buf.join("\\n")) + "</code></pre>"; i++; continue;
+    }
+    if (/^\\s*\\|.*\\|\\s*$/.test(line)) {
+      flush(); const rows = [];
+      while (i < lines.length && /^\\s*\\|.*\\|\\s*$/.test(lines[i])) rows.push(lines[i++]);
+      html += tableHtml(rows.map((r) => r.trim().replace(/^\\|/, "").replace(/\\|$/, "").split("|").map((c) => c.trim())).filter((r) => !r.every((c) => /^:?-+:?$/.test(c))), false, true);
+      continue;
+    }
+    let m;
+    if ((m = line.match(/^(#{1,6})\\s+(.*)$/))) { flush(); html += "<h4>" + inline(m[2]) + "</h4>"; }
+    else if ((m = line.match(/^\\s*[-*+]\\s+(.*)$/))) { if (para.length) { html += "<p>" + inline(para.join(" ")) + "</p>"; para = []; } if (list !== "ul") { if (list) html += "</" + list + ">"; html += "<ul>"; list = "ul"; } html += "<li>" + inline(m[1]) + "</li>"; }
+    else if ((m = line.match(/^\\s*\\d+[.)]\\s+(.*)$/))) { if (para.length) { html += "<p>" + inline(para.join(" ")) + "</p>"; para = []; } if (list !== "ol") { if (list) html += "</" + list + ">"; html += "<ol>"; list = "ol"; } html += "<li>" + inline(m[1]) + "</li>"; }
+    else if ((m = line.match(/^>\\s?(.*)$/))) { flush(); html += "<blockquote>" + inline(m[1]) + "</blockquote>"; }
+    else if (!line.trim()) flush();
+    else { if (list) { html += "</" + list + ">"; list = null; } para.push(line.trim()); }
+    i++;
+  }
+  flush();
+  return html;
+}
+function tableHtml(rows, highlightLast, plain) {
+  if (!rows.length) return "";
+  const [head, ...body] = rows;
+  const cell = (c) => '<td class="' + (/^[-+]?[\\d.,%]+\\s*\\S{0,3}$/.test(c) ? "num" : "") + '">' + inline(c) + "</td>";
+  const tr = body.map((r, idx) => '<tr class="' + (highlightLast && idx === body.length - 1 ? "latest" : "") + '">' + r.map(cell).join("") + "</tr>").join("");
+  const t = "<table><thead><tr>" + head.map((c) => "<th>" + inline(c) + "</th>").join("") + "</tr></thead><tbody>" + tr + "</tbody></table>";
+  return plain ? '<div class="tablewrap">' + t + "</div>" : t;
+}
+function renderList() {
+  const list = document.getElementById("list");
+  const picker = document.getElementById("picker");
+  list.innerHTML = data.projects.map((p) =>
+    '<button class="project' + (p.root === selected ? " active" : "") + '" data-root="' + esc(p.root) + '">' +
+      '<div class="row"><span class="name">' + esc(p.name) + "</span>" + statusChip(p.roundStatus) + "</div>" +
+      '<div class="main">' + esc(p.mainline || "\u672A\u5199\u4E3B\u7EBF") + "</div>" +
+      '<div class="foot"><span>' + esc(p.currentRound || "\u2014") + "</span><span>" + ago(p.lastActivity) + "</span></div>" +
+    "</button>").join("") || '<div class="empty">\u6CA1\u6709\u5DF2\u767B\u8BB0\u4E14\u6709\u7814\u7A76\u8BB0\u5F55\u7684\u9879\u76EE\u3002</div>';
+  list.querySelectorAll(".project").forEach((el) => el.addEventListener("click", () => select(el.dataset.root)));
+  picker.innerHTML = data.projects.map((p) => '<option value="' + esc(p.root) + '"' + (p.root === selected ? " selected" : "") + ">" + esc(p.name) + "</option>").join("");
+}
+function renderView() {
+  const view = document.getElementById("view");
+  const p = data.projects.find((item) => item.root === selected);
+  if (!p) { view.innerHTML = '<div class="empty">\u4ECE\u5DE6\u4FA7\u9009\u62E9\u4E00\u4E2A\u9879\u76EE\u3002</div>'; return; }
+  const evalRows = p.evaluation ? p.evaluation.tables.reduce((n, t) => n + t.rows.length, 0) : 0;
+  let html = '<h1 class="title">' + esc(p.name) + '</h1><div class="path">' + esc(p.root) + "</div>";
+  html += '<div class="mainline"><span class="label">\u4E3B\u7EBF</span>' + esc(p.mainline || "\u8EAB\u4EFD\u5361\u91CC\u8FD8\u6CA1\u6709 Mainline\u3002") + "</div>";
+  html += '<div class="tiles">' +
+    tile("\u5F53\u524D\u8F6E\u6B21", p.currentRound || "\u2014") + tile("\u8F6E\u6B21\u72B6\u6001", (STATUS[String(p.roundStatus || "").toLowerCase()] || [0, p.roundStatus || "\u2014"])[1]) +
+    tile("\u5DF2\u6709\u8F6E\u6B21", p.rounds.length) + tile("\u8BC4\u6D4B\u8BB0\u5F55", evalRows ? evalRows + " \u884C" : "\u2014") + tile("\u6700\u8FD1\u66F4\u65B0", ago(p.lastActivity)) + "</div>";
+  html += '<section><h2>\u8BC4\u6D4B\u8868 <span class="sub">EVAL.md \xB7 \u6700\u65B0\u4E00\u884C\u9AD8\u4EAE</span></h2>';
+  if (!p.evaluation) html += '<div class="card note">\u8FD8\u6CA1\u6709 EVAL.md\u3002\u7ACB\u9879\u786E\u8BA4\u540E\u7531\u5BFC\u5E08\u5B9A\u8BC4\u6D4B\u3002</div>';
+  else if (p.evaluation.tables.length) html += p.evaluation.tables.map((t) => '<div class="tablewrap">' + tableHtml([t.header, ...t.rows], true) + "</div>").join("") + lazyDoc(p.root, "EVAL.md", "\u67E5\u770B EVAL.md \u539F\u6587");
+  else html += '<div class="card md">' + md(p.evaluation.text) + "</div>";
+  html += "</section>";
+  html += '<section><h2>\u8F6E\u6B21 <span class="sub">rounds/ \xB7 \u65B0\u7684\u5728\u4E0A</span></h2>';
+  if (!p.rounds.length) html += '<div class="card note">\u8FD8\u6CA1\u6709\u8F6E\u6B21\u8BB0\u5F55\u3002</div>';
+  html += p.rounds.map((r) => {
+    const key = p.root + "#" + r.number;
+    const which = open.get(key);
+    const current = p.currentRound && p.currentRound.includes(r.label);
+    return '<div class="round' + (current ? " current" : "") + '"><div class="head">' +
+      '<span class="no">\u7B2C ' + esc(r.label) + " \u8F6E</span>" + authorChip(r.author) +
+      '<span class="rtitle">' + esc(r.title || "") + "</span>" +
+      (r.result ? "" : '<span class="chip ' + (current ? "ongoing" : "none") + '">' + (current ? "\u8FDB\u884C\u4E2D" : "\u672A\u51FA\u7ED3\u679C") + "</span>") +
+      '<span class="time">' + ago((r.result || r.brief || {}).mtime) + "</span>" +
+      '<span class="tabs"><button data-key="' + esc(key) + '" data-root="' + esc(p.root) + '" data-file="' + esc(r.brief ? r.brief.file : "") + '" data-which="brief"' + (r.brief ? "" : " disabled") + (which === "brief" ? ' class="on"' : "") + ">\u8BF4\u660E</button>" +
+      '<button data-key="' + esc(key) + '" data-root="' + esc(p.root) + '" data-file="' + esc(r.result ? r.result.file : "") + '" data-which="result"' + (r.result ? "" : " disabled") + (which === "result" ? ' class="on"' : "") + ">\u7ED3\u679C</button></span></div>" +
+      (which && r[which] ? roundBody(p.root, r[which]) : "") + "</div>";
+  }).join("");
+  html += "</section>";
+  html += '<section><h2>\u8EAB\u4EFD\u5361 <span class="sub">IDENTITY.md</span></h2><div class="card md">' + (p.identity ? md(p.identity.text) + (p.identity.text.length > 4096 ? '<div class="note">\u8EAB\u4EFD\u5361\u8D85\u8FC7 4KB\uFF0C\u5BBF\u4E3B\u53EA\u4F1A\u770B\u5230\u5F00\u5934\u90E8\u5206\u3002</div>' : "") : '<span class="note">\u8FD8\u6CA1\u6709\u8EAB\u4EFD\u5361\u3002</span>') + "</div></section>";
+  if (p.doctor) html += "<section>" + lazyDoc(p.root, "DOCTOR.md", "Dove \u96C6\u6210\u95EE\u9898\u8BB0\u5F55\uFF08DOCTOR.md\uFF09") + "</section>";
+  view.innerHTML = html;
+  view.querySelectorAll("details[data-name]").forEach((d) => d.addEventListener("toggle", () => {
+    const key = d.dataset.root + "/" + d.dataset.name;
+    if (d.open) { openDocs.add(key); loadRound(d.dataset.root, d.dataset.name); } else openDocs.delete(key);
+  }));
+  view.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
+    const which = open.get(b.dataset.key) === b.dataset.which ? null : b.dataset.which;
+    open.set(b.dataset.key, which);
+    if (which) loadRound(b.dataset.root, b.dataset.file); else renderView();
+  }));
+}
+const texts = new Map();
+async function loadRound(root, file) {
+  const key = root + "/" + file;
+  if (!texts.has(key)) {
+    texts.set(key, { loading: true });
+    renderView();
+    try {
+      const res = await fetch("/api/doc?project=" + encodeURIComponent(root) + "&name=" + encodeURIComponent(file), { cache: "no-store" });
+      texts.set(key, res.ok ? await res.json() : { error: "\u8BFB\u53D6\u5931\u8D25\uFF08" + res.status + "\uFF09" });
+    } catch (error) {
+      texts.set(key, { error: "\u8BFB\u53D6\u5931\u8D25\uFF1A" + error.message });
+    }
+  }
+  renderView();
+}
+const openDocs = new Set();
+function lazyDoc(root, name, label) {
+  const key = root + "/" + name;
+  const isOpen = openDocs.has(key);
+  return '<details class="note" data-root="' + esc(root) + '" data-name="' + esc(name) + '"' + (isOpen ? " open" : "") + "><summary>" + esc(label) + "</summary>" + (isOpen ? roundBody(root, { file: name }) : "") + "</details>";
+}
+function roundBody(root, part) {
+  const t = texts.get(root + "/" + part.file);
+  if (!t || t.loading) return '<div class="body note">\u8BFB\u53D6\u4E2D\u2026</div>';
+  if (t.error) return '<div class="body note">' + esc(t.error) + "</div>";
+  return '<div class="body md">' + md(t.text) + (t.truncated ? '<div class="note">\u5185\u5BB9\u8F83\u957F\uFF0C\u53EA\u663E\u793A\u524D 64KB\u3002</div>' : "") + "</div>";
+}
+function tile(k, v) { return '<div class="tile"><div class="k">' + k + '</div><div class="v" title="' + esc(v) + '">' + esc(v) + "</div></div>"; }
+function select(root) {
+  selected = root;
+  history.replaceState(null, "", "#" + encodeURIComponent(root));
+  renderList(); renderView();
+}
+async function load() {
+  try {
+    const res = await fetch("/api/dashboard", { cache: "no-store" });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || res.statusText);
+    data = body;
+    if (!selected || !data.projects.some((p) => p.root === selected)) selected = data.projects[0]?.root ?? null;
+    document.getElementById("meta").textContent = (data.version ? "Dove " + data.version + " \xB7 " : "") + data.projects.length + " \u4E2A\u9879\u76EE \xB7 \u66F4\u65B0\u4E8E " + new Date(data.generatedAt).toLocaleTimeString();
+    renderList(); renderView();
+  } catch (error) {
+    document.getElementById("meta").textContent = data
+      ? "\u5237\u65B0\u5931\u8D25\uFF0C\u663E\u793A\u7684\u662F " + new Date(data.generatedAt).toLocaleTimeString() + " \u7684\u6570\u636E"
+      : "\u8BFB\u53D6\u5931\u8D25\uFF1A" + error.message;
+  }
+}
+document.getElementById("reload").addEventListener("click", () => { texts.clear(); load(); });
+document.getElementById("picker").addEventListener("change", (e) => select(e.target.value));
+document.getElementById("theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+});
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
+`;
 }
 
 // src/cli/terminal-output.mjs
@@ -14377,6 +14734,7 @@ function renderDoveHelp() {
   dove projects import --project <dir>... [--sync] [--json|--format json]
   dove projects sync [--json|--format json]
   dove projects status [--json|--format json]
+  dove dashboard [--port <port>] [--bind <address>] [--json|--format json]
   dove run start --project <dir> [--id <id>] [--group <name>] [--seed <short-text>] [--wall-time <duration>|--timeout-ms <ms>] [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--data <basis>] [--evaluator <basis>] [--resource-basis <basis>] [--kill-grace-ms <ms>] [--json|--format json] -- <command> [args...]
   dove run status --project <dir> [--id <id>|--group <name>] [--json|--format json]
   dove run resume --project <dir> --id <id> [--json|--format json]
@@ -14388,6 +14746,8 @@ function renderDoveHelp() {
   dove hook stop --project <dir>
 
 \u666E\u901A Claude \u4F1A\u8BDD\u662F Dove \u7684\u4E3B\u8981\u5165\u53E3\uFF1B--agent dove \u4E0E\u4E5D\u4E2A /dove:* Skills \u53EA\u662F\u53EF\u9009\u5FEB\u6377\u5165\u53E3\u3002CLI \u7BA1\u7406\u9879\u76EE\u63A5\u5165\u3001\u8BCA\u65AD\u548C\u8FD0\u884C\u6536\u636E\uFF0C\u4E0D\u542F\u52A8\u5BA1\u7A3F\u6A21\u578B\u3002/dove:review \u4FDD\u7559\uFF0C\u5BFC\u5E08 dove-mentor \u4E0E\u8BBA\u6587\u5BA1\u7A3F dove-review \u4F7F\u7528\u5BBF\u4E3B\u539F\u751F\u5168\u65B0\u53EA\u8BFB\u5B50 agent\uFF0C\u4EC5 Read/Grep/Glob\uFF0C\u4E0D\u4F20\u6267\u884C\u5BF9\u8BDD\u3001\u4E0D\u7EED\u63A5\u5386\u53F2\u3002
+
+dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u53EA\u8BFB\u7F51\u9875\uFF0C\u96C6\u4E2D\u67E5\u770B\u5DF2\u767B\u8BB0\u9879\u76EE\u7684\u4E3B\u7EBF\u3001\u5F53\u524D\u8F6E\u6B21\u3001EVAL \u8BC4\u6D4B\u8868\u548C\u6BCF\u8F6E\u8BF4\u660E/\u7ED3\u679C\uFF08\u9ED8\u8BA4 127.0.0.1:7788\uFF0C\u8FDC\u7A0B\u7528 SSH \u7AEF\u53E3\u8F6C\u53D1\u6253\u5F00\uFF09\u3002
 
 \u79D1\u7814\u6838\u5FC3\u8BB0\u5F55\u662F .dove/research/IDENTITY.md\u3001EVAL.md\u3001rounds/\u3002\u8F6E\u6B21\u8BF4\u660E\u6807\u6CE8\u4F5C\u8005\uFF08\u5BFC\u5E08/\u7528\u6237/\u5916\u90E8\uFF09\uFF1B\u7ED3\u679C\u51E0\u884C\u52A0 EVAL \u4E00\u884C\u3002\u8BC4\u6D4B\u7531\u7528\u6237\u786E\u8BA4\u4E00\u6B21\uFF0C\u81F3\u5C11\u542B\u4E00\u5217\u672A\u89C1\u7C7B\u522B\u7684\u6CDB\u5316\u7ED3\u679C\uFF1B\u91CD\u8981\u7ED3\u679C\u540E\u7684\u516B\u7EF4\u5224\u65AD\u7531\u5BFC\u5E08\u7ED9\u51FA\u3002\u5DF2\u6709 missions\u3001experiments\u3001claims \u539F\u5730\u4FDD\u7559\uFF0C\u4E0D\u8FC1\u79FB\u5220\u9664\uFF1B\u521D\u59CB\u5316\u4ECD\u53EA\u5728\u6CA1\u6709\u7814\u7A76\u6811\u65F6\u5EFA\u7ACB\u6700\u5C0F RESEARCH.md\u3002
 
@@ -16296,24 +16656,371 @@ function renderDoveStatusLine(input, options2 = {}) {
 ${project}` : session;
 }
 
-// src/core/dove-lifecycle.mjs
-import fs12 from "node:fs";
+// src/core/dashboard-data.mjs
+import fs6 from "node:fs";
+import path9 from "node:path";
 
-// src/core/project-installation.mjs
-import fs11 from "node:fs";
-import path13 from "node:path";
-
-// src/core/file-set-transaction.mjs
+// src/core/project-registry.mjs
 import crypto from "node:crypto";
+import fs5 from "node:fs";
+import os2 from "node:os";
+import path8 from "node:path";
+
+// src/core/package-metadata.mjs
 import fs4 from "node:fs";
 import path7 from "node:path";
+import { fileURLToPath } from "node:url";
+var injectedName = true ? "dove" : null;
+var injectedVersion = true ? "3.3.1" : null;
+function parseSemver(value2) {
+  const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
+  if (!match) return null;
+  const prerelease = match[4]?.split(".") ?? [];
+  if (prerelease.some((identifier) => /^\d+$/u.test(identifier) && identifier.length > 1 && identifier.startsWith("0"))) return null;
+  return { core: match.slice(1, 4), prerelease };
+}
+function compareNumericIdentifier(left, right) {
+  if (left.length !== right.length) return left.length < right.length ? -1 : 1;
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+function comparePrereleaseIdentifier(left, right) {
+  const leftNumeric = /^\d+$/u.test(left);
+  const rightNumeric = /^\d+$/u.test(right);
+  if (leftNumeric && rightNumeric) return compareNumericIdentifier(left, right);
+  if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+function comparePackageVersions(left, right) {
+  const leftParts = parseSemver(left);
+  const rightParts = parseSemver(right);
+  if (!leftParts || !rightParts) return null;
+  for (let index = 0; index < leftParts.core.length; index += 1) {
+    const order = compareNumericIdentifier(leftParts.core[index], rightParts.core[index]);
+    if (order !== 0) return order;
+  }
+  if (leftParts.prerelease.length === 0 || rightParts.prerelease.length === 0) {
+    if (leftParts.prerelease.length === rightParts.prerelease.length) return 0;
+    return leftParts.prerelease.length === 0 ? 1 : -1;
+  }
+  const count = Math.max(leftParts.prerelease.length, rightParts.prerelease.length);
+  for (let index = 0; index < count; index += 1) {
+    if (leftParts.prerelease[index] === void 0) return -1;
+    if (rightParts.prerelease[index] === void 0) return 1;
+    const order = comparePrereleaseIdentifier(leftParts.prerelease[index], rightParts.prerelease[index]);
+    if (order !== 0) return order;
+  }
+  return 0;
+}
+function classifyPackageCompatibility(candidate, expected) {
+  if (!candidate || !expected || candidate.name !== expected.name) return "identity-mismatch";
+  const order = comparePackageVersions(candidate.version, expected.version);
+  if (order === null) return "invalid-version";
+  if (order > 0) return "newer";
+  if (order < 0) return "older";
+  return "current";
+}
+function sourcePackage() {
+  const packagePath = path7.resolve(path7.dirname(fileURLToPath(import.meta.url)), "../..", "package.json");
+  return JSON.parse(fs4.readFileSync(packagePath, "utf8"));
+}
+var packageMetadata = injectedName && injectedVersion ? { name: injectedName, version: injectedVersion } : sourcePackage();
+if (typeof packageMetadata.name !== "string" || !packageMetadata.name) throw new Error("Dove package name is invalid.");
+if (!parseSemver(packageMetadata.version)) throw new Error("Dove package version is invalid.");
+var PACKAGE_NAME = packageMetadata.name;
+var PACKAGE_VERSION = packageMetadata.version;
+
+// src/core/project-registry.mjs
+var REGISTRY_NAME = "projects.json";
+var REPORT_NAME = "last-sync.json";
+var LOCK_NAME = ".registry-lock";
+function configDirectory(env = process.env) {
+  const base = env.XDG_CONFIG_HOME || path8.join(env.HOME || os2.homedir(), ".config");
+  if (!path8.isAbsolute(base)) throw new Error("Dove user configuration root must be absolute.");
+  return path8.join(base, "dove");
+}
+function inspectFile(file, fsOps = fs5) {
+  try {
+    const stat = fsOps.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Dove user registry requires a regular file: ${file}.`);
+    if (typeof process.getuid === "function" && stat.uid !== process.getuid()) throw new Error(`Dove user registry is not owned by the current user: ${file}.`);
+    if (process.platform !== "win32" && (stat.mode & 63) !== 0) throw new Error(`Dove user registry permissions are too broad: ${file}.`);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+function inspectDirectory(directory, fsOps = fs5, privateDirectory = false) {
+  try {
+    const stat = fsOps.lstatSync(directory);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`Dove user registry directory must be real: ${directory}.`);
+    if (privateDirectory && typeof process.getuid === "function" && stat.uid !== process.getuid()) throw new Error(`Dove user registry directory is not owned by the current user: ${directory}.`);
+    if (privateDirectory && process.platform !== "win32" && (stat.mode & 63) !== 0) throw new Error(`Dove user registry directory permissions are too broad: ${directory}.`);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+function registryDirectory(options2 = {}, create = false) {
+  const fsOps = options2.fsOps ?? fs5;
+  const directory = configDirectory(options2.env);
+  const base = path8.dirname(directory);
+  if (!inspectDirectory(base, fsOps)) {
+    if (!create) return null;
+    fsOps.mkdirSync(base, { recursive: true, mode: 448 });
+  }
+  const baseStat = fsOps.lstatSync(base);
+  if (typeof process.getuid === "function" && baseStat.uid !== process.getuid()) throw new Error(`Dove user configuration root is not owned by the current user: ${base}.`);
+  if (process.platform !== "win32" && (baseStat.mode & 2) !== 0) throw new Error(`Dove user configuration root is publicly writable: ${base}.`);
+  if (!inspectDirectory(directory, fsOps, true)) {
+    if (!create) return null;
+    fsOps.mkdirSync(directory, { mode: 448 });
+  }
+  return directory;
+}
+function validateProjects(value2) {
+  if (!value2 || typeof value2 !== "object" || Array.isArray(value2) || Object.keys(value2).sort().join(",") !== "projects,revision" || value2.revision !== 1 || !Array.isArray(value2.projects)) throw new Error("Dove user project registry is invalid.");
+  const seen = /* @__PURE__ */ new Set();
+  for (const root of value2.projects) {
+    if (typeof root !== "string" || !path8.isAbsolute(root) || root !== path8.normalize(root) || root.includes("\0") || seen.has(root)) throw new Error("Dove user project registry contains an invalid project root.");
+    seen.add(root);
+  }
+  return value2.projects;
+}
+function readJson(file, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs5;
+  if (!inspectFile(file, fsOps)) return null;
+  return JSON.parse(fsOps.readFileSync(file, "utf8"));
+}
+function writeJson(file, data, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs5;
+  inspectFile(file, fsOps);
+  const temporary = path8.join(path8.dirname(file), `.${path8.basename(file)}.${process.pid}.${crypto.randomUUID()}.tmp`);
+  try {
+    fsOps.writeFileSync(temporary, `${JSON.stringify(data, null, 2)}
+`, { flag: "wx", mode: 384 });
+    fsOps.renameSync(temporary, file);
+  } finally {
+    if (fsOps.existsSync(temporary)) fsOps.unlinkSync(temporary);
+  }
+}
+function lockedRegistry(options2, operation) {
+  const fsOps = options2.fsOps ?? fs5;
+  const directory = registryDirectory(options2, true);
+  const lock = path8.join(directory, LOCK_NAME);
+  let acquired = false;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      fsOps.mkdirSync(lock, { mode: 448 });
+      acquired = true;
+      break;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+  if (!acquired) throw new Error(`Dove project registry is locked at ${lock}; another operation may be active, or a prior operation was interrupted. Inspect it before retrying.`);
+  try {
+    return operation(path8.join(directory, REGISTRY_NAME));
+  } finally {
+    fsOps.rmdirSync(lock);
+  }
+}
+function readRegisteredProjects(options2 = {}) {
+  const directory = registryDirectory(options2);
+  if (!directory) return [];
+  const value2 = readJson(path8.join(directory, REGISTRY_NAME), options2);
+  return value2 === null ? [] : [...validateProjects(value2)];
+}
+function changeRegisteredProjects(add, remove = [], options2 = {}) {
+  return lockedRegistry(options2, (file) => {
+    const existing = readJson(file, options2);
+    const roots = existing === null ? [] : validateProjects(existing);
+    for (const root of [...add, ...remove]) {
+      if (typeof root !== "string" || !path8.isAbsolute(root) || root !== path8.normalize(root)) throw new Error("Dove project registration requires an absolute canonical root.");
+    }
+    const next = [.../* @__PURE__ */ new Set([...roots, ...add])].filter((root) => !remove.includes(root)).sort();
+    if (existing === null || JSON.stringify(roots) !== JSON.stringify(next)) writeJson(file, { revision: 1, projects: next }, options2);
+    return next;
+  });
+}
+function readLastProjectSync(options2 = {}) {
+  const directory = registryDirectory(options2);
+  if (!directory) return null;
+  const report = readJson(path8.join(directory, REPORT_NAME), options2);
+  if (report === null) return null;
+  if (!report || report.revision !== 1 || !Array.isArray(report.projects) || typeof report.packageVersion !== "string") throw new Error("Dove last project sync report is invalid.");
+  return report;
+}
+function writeLastProjectSync(report, options2 = {}) {
+  return lockedRegistry(options2, () => {
+    const directory = registryDirectory(options2);
+    const file = path8.join(directory, REPORT_NAME);
+    const prior = readLastProjectSync(options2);
+    if (prior) {
+      const order = comparePackageVersions(prior.packageVersion, report.packageVersion);
+      if (order === null) throw new Error("Dove last project sync report has an invalid package version.");
+      if (order > 0) return false;
+    }
+    writeJson(file, { revision: 1, ...report }, options2);
+    return true;
+  });
+}
+
+// src/core/dashboard-data.mjs
+var RESEARCH_ROOT = ".dove/research";
+var MAX_TEXT_BYTES = 64 * 1024;
+var MAX_ROUNDS = 40;
+var ROUND_FILE = /^(\d+)[-_](brief|result)\.md$/iu;
+var AUTHOR_LABELS = [
+  [/导师|mentor/iu, "mentor"],
+  [/用户|user/iu, "user"],
+  [/外部|external/iu, "external"]
+];
+function readText(file, fsOps) {
+  try {
+    const stat = fsOps.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink()) return null;
+    const bytes = fsOps.readFileSync(file);
+    const truncated = bytes.length > MAX_TEXT_BYTES;
+    const text = new TextDecoder("utf-8").decode(bytes.subarray(0, MAX_TEXT_BYTES));
+    return { text, truncated, mtime: stat.mtimeMs ?? null };
+  } catch {
+    return null;
+  }
+}
+function listDirectory(directory, fsOps) {
+  try {
+    return fsOps.readdirSync(directory);
+  } catch {
+    return [];
+  }
+}
+function parseCardFields(text = "") {
+  const fields = {};
+  for (const line of text.split(/\r?\n/u)) {
+    const match = line.match(/^\s*(?:[-*]\s*)?\**([^:：*\n]{1,40}?)\**\s*[:：]\s*(.+)$/u);
+    if (!match) continue;
+    const key = match[1].trim();
+    if (!(key in fields)) fields[key] = match[2].trim();
+  }
+  return fields;
+}
+function parseAuthor(text = "") {
+  const line = text.split(/\r?\n/u).slice(0, 12).find((item) => /^\s*(?:[-*]\s*)?\**\s*(Author|作者)\s*\**\s*[:：]/iu.test(item));
+  if (!line) return null;
+  const value2 = line.replace(/^[^:：]*[:：]\s*/u, "");
+  for (const [pattern, label] of AUTHOR_LABELS) if (pattern.test(value2)) return label;
+  return "other";
+}
+function firstHeading(text = "") {
+  const heading = text.split(/\r?\n/u).find((line) => /^#{1,3}\s+\S/u.test(line));
+  return heading ? heading.replace(/^#{1,3}\s+/u, "").trim() : null;
+}
+function parseMarkdownTables(text = "") {
+  const tables = [];
+  let current = null;
+  const cells = (line) => line.trim().replace(/^\|/u, "").replace(/\|$/u, "").split("|").map((cell) => cell.trim());
+  for (const line of text.split(/\r?\n/u)) {
+    if (!/^\s*\|.*\|\s*$/u.test(line)) {
+      if (current) tables.push(current);
+      current = null;
+      continue;
+    }
+    const row = cells(line);
+    if (row.every((cell) => /^:?-+:?$/u.test(cell))) continue;
+    if (!current) current = { header: row, rows: [] };
+    else current.rows.push(row);
+  }
+  if (current) tables.push(current);
+  return tables;
+}
+function collectRounds(directory, fsOps) {
+  const byNumber = /* @__PURE__ */ new Map();
+  for (const name of listDirectory(directory, fsOps)) {
+    const match = name.match(ROUND_FILE);
+    if (!match) continue;
+    const number = Number(match[1]);
+    const kind = match[2].toLowerCase();
+    const file = readText(path9.join(directory, name), fsOps);
+    if (!file) continue;
+    const entry = byNumber.get(number) ?? { number, label: match[1] };
+    entry[kind] = { file: name, truncated: file.truncated, mtime: file.mtime };
+    if (kind === "brief") {
+      entry.author = parseAuthor(file.text);
+      entry.title = firstHeading(file.text);
+    }
+    byNumber.set(number, entry);
+  }
+  return [...byNumber.values()].sort((left, right) => right.number - left.number).slice(0, MAX_ROUNDS);
+}
+function evaluationSummary(evaluation) {
+  const tables = parseMarkdownTables(evaluation.text);
+  return { mtime: evaluation.mtime, truncated: evaluation.truncated, tables, text: tables.length ? null : evaluation.text };
+}
+function summarizeProject(root, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs6;
+  const research = path9.join(root, RESEARCH_ROOT);
+  let exists = false;
+  try {
+    exists = fsOps.lstatSync(root).isDirectory();
+  } catch {
+    exists = false;
+  }
+  const identity = readText(path9.join(research, "IDENTITY.md"), fsOps);
+  const evaluation = readText(path9.join(research, "EVAL.md"), fsOps);
+  const doctor = readText(path9.join(root, ".dove/install/DOCTOR.md"), fsOps);
+  const rounds = exists ? collectRounds(path9.join(research, "rounds"), fsOps) : [];
+  const fields = identity ? parseCardFields(identity.text) : {};
+  const current = identity ? parseDoveCurrentRound(identity.text) : null;
+  const statusMatch = identity?.text.match(/^Round status:[ \t]*(.+)$/mu)?.[1]?.trim() ?? null;
+  const times = [identity?.mtime, evaluation?.mtime, ...rounds.flatMap((round) => [round.brief?.mtime, round.result?.mtime])].filter((value2) => typeof value2 === "number");
+  return {
+    root,
+    name: path9.basename(root),
+    exists,
+    mainline: fields.Mainline ?? fields["\u4E3B\u7EBF"] ?? null,
+    currentRound: current?.brief ?? null,
+    roundStatus: statusMatch,
+    lastActivity: times.length ? Math.max(...times) : null,
+    identity: identity ? { text: identity.text, truncated: identity.truncated, mtime: identity.mtime } : null,
+    evaluation: evaluation ? evaluationSummary(evaluation) : null,
+    rounds,
+    doctor: doctor ? { mtime: doctor.mtime } : null
+  };
+}
+var NAMED_DOCUMENTS = { "EVAL.md": `${RESEARCH_ROOT}/EVAL.md`, "DOCTOR.md": ".dove/install/DOCTOR.md" };
+function readProjectDocument(root, name, options2 = {}) {
+  if (typeof name !== "string") return null;
+  const relative = ROUND_FILE.test(name) ? `${RESEARCH_ROOT}/rounds/${name}` : NAMED_DOCUMENTS[name];
+  return relative ? readText(path9.join(root, relative), options2.fsOps ?? fs6) : null;
+}
+function collectDashboard(options2 = {}) {
+  const roots = options2.projects ?? readRegisteredProjects(options2);
+  const projects = roots.map((root) => summarizeProject(root, options2)).filter((project) => project.exists && (project.identity || project.evaluation || project.rounds.length));
+  projects.sort((left, right) => (right.lastActivity ?? 0) - (left.lastActivity ?? 0));
+  return { generatedAt: new Date(options2.now ?? Date.now()).toISOString(), version: options2.packageVersion ?? null, projects };
+}
+
+// src/core/dove-lifecycle.mjs
+import fs14 from "node:fs";
+
+// src/core/project-installation.mjs
+import fs13 from "node:fs";
+import path15 from "node:path";
+
+// src/core/file-set-transaction.mjs
+import crypto2 from "node:crypto";
+import fs7 from "node:fs";
+import path10 from "node:path";
 var MAX_CLEANUP_WARNINGS = 20;
 var ENTRY_FIELDS = /* @__PURE__ */ new Set(["root", "relativePath", "content", "encoding", "force", "delete", "deleteEmptyDirectory", "expectedState", "label"]);
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 function sha256(content) {
-  return crypto.createHash("sha256").update(content).digest("hex");
+  return crypto2.createHash("sha256").update(content).digest("hex");
 }
 function state(anchor, relativePath) {
   const stat = anchor.tryLstat(relativePath);
@@ -16343,10 +17050,10 @@ function expectedState(raw, index) {
 }
 function parentDirectories(relativePath) {
   const directories = [];
-  let current = path7.posix.dirname(relativePath);
+  let current = path10.posix.dirname(relativePath);
   while (current !== ".") {
     directories.push(current);
-    current = path7.posix.dirname(current);
+    current = path10.posix.dirname(current);
   }
   return directories.reverse();
 }
@@ -16375,7 +17082,7 @@ function removeNewTransactionParents(anchor, transaction) {
   }
 }
 function assertNoUnexpectedChildren(entry, resolved) {
-  const scheduledChildren = new Set(resolved.filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path7.posix.dirname(candidate.relativePath) === entry.relativePath).map((candidate) => path7.posix.basename(candidate.relativePath)));
+  const scheduledChildren = new Set(resolved.filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path10.posix.dirname(candidate.relativePath) === entry.relativePath).map((candidate) => path10.posix.basename(candidate.relativePath)));
   const unexpected = entry.anchor.readdir(entry.relativePath).map((child) => typeof child === "string" ? child : child.name).filter((child) => !scheduledChildren.has(child));
   if (unexpected.length > 0) {
     throw new Error(`Transactional directory deletion found an unscheduled child: ${entry.relativePath}/${unexpected.sort().join(`, ${entry.relativePath}/`)}.`);
@@ -16393,8 +17100,8 @@ function committedResult(entries, cleanupFailures) {
 }
 function writeFileSetTransaction(entries, options2 = {}) {
   if (!Array.isArray(entries)) throw new Error("Transactional write entries must be an array.");
-  const fsOps = options2.fsOps ?? fs4;
-  const transactionId = (options2.transactionId ?? crypto.randomUUID()).replace(/[^a-z0-9._-]/giu, "-");
+  const fsOps = options2.fsOps ?? fs7;
+  const transactionId = (options2.transactionId ?? crypto2.randomUUID()).replace(/[^a-z0-9._-]/giu, "-");
   const anchors = /* @__PURE__ */ new Map();
   const resolved = [];
   const targets = /* @__PURE__ */ new Set();
@@ -16402,7 +17109,7 @@ function writeFileSetTransaction(entries, options2 = {}) {
   const promotions = [];
   const createdDirectories = /* @__PURE__ */ new Map();
   const anchorFor = (root) => {
-    const canonicalRoot = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path7.resolve(root)) : fsOps.realpathSync(path7.resolve(root));
+    const canonicalRoot = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path10.resolve(root)) : fsOps.realpathSync(path10.resolve(root));
     if (!anchors.has(canonicalRoot)) anchors.set(canonicalRoot, openRootedFilesystem(canonicalRoot, { fsOps }));
     return anchors.get(canonicalRoot);
   };
@@ -16450,8 +17157,8 @@ function writeFileSetTransaction(entries, options2 = {}) {
     }
     for (const [index, entry] of resolved.entries()) {
       if (entry.deleting) continue;
-      const parent = path7.posix.dirname(entry.relativePath);
-      const temporaryName = `.${path7.posix.basename(entry.relativePath)}.${transactionId}.${index}.tmp`;
+      const parent = path10.posix.dirname(entry.relativePath);
+      const temporaryName = `.${path10.posix.basename(entry.relativePath)}.${transactionId}.${index}.tmp`;
       entry.stagedPath = parent === "." ? temporaryName : `${parent}/${temporaryName}`;
       ensureParentDirectories(entry.anchor, entry.relativePath, createdDirectories.get(entry.anchor));
       entry.anchor.writeNewFile(entry.stagedPath, entry.content);
@@ -16533,71 +17240,8 @@ function writeFileSetTransaction(entries, options2 = {}) {
 }
 
 // src/core/project-installation-manifest.mjs
-import fs6 from "node:fs";
-import path9 from "node:path";
-
-// src/core/package-metadata.mjs
-import fs5 from "node:fs";
-import path8 from "node:path";
-import { fileURLToPath } from "node:url";
-var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.3.1" : null;
-function parseSemver(value2) {
-  const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
-  if (!match) return null;
-  const prerelease = match[4]?.split(".") ?? [];
-  if (prerelease.some((identifier) => /^\d+$/u.test(identifier) && identifier.length > 1 && identifier.startsWith("0"))) return null;
-  return { core: match.slice(1, 4), prerelease };
-}
-function compareNumericIdentifier(left, right) {
-  if (left.length !== right.length) return left.length < right.length ? -1 : 1;
-  return left === right ? 0 : left < right ? -1 : 1;
-}
-function comparePrereleaseIdentifier(left, right) {
-  const leftNumeric = /^\d+$/u.test(left);
-  const rightNumeric = /^\d+$/u.test(right);
-  if (leftNumeric && rightNumeric) return compareNumericIdentifier(left, right);
-  if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
-  return left === right ? 0 : left < right ? -1 : 1;
-}
-function comparePackageVersions(left, right) {
-  const leftParts = parseSemver(left);
-  const rightParts = parseSemver(right);
-  if (!leftParts || !rightParts) return null;
-  for (let index = 0; index < leftParts.core.length; index += 1) {
-    const order = compareNumericIdentifier(leftParts.core[index], rightParts.core[index]);
-    if (order !== 0) return order;
-  }
-  if (leftParts.prerelease.length === 0 || rightParts.prerelease.length === 0) {
-    if (leftParts.prerelease.length === rightParts.prerelease.length) return 0;
-    return leftParts.prerelease.length === 0 ? 1 : -1;
-  }
-  const count = Math.max(leftParts.prerelease.length, rightParts.prerelease.length);
-  for (let index = 0; index < count; index += 1) {
-    if (leftParts.prerelease[index] === void 0) return -1;
-    if (rightParts.prerelease[index] === void 0) return 1;
-    const order = comparePrereleaseIdentifier(leftParts.prerelease[index], rightParts.prerelease[index]);
-    if (order !== 0) return order;
-  }
-  return 0;
-}
-function classifyPackageCompatibility(candidate, expected) {
-  if (!candidate || !expected || candidate.name !== expected.name) return "identity-mismatch";
-  const order = comparePackageVersions(candidate.version, expected.version);
-  if (order === null) return "invalid-version";
-  if (order > 0) return "newer";
-  if (order < 0) return "older";
-  return "current";
-}
-function sourcePackage() {
-  const packagePath = path8.resolve(path8.dirname(fileURLToPath(import.meta.url)), "../..", "package.json");
-  return JSON.parse(fs5.readFileSync(packagePath, "utf8"));
-}
-var packageMetadata = injectedName && injectedVersion ? { name: injectedName, version: injectedVersion } : sourcePackage();
-if (typeof packageMetadata.name !== "string" || !packageMetadata.name) throw new Error("Dove package name is invalid.");
-if (!parseSemver(packageMetadata.version)) throw new Error("Dove package version is invalid.");
-var PACKAGE_NAME = packageMetadata.name;
-var PACKAGE_VERSION = packageMetadata.version;
+import fs8 from "node:fs";
+import path11 from "node:path";
 
 // src/core/schema.mjs
 var ARTIFACT_PATHS = Object.freeze({
@@ -16660,10 +17304,10 @@ function exactIsoTimestamp(value2, label) {
 }
 function canonicalProjectRelativePath(value2, label) {
   nonEmptyString(value2, label);
-  if (value2.includes("\\") || path9.posix.isAbsolute(value2) || /^[A-Za-z]:[\\/]/u.test(value2)) {
+  if (value2.includes("\\") || path11.posix.isAbsolute(value2) || /^[A-Za-z]:[\\/]/u.test(value2)) {
     throw new Error(`${label} must be a project-relative path without backslashes: ${value2}`);
   }
-  const normalized = path9.posix.normalize(value2);
+  const normalized = path11.posix.normalize(value2);
   if (normalized !== value2 || normalized === "." || normalized === ".." || normalized.startsWith("../") || value2.includes("//") || value2.endsWith("/")) {
     throw new Error(`${label} must be one canonical project-relative path: ${value2}`);
   }
@@ -16694,7 +17338,7 @@ function validateManagedEntry(entry, index) {
   assertFields(entry, MANAGED_FIELDS, label);
   canonicalProjectRelativePath(entry.path, `${label}.path`);
   if (MANAGED_REFERENCE_PATHS.has(entry.path) && (entry.kind !== "exclusive-file" || entry.selector !== null)) {
-    throw new Error(`${label} must own ${path9.posix.basename(entry.path)} as one exclusive file.`);
+    throw new Error(`${label} must own ${path11.posix.basename(entry.path)} as one exclusive file.`);
   }
   if (!MANAGED_KINDS.has(entry.kind)) throw new Error(`${label}.kind is unsupported: ${entry.kind}.`);
   if (entry.kind === "exclusive-file") {
@@ -16797,12 +17441,12 @@ function lstatOrNull(fsOps, targetPath) {
   }
 }
 function inspectManifestFile(root, fsOps, manifestRelativePath) {
-  const installationDirectory = path9.join(root, path9.posix.dirname(manifestRelativePath));
+  const installationDirectory = path11.join(root, path11.posix.dirname(manifestRelativePath));
   const directoryStat = lstatOrNull(fsOps, installationDirectory);
   if (directoryStat === null) throw new Error(`Dove project installation manifest is missing: ${manifestRelativePath}.`);
   if (directoryStat.isSymbolicLink()) throw new Error(`Dove project installation directory must not be a symbolic link: ${installationDirectory}.`);
   if (!directoryStat.isDirectory()) throw new Error(`Dove project installation path must be a directory: ${installationDirectory}.`);
-  const manifestPath = path9.join(root, manifestRelativePath);
+  const manifestPath = path11.join(root, manifestRelativePath);
   const stat = lstatOrNull(fsOps, manifestPath);
   if (stat === null) throw new Error(`Dove project installation manifest is missing: ${manifestRelativePath}.`);
   if (stat.isSymbolicLink()) throw new Error(`Dove project installation manifest must not be a symbolic link: ${manifestRelativePath}.`);
@@ -16810,10 +17454,10 @@ function inspectManifestFile(root, fsOps, manifestRelativePath) {
   return manifestPath;
 }
 function readProjectInstallationManifest(root, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs6;
-  const doveStat = lstatOrNull(fsOps, path9.join(root, ".dove"));
+  const fsOps = options2.fsOps ?? fs8;
+  const doveStat = lstatOrNull(fsOps, path11.join(root, ".dove"));
   if (doveStat && (doveStat.isSymbolicLink() || !doveStat.isDirectory())) throw new Error("Dove installation parent .dove must be a real directory.");
-  if (lstatOrNull(fsOps, path9.join(root, ".dove-install")) !== null) throw new Error("Dove found unsupported legacy installation state; resolve it explicitly without automatic migration or cleanup.");
+  if (lstatOrNull(fsOps, path11.join(root, ".dove-install")) !== null) throw new Error("Dove found unsupported legacy installation state; resolve it explicitly without automatic migration or cleanup.");
   const manifestPath = inspectManifestFile(root, fsOps, INSTALLATION_MANIFEST_PATH);
   try {
     const parsed2 = JSON.parse(fsOps.readFileSync(manifestPath, "utf8"));
@@ -16825,8 +17469,8 @@ function readProjectInstallationManifest(root, options2 = {}) {
 }
 
 // src/core/project-installation-plan.mjs
-import fs8 from "node:fs";
-import path11 from "node:path";
+import fs10 from "node:fs";
+import path13 from "node:path";
 
 // src/core/paper-search-integration.mjs
 var PAPER_SEARCH_MCP_SERVER_NAME = "dove-paper-search";
@@ -16865,15 +17509,15 @@ Use the pinned \`dove-paper-search\` project MCP only when academic paper discov
 }
 
 // src/core/project-installation-resources.mjs
-import crypto2 from "node:crypto";
+import crypto3 from "node:crypto";
 
 // scripts/generate-command-adapters.mjs
-import fs7 from "node:fs";
-import path10 from "node:path";
+import fs9 from "node:fs";
+import path12 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var __filename = fileURLToPath2(import.meta.url);
-var __dirname = path10.dirname(__filename);
-var PACKAGE_ROOT = path10.resolve(__dirname, "..");
+var __dirname = path12.dirname(__filename);
+var PACKAGE_ROOT = path12.resolve(__dirname, "..");
 function markdownTitle(command3) {
   return command3.title.replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -17036,7 +17680,7 @@ var STATUS_LINE_SELECTOR = "/statusLine[dove-project-directory]";
 var CLAUDE_HOST = "claude";
 var FORBIDDEN_RESOURCE_PREFIXES = [".dove/", "bin/", "dist/", "mcp/", "scripts/"];
 function sha2562(content) {
-  return crypto2.createHash("sha256").update(content).digest("hex");
+  return crypto3.createHash("sha256").update(content).digest("hex");
 }
 function canonicalJson(value2) {
   if (value2 === null || typeof value2 !== "object") return JSON.stringify(value2);
@@ -17176,8 +17820,8 @@ function desiredManaged(resources) {
 }
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path18) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path18 === "$" ? key : `${path18}.${key}`}.`);
+function duplicateKeyError(label, key, path19) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path19 === "$" ? key : `${path19}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -17213,7 +17857,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path18) {
+  function parseArray(path19) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -17222,7 +17866,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path18}[${itemIndex}]`);
+      parseValue(`${path19}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -17234,7 +17878,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path18) {
+  function parseObject(path19) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -17244,12 +17888,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path18);
+      if (keys.has(key)) duplicateKeyError(label, key, path19);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path18 === "$" ? `$.${key}` : `${path18}.${key}`);
+      parseValue(path19 === "$" ? `$.${key}` : `${path19}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -17260,11 +17904,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path18) {
+  function parseValue(path19) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path18);
-    else if (character === "[") parseArray(path18);
+    if (character === "{") parseObject(path19);
+    else if (character === "[") parseArray(path19);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -17296,11 +17940,11 @@ function lstatOrNull2(fsOps, targetPath) {
     throw error;
   }
 }
-function inspectRegularProjectFile(root, relativePath, fsOps = fs8) {
+function inspectRegularProjectFile(root, relativePath, fsOps = fs10) {
   let current = root;
   const components = relativePath.split("/");
   for (const [index, component] of components.entries()) {
-    current = path11.join(current, component);
+    current = path13.join(current, component);
     const stat = lstatOrNull2(fsOps, current);
     if (stat === null) return { exists: false, bytes: null, digest: null, mode: null, type: "absent" };
     if (stat.isSymbolicLink()) throw new Error(`Dove project integration path must not be a symbolic link: ${relativePath}.`);
@@ -17556,7 +18200,7 @@ function addFragment(resource, value2) {
   }
   throw new Error(`Dove does not install unsupported project-local fragment ${resource.path}#${resource.selector}.`);
 }
-function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps = fs8, options2 = {}) {
+function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps = fs10, options2 = {}) {
   const replaceDrift = shouldReplaceLocalEdit(options2);
   const skipDrift = shouldSkipLocalEdit(options2);
   const observed = inspectRegularProjectFile(root, relativePath, fsOps);
@@ -17699,7 +18343,7 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
     retiredHooks
   };
 }
-function planResource(root, desired, oldEntry, fsOps = fs8, options2 = {}) {
+function planResource(root, desired, oldEntry, fsOps = fs10, options2 = {}) {
   const kind = desired?.kind ?? oldEntry.kind;
   if (kind === "exclusive-file") return planExclusive(root, desired, oldEntry, fsOps, options2);
   throw new Error(`Unsupported project integration resource kind: ${kind}.`);
@@ -17713,7 +18357,7 @@ function assertManagedOwnership(manifest) {
     }
   }
 }
-function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs8, manifest = null, replacementPolicy = "safe" }) {
+function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs10, manifest = null, replacementPolicy = "safe" }) {
   if (manifest && ["identity-mismatch", "invalid-version", "newer"].includes(classifyPackageCompatibility(manifest.package, { name: packageName, version: packageVersion }))) {
     throw new Error("Dove project integration package is incompatible with the running CLI.");
   }
@@ -17793,15 +18437,15 @@ function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs
 }
 
 // src/core/project-root.mjs
-import fs9 from "node:fs";
-import path12 from "node:path";
-var INSTALLATION_DIRECTORY = path12.posix.dirname(INSTALLATION_MANIFEST_PATH);
+import fs11 from "node:fs";
+import path14 from "node:path";
+var INSTALLATION_DIRECTORY = path14.posix.dirname(INSTALLATION_MANIFEST_PATH);
 function realpathNative2(fsOps, targetPath) {
   return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
 }
 function canonicalExistingDirectory(value2, label, fsOps) {
   if (typeof value2 !== "string" || !value2.trim() || value2.includes("\0")) throw new Error(`${label} must name an existing directory.`);
-  const resolved = path12.resolve(value2);
+  const resolved = path14.resolve(value2);
   let stat;
   try {
     stat = fsOps.statSync(resolved);
@@ -17817,7 +18461,7 @@ function parentDirectories2(start) {
   let current = start;
   while (true) {
     directories.push(current);
-    const parent = path12.dirname(current);
+    const parent = path14.dirname(current);
     if (parent === current) return directories;
     current = parent;
   }
@@ -17836,16 +18480,16 @@ function preservedInstallationDirectory(directoryPath, directoryStat, fsOps) {
   const children = fsOps.readdirSync(directoryPath).map(String).sort();
   if (children.length > 1 || children.length === 1 && children[0] !== "DOCTOR.md") return false;
   if (children.length === 0) return true;
-  const doctorStat = lstatOrNull3(fsOps, path12.join(directoryPath, "DOCTOR.md"));
+  const doctorStat = lstatOrNull3(fsOps, path14.join(directoryPath, "DOCTOR.md"));
   return doctorStat?.isFile() === true && !doctorStat.isSymbolicLink();
 }
 function installationStateAt(root, options2) {
-  const fsOps = options2.fsOps ?? fs9;
-  const doveStat = lstatOrNull3(fsOps, path12.join(root, ".dove"));
+  const fsOps = options2.fsOps ?? fs11;
+  const doveStat = lstatOrNull3(fsOps, path14.join(root, ".dove"));
   if (doveStat && (doveStat.isSymbolicLink() || !doveStat.isDirectory())) throw new Error(`Dove installation parent must be a real directory: ${root}/.dove.`);
-  if (lstatOrNull3(fsOps, path12.join(root, ".dove-install")) !== null) throw legacyInitError(root);
-  const directoryPath = path12.join(root, INSTALLATION_DIRECTORY);
-  const manifestPath = path12.join(root, INSTALLATION_MANIFEST_PATH);
+  if (lstatOrNull3(fsOps, path14.join(root, ".dove-install")) !== null) throw legacyInitError(root);
+  const directoryPath = path14.join(root, INSTALLATION_DIRECTORY);
+  const manifestPath = path14.join(root, INSTALLATION_MANIFEST_PATH);
   const manifestStat = lstatOrNull3(fsOps, manifestPath);
   if (manifestStat === null) {
     const directoryStat2 = lstatOrNull3(fsOps, directoryPath);
@@ -17871,7 +18515,7 @@ function setupEvidenceAt(root, fsOps) {
     LEGACY_INSTALLATION_MANIFEST_PATH
   ];
   for (const relativePath of paths) {
-    const target = path12.join(root, relativePath);
+    const target = path14.join(root, relativePath);
     const stat = lstatOrNull3(fsOps, target);
     if (stat === null) continue;
     if (stat.isSymbolicLink() || !stat.isFile()) {
@@ -17880,7 +18524,7 @@ function setupEvidenceAt(root, fsOps) {
     return { state: "marker", relativePath };
   }
   for (const relativePath of [INSTALLATION_DIRECTORY, ".dove-install"]) {
-    const target = path12.join(root, relativePath);
+    const target = path14.join(root, relativePath);
     const stat = lstatOrNull3(fsOps, target);
     if (stat === null) continue;
     if (stat.isSymbolicLink() || !stat.isDirectory()) {
@@ -17896,7 +18540,7 @@ function legacyInitError(root) {
 }
 function gitRootFrom(start, fsOps) {
   for (const directory of parentDirectories2(start)) {
-    const dotGit = path12.join(directory, ".git");
+    const dotGit = path14.join(directory, ".git");
     const stat = lstatOrNull3(fsOps, dotGit);
     if (stat === null) continue;
     if (stat.isSymbolicLink()) throw new Error(`Git project marker must not be a symbolic link: ${dotGit}.`);
@@ -17909,7 +18553,7 @@ function initRequiredError(start) {
   return new Error(`Dove project integration is not initialized from ${start}. Run 'dove init' from the project root, or use 'dove init --project <dir>'.`);
 }
 function resolveProjectRootForInit(project, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs9;
+  const fsOps = options2.fsOps ?? fs11;
   const explicitProject = project !== void 0 && project !== null;
   const candidateInput = explicitProject ? project : options2.cwd ?? process.cwd();
   const candidate = canonicalExistingDirectory(candidateInput, explicitProject ? "Dove project" : "Current working directory", fsOps);
@@ -17930,19 +18574,19 @@ function resolveProjectRootForInit(project, options2 = {}) {
   return !explicitProject && gitRoot !== null ? gitRoot : candidate;
 }
 function packageProjectBoundary(directory, fsOps) {
-  const packageJson = lstatOrNull3(fsOps, path12.join(directory, "package.json"));
-  const nodeModules = lstatOrNull3(fsOps, path12.join(directory, "node_modules"));
+  const packageJson = lstatOrNull3(fsOps, path14.join(directory, "package.json"));
+  const nodeModules = lstatOrNull3(fsOps, path14.join(directory, "node_modules"));
   return packageJson?.isFile() && !packageJson.isSymbolicLink() && nodeModules?.isDirectory() && !nodeModules.isSymbolicLink();
 }
 function resolveProjectRootForSetup(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs9;
+  const fsOps = options2.fsOps ?? fs11;
   const candidate = canonicalExistingDirectory(start ?? options2.cwd ?? process.cwd(), "Dove project setup start", fsOps);
   for (const directory of parentDirectories2(candidate)) {
     if (setupEvidenceAt(directory, fsOps).state !== "absent") return directory;
-    const dotGit = lstatOrNull3(fsOps, path12.join(directory, ".git"));
+    const dotGit = lstatOrNull3(fsOps, path14.join(directory, ".git"));
     if (dotGit !== null) {
       if (dotGit.isSymbolicLink() || !dotGit.isDirectory() && !dotGit.isFile()) {
-        throw new Error(`Git project marker must be a file or directory: ${path12.join(directory, ".git")}.`);
+        throw new Error(`Git project marker must be a file or directory: ${path14.join(directory, ".git")}.`);
       }
       return directory;
     }
@@ -17951,20 +18595,20 @@ function resolveProjectRootForSetup(start, options2 = {}) {
   return candidate;
 }
 function resolveInstalledProjectRoot(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs9;
+  const fsOps = options2.fsOps ?? fs11;
   const startingDirectory = canonicalExistingDirectory(start ?? options2.cwd ?? process.cwd(), "Dove project search start", fsOps);
   for (const directory of parentDirectories2(startingDirectory)) {
     const installation = installationStateAt(directory, options2);
     if (installation.state === "initialized") return directory;
     if (installation.state === "residue") throw new Error(`Dove installation state is incomplete at ${directory}.`);
-    if (lstatOrNull3(fsOps, path12.join(directory, ".git")) !== null || packageProjectBoundary(directory, fsOps)) break;
+    if (lstatOrNull3(fsOps, path14.join(directory, ".git")) !== null || packageProjectBoundary(directory, fsOps)) break;
   }
   throw initRequiredError(startingDirectory);
 }
 function resolveExactInstalledProjectRoot(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs9;
+  const fsOps = options2.fsOps ?? fs11;
   if (typeof start !== "string" || !start.trim() || start.includes("\0")) throw new Error("Dove hook project must name an initialized project root.");
-  const resolved = path12.resolve(start);
+  const resolved = path14.resolve(start);
   const stat = lstatOrNull3(fsOps, resolved);
   if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove hook project must be a real directory: ${resolved}.`);
   const root = realpathNative2(fsOps, resolved);
@@ -17975,7 +18619,7 @@ function resolveExactInstalledProjectRoot(start, options2 = {}) {
 function inspectProjectRoot(start, options2 = {}) {
   let canonicalStart = null;
   try {
-    canonicalStart = canonicalExistingDirectory(start ?? options2.cwd ?? process.cwd(), "Dove project search start", options2.fsOps ?? fs9);
+    canonicalStart = canonicalExistingDirectory(start ?? options2.cwd ?? process.cwd(), "Dove project search start", options2.fsOps ?? fs11);
     const root = resolveInstalledProjectRoot(canonicalStart, options2);
     return Object.freeze({ state: "initialized", initialized: true, start: canonicalStart, root, error: null });
   } catch (error) {
@@ -17992,15 +18636,15 @@ function inspectProjectRoot(start, options2 = {}) {
 }
 
 // src/core/research-defaults.mjs
-import fs10 from "node:fs";
-var RESEARCH_ROOT = ARTIFACT_PATHS.researchDocumentsDir;
+import fs12 from "node:fs";
+var RESEARCH_ROOT2 = ARTIFACT_PATHS.researchDocumentsDir;
 var RESEARCH_DEFAULT_PATHS = Object.freeze({
-  root: RESEARCH_ROOT,
+  root: RESEARCH_ROOT2,
   overview: ARTIFACT_PATHS.researchOverview,
   identity: DOVE_IDENTITY_CARD_PATH,
-  evaluation: `${RESEARCH_ROOT}/EVAL.md`,
-  roundsDirectory: `${RESEARCH_ROOT}/rounds`,
-  lessonsDirectory: `${RESEARCH_ROOT}/lessons`,
+  evaluation: `${RESEARCH_ROOT2}/EVAL.md`,
+  roundsDirectory: `${RESEARCH_ROOT2}/rounds`,
+  lessonsDirectory: `${RESEARCH_ROOT2}/lessons`,
   lessonsSummary: ARTIFACT_PATHS.researchLessons
 });
 var RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
@@ -18009,12 +18653,12 @@ var RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
     content: "# Research\n\nCurrent work uses `IDENTITY.md`, `EVAL.md`, and `rounds/` (briefs and results). Confirm inception from the user's originals first, then let the mentor define the evaluation. Keep this file a short index to existing history; leave historical missions, experiments, and claims in place.\n"
   })
 ]);
-var RESEARCH_DEFAULT_DIRECTORY_PATHS = Object.freeze([RESEARCH_ROOT]);
+var RESEARCH_DEFAULT_DIRECTORY_PATHS = Object.freeze([RESEARCH_ROOT2]);
 function prepareResearchDefaults(root, options2 = {}) {
-  const anchor = openRootedFilesystem(root, { fsOps: options2.fsOps ?? fs10 });
-  const directory = anchor.tryLstat(RESEARCH_ROOT);
+  const anchor = openRootedFilesystem(root, { fsOps: options2.fsOps ?? fs12 });
+  const directory = anchor.tryLstat(RESEARCH_ROOT2);
   if (directory && (directory.isSymbolicLink() || !directory.isDirectory())) {
-    throw new Error(`${RESEARCH_ROOT} must be a real directory.`);
+    throw new Error(`${RESEARCH_ROOT2} must be a real directory.`);
   }
   const entries = directory ? [] : RESEARCH_DEFAULT_DOCUMENTS.map(({ path: relativePath, content }) => ({
     root,
@@ -18064,7 +18708,7 @@ function transactionOptions(fsOps, options2 = {}) {
   return { ...options2, fsOps };
 }
 function initializeProjectIntegration(rootOrProject, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs11;
+  const fsOps = options2.fsOps ?? fs13;
   assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const hosts = normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: true });
   const now = exactTimestamp(options2.now);
@@ -18080,7 +18724,7 @@ function initializeProjectIntegration(rootOrProject, options2 = {}) {
   );
 }
 function prepareInstalledPlan(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs11;
+  const fsOps = options2.fsOps ?? fs13;
   const root = resolveInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
   const hosts = options2.hosts === void 0 ? [...manifest.hosts] : normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: false });
@@ -18099,7 +18743,7 @@ function updateProjectIntegration(start, options2 = {}) {
   return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", prepared.root, prepared.hosts, prepared.manifest, transaction, prepared);
 }
 function syncProjectIntegration(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs11;
+  const fsOps = options2.fsOps ?? fs13;
   const root = resolveExactInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
   const inspected = prepareInstalledPlan(root, { ...options2, fsOps, replacementPolicy: "auto-inspect" });
   if (inspected.skippedLocalEdits.length > 0) {
@@ -18129,7 +18773,7 @@ function inspectProjectIntegration(start, options2 = {}) {
   };
 }
 function canonicalLifecycleRoot(start, fsOps) {
-  const resolved = path13.resolve(start ?? process.cwd());
+  const resolved = path15.resolve(start ?? process.cwd());
   const stat = fsOps.lstatSync(resolved);
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove lifecycle project root must be a real directory: ${resolved}.`);
   return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
@@ -18141,7 +18785,7 @@ function prepareLifecycleIntegration(root, options2, { hosts, source }) {
     packageName: options2.packageName,
     packageVersion: options2.packageVersion,
     now: exactTimestamp(options2.now),
-    fsOps: options2.fsOps ?? fs11,
+    fsOps: options2.fsOps ?? fs13,
     manifest: source,
     replacementPolicy: "confirmed-reinstall"
   });
@@ -18177,7 +18821,7 @@ function previewShape(kind, root, hosts, prepared, confirmationRequired) {
   return preview;
 }
 function previewProjectCompleteReinstall(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs11;
+  const fsOps = options2.fsOps ?? fs13;
   assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
@@ -18200,7 +18844,7 @@ function reinstallPreviewScope(preview) {
 function completeReinstallProjectIntegration(start, options2 = {}) {
   if (options2.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true after displaying the real destructive scope.");
   if (!options2.preview || options2.preview.action !== "reinstall") throw new Error("Complete Reinstall requires the approved reinstall preview.");
-  const fsOps = options2.fsOps ?? fs11;
+  const fsOps = options2.fsOps ?? fs13;
   assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
@@ -18225,7 +18869,7 @@ function completeReinstallProjectIntegration(start, options2 = {}) {
   );
 }
 function prepareUninstall(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs11;
+  const fsOps = options2.fsOps ?? fs13;
   const root = canonicalLifecycleRoot(start, fsOps);
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
   assertManagedOwnership(manifest);
@@ -18312,7 +18956,7 @@ function uninstallProjectIntegration(start, options2 = {}) {
 
 // src/core/dove-lifecycle.mjs
 function updateDoveLifecycle(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs12;
+  const fsOps = options2.fsOps ?? fs14;
   const root = resolveProjectRootForSetup(start, { fsOps });
   return updateProjectIntegration(root, options2);
 }
@@ -18326,149 +18970,6 @@ function previewUninstallDoveLifecycle(start, options2 = {}) {
 function uninstallDoveLifecycle(start, options2 = {}) {
   if (options2.confirmed !== true) throw new Error("Dove uninstall requires confirmed: true.");
   return uninstallProjectIntegration(start, options2);
-}
-
-// src/core/project-registry.mjs
-import crypto3 from "node:crypto";
-import fs13 from "node:fs";
-import os2 from "node:os";
-import path14 from "node:path";
-var REGISTRY_NAME = "projects.json";
-var REPORT_NAME = "last-sync.json";
-var LOCK_NAME = ".registry-lock";
-function configDirectory(env = process.env) {
-  const base = env.XDG_CONFIG_HOME || path14.join(env.HOME || os2.homedir(), ".config");
-  if (!path14.isAbsolute(base)) throw new Error("Dove user configuration root must be absolute.");
-  return path14.join(base, "dove");
-}
-function inspectFile(file, fsOps = fs13) {
-  try {
-    const stat = fsOps.lstatSync(file);
-    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Dove user registry requires a regular file: ${file}.`);
-    if (typeof process.getuid === "function" && stat.uid !== process.getuid()) throw new Error(`Dove user registry is not owned by the current user: ${file}.`);
-    if (process.platform !== "win32" && (stat.mode & 63) !== 0) throw new Error(`Dove user registry permissions are too broad: ${file}.`);
-    return true;
-  } catch (error) {
-    if (error?.code === "ENOENT") return false;
-    throw error;
-  }
-}
-function inspectDirectory(directory, fsOps = fs13, privateDirectory = false) {
-  try {
-    const stat = fsOps.lstatSync(directory);
-    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`Dove user registry directory must be real: ${directory}.`);
-    if (privateDirectory && typeof process.getuid === "function" && stat.uid !== process.getuid()) throw new Error(`Dove user registry directory is not owned by the current user: ${directory}.`);
-    if (privateDirectory && process.platform !== "win32" && (stat.mode & 63) !== 0) throw new Error(`Dove user registry directory permissions are too broad: ${directory}.`);
-    return true;
-  } catch (error) {
-    if (error?.code === "ENOENT") return false;
-    throw error;
-  }
-}
-function registryDirectory(options2 = {}, create = false) {
-  const fsOps = options2.fsOps ?? fs13;
-  const directory = configDirectory(options2.env);
-  const base = path14.dirname(directory);
-  if (!inspectDirectory(base, fsOps)) {
-    if (!create) return null;
-    fsOps.mkdirSync(base, { recursive: true, mode: 448 });
-  }
-  const baseStat = fsOps.lstatSync(base);
-  if (typeof process.getuid === "function" && baseStat.uid !== process.getuid()) throw new Error(`Dove user configuration root is not owned by the current user: ${base}.`);
-  if (process.platform !== "win32" && (baseStat.mode & 2) !== 0) throw new Error(`Dove user configuration root is publicly writable: ${base}.`);
-  if (!inspectDirectory(directory, fsOps, true)) {
-    if (!create) return null;
-    fsOps.mkdirSync(directory, { mode: 448 });
-  }
-  return directory;
-}
-function validateProjects(value2) {
-  if (!value2 || typeof value2 !== "object" || Array.isArray(value2) || Object.keys(value2).sort().join(",") !== "projects,revision" || value2.revision !== 1 || !Array.isArray(value2.projects)) throw new Error("Dove user project registry is invalid.");
-  const seen = /* @__PURE__ */ new Set();
-  for (const root of value2.projects) {
-    if (typeof root !== "string" || !path14.isAbsolute(root) || root !== path14.normalize(root) || root.includes("\0") || seen.has(root)) throw new Error("Dove user project registry contains an invalid project root.");
-    seen.add(root);
-  }
-  return value2.projects;
-}
-function readJson(file, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs13;
-  if (!inspectFile(file, fsOps)) return null;
-  return JSON.parse(fsOps.readFileSync(file, "utf8"));
-}
-function writeJson(file, data, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs13;
-  inspectFile(file, fsOps);
-  const temporary = path14.join(path14.dirname(file), `.${path14.basename(file)}.${process.pid}.${crypto3.randomUUID()}.tmp`);
-  try {
-    fsOps.writeFileSync(temporary, `${JSON.stringify(data, null, 2)}
-`, { flag: "wx", mode: 384 });
-    fsOps.renameSync(temporary, file);
-  } finally {
-    if (fsOps.existsSync(temporary)) fsOps.unlinkSync(temporary);
-  }
-}
-function lockedRegistry(options2, operation) {
-  const fsOps = options2.fsOps ?? fs13;
-  const directory = registryDirectory(options2, true);
-  const lock = path14.join(directory, LOCK_NAME);
-  let acquired = false;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      fsOps.mkdirSync(lock, { mode: 448 });
-      acquired = true;
-      break;
-    } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
-    }
-  }
-  if (!acquired) throw new Error(`Dove project registry is locked at ${lock}; another operation may be active, or a prior operation was interrupted. Inspect it before retrying.`);
-  try {
-    return operation(path14.join(directory, REGISTRY_NAME));
-  } finally {
-    fsOps.rmdirSync(lock);
-  }
-}
-function readRegisteredProjects(options2 = {}) {
-  const directory = registryDirectory(options2);
-  if (!directory) return [];
-  const value2 = readJson(path14.join(directory, REGISTRY_NAME), options2);
-  return value2 === null ? [] : [...validateProjects(value2)];
-}
-function changeRegisteredProjects(add, remove = [], options2 = {}) {
-  return lockedRegistry(options2, (file) => {
-    const existing = readJson(file, options2);
-    const roots = existing === null ? [] : validateProjects(existing);
-    for (const root of [...add, ...remove]) {
-      if (typeof root !== "string" || !path14.isAbsolute(root) || root !== path14.normalize(root)) throw new Error("Dove project registration requires an absolute canonical root.");
-    }
-    const next = [.../* @__PURE__ */ new Set([...roots, ...add])].filter((root) => !remove.includes(root)).sort();
-    if (existing === null || JSON.stringify(roots) !== JSON.stringify(next)) writeJson(file, { revision: 1, projects: next }, options2);
-    return next;
-  });
-}
-function readLastProjectSync(options2 = {}) {
-  const directory = registryDirectory(options2);
-  if (!directory) return null;
-  const report = readJson(path14.join(directory, REPORT_NAME), options2);
-  if (report === null) return null;
-  if (!report || report.revision !== 1 || !Array.isArray(report.projects) || typeof report.packageVersion !== "string") throw new Error("Dove last project sync report is invalid.");
-  return report;
-}
-function writeLastProjectSync(report, options2 = {}) {
-  return lockedRegistry(options2, () => {
-    const directory = registryDirectory(options2);
-    const file = path14.join(directory, REPORT_NAME);
-    const prior = readLastProjectSync(options2);
-    if (prior) {
-      const order = comparePackageVersions(prior.packageVersion, report.packageVersion);
-      if (order === null) throw new Error("Dove last project sync report has an invalid package version.");
-      if (order > 0) return false;
-    }
-    writeJson(file, { revision: 1, ...report }, options2);
-    return true;
-  });
 }
 
 // src/core/project-cascade.mjs
@@ -18515,12 +19016,12 @@ function inspectRegisteredProjects(options2 = {}) {
 }
 
 // src/core/project-doctor.mjs
-import fs15 from "node:fs";
-import path15 from "node:path";
+import fs16 from "node:fs";
+import path16 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/core/research-documents.mjs
-import fs14 from "node:fs";
+import fs15 from "node:fs";
 var RESEARCH_DOCUMENT_PATHS = Object.freeze({ ...RESEARCH_DEFAULT_PATHS });
 function readableMarkdown(root, relativePath) {
   const stat = root.tryLstat(relativePath);
@@ -18532,7 +19033,7 @@ function readableMarkdown(root, relativePath) {
 function inspectResearchDocuments(project, options2 = {}) {
   const base = { root: RESEARCH_DOCUMENT_PATHS.root, identity: null, evaluation: null, rounds: null, overview: null };
   try {
-    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs14 });
+    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs15 });
     const directory = root.tryLstat(RESEARCH_DOCUMENT_PATHS.root);
     if (!directory) return { ...base, healthy: true, state: "absent" };
     if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error(`${base.root} must be a real directory.`);
@@ -18566,8 +19067,8 @@ function classifyProjectSetup(result) {
 }
 
 // src/core/project-doctor.mjs
-var MODULE_DIRECTORY = path15.dirname(fileURLToPath3(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path15.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path15.basename(MODULE_DIRECTORY)) ? ".." : "../..");
+var MODULE_DIRECTORY = path16.dirname(fileURLToPath3(import.meta.url));
+var DEFAULT_PACKAGE_ROOT = path16.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path16.basename(MODULE_DIRECTORY)) ? ".." : "../..");
 function messageFor(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -18587,18 +19088,18 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 function inspectUserCli(options2) {
-  const fsOps = options2.fsOps ?? fs15;
-  const packageRoot = path15.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
+  const fsOps = options2.fsOps ?? fs16;
+  const packageRoot = path16.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options2.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
-    const absolutePath = path15.resolve(packageRoot, relativePath);
-    const relative = path15.relative(packageRoot, absolutePath);
-    const contained = relative !== "" && !relative.startsWith("..") && !path15.isAbsolute(relative);
+    const absolutePath = path16.resolve(packageRoot, relativePath);
+    const relative = path16.relative(packageRoot, absolutePath);
+    const contained = relative !== "" && !relative.startsWith("..") && !path16.isAbsolute(relative);
     const healthy2 = contained && regularNonSymlink(fsOps, absolutePath);
     return { path: relativePath, healthy: healthy2, state: healthy2 ? "current" : contained ? "missing-or-invalid" : "outside-package-root" };
   });
-  const executablePath = path15.resolve(options2.executablePath ?? path15.join(packageRoot, "bin/dove-package.mjs"));
-  const executableRelative = path15.relative(packageRoot, executablePath);
-  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path15.isAbsolute(executableRelative);
+  const executablePath = path16.resolve(options2.executablePath ?? path16.join(packageRoot, "bin/dove-package.mjs"));
+  const executableRelative = path16.relative(packageRoot, executablePath);
+  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path16.isAbsolute(executableRelative);
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
   const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
@@ -18710,7 +19211,7 @@ function inspectProjectDoctor(start, options2 = {}) {
   try {
     setupRoot = resolveProjectRootForSetup(start, { fsOps: options2.fsOps });
   } catch {
-    setupRoot = typeof start === "string" ? path15.resolve(start) : null;
+    setupRoot = typeof start === "string" ? path16.resolve(start) : null;
   }
   const projectIntegration = inspectIntegration(start, options2);
   const safeRoot = projectIntegration.root ?? setupRoot;
@@ -18732,8 +19233,8 @@ function inspectProjectDoctor(start, options2 = {}) {
 
 // src/core/run-record.mjs
 import crypto4 from "node:crypto";
-import fs16 from "node:fs";
-import path16 from "node:path";
+import fs17 from "node:fs";
+import path17 from "node:path";
 import process5 from "node:process";
 
 // src/core/run-environment.mjs
@@ -18904,7 +19405,7 @@ function normalizeRunId(value2) {
   return value2;
 }
 function normalizeRunProject(project, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   return resolveInstalledProjectRoot(project ?? options2.cwd ?? process5.cwd(), { fsOps });
 }
 function runRelativePaths(runId) {
@@ -18921,17 +19422,17 @@ function runAbsolutePaths(projectRoot, runId) {
   const relative = runRelativePaths(runId);
   return {
     ...relative,
-    absoluteRunDirectory: path16.join(projectRoot, relative.runDirectory),
-    absoluteJournalPath: path16.join(projectRoot, relative.journalPath),
-    absoluteStdoutPath: path16.join(projectRoot, relative.stdoutPath),
-    absoluteStderrPath: path16.join(projectRoot, relative.stderrPath)
+    absoluteRunDirectory: path17.join(projectRoot, relative.runDirectory),
+    absoluteJournalPath: path17.join(projectRoot, relative.journalPath),
+    absoluteStdoutPath: path17.join(projectRoot, relative.stdoutPath),
+    absoluteStderrPath: path17.join(projectRoot, relative.stderrPath)
   };
 }
 function ensureRunsRoot(projectRoot, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
-  const doveRoot = path16.join(projectRoot, ARTIFACT_PATHS.doveRoot);
+  const fsOps = options2.fsOps ?? fs17;
+  const doveRoot = path17.join(projectRoot, ARTIFACT_PATHS.doveRoot);
   assertRealDirectory(fsOps, doveRoot, "Dove workspace root");
-  const runsRoot = path16.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const runsRoot = path17.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat !== null) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -18947,7 +19448,7 @@ function ensureRunsRoot(projectRoot, options2 = {}) {
   return runsRoot;
 }
 function reserveRunDirectory(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const runId = normalizeRunId(options2.id ?? createRunId({ now: options2.now }));
   ensureRunsRoot(projectRoot, { fsOps });
@@ -18962,13 +19463,13 @@ function reserveRunDirectory(options2 = {}) {
   return { projectRoot, runId, paths };
 }
 function requireRunDirectory(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const paths = runAbsolutePaths(projectRoot, runId);
   assertRealDirectory(fsOps, paths.absoluteRunDirectory, "Dove run directory");
   return paths;
 }
 function tryRunDirectory(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const paths = runAbsolutePaths(projectRoot, runId);
   const stat = lstatOrNull5(fsOps, paths.absoluteRunDirectory);
   if (stat === null) return null;
@@ -18976,9 +19477,9 @@ function tryRunDirectory(projectRoot, runId, options2 = {}) {
   return paths;
 }
 function acquireRunMutationLock(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const paths = requireRunDirectory(projectRoot, runId, { fsOps });
-  const lockPath = path16.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
+  const lockPath = path17.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
   for (let attempt = 0; attempt <= RUN_LOCK_WAIT_MS / RUN_LOCK_RETRY_MS; attempt += 1) {
     try {
       fsOps.mkdirSync(lockPath, { mode: 448 });
@@ -19000,7 +19501,7 @@ function validateRunEvent(value2, expectedRunId, expectedSeq, label) {
   return value2;
 }
 function readRunEvents(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const id = normalizeRunId(runId);
   const paths = requireRunDirectory(projectRoot, id, { fsOps });
   assertRegularFile(fsOps, paths.absoluteJournalPath, "Dove run journal");
@@ -19015,7 +19516,7 @@ function readRunEvents(projectRoot, runId, options2 = {}) {
   });
 }
 function tryReadRunEvents(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const id = normalizeRunId(runId);
   const paths = tryRunDirectory(projectRoot, id, { fsOps });
   if (paths === null) return null;
@@ -19025,7 +19526,7 @@ function tryReadRunEvents(projectRoot, runId, options2 = {}) {
 }
 function appendRunEvents(projectRoot, runId, items, options2 = {}) {
   if (!Array.isArray(items) || items.length === 0) throw new Error("Dove run event append requires at least one event item.");
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const id = normalizeRunId(runId);
   const lock = acquireRunMutationLock(projectRoot, id, { fsOps });
   try {
@@ -19257,8 +19758,8 @@ function summarizeRun(projectRoot, runId, options2 = {}) {
   return summarizeStatus(projectRoot, normalizeRunId(runId), events);
 }
 function runsRootEntries(projectRoot, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
-  const runsRoot = path16.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const fsOps = options2.fsOps ?? fs17;
+  const runsRoot = path17.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat === null) return [];
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -19268,7 +19769,7 @@ function runsRootEntries(projectRoot, options2 = {}) {
   }).sort();
 }
 function listRunSummaries(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const group = normalizeRunGroup(options2.group);
   const runs = [];
@@ -19282,7 +19783,7 @@ function listRunSummaries(options2 = {}) {
   return { command: "status", status: "ok", project: projectRoot, group, runs };
 }
 function inspectRunStatus(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const projectRoot = normalizeRunProject(options2.project, options2);
   if (options2.id !== void 0 && options2.id !== null) {
     if (options2.group !== void 0 && options2.group !== null) throw new Error("Use only one of --id or --group for dove run status.");
@@ -19292,7 +19793,7 @@ function inspectRunStatus(options2 = {}) {
   return listRunSummaries({ ...options2, fsOps, project: projectRoot });
 }
 function appendReconciledInterrupted(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const id = normalizeRunId(runId);
   const event = appendRunEvent(projectRoot, id, "run.reconciled", {
     outcome: "interrupted",
@@ -19319,7 +19820,7 @@ function appendReconciledInterrupted(projectRoot, runId, options2 = {}) {
   return { event, summary: summarizeRun(projectRoot, id, { fsOps }) };
 }
 function appendFinalizedRun(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const root = normalizeRunProject(projectRoot, { fsOps, cwd: options2.cwd });
   const id = normalizeRunId(runId);
   const event = appendRunEvent(root, id, "run.finalized", (events) => {
@@ -19360,7 +19861,7 @@ function selectedRunIds(projectRoot, options2 = {}) {
   return [.../* @__PURE__ */ new Set([...explicitIds, ...byGroup])].sort();
 }
 function compareRuns(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const runIds2 = selectedRunIds(projectRoot, { ...options2, fsOps });
   if (runIds2.length === 0) {
@@ -19419,7 +19920,7 @@ function compareRuns(options2 = {}) {
 
 // src/core/run-supervisor.mjs
 import { spawn as spawn2 } from "node:child_process";
-import fs17 from "node:fs";
+import fs18 from "node:fs";
 import process6 from "node:process";
 var SUPERVISOR_ENTRY = "__dove-run-supervisor";
 var SUPERVISOR_READY_TIMEOUT_MS = 1e4;
@@ -19454,7 +19955,7 @@ function sendSupervisorMessageAsync(message) {
 function closeFd(fd) {
   if (!Number.isInteger(fd)) return;
   try {
-    fs17.closeSync(fd);
+    fs18.closeSync(fd);
   } catch {
   }
 }
@@ -19498,8 +19999,8 @@ function appendTerminalEvent(projectRoot, runId, payload, options2 = {}) {
 }
 function openRunLogFiles(paths) {
   return {
-    stdoutFd: fs17.openSync(paths.absoluteStdoutPath, "wx", 384),
-    stderrFd: fs17.openSync(paths.absoluteStderrPath, "wx", 384)
+    stdoutFd: fs18.openSync(paths.absoluteStdoutPath, "wx", 384),
+    stderrFd: fs18.openSync(paths.absoluteStderrPath, "wx", 384)
   };
 }
 function normalizeStartPayload(raw) {
@@ -19766,7 +20267,7 @@ async function configureSupervisorAndWait(child, payload, acceptedTypes) {
   }
   return await result;
 }
-function removeEmptyReservedRunDirectory(paths, fsOps = fs17) {
+function removeEmptyReservedRunDirectory(paths, fsOps = fs18) {
   try {
     const entries = fsOps.readdirSync(paths.absoluteRunDirectory);
     if (entries.length === 0) fsOps.rmdirSync(paths.absoluteRunDirectory);
@@ -19902,8 +20403,8 @@ async function runSupervisorMain(argv = process6.argv.slice(2)) {
 
 // bin/dove.mjs
 var __filename2 = fileURLToPath4(import.meta.url);
-var __dirname2 = path17.dirname(__filename2);
-var PACKAGE_ROOT2 = path17.resolve(__dirname2, "..");
+var __dirname2 = path18.dirname(__filename2);
+var PACKAGE_ROOT2 = path18.resolve(__dirname2, "..");
 var PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
 if (isRunSupervisorInvocation(process7.argv.slice(2))) await runSupervisorMain(process7.argv.slice(2));
 function projectOption2(options2) {
@@ -20019,18 +20520,18 @@ function prepareHookProject(project) {
 function assertHookPayloadProject(payload, target) {
   if (payload?.cwd === void 0) return;
   if (typeof payload.cwd !== "string" || !payload.cwd.trim() || payload.cwd.includes("\0")) throw new Error("Dove hook cwd \u5FC5\u987B\u6307\u5411\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u4E2D\u7684\u76EE\u5F55\u3002");
-  const cwd = fs18.realpathSync(payload.cwd);
-  const stat = fs18.statSync(cwd);
-  const relative = path17.relative(target, cwd);
-  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path17.sep}`) || path17.isAbsolute(relative)) {
+  const cwd = fs19.realpathSync(payload.cwd);
+  const stat = fs19.statSync(cwd);
+  const relative = path18.relative(target, cwd);
+  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path18.sep}`) || path18.isAbsolute(relative)) {
     throw new Error("Dove hook cwd \u4E0D\u5C5E\u4E8E\u58F0\u660E\u7684\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u3002");
   }
   let directory = cwd;
   while (directory !== target) {
-    if (fs18.existsSync(path17.join(directory, ".dove/install/manifest.json")) || fs18.existsSync(path17.join(directory, ".dove-install"))) {
+    if (fs19.existsSync(path18.join(directory, ".dove/install/manifest.json")) || fs19.existsSync(path18.join(directory, ".dove-install"))) {
       throw new Error("Dove hook cwd \u5C5E\u4E8E\u53E6\u4E00\u4E2A\u9879\u76EE\u96C6\u6210\u3002");
     }
-    directory = path17.dirname(directory);
+    directory = path18.dirname(directory);
   }
 }
 async function readStdin(limit = Infinity) {
@@ -20137,7 +20638,7 @@ try {
     process7.exit(0);
   }
   if (command2 === "reinstall") {
-    const target = path17.resolve(projectOption2(options) ?? process7.cwd());
+    const target = path18.resolve(projectOption2(options) ?? process7.cwd());
     if (wantsJson(options)) {
       const preview2 = previewProjectCompleteReinstall(target, PACKAGE_OPTIONS);
       const { manifest, ...publicPreview } = preview2;
@@ -20162,7 +20663,7 @@ try {
     process7.exit(0);
   }
   if (command2 === "uninstall") {
-    const target = path17.resolve(projectOption2(options) ?? process7.cwd());
+    const target = path18.resolve(projectOption2(options) ?? process7.cwd());
     const preview = previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS);
     if (wantsJson(options)) {
       writeJson2(preview);
@@ -20205,6 +20706,23 @@ try {
     else console.log(JSON.stringify(result, null, 2));
     if (subcommand === "sync") warnSyncResult(result);
     process7.exit(0);
+  }
+  if (command2 === "dashboard") {
+    const collect = () => collectDashboard({ ...PACKAGE_OPTIONS, packageVersion: PACKAGE_VERSION });
+    if (wantsJson(options)) {
+      process7.stdout.write(`${JSON.stringify(collect(), null, 2)}
+`, () => process7.exit(0));
+      await new Promise(() => {
+      });
+    }
+    const port = options.port === void 0 ? DEFAULT_DASHBOARD_PORT : Number(options.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`--port \u9700\u8981 1 \u5230 65535 \u4E4B\u95F4\u7684\u6574\u6570\uFF1A${options.port}`);
+    const bind = options.bind ?? DEFAULT_DASHBOARD_BIND;
+    await startDashboardServer({ collect, listRoots: () => readRegisteredProjects(PACKAGE_OPTIONS), readDocument: readProjectDocument, bind, port });
+    console.log(`Dove \u79D1\u7814\u9762\u677F\uFF08\u53EA\u8BFB\uFF09\uFF1Ahttp://${bind}:${port}/   Ctrl+C \u9000\u51FA`);
+    if (bind === DEFAULT_DASHBOARD_BIND) console.log(`\u4ECE\u81EA\u5DF1\u7535\u8111\u6253\u5F00\uFF1Assh -N -L ${port}:127.0.0.1:${port} <\u670D\u52A1\u5668>\uFF0C\u518D\u8BBF\u95EE http://localhost:${port}/`);
+    await new Promise(() => {
+    });
   }
   if (command2 === "doctor") {
     const result = inspect(projectOption2(options) ?? process7.cwd());
@@ -20284,7 +20802,7 @@ try {
       }
     }
     if (hookName === "statusline") {
-      process7.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path17.resolve(projectOption2(options)) })}
+      process7.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path18.resolve(projectOption2(options)) })}
 `);
       process7.exit(0);
     }
