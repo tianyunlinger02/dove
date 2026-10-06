@@ -326,9 +326,12 @@ function validateSessionFacts(root, executable) {
     for (const source of ["startup", "clear", "compact", "resume"]) {
       const output = invoke(source);
       assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
-      const context = output.hookSpecificOutput.additionalContext;
+      const delivered = output.hookSpecificOutput.additionalContext;
+      const sourceMarker = `\nUser-original source: ${JSON.stringify(path.join(root, "synthetic-transcript.jsonl"))}.`;
+      assert.ok(delivered.includes(sourceMarker), "SessionStart appends the user-original source pointer without reading its contents");
+      const context = delivered.slice(0, delivered.indexOf(sourceMarker));
       if (source === "startup" || source === "clear") {
-        assert.equal(context, bootstrap, "startup and clear only bootstrap the main agent's two short summaries");
+        assert.equal(context, bootstrap, "startup and clear bootstrap the main agent's two short summaries before the source pointer");
       } else {
         if (card === null) {
           assert.match(context, /No readable short identity card at \.dove\/research\/IDENTITY\.md/u);
@@ -345,8 +348,8 @@ function validateSessionFacts(root, executable) {
         assert.ok(context.includes(`${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n`));
         assert.ok(context.endsWith(DOVE_RESEARCH_REFLECTION_CONTINUITY));
       }
-      assert.equal(context.includes(REFERENCES[0].content.slice(0, 500)), false, "do not embed author-preference body");
-      assert.doesNotMatch(context, /SYNTHETIC_PRIVATE_REPORT_MUST_NOT_APPEAR|Latest Review:|Latest Run:|RESEARCH\.md: exists=/u);
+      assert.equal(delivered.includes(REFERENCES[0].content.slice(0, 500)), false, "do not embed author-preference body");
+      assert.doesNotMatch(delivered, /SYNTHETIC_PRIVATE_REPORT_MUST_NOT_APPEAR|Latest Review:|Latest Run:|RESEARCH\.md: exists=/u);
     }
   };
 
