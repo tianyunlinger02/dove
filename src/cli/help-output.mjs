@@ -12,7 +12,7 @@ export function renderDoveHelp() {
   dove projects import --project <dir>... [--sync] [--json|--format json]
   dove projects sync [--json|--format json]
   dove projects status [--json|--format json]
-  dove dashboard [--port <port>] [--bind <address>] [--json|--format json]
+  dove dashboard [--port <port>] [--bind <address>] [--password-file <file>] [--json|--format json]
   dove run start --project <dir> [--id <id>] [--group <name>] [--seed <short-text>] [--wall-time <duration>|--timeout-ms <ms>] [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--data <basis>] [--evaluator <basis>] [--resource-basis <basis>] [--kill-grace-ms <ms>] [--json|--format json] -- <command> [args...]
   dove run status --project <dir> [--id <id>|--group <name>] [--json|--format json]
   dove run resume --project <dir> --id <id> [--json|--format json]
@@ -25,7 +25,7 @@ export function renderDoveHelp() {
 
 普通 Claude 会话是 Dove 的主要入口；--agent dove 与九个 /dove:* Skills 只是可选快捷入口。CLI 管理项目接入、诊断和运行收据，不启动审稿模型。/dove:review 保留，导师 dove-mentor 与论文审稿 dove-review 使用宿主原生全新只读子 agent，仅 Read/Grep/Glob，不传执行对话、不续接历史。
 
-dove dashboard 在本机起一个只读网页，集中查看已登记项目的主线、当前轮次、EVAL 评测表和每轮说明/结果（默认 127.0.0.1:7788，远程用 SSH 端口转发打开）。
+dove dashboard 在本机起一个只读网页，集中查看已登记项目的主线、当前轮次、EVAL 评测表和每轮说明/结果（默认 127.0.0.1:7788，远程用 SSH 端口转发打开；挂到公网隧道时用 --password-file 开启密码登录，所有页面和数据接口都要先登录）。
 
 科研核心记录是 .dove/research/IDENTITY.md、EVAL.md、rounds/。轮次说明标注作者（导师/用户/外部）；结果几行加 EVAL 一行。评测由用户确认一次，至少含一列未见类别的泛化结果；重要结果后的八维判断由导师给出。已有 missions、experiments、claims 原地保留，不迁移删除；初始化仍只在没有研究树时建立最小 RESEARCH.md。
 

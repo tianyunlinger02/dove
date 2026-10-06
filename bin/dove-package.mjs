@@ -13910,7 +13910,7 @@ var CLI_COMMAND_SPECS = Object.freeze({
   reinstall: command([projectOption, ...outputOptions]),
   uninstall: command([projectOption, ...outputOptions]),
   doctor: command([projectOption, ...outputOptions]),
-  dashboard: command([value("--port"), value("--bind"), ...outputOptions]),
+  dashboard: command([value("--port"), value("--bind"), value("--password-file"), ...outputOptions]),
   projects: command([], {
     subcommands: {
       import: command([value("--project", { repeatable: true, dedupe: true }), boolean("--sync"), ...outputOptions]),
@@ -14099,19 +14099,89 @@ function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
 }
 
 // src/cli/dashboard-server.mjs
+import crypto from "node:crypto";
 import http from "node:http";
 var DEFAULT_DASHBOARD_PORT = 7788;
 var DEFAULT_DASHBOARD_BIND = "127.0.0.1";
-function createDashboardServer({ collect, listRoots, readDocument }) {
-  return http.createServer((request, response) => {
+var SESSION_COOKIE = "dove_dashboard";
+var SESSION_MAX_AGE = 30 * 24 * 3600;
+var MAX_LOGIN_BODY = 4096;
+function sessionValue(password) {
+  return crypto.createHmac("sha256", password).update("dove-dashboard-session").digest("base64url");
+}
+function sameSecret(left, right) {
+  const a = crypto.createHash("sha256").update(String(left)).digest();
+  const b = crypto.createHash("sha256").update(String(right)).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+function readCookie(request, name) {
+  for (const part of String(request.headers.cookie ?? "").split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name) return rest.join("=");
+  }
+  return null;
+}
+function readBody(request) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    request.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > MAX_LOGIN_BODY) {
+        reject(new Error("body too large"));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    request.on("error", reject);
+  });
+}
+function cookieAttributes(request, maxAge) {
+  const secure = request.headers["x-forwarded-proto"] === "https" || Boolean(request.socket.encrypted);
+  return `Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
+}
+function createDashboardServer({ collect, listRoots, readDocument, password = null }) {
+  const session = password ? sessionValue(password) : null;
+  const signedIn = (request) => !password || sameSecret(readCookie(request, SESSION_COOKIE) ?? "", session);
+  return http.createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
+    if (password && request.method === "POST" && url.pathname === "/login") {
+      let supplied = "";
+      try {
+        supplied = new URLSearchParams(await readBody(request)).get("password") ?? "";
+      } catch {
+        response.writeHead(413).end();
+        return;
+      }
+      if (sameSecret(supplied, password)) {
+        response.writeHead(303, { location: "/", "set-cookie": `${SESSION_COOKIE}=${session}; ${cookieAttributes(request, SESSION_MAX_AGE)}` }).end();
+      } else {
+        setTimeout(() => response.writeHead(303, { location: "/?failed=1" }).end(), 800);
+      }
+      return;
+    }
+    if (password && request.method === "POST" && url.pathname === "/logout") {
+      response.writeHead(303, { location: "/", "set-cookie": `${SESSION_COOKIE}=; ${cookieAttributes(request, 0)}` }).end();
+      return;
+    }
     if (request.method !== "GET") {
       response.writeHead(405, { allow: "GET" }).end();
       return;
     }
+    if (!signedIn(request)) {
+      if (url.pathname === "/") {
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+        response.end(renderLoginHtml(url.searchParams.has("failed")));
+      } else {
+        response.writeHead(401, { "cache-control": "no-store" }).end();
+      }
+      return;
+    }
     if (url.pathname === "/") {
       response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-      response.end(renderDashboardHtml());
+      response.end(renderDashboardHtml({ canSignOut: Boolean(password) }));
       return;
     }
     if (url.pathname === "/api/dashboard") {
@@ -14141,8 +14211,8 @@ function createDashboardServer({ collect, listRoots, readDocument }) {
     response.writeHead(404).end();
   });
 }
-function startDashboardServer({ collect, listRoots, readDocument, bind = DEFAULT_DASHBOARD_BIND, port = DEFAULT_DASHBOARD_PORT }) {
-  const server = createDashboardServer({ collect, listRoots, readDocument });
+function startDashboardServer({ collect, listRoots, readDocument, password = null, bind = DEFAULT_DASHBOARD_BIND, port = DEFAULT_DASHBOARD_PORT }) {
+  const server = createDashboardServer({ collect, listRoots, readDocument, password });
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, bind, () => {
@@ -14151,7 +14221,39 @@ function startDashboardServer({ collect, listRoots, readDocument, bind = DEFAULT
     });
   });
 }
-function renderDashboardHtml() {
+function renderLoginHtml(failed = false) {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dove \u79D1\u7814\u9762\u677F</title>
+<style>
+:root { --bg: #f6f7f4; --panel: #fff; --ink: #1f2a2e; --muted: #66737a; --line: #e2e6e1; --accent: #4f7a3a; --bad: #b04a3a; }
+@media (prefers-color-scheme: dark) { :root { --bg: #151a1c; --panel: #1d2427; --ink: #e5ebe8; --muted: #93a19c; --line: #2c3539; --accent: #8fbf74; --bad: #ec8f7f; } }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--ink); font: 15px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; padding: 16px; }
+form { width: min(360px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px 24px; }
+h1 { margin: 0 0 4px; font-size: 20px; }
+p { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+input { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+button { width: 100%; margin-top: 12px; padding: 10px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.bad { color: var(--bad); font-size: 13px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<form method="post" action="/login">
+  <h1>\u{1F54A} Dove \u79D1\u7814\u9762\u677F</h1>
+  <p>\u8BF7\u8F93\u5165\u8BBF\u95EE\u5BC6\u7801</p>
+  <input type="password" name="password" autocomplete="current-password" autofocus required aria-label="\u8BBF\u95EE\u5BC6\u7801">
+  <button type="submit">\u767B\u5F55</button>
+  ${failed ? '<div class="bad">\u5BC6\u7801\u4E0D\u5BF9\uFF0C\u8BF7\u91CD\u8BD5\u3002</div>' : ""}
+</form>
+</body>
+</html>
+`;
+}
+function renderDashboardHtml({ canSignOut = false } = {}) {
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -14261,6 +14363,7 @@ select.mobile { display: none; }
   <span class="meta" id="meta">\u52A0\u8F7D\u4E2D\u2026</span>
   <button id="theme" title="\u5207\u6362\u660E\u6697">\u660E/\u6697</button>
   <button id="reload">\u5237\u65B0</button>
+  ${canSignOut ? '<form method="post" action="/logout" style="margin:0"><button type="submit">\u9000\u51FA</button></form>' : ""}
 </header>
 <select class="mobile" id="picker" aria-label="\u9009\u62E9\u9879\u76EE"></select>
 <div class="layout">
@@ -14427,6 +14530,7 @@ function select(root) {
 async function load() {
   try {
     const res = await fetch("/api/dashboard", { cache: "no-store" });
+    if (res.status === 401) { location.reload(); return; }
     const body = await res.json();
     if (!res.ok) throw new Error(body.error || res.statusText);
     data = body;
@@ -14734,7 +14838,7 @@ function renderDoveHelp() {
   dove projects import --project <dir>... [--sync] [--json|--format json]
   dove projects sync [--json|--format json]
   dove projects status [--json|--format json]
-  dove dashboard [--port <port>] [--bind <address>] [--json|--format json]
+  dove dashboard [--port <port>] [--bind <address>] [--password-file <file>] [--json|--format json]
   dove run start --project <dir> [--id <id>] [--group <name>] [--seed <short-text>] [--wall-time <duration>|--timeout-ms <ms>] [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--data <basis>] [--evaluator <basis>] [--resource-basis <basis>] [--kill-grace-ms <ms>] [--json|--format json] -- <command> [args...]
   dove run status --project <dir> [--id <id>|--group <name>] [--json|--format json]
   dove run resume --project <dir> --id <id> [--json|--format json]
@@ -14747,7 +14851,7 @@ function renderDoveHelp() {
 
 \u666E\u901A Claude \u4F1A\u8BDD\u662F Dove \u7684\u4E3B\u8981\u5165\u53E3\uFF1B--agent dove \u4E0E\u4E5D\u4E2A /dove:* Skills \u53EA\u662F\u53EF\u9009\u5FEB\u6377\u5165\u53E3\u3002CLI \u7BA1\u7406\u9879\u76EE\u63A5\u5165\u3001\u8BCA\u65AD\u548C\u8FD0\u884C\u6536\u636E\uFF0C\u4E0D\u542F\u52A8\u5BA1\u7A3F\u6A21\u578B\u3002/dove:review \u4FDD\u7559\uFF0C\u5BFC\u5E08 dove-mentor \u4E0E\u8BBA\u6587\u5BA1\u7A3F dove-review \u4F7F\u7528\u5BBF\u4E3B\u539F\u751F\u5168\u65B0\u53EA\u8BFB\u5B50 agent\uFF0C\u4EC5 Read/Grep/Glob\uFF0C\u4E0D\u4F20\u6267\u884C\u5BF9\u8BDD\u3001\u4E0D\u7EED\u63A5\u5386\u53F2\u3002
 
-dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u53EA\u8BFB\u7F51\u9875\uFF0C\u96C6\u4E2D\u67E5\u770B\u5DF2\u767B\u8BB0\u9879\u76EE\u7684\u4E3B\u7EBF\u3001\u5F53\u524D\u8F6E\u6B21\u3001EVAL \u8BC4\u6D4B\u8868\u548C\u6BCF\u8F6E\u8BF4\u660E/\u7ED3\u679C\uFF08\u9ED8\u8BA4 127.0.0.1:7788\uFF0C\u8FDC\u7A0B\u7528 SSH \u7AEF\u53E3\u8F6C\u53D1\u6253\u5F00\uFF09\u3002
+dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u53EA\u8BFB\u7F51\u9875\uFF0C\u96C6\u4E2D\u67E5\u770B\u5DF2\u767B\u8BB0\u9879\u76EE\u7684\u4E3B\u7EBF\u3001\u5F53\u524D\u8F6E\u6B21\u3001EVAL \u8BC4\u6D4B\u8868\u548C\u6BCF\u8F6E\u8BF4\u660E/\u7ED3\u679C\uFF08\u9ED8\u8BA4 127.0.0.1:7788\uFF0C\u8FDC\u7A0B\u7528 SSH \u7AEF\u53E3\u8F6C\u53D1\u6253\u5F00\uFF1B\u6302\u5230\u516C\u7F51\u96A7\u9053\u65F6\u7528 --password-file \u5F00\u542F\u5BC6\u7801\u767B\u5F55\uFF0C\u6240\u6709\u9875\u9762\u548C\u6570\u636E\u63A5\u53E3\u90FD\u8981\u5148\u767B\u5F55\uFF09\u3002
 
 \u79D1\u7814\u6838\u5FC3\u8BB0\u5F55\u662F .dove/research/IDENTITY.md\u3001EVAL.md\u3001rounds/\u3002\u8F6E\u6B21\u8BF4\u660E\u6807\u6CE8\u4F5C\u8005\uFF08\u5BFC\u5E08/\u7528\u6237/\u5916\u90E8\uFF09\uFF1B\u7ED3\u679C\u51E0\u884C\u52A0 EVAL \u4E00\u884C\u3002\u8BC4\u6D4B\u7531\u7528\u6237\u786E\u8BA4\u4E00\u6B21\uFF0C\u81F3\u5C11\u542B\u4E00\u5217\u672A\u89C1\u7C7B\u522B\u7684\u6CDB\u5316\u7ED3\u679C\uFF1B\u91CD\u8981\u7ED3\u679C\u540E\u7684\u516B\u7EF4\u5224\u65AD\u7531\u5BFC\u5E08\u7ED9\u51FA\u3002\u5DF2\u6709 missions\u3001experiments\u3001claims \u539F\u5730\u4FDD\u7559\uFF0C\u4E0D\u8FC1\u79FB\u5220\u9664\uFF1B\u521D\u59CB\u5316\u4ECD\u53EA\u5728\u6CA1\u6709\u7814\u7A76\u6811\u65F6\u5EFA\u7ACB\u6700\u5C0F RESEARCH.md\u3002
 
@@ -16661,7 +16765,7 @@ import fs6 from "node:fs";
 import path9 from "node:path";
 
 // src/core/project-registry.mjs
-import crypto from "node:crypto";
+import crypto2 from "node:crypto";
 import fs5 from "node:fs";
 import os2 from "node:os";
 import path8 from "node:path";
@@ -16796,7 +16900,7 @@ function readJson(file, options2 = {}) {
 function writeJson(file, data, options2 = {}) {
   const fsOps = options2.fsOps ?? fs5;
   inspectFile(file, fsOps);
-  const temporary = path8.join(path8.dirname(file), `.${path8.basename(file)}.${process.pid}.${crypto.randomUUID()}.tmp`);
+  const temporary = path8.join(path8.dirname(file), `.${path8.basename(file)}.${process.pid}.${crypto2.randomUUID()}.tmp`);
   try {
     fsOps.writeFileSync(temporary, `${JSON.stringify(data, null, 2)}
 `, { flag: "wx", mode: 384 });
@@ -17011,7 +17115,7 @@ import fs13 from "node:fs";
 import path15 from "node:path";
 
 // src/core/file-set-transaction.mjs
-import crypto2 from "node:crypto";
+import crypto3 from "node:crypto";
 import fs7 from "node:fs";
 import path10 from "node:path";
 var MAX_CLEANUP_WARNINGS = 20;
@@ -17020,7 +17124,7 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 function sha256(content) {
-  return crypto2.createHash("sha256").update(content).digest("hex");
+  return crypto3.createHash("sha256").update(content).digest("hex");
 }
 function state(anchor, relativePath) {
   const stat = anchor.tryLstat(relativePath);
@@ -17101,7 +17205,7 @@ function committedResult(entries, cleanupFailures) {
 function writeFileSetTransaction(entries, options2 = {}) {
   if (!Array.isArray(entries)) throw new Error("Transactional write entries must be an array.");
   const fsOps = options2.fsOps ?? fs7;
-  const transactionId = (options2.transactionId ?? crypto2.randomUUID()).replace(/[^a-z0-9._-]/giu, "-");
+  const transactionId = (options2.transactionId ?? crypto3.randomUUID()).replace(/[^a-z0-9._-]/giu, "-");
   const anchors = /* @__PURE__ */ new Map();
   const resolved = [];
   const targets = /* @__PURE__ */ new Set();
@@ -17509,7 +17613,7 @@ Use the pinned \`dove-paper-search\` project MCP only when academic paper discov
 }
 
 // src/core/project-installation-resources.mjs
-import crypto3 from "node:crypto";
+import crypto4 from "node:crypto";
 
 // scripts/generate-command-adapters.mjs
 import fs9 from "node:fs";
@@ -17680,7 +17784,7 @@ var STATUS_LINE_SELECTOR = "/statusLine[dove-project-directory]";
 var CLAUDE_HOST = "claude";
 var FORBIDDEN_RESOURCE_PREFIXES = [".dove/", "bin/", "dist/", "mcp/", "scripts/"];
 function sha2562(content) {
-  return crypto3.createHash("sha256").update(content).digest("hex");
+  return crypto4.createHash("sha256").update(content).digest("hex");
 }
 function canonicalJson(value2) {
   if (value2 === null || typeof value2 !== "object") return JSON.stringify(value2);
@@ -19232,7 +19336,7 @@ function inspectProjectDoctor(start, options2 = {}) {
 }
 
 // src/core/run-record.mjs
-import crypto4 from "node:crypto";
+import crypto5 from "node:crypto";
 import fs17 from "node:fs";
 import path17 from "node:path";
 import process5 from "node:process";
@@ -19394,7 +19498,7 @@ function createRunId(options2 = {}) {
   const now = options2.now instanceof Date ? options2.now : new Date(options2.now ?? Date.now());
   const date = now.toISOString().slice(0, 10).replace(/-/gu, "");
   const time = now.toISOString().slice(11, 19).replace(/:/gu, "");
-  const suffix = crypto4.randomBytes(4).toString("hex");
+  const suffix = crypto5.randomBytes(4).toString("hex");
   return `run-${date}-${time}-${suffix}`;
 }
 function normalizeRunId(value2) {
@@ -20718,8 +20822,13 @@ try {
     const port = options.port === void 0 ? DEFAULT_DASHBOARD_PORT : Number(options.port);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`--port \u9700\u8981 1 \u5230 65535 \u4E4B\u95F4\u7684\u6574\u6570\uFF1A${options.port}`);
     const bind = options.bind ?? DEFAULT_DASHBOARD_BIND;
-    await startDashboardServer({ collect, listRoots: () => readRegisteredProjects(PACKAGE_OPTIONS), readDocument: readProjectDocument, bind, port });
-    console.log(`Dove \u79D1\u7814\u9762\u677F\uFF08\u53EA\u8BFB\uFF09\uFF1Ahttp://${bind}:${port}/   Ctrl+C \u9000\u51FA`);
+    let password = null;
+    if (options.passwordFile !== void 0) {
+      password = fs19.readFileSync(path18.resolve(options.passwordFile), "utf8").trim();
+      if (!password) throw new Error(`\u5BC6\u7801\u6587\u4EF6\u4E3A\u7A7A\uFF1A${options.passwordFile}`);
+    }
+    await startDashboardServer({ collect, listRoots: () => readRegisteredProjects(PACKAGE_OPTIONS), readDocument: readProjectDocument, password, bind, port });
+    console.log(`Dove \u79D1\u7814\u9762\u677F\uFF08\u53EA\u8BFB${password ? "\uFF0C\u9700\u5BC6\u7801\u767B\u5F55" : ""}\uFF09\uFF1Ahttp://${bind}:${port}/   Ctrl+C \u9000\u51FA`);
     if (bind === DEFAULT_DASHBOARD_BIND) console.log(`\u4ECE\u81EA\u5DF1\u7535\u8111\u6253\u5F00\uFF1Assh -N -L ${port}:127.0.0.1:${port} <\u670D\u52A1\u5668>\uFF0C\u518D\u8BBF\u95EE http://localhost:${port}/`);
     await new Promise(() => {
     });

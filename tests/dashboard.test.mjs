@@ -82,3 +82,29 @@ test("server serves the page and read-only JSON", async () => {
   }
   assert.ok(renderDashboardHtml().includes("/api/dashboard"));
 });
+
+test("with a password every page and API request needs the session cookie", async () => {
+  const root = fixtureProject(researchFiles);
+  const server = await startDashboardServer({ collect: () => collectDashboard({ projects: [root] }), listRoots: () => [root], readDocument: readProjectDocument, password: "s3cret-pass", port: 0 });
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const login = await (await fetch(`${base}/`)).text();
+    assert.match(login, /请输入访问密码/u);
+    assert.doesNotMatch(login, /从四张图/u);
+    assert.equal((await fetch(`${base}/api/dashboard`)).status, 401);
+    assert.equal((await fetch(`${base}/api/doc?project=${encodeURIComponent(root)}&name=001-brief.md`)).status, 401);
+    const post = (password) => fetch(`${base}/login`, { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ password }) });
+    const wrong = await post("nope");
+    assert.equal(wrong.headers.get("location"), "/?failed=1");
+    assert.equal(wrong.headers.get("set-cookie"), null);
+    const right = await post("s3cret-pass");
+    const cookie = right.headers.get("set-cookie");
+    assert.match(cookie, /^dove_dashboard=[^;]+; Path=\/; HttpOnly; SameSite=Strict/u);
+    const headers = { cookie: cookie.split(";")[0] };
+    assert.equal((await fetch(`${base}/api/dashboard`, { headers })).status, 200);
+    assert.match(await (await fetch(`${base}/`, { headers })).text(), /action="\/logout"/u);
+    assert.equal((await fetch(`${base}/api/dashboard`, { headers: { cookie: "dove_dashboard=forged" } })).status, 401);
+  } finally {
+    server.close();
+  }
+});

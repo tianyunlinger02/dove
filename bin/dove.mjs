@@ -380,8 +380,13 @@ try {
     const port = options.port === undefined ? DEFAULT_DASHBOARD_PORT : Number(options.port);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`--port 需要 1 到 65535 之间的整数：${options.port}`);
     const bind = options.bind ?? DEFAULT_DASHBOARD_BIND;
-    await startDashboardServer({ collect, listRoots: () => readRegisteredProjects(PACKAGE_OPTIONS), readDocument: readProjectDocument, bind, port });
-    console.log(`Dove 科研面板（只读）：http://${bind}:${port}/   Ctrl+C 退出`);
+    let password = null;
+    if (options.passwordFile !== undefined) {
+      password = fs.readFileSync(path.resolve(options.passwordFile), "utf8").trim();
+      if (!password) throw new Error(`密码文件为空：${options.passwordFile}`);
+    }
+    await startDashboardServer({ collect, listRoots: () => readRegisteredProjects(PACKAGE_OPTIONS), readDocument: readProjectDocument, password, bind, port });
+    console.log(`Dove 科研面板（只读${password ? "，需密码登录" : ""}）：http://${bind}:${port}/   Ctrl+C 退出`);
     if (bind === DEFAULT_DASHBOARD_BIND) console.log(`从自己电脑打开：ssh -N -L ${port}:127.0.0.1:${port} <服务器>，再访问 http://localhost:${port}/`);
     await new Promise(() => {});
   }

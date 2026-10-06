@@ -1,20 +1,98 @@
+import crypto from "node:crypto";
 import http from "node:http";
 
 // Local read-only web view of registered projects. Binds to loopback by
-// default; reach it from another machine with an SSH tunnel.
+// default; reach it from another machine with an SSH tunnel, or put it behind
+// a public tunnel with a password so every page and API request is checked.
 export const DEFAULT_DASHBOARD_PORT = 7788;
 export const DEFAULT_DASHBOARD_BIND = "127.0.0.1";
+const SESSION_COOKIE = "dove_dashboard";
+const SESSION_MAX_AGE = 30 * 24 * 3600;
+const MAX_LOGIN_BODY = 4096;
 
-export function createDashboardServer({ collect, listRoots, readDocument }) {
-  return http.createServer((request, response) => {
+// The session value is derived from the password, so a restart keeps people
+// signed in and changing the password signs everyone out.
+function sessionValue(password) {
+  return crypto.createHmac("sha256", password).update("dove-dashboard-session").digest("base64url");
+}
+
+function sameSecret(left, right) {
+  const a = crypto.createHash("sha256").update(String(left)).digest();
+  const b = crypto.createHash("sha256").update(String(right)).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+function readCookie(request, name) {
+  for (const part of String(request.headers.cookie ?? "").split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name) return rest.join("=");
+  }
+  return null;
+}
+
+function readBody(request) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    request.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > MAX_LOGIN_BODY) {
+        reject(new Error("body too large"));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    request.on("error", reject);
+  });
+}
+
+function cookieAttributes(request, maxAge) {
+  const secure = request.headers["x-forwarded-proto"] === "https" || Boolean(request.socket.encrypted);
+  return `Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
+}
+
+export function createDashboardServer({ collect, listRoots, readDocument, password = null }) {
+  const session = password ? sessionValue(password) : null;
+  const signedIn = (request) => !password || sameSecret(readCookie(request, SESSION_COOKIE) ?? "", session);
+  return http.createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
+    if (password && request.method === "POST" && url.pathname === "/login") {
+      let supplied = "";
+      try {
+        supplied = new URLSearchParams(await readBody(request)).get("password") ?? "";
+      } catch {
+        response.writeHead(413).end();
+        return;
+      }
+      if (sameSecret(supplied, password)) {
+        response.writeHead(303, { location: "/", "set-cookie": `${SESSION_COOKIE}=${session}; ${cookieAttributes(request, SESSION_MAX_AGE)}` }).end();
+      } else {
+        setTimeout(() => response.writeHead(303, { location: "/?failed=1" }).end(), 800);
+      }
+      return;
+    }
+    if (password && request.method === "POST" && url.pathname === "/logout") {
+      response.writeHead(303, { location: "/", "set-cookie": `${SESSION_COOKIE}=; ${cookieAttributes(request, 0)}` }).end();
+      return;
+    }
     if (request.method !== "GET") {
       response.writeHead(405, { allow: "GET" }).end();
       return;
     }
+    if (!signedIn(request)) {
+      if (url.pathname === "/") {
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+        response.end(renderLoginHtml(url.searchParams.has("failed")));
+      } else {
+        response.writeHead(401, { "cache-control": "no-store" }).end();
+      }
+      return;
+    }
     if (url.pathname === "/") {
       response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-      response.end(renderDashboardHtml());
+      response.end(renderDashboardHtml({ canSignOut: Boolean(password) }));
       return;
     }
     if (url.pathname === "/api/dashboard") {
@@ -45,8 +123,8 @@ export function createDashboardServer({ collect, listRoots, readDocument }) {
   });
 }
 
-export function startDashboardServer({ collect, listRoots, readDocument, bind = DEFAULT_DASHBOARD_BIND, port = DEFAULT_DASHBOARD_PORT }) {
-  const server = createDashboardServer({ collect, listRoots, readDocument });
+export function startDashboardServer({ collect, listRoots, readDocument, password = null, bind = DEFAULT_DASHBOARD_BIND, port = DEFAULT_DASHBOARD_PORT }) {
+  const server = createDashboardServer({ collect, listRoots, readDocument, password });
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, bind, () => {
@@ -56,7 +134,40 @@ export function startDashboardServer({ collect, listRoots, readDocument, bind = 
   });
 }
 
-export function renderDashboardHtml() {
+export function renderLoginHtml(failed = false) {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dove 科研面板</title>
+<style>
+:root { --bg: #f6f7f4; --panel: #fff; --ink: #1f2a2e; --muted: #66737a; --line: #e2e6e1; --accent: #4f7a3a; --bad: #b04a3a; }
+@media (prefers-color-scheme: dark) { :root { --bg: #151a1c; --panel: #1d2427; --ink: #e5ebe8; --muted: #93a19c; --line: #2c3539; --accent: #8fbf74; --bad: #ec8f7f; } }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--ink); font: 15px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; padding: 16px; }
+form { width: min(360px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px 24px; }
+h1 { margin: 0 0 4px; font-size: 20px; }
+p { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+input { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+button { width: 100%; margin-top: 12px; padding: 10px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.bad { color: var(--bad); font-size: 13px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<form method="post" action="/login">
+  <h1>🕊 Dove 科研面板</h1>
+  <p>请输入访问密码</p>
+  <input type="password" name="password" autocomplete="current-password" autofocus required aria-label="访问密码">
+  <button type="submit">登录</button>
+  ${failed ? '<div class="bad">密码不对，请重试。</div>' : ""}
+</form>
+</body>
+</html>
+`;
+}
+
+export function renderDashboardHtml({ canSignOut = false } = {}) {
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -166,6 +277,7 @@ select.mobile { display: none; }
   <span class="meta" id="meta">加载中…</span>
   <button id="theme" title="切换明暗">明/暗</button>
   <button id="reload">刷新</button>
+  ${canSignOut ? '<form method="post" action="/logout" style="margin:0"><button type="submit">退出</button></form>' : ""}
 </header>
 <select class="mobile" id="picker" aria-label="选择项目"></select>
 <div class="layout">
@@ -332,6 +444,7 @@ function select(root) {
 async function load() {
   try {
     const res = await fetch("/api/dashboard", { cache: "no-store" });
+    if (res.status === 401) { location.reload(); return; }
     const body = await res.json();
     if (!res.ok) throw new Error(body.error || res.statusText);
     data = body;
