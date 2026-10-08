@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import http from "node:http";
 
-// Local read-only web view of registered projects. Binds to loopback by
+// Local web view of registered projects (research records are read-only). Binds to loopback by
 // default; reach it from another machine with an SSH tunnel, or put it behind
 // a public tunnel with a password so every page and API request is checked.
 export const DEFAULT_DASHBOARD_PORT = 7788;
@@ -30,13 +30,13 @@ function readCookie(request, name) {
   return null;
 }
 
-function readBody(request) {
+function readBody(request, limit) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     request.on("data", (chunk) => {
       size += chunk.length;
-      if (size > MAX_LOGIN_BODY) {
+      if (size > limit) {
         reject(new Error("body too large"));
         request.destroy();
         return;
@@ -53,36 +53,45 @@ function cookieAttributes(request, maxAge) {
   return `Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
 }
 
-export function createDashboardServer({ collect, listRoots, readDocument, password = null }) {
-  const session = password ? sessionValue(password) : null;
-  const signedIn = (request) => !password || sameSecret(readCookie(request, SESSION_COOKIE) ?? "", session);
+const MAX_ACTION_BODY = 64 * 1024;
+const SETTINGS_ACTIONS = new Set(["addProject", "removeProject", "syncProjects", "saveWatchConfig", "saveWatchGlobal", "saveS2Key", "runWatch"]);
+
+function sendJson(response, status, value) {
+  response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+  response.end(JSON.stringify(value));
+}
+
+// Settings changes arrive as one JSON action. They need a signed-in session
+// (when a password is set) and the x-dove-request header, which a cross-site
+// form cannot send.
+export function createDashboardServer({ collect, listRoots, readDocument, password = null, actions = null }) {
+  let currentPassword = password || null;
+  const session = () => (currentPassword ? sessionValue(currentPassword) : null);
+  const signedIn = (request) => !currentPassword || sameSecret(readCookie(request, SESSION_COOKIE) ?? "", session());
+  const knownRoot = (root) => typeof root === "string" && (listRoots?.() ?? []).includes(root);
   return http.createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
-    if (password && request.method === "POST" && url.pathname === "/login") {
+    if (currentPassword && request.method === "POST" && url.pathname === "/login") {
       let supplied = "";
       try {
-        supplied = new URLSearchParams(await readBody(request)).get("password") ?? "";
+        supplied = new URLSearchParams(await readBody(request, MAX_LOGIN_BODY)).get("password") ?? "";
       } catch {
         response.writeHead(413).end();
         return;
       }
-      if (sameSecret(supplied, password)) {
-        response.writeHead(303, { location: "/", "set-cookie": `${SESSION_COOKIE}=${session}; ${cookieAttributes(request, SESSION_MAX_AGE)}` }).end();
+      if (sameSecret(supplied, currentPassword)) {
+        response.writeHead(303, { location: "/", "set-cookie": `${SESSION_COOKIE}=${session()}; ${cookieAttributes(request, SESSION_MAX_AGE)}` }).end();
       } else {
         setTimeout(() => response.writeHead(303, { location: "/?failed=1" }).end(), 800);
       }
       return;
     }
-    if (password && request.method === "POST" && url.pathname === "/logout") {
+    if (currentPassword && request.method === "POST" && url.pathname === "/logout") {
       response.writeHead(303, { location: "/", "set-cookie": `${SESSION_COOKIE}=; ${cookieAttributes(request, 0)}` }).end();
       return;
     }
-    if (request.method !== "GET") {
-      response.writeHead(405, { allow: "GET" }).end();
-      return;
-    }
     if (!signedIn(request)) {
-      if (url.pathname === "/") {
+      if (request.method === "GET" && url.pathname === "/") {
         response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
         response.end(renderLoginHtml(url.searchParams.has("failed")));
       } else {
@@ -90,41 +99,86 @@ export function createDashboardServer({ collect, listRoots, readDocument, passwo
       }
       return;
     }
-    if (url.pathname === "/") {
-      response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-      response.end(renderDashboardHtml({ canSignOut: Boolean(password) }));
+    if (request.method === "POST" && url.pathname === "/api/action" && actions) {
+      if (request.headers["x-dove-request"] !== "1") {
+        response.writeHead(403).end();
+        return;
+      }
+      let action;
+      try {
+        action = JSON.parse(await readBody(request, MAX_ACTION_BODY));
+      } catch {
+        sendJson(response, 400, { error: "请求格式不对" });
+        return;
+      }
+      if (action?.root !== undefined && !knownRoot(action.root) && action.type !== "addProject") {
+        sendJson(response, 404, { error: "未登记的项目" });
+        return;
+      }
+      try {
+        if (action?.type === "changePassword") {
+          const next = String(action.password ?? "");
+          if (next.length < 8) throw new Error("新密码至少 8 位");
+          await actions.changePassword(next);
+          currentPassword = next;
+          response.writeHead(200, { "content-type": "application/json; charset=utf-8", "set-cookie": `${SESSION_COOKIE}=${session()}; ${cookieAttributes(request, SESSION_MAX_AGE)}` });
+          response.end(JSON.stringify({ ok: true }));
+          return;
+        }
+        if (!SETTINGS_ACTIONS.has(action?.type) || typeof actions[action.type] !== "function") throw new Error("不支持的操作");
+        sendJson(response, 200, { ok: true, result: await actions[action.type](action) });
+      } catch (error) {
+        sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+      }
       return;
     }
-    if (url.pathname === "/api/dashboard") {
-      try {
-        const body = JSON.stringify(collect());
-        response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-        response.end(body);
-      } catch (error) {
-        response.writeHead(500, { "content-type": "application/json; charset=utf-8" });
-        response.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+    if (request.method !== "GET") {
+      response.writeHead(405, { allow: "GET" }).end();
+      return;
+    }
+    if (url.pathname === "/") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+      response.end(renderDashboardHtml({ canSignOut: Boolean(currentPassword), canEdit: Boolean(actions) }));
+      return;
+    }
+    try {
+      if (url.pathname === "/api/dashboard") {
+        sendJson(response, 200, collect());
+        return;
       }
+      if (url.pathname === "/api/settings" && actions) {
+        sendJson(response, 200, await actions.getSettings({ passwordSet: Boolean(currentPassword) }));
+        return;
+      }
+      if (url.pathname === "/api/watch" && actions) {
+        const root = url.searchParams.get("project");
+        if (!knownRoot(root)) {
+          response.writeHead(404).end();
+          return;
+        }
+        sendJson(response, 200, await actions.readWatch({ root }));
+        return;
+      }
+    } catch (error) {
+      sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
       return;
     }
     if (url.pathname === "/api/doc") {
       const root = url.searchParams.get("project");
-      const file = url.searchParams.get("name");
-      const known = typeof root === "string" && (listRoots?.() ?? []).includes(root);
-      const doc = known ? readDocument(root, file) : null;
+      const doc = knownRoot(root) ? readDocument(root, url.searchParams.get("name")) : null;
       if (!doc) {
         response.writeHead(404).end();
         return;
       }
-      response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-      response.end(JSON.stringify(doc));
+      sendJson(response, 200, doc);
       return;
     }
     response.writeHead(404).end();
   });
 }
 
-export function startDashboardServer({ collect, listRoots, readDocument, password = null, bind = DEFAULT_DASHBOARD_BIND, port = DEFAULT_DASHBOARD_PORT }) {
-  const server = createDashboardServer({ collect, listRoots, readDocument, password });
+export function startDashboardServer({ collect, listRoots, readDocument, password = null, actions = null, bind = DEFAULT_DASHBOARD_BIND, port = DEFAULT_DASHBOARD_PORT }) {
+  const server = createDashboardServer({ collect, listRoots, readDocument, password, actions });
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, bind, () => {
@@ -167,7 +221,7 @@ button { width: 100%; margin-top: 12px; padding: 10px; border: 0; border-radius:
 `;
 }
 
-export function renderDashboardHtml({ canSignOut = false } = {}) {
+export function renderDashboardHtml({ canSignOut = false, canEdit = false } = {}) {
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -263,6 +317,28 @@ td.num { font-variant-numeric: tabular-nums; }
 details summary { cursor: pointer; color: var(--muted); }
 .note { color: var(--muted); font-size: 12px; margin-top: 6px; }
 select.mobile { display: none; }
+nav.tabsnav { display: flex; gap: 4px; margin-left: 12px; }
+nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.paper { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.paper:last-child { border-bottom: 0; }
+.paper a { color: var(--ink); font-weight: 600; text-decoration: none; }
+.paper a:hover { text-decoration: underline; }
+.paper .why { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.paper .abs { font-size: 12.5px; margin-top: 4px; color: var(--ink); opacity: .85; }
+.form { display: grid; gap: 10px; }
+.form label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.form input[type=text], .form input[type=password], .form input[type=number], .form textarea, .form select { font: inherit; font-size: 13.5px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; width: 100%; }
+.form textarea { min-height: 84px; resize: vertical; }
+.form .row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.danger { color: var(--user); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.reg { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.reg:last-child { border-bottom: 0; }
+.reg .p { flex: 1 1 260px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; overflow-wrap: anywhere; }
+#toast { position: fixed; right: 16px; bottom: 16px; background: var(--ink); color: var(--panel); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100vw - 32px); }
+#toast.show { opacity: 1; }
 @media (max-width: 820px) {
   .layout { grid-template-columns: 1fr; }
   aside { display: none; }
@@ -274,6 +350,7 @@ select.mobile { display: none; }
 <body>
 <header class="top">
   <span class="brand">🕊 Dove 科研面板</span>
+  ${canEdit ? '<nav class="tabsnav"><button id="navProjects" class="on">项目</button><button id="navSettings">设置</button></nav>' : ""}
   <span class="meta" id="meta">加载中…</span>
   <button id="theme" title="切换明暗">明/暗</button>
   <button id="reload">刷新</button>
@@ -284,11 +361,16 @@ select.mobile { display: none; }
   <aside id="list"></aside>
   <main id="view"><div class="empty">加载中…</div></main>
 </div>
+<div id="toast"></div>
 <script>
+const CAN_EDIT = ${canEdit ? "true" : "false"};
+let mode = location.hash === "#settings" && CAN_EDIT ? "settings" : "projects";
+let settings = null;
+const watchCache = new Map();
 const STATUS = { ongoing: ["ongoing", "进行中"], "进行中": ["ongoing", "进行中"], paused: ["paused", "已暂停"], "暂停": ["paused", "已暂停"], completed: ["completed", "已完成"], "完成": ["completed", "已完成"] };
 const AUTHOR = { mentor: "导师", user: "用户", external: "外部", other: "其他" };
 let data = null;
-let selected = decodeURIComponent(location.hash.slice(1)) || null;
+let selected = location.hash === "#settings" ? null : decodeURIComponent(location.hash.slice(1)) || null;
 const open = new Map();
 
 function esc(value) {
@@ -379,6 +461,7 @@ function renderView() {
   else if (p.evaluation.tables.length) html += p.evaluation.tables.map((t) => '<div class="tablewrap">' + tableHtml([t.header, ...t.rows], true) + "</div>").join("") + lazyDoc(p.root, "EVAL.md", "查看 EVAL.md 原文");
   else html += '<div class="card md">' + md(p.evaluation.text) + "</div>";
   html += "</section>";
+  if (CAN_EDIT) html += papersSection(p.root);
   html += '<section><h2>轮次 <span class="sub">rounds/ · 新的在上</span></h2>';
   if (!p.rounds.length) html += '<div class="card note">还没有轮次记录。</div>';
   html += p.rounds.map((r) => {
@@ -435,9 +518,107 @@ function roundBody(root, part) {
   if (t.error) return '<div class="body note">' + esc(t.error) + "</div>";
   return '<div class="body md">' + md(t.text) + (t.truncated ? '<div class="note">内容较长，只显示前 64KB。</div>' : "") + "</div>";
 }
+function papersSection(root) {
+  let html = '<section><h2>新论文 <span class="sub">论文追踪 · 导师下一轮判断影响</span></h2>';
+  const w = watchCache.get(root);
+  if (!w) { loadWatch(root); return html + '<div class="card note">读取中…</div></section>'; }
+  if (w.error) return html + '<div class="card note">' + esc(w.error) + "</div></section>";
+  const digest = (w.digests || [])[0];
+  if (!w.config.keywords.length && !w.config.authors.length) return html + '<div class="card note">还没设置追踪关键词或作者。到「设置 → 论文追踪」里填好后，每天自动抓取。</div></section>';
+  if (!digest) return html + '<div class="card note">还没运行过。可以在设置页点「立即运行」。</div></section>';
+  html += '<div class="card" style="padding:0">';
+  html += '<div class="paper why">' + esc(digest.date) + " · " + digest.items.length + " 篇" + (digest.notes && digest.notes.length ? " · " + esc(digest.notes.join("；")) : "") + "</div>";
+  html += digest.items.slice(0, 12).map((it) => '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">分数 ' + esc(it.score) + " · " + esc((it.published || "").slice(0, 10)) + " · " + esc(it.reasons.join("；")) + (it.venue ? " · " + esc(it.venue) : "") + '</div><div class="abs">' + esc((it.abstract || "").slice(0, 220)) + (it.abstract && it.abstract.length > 220 ? "…" : "") + "</div></div>").join("") || '<div class="paper note">最近没有新的相关论文。</div>';
+  return html + "</div></section>";
+}
+async function loadWatch(root) {
+  watchCache.set(root, { loading: true });
+  try {
+    const res = await fetch("/api/watch?project=" + encodeURIComponent(root), { cache: "no-store" });
+    watchCache.set(root, res.ok ? await res.json() : { error: "读取失败（" + res.status + "）" });
+  } catch (error) {
+    watchCache.set(root, { error: "读取失败：" + error.message });
+  }
+  if (mode === "projects" && selected === root) renderView();
+}
+function toast(text) {
+  const el = document.getElementById("toast");
+  el.textContent = text; el.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => el.classList.remove("show"), 3200);
+}
+async function act(type, payload) {
+  const res = await fetch("/api/action", { method: "POST", headers: { "content-type": "application/json", "x-dove-request": "1" }, body: JSON.stringify({ type, ...payload }) });
+  if (res.status === 401) { location.reload(); throw new Error("请重新登录"); }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "操作失败（" + res.status + "）");
+  return body.result;
+}
+async function loadSettings() {
+  try {
+    const res = await fetch("/api/settings", { cache: "no-store" });
+    if (res.status === 401) { location.reload(); return; }
+    settings = await res.json();
+  } catch (error) {
+    settings = { error: error.message };
+  }
+  if (mode === "settings") renderSettings();
+}
+const lines = (v) => (v || []).join("\\n");
+function renderSettings() {
+  const view = document.getElementById("view");
+  if (!settings) { view.innerHTML = '<div class="empty">加载中…</div>'; loadSettings(); return; }
+  if (settings.error) { view.innerHTML = '<div class="empty">' + esc(settings.error) + "</div>"; return; }
+  const g = settings.watchGlobal, st = settings.watchState || {};
+  let html = '<h1 class="title">设置</h1><div class="path">保存后立即生效，研究记录本身不会被这里修改。</div>';
+  html += '<section style="margin-top:18px"><h2>论文追踪 <span class="sub">每天自动抓 arXiv 新论文，用 Hugging Face 热门榜和 Semantic Scholar 排序</span></h2><div class="card form">' +
+    '<div class="row2"><label>每天几点运行（服务器时间）<select id="wHour">' + Array.from({ length: 24 }, (_, h) => '<option value="' + h + '"' + (h === g.dailyHour ? " selected" : "") + ">" + h + ":00</option>").join("") + "</select></label>" +
+    '<label>每次回看几天<input type="number" id="wDays" min="1" max="14" value="' + esc(g.lookbackDays) + '"></label>' +
+    '<label>每个项目最多保留几篇<input type="number" id="wMax" min="5" max="200" value="' + esc(g.maxPerDigest) + '"></label>' +
+    '<label>网络代理（可空）<input type="text" id="wProxy" placeholder="服务器连不上 Hugging Face 时填，例如 http://127.0.0.1:7890" value="' + esc(g.proxy) + '"></label></div>' +
+    '<div class="btns"><button class="btn primary" id="wSave">保存</button><button class="btn" id="wRunAll">立即运行全部项目</button><span class="note">' +
+    (settings.watchRunning ? "正在运行…" : st.lastRun ? "上次运行：" + new Date(st.lastRun).toLocaleString() + " · " + (st.results || []).map((r) => r.root.split("/").pop() + " " + ({ done: (r.found ?? 0) + " 篇", unconfigured: "未设关键词", disabled: "已关闭", failed: "失败" }[r.status] || r.status)).join("，") : "还没运行过") + "</span></div>" +
+    '<div class="btns" style="margin-top:6px"><label style="flex:1 1 260px">Semantic Scholar API key（可选，' + (settings.s2KeySet ? "已设置" : "未设置") + '；没有也能运行）<input type="password" id="s2Key" placeholder="' + (settings.s2KeySet ? "输入新 key 可替换" : "粘贴 key") + '" autocomplete="off"></label><button class="btn" id="s2Save">保存 key</button>' + (settings.s2KeySet ? '<button class="btn danger" id="s2Clear">清除 key</button>' : "") + "</div></div></section>";
+  html += '<section><h2>各项目追踪内容 <span class="sub">关键词一行一个，命中标题权重高；关注作者命中会加分</span></h2>';
+  if (!settings.projects.length) html += '<div class="card note">还没有带研究记录的已登记项目。</div>';
+  html += settings.projects.map((p, i) => '<div class="card form" style="margin-bottom:10px" data-i="' + i + '"><div class="btns"><strong style="flex:1">' + esc(p.name) + '</strong><span class="btns" style="color:var(--ink);font-size:13px"><input type="checkbox" class="wEnabled" id="wEn' + i + '"' + (p.watch.enabled ? " checked" : "") + '><label for="wEn' + i + '" style="display:inline;color:var(--ink)">启用追踪</label></span></div>' +
+    '<div class="row2"><label>关键词<textarea class="wKeywords" placeholder="例如：sewing pattern">' + esc(lines(p.watch.keywords)) + "</textarea></label>" +
+    '<label>关注作者<textarea class="wAuthors" placeholder="例如：Maria Korosteleva（可空）">' + esc(lines(p.watch.authors)) + "</textarea></label></div>" +
+    '<label>arXiv 分类（逗号分隔）<input type="text" class="wCats" value="' + esc(p.watch.categories.join(", ")) + '"></label>' +
+    '<div class="btns"><button class="btn primary wSaveP" data-root="' + esc(p.root) + '">保存</button><button class="btn wRunP" data-root="' + esc(p.root) + '">只运行这个项目</button></div></div>').join("");
+  html += "</section>";
+  html += '<section><h2>项目登记 <span class="sub">登记的项目会随 Dove 升级自动更新，并显示在面板里</span></h2><div class="card">' +
+    settings.registered.map((r) => '<div class="reg"><span class="p">' + esc(r.root) + "</span>" + (r.exists ? "" : '<span class="chip none">目录不存在</span>') + '<button class="btn danger regRemove" data-root="' + esc(r.root) + '">移出登记</button></div>').join("") +
+    '<div class="reg"><input type="text" id="regPath" placeholder="已安装 Dove 的项目绝对路径" style="flex:1 1 260px;font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)"><button class="btn" id="regAdd">登记</button><button class="btn" id="regSync">把所有项目更新到当前版本</button></div></div></section>';
+  if (settings.canChangePassword) html += '<section><h2>面板密码</h2><div class="card form"><div class="row2"><label>新密码（至少 8 位）<input type="password" id="pw1" autocomplete="new-password"></label><label>再输一次<input type="password" id="pw2" autocomplete="new-password"></label></div><div class="btns"><button class="btn primary" id="pwSave">修改密码</button><span class="note">修改后其他设备需要重新登录。</span></div></div></section>';
+  view.innerHTML = html;
+  const run = (fn) => async (event) => { const b = event.currentTarget; b.disabled = true; try { await fn(b); } catch (error) { toast(error.message); } finally { b.disabled = false; } };
+  const byId = (id) => document.getElementById(id);
+  byId("wSave").addEventListener("click", run(async () => { await act("saveWatchGlobal", { settings: { dailyHour: Number(byId("wHour").value), lookbackDays: Number(byId("wDays").value), maxPerDigest: Number(byId("wMax").value), proxy: byId("wProxy").value } }); toast("已保存"); await loadSettings(); }));
+  byId("wRunAll").addEventListener("click", run(async () => { await act("runWatch", {}); toast("已开始运行，完成后刷新可见"); watchCache.clear(); setTimeout(loadSettings, 4000); }));
+  byId("s2Save").addEventListener("click", run(async () => { if (!byId("s2Key").value.trim()) throw new Error("先粘贴 key"); await act("saveS2Key", { key: byId("s2Key").value }); toast("key 已保存"); await loadSettings(); }));
+  if (byId("s2Clear")) byId("s2Clear").addEventListener("click", run(async () => { await act("saveS2Key", { key: "" }); toast("key 已清除"); await loadSettings(); }));
+  view.querySelectorAll(".wSaveP").forEach((b) => b.addEventListener("click", run(async (btn) => {
+    const card = btn.closest(".card");
+    await act("saveWatchConfig", { root: btn.dataset.root, config: { enabled: card.querySelector(".wEnabled").checked, keywords: card.querySelector(".wKeywords").value, authors: card.querySelector(".wAuthors").value, categories: card.querySelector(".wCats").value } });
+    watchCache.delete(btn.dataset.root); toast("已保存"); await loadSettings();
+  })));
+  view.querySelectorAll(".wRunP").forEach((b) => b.addEventListener("click", run(async (btn) => { await act("runWatch", { root: btn.dataset.root }); watchCache.delete(btn.dataset.root); toast("已开始运行"); setTimeout(loadSettings, 4000); })));
+  view.querySelectorAll(".regRemove").forEach((b) => b.addEventListener("click", run(async (btn) => { await act("removeProject", { root: btn.dataset.root }); toast("已移出登记"); await loadSettings(); load(); })));
+  byId("regAdd").addEventListener("click", run(async () => { await act("addProject", { path: byId("regPath").value.trim() }); toast("已登记"); await loadSettings(); load(); }));
+  byId("regSync").addEventListener("click", run(async () => { const r = await act("syncProjects", {}); toast("更新完成：" + (r || []).map((x) => x.target.split("/").pop() + " " + x.status).join("，")); }));
+  if (byId("pwSave")) byId("pwSave").addEventListener("click", run(async () => { if (byId("pw1").value !== byId("pw2").value) throw new Error("两次输入不一致"); await act("changePassword", { password: byId("pw1").value }); byId("pw1").value = byId("pw2").value = ""; toast("密码已修改"); }));
+}
+function setMode(next) {
+  mode = next;
+  document.getElementById("navProjects")?.classList.toggle("on", mode === "projects");
+  document.getElementById("navSettings")?.classList.toggle("on", mode === "settings");
+  if (mode === "settings") { history.replaceState(null, "", "#settings"); settings = null; renderSettings(); }
+  else { if (selected) history.replaceState(null, "", "#" + encodeURIComponent(selected)); renderView(); }
+}
 function tile(k, v) { return '<div class="tile"><div class="k">' + k + '</div><div class="v" title="' + esc(v) + '">' + esc(v) + "</div></div>"; }
 function select(root) {
   selected = root;
+  if (mode !== "projects") { mode = "projects"; document.getElementById("navProjects")?.classList.add("on"); document.getElementById("navSettings")?.classList.remove("on"); }
   history.replaceState(null, "", "#" + encodeURIComponent(root));
   renderList(); renderView();
 }
@@ -450,14 +631,18 @@ async function load() {
     data = body;
     if (!selected || !data.projects.some((p) => p.root === selected)) selected = data.projects[0]?.root ?? null;
     document.getElementById("meta").textContent = (data.version ? "Dove " + data.version + " · " : "") + data.projects.length + " 个项目 · 更新于 " + new Date(data.generatedAt).toLocaleTimeString();
-    renderList(); renderView();
+    renderList();
+    if (mode === "projects") renderView();
   } catch (error) {
     document.getElementById("meta").textContent = data
       ? "刷新失败，显示的是 " + new Date(data.generatedAt).toLocaleTimeString() + " 的数据"
       : "读取失败：" + error.message;
   }
 }
-document.getElementById("reload").addEventListener("click", () => { texts.clear(); load(); });
+document.getElementById("reload").addEventListener("click", () => { texts.clear(); watchCache.clear(); load(); if (mode === "settings") loadSettings(); });
+document.getElementById("navProjects")?.addEventListener("click", () => setMode("projects"));
+document.getElementById("navSettings")?.addEventListener("click", () => setMode("settings"));
+if (mode === "settings") setMode("settings");
 document.getElementById("picker").addEventListener("change", (e) => select(e.target.value));
 document.getElementById("theme").addEventListener("click", () => {
   const root = document.documentElement;

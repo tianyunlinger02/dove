@@ -37,7 +37,7 @@
     "review:validate": "node ./scripts/validate-review.mjs",
     "runs:validate": "node ./scripts/validate-runs.mjs",
     "runtime:validate": "node --test ./tests/file-write-safety.test.mjs",
-    "dashboard:validate": "node --test ./tests/dashboard.test.mjs",
+    "dashboard:validate": "node --test ./tests/dashboard.test.mjs ./tests/paper-watch.test.mjs",
     "behavior:validate": "node ./evals/behavior/validate.mjs",
     "behavior:eval": "node ./evals/behavior/eval.mjs",
     "package:validate": "node ./scripts/validate-package.mjs",

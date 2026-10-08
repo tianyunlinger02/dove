@@ -108,3 +108,10 @@ test("with a password every page and API request needs the session cookie", asyn
     server.close();
   }
 });
+
+test("page scripts parse in every mode", () => {
+  for (const options of [{}, { canEdit: true }, { canEdit: true, canSignOut: true }]) {
+    const html = renderDashboardHtml(options);
+    assert.doesNotThrow(() => new Function(html.split("<script>")[1].split("</script>")[0]), JSON.stringify(options));
+  }
+});

@@ -8,7 +8,9 @@ import { fileURLToPath } from "node:url";
 import { confirm } from "@inquirer/prompts";
 
 import { parseDoveCli } from "../src/cli/command-parser.mjs";
+import { createDashboardActions } from "../src/cli/dashboard-actions.mjs";
 import { DEFAULT_DASHBOARD_BIND, DEFAULT_DASHBOARD_PORT, startDashboardServer } from "../src/cli/dashboard-server.mjs";
+import { runWatch } from "../src/core/paper-watch.mjs";
 import { renderDoveDoctor } from "../src/cli/doctor-output.mjs";
 import { renderDoveHelp } from "../src/cli/help-output.mjs";
 import { runInteractiveDoveSetup } from "../src/cli/interactive-setup.mjs";
@@ -381,14 +383,26 @@ try {
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`--port 需要 1 到 65535 之间的整数：${options.port}`);
     const bind = options.bind ?? DEFAULT_DASHBOARD_BIND;
     let password = null;
-    if (options.passwordFile !== undefined) {
-      password = fs.readFileSync(path.resolve(options.passwordFile), "utf8").trim();
+    const passwordFile = options.passwordFile === undefined ? null : path.resolve(options.passwordFile);
+    if (passwordFile) {
+      password = fs.readFileSync(passwordFile, "utf8").trim();
       if (!password) throw new Error(`密码文件为空：${options.passwordFile}`);
     }
-    await startDashboardServer({ collect, listRoots: () => readRegisteredProjects(PACKAGE_OPTIONS), readDocument: readProjectDocument, password, bind, port });
-    console.log(`Dove 科研面板（只读${password ? "，需密码登录" : ""}）：http://${bind}:${port}/   Ctrl+C 退出`);
+    const actions = createDashboardActions({ packageOptions: PACKAGE_OPTIONS, passwordFile });
+    await startDashboardServer({ collect, listRoots: () => readRegisteredProjects(PACKAGE_OPTIONS), readDocument: readProjectDocument, password, actions, bind, port });
+    actions.startScheduler();
+    console.log(`Dove 科研面板（${password ? "需密码登录" : "无密码，只应在本机或 SSH 隧道里打开"}）：http://${bind}:${port}/   Ctrl+C 退出`);
+    console.log("论文追踪会在面板运行期间按设置每天自动执行一次。");
     if (bind === DEFAULT_DASHBOARD_BIND) console.log(`从自己电脑打开：ssh -N -L ${port}:127.0.0.1:${port} <服务器>，再访问 http://localhost:${port}/`);
     await new Promise(() => {});
+  }
+
+  if (command === "watch") {
+    const roots = options.project ? [path.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs.existsSync(root));
+    const result = await runWatch(roots, PACKAGE_OPTIONS);
+    if (wantsJson(options)) writeJson(result);
+    else for (const item of result.results) console.log(`${path.basename(item.root)}：${({ done: `新论文 ${item.found} 篇`, unconfigured: "还没设置关键词或作者", disabled: "已关闭追踪", failed: `失败 ${item.error}` })[item.status] ?? item.status}${item.notes?.length ? `（${item.notes.join("；")}）` : ""}`);
+    process.exit(0);
   }
 
   if (command === "doctor") {

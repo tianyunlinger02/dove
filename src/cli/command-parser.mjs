@@ -28,6 +28,7 @@ export const CLI_COMMAND_SPECS = Object.freeze({
   uninstall: command([projectOption, ...outputOptions]),
   doctor: command([projectOption, ...outputOptions]),
   dashboard: command([value("--port"), value("--bind"), value("--password-file"), ...outputOptions]),
+  watch: command([], { subcommands: { run: command([projectOption, ...outputOptions]) } }),
   projects: command([], {
     subcommands: {
       import: command([value("--project", { repeatable: true, dedupe: true }), boolean("--sync"), ...outputOptions]),
