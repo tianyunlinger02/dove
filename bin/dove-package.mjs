@@ -1128,15 +1128,15 @@ var require_route = __commonJS({
       };
     }
     function wrapConversion(toModel, graph) {
-      const path21 = [graph[toModel].parent, toModel];
+      const path22 = [graph[toModel].parent, toModel];
       let fn = conversions[graph[toModel].parent][toModel];
       let cur = graph[toModel].parent;
       while (graph[cur].parent) {
-        path21.unshift(graph[cur].parent);
+        path22.unshift(graph[cur].parent);
         fn = link(conversions[graph[cur].parent][cur], fn);
         cur = graph[cur].parent;
       }
-      fn.conversion = path21;
+      fn.conversion = path22;
       return fn;
     }
     module.exports = function(fromModel) {
@@ -7632,10 +7632,10 @@ var require_lib2 = __commonJS({
     exports.analyse = analyse;
     var detectFile = (filepath, opts = {}) => new Promise((resolve, reject) => {
       let fd;
-      const fs22 = (0, node_1.default)();
+      const fs23 = (0, node_1.default)();
       const handler = (err, buffer) => {
         if (fd) {
-          fs22.closeSync(fd);
+          fs23.closeSync(fd);
         }
         if (err) {
           reject(err);
@@ -7647,9 +7647,9 @@ var require_lib2 = __commonJS({
       };
       const sampleSize = (opts === null || opts === void 0 ? void 0 : opts.sampleSize) || 0;
       if (sampleSize > 0) {
-        fd = fs22.openSync(filepath, "r");
+        fd = fs23.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(sampleSize);
-        fs22.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
+        fs23.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
           if (err) {
             handler(err, null);
           } else {
@@ -7661,22 +7661,22 @@ var require_lib2 = __commonJS({
         });
         return;
       }
-      fs22.readFile(filepath, handler);
+      fs23.readFile(filepath, handler);
     });
     exports.detectFile = detectFile;
     var detectFileSync = (filepath, opts = {}) => {
-      const fs22 = (0, node_1.default)();
+      const fs23 = (0, node_1.default)();
       if (opts && opts.sampleSize) {
-        const fd = fs22.openSync(filepath, "r");
+        const fd = fs23.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(opts.sampleSize);
-        const bytesRead = fs22.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
+        const bytesRead = fs23.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
         if (bytesRead < opts.sampleSize) {
           sample = sample.subarray(0, bytesRead);
         }
-        fs22.closeSync(fd);
+        fs23.closeSync(fd);
         return (0, exports.detect)(sample);
       }
-      return (0, exports.detect)(fs22.readFileSync(filepath));
+      return (0, exports.detect)(fs23.readFileSync(filepath));
     };
     exports.detectFileSync = detectFileSync;
     exports.default = {
@@ -11477,8 +11477,8 @@ var require_lib3 = __commonJS({
 });
 
 // bin/dove.mjs
-import fs21 from "node:fs";
-import path20 from "node:path";
+import fs22 from "node:fs";
+import path21 from "node:path";
 import process7 from "node:process";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
@@ -13912,6 +13912,7 @@ var CLI_COMMAND_SPECS = Object.freeze({
   doctor: command([projectOption, ...outputOptions]),
   dashboard: command([value("--port"), value("--bind"), value("--password-file"), ...outputOptions]),
   watch: command([], { subcommands: { run: command([projectOption, ...outputOptions]) } }),
+  topic: command([], { subcommands: { start: command([projectOption, ...outputOptions]) } }),
   projects: command([], {
     subcommands: {
       import: command([value("--project", { repeatable: true, dedupe: true }), boolean("--sync"), ...outputOptions]),
@@ -14100,8 +14101,8 @@ function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
 }
 
 // src/cli/dashboard-actions.mjs
-import fs13 from "node:fs";
-import path12 from "node:path";
+import fs15 from "node:fs";
+import path14 from "node:path";
 
 // src/core/host-registry.mjs
 var PROJECT_HOST_IDS = Object.freeze(["claude", "dsh"]);
@@ -14741,12 +14742,12 @@ function renderClaudeDoveMentorAgent() {
   return `---
 name: ${DOVE_RESEARCH_MENTOR_NAME}
 description: \u4ECE\u7528\u6237\u539F\u8BDD\u91CD\u5EFA\u7ACB\u9879\uFF0C\u62BD\u67E5\u4EA7\u7269\u548C\u8BC4\u6D4B\uFF0C\u5224\u65AD\u65B9\u6CD5\u7248\u672C\u5E76\u7ED9\u51FA\u4E0B\u4E00\u8F6E\u8BF4\u660E\u3002
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, mcp__exa, mcp__dove-paper-search
 ---
 
 # Dove \u5BFC\u5E08
 
-\u4F60\u662F\u540C\u4E00\u4E2A Dove \u7814\u7A76\u8005\u7684\u4E00\u6B21\u72EC\u7ACB\u5224\u65AD\uFF0C\u4E0D\u662F\u5BA1\u6279\u8005\u3002\u6BCF\u6B21\u539F\u751F Agent \u8C03\u7528\u662F\u5168\u65B0\u4E0A\u4E0B\u6587\uFF0C\u4E0D resume\uFF0C\u4E0D\u5E26\u6267\u884C\u8FC7\u7A0B\u5BF9\u8BDD\uFF0C\u4E0D\u7528\u6267\u884C\u8005\u8F6C\u8FF0\u4EE3\u66FF\u7528\u6237\u539F\u8BDD\uFF0C\u4E0D\u901A\u8FC7 CLI \u542F\u52A8\u6A21\u578B\u3002\u53EA\u7528 Read/Grep/Glob\uFF0C\u4E0D\u8BA1\u7B97\u3001\u4E0D\u6539\u6587\u4EF6\uFF1B\u6240\u9700\u642D\u8BC4\u6D4B\u3001\u91CD\u7B97\u3001\u663E\u8457\u6027\u68C0\u9A8C\u90FD\u5199\u8FDB\u8BF4\u660E\u4EA4\u7ED9\u6267\u884C\u8005\u3002
+\u4F60\u662F\u540C\u4E00\u4E2A Dove \u7814\u7A76\u8005\u7684\u4E00\u6B21\u72EC\u7ACB\u5224\u65AD\uFF0C\u4E0D\u662F\u5BA1\u6279\u8005\u3002\u6BCF\u6B21\u539F\u751F Agent \u8C03\u7528\u662F\u5168\u65B0\u4E0A\u4E0B\u6587\uFF0C\u4E0D resume\uFF0C\u4E0D\u5E26\u6267\u884C\u8FC7\u7A0B\u5BF9\u8BDD\uFF0C\u4E0D\u7528\u6267\u884C\u8005\u8F6C\u8FF0\u4EE3\u66FF\u7528\u6237\u539F\u8BDD\uFF0C\u4E0D\u901A\u8FC7 CLI \u542F\u52A8\u6A21\u578B\u3002\u53EA\u8BFB\uFF1ARead/Grep/Glob\uFF0C\u52A0\u4E0A\u7F51\u9875\u68C0\u7D22\uFF08exa\uFF09\u548C\u8BBA\u6587\u68C0\u7D22\uFF08dove-paper-search\uFF09\uFF0C\u68C0\u7D22\u53EA\u7528\u4E8E\u65B0\u8BBA\u6587\u7684\u80CC\u666F\u6838\u5B9E\u548C\u6BCF\u5468\u9886\u57DF\u626B\u63CF\uFF1B\u4E0D\u8BA1\u7B97\u3001\u4E0D\u6539\u6587\u4EF6\uFF1B\u6240\u9700\u642D\u8BC4\u6D4B\u3001\u91CD\u7B97\u3001\u663E\u8457\u6027\u68C0\u9A8C\u90FD\u5199\u8FDB\u8BF4\u660E\u4EA4\u7ED9\u6267\u884C\u8005\u3002
 
 ## \u5148\u8BFB\u8C01\u8BF4\u4E86\u4EC0\u4E48
 
@@ -14771,7 +14772,11 @@ EVAL \u7B2C\u4E00\u6761\u6570\u636E\u884C\u662F\u540C\u8F93\u5165\u5F3A\u57FA\u7
 2. \u6539\u52A8\u5E26\u6765\u901A\u7528\u80FD\u529B\u8FD8\u662F\u8865\u4E01\uFF1A\u9488\u5BF9\u54EA\u7C7B\u5931\u8D25\uFF0C\u672A\u89C1\u6570\u636E\u5217\u662F\u5426\u53D8\u5316\uFF0C\u800C\u4E0D\u662F\u67D0\u4E00\u4EF6\u662F\u5426\u8C03\u901A\u3002
 3. \u95EE\u9898/\u65B9\u6CD5/\u8D21\u732E\u662F\u5426\u7AD9\u5F97\u4F4F\uFF1A\u68C0\u67E5\u654F\u611F\u6027\u3001\u5BF9\u7167\u5F3A\u5F31\u3001\u8BBE\u5B9A\u73B0\u5B9E\u6027\uFF1B\u533A\u5206\u8865\u8BC1\u636E\u7684\u201C\u9A8C\u8BC1\u201D\u548C\u6539\u53D8\u673A\u5236/\u80FD\u529B\u7684\u201C\u771F\u8865\u5F3A\u201D\uFF0C\u4E0D\u9ED8\u8BA4\u6536\u7A84\u4E3B\u5F20\u3002\u4E0D\u8981\u4E3A\u5355\u4EF6\u6837\u672C\u51FA\u9886\u57DF\u5DE5\u827A\u4E3B\u610F\u3002
 
-\u65B0\u8BBA\u6587\u6458\u8981\u91CC\u4E0E\u672C\u9879\u76EE\u76F8\u5173\u7684\uFF0C\u9010\u7BC7\u5224\u4E3A\uFF1A\u649E\u9898\uFF08\u8D21\u732E\u88AB\u90E8\u5206\u6216\u5168\u90E8\u8986\u76D6\uFF0C\u6539\u5199\u65B0\u9896\u6027\u5224\u65AD\uFF0C\u8986\u76D6\u4E3B\u5F20\u65F6\u627E\u7528\u6237\uFF09\u3001\u65B0\u57FA\u7EBF\uFF08\u8FDB\u5165 EVAL \u5BF9\u7167\uFF09\u3001\u53EF\u501F\u7528\uFF08\u65B9\u6CD5\u6216\u6570\u636E\u5199\u8FDB\u4E0B\u4E00\u8F6E\u8BF4\u660E\uFF09\u3001\u65E0\u5173\uFF1B\u53EA\u51ED\u6458\u8981\u4E0D\u80FD\u5B9A\u7684\uFF0C\u5728\u8BF4\u660E\u91CC\u5B89\u6392\u6267\u884C\u8005\u8BFB\u5168\u6587\u6838\u5B9E\u3002
+\u65B0\u8BBA\u6587\u6458\u8981\u91CC\u4E0E\u672C\u9879\u76EE\u76F8\u5173\u7684\uFF0C\u9010\u7BC7\u5224\u4E3A\uFF1A\u649E\u9898\uFF08\u8D21\u732E\u88AB\u90E8\u5206\u6216\u5168\u90E8\u8986\u76D6\uFF0C\u6539\u5199\u65B0\u9896\u6027\u5224\u65AD\uFF0C\u8986\u76D6\u4E3B\u5F20\u65F6\u627E\u7528\u6237\uFF09\u3001\u65B0\u57FA\u7EBF\uFF08\u8FDB\u5165 EVAL \u5BF9\u7167\uFF09\u3001\u53EF\u501F\u7528\uFF08\u65B9\u6CD5\u6216\u6570\u636E\u5199\u8FDB\u4E0B\u4E00\u8F6E\u8BF4\u660E\uFF09\u3001\u65E0\u5173\uFF1B\u7591\u4F3C\u649E\u9898\u6216\u91CD\u8981\u7684\uFF0C\u5148\u7528\u7F51\u9875\u548C\u8BBA\u6587\u68C0\u7D22\u770B\u9879\u76EE\u4E3B\u9875\u3001\u4F5C\u8005\u65E2\u5F80\u5DE5\u4F5C\u548C\u5168\u6587\uFF1B\u4ECD\u4E0D\u80FD\u5B9A\u7684\uFF0C\u5728\u8BF4\u660E\u91CC\u5B89\u6392\u6267\u884C\u8005\u8BFB\u5168\u6587\u6838\u5B9E\u3002\u5728\u8BF4\u660E\u91CC\u8BBE\u201C\u8BBA\u6587\u5F71\u54CD\u201D\u4E00\u8282\uFF0C\u6BCF\u7BC7\u4E00\u884C\uFF0C\u683C\u5F0F\u56FA\u5B9A\u4E3A\u201C- \u7F16\u53F7 | \u649E\u9898/\u65B0\u57FA\u7EBF/\u53EF\u501F\u7528/\u65E0\u5173 | \u4E00\u53E5\u7406\u7531\u201D\uFF0C\u7F16\u53F7\u7528\u6458\u8981\u91CC\u7684 arXiv \u7F16\u53F7\u6216 OpenAlex \u7F16\u53F7\u3002
+
+\u8DDD\u4E0A\u6B21\u9886\u57DF\u626B\u63CF\uFF08.dove/research/watch/scan-\u65E5\u671F.md\uFF09\u8D85\u8FC7 7 \u5929\u6216\u4ECE\u672A\u626B\u63CF\u65F6\uFF0C\u672C\u8F6E\u987A\u5E26\u505A\u4E00\u6B21\uFF1A\u7528\u7F51\u9875\u548C\u8BBA\u6587\u68C0\u7D22\u770B\u672C\u65B9\u5411\u8FD1\u671F\u9876\u4F1A\u63A5\u6536\u3001\u7EFC\u8FF0\u548C\u91CD\u8981\u8BA8\u8BBA\uFF0C\u5199\u6210\u8BF4\u660E\u672B\u5C3E\u7684\u201C\u9886\u57DF\u626B\u63CF\u201D\u4E00\u8282\uFF08\u4E00\u9875\u4EE5\u5185\uFF0C\u6BCF\u6761\u5E26\u6765\u6E90\u94FE\u63A5\uFF0C\u6307\u51FA\u5BF9\u672C\u9879\u76EE\u7684\u542B\u4E49\uFF09\uFF1B\u4E3B\u4F1A\u8BDD\u628A\u8FD9\u4E00\u8282\u53E6\u5B58\u4E3A .dove/research/watch/scan-\u65E5\u671F.md\u3002
+
+\u82E5 .dove/research/watch/config.json \u4ECD\u662F\u81EA\u52A8\u521D\u7A3F\uFF08source \u4E3A draft\uFF09\uFF0C\u6216\u8FFD\u8E2A\u7ED3\u679C\u660E\u663E\u8DD1\u504F\uFF0C\u5728\u8BF4\u660E\u91CC\u52A0\u201C\u8FFD\u8E2A\u5EFA\u8BAE\u201D\u4E00\u8282\uFF1A\u82F1\u6587\u5173\u952E\u8BCD\u3001\u5173\u6CE8\u4F5C\u8005\u3001\u5173\u6CE8\u4F1A\u8BAE\u3001\u5173\u6CE8\u673A\u6784\u3001\u8FD1\u90BB\u8BBA\u6587 arXiv \u7F16\u53F7\uFF1B\u4E3B\u4F1A\u8BDD\u636E\u6B64\u6539\u5199\u8BE5\u6587\u4EF6\u5E76\u628A source \u8BBE\u4E3A mentor\u3002
 
 ## \u4E0B\u4E00\u8F6E\u8BF4\u660E\u7684\u56FA\u5B9A\u5199\u6CD5
 
@@ -14780,6 +14785,10 @@ EVAL \u7B2C\u4E00\u6761\u6570\u636E\u884C\u662F\u540C\u8F93\u5165\u5F3A\u57FA\u7
 \u4E00\u8F6E=\u4E00\u4E2A\u65B9\u6CD5\u7248\u672C\uFF1B\u8BC4\u6D4B\u671F\u95F4\u7248\u672C\u5185\u4EE3\u7801\u4E0D\u6539\uFF0C\u6539\u4EE3\u7801\u5C31\u65B0\u7248\u672C\u3001\u5168\u91CF\u91CD\u8DD1\uFF0C\u4E0D\u628A\u5355\u6B3E\u4FEE\u8865\u7B97\u5168\u8F6E\u7ED3\u679C\u3002\u65E7\u65B9\u6CD5\u4FDD\u7559\u4F5C\u6D88\u878D\uFF0C\u5404\u5BF9\u7167\u540C\u9884\u7B97\u3002\u5141\u8BB8\u4E2D\u9014\u66FF\u6362\u672C\u8F6E\u8BF4\u660E\uFF0C\u6807\u6CE8\u539F\u56E0\u548C\u4F5C\u8005\uFF1B\u82E5\u65B9\u6CD5\u4EE3\u7801\u53D8\u5316\u5219\u8F6C\u65B0\u7248\u672C\uFF0C\u4E0D\u80FD\u7528\u6539\u8BF4\u660E\u63A9\u76D6\u3002\u5BF9\u201C\u5B66\u4E0D\u52A8\u201D\u7684\u9879\u76EE\uFF0C\u7ACB\u9879\u540E\u7684\u7B2C\u4E00\u4E2A\u65B9\u6CD5\u8F6E\u6B21\u56FA\u5B9A\u5148\u505A\u5355\u4EF6\u8FC7\u62DF\u5408/\u4ECE\u7A7A\u72B6\u6001\u590D\u73B0\u53EF\u5B66\u4E60\u6027\uFF0C\u4E0D\u80FD\u628A\u6269\u6570\u636E\u3001\u5EFA\u5927\u8BC4\u4EF7\u5668\u7B49\u6392\u5728\u7B2C\u4E00\u6B21\u68C0\u9A8C\u524D\u3002
 
 \u5B8C\u6210\u4E00\u8F6E\u540E\u7ED9\u4E0B\u4E00\u8F6E\uFF1B\u8FDE\u7EED\u51E0\u8F6E EVAL \u6CA1\u65B0\u884C\u65F6\u8BCA\u65AD\u4E3A\u4EC0\u4E48\u672A\u5F62\u6210\u7ED3\u679C\u5E76\u6539\u4E0B\u4E00\u8F6E\uFF0C\u4E0D\u8865\u9020\u6570\u636E\u3002\u6267\u884C\u8005\u56E0\u201C\u8FDD\u80CC\u539F\u5219/\u9700\u8981\u65B0\u673A\u5236/\u89C4\u5219\u4E0D\u5141\u8BB8\u201D\u81EA\u884C\u505C\u4E0B\uFF0C\u4E5F\u8C03\u7528\u4F60\u6838\u5BF9\u89C4\u5219\u6765\u6E90\u3002\u82E5\u4E0A\u4E0B\u6587\u6458\u8981\u5927\u534A\u662F\u7981\u4EE4\uFF0C\u53EF\u5EFA\u8BAE\u7528\u6237\u6E05\u7A7A\uFF0C\u518D\u6309\u8EAB\u4EFD\u5361\u3001\u7528\u6237\u539F\u8BDD\u548C\u5F53\u524D\u8BF4\u660E\u91CD\u53D1\uFF1B\u4E0D\u81EA\u884C\u6E05\u7A7A\u6216\u64A4\u9500\u5BBF\u4E3B\u6743\u9650\u3002
+
+## \u9009\u9898\u8F6E
+
+\u7528\u6237\u8981\u9009\u9898\u6216\u5F00\u9898\u65F6\uFF0C\u4E3B\u4F1A\u8BDD\u5148\u8FD0\u884C dove topic start \u628A\u7528\u6237\u7684\u9009\u9898\u6807\u51C6\u590D\u5236\u4E3A .dove/research/topics/CRITERIA.md\u3002\u9009\u9898\u8F6E\u4EE5 CRITERIA.md \u4E3A\u552F\u4E00\u4F9D\u636E\uFF1A\u7167\u5B83\u7684\u56FA\u5B9A\u987A\u5E8F\u3001\u786C\u89C4\u5219\u548C\u65B9\u5411\u5361\u6A21\u677F\u63A8\u8FDB\uFF0C\u4E0D\u5957\u7528\u4E0A\u9762\u65B9\u6CD5\u8F6E\u6B21\u7684\u516D\u9879\u5199\u6CD5\uFF0C\u4E5F\u4E0D\u8DD1\u5B8C\u6574\u65B9\u6CD5\u5B9E\u9A8C\uFF0C\u53EA\u505A\u6807\u51C6\u660E\u786E\u5141\u8BB8\u7684\u8BCA\u65AD\u6D4B\u91CF\u6216\u6DD8\u6C70\u6027\u9884\u5B9E\u9A8C\u3002\u5148\u53D1\u6563\uFF1A\u7B2C\u4E00\u6279\u5019\u9009\u8981\u6709\u5BBD\u5EA6\uFF0C\u751F\u6210\u9636\u6BB5\u4E0D\u780D\u9898\uFF1B\u53CD\u5411\u5BA1\u67E5\u4E0E\u8FD1\u90BB\u5BA1\u8BA1\u7528\u7F51\u9875\u548C\u8BBA\u6587\u68C0\u7D22\uFF0C\u5199\u51FA\u5904\u548C\u8986\u76D6\u7A0B\u5EA6\uFF1B\u5BA1\u67E5\u8F6E\u6570\u548C\u6536\u7A84\u5B88\u6807\u51C6\u91CC\u7684\u4E0A\u9650\uFF0C\u7A84\u5230\u4E0D\u503C\u5F97\u505A\u5C31\u56DE\u5230\u751F\u6210\uFF0C\u4E0D\u7EE7\u7EED\u9650\u5B9A\u3002\u6BCF\u4E2A\u5019\u9009\u4E00\u5F20 topics/cards/NN-\u540D\u79F0.md\uFF0C\u5F00\u5934\u4E94\u884C\u56FA\u5B9A\u4E3A\u201C\u72B6\u6001\uFF1A\u201D\u201C\u9636\u6BB5\uFF1A\u201D\u201C\u5B9A\u4F4D\uFF1A\u201D\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u201C\u516D\u70B9\uFF1A\u201D\uFF08\u516D\u9879\u5404\u5199 \u6EE1\u8DB3/\u5F85\u6838\u5B9E/\u4E0D\u6EE1\u8DB3\uFF09\uFF0C\u5176\u4F59\u6309\u6807\u51C6\u6A21\u677F\uFF1B\u63A8\u8350\u4E0E\u64A4\u56DE\u90FD\u5199\u5177\u4F53\u8BC1\u636E\u3002\u7EFC\u5408\u5B9A\u9898\u7ED9\u51FA\u6392\u5E8F\u548C 2\u20133 \u4E2A\u63A8\u8350\uFF0C\u4EA4\u7528\u6237\u786E\u8BA4\u4E00\u6B21\uFF1B\u9009\u5B9A\u540E\u6309\u8BE5\u65B9\u5411\u505A\u7ACB\u9879\uFF0C\u518D\u5B9A\u8BC4\u6D4B\u3002
 
 ## \u627E\u7528\u6237\uFF0C\u4E0D\u53CD\u590D\u7B49\u7528\u6237
 
@@ -16036,8 +16045,8 @@ function desiredManaged(resources) {
 }
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path21) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path21 === "$" ? key : `${path21}.${key}`}.`);
+function duplicateKeyError(label, key, path22) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path22 === "$" ? key : `${path22}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -16073,7 +16082,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path21) {
+  function parseArray(path22) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -16082,7 +16091,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path21}[${itemIndex}]`);
+      parseValue(`${path22}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -16094,7 +16103,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path21) {
+  function parseObject(path22) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -16104,12 +16113,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path21);
+      if (keys.has(key)) duplicateKeyError(label, key, path22);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path21 === "$" ? `$.${key}` : `${path21}.${key}`);
+      parseValue(path22 === "$" ? `$.${key}` : `${path22}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -16120,11 +16129,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path21) {
+  function parseValue(path22) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path21);
-    else if (character === "[") parseArray(path21);
+    if (character === "{") parseObject(path22);
+    else if (character === "[") parseArray(path22);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -17394,11 +17403,169 @@ function inspectRegisteredProjects(options2 = {}) {
   return { projects: readRegisteredProjects(options2), lastSync: readLastProjectSync(options2) };
 }
 
+// src/core/dashboard-data.mjs
+import fs12 from "node:fs";
+import path11 from "node:path";
+var RESEARCH_ROOT2 = ".dove/research";
+var MAX_TEXT_BYTES = 64 * 1024;
+var MAX_ROUNDS = 40;
+var ROUND_FILE = /^(\d+)[-_](brief|result)\.md$/iu;
+var AUTHOR_LABELS = [
+  [/导师|mentor/iu, "mentor"],
+  [/用户|user/iu, "user"],
+  [/外部|external/iu, "external"]
+];
+function readText(file, fsOps) {
+  try {
+    const stat = fsOps.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink()) return null;
+    const bytes = fsOps.readFileSync(file);
+    const truncated = bytes.length > MAX_TEXT_BYTES;
+    const text = new TextDecoder("utf-8").decode(bytes.subarray(0, MAX_TEXT_BYTES));
+    return { text, truncated, mtime: stat.mtimeMs ?? null };
+  } catch {
+    return null;
+  }
+}
+function listDirectory(directory, fsOps) {
+  try {
+    return fsOps.readdirSync(directory);
+  } catch {
+    return [];
+  }
+}
+function parseCardFields(text = "") {
+  const fields = {};
+  for (const line of text.split(/\r?\n/u)) {
+    const match = line.match(/^\s*(?:[-*]\s*)?\**([^:：*\n]{1,40}?)\**\s*[:：]\s*(.+)$/u);
+    if (!match) continue;
+    const key = match[1].trim();
+    if (!(key in fields)) fields[key] = match[2].trim();
+  }
+  return fields;
+}
+function parseAuthor(text = "") {
+  const line = text.split(/\r?\n/u).slice(0, 12).find((item) => /^\s*(?:[-*]\s*)?\**\s*(Author|作者)\s*\**\s*[:：]/iu.test(item));
+  if (!line) return null;
+  const value2 = line.replace(/^[^:：]*[:：]\s*/u, "");
+  for (const [pattern, label] of AUTHOR_LABELS) if (pattern.test(value2)) return label;
+  return "other";
+}
+function firstHeading(text = "") {
+  const heading = text.split(/\r?\n/u).find((line) => /^#{1,3}\s+\S/u.test(line));
+  return heading ? heading.replace(/^#{1,3}\s+/u, "").trim() : null;
+}
+function parseMarkdownTables(text = "") {
+  const tables = [];
+  let current = null;
+  const cells = (line) => line.trim().replace(/^\|/u, "").replace(/\|$/u, "").split("|").map((cell) => cell.trim());
+  for (const line of text.split(/\r?\n/u)) {
+    if (!/^\s*\|.*\|\s*$/u.test(line)) {
+      if (current) tables.push(current);
+      current = null;
+      continue;
+    }
+    const row = cells(line);
+    if (row.every((cell) => /^:?-+:?$/u.test(cell))) continue;
+    if (!current) current = { header: row, rows: [] };
+    else current.rows.push(row);
+  }
+  if (current) tables.push(current);
+  return tables;
+}
+function collectRounds(directory, fsOps) {
+  const byNumber = /* @__PURE__ */ new Map();
+  for (const name of listDirectory(directory, fsOps)) {
+    const match = name.match(ROUND_FILE);
+    if (!match) continue;
+    const number = Number(match[1]);
+    const kind = match[2].toLowerCase();
+    const file = readText(path11.join(directory, name), fsOps);
+    if (!file) continue;
+    const entry = byNumber.get(number) ?? { number, label: match[1] };
+    entry[kind] = { file: name, truncated: file.truncated, mtime: file.mtime };
+    if (kind === "brief") {
+      entry.author = parseAuthor(file.text);
+      entry.title = firstHeading(file.text);
+    }
+    byNumber.set(number, entry);
+  }
+  return [...byNumber.values()].sort((left, right) => right.number - left.number).slice(0, MAX_ROUNDS);
+}
+function evaluationSummary(evaluation) {
+  const tables = parseMarkdownTables(evaluation.text);
+  return { mtime: evaluation.mtime, truncated: evaluation.truncated, tables, text: tables.length ? null : evaluation.text };
+}
+function summarizeProject(root, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs12;
+  const research = path11.join(root, RESEARCH_ROOT2);
+  let exists = false;
+  try {
+    exists = fsOps.lstatSync(root).isDirectory();
+  } catch {
+    exists = false;
+  }
+  const identity = readText(path11.join(research, "IDENTITY.md"), fsOps);
+  const evaluation = readText(path11.join(research, "EVAL.md"), fsOps);
+  const doctor = readText(path11.join(root, ".dove/install/DOCTOR.md"), fsOps);
+  const rounds = exists ? collectRounds(path11.join(research, "rounds"), fsOps) : [];
+  const fields = identity ? parseCardFields(identity.text) : {};
+  const current = identity ? parseDoveCurrentRound(identity.text) : null;
+  const statusMatch = identity?.text.match(/^Round status:[ \t]*(.+)$/mu)?.[1]?.trim() ?? null;
+  const times = [identity?.mtime, evaluation?.mtime, ...rounds.flatMap((round) => [round.brief?.mtime, round.result?.mtime])].filter((value2) => typeof value2 === "number");
+  return {
+    root,
+    name: path11.basename(root),
+    exists,
+    mainline: fields.Mainline ?? fields["\u4E3B\u7EBF"] ?? null,
+    currentRound: current?.brief ?? null,
+    roundStatus: statusMatch,
+    lastActivity: times.length ? Math.max(...times) : null,
+    identity: identity ? { text: identity.text, truncated: identity.truncated, mtime: identity.mtime } : null,
+    evaluation: evaluation ? evaluationSummary(evaluation) : null,
+    rounds,
+    doctor: doctor ? { mtime: doctor.mtime } : null
+  };
+}
+var NAMED_DOCUMENTS = { "EVAL.md": `${RESEARCH_ROOT2}/EVAL.md`, "DOCTOR.md": ".dove/install/DOCTOR.md" };
+function readProjectDocument(root, name, options2 = {}) {
+  if (typeof name !== "string") return null;
+  const topic = /^topics\/(?:cards\/)?[^/\\]+\.md$/u.test(name) && !name.includes("..") ? `${RESEARCH_ROOT2}/${name}` : null;
+  const relative = ROUND_FILE.test(name) ? `${RESEARCH_ROOT2}/rounds/${name}` : topic ?? NAMED_DOCUMENTS[name];
+  return relative ? readText(path11.join(root, relative), options2.fsOps ?? fs12) : null;
+}
+var IMPACTS = [["\u649E\u9898", "overlap"], ["\u65B0\u57FA\u7EBF", "baseline"], ["\u53EF\u501F\u7528", "borrow"], ["\u65E0\u5173", "irrelevant"]];
+function parsePaperImpacts(root, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs12;
+  const directory = path11.join(root, RESEARCH_ROOT2, "rounds");
+  const impacts = {};
+  for (const name of listDirectory(directory, fsOps).filter((item) => /brief\.md$/iu.test(item)).sort()) {
+    const file = readText(path11.join(directory, name), fsOps);
+    if (!file) continue;
+    for (const line of file.text.split(/\r?\n/u)) {
+      const id = line.match(/(\d{4}\.\d{4,5}|\bW\d{6,}\b)/u)?.[1];
+      const hit = id && IMPACTS.find(([word]) => line.includes(word));
+      if (hit) impacts[id] = { impact: hit[1], label: hit[0], round: name, note: line.replace(/^[-*\s]+/u, "").slice(0, 300) };
+    }
+  }
+  return impacts;
+}
+function collectDashboard(options2 = {}) {
+  const roots = options2.projects ?? readRegisteredProjects(options2);
+  const projects = roots.map((root) => summarizeProject(root, options2)).filter((project) => project.exists && (project.identity || project.evaluation || project.rounds.length));
+  projects.sort((left, right) => (right.lastActivity ?? 0) - (left.lastActivity ?? 0));
+  return { generatedAt: new Date(options2.now ?? Date.now()).toISOString(), version: options2.packageVersion ?? null, projects };
+}
+
+// src/core/topic-selection.mjs
+import fs14 from "node:fs";
+import path13 from "node:path";
+
 // src/core/paper-watch.mjs
 import { execFile } from "node:child_process";
-import fs12 from "node:fs";
+import fs13 from "node:fs";
 import os3 from "node:os";
-import path11 from "node:path";
+import path12 from "node:path";
 var WATCH_DIR = ".dove/research/watch";
 var PROJECT_CONFIG = `${WATCH_DIR}/config.json`;
 var PROJECT_STATE = `${WATCH_DIR}/state.json`;
@@ -17407,6 +17574,9 @@ var DEFAULT_CATEGORIES = ["cs.CV", "cs.GR", "cs.LG"];
 var FIRST_RUN_DAYS = 30;
 var ARXIV_INDEX_LAG_DAYS = 3;
 var MIN_RELEVANCE = 2;
+var OPENALEX = "https://api.openalex.org";
+var OPENALEX_FIELDS = "id,title,publication_date,authorships,abstract_inverted_index,locations,primary_location,referenced_works";
+var HOT_FILE = "watch-hot.json";
 var DEFAULT_GLOBAL_WATCH_SETTINGS = Object.freeze({ dailyHour: 8, lookbackDays: 3, proxy: "", maxPerDigest: 30 });
 function localDate(value2 = Date.now()) {
   const date = new Date(value2);
@@ -17414,28 +17584,28 @@ function localDate(value2 = Date.now()) {
 }
 function doveConfigDirectory(options2 = {}) {
   const env = options2.env ?? process.env;
-  const base = env.XDG_CONFIG_HOME || path11.join(env.HOME || os3.homedir(), ".config");
-  return path11.join(base, "dove");
+  const base = env.XDG_CONFIG_HOME || path12.join(env.HOME || os3.homedir(), ".config");
+  return path12.join(base, "dove");
 }
 function readJson2(file, fallback) {
   try {
-    return JSON.parse(fs12.readFileSync(file, "utf8"));
+    return JSON.parse(fs13.readFileSync(file, "utf8"));
   } catch {
     return fallback;
   }
 }
 function writePrivateFile(file, content) {
-  fs12.mkdirSync(path11.dirname(file), { recursive: true, mode: 448 });
+  fs13.mkdirSync(path12.dirname(file), { recursive: true, mode: 448 });
   const temporary = `${file}.${process.pid}.tmp`;
-  fs12.writeFileSync(temporary, content, { mode: 384 });
-  fs12.renameSync(temporary, file);
+  fs13.writeFileSync(temporary, content, { mode: 384 });
+  fs13.renameSync(temporary, file);
 }
 function writeProjectFile(root, relative, content) {
-  const file = path11.join(root, relative);
-  fs12.mkdirSync(path11.dirname(file), { recursive: true });
+  const file = path12.join(root, relative);
+  fs13.mkdirSync(path12.dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.tmp`;
-  fs12.writeFileSync(temporary, content);
-  fs12.renameSync(temporary, file);
+  fs13.writeFileSync(temporary, content);
+  fs13.renameSync(temporary, file);
 }
 var cleanList = (value2) => (Array.isArray(value2) ? value2 : String(value2 ?? "").split(/\r?\n|[,，]/u)).map((item) => String(item).trim()).filter(Boolean).slice(0, 100);
 function normalizeWatchConfig(value2 = {}) {
@@ -17443,17 +17613,134 @@ function normalizeWatchConfig(value2 = {}) {
     enabled: value2.enabled !== false,
     keywords: cleanList(value2.keywords),
     categories: cleanList(value2.categories).length ? cleanList(value2.categories) : [...DEFAULT_CATEGORIES],
-    authors: cleanList(value2.authors)
+    authors: cleanList(value2.authors),
+    venues: cleanList(value2.venues),
+    institutions: cleanList(value2.institutions),
+    seedPapers: cleanList(value2.seedPapers).map((item) => arxivIdFromUrl(item) ?? item),
+    source: ["draft", "mentor"].includes(value2.source) ? value2.source : "user"
   };
 }
+function watchConfigExists(root) {
+  return fs13.existsSync(path12.join(root, PROJECT_CONFIG));
+}
 function readWatchConfig(root) {
-  return normalizeWatchConfig(readJson2(path11.join(root, PROJECT_CONFIG), {}));
+  return normalizeWatchConfig(readJson2(path12.join(root, PROJECT_CONFIG), {}));
 }
 function writeWatchConfig(root, value2) {
   const config = normalizeWatchConfig(value2);
   writeProjectFile(root, PROJECT_CONFIG, `${JSON.stringify(config, null, 2)}
 `);
   return config;
+}
+var STRUCTURE_WORDS = new Set("dove research rounds round brief briefs result results runs run artifacts artifact outputs output scripts script src home nvme tmp json md py mjs txt csv yaml yml log logs train val test dev split checkpoint checkpoints config configs identity eval mainline readme main repo commit worktree claude gpu cpu cuda batch epoch epochs step steps true false null none".split(" "));
+function proseOnly(text) {
+  return String(text).replace(/```[\s\S]*?```/gu, " ").replace(/`[^`\n]*`/gu, " ").replace(/https?:\/\/\S+/gu, " ").replace(/\S*[\/\\]\S*/gu, " ").replace(/\S*[_=<>{}$#@]\S*/gu, " ").replace(/\b\S*\d\S*\b/gu, " ");
+}
+function phraseCounts(text, { minWordLength = 3 } = {}) {
+  const phrases = /* @__PURE__ */ new Map();
+  for (const sentence of proseOnly(text).split(/[\n.;:!?()\[\]{}"|，。；：！？、（）]+/u)) {
+    const words = (sentence.toLowerCase().match(/[a-z][a-z-]+/gu) ?? []).filter((word) => word.length >= minWordLength && !word.includes("--"));
+    for (let size = 2; size <= 3; size += 1) {
+      for (let index = 0; index + size <= words.length; index += 1) {
+        const gram = words.slice(index, index + size);
+        if (STOPWORDS.has(gram[0]) || STOPWORDS.has(gram[gram.length - 1]) || gram.some((word) => STRUCTURE_WORDS.has(word) || word.length > 24)) continue;
+        const phrase = gram.join(" ");
+        phrases.set(phrase, (phrases.get(phrase) ?? 0) + 1);
+      }
+    }
+  }
+  return phrases;
+}
+function topPhrases(phrases, { minCount, limit, exclude = [] }) {
+  const ranked = [...phrases.entries()].filter(([, count]) => count >= minCount).sort((left, right) => right[1] * right[0].split(" ").length - left[1] * left[0].split(" ").length);
+  const kept = [...exclude];
+  const result = [];
+  for (const [phrase] of ranked) {
+    if (result.length >= limit) break;
+    if (kept.some((item) => item.includes(phrase) || phrase.includes(item))) continue;
+    kept.push(phrase);
+    result.push(phrase);
+  }
+  return result;
+}
+var STOPWORDS = new Set("the a an and or of for to in on with by from as is are was were be been this that these those it its into via using use used we our not no than then also can may per each all any both more most other such only same so very will would should could have has had which while when where what who how than at about after before over under between within without based new one two three first second via vs etc et al data model method methods result results paper work task tasks approach figure table section appendix".split(" "));
+function collectProjectText(root) {
+  const research = path12.join(root, ".dove/research");
+  const files = [];
+  const add = (file) => {
+    try {
+      if (fs13.statSync(file).isFile()) files.push(file);
+    } catch {
+    }
+  };
+  for (const name of ["IDENTITY.md", "EVAL.md", "RESEARCH.md"]) add(path12.join(research, name));
+  for (const directory of ["rounds", "sources", "missions", "experiments", "claims"]) {
+    try {
+      for (const name of fs13.readdirSync(path12.join(research, directory)).filter((item) => item.endsWith(".md")).sort().reverse().slice(0, 40)) add(path12.join(research, directory, name));
+    } catch {
+    }
+  }
+  for (const directory of [root, path12.join(root, "docs")]) {
+    try {
+      for (const name of fs13.readdirSync(directory).filter((item) => /\.md$/iu.test(item)).sort().slice(0, 20)) add(path12.join(directory, name));
+    } catch {
+    }
+  }
+  let total = 0;
+  const texts = [];
+  for (const file of files) {
+    if (total > 3 * 1024 * 1024) break;
+    try {
+      const text = fs13.readFileSync(file, "utf8").slice(0, 256 * 1024);
+      total += text.length;
+      texts.push(text);
+    } catch {
+    }
+  }
+  return texts.join("\n");
+}
+function draftWatchConfig(root) {
+  const text = collectProjectText(root);
+  const seedCounts = /* @__PURE__ */ new Map();
+  for (const match of text.matchAll(/(?:arxiv\.org\/(?:abs|pdf)\/|arXiv[:\s]\s*)(\d{4}\.\d{4,5})/giu)) seedCounts.set(match[1], (seedCounts.get(match[1]) ?? 0) + 1);
+  const keywords = topPhrases(phraseCounts(text), { minCount: 3, limit: 10 });
+  const seedPapers = [...seedCounts.entries()].sort((left, right) => right[1] - left[1]).slice(0, 15).map(([id]) => id);
+  return normalizeWatchConfig({ keywords, seedPapers, source: "draft" });
+}
+function namedMethods(text, limit = 8) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const match of proseOnly(text).matchAll(/\b([A-Z][a-z]+(?:[A-Z][a-z0-9]*)+|[A-Z]{2,}[a-z]+[A-Za-z]*)\b/gu)) {
+    if (match[1].length < 5) continue;
+    counts.set(match[1], (counts.get(match[1]) ?? 0) + 1);
+  }
+  return [...counts.entries()].filter(([, count]) => count >= 3).sort((left, right) => right[1] - left[1]).slice(0, limit).map(([name]) => name);
+}
+async function seedsFromNames(names, { proxy, get }) {
+  if (!names.length) return [];
+  const query = `(cat:cs.CV OR cat:cs.GR OR cat:cs.LG) AND (${names.map((name) => `ti:${name}`).join(" OR ")})`;
+  const response = await get(`https://export.arxiv.org/api/query?search_query=${encodeURIComponent(query)}&max_results=60`, { proxy });
+  if (response.status !== 200) return [];
+  const papers = parseArxivFeed(response.body);
+  const seeds = [];
+  for (const name of names) {
+    const hit = papers.find((paper) => new RegExp(`\\b${name}\\b`, "iu").test(paper.title));
+    if (hit && !seeds.includes(hit.id)) seeds.push(hit.id);
+  }
+  return seeds;
+}
+async function draftWatchConfigWithSources(root, { proxy = "", get = curlGet } = {}) {
+  const draft = draftWatchConfig(root);
+  if (draft.seedPapers.length < 3) {
+    const found = await seedsFromNames(namedMethods(collectProjectText(root)), { proxy, get });
+    draft.seedPapers = [...draft.seedPapers, ...found.filter((id) => !draft.seedPapers.includes(id))].slice(0, 15);
+  }
+  if (!draft.seedPapers.length) return draft;
+  const response = await get(`https://export.arxiv.org/api/query?id_list=${draft.seedPapers.join(",")}&max_results=${draft.seedPapers.length}`, { proxy });
+  if (response.status !== 200) return draft;
+  const papers = parseArxivFeed(response.body);
+  const fromSources = topPhrases(phraseCounts(papers.map((paper) => `${paper.title}. ${paper.title}. ${paper.abstract}`).join("\n"), { minWordLength: 3 }), { minCount: 2, limit: 8 });
+  const keywords = [...fromSources, ...draft.keywords.filter((keyword) => !fromSources.some((item) => item.includes(keyword) || keyword.includes(item)))].slice(0, 12);
+  return normalizeWatchConfig({ ...draft, keywords });
 }
 function normalizeGlobalWatchSettings(value2 = {}) {
   const hour = Number(value2.dailyHour);
@@ -17467,36 +17754,36 @@ function normalizeGlobalWatchSettings(value2 = {}) {
   };
 }
 function readGlobalWatchSettings(options2 = {}) {
-  return normalizeGlobalWatchSettings(readJson2(path11.join(doveConfigDirectory(options2), "watch.json"), {}));
+  return normalizeGlobalWatchSettings(readJson2(path12.join(doveConfigDirectory(options2), "watch.json"), {}));
 }
 function writeGlobalWatchSettings(value2, options2 = {}) {
   const settings = normalizeGlobalWatchSettings(value2);
-  writePrivateFile(path11.join(doveConfigDirectory(options2), "watch.json"), `${JSON.stringify(settings, null, 2)}
+  writePrivateFile(path12.join(doveConfigDirectory(options2), "watch.json"), `${JSON.stringify(settings, null, 2)}
 `);
   return settings;
 }
 function readSemanticScholarKey(options2 = {}) {
   try {
-    return fs12.readFileSync(path11.join(doveConfigDirectory(options2), "s2-api-key"), "utf8").trim() || null;
+    return fs13.readFileSync(path12.join(doveConfigDirectory(options2), "s2-api-key"), "utf8").trim() || null;
   } catch {
     return null;
   }
 }
 function writeSemanticScholarKey(key, options2 = {}) {
-  const file = path11.join(doveConfigDirectory(options2), "s2-api-key");
+  const file = path12.join(doveConfigDirectory(options2), "s2-api-key");
   const value2 = String(key ?? "").trim();
   if (!value2) {
-    fs12.rmSync(file, { force: true });
+    fs13.rmSync(file, { force: true });
     return false;
   }
   writePrivateFile(file, value2);
   return true;
 }
 function readGlobalWatchState(options2 = {}) {
-  return readJson2(path11.join(doveConfigDirectory(options2), "watch-state.json"), {});
+  return readJson2(path12.join(doveConfigDirectory(options2), "watch-state.json"), {});
 }
 function writeGlobalWatchState(state2, options2 = {}) {
-  writePrivateFile(path11.join(doveConfigDirectory(options2), "watch-state.json"), `${JSON.stringify(state2, null, 2)}
+  writePrivateFile(path12.join(doveConfigDirectory(options2), "watch-state.json"), `${JSON.stringify(state2, null, 2)}
 `);
 }
 function curlGet(url, { proxy = "", headers = {}, timeoutSeconds = 40, body = null } = {}) {
@@ -17522,6 +17809,11 @@ function arxivIdFromUrl(value2 = "") {
   const match = String(value2).match(/(\d{4}\.\d{4,5})(v\d+)?/u);
   return match ? match[1] : null;
 }
+function codeLink(text = "") {
+  const match = String(text).match(/https?:\/\/(?:www\.)?(?:github\.com|[a-z0-9-]+\.github\.io|huggingface\.co|gitlab\.com)[^\s)"'<>,;]*/iu);
+  if (match) return match[0].replace(/[.]+$/u, "");
+  return /project page|code is available|code will be (?:made )?available/iu.test(text) ? "\uFF08\u6458\u8981\u63D0\u5230\u4E3B\u9875/\u4EE3\u7801\uFF09" : null;
+}
 function parseArxivFeed(xml = "") {
   const entries = [];
   for (const block of xml.split(/<entry>/u).slice(1)) {
@@ -17535,6 +17827,7 @@ function parseArxivFeed(xml = "") {
       published: field("published"),
       authors: [...block.matchAll(/<name>([\s\S]*?)<\/name>/gu)].map((match) => decodeXml(match[1])),
       categories: [...block.matchAll(/<category[^>]*term="([^"]+)"/gu)].map((match) => match[1]),
+      code: codeLink(`${field("arxiv:comment")} ${field("summary")}`),
       url: `https://arxiv.org/abs/${id}`
     });
   }
@@ -17553,6 +17846,85 @@ async function fetchArxiv(config, { since, proxy, get = curlGet }) {
   const response = await get(url, { proxy });
   if (response.status !== 200) return { items: [], error: `arXiv ${response.status || response.error}` };
   return { items: parseArxivFeed(response.body).filter((item) => !since || Date.parse(item.published) >= since) };
+}
+async function fetchArxivAuthors(config, { since, proxy, get = curlGet }) {
+  if (!config.authors.length) return { items: [] };
+  const query = config.authors.map((name) => `au:"${name.replace(/"/gu, "")}"`).join(" OR ");
+  const response = await get(`https://export.arxiv.org/api/query?search_query=${encodeURIComponent(query)}&sortBy=submittedDate&sortOrder=descending&max_results=100`, { proxy });
+  if (response.status !== 200) return { items: [], error: `arXiv \u4F5C\u8005\u68C0\u7D22 ${response.status || response.error}` };
+  return { items: parseArxivFeed(response.body).filter((item) => !since || Date.parse(item.published) >= since) };
+}
+async function openAlexJson(query, { proxy, get }) {
+  const response = await get(`${OPENALEX}/${query}`, { proxy });
+  if (response.status !== 200) throw new Error(`OpenAlex ${response.status || response.error}`);
+  return JSON.parse(response.body);
+}
+function abstractFromIndex(index) {
+  if (!index || typeof index !== "object") return "";
+  const words = [];
+  for (const [word, positions] of Object.entries(index)) for (const position of positions) words[position] = word;
+  return words.filter(Boolean).join(" ");
+}
+function openAlexWorkToItem(work) {
+  const arxiv = (work.locations ?? []).map((location) => arxivIdFromUrl(location?.landing_page_url ?? "")).find(Boolean) ?? (/arxiv/iu.test(work.doi ?? "") ? arxivIdFromUrl(work.doi) : null);
+  const landing = work.primary_location?.landing_page_url ?? work.doi ?? work.id;
+  return {
+    id: arxiv ?? String(work.id).split("/").pop(),
+    openalexId: String(work.id).split("/").pop(),
+    title: decodeXml(work.title ?? ""),
+    abstract: abstractFromIndex(work.abstract_inverted_index),
+    published: work.publication_date ?? "",
+    authors: (work.authorships ?? []).map((authorship) => authorship.author?.display_name).filter(Boolean),
+    institutions: [...new Set((work.authorships ?? []).flatMap((authorship) => (authorship.institutions ?? []).map((institution) => institution.display_name)).filter(Boolean))],
+    venue: work.primary_location?.source?.display_name ?? null,
+    references: (work.referenced_works ?? []).map((reference) => String(reference).split("/").pop()),
+    url: arxiv ? `https://arxiv.org/abs/${arxiv}` : landing
+  };
+}
+async function resolveSeed(id, { proxy, get }) {
+  if (/^W\d+$/u.test(id)) return id;
+  if (!/^\d{4}\.\d{4,5}$/u.test(id)) return null;
+  for (const scheme of ["http", "https"]) {
+    const data = await openAlexJson(`works?filter=locations.landing_page_url:${scheme}://arxiv.org/abs/${id}&select=id&per-page=1`, { proxy, get });
+    if (data.results?.[0]?.id) return String(data.results[0].id).split("/").pop();
+  }
+  return null;
+}
+async function resolveInstitution(name, { proxy, get }) {
+  const data = await openAlexJson(`institutions?search=${encodeURIComponent(name)}&select=id,display_name&per-page=1`, { proxy, get });
+  return data.results?.[0]?.id ? String(data.results[0].id).split("/").pop() : null;
+}
+async function fetchOpenAlex(config, { since, proxy, get = curlGet, cache = {} }) {
+  const notes = [];
+  const items = [];
+  const nextCache = { seeds: { ...cache.seeds ?? {} }, institutions: { ...cache.institutions ?? {} } };
+  const from = localDate(since);
+  try {
+    for (const seed of config.seedPapers) if (!(seed in nextCache.seeds)) nextCache.seeds[seed] = await resolveSeed(seed, { proxy, get });
+    const seedIds = config.seedPapers.map((seed) => nextCache.seeds[seed]).filter(Boolean);
+    const seedNames = new Map(config.seedPapers.map((seed) => [nextCache.seeds[seed], seed]));
+    for (let index = 0; index < seedIds.length; index += 40) {
+      const batch = seedIds.slice(index, index + 40);
+      const data = await openAlexJson(`works?filter=cites:${batch.join("|")},from_publication_date:${from}&select=${OPENALEX_FIELDS}&per-page=100&sort=publication_date:desc`, { proxy, get });
+      for (const work of data.results ?? []) {
+        const item = openAlexWorkToItem(work);
+        item.citedSeeds = item.references.filter((reference) => seedNames.has(reference)).map((reference) => seedNames.get(reference));
+        items.push(item);
+      }
+    }
+    for (const name of config.institutions) if (!(name in nextCache.institutions)) nextCache.institutions[name] = await resolveInstitution(name, { proxy, get });
+    const institutionIds = config.institutions.map((name) => nextCache.institutions[name]).filter(Boolean);
+    if (institutionIds.length && config.keywords.length) {
+      const search = config.keywords.map((keyword) => /\s/u.test(keyword) ? `"${keyword}"` : keyword).join(" OR ");
+      const data = await openAlexJson(`works?search=${encodeURIComponent(search)}&filter=authorships.institutions.lineage:${institutionIds.join("|")},from_publication_date:${from}&select=${OPENALEX_FIELDS}&per-page=100&sort=publication_date:desc`, { proxy, get });
+      for (const work of data.results ?? []) items.push(openAlexWorkToItem(work));
+    }
+    const unresolved = [...config.seedPapers.filter((seed) => !nextCache.seeds[seed]), ...config.institutions.filter((name) => !nextCache.institutions[name])];
+    if (unresolved.length) notes.push(`OpenAlex \u672A\u627E\u5230\uFF1A${unresolved.slice(0, 5).join("\u3001")}${unresolved.length > 5 ? " \u7B49" : ""}`);
+  } catch (error) {
+    notes.push(error instanceof Error ? error.message : String(error));
+  }
+  return { items, notes, cache: nextCache };
 }
 async function fetchHuggingFaceDaily(days, { proxy, get = curlGet, now = Date.now() }) {
   const papers = /* @__PURE__ */ new Map();
@@ -17631,7 +18003,29 @@ function scorePaper(paper, config, signals2 = {}) {
       reasons.push(`\u5173\u6CE8\u4F5C\u8005 ${watched}`);
     }
   }
+  for (const seed of paper.citedSeeds ?? []) {
+    relevance += 3;
+    reasons.push(`\u5F15\u7528\u4E86\u8FD1\u90BB\u8BBA\u6587 ${seed}`);
+  }
+  const institutions = (paper.institutions ?? []).map(lower);
+  for (const watched of config.institutions ?? []) {
+    if (institutions.some((institution) => institution.includes(lower(watched)))) {
+      relevance += 2;
+      reasons.push(`\u5173\u6CE8\u673A\u6784 ${watched}`);
+    }
+  }
   score += relevance;
+  const venue = signals2.s2?.venue || paper.venue;
+  for (const watched of config.venues ?? []) {
+    if (venue && lower(venue).includes(lower(watched))) {
+      score += 2;
+      reasons.push(`\u5173\u6CE8\u4F1A\u8BAE ${watched}`);
+    }
+  }
+  if (paper.code) {
+    score += 1;
+    reasons.push(paper.code.startsWith("http") ? "\u6709\u4EE3\u7801/\u4E3B\u9875" : "\u6458\u8981\u63D0\u5230\u4EE3\u7801/\u4E3B\u9875");
+  }
   if (signals2.hf) {
     score += 2 + Math.min(3, Math.log2(1 + (signals2.hf.upvotes || 0)) / 2);
     reasons.push(`HF \u6BCF\u65E5\u70ED\u95E8\uFF08${signals2.hf.upvotes || 0} \u8D5E\uFF09`);
@@ -17646,44 +18040,63 @@ function scorePaper(paper, config, signals2 = {}) {
   return { score: Math.round(score * 10) / 10, relevance, reasons };
 }
 function renderDigest(project, date, items, notes) {
-  const lines = [`# \u8BBA\u6587\u8FFD\u8E2A ${date}`, "", `\u9879\u76EE\uFF1A${project}\u3002\u5BFC\u5E08\u5728\u4E0B\u4E00\u8F6E\u5F00\u59CB\u65F6\u5224\u65AD\u6BCF\u7BC7\u5BF9\u672C\u9879\u76EE\u7684\u5F71\u54CD\uFF1A\u649E\u9898 / \u65B0\u57FA\u7EBF / \u53EF\u501F\u7528 / \u65E0\u5173\u3002`, ""];
+  const lines = [`# \u8BBA\u6587\u8FFD\u8E2A ${date}`, "", `\u9879\u76EE\uFF1A${project}\u3002\u5BFC\u5E08\u5728\u4E0B\u4E00\u8F6E\u5F00\u59CB\u65F6\u5224\u65AD\u6BCF\u7BC7\u5BF9\u672C\u9879\u76EE\u7684\u5F71\u54CD\uFF0C\u5E76\u5728\u8BF4\u660E\u91CC\u6309\u300C- \u7F16\u53F7 | \u649E\u9898/\u65B0\u57FA\u7EBF/\u53EF\u501F\u7528/\u65E0\u5173 | \u7406\u7531\u300D\u9010\u884C\u5199\u51FA\u3002`, ""];
   if (notes.length) lines.push(`\u8BF4\u660E\uFF1A${notes.join("\uFF1B")}`, "");
   if (!items.length) lines.push("\u4ECA\u5929\u6CA1\u6709\u65B0\u7684\u76F8\u5173\u8BBA\u6587\u3002");
   for (const item of items) {
-    lines.push(`## ${item.title}`, `- \u94FE\u63A5\uFF1A${item.url}  \xB7  \u5206\u6570 ${item.score}  \xB7  ${item.published.slice(0, 10)}`, `- \u4F5C\u8005\uFF1A${item.authors.slice(0, 6).join(", ")}${item.authors.length > 6 ? " \u7B49" : ""}`, `- \u9009\u4E2D\u539F\u56E0\uFF1A${item.reasons.join("\uFF1B") || "\u5206\u7C7B\u5185\u65B0\u8BBA\u6587"}`, `- \u6458\u8981\uFF1A${item.abstract.slice(0, 400)}${item.abstract.length > 400 ? "\u2026" : ""}`, "");
+    lines.push(`## ${item.title}`, `- \u7F16\u53F7\uFF1A${item.id}  \xB7  \u94FE\u63A5\uFF1A${item.url}  \xB7  \u5206\u6570 ${item.score}  \xB7  ${String(item.published).slice(0, 10)}`, `- \u4F5C\u8005\uFF1A${item.authors.slice(0, 6).join(", ")}${item.authors.length > 6 ? " \u7B49" : ""}`, `- \u9009\u4E2D\u539F\u56E0\uFF1A${item.reasons.join("\uFF1B") || "\u5206\u7C7B\u5185\u65B0\u8BBA\u6587"}`, `- \u6458\u8981\uFF1A${item.abstract.slice(0, 400)}${item.abstract.length > 400 ? "\u2026" : ""}`, "");
   }
   return `${lines.join("\n")}
 `;
 }
 async function runProjectWatch(root, { settings, key, hf, now = Date.now(), get = curlGet }) {
+  let drafted = false;
+  if (!watchConfigExists(root)) {
+    writeWatchConfig(root, await draftWatchConfigWithSources(root, { proxy: settings.proxy, get }));
+    drafted = true;
+  }
   const config = readWatchConfig(root);
   const date = localDate(now);
   if (!config.enabled) return { root, status: "disabled" };
-  if (!config.keywords.length && !config.authors.length) return { root, status: "unconfigured" };
+  if (!config.keywords.length && !config.authors.length && !config.seedPapers.length) return { root, status: "unconfigured", drafted };
   const notes = [];
-  const statePath = path11.join(root, PROJECT_STATE);
+  const statePath = path12.join(root, PROJECT_STATE);
   const state2 = readJson2(statePath, {});
   const lastRun = Date.parse(state2.lastRun ?? "");
   const since = Number.isFinite(lastRun) ? Math.min(now - settings.lookbackDays * 864e5, lastRun - ARXIV_INDEX_LAG_DAYS * 864e5) : now - FIRST_RUN_DAYS * 864e5;
-  const arxiv = await fetchArxiv(config, { since, proxy: settings.proxy, get });
-  if (arxiv.error) notes.push(arxiv.error);
-  const candidates = new Map(arxiv.items.map((item) => [item.id, item]));
+  if (drafted) notes.push("\u8FFD\u8E2A\u914D\u7F6E\u662F\u6839\u636E\u9879\u76EE\u8D44\u6599\u81EA\u52A8\u751F\u6210\u7684\u521D\u7A3F\uFF0C\u8BF7\u5728\u8BBE\u7F6E\u9875\u68C0\u67E5");
+  const candidates = /* @__PURE__ */ new Map();
+  const merge = (item) => {
+    const existing = candidates.get(item.id);
+    candidates.set(item.id, existing ? { ...item, ...existing, citedSeeds: [.../* @__PURE__ */ new Set([...existing.citedSeeds ?? [], ...item.citedSeeds ?? []])], institutions: existing.institutions?.length ? existing.institutions : item.institutions, venue: existing.venue ?? item.venue } : item);
+  };
+  if (config.keywords.length) {
+    const arxiv = await fetchArxiv(config, { since, proxy: settings.proxy, get });
+    if (arxiv.error) notes.push(arxiv.error);
+    arxiv.items.forEach(merge);
+  }
+  const byAuthor = await fetchArxivAuthors(config, { since, proxy: settings.proxy, get });
+  if (byAuthor.error) notes.push(byAuthor.error);
+  byAuthor.items.forEach(merge);
+  const openAlex = await fetchOpenAlex(config, { since, proxy: settings.proxy, get, cache: state2.openalex });
+  notes.push(...openAlex.notes);
+  openAlex.items.forEach(merge);
   for (const [id, paper] of hf.papers) if (!candidates.has(id)) candidates.set(id, { ...paper, categories: [] });
   const seen = new Set(state2.seen ?? []);
   let ranked = [...candidates.values()].filter((item) => !seen.has(item.id)).map((item) => ({ ...item, ...scorePaper(item, config, { hf: hf.papers.get(item.id) }) })).filter((item) => item.relevance >= MIN_RELEVANCE).sort((left, right) => right.score - left.score).slice(0, settings.maxPerDigest);
-  const s2 = await fetchSemanticScholar(ranked.map((item) => item.id), { key, proxy: settings.proxy, get });
+  const s2 = await fetchSemanticScholar(ranked.map((item) => item.id).filter((id) => /^\d{4}\.\d{4,5}$/u.test(id)), { key, proxy: settings.proxy, get });
   if (s2.error) notes.push(s2.error);
   ranked = ranked.map((item) => ({ ...item, ...s2.papers.get(item.id), ...scorePaper(item, config, { hf: hf.papers.get(item.id), s2: s2.papers.get(item.id) }) })).sort((left, right) => right.score - left.score);
-  const earlier = readJson2(path11.join(root, WATCH_DIR, `${date}.json`), null);
+  const earlier = readJson2(path12.join(root, WATCH_DIR, `${date}.json`), null);
   const merged = [...ranked, ...(earlier?.items ?? []).filter((item) => !ranked.some((fresh) => fresh.id === item.id))].sort((left, right) => right.score - left.score);
   const digest = { date, generatedAt: new Date(now).toISOString(), notes, items: merged };
   writeProjectFile(root, `${WATCH_DIR}/${date}.json`, `${JSON.stringify(digest, null, 2)}
 `);
-  writeProjectFile(root, `${WATCH_DIR}/${date}.md`, renderDigest(path11.basename(root), date, merged, notes));
+  writeProjectFile(root, `${WATCH_DIR}/${date}.md`, renderDigest(path12.basename(root), date, merged, notes));
   const nextSeen = [...ranked.map((item) => item.id), ...seen].slice(0, MAX_SEEN);
-  writeProjectFile(root, PROJECT_STATE, `${JSON.stringify({ lastRun: digest.generatedAt, seen: nextSeen }, null, 2)}
+  writeProjectFile(root, PROJECT_STATE, `${JSON.stringify({ lastRun: digest.generatedAt, seen: nextSeen, openalex: openAlex.cache }, null, 2)}
 `);
-  return { root, status: "done", found: ranked.length, notes };
+  return { root, status: "done", found: ranked.length, notes, drafted };
 }
 async function runWatch(roots, options2 = {}) {
   const now = options2.now ?? Date.now();
@@ -17700,24 +18113,131 @@ async function runWatch(roots, options2 = {}) {
     }
   }
   const state2 = { lastRun: new Date(now).toISOString(), lastRunDate: localDate(now), hfErrors: hf.errors, results };
-  if (options2.recordGlobalState !== false) writeGlobalWatchState(state2, options2);
+  if (options2.recordGlobalState !== false) {
+    writeGlobalWatchState(state2, options2);
+    const hot = [...hf.papers.values()].sort((left, right) => right.upvotes - left.upvotes).slice(0, 60).map(({ id, title, abstract, upvotes, url, published }) => ({ id, title, abstract: abstract.slice(0, 600), upvotes, url, published }));
+    writePrivateFile(path12.join(doveConfigDirectory(options2), HOT_FILE), `${JSON.stringify({ generatedAt: state2.lastRun, papers: hot }, null, 2)}
+`);
+  }
   return state2;
 }
+function readWatchHot(options2 = {}) {
+  return readJson2(path12.join(doveConfigDirectory(options2), HOT_FILE), { papers: [] });
+}
+function readLatestScan(root) {
+  try {
+    const name = fs13.readdirSync(path12.join(root, WATCH_DIR)).filter((item) => /^scan-\d{4}-\d{2}-\d{2}\.md$/u.test(item)).sort().pop();
+    return name ? { date: name.slice(5, 15), text: fs13.readFileSync(path12.join(root, WATCH_DIR, name), "utf8").slice(0, 64 * 1024) } : null;
+  } catch {
+    return null;
+  }
+}
 function readWatchDigests(root, limit = 3) {
-  const directory = path11.join(root, WATCH_DIR);
+  const directory = path12.join(root, WATCH_DIR);
   let files = [];
   try {
-    files = fs12.readdirSync(directory).filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/u.test(name)).sort().reverse().slice(0, limit);
+    files = fs13.readdirSync(directory).filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/u.test(name)).sort().reverse().slice(0, limit);
   } catch {
     return [];
   }
-  return files.map((name) => readJson2(path11.join(directory, name), null)).filter(Boolean);
+  return files.map((name) => readJson2(path12.join(directory, name), null)).filter(Boolean);
+}
+
+// src/core/topic-selection.mjs
+var CRITERIA_NAME = "topic-criteria.md";
+var TOPICS_DIR = ".dove/research/topics";
+var CARD_FIELDS = Object.freeze({ \u72B6\u6001: "status", \u9636\u6BB5: "stage", \u5B9A\u4F4D: "position", \u4E00\u53E5\u8BDD: "summary", \u516D\u70B9: "six" });
+function topicCriteriaPath(options2 = {}) {
+  return path13.join(doveConfigDirectory(options2), CRITERIA_NAME);
+}
+function describe(text, stat) {
+  return {
+    title: text.split(/\r?\n/u).find((line) => /^#\s+\S/u.test(line))?.replace(/^#\s+/u, "").trim() ?? null,
+    version: [...text.matchAll(/第\s*(\d+)\s*版/gu)].map((match) => Number(match[1])).sort((left, right) => right - left).map(String)[0] ?? null,
+    bytes: Buffer.byteLength(text),
+    updatedAt: stat ? new Date(stat.mtimeMs).toISOString() : null
+  };
+}
+function readTopicCriteriaInfo(options2 = {}) {
+  const file = topicCriteriaPath(options2);
+  try {
+    return { present: true, ...describe(fs14.readFileSync(file, "utf8"), fs14.statSync(file)) };
+  } catch {
+    return { present: false };
+  }
+}
+function writeTopicCriteria(text, options2 = {}) {
+  const value2 = String(text ?? "");
+  if (value2.trim().length < 200) throw new Error("\u9009\u9898\u6807\u51C6\u5185\u5BB9\u592A\u77ED\uFF0C\u50CF\u662F\u6CA1\u7C98\u8D34\u5B8C\u6574");
+  const file = topicCriteriaPath(options2);
+  fs14.mkdirSync(path13.dirname(file), { recursive: true, mode: 448 });
+  const temporary = `${file}.${process.pid}.tmp`;
+  fs14.writeFileSync(temporary, value2, { mode: 384 });
+  fs14.renameSync(temporary, file);
+  return readTopicCriteriaInfo(options2);
+}
+var README = `# \u9009\u9898
+
+\u672C\u76EE\u5F55\u8BB0\u5F55\u4E00\u6B21\u9009\u9898\u3002\u4F9D\u636E\u662F CRITERIA.md\uFF08\u5F00\u59CB\u65F6\u4ECE\u7528\u6237\u7684\u9009\u9898\u6807\u51C6\u590D\u5236\uFF0C\u4E4B\u540E\u6807\u51C6\u66F4\u65B0\u65F6\u53EF\u91CD\u65B0\u590D\u5236\uFF09\u3002
+
+- \u6309 CRITERIA.md \u7684\u56FA\u5B9A\u987A\u5E8F\u548C\u786C\u89C4\u5219\u63A8\u8FDB\uFF1B\u6BCF\u4E00\u9636\u6BB5\u662F\u4E00\u8F6E\uFF0C\u8BF4\u660E\u548C\u7ED3\u679C\u7167\u5E38\u5199\u5728 ../rounds/\uFF0C\u4F5C\u8005\u6807\u660E\u3002
+- \u5148\u53D1\u6563\u51FA\u6709\u5BBD\u5EA6\u7684\u5019\u9009\uFF0C\u518D\u505A\u53CD\u5411\u5BA1\u67E5\uFF1B\u8FD1\u90BB\u5BA1\u8BA1\u7528\u771F\u5B9E\u7684\u8BBA\u6587\u4E0E\u7F51\u9875\u68C0\u7D22\uFF0C\u5199\u51FA\u51FA\u5904\u3002
+- \u6BCF\u4E2A\u5019\u9009\u65B9\u5411\u4E00\u5F20\u5361\uFF1Acards/NN-\u540D\u79F0.md\uFF0C\u6309 CRITERIA.md \u7684\u65B9\u5411\u5361\u6A21\u677F\u5199\u3002\u5361\u7247\u5F00\u5934\u56FA\u5B9A\u4E94\u884C\uFF0C\u9762\u677F\u636E\u6B64\u663E\u793A\uFF1A
+  - \u72B6\u6001\uFF1A\u5019\u9009 / \u7EF4\u6301 / \u9650\u5B9A / \u6682\u7F13 / \u64A4\u56DE / \u63A8\u8350 / \u9009\u5B9A
+  - \u9636\u6BB5\uFF1A\u4E00 / \u4E8C / \u4E09 / \u56DB
+  - \u5B9A\u4F4D\uFF1A\u7A33\u5065 / \u5E73\u8861 / \u63A2\u7D22
+  - \u4E00\u53E5\u8BDD\uFF1A\u8BFB\u8005\u80FD\u8BB0\u4F4F\u7684\u4E3B\u8D21\u732E
+  - \u516D\u70B9\uFF1A\u95EE\u9898 \u6EE1\u8DB3\uFF5C\u65B9\u6CD5 \u5F85\u6838\u5B9E\uFF5C\u8D21\u732E \u2026\uFF08\u516D\u9879\u5404\u5199 \u6EE1\u8DB3 / \u5F85\u6838\u5B9E / \u4E0D\u6EE1\u8DB3\uFF09
+- \u9009\u5B9A\u65B9\u5411\u7531\u7528\u6237\u786E\u8BA4\u540E\uFF0C\u6210\u4E3A\u9879\u76EE\u7ACB\u9879\u7684\u4F9D\u636E\uFF08\u8EAB\u4EFD\u5361\u4E0E\u8BC4\u6D4B\u8868\uFF09\u3002
+`;
+function startTopicSelection(root, options2 = {}) {
+  const source = topicCriteriaPath(options2);
+  if (!fs14.existsSync(source)) throw new Error("\u8FD8\u6CA1\u6709\u9009\u9898\u6807\u51C6\uFF1A\u5148\u5728\u9762\u677F\u8BBE\u7F6E\u9875\u7C98\u8D34\uFF0C\u6216\u653E\u5230 " + source);
+  const directory = path13.join(root, TOPICS_DIR);
+  fs14.mkdirSync(path13.join(directory, "cards"), { recursive: true });
+  fs14.copyFileSync(source, path13.join(directory, "CRITERIA.md"));
+  if (!fs14.existsSync(path13.join(directory, "README.md"))) fs14.writeFileSync(path13.join(directory, "README.md"), README);
+  return readTopics(root);
+}
+function parseCardHeader(text = "") {
+  const card = {};
+  for (const line of text.split(/\r?\n/u).slice(0, 40)) {
+    const match = line.match(/^\s*(?:[-*]\s*)?\**\s*(状态|阶段|定位|一句话|六点)\s*\**\s*[:：]\s*(.+)$/u);
+    if (match && !(CARD_FIELDS[match[1]] in card)) card[CARD_FIELDS[match[1]]] = match[2].trim();
+  }
+  const title = text.split(/\r?\n/u).find((line) => /^#\s+\S/u.test(line));
+  if (title) card.title = title.replace(/^#\s+/u, "").trim();
+  if (card.six) {
+    card.sixParts = card.six.split(/[｜|;；,，]/u).map((part) => part.trim()).filter(Boolean).map((part) => ({ text: part, state: /不满足/u.test(part) ? "no" : /待核实|待定/u.test(part) ? "pending" : /满足/u.test(part) ? "yes" : "unknown" }));
+  }
+  return card;
+}
+function readTopics(root) {
+  const directory = path13.join(root, TOPICS_DIR);
+  if (!fs14.existsSync(directory)) return { started: false };
+  let criteria = null;
+  try {
+    const file = path13.join(directory, "CRITERIA.md");
+    criteria = describe(fs14.readFileSync(file, "utf8"), fs14.statSync(file));
+  } catch {
+  }
+  const cards = [];
+  try {
+    for (const name of fs14.readdirSync(path13.join(directory, "cards")).filter((item) => item.endsWith(".md")).sort()) {
+      const file = path13.join(directory, "cards", name);
+      const text = fs14.readFileSync(file, "utf8").slice(0, 64 * 1024);
+      cards.push({ file: `topics/cards/${name}`, name: name.replace(/\.md$/u, ""), mtime: fs14.statSync(file).mtimeMs, ...parseCardHeader(text) });
+    }
+  } catch {
+  }
+  const documents = fs14.readdirSync(directory).filter((name) => name.endsWith(".md") && name !== "CRITERIA.md").sort().map((name) => `topics/${name}`);
+  return { started: true, criteria, cards, documents };
 }
 
 // src/cli/dashboard-actions.mjs
 function isDirectory(root) {
   try {
-    return fs13.statSync(root).isDirectory();
+    return fs15.statSync(root).isDirectory();
   } catch {
     return false;
   }
@@ -17738,21 +18258,68 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
       const roots = registered();
       return {
         registered: roots.map((root) => ({ root, exists: isDirectory(root) })),
-        projects: roots.filter((root) => isDirectory(path12.join(root, ".dove/research"))).map((root) => ({ root, name: path12.basename(root), watch: readWatchConfig(root) })),
+        projects: roots.filter((root) => isDirectory(path14.join(root, ".dove/research"))).map((root) => ({ root, name: path14.basename(root), watch: readWatchConfig(root) })),
         watchGlobal: readGlobalWatchSettings(options2),
         watchState: readGlobalWatchState(options2),
         watchRunning: Boolean(running),
         s2KeySet: Boolean(readSemanticScholarKey(options2)),
+        topicCriteria: readTopicCriteriaInfo(options2),
         passwordSet,
         canChangePassword: Boolean(passwordFile)
       };
     },
     readWatch({ root }) {
-      return { config: readWatchConfig(root), digests: readWatchDigests(root, 3) };
+      return { config: readWatchConfig(root), digests: readWatchDigests(root, 3), impacts: parsePaperImpacts(root), scan: readLatestScan(root) };
+    },
+    readTopicsOverview() {
+      return {
+        criteria: readTopicCriteriaInfo(options2),
+        projects: registered().filter((root) => isDirectory(path14.join(root, ".dove/research"))).map((root) => ({ root, name: path14.basename(root), ...readTopics(root) }))
+      };
+    },
+    startTopics({ root }) {
+      return startTopicSelection(root, options2);
+    },
+    saveTopicCriteria({ text }) {
+      return writeTopicCriteria(text, options2);
+    },
+    draftWatchConfig({ root }) {
+      return draftWatchConfigWithSources(root, { proxy: readGlobalWatchSettings(options2).proxy });
+    },
+    // Field-wide view: this week's best matches across projects, community
+    // hot papers that touch any project's keywords, and each project's latest scan.
+    readTrends({ now = Date.now() } = {}) {
+      const weekAgo = localDate(now - 7 * 864e5);
+      const roots = registered().filter((root) => isDirectory(path14.join(root, ".dove/research")));
+      const byId = /* @__PURE__ */ new Map();
+      const keywords = /* @__PURE__ */ new Set();
+      const scans = [];
+      for (const root of roots) {
+        const config = readWatchConfig(root);
+        config.keywords.forEach((keyword) => keywords.add(keyword.toLowerCase()));
+        const impacts = parsePaperImpacts(root);
+        for (const digest of readWatchDigests(root, 7).filter((item) => item.date >= weekAgo)) {
+          for (const item of digest.items) {
+            const entry = byId.get(item.id) ?? { ...item, projects: [], impacts: [] };
+            if (!entry.projects.includes(path14.basename(root))) entry.projects.push(path14.basename(root));
+            if (impacts[item.id]) entry.impacts.push({ project: path14.basename(root), ...impacts[item.id] });
+            entry.score = Math.max(entry.score ?? 0, item.score ?? 0);
+            byId.set(item.id, entry);
+          }
+        }
+        const scan = readLatestScan(root);
+        if (scan) scans.push({ project: path14.basename(root), ...scan });
+      }
+      const hot = (readWatchHot(options2).papers ?? []).filter((paper) => {
+        const text = `${paper.title} ${paper.abstract}`.toLowerCase();
+        return [...keywords].some((keyword) => text.includes(keyword));
+      }).slice(0, 15);
+      const top = [...byId.values()].sort((left, right) => right.impacts.length - left.impacts.length || right.score - left.score).slice(0, 30);
+      return { since: weekAgo, top, hot, scans };
     },
     addProject({ path: target }) {
-      if (typeof target !== "string" || !path12.isAbsolute(target)) throw new Error("\u8BF7\u586B\u5199\u9879\u76EE\u7684\u7EDD\u5BF9\u8DEF\u5F84");
-      return importProjectRoots([path12.normalize(target)], options2);
+      if (typeof target !== "string" || !path14.isAbsolute(target)) throw new Error("\u8BF7\u586B\u5199\u9879\u76EE\u7684\u7EDD\u5BF9\u8DEF\u5F84");
+      return importProjectRoots([path14.normalize(target)], options2);
     },
     removeProject({ root }) {
       return changeRegisteredProjects([], [root], options2);
@@ -17776,8 +18343,8 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
     changePassword(next) {
       if (!passwordFile) throw new Error("\u9762\u677F\u6CA1\u6709\u7528 --password-file \u542F\u52A8\uFF0C\u4E0D\u80FD\u5728\u8FD9\u91CC\u6539\u5BC6\u7801");
       const temporary = `${passwordFile}.${process.pid}.tmp`;
-      fs13.writeFileSync(temporary, next, { mode: 384 });
-      fs13.renameSync(temporary, passwordFile);
+      fs15.writeFileSync(temporary, next, { mode: 384 });
+      fs15.renameSync(temporary, passwordFile);
     },
     // Runs once a day at the configured hour while the dashboard is up.
     startScheduler({ intervalMs = 10 * 60 * 1e3, now = () => /* @__PURE__ */ new Date() } = {}) {
@@ -17839,8 +18406,8 @@ function cookieAttributes(request, maxAge) {
   const secure = request.headers["x-forwarded-proto"] === "https" || Boolean(request.socket.encrypted);
   return `Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
 }
-var MAX_ACTION_BODY = 64 * 1024;
-var SETTINGS_ACTIONS = /* @__PURE__ */ new Set(["addProject", "removeProject", "syncProjects", "saveWatchConfig", "saveWatchGlobal", "saveS2Key", "runWatch"]);
+var MAX_ACTION_BODY = 1024 * 1024;
+var SETTINGS_ACTIONS = /* @__PURE__ */ new Set(["addProject", "removeProject", "syncProjects", "saveWatchConfig", "saveWatchGlobal", "saveS2Key", "runWatch", "draftWatchConfig", "startTopics", "saveTopicCriteria"]);
 function sendJson(response, status, value2) {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   response.end(JSON.stringify(value2));
@@ -17929,6 +18496,14 @@ function createDashboardServer({ collect, listRoots, readDocument, password = nu
       }
       if (url.pathname === "/api/settings" && actions) {
         sendJson(response, 200, await actions.getSettings({ passwordSet: Boolean(currentPassword) }));
+        return;
+      }
+      if (url.pathname === "/api/topics" && actions) {
+        sendJson(response, 200, await actions.readTopicsOverview());
+        return;
+      }
+      if (url.pathname === "/api/trends" && actions) {
+        sendJson(response, 200, await actions.readTrends());
         return;
       }
       if (url.pathname === "/api/watch" && actions) {
@@ -18115,6 +18690,15 @@ nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-colo
 .reg { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .reg:last-child { border-bottom: 0; }
 .reg .p { flex: 1 1 260px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; overflow-wrap: anywhere; }
+.group { padding: 6px 14px; font-size: 12px; font-weight: 700; background: var(--bg); border-bottom: 1px solid var(--line); }
+.group.overlap { color: var(--user); } .group.baseline { color: var(--done); } .group.borrow { color: var(--accent); } .group.pending { color: var(--warn); }
+.paper .judge { font-size: 12px; margin-top: 3px; }
+.dots { display: inline-flex; gap: 3px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--pause-soft); display: inline-block; }
+.dot.yes { background: var(--accent); } .dot.pending { background: var(--warn); } .dot.no { background: var(--user); }
+tr.cardrow { cursor: pointer; }
+tr.cardrow:hover td { background: var(--accent-soft); }
+.badge-draft { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); margin-left: 6px; }
 #toast { position: fixed; right: 16px; bottom: 16px; background: var(--ink); color: var(--panel); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100vw - 32px); }
 #toast.show { opacity: 1; }
 @media (max-width: 820px) {
@@ -18128,7 +18712,7 @@ nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-colo
 <body>
 <header class="top">
   <span class="brand">\u{1F54A} Dove \u79D1\u7814\u9762\u677F</span>
-  ${canEdit ? '<nav class="tabsnav"><button id="navProjects" class="on">\u9879\u76EE</button><button id="navSettings">\u8BBE\u7F6E</button></nav>' : ""}
+  ${canEdit ? '<nav class="tabsnav"><button id="navProjects" class="on">\u9879\u76EE</button><button id="navTrends">\u52A8\u6001</button><button id="navTopics">\u9009\u9898</button><button id="navSettings">\u8BBE\u7F6E</button></nav>' : ""}
   <span class="meta" id="meta">\u52A0\u8F7D\u4E2D\u2026</span>
   <button id="theme" title="\u5207\u6362\u660E\u6697">\u660E/\u6697</button>
   <button id="reload">\u5237\u65B0</button>
@@ -18142,13 +18726,17 @@ nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-colo
 <div id="toast"></div>
 <script>
 const CAN_EDIT = ${canEdit ? "true" : "false"};
-let mode = location.hash === "#settings" && CAN_EDIT ? "settings" : "projects";
+const MODES = ["settings", "trends", "topics"];
+let mode = CAN_EDIT && MODES.includes(location.hash.slice(1)) ? location.hash.slice(1) : "projects";
+let trends = null;
+let topics = null;
+let topicRoot = null;
 let settings = null;
 const watchCache = new Map();
 const STATUS = { ongoing: ["ongoing", "\u8FDB\u884C\u4E2D"], "\u8FDB\u884C\u4E2D": ["ongoing", "\u8FDB\u884C\u4E2D"], paused: ["paused", "\u5DF2\u6682\u505C"], "\u6682\u505C": ["paused", "\u5DF2\u6682\u505C"], completed: ["completed", "\u5DF2\u5B8C\u6210"], "\u5B8C\u6210": ["completed", "\u5DF2\u5B8C\u6210"] };
 const AUTHOR = { mentor: "\u5BFC\u5E08", user: "\u7528\u6237", external: "\u5916\u90E8", other: "\u5176\u4ED6" };
 let data = null;
-let selected = location.hash === "#settings" ? null : decodeURIComponent(location.hash.slice(1)) || null;
+let selected = ["#settings", "#trends", "#topics"].includes(location.hash) ? null : decodeURIComponent(location.hash.slice(1)) || null;
 const open = new Map();
 
 function esc(value) {
@@ -18270,11 +18858,12 @@ function renderView() {
   }));
 }
 const texts = new Map();
+function rerender() { if (mode === "topics") renderTopics(); else if (mode === "projects") renderView(); }
 async function loadRound(root, file) {
   const key = root + "/" + file;
   if (!texts.has(key)) {
     texts.set(key, { loading: true });
-    renderView();
+    rerender();
     try {
       const res = await fetch("/api/doc?project=" + encodeURIComponent(root) + "&name=" + encodeURIComponent(file), { cache: "no-store" });
       texts.set(key, res.ok ? await res.json() : { error: "\u8BFB\u53D6\u5931\u8D25\uFF08" + res.status + "\uFF09" });
@@ -18282,7 +18871,7 @@ async function loadRound(root, file) {
       texts.set(key, { error: "\u8BFB\u53D6\u5931\u8D25\uFF1A" + error.message });
     }
   }
-  renderView();
+  rerender();
 }
 const openDocs = new Set();
 function lazyDoc(root, name, label) {
@@ -18296,18 +18885,110 @@ function roundBody(root, part) {
   if (t.error) return '<div class="body note">' + esc(t.error) + "</div>";
   return '<div class="body md">' + md(t.text) + (t.truncated ? '<div class="note">\u5185\u5BB9\u8F83\u957F\uFF0C\u53EA\u663E\u793A\u524D 64KB\u3002</div>' : "") + "</div>";
 }
+const GROUPS = [["overlap", "\u649E\u9898\uFF1A\u8D21\u732E\u53EF\u80FD\u88AB\u8986\u76D6"], ["baseline", "\u65B0\u57FA\u7EBF\uFF1A\u8BE5\u8FDB\u8BC4\u6D4B\u5BF9\u7167"], ["borrow", "\u53EF\u501F\u7528\uFF1A\u65B9\u6CD5\u6216\u6570\u636E"], ["pending", "\u5F85\u5BFC\u5E08\u5224\u65AD"]];
+function paperHtml(it, judge) {
+  return '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">' + esc(it.id) + " \xB7 \u5206\u6570 " + esc(it.score) + " \xB7 " + esc(String(it.published || "").slice(0, 10)) + " \xB7 " + esc((it.reasons || []).join("\uFF1B")) + (it.venue ? " \xB7 " + esc(it.venue) : "") + (it.code && String(it.code).startsWith("http") ? ' \xB7 <a href="' + esc(it.code) + '" target="_blank" rel="noopener">\u4EE3\u7801/\u4E3B\u9875</a>' : "") + "</div>" + (judge ? '<div class="judge">\u5BFC\u5E08\uFF08' + esc(judge.round) + "\uFF09\uFF1A" + esc(judge.note) + "</div>" : "") + '<div class="abs">' + esc((it.abstract || "").slice(0, 220)) + (it.abstract && it.abstract.length > 220 ? "\u2026" : "") + "</div></div>";
+}
 function papersSection(root) {
-  let html = '<section><h2>\u65B0\u8BBA\u6587 <span class="sub">\u8BBA\u6587\u8FFD\u8E2A \xB7 \u5BFC\u5E08\u4E0B\u4E00\u8F6E\u5224\u65AD\u5F71\u54CD</span></h2>';
+  let html = '<section><h2>\u65B0\u8BBA\u6587 <span class="sub">\u8BBA\u6587\u8FFD\u8E2A \xB7 \u6309\u5BFC\u5E08\u7684\u5F71\u54CD\u5224\u65AD\u5206\u7EC4</span></h2>';
   const w = watchCache.get(root);
-  if (!w) { loadWatch(root); return html + '<div class="card note">\u8BFB\u53D6\u4E2D\u2026</div></section>'; }
+  if (!w || w.loading) { if (!w) loadWatch(root); return html + '<div class="card note">\u8BFB\u53D6\u4E2D\u2026</div></section>'; }
   if (w.error) return html + '<div class="card note">' + esc(w.error) + "</div></section>";
-  const digest = (w.digests || [])[0];
-  if (!w.config.keywords.length && !w.config.authors.length) return html + '<div class="card note">\u8FD8\u6CA1\u8BBE\u7F6E\u8FFD\u8E2A\u5173\u952E\u8BCD\u6216\u4F5C\u8005\u3002\u5230\u300C\u8BBE\u7F6E \u2192 \u8BBA\u6587\u8FFD\u8E2A\u300D\u91CC\u586B\u597D\u540E\uFF0C\u6BCF\u5929\u81EA\u52A8\u6293\u53D6\u3002</div></section>';
-  if (!digest) return html + '<div class="card note">\u8FD8\u6CA1\u8FD0\u884C\u8FC7\u3002\u53EF\u4EE5\u5728\u8BBE\u7F6E\u9875\u70B9\u300C\u7ACB\u5373\u8FD0\u884C\u300D\u3002</div></section>';
-  html += '<div class="card" style="padding:0">';
-  html += '<div class="paper why">' + esc(digest.date) + " \xB7 " + digest.items.length + " \u7BC7" + (digest.notes && digest.notes.length ? " \xB7 " + esc(digest.notes.join("\uFF1B")) : "") + "</div>";
-  html += digest.items.slice(0, 12).map((it) => '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">\u5206\u6570 ' + esc(it.score) + " \xB7 " + esc((it.published || "").slice(0, 10)) + " \xB7 " + esc(it.reasons.join("\uFF1B")) + (it.venue ? " \xB7 " + esc(it.venue) : "") + '</div><div class="abs">' + esc((it.abstract || "").slice(0, 220)) + (it.abstract && it.abstract.length > 220 ? "\u2026" : "") + "</div></div>").join("") || '<div class="paper note">\u6700\u8FD1\u6CA1\u6709\u65B0\u7684\u76F8\u5173\u8BBA\u6587\u3002</div>';
-  return html + "</div></section>";
+  const c = w.config;
+  if (!c.keywords.length && !c.authors.length && !c.seedPapers.length) return html + '<div class="card note">\u8FD8\u6CA1\u6709\u8FFD\u8E2A\u5185\u5BB9\u3002\u4E0B\u6B21\u8FD0\u884C\u4F1A\u6839\u636E\u9879\u76EE\u8D44\u6599\u81EA\u52A8\u751F\u6210\u521D\u7A3F\uFF0C\u4E5F\u53EF\u4EE5\u5230\u300C\u8BBE\u7F6E\u300D\u91CC\u586B\u5199\u3002</div></section>';
+  const seenIds = new Set();
+  const items = [];
+  for (const digest of w.digests || []) for (const it of digest.items) if (!seenIds.has(it.id)) { seenIds.add(it.id); items.push(it); }
+  if (!items.length) return html + '<div class="card note">' + (w.digests && w.digests.length ? "\u6700\u8FD1\u51E0\u5929\u6CA1\u6709\u65B0\u7684\u76F8\u5173\u8BBA\u6587\u3002" : "\u8FD8\u6CA1\u8FD0\u884C\u8FC7\u3002\u53EF\u4EE5\u5728\u8BBE\u7F6E\u9875\u70B9\u300C\u7ACB\u5373\u8FD0\u884C\u300D\u3002") + (c.source === "draft" ? '<span class="badge-draft">\u8FFD\u8E2A\u5185\u5BB9\u662F\u81EA\u52A8\u521D\u7A3F</span>' : "") + "</div></section>";
+  const impacts = w.impacts || {};
+  html += '<div class="card" style="padding:0"><div class="paper why">\u6700\u8FD1 ' + (w.digests || []).length + " \u5929 \xB7 " + items.length + " \u7BC7" + (c.source === "draft" ? '<span class="badge-draft">\u8FFD\u8E2A\u5185\u5BB9\u662F\u81EA\u52A8\u521D\u7A3F\uFF0C\u53BB\u8BBE\u7F6E\u9875\u68C0\u67E5</span>' : "") + "</div>";
+  for (const [key, label] of GROUPS) {
+    const group = items.filter((it) => (impacts[it.id]?.impact || "pending") === key).slice(0, key === "pending" ? 12 : 50);
+    if (group.length) html += '<div class="group ' + key + '">' + label + " \xB7 " + group.length + "</div>" + group.map((it) => paperHtml(it, impacts[it.id])).join("");
+  }
+  const ignored = items.filter((it) => impacts[it.id]?.impact === "irrelevant").length;
+  if (ignored) html += '<div class="paper why">\u5BFC\u5E08\u5224\u4E3A\u65E0\u5173\uFF1A' + ignored + " \u7BC7\uFF08\u5DF2\u9690\u85CF\uFF09</div>";
+  html += "</div>";
+  if (w.scan) html += lazyScan(root, w.scan);
+  return html + "</section>";
+}
+function lazyScan(root, scan) {
+  return '<details class="note" style="margin-top:8px"><summary>\u5BFC\u5E08\u6700\u8FD1\u4E00\u6B21\u9886\u57DF\u626B\u63CF\uFF08' + esc(scan.date) + '\uFF09</summary><div class="card md">' + md(scan.text) + "</div></details>";
+}
+function renderTrends() {
+  const view = document.getElementById("view");
+  if (!trends) { view.innerHTML = '<div class="empty">\u52A0\u8F7D\u4E2D\u2026</div>'; loadTrends(); return; }
+  if (trends.error) { view.innerHTML = '<div class="empty">' + esc(trends.error) + "</div>"; return; }
+  let html = '<h1 class="title">\u672C\u5468\u9886\u57DF\u52A8\u6001</h1><div class="path">\u81EA ' + esc(trends.since) + " \u8D77 \xB7 \u6240\u6709\u9879\u76EE\u7684\u8FFD\u8E2A\u7ED3\u679C\u6C47\u603B</div>";
+  html += '<section style="margin-top:18px"><h2>\u5404\u9879\u76EE\u6700\u76F8\u5173\u7684\u65B0\u8BBA\u6587 <span class="sub">\u5BFC\u5E08\u5224\u8FC7\u7684\u6392\u5728\u524D\u9762</span></h2><div class="card" style="padding:0">';
+  html += trends.top.map((it) => paperHtml(it, null).replace('<div class="abs">', '<div class="judge">' + esc(it.projects.join("\u3001")) + (it.impacts.length ? " \xB7 " + esc(it.impacts.map((x) => x.project + "\uFF1A" + x.label).join("\uFF1B")) : "") + '</div><div class="abs">')).join("") || '<div class="paper note">\u8FD9\u4E00\u5468\u8FD8\u6CA1\u6709\u8FFD\u8E2A\u7ED3\u679C\u3002</div>';
+  html += "</div></section>";
+  html += '<section><h2>\u793E\u533A\u70ED\u70B9\u91CC\u548C\u4F60\u65B9\u5411\u76F8\u5173\u7684 <span class="sub">Hugging Face \u6BCF\u65E5\u8BBA\u6587\u699C\uFF0C\u547D\u4E2D\u4EFB\u4E00\u9879\u76EE\u5173\u952E\u8BCD</span></h2><div class="card" style="padding:0">';
+  html += trends.hot.map((it) => '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">' + esc(it.id) + " \xB7 " + esc(it.upvotes) + " \u8D5E \xB7 " + esc(String(it.published || "").slice(0, 10)) + "</div></div>").join("") || '<div class="paper note">\u6682\u65F6\u6CA1\u6709\u3002</div>';
+  html += "</div></section>";
+  html += '<section><h2>\u5BFC\u5E08\u9886\u57DF\u626B\u63CF <span class="sub">\u6BCF\u5468\u4E00\u6B21\uFF0C\u5728\u5BFC\u5E08\u73AF\u8282\u7528\u7F51\u9875\u548C\u8BBA\u6587\u68C0\u7D22\u5B8C\u6210</span></h2>';
+  html += trends.scans.map((x) => '<details class="note"><summary>' + esc(x.project) + " \xB7 " + esc(x.date) + '</summary><div class="card md">' + md(x.text) + "</div></details>").join("") || '<div class="card note">\u8FD8\u6CA1\u6709\u626B\u63CF\u8BB0\u5F55\u3002</div>';
+  html += "</section>";
+  view.innerHTML = html;
+}
+const TOPIC_STATUS = { \u63A8\u8350: "completed", \u9009\u5B9A: "completed", \u7EF4\u6301: "ongoing", \u5019\u9009: "paused", \u9650\u5B9A: "none", \u6682\u7F13: "none", \u64A4\u56DE: "other" };
+function renderTopics() {
+  const view = document.getElementById("view");
+  if (!topics) { view.innerHTML = '<div class="empty">\u52A0\u8F7D\u4E2D\u2026</div>'; loadTopics(); return; }
+  if (topics.error) { view.innerHTML = '<div class="empty">' + esc(topics.error) + "</div>"; return; }
+  const c = topics.criteria;
+  let html = '<h1 class="title">\u9009\u9898</h1><div class="path">\u4F9D\u636E\uFF1A' + (c.present ? esc(c.title || "\u9009\u9898\u6807\u51C6") + (c.version ? "\uFF08\u7B2C " + esc(c.version) + " \u7248\uFF09" : "") : "\u8FD8\u6CA1\u6709\u9009\u9898\u6807\u51C6\uFF0C\u5148\u5230\u300C\u8BBE\u7F6E\u300D\u91CC\u7C98\u8D34") + "</div>";
+  const started = topics.projects.filter((x) => x.started);
+  if (!topicRoot || !started.some((x) => x.root === topicRoot)) topicRoot = started[0]?.root ?? null;
+  html += '<section style="margin-top:18px"><h2>\u9879\u76EE</h2><div class="card btns">' + topics.projects.map((x) => x.started
+    ? '<button class="btn' + (x.root === topicRoot ? " primary" : "") + ' tPick" data-root="' + esc(x.root) + '">' + esc(x.name) + " \xB7 " + (x.cards || []).length + " \u4E2A\u5019\u9009</button>"
+    : '<button class="btn tStart" data-root="' + esc(x.root) + '"' + (c.present ? "" : " disabled") + ">\u5728 " + esc(x.name) + " \u5F00\u59CB\u9009\u9898</button>").join("") + "</div></section>";
+  const t = started.find((x) => x.root === topicRoot);
+  if (t) {
+    if (t.criteria && c.present && t.criteria.version !== c.version) html += '<div class="card note" style="margin-bottom:12px">\u8FD9\u4E2A\u9879\u76EE\u7528\u7684\u662F\u7B2C ' + esc(t.criteria.version || "?") + " \u7248\u6807\u51C6\uFF0C\u5F53\u524D\u6807\u51C6\u662F\u7B2C " + esc(c.version || "?") + ' \u7248\u3002<button class="btn tStart" data-root="' + esc(t.root) + '">\u6362\u6210\u5F53\u524D\u7248\u672C</button></div>';
+    html += '<section><h2>\u5019\u9009\u65B9\u5411 <span class="sub">\u5361\u7247\u5F00\u5934\u4E94\u884C\uFF1A\u72B6\u6001\u3001\u9636\u6BB5\u3001\u5B9A\u4F4D\u3001\u4E00\u53E5\u8BDD\u3001\u516D\u70B9</span></h2>';
+    if (!t.cards.length) html += '<div class="card note">\u8FD8\u6CA1\u6709\u5019\u9009\u5361\u3002\u5728\u8FD9\u4E2A\u9879\u76EE\u7684\u4F1A\u8BDD\u91CC\u8BF4\u201C\u5F00\u59CB\u9009\u9898\u201D\uFF0C\u5BFC\u5E08\u4F1A\u6309\u9009\u9898\u6807\u51C6\u5148\u53D1\u6563\u3001\u518D\u5BA1\u67E5\uFF0C\u628A\u5019\u9009\u5199\u8FDB topics/cards/\u3002</div>';
+    else html += '<div class="tablewrap"><table><thead><tr><th>\u5019\u9009</th><th>\u5B9A\u4F4D</th><th>\u9636\u6BB5</th><th>\u72B6\u6001</th><th>\u516D\u70B9</th><th>\u4E00\u53E5\u8BDD</th></tr></thead><tbody>' + t.cards.map((k) =>
+      '<tr class="cardrow" data-file="' + esc(k.file) + '"><td>' + esc(k.title || k.name) + "</td><td>" + esc(k.position || "\u2014") + "</td><td>" + esc(k.stage || "\u2014") + '</td><td><span class="chip ' + (TOPIC_STATUS[(k.status || "").slice(0, 2)] || "other") + '">' + esc(k.status || "\u672A\u6807") + '</span></td><td><span class="dots" title="' + esc(k.six || "") + '">' + (k.sixParts || []).map((x) => '<span class="dot ' + x.state + '"></span>').join("") + '</span></td><td style="white-space:normal;min-width:240px">' + esc(k.summary || "") + "</td></tr>" +
+      (openDocs.has(t.root + "/" + k.file) ? '<tr><td colspan="6" style="white-space:normal">' + roundBody(t.root, { file: k.file }) + "</td></tr>" : "")).join("") + "</tbody></table></div>";
+    html += "</section>";
+    if (t.documents.length) html += '<section><h2>\u9636\u6BB5\u6750\u6599</h2>' + t.documents.map((d) => lazyDoc(t.root, d, d.replace("topics/", ""))).join("") + "</section>";
+  }
+  view.innerHTML = html;
+  view.querySelectorAll(".tPick").forEach((b) => b.addEventListener("click", () => { topicRoot = b.dataset.root; renderTopics(); }));
+  view.querySelectorAll(".tStart").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { await act("startTopics", { root: b.dataset.root }); topicRoot = b.dataset.root; toast("\u5DF2\u5EFA\u7ACB\u9009\u9898\u76EE\u5F55"); topics = null; renderTopics(); }
+    catch (error) { toast(error.message); b.disabled = false; }
+  }));
+  view.querySelectorAll("tr.cardrow").forEach((r) => r.addEventListener("click", () => {
+    const key = topicRoot + "/" + r.dataset.file;
+    if (openDocs.has(key)) { openDocs.delete(key); renderTopics(); } else { openDocs.add(key); loadRound(topicRoot, r.dataset.file); }
+  }));
+  view.querySelectorAll("details[data-name]").forEach((d) => d.addEventListener("toggle", () => {
+    const key = d.dataset.root + "/" + d.dataset.name;
+    if (d.open) { openDocs.add(key); loadRound(d.dataset.root, d.dataset.name); } else openDocs.delete(key);
+  }));
+}
+async function loadTopics() {
+  try {
+    const res = await fetch("/api/topics", { cache: "no-store" });
+    if (res.status === 401) { location.reload(); return; }
+    topics = res.ok ? await res.json() : { error: "\u8BFB\u53D6\u5931\u8D25\uFF08" + res.status + "\uFF09" };
+  } catch (error) {
+    topics = { error: "\u8BFB\u53D6\u5931\u8D25\uFF1A" + error.message };
+  }
+  if (mode === "topics") renderTopics();
+}
+async function loadTrends() {
+  try {
+    const res = await fetch("/api/trends", { cache: "no-store" });
+    if (res.status === 401) { location.reload(); return; }
+    trends = res.ok ? await res.json() : { error: "\u8BFB\u53D6\u5931\u8D25\uFF08" + res.status + "\uFF09" };
+  } catch (error) {
+    trends = { error: "\u8BFB\u53D6\u5931\u8D25\uFF1A" + error.message };
+  }
+  if (mode === "trends") renderTrends();
 }
 async function loadWatch(root) {
   watchCache.set(root, { loading: true });
@@ -18356,13 +19037,18 @@ function renderSettings() {
     '<div class="btns"><button class="btn primary" id="wSave">\u4FDD\u5B58</button><button class="btn" id="wRunAll">\u7ACB\u5373\u8FD0\u884C\u5168\u90E8\u9879\u76EE</button><span class="note">' +
     (settings.watchRunning ? "\u6B63\u5728\u8FD0\u884C\u2026" : st.lastRun ? "\u4E0A\u6B21\u8FD0\u884C\uFF1A" + new Date(st.lastRun).toLocaleString() + " \xB7 " + (st.results || []).map((r) => r.root.split("/").pop() + " " + ({ done: (r.found ?? 0) + " \u7BC7", unconfigured: "\u672A\u8BBE\u5173\u952E\u8BCD", disabled: "\u5DF2\u5173\u95ED", failed: "\u5931\u8D25" }[r.status] || r.status)).join("\uFF0C") : "\u8FD8\u6CA1\u8FD0\u884C\u8FC7") + "</span></div>" +
     '<div class="btns" style="margin-top:6px"><label style="flex:1 1 260px">Semantic Scholar API key\uFF08\u53EF\u9009\uFF0C' + (settings.s2KeySet ? "\u5DF2\u8BBE\u7F6E" : "\u672A\u8BBE\u7F6E") + '\uFF1B\u6CA1\u6709\u4E5F\u80FD\u8FD0\u884C\uFF09<input type="password" id="s2Key" placeholder="' + (settings.s2KeySet ? "\u8F93\u5165\u65B0 key \u53EF\u66FF\u6362" : "\u7C98\u8D34 key") + '" autocomplete="off"></label><button class="btn" id="s2Save">\u4FDD\u5B58 key</button>' + (settings.s2KeySet ? '<button class="btn danger" id="s2Clear">\u6E05\u9664 key</button>' : "") + "</div></div></section>";
+  const tc = settings.topicCriteria || {};
+  html += '<section><h2>\u9009\u9898\u6807\u51C6 <span class="sub">\u9009\u9898\u529F\u80FD\u4EE5\u8FD9\u4EFD\u6587\u6863\u4E3A\u51C6\uFF1B\u5F00\u59CB\u9009\u9898\u65F6\u590D\u5236\u8FDB\u9879\u76EE</span></h2><div class="card form"><div class="note">' + (tc.present ? "\u5F53\u524D\uFF1A" + esc(tc.title || "") + (tc.version ? "\uFF08\u7B2C " + esc(tc.version) + " \u7248\uFF09" : "") + " \xB7 " + Math.round(tc.bytes / 1024) + " KB \xB7 \u66F4\u65B0\u4E8E " + new Date(tc.updatedAt).toLocaleString() : "\u8FD8\u6CA1\u6709\u8BBE\u7F6E") + '</div><label>\u7C98\u8D34\u65B0\u7248\u672C\u7684\u5B8C\u6574\u5185\u5BB9\u6765\u66FF\u6362<textarea id="tcText" style="min-height:120px" placeholder="# \u8BBA\u6587\u9009\u9898\u8981\u6C42\u3001\u8BBA\u8BC1\u539F\u5219\u4E0E\u4EA4\u4ED8\u89C4\u8303 \u2026"></textarea></label><div class="btns"><button class="btn primary" id="tcSave">\u4FDD\u5B58\u9009\u9898\u6807\u51C6</button></div></div></section>';
   html += '<section><h2>\u5404\u9879\u76EE\u8FFD\u8E2A\u5185\u5BB9 <span class="sub">\u5173\u952E\u8BCD\u4E00\u884C\u4E00\u4E2A\uFF0C\u547D\u4E2D\u6807\u9898\u6743\u91CD\u9AD8\uFF1B\u5173\u6CE8\u4F5C\u8005\u547D\u4E2D\u4F1A\u52A0\u5206</span></h2>';
   if (!settings.projects.length) html += '<div class="card note">\u8FD8\u6CA1\u6709\u5E26\u7814\u7A76\u8BB0\u5F55\u7684\u5DF2\u767B\u8BB0\u9879\u76EE\u3002</div>';
   html += settings.projects.map((p, i) => '<div class="card form" style="margin-bottom:10px" data-i="' + i + '"><div class="btns"><strong style="flex:1">' + esc(p.name) + '</strong><span class="btns" style="color:var(--ink);font-size:13px"><input type="checkbox" class="wEnabled" id="wEn' + i + '"' + (p.watch.enabled ? " checked" : "") + '><label for="wEn' + i + '" style="display:inline;color:var(--ink)">\u542F\u7528\u8FFD\u8E2A</label></span></div>' +
     '<div class="row2"><label>\u5173\u952E\u8BCD<textarea class="wKeywords" placeholder="\u4F8B\u5982\uFF1Asewing pattern">' + esc(lines(p.watch.keywords)) + "</textarea></label>" +
     '<label>\u5173\u6CE8\u4F5C\u8005<textarea class="wAuthors" placeholder="\u4F8B\u5982\uFF1AMaria Korosteleva\uFF08\u53EF\u7A7A\uFF09">' + esc(lines(p.watch.authors)) + "</textarea></label></div>" +
+    '<div class="row2"><label>\u5173\u6CE8\u4F1A\u8BAE\uFF08\u4E00\u884C\u4E00\u4E2A\uFF0C\u547D\u4E2D\u52A0\u5206\uFF09<textarea class="wVenues" placeholder="\u4F8B\u5982\uFF1ACVPR">' + esc(lines(p.watch.venues)) + "</textarea></label>" +
+    '<label>\u5173\u6CE8\u673A\u6784\uFF08\u4E00\u884C\u4E00\u4E2A\uFF0C\u7ECF OpenAlex \u5339\u914D\uFF09<textarea class="wInsts" placeholder="\u4F8B\u5982\uFF1AETH Zurich">' + esc(lines(p.watch.institutions)) + "</textarea></label></div>" +
+    '<label>\u8FD1\u90BB\u8BBA\u6587\uFF08arXiv \u7F16\u53F7\u6216\u94FE\u63A5\uFF0C\u4E00\u884C\u4E00\u4E2A\uFF1B\u8FFD\u8E2A\u65B0\u5F15\u7528\u5B83\u4EEC\u7684\u8BBA\u6587\uFF09<textarea class="wSeeds" placeholder="\u4F8B\u5982\uFF1A2306.03642">' + esc(lines(p.watch.seedPapers)) + "</textarea></label>" +
     '<label>arXiv \u5206\u7C7B\uFF08\u9017\u53F7\u5206\u9694\uFF09<input type="text" class="wCats" value="' + esc(p.watch.categories.join(", ")) + '"></label>' +
-    '<div class="btns"><button class="btn primary wSaveP" data-root="' + esc(p.root) + '">\u4FDD\u5B58</button><button class="btn wRunP" data-root="' + esc(p.root) + '">\u53EA\u8FD0\u884C\u8FD9\u4E2A\u9879\u76EE</button></div></div>').join("");
+    '<div class="btns"><button class="btn primary wSaveP" data-root="' + esc(p.root) + '">\u4FDD\u5B58</button><button class="btn wRunP" data-root="' + esc(p.root) + '">\u53EA\u8FD0\u884C\u8FD9\u4E2A\u9879\u76EE</button><button class="btn wDraftP" data-root="' + esc(p.root) + '">\u6839\u636E\u9879\u76EE\u8D44\u6599\u751F\u6210\u521D\u7A3F</button>' + (p.watch.source === "draft" ? '<span class="badge-draft">\u5F53\u524D\u662F\u81EA\u52A8\u521D\u7A3F</span>' : "") + "</div></div>").join("");
   html += "</section>";
   html += '<section><h2>\u9879\u76EE\u767B\u8BB0 <span class="sub">\u767B\u8BB0\u7684\u9879\u76EE\u4F1A\u968F Dove \u5347\u7EA7\u81EA\u52A8\u66F4\u65B0\uFF0C\u5E76\u663E\u793A\u5728\u9762\u677F\u91CC</span></h2><div class="card">' +
     settings.registered.map((r) => '<div class="reg"><span class="p">' + esc(r.root) + "</span>" + (r.exists ? "" : '<span class="chip none">\u76EE\u5F55\u4E0D\u5B58\u5728</span>') + '<button class="btn danger regRemove" data-root="' + esc(r.root) + '">\u79FB\u51FA\u767B\u8BB0</button></div>').join("") +
@@ -18373,12 +19059,20 @@ function renderSettings() {
   const byId = (id) => document.getElementById(id);
   byId("wSave").addEventListener("click", run(async () => { await act("saveWatchGlobal", { settings: { dailyHour: Number(byId("wHour").value), lookbackDays: Number(byId("wDays").value), maxPerDigest: Number(byId("wMax").value), proxy: byId("wProxy").value } }); toast("\u5DF2\u4FDD\u5B58"); await loadSettings(); }));
   byId("wRunAll").addEventListener("click", run(async () => { await act("runWatch", {}); toast("\u5DF2\u5F00\u59CB\u8FD0\u884C\uFF0C\u5B8C\u6210\u540E\u5237\u65B0\u53EF\u89C1"); watchCache.clear(); setTimeout(loadSettings, 4000); }));
+  byId("tcSave").addEventListener("click", run(async () => { const r = await act("saveTopicCriteria", { text: byId("tcText").value }); byId("tcText").value = ""; toast("\u5DF2\u4FDD\u5B58" + (r.version ? "\u7B2C " + r.version + " \u7248" : "")); await loadSettings(); }));
   byId("s2Save").addEventListener("click", run(async () => { if (!byId("s2Key").value.trim()) throw new Error("\u5148\u7C98\u8D34 key"); await act("saveS2Key", { key: byId("s2Key").value }); toast("key \u5DF2\u4FDD\u5B58"); await loadSettings(); }));
   if (byId("s2Clear")) byId("s2Clear").addEventListener("click", run(async () => { await act("saveS2Key", { key: "" }); toast("key \u5DF2\u6E05\u9664"); await loadSettings(); }));
   view.querySelectorAll(".wSaveP").forEach((b) => b.addEventListener("click", run(async (btn) => {
     const card = btn.closest(".card");
-    await act("saveWatchConfig", { root: btn.dataset.root, config: { enabled: card.querySelector(".wEnabled").checked, keywords: card.querySelector(".wKeywords").value, authors: card.querySelector(".wAuthors").value, categories: card.querySelector(".wCats").value } });
+    await act("saveWatchConfig", { root: btn.dataset.root, config: { enabled: card.querySelector(".wEnabled").checked, keywords: card.querySelector(".wKeywords").value, authors: card.querySelector(".wAuthors").value, venues: card.querySelector(".wVenues").value, institutions: card.querySelector(".wInsts").value, seedPapers: card.querySelector(".wSeeds").value, categories: card.querySelector(".wCats").value, source: "user" } });
     watchCache.delete(btn.dataset.root); toast("\u5DF2\u4FDD\u5B58"); await loadSettings();
+  })));
+  view.querySelectorAll(".wDraftP").forEach((b) => b.addEventListener("click", run(async (btn) => {
+    const draft = await act("draftWatchConfig", { root: btn.dataset.root });
+    const card = btn.closest(".card");
+    card.querySelector(".wKeywords").value = lines(draft.keywords);
+    card.querySelector(".wSeeds").value = lines(draft.seedPapers);
+    toast("\u5DF2\u586B\u5165\u521D\u7A3F\uFF08\u8FD8\u6CA1\u4FDD\u5B58\uFF09\uFF0C\u68C0\u67E5\u540E\u70B9\u4FDD\u5B58");
   })));
   view.querySelectorAll(".wRunP").forEach((b) => b.addEventListener("click", run(async (btn) => { await act("runWatch", { root: btn.dataset.root }); watchCache.delete(btn.dataset.root); toast("\u5DF2\u5F00\u59CB\u8FD0\u884C"); setTimeout(loadSettings, 4000); })));
   view.querySelectorAll(".regRemove").forEach((b) => b.addEventListener("click", run(async (btn) => { await act("removeProject", { root: btn.dataset.root }); toast("\u5DF2\u79FB\u51FA\u767B\u8BB0"); await loadSettings(); load(); })));
@@ -18389,14 +19083,18 @@ function renderSettings() {
 function setMode(next) {
   mode = next;
   document.getElementById("navProjects")?.classList.toggle("on", mode === "projects");
+  document.getElementById("navTrends")?.classList.toggle("on", mode === "trends");
   document.getElementById("navSettings")?.classList.toggle("on", mode === "settings");
+  document.getElementById("navTopics")?.classList.toggle("on", mode === "topics");
+  if (mode === "topics") { history.replaceState(null, "", "#topics"); topics = null; renderTopics(); return; }
   if (mode === "settings") { history.replaceState(null, "", "#settings"); settings = null; renderSettings(); }
+  else if (mode === "trends") { history.replaceState(null, "", "#trends"); trends = null; renderTrends(); }
   else { if (selected) history.replaceState(null, "", "#" + encodeURIComponent(selected)); renderView(); }
 }
 function tile(k, v) { return '<div class="tile"><div class="k">' + k + '</div><div class="v" title="' + esc(v) + '">' + esc(v) + "</div></div>"; }
 function select(root) {
   selected = root;
-  if (mode !== "projects") { mode = "projects"; document.getElementById("navProjects")?.classList.add("on"); document.getElementById("navSettings")?.classList.remove("on"); }
+  if (mode !== "projects") { mode = "projects"; document.getElementById("navProjects")?.classList.add("on"); document.getElementById("navSettings")?.classList.remove("on"); document.getElementById("navTrends")?.classList.remove("on"); document.getElementById("navTopics")?.classList.remove("on"); }
   history.replaceState(null, "", "#" + encodeURIComponent(root));
   renderList(); renderView();
 }
@@ -18417,10 +19115,12 @@ async function load() {
       : "\u8BFB\u53D6\u5931\u8D25\uFF1A" + error.message;
   }
 }
-document.getElementById("reload").addEventListener("click", () => { texts.clear(); watchCache.clear(); load(); if (mode === "settings") loadSettings(); });
+document.getElementById("reload").addEventListener("click", () => { texts.clear(); watchCache.clear(); load(); if (mode === "settings") loadSettings(); if (mode === "trends") loadTrends(); if (mode === "topics") loadTopics(); });
 document.getElementById("navProjects")?.addEventListener("click", () => setMode("projects"));
 document.getElementById("navSettings")?.addEventListener("click", () => setMode("settings"));
-if (mode === "settings") setMode("settings");
+document.getElementById("navTrends")?.addEventListener("click", () => setMode("trends"));
+document.getElementById("navTopics")?.addEventListener("click", () => setMode("topics"));
+if (mode !== "projects") setMode(mode);
 document.getElementById("picker").addEventListener("change", (e) => select(e.target.value));
 document.getElementById("theme").addEventListener("click", () => {
   const root = document.documentElement;
@@ -18717,6 +19417,7 @@ function renderDoveHelp() {
   dove projects status [--json|--format json]
   dove dashboard [--port <port>] [--bind <address>] [--password-file <file>] [--json|--format json]
   dove watch run [--project <dir>] [--json|--format json]
+  dove topic start [--project <dir>] [--json|--format json]
   dove run start --project <dir> [--id <id>] [--group <name>] [--seed <short-text>] [--wall-time <duration>|--timeout-ms <ms>] [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--data <basis>] [--evaluator <basis>] [--resource-basis <basis>] [--kill-grace-ms <ms>] [--json|--format json] -- <command> [args...]
   dove run status --project <dir> [--id <id>|--group <name>] [--json|--format json]
   dove run resume --project <dir> --id <id> [--json|--format json]
@@ -18729,7 +19430,7 @@ function renderDoveHelp() {
 
 \u666E\u901A Claude \u4F1A\u8BDD\u662F Dove \u7684\u4E3B\u8981\u5165\u53E3\uFF1B--agent dove \u4E0E\u4E5D\u4E2A /dove:* Skills \u53EA\u662F\u53EF\u9009\u5FEB\u6377\u5165\u53E3\u3002CLI \u7BA1\u7406\u9879\u76EE\u63A5\u5165\u3001\u8BCA\u65AD\u548C\u8FD0\u884C\u6536\u636E\uFF0C\u4E0D\u542F\u52A8\u5BA1\u7A3F\u6A21\u578B\u3002/dove:review \u4FDD\u7559\uFF0C\u5BFC\u5E08 dove-mentor \u4E0E\u8BBA\u6587\u5BA1\u7A3F dove-review \u4F7F\u7528\u5BBF\u4E3B\u539F\u751F\u5168\u65B0\u53EA\u8BFB\u5B50 agent\uFF0C\u4EC5 Read/Grep/Glob\uFF0C\u4E0D\u4F20\u6267\u884C\u5BF9\u8BDD\u3001\u4E0D\u7EED\u63A5\u5386\u53F2\u3002
 
-dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u53EA\u8BFB\u7F51\u9875\uFF0C\u96C6\u4E2D\u67E5\u770B\u5DF2\u767B\u8BB0\u9879\u76EE\u7684\u4E3B\u7EBF\u3001\u5F53\u524D\u8F6E\u6B21\u3001EVAL \u8BC4\u6D4B\u8868\u548C\u6BCF\u8F6E\u8BF4\u660E/\u7ED3\u679C\uFF08\u9ED8\u8BA4 127.0.0.1:7788\uFF0C\u8FDC\u7A0B\u7528 SSH \u7AEF\u53E3\u8F6C\u53D1\u6253\u5F00\uFF1B\u6302\u5230\u516C\u7F51\u96A7\u9053\u65F6\u7528 --password-file \u5F00\u542F\u5BC6\u7801\u767B\u5F55\uFF0C\u6240\u6709\u9875\u9762\u548C\u6570\u636E\u63A5\u53E3\u90FD\u8981\u5148\u767B\u5F55\uFF09\u3002\u9762\u677F\u7684\u300C\u8BBE\u7F6E\u300D\u9875\u53EF\u7BA1\u7406\u9879\u76EE\u767B\u8BB0\u3001\u8BBA\u6587\u8FFD\u8E2A\uFF08\u5173\u952E\u8BCD\u3001\u4F5C\u8005\u3001arXiv \u5206\u7C7B\u3001\u6BCF\u5929\u8FD0\u884C\u65F6\u95F4\u3001\u4EE3\u7406\u3001\u53EF\u9009\u7684 Semantic Scholar key\uFF09\u548C\u9762\u677F\u5BC6\u7801\uFF1B\u8BBA\u6587\u8FFD\u8E2A\u5728\u9762\u677F\u8FD0\u884C\u671F\u95F4\u6BCF\u5929\u81EA\u52A8\u6267\u884C\uFF0C\u4E5F\u53EF\u7528 dove watch run \u624B\u52A8\u6267\u884C\uFF0C\u7ED3\u679C\u5199\u5165\u5404\u9879\u76EE .dove/research/watch/\uFF0C\u7531\u5BFC\u5E08\u5728\u4E0B\u4E00\u8F6E\u5224\u65AD\u5F71\u54CD\u3002
+dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u53EA\u8BFB\u7F51\u9875\uFF0C\u96C6\u4E2D\u67E5\u770B\u5DF2\u767B\u8BB0\u9879\u76EE\u7684\u4E3B\u7EBF\u3001\u5F53\u524D\u8F6E\u6B21\u3001EVAL \u8BC4\u6D4B\u8868\u548C\u6BCF\u8F6E\u8BF4\u660E/\u7ED3\u679C\uFF08\u9ED8\u8BA4 127.0.0.1:7788\uFF0C\u8FDC\u7A0B\u7528 SSH \u7AEF\u53E3\u8F6C\u53D1\u6253\u5F00\uFF1B\u6302\u5230\u516C\u7F51\u96A7\u9053\u65F6\u7528 --password-file \u5F00\u542F\u5BC6\u7801\u767B\u5F55\uFF0C\u6240\u6709\u9875\u9762\u548C\u6570\u636E\u63A5\u53E3\u90FD\u8981\u5148\u767B\u5F55\uFF09\u3002\u9762\u677F\u7684\u300C\u8BBE\u7F6E\u300D\u9875\u53EF\u7BA1\u7406\u9879\u76EE\u767B\u8BB0\u3001\u8BBA\u6587\u8FFD\u8E2A\uFF08\u5173\u952E\u8BCD\u3001\u4F5C\u8005\u3001arXiv \u5206\u7C7B\u3001\u6BCF\u5929\u8FD0\u884C\u65F6\u95F4\u3001\u4EE3\u7406\u3001\u53EF\u9009\u7684 Semantic Scholar key\uFF09\u548C\u9762\u677F\u5BC6\u7801\uFF1B\u8BBA\u6587\u8FFD\u8E2A\u5728\u9762\u677F\u8FD0\u884C\u671F\u95F4\u6BCF\u5929\u81EA\u52A8\u6267\u884C\uFF0C\u4E5F\u53EF\u7528 dove watch run \u624B\u52A8\u6267\u884C\uFF0C\u7ED3\u679C\u5199\u5165\u5404\u9879\u76EE .dove/research/watch/\uFF0C\u7531\u5BFC\u5E08\u5728\u4E0B\u4E00\u8F6E\u5224\u65AD\u5F71\u54CD\u3002dove topic start \u628A\u7528\u6237\u7684\u9009\u9898\u6807\u51C6\uFF08\u9762\u677F\u8BBE\u7F6E\u9875\u7EF4\u62A4\uFF09\u590D\u5236\u5230\u9879\u76EE .dove/research/topics/CRITERIA.md\uFF0C\u5BFC\u5E08\u6309\u5B83\u5206\u9636\u6BB5\u9009\u9898\uFF0C\u5019\u9009\u5361\u5728\u9762\u677F\u300C\u9009\u9898\u300D\u9875\u67E5\u770B\u3002
 
 \u79D1\u7814\u6838\u5FC3\u8BB0\u5F55\u662F .dove/research/IDENTITY.md\u3001EVAL.md\u3001rounds/\u3002\u8F6E\u6B21\u8BF4\u660E\u6807\u6CE8\u4F5C\u8005\uFF08\u5BFC\u5E08/\u7528\u6237/\u5916\u90E8\uFF09\uFF1B\u7ED3\u679C\u51E0\u884C\u52A0 EVAL \u4E00\u884C\u3002\u8BC4\u6D4B\u7531\u7528\u6237\u786E\u8BA4\u4E00\u6B21\uFF0C\u81F3\u5C11\u542B\u4E00\u5217\u672A\u89C1\u7C7B\u522B\u7684\u6CDB\u5316\u7ED3\u679C\uFF1B\u91CD\u8981\u7ED3\u679C\u540E\u7684\u516B\u7EF4\u5224\u65AD\u7531\u5BFC\u5E08\u7ED9\u51FA\u3002\u5DF2\u6709 missions\u3001experiments\u3001claims \u539F\u5730\u4FDD\u7559\uFF0C\u4E0D\u8FC1\u79FB\u5220\u9664\uFF1B\u521D\u59CB\u5316\u4ECD\u53EA\u5728\u6CA1\u6709\u7814\u7A76\u6811\u65F6\u5EFA\u7ACB\u6700\u5C0F RESEARCH.md\u3002
 
@@ -18738,10 +19439,10 @@ dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u53EA\u8BFB\u7F51\u9875\uFF0
 }
 
 // src/cli/interactive-setup.mjs
-import path14 from "node:path";
+import path16 from "node:path";
 
 // src/cli/project-integration-output.mjs
-import path13 from "node:path";
+import path15 from "node:path";
 var INTERNAL_FIELD_NAMES = /* @__PURE__ */ new Set([
   "writtenPaths",
   "removedPaths",
@@ -18848,7 +19549,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
   const showMascot = options2.showMascot !== false;
   const color = terminalColorEnabled(stream, env);
   const heading = headingFor(command3, result.status);
-  const projectName = terminalSafeText2(path13.basename(result.target) || result.target);
+  const projectName = terminalSafeText2(path15.basename(result.target) || result.target);
   const lines = [];
   if (showMascot && command3 === "init" && ["initialized", "already-initialized"].includes(result.status) && interactive) {
     lines.push(renderDovePixelArt({ color }), "");
@@ -18889,7 +19590,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
 
 // src/cli/interactive-setup.mjs
 function safeProjectName(target) {
-  return path14.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
+  return path16.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
 }
 function resultHosts(result) {
   return result.hosts ?? result.projectIntegration?.manifest?.hosts ?? [];
@@ -19209,7 +19910,7 @@ function renderRunResult(result) {
 }
 
 // src/core/session-start-hook.mjs
-import path15 from "node:path";
+import path17 from "node:path";
 function parseSessionStartPayload(input) {
   let payload;
   try {
@@ -19236,14 +19937,14 @@ function sessionStartOutput(payload, result = null, options2 = {}) {
     output.systemMessage = "Dove project integration needs attention. SessionStart is read-only; run dove update explicitly to update supported manifest-owned integration. If blocked, inspect dove doctor --json before changing files.";
   }
   if (payload.source === "startup" || payload.source === "clear") {
-    if (typeof options2.project !== "string" || !path15.isAbsolute(options2.project)) {
+    if (typeof options2.project !== "string" || !path17.isAbsolute(options2.project)) {
       throw new Error("Dove SessionStart bootstrap requires an explicit absolute project root.");
     }
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
       additionalContext: renderDoveAuthorPreferencesBootstrap(
-        path15.join(options2.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude),
-        path15.join(options2.project, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude)
+        path17.join(options2.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude),
+        path17.join(options2.project, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude)
       )
     };
   } else if (payload.source === "compact" || payload.source === "resume") {
@@ -19324,7 +20025,7 @@ function userPromptSubmitFailureOutput(error) {
 }
 
 // src/core/stop-hook.mjs
-import fs14 from "node:fs";
+import fs16 from "node:fs";
 function parseStopPayload(input) {
   try {
     const payload = JSON.parse(input);
@@ -19343,7 +20044,7 @@ function mentorCallInRecord(record, called = false) {
   return called || record.type === "assistant" && Array.isArray(content) && content.some((block) => block.type === "tool_use" && block.name === "Agent" && block.input?.subagent_type === "dove-mentor");
 }
 async function mentorCalled(transcriptPath) {
-  const file = await fs14.promises.open(transcriptPath, "r");
+  const file = await fs16.promises.open(transcriptPath, "r");
   const buffer = Buffer.alloc(64 * 1024);
   let pending = Buffer.alloc(0);
   let called = false;
@@ -19394,7 +20095,7 @@ async function stopHookOutput(payload, options2 = {}) {
 
 // src/core/statusline.mjs
 import { spawnSync as spawnSync2 } from "node:child_process";
-import path16 from "node:path";
+import path18 from "node:path";
 import process4 from "node:process";
 var MAX_MAINLINE_CODE_POINTS = 80;
 var STATUS_SEPARATOR = " \xB7 ";
@@ -19450,7 +20151,7 @@ function inspectGitBranch(projectRoot, options2 = {}) {
       windowsHide: true,
       env: {
         ...process4.env,
-        GIT_CEILING_DIRECTORIES: path16.dirname(path16.resolve(projectRoot))
+        GIT_CEILING_DIRECTORIES: path18.dirname(path18.resolve(projectRoot))
       }
     });
     if (result?.status !== 0 || result.signal || result.error) return null;
@@ -19529,7 +20230,7 @@ function renderDoveStatusLine(input, options2 = {}) {
   const remainingValue = nonNegativeNumber(payload.context_window?.remaining_percentage);
   const remaining = remainingValue === null ? null : Math.min(100, Math.round(remainingValue));
   const duration = formatSessionDuration(payload.cost?.total_duration_ms);
-  const project = options2.projectRoot ? oneLine(path16.resolve(options2.projectRoot)) : null;
+  const project = options2.projectRoot ? oneLine(path18.resolve(options2.projectRoot)) : null;
   const card = readDoveIdentityCard(options2.projectRoot, options2) ?? "";
   const mainline = shortMainline(Object.hasOwn(options2, "mainline") ? options2.mainline : parseResearchMainline(card));
   const noColorValue = (options2.env ?? process4.env).NO_COLOR;
@@ -19550,147 +20251,10 @@ function renderDoveStatusLine(input, options2 = {}) {
 ${project}` : session;
 }
 
-// src/core/dashboard-data.mjs
-import fs15 from "node:fs";
-import path17 from "node:path";
-var RESEARCH_ROOT2 = ".dove/research";
-var MAX_TEXT_BYTES = 64 * 1024;
-var MAX_ROUNDS = 40;
-var ROUND_FILE = /^(\d+)[-_](brief|result)\.md$/iu;
-var AUTHOR_LABELS = [
-  [/导师|mentor/iu, "mentor"],
-  [/用户|user/iu, "user"],
-  [/外部|external/iu, "external"]
-];
-function readText(file, fsOps) {
-  try {
-    const stat = fsOps.lstatSync(file);
-    if (!stat.isFile() || stat.isSymbolicLink()) return null;
-    const bytes = fsOps.readFileSync(file);
-    const truncated = bytes.length > MAX_TEXT_BYTES;
-    const text = new TextDecoder("utf-8").decode(bytes.subarray(0, MAX_TEXT_BYTES));
-    return { text, truncated, mtime: stat.mtimeMs ?? null };
-  } catch {
-    return null;
-  }
-}
-function listDirectory(directory, fsOps) {
-  try {
-    return fsOps.readdirSync(directory);
-  } catch {
-    return [];
-  }
-}
-function parseCardFields(text = "") {
-  const fields = {};
-  for (const line of text.split(/\r?\n/u)) {
-    const match = line.match(/^\s*(?:[-*]\s*)?\**([^:：*\n]{1,40}?)\**\s*[:：]\s*(.+)$/u);
-    if (!match) continue;
-    const key = match[1].trim();
-    if (!(key in fields)) fields[key] = match[2].trim();
-  }
-  return fields;
-}
-function parseAuthor(text = "") {
-  const line = text.split(/\r?\n/u).slice(0, 12).find((item) => /^\s*(?:[-*]\s*)?\**\s*(Author|作者)\s*\**\s*[:：]/iu.test(item));
-  if (!line) return null;
-  const value2 = line.replace(/^[^:：]*[:：]\s*/u, "");
-  for (const [pattern, label] of AUTHOR_LABELS) if (pattern.test(value2)) return label;
-  return "other";
-}
-function firstHeading(text = "") {
-  const heading = text.split(/\r?\n/u).find((line) => /^#{1,3}\s+\S/u.test(line));
-  return heading ? heading.replace(/^#{1,3}\s+/u, "").trim() : null;
-}
-function parseMarkdownTables(text = "") {
-  const tables = [];
-  let current = null;
-  const cells = (line) => line.trim().replace(/^\|/u, "").replace(/\|$/u, "").split("|").map((cell) => cell.trim());
-  for (const line of text.split(/\r?\n/u)) {
-    if (!/^\s*\|.*\|\s*$/u.test(line)) {
-      if (current) tables.push(current);
-      current = null;
-      continue;
-    }
-    const row = cells(line);
-    if (row.every((cell) => /^:?-+:?$/u.test(cell))) continue;
-    if (!current) current = { header: row, rows: [] };
-    else current.rows.push(row);
-  }
-  if (current) tables.push(current);
-  return tables;
-}
-function collectRounds(directory, fsOps) {
-  const byNumber = /* @__PURE__ */ new Map();
-  for (const name of listDirectory(directory, fsOps)) {
-    const match = name.match(ROUND_FILE);
-    if (!match) continue;
-    const number = Number(match[1]);
-    const kind = match[2].toLowerCase();
-    const file = readText(path17.join(directory, name), fsOps);
-    if (!file) continue;
-    const entry = byNumber.get(number) ?? { number, label: match[1] };
-    entry[kind] = { file: name, truncated: file.truncated, mtime: file.mtime };
-    if (kind === "brief") {
-      entry.author = parseAuthor(file.text);
-      entry.title = firstHeading(file.text);
-    }
-    byNumber.set(number, entry);
-  }
-  return [...byNumber.values()].sort((left, right) => right.number - left.number).slice(0, MAX_ROUNDS);
-}
-function evaluationSummary(evaluation) {
-  const tables = parseMarkdownTables(evaluation.text);
-  return { mtime: evaluation.mtime, truncated: evaluation.truncated, tables, text: tables.length ? null : evaluation.text };
-}
-function summarizeProject(root, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs15;
-  const research = path17.join(root, RESEARCH_ROOT2);
-  let exists = false;
-  try {
-    exists = fsOps.lstatSync(root).isDirectory();
-  } catch {
-    exists = false;
-  }
-  const identity = readText(path17.join(research, "IDENTITY.md"), fsOps);
-  const evaluation = readText(path17.join(research, "EVAL.md"), fsOps);
-  const doctor = readText(path17.join(root, ".dove/install/DOCTOR.md"), fsOps);
-  const rounds = exists ? collectRounds(path17.join(research, "rounds"), fsOps) : [];
-  const fields = identity ? parseCardFields(identity.text) : {};
-  const current = identity ? parseDoveCurrentRound(identity.text) : null;
-  const statusMatch = identity?.text.match(/^Round status:[ \t]*(.+)$/mu)?.[1]?.trim() ?? null;
-  const times = [identity?.mtime, evaluation?.mtime, ...rounds.flatMap((round) => [round.brief?.mtime, round.result?.mtime])].filter((value2) => typeof value2 === "number");
-  return {
-    root,
-    name: path17.basename(root),
-    exists,
-    mainline: fields.Mainline ?? fields["\u4E3B\u7EBF"] ?? null,
-    currentRound: current?.brief ?? null,
-    roundStatus: statusMatch,
-    lastActivity: times.length ? Math.max(...times) : null,
-    identity: identity ? { text: identity.text, truncated: identity.truncated, mtime: identity.mtime } : null,
-    evaluation: evaluation ? evaluationSummary(evaluation) : null,
-    rounds,
-    doctor: doctor ? { mtime: doctor.mtime } : null
-  };
-}
-var NAMED_DOCUMENTS = { "EVAL.md": `${RESEARCH_ROOT2}/EVAL.md`, "DOCTOR.md": ".dove/install/DOCTOR.md" };
-function readProjectDocument(root, name, options2 = {}) {
-  if (typeof name !== "string") return null;
-  const relative = ROUND_FILE.test(name) ? `${RESEARCH_ROOT2}/rounds/${name}` : NAMED_DOCUMENTS[name];
-  return relative ? readText(path17.join(root, relative), options2.fsOps ?? fs15) : null;
-}
-function collectDashboard(options2 = {}) {
-  const roots = options2.projects ?? readRegisteredProjects(options2);
-  const projects = roots.map((root) => summarizeProject(root, options2)).filter((project) => project.exists && (project.identity || project.evaluation || project.rounds.length));
-  projects.sort((left, right) => (right.lastActivity ?? 0) - (left.lastActivity ?? 0));
-  return { generatedAt: new Date(options2.now ?? Date.now()).toISOString(), version: options2.packageVersion ?? null, projects };
-}
-
 // src/core/dove-lifecycle.mjs
-import fs16 from "node:fs";
+import fs17 from "node:fs";
 function updateDoveLifecycle(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs17;
   const root = resolveProjectRootForSetup(start, { fsOps });
   return updateProjectIntegration(root, options2);
 }
@@ -19707,12 +20271,12 @@ function uninstallDoveLifecycle(start, options2 = {}) {
 }
 
 // src/core/project-doctor.mjs
-import fs18 from "node:fs";
-import path18 from "node:path";
+import fs19 from "node:fs";
+import path19 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/core/research-documents.mjs
-import fs17 from "node:fs";
+import fs18 from "node:fs";
 var RESEARCH_DOCUMENT_PATHS = Object.freeze({ ...RESEARCH_DEFAULT_PATHS });
 function readableMarkdown(root, relativePath) {
   const stat = root.tryLstat(relativePath);
@@ -19724,7 +20288,7 @@ function readableMarkdown(root, relativePath) {
 function inspectResearchDocuments(project, options2 = {}) {
   const base = { root: RESEARCH_DOCUMENT_PATHS.root, identity: null, evaluation: null, rounds: null, overview: null };
   try {
-    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs17 });
+    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs18 });
     const directory = root.tryLstat(RESEARCH_DOCUMENT_PATHS.root);
     if (!directory) return { ...base, healthy: true, state: "absent" };
     if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error(`${base.root} must be a real directory.`);
@@ -19758,8 +20322,8 @@ function classifyProjectSetup(result) {
 }
 
 // src/core/project-doctor.mjs
-var MODULE_DIRECTORY = path18.dirname(fileURLToPath3(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path18.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path18.basename(MODULE_DIRECTORY)) ? ".." : "../..");
+var MODULE_DIRECTORY = path19.dirname(fileURLToPath3(import.meta.url));
+var DEFAULT_PACKAGE_ROOT = path19.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path19.basename(MODULE_DIRECTORY)) ? ".." : "../..");
 function messageFor(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -19779,18 +20343,18 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 function inspectUserCli(options2) {
-  const fsOps = options2.fsOps ?? fs18;
-  const packageRoot = path18.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
+  const fsOps = options2.fsOps ?? fs19;
+  const packageRoot = path19.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options2.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
-    const absolutePath = path18.resolve(packageRoot, relativePath);
-    const relative = path18.relative(packageRoot, absolutePath);
-    const contained = relative !== "" && !relative.startsWith("..") && !path18.isAbsolute(relative);
+    const absolutePath = path19.resolve(packageRoot, relativePath);
+    const relative = path19.relative(packageRoot, absolutePath);
+    const contained = relative !== "" && !relative.startsWith("..") && !path19.isAbsolute(relative);
     const healthy2 = contained && regularNonSymlink(fsOps, absolutePath);
     return { path: relativePath, healthy: healthy2, state: healthy2 ? "current" : contained ? "missing-or-invalid" : "outside-package-root" };
   });
-  const executablePath = path18.resolve(options2.executablePath ?? path18.join(packageRoot, "bin/dove-package.mjs"));
-  const executableRelative = path18.relative(packageRoot, executablePath);
-  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path18.isAbsolute(executableRelative);
+  const executablePath = path19.resolve(options2.executablePath ?? path19.join(packageRoot, "bin/dove-package.mjs"));
+  const executableRelative = path19.relative(packageRoot, executablePath);
+  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path19.isAbsolute(executableRelative);
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
   const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
@@ -19902,7 +20466,7 @@ function inspectProjectDoctor(start, options2 = {}) {
   try {
     setupRoot = resolveProjectRootForSetup(start, { fsOps: options2.fsOps });
   } catch {
-    setupRoot = typeof start === "string" ? path18.resolve(start) : null;
+    setupRoot = typeof start === "string" ? path19.resolve(start) : null;
   }
   const projectIntegration = inspectIntegration(start, options2);
   const safeRoot = projectIntegration.root ?? setupRoot;
@@ -19924,8 +20488,8 @@ function inspectProjectDoctor(start, options2 = {}) {
 
 // src/core/run-record.mjs
 import crypto5 from "node:crypto";
-import fs19 from "node:fs";
-import path19 from "node:path";
+import fs20 from "node:fs";
+import path20 from "node:path";
 import process5 from "node:process";
 
 // src/core/run-environment.mjs
@@ -20096,7 +20660,7 @@ function normalizeRunId(value2) {
   return value2;
 }
 function normalizeRunProject(project, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   return resolveInstalledProjectRoot(project ?? options2.cwd ?? process5.cwd(), { fsOps });
 }
 function runRelativePaths(runId) {
@@ -20113,17 +20677,17 @@ function runAbsolutePaths(projectRoot, runId) {
   const relative = runRelativePaths(runId);
   return {
     ...relative,
-    absoluteRunDirectory: path19.join(projectRoot, relative.runDirectory),
-    absoluteJournalPath: path19.join(projectRoot, relative.journalPath),
-    absoluteStdoutPath: path19.join(projectRoot, relative.stdoutPath),
-    absoluteStderrPath: path19.join(projectRoot, relative.stderrPath)
+    absoluteRunDirectory: path20.join(projectRoot, relative.runDirectory),
+    absoluteJournalPath: path20.join(projectRoot, relative.journalPath),
+    absoluteStdoutPath: path20.join(projectRoot, relative.stdoutPath),
+    absoluteStderrPath: path20.join(projectRoot, relative.stderrPath)
   };
 }
 function ensureRunsRoot(projectRoot, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
-  const doveRoot = path19.join(projectRoot, ARTIFACT_PATHS.doveRoot);
+  const fsOps = options2.fsOps ?? fs20;
+  const doveRoot = path20.join(projectRoot, ARTIFACT_PATHS.doveRoot);
   assertRealDirectory(fsOps, doveRoot, "Dove workspace root");
-  const runsRoot = path19.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const runsRoot = path20.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat !== null) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -20139,7 +20703,7 @@ function ensureRunsRoot(projectRoot, options2 = {}) {
   return runsRoot;
 }
 function reserveRunDirectory(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const runId = normalizeRunId(options2.id ?? createRunId({ now: options2.now }));
   ensureRunsRoot(projectRoot, { fsOps });
@@ -20154,13 +20718,13 @@ function reserveRunDirectory(options2 = {}) {
   return { projectRoot, runId, paths };
 }
 function requireRunDirectory(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const paths = runAbsolutePaths(projectRoot, runId);
   assertRealDirectory(fsOps, paths.absoluteRunDirectory, "Dove run directory");
   return paths;
 }
 function tryRunDirectory(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const paths = runAbsolutePaths(projectRoot, runId);
   const stat = lstatOrNull5(fsOps, paths.absoluteRunDirectory);
   if (stat === null) return null;
@@ -20168,9 +20732,9 @@ function tryRunDirectory(projectRoot, runId, options2 = {}) {
   return paths;
 }
 function acquireRunMutationLock(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const paths = requireRunDirectory(projectRoot, runId, { fsOps });
-  const lockPath = path19.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
+  const lockPath = path20.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
   for (let attempt = 0; attempt <= RUN_LOCK_WAIT_MS / RUN_LOCK_RETRY_MS; attempt += 1) {
     try {
       fsOps.mkdirSync(lockPath, { mode: 448 });
@@ -20192,7 +20756,7 @@ function validateRunEvent(value2, expectedRunId, expectedSeq, label) {
   return value2;
 }
 function readRunEvents(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const id = normalizeRunId(runId);
   const paths = requireRunDirectory(projectRoot, id, { fsOps });
   assertRegularFile(fsOps, paths.absoluteJournalPath, "Dove run journal");
@@ -20207,7 +20771,7 @@ function readRunEvents(projectRoot, runId, options2 = {}) {
   });
 }
 function tryReadRunEvents(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const id = normalizeRunId(runId);
   const paths = tryRunDirectory(projectRoot, id, { fsOps });
   if (paths === null) return null;
@@ -20217,7 +20781,7 @@ function tryReadRunEvents(projectRoot, runId, options2 = {}) {
 }
 function appendRunEvents(projectRoot, runId, items, options2 = {}) {
   if (!Array.isArray(items) || items.length === 0) throw new Error("Dove run event append requires at least one event item.");
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const id = normalizeRunId(runId);
   const lock = acquireRunMutationLock(projectRoot, id, { fsOps });
   try {
@@ -20449,8 +21013,8 @@ function summarizeRun(projectRoot, runId, options2 = {}) {
   return summarizeStatus(projectRoot, normalizeRunId(runId), events);
 }
 function runsRootEntries(projectRoot, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
-  const runsRoot = path19.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const fsOps = options2.fsOps ?? fs20;
+  const runsRoot = path20.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat === null) return [];
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -20460,7 +21024,7 @@ function runsRootEntries(projectRoot, options2 = {}) {
   }).sort();
 }
 function listRunSummaries(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const group = normalizeRunGroup(options2.group);
   const runs = [];
@@ -20474,7 +21038,7 @@ function listRunSummaries(options2 = {}) {
   return { command: "status", status: "ok", project: projectRoot, group, runs };
 }
 function inspectRunStatus(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const projectRoot = normalizeRunProject(options2.project, options2);
   if (options2.id !== void 0 && options2.id !== null) {
     if (options2.group !== void 0 && options2.group !== null) throw new Error("Use only one of --id or --group for dove run status.");
@@ -20484,7 +21048,7 @@ function inspectRunStatus(options2 = {}) {
   return listRunSummaries({ ...options2, fsOps, project: projectRoot });
 }
 function appendReconciledInterrupted(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const id = normalizeRunId(runId);
   const event = appendRunEvent(projectRoot, id, "run.reconciled", {
     outcome: "interrupted",
@@ -20511,7 +21075,7 @@ function appendReconciledInterrupted(projectRoot, runId, options2 = {}) {
   return { event, summary: summarizeRun(projectRoot, id, { fsOps }) };
 }
 function appendFinalizedRun(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const root = normalizeRunProject(projectRoot, { fsOps, cwd: options2.cwd });
   const id = normalizeRunId(runId);
   const event = appendRunEvent(root, id, "run.finalized", (events) => {
@@ -20552,7 +21116,7 @@ function selectedRunIds(projectRoot, options2 = {}) {
   return [.../* @__PURE__ */ new Set([...explicitIds, ...byGroup])].sort();
 }
 function compareRuns(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs20;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const runIds2 = selectedRunIds(projectRoot, { ...options2, fsOps });
   if (runIds2.length === 0) {
@@ -20611,7 +21175,7 @@ function compareRuns(options2 = {}) {
 
 // src/core/run-supervisor.mjs
 import { spawn as spawn2 } from "node:child_process";
-import fs20 from "node:fs";
+import fs21 from "node:fs";
 import process6 from "node:process";
 var SUPERVISOR_ENTRY = "__dove-run-supervisor";
 var SUPERVISOR_READY_TIMEOUT_MS = 1e4;
@@ -20646,7 +21210,7 @@ function sendSupervisorMessageAsync(message) {
 function closeFd(fd) {
   if (!Number.isInteger(fd)) return;
   try {
-    fs20.closeSync(fd);
+    fs21.closeSync(fd);
   } catch {
   }
 }
@@ -20690,8 +21254,8 @@ function appendTerminalEvent(projectRoot, runId, payload, options2 = {}) {
 }
 function openRunLogFiles(paths) {
   return {
-    stdoutFd: fs20.openSync(paths.absoluteStdoutPath, "wx", 384),
-    stderrFd: fs20.openSync(paths.absoluteStderrPath, "wx", 384)
+    stdoutFd: fs21.openSync(paths.absoluteStdoutPath, "wx", 384),
+    stderrFd: fs21.openSync(paths.absoluteStderrPath, "wx", 384)
   };
 }
 function normalizeStartPayload(raw) {
@@ -20958,7 +21522,7 @@ async function configureSupervisorAndWait(child, payload, acceptedTypes) {
   }
   return await result;
 }
-function removeEmptyReservedRunDirectory(paths, fsOps = fs20) {
+function removeEmptyReservedRunDirectory(paths, fsOps = fs21) {
   try {
     const entries = fsOps.readdirSync(paths.absoluteRunDirectory);
     if (entries.length === 0) fsOps.rmdirSync(paths.absoluteRunDirectory);
@@ -21094,8 +21658,8 @@ async function runSupervisorMain(argv = process6.argv.slice(2)) {
 
 // bin/dove.mjs
 var __filename2 = fileURLToPath4(import.meta.url);
-var __dirname2 = path20.dirname(__filename2);
-var PACKAGE_ROOT2 = path20.resolve(__dirname2, "..");
+var __dirname2 = path21.dirname(__filename2);
+var PACKAGE_ROOT2 = path21.resolve(__dirname2, "..");
 var PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
 if (isRunSupervisorInvocation(process7.argv.slice(2))) await runSupervisorMain(process7.argv.slice(2));
 function projectOption2(options2) {
@@ -21211,18 +21775,18 @@ function prepareHookProject(project) {
 function assertHookPayloadProject(payload, target) {
   if (payload?.cwd === void 0) return;
   if (typeof payload.cwd !== "string" || !payload.cwd.trim() || payload.cwd.includes("\0")) throw new Error("Dove hook cwd \u5FC5\u987B\u6307\u5411\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u4E2D\u7684\u76EE\u5F55\u3002");
-  const cwd = fs21.realpathSync(payload.cwd);
-  const stat = fs21.statSync(cwd);
-  const relative = path20.relative(target, cwd);
-  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path20.sep}`) || path20.isAbsolute(relative)) {
+  const cwd = fs22.realpathSync(payload.cwd);
+  const stat = fs22.statSync(cwd);
+  const relative = path21.relative(target, cwd);
+  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path21.sep}`) || path21.isAbsolute(relative)) {
     throw new Error("Dove hook cwd \u4E0D\u5C5E\u4E8E\u58F0\u660E\u7684\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u3002");
   }
   let directory = cwd;
   while (directory !== target) {
-    if (fs21.existsSync(path20.join(directory, ".dove/install/manifest.json")) || fs21.existsSync(path20.join(directory, ".dove-install"))) {
+    if (fs22.existsSync(path21.join(directory, ".dove/install/manifest.json")) || fs22.existsSync(path21.join(directory, ".dove-install"))) {
       throw new Error("Dove hook cwd \u5C5E\u4E8E\u53E6\u4E00\u4E2A\u9879\u76EE\u96C6\u6210\u3002");
     }
-    directory = path20.dirname(directory);
+    directory = path21.dirname(directory);
   }
 }
 async function readStdin(limit = Infinity) {
@@ -21329,7 +21893,7 @@ try {
     process7.exit(0);
   }
   if (command2 === "reinstall") {
-    const target = path20.resolve(projectOption2(options) ?? process7.cwd());
+    const target = path21.resolve(projectOption2(options) ?? process7.cwd());
     if (wantsJson(options)) {
       const preview2 = previewProjectCompleteReinstall(target, PACKAGE_OPTIONS);
       const { manifest, ...publicPreview } = preview2;
@@ -21354,7 +21918,7 @@ try {
     process7.exit(0);
   }
   if (command2 === "uninstall") {
-    const target = path20.resolve(projectOption2(options) ?? process7.cwd());
+    const target = path21.resolve(projectOption2(options) ?? process7.cwd());
     const preview = previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS);
     if (wantsJson(options)) {
       writeJson2(preview);
@@ -21410,9 +21974,9 @@ try {
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`--port \u9700\u8981 1 \u5230 65535 \u4E4B\u95F4\u7684\u6574\u6570\uFF1A${options.port}`);
     const bind = options.bind ?? DEFAULT_DASHBOARD_BIND;
     let password = null;
-    const passwordFile = options.passwordFile === void 0 ? null : path20.resolve(options.passwordFile);
+    const passwordFile = options.passwordFile === void 0 ? null : path21.resolve(options.passwordFile);
     if (passwordFile) {
-      password = fs21.readFileSync(passwordFile, "utf8").trim();
+      password = fs22.readFileSync(passwordFile, "utf8").trim();
       if (!password) throw new Error(`\u5BC6\u7801\u6587\u4EF6\u4E3A\u7A7A\uFF1A${options.passwordFile}`);
     }
     const actions = createDashboardActions({ packageOptions: PACKAGE_OPTIONS, passwordFile });
@@ -21424,11 +21988,18 @@ try {
     await new Promise(() => {
     });
   }
+  if (command2 === "topic") {
+    const root = path21.resolve(options.project ?? process7.cwd());
+    const result = startTopicSelection(root, PACKAGE_OPTIONS);
+    if (wantsJson(options)) writeJson2(result);
+    else console.log(`\u9009\u9898\u76EE\u5F55\u5DF2\u5C31\u7EEA\uFF1A${path21.join(root, ".dove/research/topics")}\uFF08\u4F9D\u636E\uFF1A${result.criteria?.title ?? "\u9009\u9898\u6807\u51C6"}${result.criteria?.version ? `\uFF0C\u7B2C ${result.criteria.version} \u7248` : ""}\uFF1B\u5DF2\u6709\u5019\u9009 ${result.cards.length} \u4E2A\uFF09`);
+    process7.exit(0);
+  }
   if (command2 === "watch") {
-    const roots = options.project ? [path20.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs21.existsSync(root));
+    const roots = options.project ? [path21.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs22.existsSync(root));
     const result = await runWatch(roots, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson2(result);
-    else for (const item of result.results) console.log(`${path20.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);
+    else for (const item of result.results) console.log(`${path21.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);
     process7.exit(0);
   }
   if (command2 === "doctor") {
@@ -21509,7 +22080,7 @@ try {
       }
     }
     if (hookName === "statusline") {
-      process7.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path20.resolve(projectOption2(options)) })}
+      process7.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path21.resolve(projectOption2(options)) })}
 `);
       process7.exit(0);
     }

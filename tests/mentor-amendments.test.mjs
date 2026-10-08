@@ -25,7 +25,7 @@ function section(title) {
 
 test("mentor amendments: actual user originals replace executor summaries, not host boundaries", () => {
   const sources = section("先读谁说了什么");
-  assert.match(mentor, /^tools: Read, Grep, Glob$/mu);
+  assert.match(mentor, /^tools: Read, Grep, Glob, mcp__exa, mcp__dove-paper-search$/mu);
   assert.match(mentor, /全新上下文.*不 resume.*不带执行过程对话.*不用执行者转述代替用户原话.*不通过 CLI 启动模型/u);
   assert.match(sources, /立项\/接手按日期.*用户原话.*每轮开始.*上轮以来.*不只读执行者总结/u);
   assert.match(sources, /原话源路径.*上次读到的日期\/范围.*Grep\/Read.*真实用户消息.*只读用户写的正文/u);

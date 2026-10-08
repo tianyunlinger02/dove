@@ -89,7 +89,7 @@ function assertDoveCliHelpRenderer() {
   assert.match(output, /dove run start --project <dir>.*--seed <short-text>.* -- <command> \[args\.\.\.\]/u);
   assert.match(output, /dove hook session-start --project <dir>/u);
   assert.match(output, /dove hook user-prompt-submit --project <dir>/u);
-  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "dashboard", "watch", "projects", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "dashboard", "watch", "topic", "projects", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
   for (const command of Object.keys(CLI_COMMAND_SPECS)) {
     assert.ok(output.includes(`dove ${command}`), `${command}: help exposes the parser's public commands`);
   }

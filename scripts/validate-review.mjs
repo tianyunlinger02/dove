@@ -11,10 +11,11 @@ import * as publicCore from "../src/core/index.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-for (const [name, render] of [["dove-mentor", renderClaudeDoveMentorAgent], ["dove-review", renderClaudeDoveReviewAgent]]) {
+// The mentor may search the web and papers for background; the paper reviewer reads only listed material.
+for (const [name, render, tools] of [["dove-mentor", renderClaudeDoveMentorAgent, ["Read", "Grep", "Glob", "mcp__exa", "mcp__dove-paper-search"]], ["dove-review", renderClaudeDoveReviewAgent, ["Read", "Grep", "Glob"]]]) {
   const content = render();
   assert.equal(content.match(/^name: (.+)$/mu)?.[1], name);
-  assert.deepEqual(content.match(/^tools: (.+)$/mu)?.[1].split(", "), ["Read", "Grep", "Glob"]);
+  assert.deepEqual(content.match(/^tools: (.+)$/mu)?.[1].split(", "), tools);
   assert.equal(generatedDoveAgentEntries().find(({ relativePath }) => relativePath === `.claude/agents/${name}.md`)?.content, content);
   assert.match(content, /实际读过的文件/u);
 }

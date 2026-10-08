@@ -140,11 +140,32 @@ export function summarizeProject(root, options = {}) {
 
 const NAMED_DOCUMENTS = { "EVAL.md": `${RESEARCH_ROOT}/EVAL.md`, "DOCTOR.md": ".dove/install/DOCTOR.md" };
 
-// Only round files and the two named documents are served; anything else is refused.
+// Only round files, topic-selection documents and the two named documents are served; anything else is refused.
 export function readProjectDocument(root, name, options = {}) {
   if (typeof name !== "string") return null;
-  const relative = ROUND_FILE.test(name) ? `${RESEARCH_ROOT}/rounds/${name}` : NAMED_DOCUMENTS[name];
+  const topic = /^topics\/(?:cards\/)?[^/\\]+\.md$/u.test(name) && !name.includes("..") ? `${RESEARCH_ROOT}/${name}` : null;
+  const relative = ROUND_FILE.test(name) ? `${RESEARCH_ROOT}/rounds/${name}` : topic ?? NAMED_DOCUMENTS[name];
   return relative ? readText(path.join(root, relative), options.fsOps ?? fs) : null;
+}
+
+const IMPACTS = [["撞题", "overlap"], ["新基线", "baseline"], ["可借用", "borrow"], ["无关", "irrelevant"]];
+
+// The mentor writes one line per judged paper in its brief, e.g.
+// "- 2610.00001 | 撞题 | 覆盖了我们的结构编辑主张". The latest judgement wins.
+export function parsePaperImpacts(root, options = {}) {
+  const fsOps = options.fsOps ?? fs;
+  const directory = path.join(root, RESEARCH_ROOT, "rounds");
+  const impacts = {};
+  for (const name of listDirectory(directory, fsOps).filter((item) => /brief\.md$/iu.test(item)).sort()) {
+    const file = readText(path.join(directory, name), fsOps);
+    if (!file) continue;
+    for (const line of file.text.split(/\r?\n/u)) {
+      const id = line.match(/(\d{4}\.\d{4,5}|\bW\d{6,}\b)/u)?.[1];
+      const hit = id && IMPACTS.find(([word]) => line.includes(word));
+      if (hit) impacts[id] = { impact: hit[1], label: hit[0], round: name, note: line.replace(/^[-*\s]+/u, "").slice(0, 300) };
+    }
+  }
+  return impacts;
 }
 
 export function collectDashboard(options = {}) {

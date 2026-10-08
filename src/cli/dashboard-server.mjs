@@ -53,8 +53,8 @@ function cookieAttributes(request, maxAge) {
   return `Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
 }
 
-const MAX_ACTION_BODY = 64 * 1024;
-const SETTINGS_ACTIONS = new Set(["addProject", "removeProject", "syncProjects", "saveWatchConfig", "saveWatchGlobal", "saveS2Key", "runWatch"]);
+const MAX_ACTION_BODY = 1024 * 1024;
+const SETTINGS_ACTIONS = new Set(["addProject", "removeProject", "syncProjects", "saveWatchConfig", "saveWatchGlobal", "saveS2Key", "runWatch", "draftWatchConfig", "startTopics", "saveTopicCriteria"]);
 
 function sendJson(response, status, value) {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -148,6 +148,14 @@ export function createDashboardServer({ collect, listRoots, readDocument, passwo
       }
       if (url.pathname === "/api/settings" && actions) {
         sendJson(response, 200, await actions.getSettings({ passwordSet: Boolean(currentPassword) }));
+        return;
+      }
+      if (url.pathname === "/api/topics" && actions) {
+        sendJson(response, 200, await actions.readTopicsOverview());
+        return;
+      }
+      if (url.pathname === "/api/trends" && actions) {
+        sendJson(response, 200, await actions.readTrends());
         return;
       }
       if (url.pathname === "/api/watch" && actions) {
@@ -337,6 +345,15 @@ nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-colo
 .reg { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .reg:last-child { border-bottom: 0; }
 .reg .p { flex: 1 1 260px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; overflow-wrap: anywhere; }
+.group { padding: 6px 14px; font-size: 12px; font-weight: 700; background: var(--bg); border-bottom: 1px solid var(--line); }
+.group.overlap { color: var(--user); } .group.baseline { color: var(--done); } .group.borrow { color: var(--accent); } .group.pending { color: var(--warn); }
+.paper .judge { font-size: 12px; margin-top: 3px; }
+.dots { display: inline-flex; gap: 3px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--pause-soft); display: inline-block; }
+.dot.yes { background: var(--accent); } .dot.pending { background: var(--warn); } .dot.no { background: var(--user); }
+tr.cardrow { cursor: pointer; }
+tr.cardrow:hover td { background: var(--accent-soft); }
+.badge-draft { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); margin-left: 6px; }
 #toast { position: fixed; right: 16px; bottom: 16px; background: var(--ink); color: var(--panel); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100vw - 32px); }
 #toast.show { opacity: 1; }
 @media (max-width: 820px) {
@@ -350,7 +367,7 @@ nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-colo
 <body>
 <header class="top">
   <span class="brand">🕊 Dove 科研面板</span>
-  ${canEdit ? '<nav class="tabsnav"><button id="navProjects" class="on">项目</button><button id="navSettings">设置</button></nav>' : ""}
+  ${canEdit ? '<nav class="tabsnav"><button id="navProjects" class="on">项目</button><button id="navTrends">动态</button><button id="navTopics">选题</button><button id="navSettings">设置</button></nav>' : ""}
   <span class="meta" id="meta">加载中…</span>
   <button id="theme" title="切换明暗">明/暗</button>
   <button id="reload">刷新</button>
@@ -364,13 +381,17 @@ nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-colo
 <div id="toast"></div>
 <script>
 const CAN_EDIT = ${canEdit ? "true" : "false"};
-let mode = location.hash === "#settings" && CAN_EDIT ? "settings" : "projects";
+const MODES = ["settings", "trends", "topics"];
+let mode = CAN_EDIT && MODES.includes(location.hash.slice(1)) ? location.hash.slice(1) : "projects";
+let trends = null;
+let topics = null;
+let topicRoot = null;
 let settings = null;
 const watchCache = new Map();
 const STATUS = { ongoing: ["ongoing", "进行中"], "进行中": ["ongoing", "进行中"], paused: ["paused", "已暂停"], "暂停": ["paused", "已暂停"], completed: ["completed", "已完成"], "完成": ["completed", "已完成"] };
 const AUTHOR = { mentor: "导师", user: "用户", external: "外部", other: "其他" };
 let data = null;
-let selected = location.hash === "#settings" ? null : decodeURIComponent(location.hash.slice(1)) || null;
+let selected = ["#settings", "#trends", "#topics"].includes(location.hash) ? null : decodeURIComponent(location.hash.slice(1)) || null;
 const open = new Map();
 
 function esc(value) {
@@ -492,11 +513,12 @@ function renderView() {
   }));
 }
 const texts = new Map();
+function rerender() { if (mode === "topics") renderTopics(); else if (mode === "projects") renderView(); }
 async function loadRound(root, file) {
   const key = root + "/" + file;
   if (!texts.has(key)) {
     texts.set(key, { loading: true });
-    renderView();
+    rerender();
     try {
       const res = await fetch("/api/doc?project=" + encodeURIComponent(root) + "&name=" + encodeURIComponent(file), { cache: "no-store" });
       texts.set(key, res.ok ? await res.json() : { error: "读取失败（" + res.status + "）" });
@@ -504,7 +526,7 @@ async function loadRound(root, file) {
       texts.set(key, { error: "读取失败：" + error.message });
     }
   }
-  renderView();
+  rerender();
 }
 const openDocs = new Set();
 function lazyDoc(root, name, label) {
@@ -518,18 +540,110 @@ function roundBody(root, part) {
   if (t.error) return '<div class="body note">' + esc(t.error) + "</div>";
   return '<div class="body md">' + md(t.text) + (t.truncated ? '<div class="note">内容较长，只显示前 64KB。</div>' : "") + "</div>";
 }
+const GROUPS = [["overlap", "撞题：贡献可能被覆盖"], ["baseline", "新基线：该进评测对照"], ["borrow", "可借用：方法或数据"], ["pending", "待导师判断"]];
+function paperHtml(it, judge) {
+  return '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">' + esc(it.id) + " · 分数 " + esc(it.score) + " · " + esc(String(it.published || "").slice(0, 10)) + " · " + esc((it.reasons || []).join("；")) + (it.venue ? " · " + esc(it.venue) : "") + (it.code && String(it.code).startsWith("http") ? ' · <a href="' + esc(it.code) + '" target="_blank" rel="noopener">代码/主页</a>' : "") + "</div>" + (judge ? '<div class="judge">导师（' + esc(judge.round) + "）：" + esc(judge.note) + "</div>" : "") + '<div class="abs">' + esc((it.abstract || "").slice(0, 220)) + (it.abstract && it.abstract.length > 220 ? "…" : "") + "</div></div>";
+}
 function papersSection(root) {
-  let html = '<section><h2>新论文 <span class="sub">论文追踪 · 导师下一轮判断影响</span></h2>';
+  let html = '<section><h2>新论文 <span class="sub">论文追踪 · 按导师的影响判断分组</span></h2>';
   const w = watchCache.get(root);
-  if (!w) { loadWatch(root); return html + '<div class="card note">读取中…</div></section>'; }
+  if (!w || w.loading) { if (!w) loadWatch(root); return html + '<div class="card note">读取中…</div></section>'; }
   if (w.error) return html + '<div class="card note">' + esc(w.error) + "</div></section>";
-  const digest = (w.digests || [])[0];
-  if (!w.config.keywords.length && !w.config.authors.length) return html + '<div class="card note">还没设置追踪关键词或作者。到「设置 → 论文追踪」里填好后，每天自动抓取。</div></section>';
-  if (!digest) return html + '<div class="card note">还没运行过。可以在设置页点「立即运行」。</div></section>';
-  html += '<div class="card" style="padding:0">';
-  html += '<div class="paper why">' + esc(digest.date) + " · " + digest.items.length + " 篇" + (digest.notes && digest.notes.length ? " · " + esc(digest.notes.join("；")) : "") + "</div>";
-  html += digest.items.slice(0, 12).map((it) => '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">分数 ' + esc(it.score) + " · " + esc((it.published || "").slice(0, 10)) + " · " + esc(it.reasons.join("；")) + (it.venue ? " · " + esc(it.venue) : "") + '</div><div class="abs">' + esc((it.abstract || "").slice(0, 220)) + (it.abstract && it.abstract.length > 220 ? "…" : "") + "</div></div>").join("") || '<div class="paper note">最近没有新的相关论文。</div>';
-  return html + "</div></section>";
+  const c = w.config;
+  if (!c.keywords.length && !c.authors.length && !c.seedPapers.length) return html + '<div class="card note">还没有追踪内容。下次运行会根据项目资料自动生成初稿，也可以到「设置」里填写。</div></section>';
+  const seenIds = new Set();
+  const items = [];
+  for (const digest of w.digests || []) for (const it of digest.items) if (!seenIds.has(it.id)) { seenIds.add(it.id); items.push(it); }
+  if (!items.length) return html + '<div class="card note">' + (w.digests && w.digests.length ? "最近几天没有新的相关论文。" : "还没运行过。可以在设置页点「立即运行」。") + (c.source === "draft" ? '<span class="badge-draft">追踪内容是自动初稿</span>' : "") + "</div></section>";
+  const impacts = w.impacts || {};
+  html += '<div class="card" style="padding:0"><div class="paper why">最近 ' + (w.digests || []).length + " 天 · " + items.length + " 篇" + (c.source === "draft" ? '<span class="badge-draft">追踪内容是自动初稿，去设置页检查</span>' : "") + "</div>";
+  for (const [key, label] of GROUPS) {
+    const group = items.filter((it) => (impacts[it.id]?.impact || "pending") === key).slice(0, key === "pending" ? 12 : 50);
+    if (group.length) html += '<div class="group ' + key + '">' + label + " · " + group.length + "</div>" + group.map((it) => paperHtml(it, impacts[it.id])).join("");
+  }
+  const ignored = items.filter((it) => impacts[it.id]?.impact === "irrelevant").length;
+  if (ignored) html += '<div class="paper why">导师判为无关：' + ignored + " 篇（已隐藏）</div>";
+  html += "</div>";
+  if (w.scan) html += lazyScan(root, w.scan);
+  return html + "</section>";
+}
+function lazyScan(root, scan) {
+  return '<details class="note" style="margin-top:8px"><summary>导师最近一次领域扫描（' + esc(scan.date) + '）</summary><div class="card md">' + md(scan.text) + "</div></details>";
+}
+function renderTrends() {
+  const view = document.getElementById("view");
+  if (!trends) { view.innerHTML = '<div class="empty">加载中…</div>'; loadTrends(); return; }
+  if (trends.error) { view.innerHTML = '<div class="empty">' + esc(trends.error) + "</div>"; return; }
+  let html = '<h1 class="title">本周领域动态</h1><div class="path">自 ' + esc(trends.since) + " 起 · 所有项目的追踪结果汇总</div>";
+  html += '<section style="margin-top:18px"><h2>各项目最相关的新论文 <span class="sub">导师判过的排在前面</span></h2><div class="card" style="padding:0">';
+  html += trends.top.map((it) => paperHtml(it, null).replace('<div class="abs">', '<div class="judge">' + esc(it.projects.join("、")) + (it.impacts.length ? " · " + esc(it.impacts.map((x) => x.project + "：" + x.label).join("；")) : "") + '</div><div class="abs">')).join("") || '<div class="paper note">这一周还没有追踪结果。</div>';
+  html += "</div></section>";
+  html += '<section><h2>社区热点里和你方向相关的 <span class="sub">Hugging Face 每日论文榜，命中任一项目关键词</span></h2><div class="card" style="padding:0">';
+  html += trends.hot.map((it) => '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">' + esc(it.id) + " · " + esc(it.upvotes) + " 赞 · " + esc(String(it.published || "").slice(0, 10)) + "</div></div>").join("") || '<div class="paper note">暂时没有。</div>';
+  html += "</div></section>";
+  html += '<section><h2>导师领域扫描 <span class="sub">每周一次，在导师环节用网页和论文检索完成</span></h2>';
+  html += trends.scans.map((x) => '<details class="note"><summary>' + esc(x.project) + " · " + esc(x.date) + '</summary><div class="card md">' + md(x.text) + "</div></details>").join("") || '<div class="card note">还没有扫描记录。</div>';
+  html += "</section>";
+  view.innerHTML = html;
+}
+const TOPIC_STATUS = { 推荐: "completed", 选定: "completed", 维持: "ongoing", 候选: "paused", 限定: "none", 暂缓: "none", 撤回: "other" };
+function renderTopics() {
+  const view = document.getElementById("view");
+  if (!topics) { view.innerHTML = '<div class="empty">加载中…</div>'; loadTopics(); return; }
+  if (topics.error) { view.innerHTML = '<div class="empty">' + esc(topics.error) + "</div>"; return; }
+  const c = topics.criteria;
+  let html = '<h1 class="title">选题</h1><div class="path">依据：' + (c.present ? esc(c.title || "选题标准") + (c.version ? "（第 " + esc(c.version) + " 版）" : "") : "还没有选题标准，先到「设置」里粘贴") + "</div>";
+  const started = topics.projects.filter((x) => x.started);
+  if (!topicRoot || !started.some((x) => x.root === topicRoot)) topicRoot = started[0]?.root ?? null;
+  html += '<section style="margin-top:18px"><h2>项目</h2><div class="card btns">' + topics.projects.map((x) => x.started
+    ? '<button class="btn' + (x.root === topicRoot ? " primary" : "") + ' tPick" data-root="' + esc(x.root) + '">' + esc(x.name) + " · " + (x.cards || []).length + " 个候选</button>"
+    : '<button class="btn tStart" data-root="' + esc(x.root) + '"' + (c.present ? "" : " disabled") + ">在 " + esc(x.name) + " 开始选题</button>").join("") + "</div></section>";
+  const t = started.find((x) => x.root === topicRoot);
+  if (t) {
+    if (t.criteria && c.present && t.criteria.version !== c.version) html += '<div class="card note" style="margin-bottom:12px">这个项目用的是第 ' + esc(t.criteria.version || "?") + " 版标准，当前标准是第 " + esc(c.version || "?") + ' 版。<button class="btn tStart" data-root="' + esc(t.root) + '">换成当前版本</button></div>';
+    html += '<section><h2>候选方向 <span class="sub">卡片开头五行：状态、阶段、定位、一句话、六点</span></h2>';
+    if (!t.cards.length) html += '<div class="card note">还没有候选卡。在这个项目的会话里说“开始选题”，导师会按选题标准先发散、再审查，把候选写进 topics/cards/。</div>';
+    else html += '<div class="tablewrap"><table><thead><tr><th>候选</th><th>定位</th><th>阶段</th><th>状态</th><th>六点</th><th>一句话</th></tr></thead><tbody>' + t.cards.map((k) =>
+      '<tr class="cardrow" data-file="' + esc(k.file) + '"><td>' + esc(k.title || k.name) + "</td><td>" + esc(k.position || "—") + "</td><td>" + esc(k.stage || "—") + '</td><td><span class="chip ' + (TOPIC_STATUS[(k.status || "").slice(0, 2)] || "other") + '">' + esc(k.status || "未标") + '</span></td><td><span class="dots" title="' + esc(k.six || "") + '">' + (k.sixParts || []).map((x) => '<span class="dot ' + x.state + '"></span>').join("") + '</span></td><td style="white-space:normal;min-width:240px">' + esc(k.summary || "") + "</td></tr>" +
+      (openDocs.has(t.root + "/" + k.file) ? '<tr><td colspan="6" style="white-space:normal">' + roundBody(t.root, { file: k.file }) + "</td></tr>" : "")).join("") + "</tbody></table></div>";
+    html += "</section>";
+    if (t.documents.length) html += '<section><h2>阶段材料</h2>' + t.documents.map((d) => lazyDoc(t.root, d, d.replace("topics/", ""))).join("") + "</section>";
+  }
+  view.innerHTML = html;
+  view.querySelectorAll(".tPick").forEach((b) => b.addEventListener("click", () => { topicRoot = b.dataset.root; renderTopics(); }));
+  view.querySelectorAll(".tStart").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { await act("startTopics", { root: b.dataset.root }); topicRoot = b.dataset.root; toast("已建立选题目录"); topics = null; renderTopics(); }
+    catch (error) { toast(error.message); b.disabled = false; }
+  }));
+  view.querySelectorAll("tr.cardrow").forEach((r) => r.addEventListener("click", () => {
+    const key = topicRoot + "/" + r.dataset.file;
+    if (openDocs.has(key)) { openDocs.delete(key); renderTopics(); } else { openDocs.add(key); loadRound(topicRoot, r.dataset.file); }
+  }));
+  view.querySelectorAll("details[data-name]").forEach((d) => d.addEventListener("toggle", () => {
+    const key = d.dataset.root + "/" + d.dataset.name;
+    if (d.open) { openDocs.add(key); loadRound(d.dataset.root, d.dataset.name); } else openDocs.delete(key);
+  }));
+}
+async function loadTopics() {
+  try {
+    const res = await fetch("/api/topics", { cache: "no-store" });
+    if (res.status === 401) { location.reload(); return; }
+    topics = res.ok ? await res.json() : { error: "读取失败（" + res.status + "）" };
+  } catch (error) {
+    topics = { error: "读取失败：" + error.message };
+  }
+  if (mode === "topics") renderTopics();
+}
+async function loadTrends() {
+  try {
+    const res = await fetch("/api/trends", { cache: "no-store" });
+    if (res.status === 401) { location.reload(); return; }
+    trends = res.ok ? await res.json() : { error: "读取失败（" + res.status + "）" };
+  } catch (error) {
+    trends = { error: "读取失败：" + error.message };
+  }
+  if (mode === "trends") renderTrends();
 }
 async function loadWatch(root) {
   watchCache.set(root, { loading: true });
@@ -578,13 +692,18 @@ function renderSettings() {
     '<div class="btns"><button class="btn primary" id="wSave">保存</button><button class="btn" id="wRunAll">立即运行全部项目</button><span class="note">' +
     (settings.watchRunning ? "正在运行…" : st.lastRun ? "上次运行：" + new Date(st.lastRun).toLocaleString() + " · " + (st.results || []).map((r) => r.root.split("/").pop() + " " + ({ done: (r.found ?? 0) + " 篇", unconfigured: "未设关键词", disabled: "已关闭", failed: "失败" }[r.status] || r.status)).join("，") : "还没运行过") + "</span></div>" +
     '<div class="btns" style="margin-top:6px"><label style="flex:1 1 260px">Semantic Scholar API key（可选，' + (settings.s2KeySet ? "已设置" : "未设置") + '；没有也能运行）<input type="password" id="s2Key" placeholder="' + (settings.s2KeySet ? "输入新 key 可替换" : "粘贴 key") + '" autocomplete="off"></label><button class="btn" id="s2Save">保存 key</button>' + (settings.s2KeySet ? '<button class="btn danger" id="s2Clear">清除 key</button>' : "") + "</div></div></section>";
+  const tc = settings.topicCriteria || {};
+  html += '<section><h2>选题标准 <span class="sub">选题功能以这份文档为准；开始选题时复制进项目</span></h2><div class="card form"><div class="note">' + (tc.present ? "当前：" + esc(tc.title || "") + (tc.version ? "（第 " + esc(tc.version) + " 版）" : "") + " · " + Math.round(tc.bytes / 1024) + " KB · 更新于 " + new Date(tc.updatedAt).toLocaleString() : "还没有设置") + '</div><label>粘贴新版本的完整内容来替换<textarea id="tcText" style="min-height:120px" placeholder="# 论文选题要求、论证原则与交付规范 …"></textarea></label><div class="btns"><button class="btn primary" id="tcSave">保存选题标准</button></div></div></section>';
   html += '<section><h2>各项目追踪内容 <span class="sub">关键词一行一个，命中标题权重高；关注作者命中会加分</span></h2>';
   if (!settings.projects.length) html += '<div class="card note">还没有带研究记录的已登记项目。</div>';
   html += settings.projects.map((p, i) => '<div class="card form" style="margin-bottom:10px" data-i="' + i + '"><div class="btns"><strong style="flex:1">' + esc(p.name) + '</strong><span class="btns" style="color:var(--ink);font-size:13px"><input type="checkbox" class="wEnabled" id="wEn' + i + '"' + (p.watch.enabled ? " checked" : "") + '><label for="wEn' + i + '" style="display:inline;color:var(--ink)">启用追踪</label></span></div>' +
     '<div class="row2"><label>关键词<textarea class="wKeywords" placeholder="例如：sewing pattern">' + esc(lines(p.watch.keywords)) + "</textarea></label>" +
     '<label>关注作者<textarea class="wAuthors" placeholder="例如：Maria Korosteleva（可空）">' + esc(lines(p.watch.authors)) + "</textarea></label></div>" +
+    '<div class="row2"><label>关注会议（一行一个，命中加分）<textarea class="wVenues" placeholder="例如：CVPR">' + esc(lines(p.watch.venues)) + "</textarea></label>" +
+    '<label>关注机构（一行一个，经 OpenAlex 匹配）<textarea class="wInsts" placeholder="例如：ETH Zurich">' + esc(lines(p.watch.institutions)) + "</textarea></label></div>" +
+    '<label>近邻论文（arXiv 编号或链接，一行一个；追踪新引用它们的论文）<textarea class="wSeeds" placeholder="例如：2306.03642">' + esc(lines(p.watch.seedPapers)) + "</textarea></label>" +
     '<label>arXiv 分类（逗号分隔）<input type="text" class="wCats" value="' + esc(p.watch.categories.join(", ")) + '"></label>' +
-    '<div class="btns"><button class="btn primary wSaveP" data-root="' + esc(p.root) + '">保存</button><button class="btn wRunP" data-root="' + esc(p.root) + '">只运行这个项目</button></div></div>').join("");
+    '<div class="btns"><button class="btn primary wSaveP" data-root="' + esc(p.root) + '">保存</button><button class="btn wRunP" data-root="' + esc(p.root) + '">只运行这个项目</button><button class="btn wDraftP" data-root="' + esc(p.root) + '">根据项目资料生成初稿</button>' + (p.watch.source === "draft" ? '<span class="badge-draft">当前是自动初稿</span>' : "") + "</div></div>").join("");
   html += "</section>";
   html += '<section><h2>项目登记 <span class="sub">登记的项目会随 Dove 升级自动更新，并显示在面板里</span></h2><div class="card">' +
     settings.registered.map((r) => '<div class="reg"><span class="p">' + esc(r.root) + "</span>" + (r.exists ? "" : '<span class="chip none">目录不存在</span>') + '<button class="btn danger regRemove" data-root="' + esc(r.root) + '">移出登记</button></div>').join("") +
@@ -595,12 +714,20 @@ function renderSettings() {
   const byId = (id) => document.getElementById(id);
   byId("wSave").addEventListener("click", run(async () => { await act("saveWatchGlobal", { settings: { dailyHour: Number(byId("wHour").value), lookbackDays: Number(byId("wDays").value), maxPerDigest: Number(byId("wMax").value), proxy: byId("wProxy").value } }); toast("已保存"); await loadSettings(); }));
   byId("wRunAll").addEventListener("click", run(async () => { await act("runWatch", {}); toast("已开始运行，完成后刷新可见"); watchCache.clear(); setTimeout(loadSettings, 4000); }));
+  byId("tcSave").addEventListener("click", run(async () => { const r = await act("saveTopicCriteria", { text: byId("tcText").value }); byId("tcText").value = ""; toast("已保存" + (r.version ? "第 " + r.version + " 版" : "")); await loadSettings(); }));
   byId("s2Save").addEventListener("click", run(async () => { if (!byId("s2Key").value.trim()) throw new Error("先粘贴 key"); await act("saveS2Key", { key: byId("s2Key").value }); toast("key 已保存"); await loadSettings(); }));
   if (byId("s2Clear")) byId("s2Clear").addEventListener("click", run(async () => { await act("saveS2Key", { key: "" }); toast("key 已清除"); await loadSettings(); }));
   view.querySelectorAll(".wSaveP").forEach((b) => b.addEventListener("click", run(async (btn) => {
     const card = btn.closest(".card");
-    await act("saveWatchConfig", { root: btn.dataset.root, config: { enabled: card.querySelector(".wEnabled").checked, keywords: card.querySelector(".wKeywords").value, authors: card.querySelector(".wAuthors").value, categories: card.querySelector(".wCats").value } });
+    await act("saveWatchConfig", { root: btn.dataset.root, config: { enabled: card.querySelector(".wEnabled").checked, keywords: card.querySelector(".wKeywords").value, authors: card.querySelector(".wAuthors").value, venues: card.querySelector(".wVenues").value, institutions: card.querySelector(".wInsts").value, seedPapers: card.querySelector(".wSeeds").value, categories: card.querySelector(".wCats").value, source: "user" } });
     watchCache.delete(btn.dataset.root); toast("已保存"); await loadSettings();
+  })));
+  view.querySelectorAll(".wDraftP").forEach((b) => b.addEventListener("click", run(async (btn) => {
+    const draft = await act("draftWatchConfig", { root: btn.dataset.root });
+    const card = btn.closest(".card");
+    card.querySelector(".wKeywords").value = lines(draft.keywords);
+    card.querySelector(".wSeeds").value = lines(draft.seedPapers);
+    toast("已填入初稿（还没保存），检查后点保存");
   })));
   view.querySelectorAll(".wRunP").forEach((b) => b.addEventListener("click", run(async (btn) => { await act("runWatch", { root: btn.dataset.root }); watchCache.delete(btn.dataset.root); toast("已开始运行"); setTimeout(loadSettings, 4000); })));
   view.querySelectorAll(".regRemove").forEach((b) => b.addEventListener("click", run(async (btn) => { await act("removeProject", { root: btn.dataset.root }); toast("已移出登记"); await loadSettings(); load(); })));
@@ -611,14 +738,18 @@ function renderSettings() {
 function setMode(next) {
   mode = next;
   document.getElementById("navProjects")?.classList.toggle("on", mode === "projects");
+  document.getElementById("navTrends")?.classList.toggle("on", mode === "trends");
   document.getElementById("navSettings")?.classList.toggle("on", mode === "settings");
+  document.getElementById("navTopics")?.classList.toggle("on", mode === "topics");
+  if (mode === "topics") { history.replaceState(null, "", "#topics"); topics = null; renderTopics(); return; }
   if (mode === "settings") { history.replaceState(null, "", "#settings"); settings = null; renderSettings(); }
+  else if (mode === "trends") { history.replaceState(null, "", "#trends"); trends = null; renderTrends(); }
   else { if (selected) history.replaceState(null, "", "#" + encodeURIComponent(selected)); renderView(); }
 }
 function tile(k, v) { return '<div class="tile"><div class="k">' + k + '</div><div class="v" title="' + esc(v) + '">' + esc(v) + "</div></div>"; }
 function select(root) {
   selected = root;
-  if (mode !== "projects") { mode = "projects"; document.getElementById("navProjects")?.classList.add("on"); document.getElementById("navSettings")?.classList.remove("on"); }
+  if (mode !== "projects") { mode = "projects"; document.getElementById("navProjects")?.classList.add("on"); document.getElementById("navSettings")?.classList.remove("on"); document.getElementById("navTrends")?.classList.remove("on"); document.getElementById("navTopics")?.classList.remove("on"); }
   history.replaceState(null, "", "#" + encodeURIComponent(root));
   renderList(); renderView();
 }
@@ -639,10 +770,12 @@ async function load() {
       : "读取失败：" + error.message;
   }
 }
-document.getElementById("reload").addEventListener("click", () => { texts.clear(); watchCache.clear(); load(); if (mode === "settings") loadSettings(); });
+document.getElementById("reload").addEventListener("click", () => { texts.clear(); watchCache.clear(); load(); if (mode === "settings") loadSettings(); if (mode === "trends") loadTrends(); if (mode === "topics") loadTopics(); });
 document.getElementById("navProjects")?.addEventListener("click", () => setMode("projects"));
 document.getElementById("navSettings")?.addEventListener("click", () => setMode("settings"));
-if (mode === "settings") setMode("settings");
+document.getElementById("navTrends")?.addEventListener("click", () => setMode("trends"));
+document.getElementById("navTopics")?.addEventListener("click", () => setMode("topics"));
+if (mode !== "projects") setMode(mode);
 document.getElementById("picker").addEventListener("change", (e) => select(e.target.value));
 document.getElementById("theme").addEventListener("click", () => {
   const root = document.documentElement;

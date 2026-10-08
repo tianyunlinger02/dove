@@ -92,7 +92,7 @@ test("rounds run to EVAL results and preserve explicit pauses and necessary user
 
 test("mentor predicts evaluation columns and owns evidence-grounded quality assessment", () => {
   const mentor = renderClaudeDoveMentorAgent();
-  assert.match(mentor, /^tools: Read, Grep, Glob$/mu);
+  assert.match(mentor, /^tools: Read, Grep, Glob, mcp__exa, mcp__dove-paper-search$/mu);
   assert.match(mentor, /全新上下文.*不 resume.*不带执行过程对话.*不用执行者转述代替用户原话/u);
   assert.match(mentor, /EVAL\.md.*brief\/result.*diff.*原始产物/u);
   assert.match(mentor, /引用 EVAL 列名、预测和实际数值/u);

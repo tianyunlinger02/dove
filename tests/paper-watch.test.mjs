@@ -7,7 +7,9 @@ import test from "node:test";
 import { createDashboardActions } from "../src/cli/dashboard-actions.mjs";
 import { startDashboardServer } from "../src/cli/dashboard-server.mjs";
 import { collectDashboard, readProjectDocument } from "../src/core/dashboard-data.mjs";
-import { localDate, parseArxivFeed, readWatchDigests, runWatch, scorePaper, writeGlobalWatchSettings, writeSemanticScholarKey, writeWatchConfig } from "../src/core/paper-watch.mjs";
+import { codeLink, draftWatchConfig, localDate, parseArxivFeed, readWatchConfig, readWatchDigests, runWatch, scorePaper, writeGlobalWatchSettings, writeSemanticScholarKey, writeWatchConfig } from "../src/core/paper-watch.mjs";
+import { parsePaperImpacts } from "../src/core/dashboard-data.mjs";
+import { changeRegisteredProjects } from "../src/core/project-registry.mjs";
 
 const NOW = Date.parse("2026-10-08T12:00:00Z");
 
@@ -124,4 +126,69 @@ test("scheduler runs once per local day after the configured hour", async () => 
   const late = new Date(2026, 9, 8, 9, 0);
   clearInterval(actions.startScheduler({ now: () => late, intervalMs: 1e9 }));
   assert.equal(runs.length, 1);
+});
+
+test("drafts keywords and neighbour papers from the project's own records", async () => {
+  const root = project();
+  fs.mkdirSync(path.join(root, ".dove/research/rounds"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".dove/research/rounds/001-brief.md"), [
+    "作者：导师", "We compare sewing pattern generation against GarmentCode.", "Sewing pattern generation needs panel topology.",
+    "Baseline: https://arxiv.org/abs/2306.03642 and arXiv:2306.03642 again; also arxiv.org/pdf/2405.12345.", "The sewing pattern generation results.", "panel topology matters; panel topology again."
+  ].join("\n"));
+  const draft = draftWatchConfig(root);
+  assert.equal(draft.source, "draft");
+  assert.ok(draft.keywords.includes("sewing pattern generation"), draft.keywords.join(","));
+  assert.ok(draft.keywords.includes("panel topology"));
+  assert.deepEqual(draft.seedPapers, ["2306.03642", "2405.12345"]);
+  const env = { HOME: tempDir("dove-watch-home-") };
+  const { get } = fakeGet();
+  const state = await runWatch([root], { env, get, now: NOW });
+  assert.equal(state.results[0].drafted, true, "a missing config is drafted on the first run");
+  assert.equal(readWatchConfig(root).source, "draft");
+});
+
+test("finds papers citing neighbours and by watched authors, and rewards watched venues and code", async () => {
+  const env = { HOME: tempDir("dove-watch-home-") };
+  const root = project();
+  writeWatchConfig(root, { keywords: ["sewing pattern"], authors: ["Carol"], venues: ["CVPR"], seedPapers: ["2306.03642"] });
+  const citing = { id: "https://openalex.org/W999", title: "Draping Garments from Programs", publication_date: "2026-10-06", authorships: [{ author: { display_name: "Eve" }, institutions: [{ display_name: "ETH Zurich" }] }], abstract_inverted_index: { "We": [0], "drape": [1] }, locations: [{ landing_page_url: "https://arxiv.org/abs/2610.00077" }], primary_location: { source: { display_name: "CVPR" } }, referenced_works: ["https://openalex.org/W111"] };
+  const base = fakeGet({ s2Status: 429 }).get;
+  const get = async (url, options) => {
+    if (url.includes("openalex.org/works?filter=locations.landing_page_url")) return { status: 200, body: JSON.stringify({ results: [{ id: "https://openalex.org/W111" }] }) };
+    if (url.includes("openalex.org/works?filter=cites:W111")) return { status: 200, body: JSON.stringify({ results: [citing] }) };
+    if (url.includes("search_query=au%3A")) return { status: 200, body: arxivXml.replace("2610.00001v1", "2610.00055v1").replace("Sewing Pattern Generation with Diffusion", "Sewing pattern editing").replace("<name>Alice Zhang</name>", "<name>Carol</name>").replace("We generate sewing patterns &amp; garments.", "Code: https://github.com/x/y") };
+    return base(url, options);
+  };
+  await runWatch([root], { env, get, now: NOW });
+  const items = readWatchDigests(root)[0].items;
+  const cited = items.find((item) => item.id === "2610.00077");
+  assert.ok(cited, items.map((item) => item.id).join(","));
+  assert.ok(cited.reasons.includes("引用了近邻论文 2306.03642"));
+  assert.ok(cited.reasons.includes("关注会议 CVPR"));
+  const byAuthor = items.find((item) => item.id === "2610.00055");
+  assert.ok(byAuthor.reasons.includes("关注作者 Carol"));
+  assert.ok(byAuthor && byAuthor.reasons.includes("有代码/主页"));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".dove/research/watch/state.json"), "utf8")).openalex.seeds["2306.03642"], "W111");
+  assert.equal(codeLink("see project page"), "（摘要提到主页/代码）");
+});
+
+test("reads mentor impact lines and builds the weekly trends view", async () => {
+  const env = { HOME: tempDir("dove-watch-home-") };
+  const root = project();
+  writeWatchConfig(root, { keywords: ["sewing pattern"] });
+  const { get } = fakeGet();
+  await runWatch([root], { env, get, now: NOW });
+  fs.mkdirSync(path.join(root, ".dove/research/rounds"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".dove/research/rounds/004-brief.md"), "作者：导师\n## 论文影响\n- 2610.00001 | 撞题 | 覆盖了结构生成主张\n");
+  fs.writeFileSync(path.join(root, ".dove/research/watch/scan-2026-10-07.md"), "# 领域扫描\n- CVPR 2026 接收了 3 篇纸样生成");
+  assert.equal(parsePaperImpacts(root)["2610.00001"].impact, "overlap");
+  const registryOptions = { env };
+  changeRegisteredProjects([root], [], registryOptions);
+  const actions = createDashboardActions({ env });
+  const trends = actions.readTrends({ now: NOW });
+  assert.equal(trends.top[0].id, "2610.00001");
+  assert.deepEqual(trends.top[0].impacts.map((item) => item.label), ["撞题"]);
+  assert.equal(trends.hot[0].id, "2610.00001", "community hot papers are kept only when they touch a project keyword");
+  assert.equal(trends.scans[0].date, "2026-10-07");
+  assert.equal(actions.readWatch({ root }).scan.date, "2026-10-07");
 });

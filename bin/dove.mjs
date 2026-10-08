@@ -11,6 +11,7 @@ import { parseDoveCli } from "../src/cli/command-parser.mjs";
 import { createDashboardActions } from "../src/cli/dashboard-actions.mjs";
 import { DEFAULT_DASHBOARD_BIND, DEFAULT_DASHBOARD_PORT, startDashboardServer } from "../src/cli/dashboard-server.mjs";
 import { runWatch } from "../src/core/paper-watch.mjs";
+import { startTopicSelection } from "../src/core/topic-selection.mjs";
 import { renderDoveDoctor } from "../src/cli/doctor-output.mjs";
 import { renderDoveHelp } from "../src/cli/help-output.mjs";
 import { runInteractiveDoveSetup } from "../src/cli/interactive-setup.mjs";
@@ -395,6 +396,14 @@ try {
     console.log("论文追踪会在面板运行期间按设置每天自动执行一次。");
     if (bind === DEFAULT_DASHBOARD_BIND) console.log(`从自己电脑打开：ssh -N -L ${port}:127.0.0.1:${port} <服务器>，再访问 http://localhost:${port}/`);
     await new Promise(() => {});
+  }
+
+  if (command === "topic") {
+    const root = path.resolve(options.project ?? process.cwd());
+    const result = startTopicSelection(root, PACKAGE_OPTIONS);
+    if (wantsJson(options)) writeJson(result);
+    else console.log(`选题目录已就绪：${path.join(root, ".dove/research/topics")}（依据：${result.criteria?.title ?? "选题标准"}${result.criteria?.version ? `，第 ${result.criteria.version} 版` : ""}；已有候选 ${result.cards.length} 个）`);
+    process.exit(0);
   }
 
   if (command === "watch") {

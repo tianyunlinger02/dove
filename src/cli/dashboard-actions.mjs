@@ -2,9 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { importProjectRoots, syncRegisteredProjects } from "../core/project-cascade.mjs";
+import { parsePaperImpacts } from "../core/dashboard-data.mjs";
+import { readTopicCriteriaInfo, readTopics, startTopicSelection, writeTopicCriteria } from "../core/topic-selection.mjs";
 import { changeRegisteredProjects, readRegisteredProjects } from "../core/project-registry.mjs";
 import {
+  draftWatchConfigWithSources,
   localDate,
+  readLatestScan,
+  readWatchHot,
   readGlobalWatchSettings,
   readGlobalWatchState,
   readSemanticScholarKey,
@@ -45,12 +50,59 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
         watchState: readGlobalWatchState(options),
         watchRunning: Boolean(running),
         s2KeySet: Boolean(readSemanticScholarKey(options)),
+        topicCriteria: readTopicCriteriaInfo(options),
         passwordSet,
         canChangePassword: Boolean(passwordFile)
       };
     },
     readWatch({ root }) {
-      return { config: readWatchConfig(root), digests: readWatchDigests(root, 3) };
+      return { config: readWatchConfig(root), digests: readWatchDigests(root, 3), impacts: parsePaperImpacts(root), scan: readLatestScan(root) };
+    },
+    readTopicsOverview() {
+      return {
+        criteria: readTopicCriteriaInfo(options),
+        projects: registered().filter((root) => isDirectory(path.join(root, ".dove/research"))).map((root) => ({ root, name: path.basename(root), ...readTopics(root) }))
+      };
+    },
+    startTopics({ root }) {
+      return startTopicSelection(root, options);
+    },
+    saveTopicCriteria({ text }) {
+      return writeTopicCriteria(text, options);
+    },
+    draftWatchConfig({ root }) {
+      return draftWatchConfigWithSources(root, { proxy: readGlobalWatchSettings(options).proxy });
+    },
+    // Field-wide view: this week's best matches across projects, community
+    // hot papers that touch any project's keywords, and each project's latest scan.
+    readTrends({ now = Date.now() } = {}) {
+      const weekAgo = localDate(now - 7 * 86400000);
+      const roots = registered().filter((root) => isDirectory(path.join(root, ".dove/research")));
+      const byId = new Map();
+      const keywords = new Set();
+      const scans = [];
+      for (const root of roots) {
+        const config = readWatchConfig(root);
+        config.keywords.forEach((keyword) => keywords.add(keyword.toLowerCase()));
+        const impacts = parsePaperImpacts(root);
+        for (const digest of readWatchDigests(root, 7).filter((item) => item.date >= weekAgo)) {
+          for (const item of digest.items) {
+            const entry = byId.get(item.id) ?? { ...item, projects: [], impacts: [] };
+            if (!entry.projects.includes(path.basename(root))) entry.projects.push(path.basename(root));
+            if (impacts[item.id]) entry.impacts.push({ project: path.basename(root), ...impacts[item.id] });
+            entry.score = Math.max(entry.score ?? 0, item.score ?? 0);
+            byId.set(item.id, entry);
+          }
+        }
+        const scan = readLatestScan(root);
+        if (scan) scans.push({ project: path.basename(root), ...scan });
+      }
+      const hot = (readWatchHot(options).papers ?? []).filter((paper) => {
+        const text = `${paper.title} ${paper.abstract}`.toLowerCase();
+        return [...keywords].some((keyword) => text.includes(keyword));
+      }).slice(0, 15);
+      const top = [...byId.values()].sort((left, right) => (right.impacts.length - left.impacts.length) || (right.score - left.score)).slice(0, 30);
+      return { since: weekAgo, top, hot, scans };
     },
     addProject({ path: target }) {
       if (typeof target !== "string" || !path.isAbsolute(target)) throw new Error("请填写项目的绝对路径");
