@@ -15,11 +15,24 @@ export function topicCriteriaPath(options = {}) {
   return path.join(doveConfigDirectory(options), CRITERIA_NAME);
 }
 
+// A criteria document may carry one project's own settings (scope, resources,
+// that project's explicit requests). They are not general criteria, so they
+// stay out of the copy each project receives.
+export function splitProjectSettings(text = "") {
+  const lines = String(text).split(/\r?\n/u);
+  const start = lines.findIndex((line) => /^##\s+.*项目设置/u.test(line));
+  if (start < 0) return { general: String(text), removed: null };
+  let end = lines.findIndex((line, index) => index > start && /^##\s+/u.test(line));
+  if (end < 0) end = lines.length;
+  return { general: [...lines.slice(0, start), ...lines.slice(end)].join("\n"), removed: lines[start].replace(/^##\s+/u, "").trim() };
+}
+
 function describe(text, stat) {
   return {
     title: text.split(/\r?\n/u).find((line) => /^#\s+\S/u.test(line))?.replace(/^#\s+/u, "").trim() ?? null,
     version: [...text.matchAll(/第\s*(\d+)\s*版/gu)].map((match) => Number(match[1])).sort((left, right) => right - left).map(String)[0] ?? null,
     bytes: Buffer.byteLength(text),
+    projectSection: splitProjectSettings(text).removed,
     updatedAt: stat ? new Date(stat.mtimeMs).toISOString() : null
   };
 }
@@ -46,7 +59,7 @@ export function writeTopicCriteria(text, options = {}) {
 
 const README = `# 选题
 
-本目录记录一次选题。依据是 CRITERIA.md（开始时从用户的选题标准复制，之后标准更新时可重新复制）。
+本目录记录一次选题。依据是 CRITERIA.md（开始时从用户的选题标准复制，之后标准更新时可重新复制；标准里写给某个项目的设置不会带进来）。本项目自己的设置——范围、资源、材料、用户对本项目的明确要求——写在 PROJECT.md，依据本项目用户原话并注明日期。
 
 - 按 CRITERIA.md 的固定顺序和硬规则推进；每一阶段是一轮，说明和结果照常写在 ../rounds/，作者标明。
 - 先发散出有宽度的候选，再做反向审查；近邻审计用真实的论文与网页检索，写出出处。
@@ -59,13 +72,35 @@ const README = `# 选题
 - 选定方向由用户确认后，成为项目立项的依据（身份卡与评测表）。
 `;
 
+const PROJECT_TEMPLATE = `# 本项目的选题设置
+
+只写这个项目的设置，依据本项目用户原话并注明日期；选题标准里写给其他项目的设置不适用。没有用户原话的项写“待用户确认”，不要替用户定。
+
+## 范围与兴趣
+
+待用户确认
+
+## 资源
+
+待用户确认
+
+## 项目材料
+
+待用户确认
+
+## 讨论方式与特别要求
+
+待用户确认（例如：选题期是否允许诊断测量或淘汰性预实验）
+`;
+
 export function startTopicSelection(root, options = {}) {
   const source = topicCriteriaPath(options);
   if (!fs.existsSync(source)) throw new Error("还没有选题标准：先在面板设置页粘贴，或放到 " + source);
   const directory = path.join(root, TOPICS_DIR);
   fs.mkdirSync(path.join(directory, "cards"), { recursive: true });
-  fs.copyFileSync(source, path.join(directory, "CRITERIA.md"));
-  if (!fs.existsSync(path.join(directory, "README.md"))) fs.writeFileSync(path.join(directory, "README.md"), README);
+  fs.writeFileSync(path.join(directory, "CRITERIA.md"), splitProjectSettings(fs.readFileSync(source, "utf8")).general);
+  fs.writeFileSync(path.join(directory, "README.md"), README);
+  if (!fs.existsSync(path.join(directory, "PROJECT.md"))) fs.writeFileSync(path.join(directory, "PROJECT.md"), PROJECT_TEMPLATE);
   return readTopics(root);
 }
 

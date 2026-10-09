@@ -10,7 +10,7 @@ import { collectDashboard, readProjectDocument } from "../src/core/dashboard-dat
 import { changeRegisteredProjects } from "../src/core/project-registry.mjs";
 import { parseCardHeader, readTopicCriteriaInfo, readTopics, startTopicSelection, writeTopicCriteria } from "../src/core/topic-selection.mjs";
 
-const criteria = `# 论文选题要求、论证原则与交付规范\n\n本版为第23版。\n${"## 一、原则\n先发散，再审查。\n".repeat(20)}`;
+const criteria = `# 论文选题要求、论证原则与交付规范\n\n本版为第23版。\n${"## 一、原则\n先发散，再审查。\n".repeat(20)}## 附录 E：当前项目设置（point1）\n\n找题期间尽量不做实验。\n\n## 修订记录\n第22版到第23版。\n`;
 
 function setup() {
   const env = { HOME: fs.mkdtempSync(path.join(os.tmpdir(), "dove-topic-home-")) };
@@ -30,6 +30,11 @@ test("criteria are kept at user level and copied into a project when selection s
   assert.equal(topics.started, true);
   assert.equal(topics.criteria.version, "23");
   assert.ok(fs.readFileSync(path.join(root, ".dove/research/topics/README.md"), "utf8").includes("开头固定五行"));
+  const copied = fs.readFileSync(path.join(root, ".dove/research/topics/CRITERIA.md"), "utf8");
+  assert.doesNotMatch(copied, /找题期间尽量不做实验/u, "another project's settings stay out of the copy");
+  assert.match(copied, /## 修订记录/u, "sections after the project settings are kept");
+  assert.equal(info.projectSection, "附录 E：当前项目设置（point1）");
+  assert.match(fs.readFileSync(path.join(root, ".dove/research/topics/PROJECT.md"), "utf8"), /待用户确认/u);
 });
 
 test("card headers give status, stage, position, summary and the six conclusions", () => {
@@ -46,7 +51,7 @@ test("dashboard lists topic cards and serves only topic documents", async () => 
   startTopicSelection(root, { env });
   fs.writeFileSync(path.join(root, ".dove/research/topics/cards/01-a.md"), "# 方向甲\n状态：候选\n阶段：一\n定位：探索\n一句话：甲\n六点：问题 待核实\n");
   fs.writeFileSync(path.join(root, ".dove/research/topics/stage1-问题池.md"), "# 问题池\n");
-  assert.deepEqual(readTopics(root).documents, ["topics/README.md", "topics/stage1-问题池.md"]);
+  assert.deepEqual(readTopics(root).documents, ["topics/PROJECT.md", "topics/README.md", "topics/stage1-问题池.md"]);
   assert.match(readProjectDocument(root, "topics/cards/01-a.md").text, /方向甲/u);
   assert.equal(readProjectDocument(root, "topics/../IDENTITY.md"), null);
   assert.equal(readProjectDocument(root, "topics/cards/../../IDENTITY.md"), null);
