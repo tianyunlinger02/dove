@@ -26,17 +26,13 @@ export function syncRegisteredProjects(options = {}) {
     try {
       const inspection = inspectProjectIntegration(root, { packageName: options.packageName, packageVersion: options.packageVersion, autoSync: true });
       if (inspection.target !== root) throw new Error("Dove registered project root changed.");
-      if (inspection.skippedLocalEdits.length > 0) {
-        projects.push({ target: root, status: "preserved", skippedLocalEdits: inspection.skippedLocalEdits });
-        continue;
-      }
       const result = syncProjectIntegration(root, { packageName: options.packageName, packageVersion: options.packageVersion });
-      projects.push({ target: root, status: result.status, changedPaths: result.changedPaths });
+      projects.push({ target: root, status: result.status, changedPaths: result.changedPaths, ...(result.skippedLocalEdits.length ? { preservedLocalEdits: result.skippedLocalEdits } : {}) });
     } catch {
       projects.push({ target: root, status: "blocked", reason: "Integration could not be safely updated; inspect this project's Dove doctor output." });
     }
   }
-  const report = { packageVersion: options.packageVersion, projects, status: projects.some((item) => ["preserved", "blocked"].includes(item.status)) ? "partial" : "current" };
+  const report = { packageVersion: options.packageVersion, projects, status: projects.some((item) => item.status === "blocked") ? "partial" : "current" };
   try {
     writeLastProjectSync(report, options);
   } catch (error) {

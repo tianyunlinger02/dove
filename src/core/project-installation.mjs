@@ -97,15 +97,13 @@ export function updateProjectIntegration(start, options = {}) {
   return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", prepared.root, prepared.hosts, prepared.manifest, transaction, prepared);
 }
 
+// Automatic updates keep each locally edited or removed managed item as the
+// user left it and still bring every other managed item current; the manifest
+// keeps the old record for preserved items so later updates preserve them too.
 export function syncProjectIntegration(start, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const root = resolveExactInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
-  const inspected = prepareInstalledPlan(root, { ...options, fsOps, replacementPolicy: "auto-inspect" });
-  if (inspected.skippedLocalEdits.length > 0) {
-    const paths = inspected.skippedLocalEdits.map((item) => `${item.path}${item.selector ? `#${item.selector}` : ""}`);
-    throw new Error(`Dove automatic project update preserved local edits; no project files were changed: ${paths.join(", ")}.`);
-  }
-  const prepared = prepareInstalledPlan(root, { ...options, fsOps, replacementPolicy: "auto-safe" });
+  const prepared = prepareInstalledPlan(root, { ...options, fsOps, replacementPolicy: "auto-inspect" });
   const transaction = writeFileSetTransaction(prepared.entries, transactionOptions(fsOps));
   return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", root, prepared.hosts, prepared.manifest, transaction, prepared);
 }

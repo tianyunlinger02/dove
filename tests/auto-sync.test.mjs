@@ -193,15 +193,19 @@ test("auto-sync blocks every write to a drifted project but continues updating a
   assert.ok(sync.status === 0 || sync.status === 1, sync.stderr);
   const report = JSON.parse(sync.stdout);
   assert.equal(report.status, "partial");
-  assert.equal(report.projects.find((item) => item.target === edited)?.status, "preserved");
+const editedReport = report.projects.find((item) => item.target === edited);
+  assert.equal(editedReport?.status, "updated");
+  assert.deepEqual(editedReport?.preservedLocalEdits, [{ path: ".dove/install/RESEARCH_QUALITY.md", selector: null }]);
+  assert.match(fs.readFileSync(path.join(edited, ".dove/install/RESEARCH_QUALITY.md"), "utf8"), /Synthetic local edit/u, "the edited item stays as the user left it");
+  assert.equal(manifest(edited).package.version, PACKAGE_VERSION, "everything else in the edited project is brought current");
+  assert.notDeepEqual(snapshot(edited), untouched);
   assert.equal(report.projects.find((item) => item.target === invalid)?.status, "blocked");
-  assert.deepEqual(snapshot(edited), untouched, "drift must prevent ALL writes, including manifest writes");
   assert.deepEqual(snapshot(invalid), invalidBefore, "invalid manifest must prevent ALL project writes");
   assertCurrent(clean);
   assert.deepEqual(fs.readFileSync(path.join(clean, "paper.md")), paper);
 });
 
-test("managed MCP fragment drift blocks all project writes while another project syncs", (t) => {
+test("managed MCP fragment drift is preserved while the rest of the project syncs", (t) => {
   const ws = workspace(t);
   const edited = project(ws.base, "mcp-edited");
   const clean = project(ws.base, "mcp-clean");
@@ -214,18 +218,18 @@ test("managed MCP fragment drift blocks all project writes while another project
   const paper = fs.readFileSync(path.join(clean, "paper.md"));
 
   const report = JSON.parse(dove(ws, "projects", "sync").stdout);
-  assert.equal(report.status, "partial");
-  assert.deepEqual(report.projects.find((item) => item.target === edited), {
-    target: edited,
-    status: "preserved",
-    skippedLocalEdits: [{ path: ".mcp.json", selector: PAPER_SEARCH_MCP_SELECTOR }]
-  });
-  assert.deepEqual(snapshot(edited), before, "one managed MCP fragment drift must prevent ALL writes to that project");
+  assert.equal(report.status, "current");
+  const editedReport = report.projects.find((item) => item.target === edited);
+  assert.equal(editedReport.status, "updated");
+  assert.deepEqual(editedReport.preservedLocalEdits, [{ path: ".mcp.json", selector: PAPER_SEARCH_MCP_SELECTOR }]);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(edited, ".mcp.json"), "utf8")).mcpServers[PAPER_SEARCH_MCP_SERVER_NAME].args.includes("--synthetic-local-edit"));
+  assert.equal(manifest(edited).package.version, PACKAGE_VERSION);
+  assert.notDeepEqual(snapshot(edited), before);
   assertCurrent(clean);
   assert.deepEqual(fs.readFileSync(path.join(clean, "paper.md")), paper);
 });
 
-test("missing managed files and MCP fragments preserve whole projects", (t) => {
+test("missing managed files and MCP fragments stay missing while the rest updates", (t) => {
   const ws = workspace(t);
   const fileMissing = project(ws.base, "file-missing");
   const fragmentMissing = project(ws.base, "fragment-missing");
@@ -241,18 +245,21 @@ test("missing managed files and MCP fragments preserve whole projects", (t) => {
   fs.writeFileSync(mcpPath, `${JSON.stringify(mcp, null, 2)}\n`);
   const before = [snapshot(fileMissing), snapshot(fragmentMissing)];
   const report = JSON.parse(dove(ws, "projects", "sync").stdout);
-  assert.equal(report.status, "partial");
-  assert.deepEqual(report.projects.find((item) => item.target === fileMissing)?.skippedLocalEdits, [
+  assert.equal(report.status, "current");
+  assert.deepEqual(report.projects.find((item) => item.target === fileMissing)?.preservedLocalEdits, [
     { path: ".dove/install/RESEARCH_QUALITY.md", selector: null }
   ]);
-  assert.deepEqual(report.projects.find((item) => item.target === fragmentMissing)?.skippedLocalEdits, [
+  assert.deepEqual(report.projects.find((item) => item.target === fragmentMissing)?.preservedLocalEdits, [
     { path: ".mcp.json", selector: PAPER_SEARCH_MCP_SELECTOR }
   ]);
-  assert.deepEqual([snapshot(fileMissing), snapshot(fragmentMissing)], before);
+  assert.equal(fs.existsSync(path.join(fileMissing, ".dove/install/RESEARCH_QUALITY.md")), false, "a removed file is not recreated");
+  assert.equal(PAPER_SEARCH_MCP_SERVER_NAME in JSON.parse(fs.readFileSync(mcpPath, "utf8")).mcpServers, false, "a removed fragment is not recreated");
+  for (const target of [fileMissing, fragmentMissing]) assert.equal(manifest(target).package.version, PACKAGE_VERSION);
+  assert.notDeepEqual([snapshot(fileMissing), snapshot(fragmentMissing)], before);
   assertCurrent(clean);
 });
 
-test("global npm postinstall syncs registered projects without overwriting drift", (t) => {
+test("global npm postinstall syncs registered projects and keeps local edits", (t) => {
   const ws = workspace(t);
   const edited = project(ws.base, "edited");
   const clean = project(ws.base, "clean");
@@ -270,8 +277,9 @@ test("global npm postinstall syncs registered projects without overwriting drift
   assert.match(installedPackage.scripts?.postinstall ?? "", /projects postinstall/u, "packed package must declare its lifecycle hook");
   const postinstallReport = JSON.parse(fs.readFileSync(path.join(ws.env.XDG_CONFIG_HOME, "dove", "last-sync.json"), "utf8"));
   assert.equal(postinstallReport.packageVersion, PACKAGE_VERSION, "global install must execute postinstall with isolated registry");
-  assert.equal(postinstallReport.projects.find((item) => item.target === edited)?.status, "preserved");
-  assert.deepEqual(snapshot(edited), untouched, "postinstall must not touch any file in a drifted project");
+  assert.equal(postinstallReport.projects.find((item) => item.target === edited)?.status, "updated");
+  assert.match(fs.readFileSync(path.join(edited, ".dove/install/RESEARCH_QUALITY.md"), "utf8"), /Synthetic local edit/u, "postinstall keeps the local edit");
+  assert.notDeepEqual(snapshot(edited), untouched);
   assertCurrent(clean);
   const executable = path.join(ws.env.npm_config_prefix, "bin", process.platform === "win32" ? "dove.cmd" : "dove");
   assert.equal(fs.existsSync(executable), true, "test must exercise an actual isolated global npm installation");

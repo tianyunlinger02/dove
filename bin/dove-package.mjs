@@ -17015,12 +17015,7 @@ function updateProjectIntegration(start, options2 = {}) {
 function syncProjectIntegration(start, options2 = {}) {
   const fsOps = options2.fsOps ?? fs10;
   const root = resolveExactInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
-  const inspected = prepareInstalledPlan(root, { ...options2, fsOps, replacementPolicy: "auto-inspect" });
-  if (inspected.skippedLocalEdits.length > 0) {
-    const paths = inspected.skippedLocalEdits.map((item) => `${item.path}${item.selector ? `#${item.selector}` : ""}`);
-    throw new Error(`Dove automatic project update preserved local edits; no project files were changed: ${paths.join(", ")}.`);
-  }
-  const prepared = prepareInstalledPlan(root, { ...options2, fsOps, replacementPolicy: "auto-safe" });
+  const prepared = prepareInstalledPlan(root, { ...options2, fsOps, replacementPolicy: "auto-inspect" });
   const transaction = writeFileSetTransaction(prepared.entries, transactionOptions(fsOps));
   return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", root, prepared.hosts, prepared.manifest, transaction, prepared);
 }
@@ -17387,17 +17382,13 @@ function syncRegisteredProjects(options2 = {}) {
     try {
       const inspection = inspectProjectIntegration(root, { packageName: options2.packageName, packageVersion: options2.packageVersion, autoSync: true });
       if (inspection.target !== root) throw new Error("Dove registered project root changed.");
-      if (inspection.skippedLocalEdits.length > 0) {
-        projects.push({ target: root, status: "preserved", skippedLocalEdits: inspection.skippedLocalEdits });
-        continue;
-      }
       const result = syncProjectIntegration(root, { packageName: options2.packageName, packageVersion: options2.packageVersion });
-      projects.push({ target: root, status: result.status, changedPaths: result.changedPaths });
+      projects.push({ target: root, status: result.status, changedPaths: result.changedPaths, ...result.skippedLocalEdits.length ? { preservedLocalEdits: result.skippedLocalEdits } : {} });
     } catch {
       projects.push({ target: root, status: "blocked", reason: "Integration could not be safely updated; inspect this project's Dove doctor output." });
     }
   }
-  const report = { packageVersion: options2.packageVersion, projects, status: projects.some((item) => ["preserved", "blocked"].includes(item.status)) ? "partial" : "current" };
+  const report = { packageVersion: options2.packageVersion, projects, status: projects.some((item) => item.status === "blocked") ? "partial" : "current" };
   try {
     writeLastProjectSync(report, options2);
   } catch (error) {
