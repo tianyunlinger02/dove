@@ -66,7 +66,7 @@ SessionStart inspects integration read-only; startup/clear adds the two-essentia
 
 The managed Stop hook gives one round reminder only when the identity card says ongoing and no mentor was called in the current turn. `stop_hook_active: true` or unavailable transcript evidence allows stopping. It checks host tool-call events without analyzing or sending conversation content to a model, creates no tracking file, and writes nothing. Explicit discussion-only/stop requests cause the main session to mark the round paused. No background scheduler is added.
 
-Owned paths/configuration remain contained and unambiguous. Explicit update may replace valid owned local edits and reports `replacedLocalEdits`; automatic/bulk sync blocks the entire project with zero writes for any owned drift/missing resource/conflict. Unrelated settings and files are preserved. Installed digests protect software ownership, not scientific claims. Exact protections belong in [Installation](INSTALL.md).
+Owned paths/configuration remain contained and unambiguous. Explicit update may replace valid owned local edits and reports `replacedLocalEdits`; automatic/bulk sync preserves locally changed or removed owned items, reports `preservedLocalEdits`, and updates the rest. Preserved items retain their previous ownership record; integration that cannot be safely planned still blocks that project. Unrelated settings and files are preserved. Installed digests protect software ownership, not scientific claims. Exact protections belong in [Installation](INSTALL.md).
 
 ## Research Markdown ownership
 

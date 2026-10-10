@@ -16,7 +16,7 @@ cd <target-project>
 dove
 ```
 
-The bare public npm package name `dove` is unrelated. With npm lifecycle scripts enabled, a global Dove upgrade refreshes only registered projects. Import older projects once by exact paths with `dove projects import --project <root>... --sync`; retry with `dove projects sync` and inspect with read-only `dove projects status`. Automatic sync skips an entire project with owned integration drift or conflicts; explicit `dove update` can replace valid owned edits. Research history is preserved. See [Installation](docs/INSTALL.md).
+The bare public npm package name `dove` is unrelated. With npm lifecycle scripts enabled, a global Dove upgrade refreshes only registered projects. Import older projects once by exact paths with `dove projects import --project <root>... --sync`; retry with `dove projects sync` and inspect with read-only `dove projects status`. Automatic sync preserves locally changed or removed owned items, reports them as `preservedLocalEdits`, and updates the rest; integration that cannot be safely planned still blocks that project. Explicit `dove update` can replace valid owned edits. Research history is preserved. See [Installation](docs/INSTALL.md).
 
 ## Ordinary conversation first
 

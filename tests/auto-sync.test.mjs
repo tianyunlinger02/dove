@@ -173,7 +173,7 @@ test("projects import --sync updates an imported old manifest and preserves rese
   assert.deepEqual(fs.readFileSync(path.join(target, "paper.md")), paper);
 });
 
-test("auto-sync blocks every write to a drifted project but continues updating another project", (t) => {
+test("auto-sync preserves locally edited items while updating the rest and blocks invalid projects", (t) => {
   const ws = workspace(t);
   const edited = project(ws.base, "edited");
   const clean = project(ws.base, "clean");
@@ -193,7 +193,7 @@ test("auto-sync blocks every write to a drifted project but continues updating a
   assert.ok(sync.status === 0 || sync.status === 1, sync.stderr);
   const report = JSON.parse(sync.stdout);
   assert.equal(report.status, "partial");
-const editedReport = report.projects.find((item) => item.target === edited);
+  const editedReport = report.projects.find((item) => item.target === edited);
   assert.equal(editedReport?.status, "updated");
   assert.deepEqual(editedReport?.preservedLocalEdits, [{ path: ".dove/install/RESEARCH_QUALITY.md", selector: null }]);
   assert.match(fs.readFileSync(path.join(edited, ".dove/install/RESEARCH_QUALITY.md"), "utf8"), /Synthetic local edit/u, "the edited item stays as the user left it");
