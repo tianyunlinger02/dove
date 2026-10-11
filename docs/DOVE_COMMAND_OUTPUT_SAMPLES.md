@@ -11,7 +11,7 @@ Dove 已在此项目启用
 宿主  Claude Code
 
 ✓ Dove 与 9 个可选专项入口已安装；导师和论文审稿使用原生只读子 agent
-✓ SessionStart、UserPromptSubmit 与单次轮次 Stop 提醒已配置；状态栏空缺时安装只读显示
+✓ SessionStart 与 UserPromptSubmit 上下文展示已配置；状态栏空缺时安装只读显示
 ✓ 论文检索 MCP 与网页 Exa MCP 已声明
 ✓ 最小研究入口 RESEARCH.md 已建立
 ✓ 项目集成记录已建立
@@ -31,7 +31,7 @@ Ordinary Claude is the complete primary entrance. The optional agent/Skills add 
 ```text
 用户：现在为什么还没做好？
 
-已有开发集结果，但未见类别这一列没有改善，核心泛化还没证明。最近两轮只修了已见样本，继续加同类分支不能回答目标。我会把实际改动和结果交给导师，让下一轮针对共同原因换方法。
+已有开发集结果，但未见类别这一列没有改善，核心泛化还没证明。最近两轮只修了已见样本，继续加同类分支不能回答目标。现有判断是下一步针对共同原因换方法，不是继续加样本特例。
 ```
 
 A bounded explanation-only request can finish without research records or execution. If the user explicitly asks to pause:
@@ -39,24 +39,24 @@ A bounded explanation-only request can finish without research records or execut
 ```text
 用户：先别做，只讨论。
 
-我先暂停当前轮次，身份卡的 Round status 已改为 paused。这次只讨论原因，不继续运行或修改方法。
+这次只讨论原因，不继续运行或修改方法。
 ```
 
-Only say the card changed if the write actually happened. An explicit no-write instruction or refused write stays a reported limit, not an invented update.
+Ending the reply needs no card edit, new round result or mentor call.
 
-## One-time evaluation confirmation
+## One-time kickoff confirmation
 
-The numbers and evaluator below are hypothetical, not facts from a consumer project:
+This example is hypothetical, not an observed user confirmation:
 
 ```text
-导师建议沿用 scripts/evaluate.py：开发集用于迭代，未见类别保留为泛化列，最终 test 只用于一次确认。EVAL 记录开发集成功率、未见类别成功率和耗时。
+按你的原话重建，部署时输入未见类别的图像，输出共享对应关系；目标是提高跨类别成功率，而不是增加类别特例。对照是同输入强基线，完成含义也包括你要求的耗时。
 
-这张表将作为完成标准；你确认一次即可，以后换指标、划分或标准也需要你确认。我不会把这个建议当成已经确认。
+请确认这份立项理解。确认后导师据此定义覆盖全部指标和泛化的 EVAL，不再另请你批准初始评测；修正评测会重算历史对照，只有改变目标含义才需再确认。
 ```
 
 ## Mentor brief
 
-The fresh read-only mentor receives identity/recent corrections, evaluation, recent briefs/results, and actual diffs or changed files—not the execution conversation. Its return is at most one page. The main session saves it verbatim as the next brief. Shape-only example:
+Use a fresh read-only mentor when requested or when kickoff, methods, evaluation, measured results or the route need independent judgment; reuse existing judgments without new material. It reads the specified records and actual artifacts, not the execution conversation. Save returned briefs verbatim. Shape-only example:
 
 ```text
 作者：导师
@@ -103,7 +103,7 @@ Status reads the card, last evaluation rows, and current brief, without running 
 正在执行导师给出的下一轮，针对共同失败原因改对应关系，再按同一评测表取结果。
 ```
 
-A status answer does not end an ongoing round unless the user explicitly asks to pause. Do not infer scientific progress from a Git branch, successful run, timestamp, or test pass.
+Status may end the reply without completing or pausing the round. Progress comes from actual research evidence, not a Git branch, timestamp or test pass.
 
 ## Bounded identity and compact/resume
 
@@ -122,16 +122,6 @@ Identity card exceeds 4KB; the beginning is shown, not a missing card. Read the 
 ```
 
 Startup/clear instead supplies the two-essentials read bootstrap. Hooks present context; they do not prove reading, write research, or perform mentor judgment.
-
-## One-time Stop reminder
-
-When an ongoing round has no mentor call in the current turn, the managed Stop hook can ask once:
-
-```text
-当前轮次仍在进行中。请保存本轮结果并调用 dove-mentor，再根据返回继续、暂停或说明完成。
-```
-
-`stop_hook_active: true` permits stopping without another block. Missing/unreadable transcript evidence also permits stopping. The hook checks host tool-call events without analyzing or transmitting conversation content, and writes no tracking or research file. Explicit discussion-only/stop requests are handled by the main session setting the card to paused, not by hook classification.
 
 ## Repeated cross-project correction
 

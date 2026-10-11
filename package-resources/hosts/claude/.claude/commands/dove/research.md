@@ -1,11 +1,11 @@
 ---
-description: "Start or continue the mentor-led research rounds from the identity card and evaluation table."
+description: "Advance research through actual work, full evaluation and independent judgment when needed."
 argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
 ---
 
 # dove.research
 
-Start or continue the mentor-led research rounds from the identity card and evaluation table.
+Advance research through actual work, full evaluation and independent judgment when needed.
 
 ## Request
 
@@ -21,7 +21,7 @@ These are flexible research considerations, not a required order or report templ
 
 ### What this is for
 
-Start or continue the mentor-led round loop.
+Advance research through actual work and necessary independent judgment.
 
 ### When to use
 
@@ -33,7 +33,7 @@ Use for research progression; bounded questions remain bounded.
 
 ### Ways Dove may proceed
 
-- Call dove-mentor fresh and read-only with dated user-original sources/range since its last reading, the current user's exact words, specified norms, identity card, EVAL, recent brief/result, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent. Save its brief verbatim; inception precedes EVAL. Follow the versioned method brief; report evaluator flaws and objections in the result.
+- Execute the versioned brief against EVAL; report attempts, outputs, unfinished work, blockers, evaluator flaws and objections. For independent judgment, give dove-mentor a fresh read-only context: dated user-original sources/range since its last reading, the current user's exact words, specified norms, card, EVAL, recent briefs/results, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent.
 
 ### When Dove needs input
 

@@ -36,7 +36,7 @@ Claude integration includes:
 - `.claude/rules/dove.md` for ordinary main-session collaboration;
 - `.claude/agents/dove.md` for the optional author-side entrance, plus native read-only `.claude/agents/dove-mentor.md` and `.claude/agents/dove-review.md`;
 - nine optional commands under `.claude/commands/dove/`;
-- managed `SessionStart`, `UserPromptSubmit`, and the narrow round-completion `Stop` hook;
+- read-only `SessionStart` and `UserPromptSubmit` context hooks;
 - a read-only Dove `statusLine` only if the project has no existing line;
 - hidden guidance Skills and project MCP declarations for pinned `dove-paper-search` and hosted Exa; and
 - a project `permissions.deny` entry for built-in `WebFetch`, leaving `WebSearch` available.
@@ -61,9 +61,11 @@ Use `dove projects sync` to retry the registered set and read-only `dove project
 
 Automatic/bulk sync preserves locally changed or removed manifest-owned files and configuration fragments—including MCP entries—and updates the remaining items. Each project is reported as `updated` or `unchanged`, with any `preservedLocalEdits` listed separately; preserving local edits alone is not a `partial` sync. Preserved items keep their previous ownership record, not a digest of local content. The manifest package version advances, but Doctor and prompt hooks can still report local integration drift; that is not a failed update of the remaining items. Integration that cannot be safely planned still blocks that project, while other registered projects continue. Explicit `dove update` is different: it may replace valid manifest-owned edits and reports them. Neither operation changes `.dove/research/**`, historical `.dove/reviews/**`, `.dove/runs/**`, or ordinary project artifacts.
 
+Dove no longer registers a Stop hook or exposes its CLI entry. Normal sync removes an old manifest-owned Stop only when its original digest still matches. Automatic sync preserves locally modified or removed Stop items with their previous ownership record and reports them; explicit update blocks on those retired-item differences rather than clearing them. Unowned and user hooks remain untouched, even if they resemble Dove's old command. Check reported differences rather than assume all Stop hooks are disabled.
+
 npm may hide lifecycle output; `npm install --global --foreground-scripts <exact-dove-package-specifier>` shows it. `--ignore-scripts` disables cascading. If one project has already refreshed and another fails, partial success exits zero to avoid npm rolling back a partly applied operation; failures before any project commits may exit nonzero. Read the per-project outcomes and inspect `dove projects status` after upgrades.
 
-Disk refresh is not host reload. An already-open Claude context with a working registered Dove prompt hook resolving the new CLI can receive verified current guidance on its next real prompt, then personally read changed rule/essentials as needed. Complete hook, agent, tool, permission, or configuration loading may require a fresh context; `/reload-skills` reloads only optional Skills. Installation, matching versions, and hook output do not prove model adoption.
+Disk refresh or Stop removal is not host reload. An already-open Claude context with a working registered Dove prompt hook resolving the new CLI can receive verified current guidance on its next real prompt, then personally read changed rule/essentials as needed. Complete hook, agent, tool, permission, or configuration loading may require a fresh context; `/reload-skills` reloads only optional Skills. Installation, matching versions, and hook output do not prove model adoption.
 
 ## Dove agent and ordinary entry
 
@@ -89,16 +91,6 @@ SessionStart inspects integration read-only. Non-current integration may produce
 UserPromptSubmit verifies current managed integration and presents the project-owned identity card and bounded current guidance on each prompt. Stale/unsafe integration receives a nonblocking diagnostic. It does not classify prompts, write research, decide permissions, or block submission.
 
 Keep `Current round` and `Round status` at the top of `IDENTITY.md`, within its first 4KB. If the card is longer, presentation retains the first 4KB and asks for shortening; it is not reported missing. The main session—not a hook—maintains the card and reads the linked brief and evaluation. Missing/unreadable identity is not inferred from history.
-
-### Narrow Stop reminder
-
-```text
-dove hook stop --project <project-root>
-```
-
-The read-only managed Stop hook blocks once only when the card identifies an ongoing round and the current turn has no `dove-mentor` call. It asks the main session to save the round result and call the mentor. `stop_hook_active: true` immediately allows stopping; missing/unreadable transcript evidence also allows it. The hook checks host tool-call events without analyzing or sending conversation content to a model. It creates no tracking file or extra tool hook and writes no research state.
-
-If the user explicitly asks to discuss only or stop, the main session sets `Round status: paused` before ending. This reminder replaces the old scheduling/continuation mechanism; it is not a background scheduler, new permission, or scientific completion gate.
 
 ### Status line
 

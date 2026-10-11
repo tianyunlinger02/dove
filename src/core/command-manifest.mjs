@@ -105,22 +105,22 @@ function capabilityContract(options) {
 
 function contract(slug) {
   if (slug === "research") return capabilityContract({
-    ambientParticipation: "Read the identity card and EVAL; execute the current round to its result, then call the mentor and continue.",
-    purpose: "Start or continue the mentor-led round loop.",
+    ambientParticipation: "Advance authorized research using the card, EVAL and current brief, with independent judgment when needed.",
+    purpose: "Advance research through actual work and necessary independent judgment.",
     when: "Use for research progression; bounded questions remain bounded.",
     actions: [
-      `Call ${DOVE_RESEARCH_MENTOR_NAME} fresh and read-only with dated user-original sources/range since its last reading, the current user's exact words, specified norms, identity card, EVAL, recent brief/result, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent. Save its brief verbatim; inception precedes EVAL. Follow the versioned method brief; report evaluator flaws and objections in the result.`
+      `Execute the versioned brief against EVAL; report attempts, outputs, unfinished work, blockers, evaluator flaws and objections. For independent judgment, give ${DOVE_RESEARCH_MENTOR_NAME} a fresh read-only context: dated user-original sources/range since its last reading, the current user's exact words, specified norms, card, EVAL, recent briefs/results, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent.`
     ],
     boundaries: ["The mentor decides methods and engineering within Mainline and user resources. Only goal/claim, deployment input/output or resource changes need the user's decision; ask once and continue independent authorized defaults if unanswered."]
   });
   if (slug === "status") return capabilityContract({
-    ambientParticipation: "Read the card, latest EVAL rows and current brief; answer four plain sentences, then return to the round.",
+    ambientParticipation: "Read the card, latest EVAL rows and current brief; answer four plain sentences.",
     purpose: "Explain progress in four plain sentences.",
     when: "Use when the user asks where research stands.",
     actions: [
       "Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Say: what we have made; whether the core is demonstrated; what blocks it; which round is underway. Quote actual values when useful; missing evidence stays unknown."
     ],
-    boundaries: ["Status reads and reports, without new experiments or a new route. Retain a user's correction in affected card fields unless writing is forbidden; then return to the ongoing round."],
+    boundaries: ["Status is read-only: answer directly without new research or document updates."],
     clarification: []
   });
   if (slug === "source") return capabilityContract({
@@ -298,7 +298,7 @@ function contract(slug) {
 }
 
 const SURFACES = [
-  ["research", "Start or continue the mentor-led research rounds from the identity card and evaluation table."],
+  ["research", "Advance research through actual work, full evaluation and independent judgment when needed."],
   ["status", "Report what we have made, whether the core is demonstrated, what blocks it and which round is underway."],
   ["source", "Use when external sources, citation identity, DOI checks, or bounded bibliography verification can change the research judgment."],
   ["experiment", "Develop quickly; evaluate fixed method versions and redraw unseen test data after a tested method changes."],

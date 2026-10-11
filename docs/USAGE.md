@@ -1,6 +1,6 @@
 # Usage
 
-Dove advances a user-confirmed research goal through short round briefs and actual evaluation results. The main session executes; a fresh read-only mentor judges the result and proposes the next round. Confirmation covers core implementation, reruns, diagnosis, and engineering decisions within your resource limits. Ask once only when the goal, intended claim or deployment inputs/outputs must change, or resources would exceed those limits; evaluator corrections within the same goal do not need renewed approval. Ordinary questions and bounded requests retain their scope and existing authorization.
+Dove advances a user-confirmed research goal through short round briefs and actual evaluation results. The main session directly executes authorized work. A fresh read-only mentor provides independent judgment when you request it or when kickoff, methods, evaluation, measured results or the route need it; reuse an existing judgment without new material. Confirmation covers implementation, reruns, diagnosis and engineering within your resource limits. Ask once only for changes to the goal, intended claim or deployment inputs/outputs, or excess resources; evaluator corrections within the same goal do not need renewed approval. Ordinary questions and bounded requests retain their scope.
 
 ## Start using Dove
 
@@ -22,7 +22,7 @@ The bare public npm package name `dove` is unrelated. Use an exact trusted artif
 
 | Skill | Use it for |
 |---|---|
-| `dove.research` | Start or continue the current round; call the mentor when no round is active. |
+| `dove.research` | Start or continue authorized research, using independent judgment when needed. |
 | `dove.status` | Read the identity card, latest evaluation rows, and current brief; explain progress in four plain sentences. |
 | `dove.source` | Find, read, check, and use relevant sources, including bounded bibliography DOI identity checks. |
 | `dove.experiment` | Develop, rerun, diagnose, and analyze within a round; reserve frozen heldout comparisons for final confirmation. |
@@ -53,7 +53,7 @@ Keep the user's confirmed `Mainline` and completion meaning stable. Methods may 
 
 Choose work for the real problem and intended contribution, not an inherited interface, available dataset, convenient proxy, mature implementation, or easiest test. Theory, relevant sources, simpler alternatives, and distinguishing predictions inform method choice; exhaustive search or prior positive results are not prerequisites for authorized core implementation. Controls and infrastructure serve the contribution. A smoke test establishes software behavior, not completion of a research round or the whole goal.
 
-The mentor reads raw outputs every round and judges three levels: whether this method family remains worthwhile; whether it adds general capability or a patch, using failure classes and unseen-data results; and whether the problem, method and contribution stand, including sensitivity, strong controls and realistic deployment assumptions. It distinguishes verification from genuine strengthening, does not default to narrowing the claim, and does not propose single-sample domain craft fixes. Within the confirmed goal, it can change methods or engineering choices directly, explaining why in the brief.
+When invoked, the mentor reads relevant raw outputs and judges three levels: whether this method family remains worthwhile; whether it adds general capability or a patch, using failure classes and unseen-data results; and whether the problem, method and contribution stand, including sensitivity, strong controls and realistic deployment assumptions. It distinguishes verification from genuine strengthening, does not default to narrowing the claim, and does not propose single-sample domain craft fixes. Within the confirmed goal, it can change methods or engineering choices directly, explaining why in the brief.
 
 The main session applies material findings to affected methods, evaluation, code, claims, manuscripts, figures, and current work. A capability report or saved record is not adoption. Negative results can advance understanding and end a round without establishing an effective method. Useful engineering or delivery can complete a bounded request without producing new scientific evidence. Software checks, actual research results, and completion of the user's goal remain separate claims.
 
@@ -73,7 +73,7 @@ rounds/
 
 On mainline confirmation or takeover, the first round reconstructs the project from the user's original words in date order and user-designated normative documents: actual deployment inputs/outputs, intended innovation/contribution, baseline categories, completion meaning and non-goals. Old history supplies counterexamples, not inherited constraints. Generate broad candidates before critique, and surface resource gaps early. The user confirms this reconstruction once; only then does the mentor define EVAL, without a second evaluation approval.
 
-At kickoff/takeover and every round start, the fresh mentor reads genuine user records, not executor retellings. Main-session SessionStart/UserPromptSubmit hooks expose only the host's `transcript_path` source path; they do not read/copy transcripts or automatically parse user history. The main session supplies that path, the last-read date/range and the current user's original text, which may not yet be persisted. The mentor uses Grep/Read to select relevant user-authored bodies, in date order initially and since the preceding round thereafter. Exclude meta messages, subagent conversations, host/system injections, self-wake summaries, tool results and assistant/executor text, even if wrapped in a user event. Do not inherit or read the full parent execution conversation. Record source, dates and last-read/since-previous-round range in the brief, not a new ledger. A source that cannot be accessed leaves provenance unknown; it does not revoke confirmed restrictions or host refusals. Restrictions established to be executor-added without user grounding are explicitly revoked in the mentor's brief.
+When invoked, the fresh mentor reads genuine user records, not executor retellings. Main-session SessionStart/UserPromptSubmit hooks expose only the host's `transcript_path` source path; they do not read/copy transcripts or automatically parse user history. The main session supplies that path, the last-read date/range and the current user's original text, which may not yet be persisted. The mentor uses Grep/Read to select relevant user-authored bodies, in date order initially and since the preceding round thereafter. Exclude meta messages, subagent conversations, host/system injections, self-wake summaries, tool results and assistant/executor text, even if wrapped in a user event. Do not inherit or read the full parent execution conversation. Record source, dates and last-read/since-previous-round range in the brief, not a new ledger. A source that cannot be accessed leaves provenance unknown; it does not revoke confirmed restrictions or host refusals. Restrictions established to be executor-added without user grounding are explicitly revoked in the mentor's brief.
 
 ### Identity card
 
@@ -89,7 +89,7 @@ Mainline: <the user's confirmed wording>
 
 Claude shows the card on valid prompts and after compact/resume. If it exceeds 4KB, the hook presents the first 4KB and asks for shortening; it does not treat the card as absent. Missing or unreadable cards remain missing, not inferred from old records. The main session shortens the card without changing confirmed intent, leaving measurements in `EVAL.md` and round details in `rounds/`.
 
-A user correction updates only affected card content, including during Status or assessment work, unless writing is expressly forbidden or refused. If the same type of correction appears in another registered project's identity card, ask once in plain language whether to add it to global `AUTHOR_PREFERENCES`. This is a suggestion, never an automatic global edit; package-installed preference copies are not the editable source.
+Apply user corrections to current judgment and action. Record only lasting corrections when writing is allowed, preserving original words, dates and sources in affected card fields. When preserving a correction recurring across registered projects, ask once whether to add it to global `AUTHOR_PREFERENCES`; this is a suggestion, not an automatic edit. Installed preference copies are not the editable source.
 
 ### Evaluation table
 
@@ -111,11 +111,9 @@ One method round is one method version. Code stays unchanged within that version
 
 Lessons retain their separate reusable-value standard: check the index once for a consequential question when needed, read relevant links, and save only grounded transferable experience within the existing write scope. Missing Lessons do not block work or create an empty index. Reflection, resumption, routine progress, and one-off tool failures do not themselves warrant a Lesson.
 
-### Pausing and the Stop reminder
+### Replies and research rounds
 
-A status or side answer returns to the active round. If the user explicitly asks for discussion only or to stop, the main session sets `Round status: paused` before ending; the hook does not write that change. Mark completed work appropriately and resume only within the user's current request and authorization.
-
-Claude's managed read-only Stop hook blocks once when the identity card says a round is ongoing and no `dove-mentor` call occurred in the current turn. It asks the main session to write the round result and call the mentor. If `stop_hook_active` is true, it immediately allows stopping. It checks host tool-call events, not conversation meaning, and neither analyzes nor sends conversation content to the mentor. This metadata check is separate from the main hooks' source-path handoff. Missing or unreadable transcript evidence allows stopping. There is no tracking file, extra tool hook, background scheduler, or new permission.
+Status, corrections, side questions and blocker reports can end the current reply without completing or pausing the research round. Continue ordinary authorized research directly; respect an explicit pause or discussion-only request. When blocked, report actual attempts, what remains unexecuted and the concrete obstacle. Preserve real evidence for research and continuation, not records, card edits or reviews solely to end a reply.
 
 ## Tools and sources
 
@@ -125,11 +123,11 @@ Dove uses only tools the current host exposes and the project permits. Claude pr
 
 ### Research
 
-Use `/dove:research` to start or continue the round cycle: begin with kickoff on confirmation/takeover; otherwise read the identity card, evaluation table and current brief, execute the active method round or call `dove-mentor` if none is active. Save the result and evaluation row, obtain the next brief and continue within the confirmed goal. Engineering choices proceed directly; the mentor asks once for a goal/claim/deployment-input-output change or resources beyond your limit. Without a reply, continue only the already-authorized default portion, not the proposed departure, and do not repeatedly ask. A bounded research question still finishes at its requested answer. Mentor intervention triggers are described in the [Research Model](development/RESEARCH_MODEL.md#导师与轮次循环).
+Use `/dove:research` to start or continue authorized research: begin with kickoff on confirmation/takeover; otherwise read the card, EVAL and current brief and execute the next substantive action. Save actual results and evaluation rows, using mentor judgment for the needs described above. Engineering choices proceed directly; ask once for a goal/claim/deployment-input-output change or excess resources. Without a reply, continue only the already-authorized portion. A bounded question finishes at its requested answer. See the [Research Model](development/RESEARCH_MODEL.md#导师与轮次循环).
 
 ### Status
 
-Use `/dove:status` to read `IDENTITY.md`, the last few `EVAL.md` rows, and the current brief. Answer in four plain sentences: what has been produced, whether the core is demonstrated, what blocks it, and which round is underway. Cite actual values when available; do not infer progress from a branch, latest timestamp, test pass, or missing note. Status does not run evaluation, fill gaps, or rewrite evidence. A user's simultaneous correction still updates affected card content unless writing is forbidden.
+Use `/dove:status` to read `IDENTITY.md`, the last few `EVAL.md` rows and the current brief. Answer in four plain sentences: what has been produced, whether the core is demonstrated, what blocks it and which round is underway. Cite actual values and leave unknowns explicit. Status is read-only and may end the reply. A simultaneous correction changes current understanding and action; lasting records follow the [identity-card guidance](#identity-card).
 
 SessionStart is not Status. After compact/resume it delivers the bounded identity card and continuity guidance; the main session then reads the current evaluation and brief as needed. The hook does not reconstruct research from overview/review/run timestamps or perform the mentor's judgment.
 

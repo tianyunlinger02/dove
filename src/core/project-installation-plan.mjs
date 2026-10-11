@@ -5,7 +5,6 @@ import {
   DOVE_CLAUDE_SETTINGS_PATH,
   DOVE_CLAUDE_STATUS_LINE,
   mergeClaudeSessionStartSettings,
-  mergeClaudeStopSettings,
   mergeClaudeUserPromptSubmitSettings
 } from "./ambient-policy.mjs";
 import {
@@ -333,7 +332,6 @@ function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
 function addFragment(resource, value) {
   if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return mergeClaudeUserPromptSubmitSettings(value).settings;
   if (resource.selector === SESSION_START_SELECTOR) return mergeClaudeSessionStartSettings(value).settings;
-  if (resource.selector === STOP_SELECTOR) return mergeClaudeStopSettings(value).settings;
   if (resource.selector === STATUS_LINE_SELECTOR) return { ...value, statusLine: resource.fragment };
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) return mergeWebFetchDenyPermission(value).settings;
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) {
@@ -433,8 +431,6 @@ export function planJsonFragments(root, relativePath, desiredEntries, oldEntries
     }
 
     if (!oldEntry) {
-      // An unowned Stop hook, even if byte-for-byte equal, is not deletion authority.
-      if (current.exists && resource.selector === STOP_SELECTOR) throw conflictError(desired);
       if (current.exists && current.digest === desired.digest) continue;
       if (current.exists) throw conflictError(desired);
       next = addFragment(desired, next);
@@ -521,7 +517,17 @@ export function planResource(root, desired, oldEntry, fsOps = fs, options = {}) 
 }
 
 export function assertManagedOwnership(manifest) {
-  const knownKeys = new Set(resourcesForHosts(manifest?.hosts ?? []).map(managedKey));
+  const hosts = manifest?.hosts ?? [];
+  const knownKeys = new Set(resourcesForHosts(hosts).filter((entry) => entry.kind === "exclusive-file").map(managedKey));
+  if (hosts.includes("claude")) {
+    // Fragment handlers also recognize retired ownership, independently of desired resources.
+    for (const selector of [SESSION_START_SELECTOR, USER_PROMPT_SUBMIT_SELECTOR, STOP_SELECTOR, STATUS_LINE_SELECTOR, WEB_FETCH_DENY_SELECTOR]) {
+      knownKeys.add(managedKey({ path: DOVE_CLAUDE_SETTINGS_PATH, kind: "json-fragment", selector }));
+    }
+    for (const selector of [PAPER_SEARCH_MCP_SELECTOR, EXA_MCP_SELECTOR]) {
+      knownKeys.add(managedKey({ path: PAPER_SEARCH_MCP_PATH, kind: "json-fragment", selector }));
+    }
+  }
   // Recognize this retired package file only so its manifest-owned copy can be removed.
   knownKeys.add(managedKey({ path: ".claude/agents/dove-reviewer.md", kind: "exclusive-file", selector: null }));
   for (const entry of manifest?.managed ?? []) {

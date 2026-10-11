@@ -119,14 +119,14 @@ function renderBody(command, heading, hostId = null) {
   const contract = renderCapabilityContract(command, hostId);
   const responsePolicy = hostId === "dsh" ? USER_RESPONSE_POLICY.join("\n") : "";
   // Author stance owns the short preference read trigger for the eight author
-  // Skills. Status inspects/reports and retains user corrections; Claude uses its rule.
+  // Skills. Status only inspects and reports; Claude uses its rule.
   const shared = hostId === "dsh" ? [
     responsePolicy,
     renderDoveSharedResearchContractSection(),
     command.id === "dove.status"
       ? `Quality summary (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`; consult relevant details in \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\` only when the status judgment needs them. Guidance is not research evidence.`
       : `Full quality details (project-relative): \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\`. Consult relevant criteria only when an actual decision needs them; author stance below requires both short summaries in each fresh author main context. Reuse the briefs after compact or resume, not both full references as a startup ritual. Guidance is not research evidence.`,
-    command.id === "dove.status" ? "For Status, use these principles only to inspect and report, except to retain the user's material correction in affected identity-card fields. Do not execute research actions or otherwise maintain documents; do not rewrite an unchanged Mainline. Respect explicit no-write instructions and host refusal."
+    command.id === "dove.status" ? "For Status, apply these principles and user corrections to a read-only answer, not research execution or document updates."
       : renderDoveAuthorStanceSection()
   ].join("\n\n") : "";
   return [`# ${heading}`, purpose, args, examples.trim(), shared, contract].filter(Boolean).join("\n\n") + "\n";

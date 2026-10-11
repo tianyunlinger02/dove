@@ -29,7 +29,7 @@ Use when the user asks where research stands.
 
 ### Scope and changes
 
-- Status reads and reports, without new experiments or a new route. Retain a user's correction in affected card fields unless writing is forbidden; then return to the ongoing round.
+- Status is read-only: answer directly without new research or document updates.
 
 ### Ways Dove may proceed
 

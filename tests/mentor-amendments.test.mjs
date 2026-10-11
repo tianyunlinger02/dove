@@ -39,7 +39,7 @@ test("mentor amendments: actual user originals replace executor summaries, not h
   assert.match(sources, /没有用户出处的自加研究禁令.*说明中明确撤销/u);
   assert.match(sources, /原话不可访问是未知，不是授权.*宿主工具拒绝.*不是.*可撤销/u);
   assert.match(DOVE_RESEARCH_CORRECTION_RECORDING, /restrictions\/Recent corrections.*verbatim quotes.*date.*source only/iu);
-  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /dated user originals since the last mentor reading, not execution summaries/iu);
+  assert.match(DOVE_RESEARCH_REFLECTION_CONTINUITY, /continue the current task.*For mentor judgment, pass dated user originals since the last mentor reading, not execution summaries/iu);
   assert.match(COMMAND_SURFACE_BY_ID["dove.research"].contract.actions.join("\n"), /dated user-original sources\/range.*last reading.*current user's exact words.*not execution conversation or paraphrased user intent/iu);
   assert.match(renderClaudeDoveReviewAgent(), /不读取[^\n]*transcript/u);
 });
@@ -106,11 +106,10 @@ test("mentor amendments: judgment separates method family, general capability an
   assert.match(levels[2], /验证.*真补强.*不默认收窄主张.*不要为单件样本出领域工艺主意/u);
 });
 
-test("mentor amendments: self-stops and stalled or zero-gain rounds trigger intervention, not bookkeeping", () => {
+test("mentor amendments: needed independent judgment reuses evidence and diagnoses stalled or zero-gain research", () => {
   const brief = section("下一轮说明的固定写法");
-  assert.match(DOVE_RESEARCH_ROUND_CYCLE, /Call `dove-mentor` when no round is active.*inception\/handover.*result.*rule-based self-stop.*stalled EVAL.*repeated zero family gain/iu);
-  assert.match(brief, /连续几轮 EVAL 没新行.*诊断.*未形成结果.*改下一轮.*不补造数据/u);
-  assert.match(brief, /违背原则\/需要新机制\/规则不允许.*自行停下.*调用你核对规则来源/u);
+  assert.match(DOVE_RESEARCH_ROUND_CYCLE, /on request or when.*need independent judgment.*reuse judgments without new material/iu);
+  assert.match(brief, /连续几轮 EVAL 没新行.*诊断.*未形成结果.*调整实际工作.*不补造数据/u);
   assert.match(section("每轮先回应，再判断三层"), /同族连续无净增就换族.*不再循环补丁/u);
   assert.match(brief, /上下文摘要大半是禁令.*建议用户清空.*身份卡、用户原话和当前说明.*不自行清空或撤销宿主权限/u);
 });

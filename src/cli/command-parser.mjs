@@ -51,8 +51,7 @@ export const CLI_COMMAND_SPECS = Object.freeze({
     subcommands: {
       "session-start": command([projectOption]),
       "user-prompt-submit": command([projectOption]),
-      statusline: command([projectOption]),
-      stop: command([projectOption])
+      statusline: command([projectOption])
     }
   })
 });

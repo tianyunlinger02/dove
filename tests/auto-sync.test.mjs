@@ -11,10 +11,13 @@ import { inspectProjectIntegration } from "../src/core/project-installation.mjs"
 import { INSTALLATION_MANIFEST_PATH, validateProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { PAPER_SEARCH_MCP_SERVER_NAME, PAPER_SEARCH_MCP_SELECTOR } from "../src/core/paper-search-integration.mjs";
+import { semanticDigest, STOP_SELECTOR } from "../src/core/project-installation-resources.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const cli = path.join(root, "bin/dove.mjs");
-const scratch = fileURLToPath(new URL("../.claude/tmp/", import.meta.url));
+const scratch = process.env.DOVE_TEMP_ROOT || process.env.TMPDIR || fileURLToPath(new URL("../.claude/tmp/", import.meta.url));
+const retiredStop = { hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] };
+const retiredStopOwner = { path: ".claude/settings.json", kind: "json-fragment", selector: STOP_SELECTOR, digest: semanticDigest(retiredStop) };
 
 function workspace(t) {
   fs.mkdirSync(scratch, { recursive: true });
@@ -115,6 +118,18 @@ function driftMcpFragment(projectRoot) {
   const config = JSON.parse(fs.readFileSync(target, "utf8"));
   config.mcpServers[PAPER_SEARCH_MCP_SERVER_NAME].args.push("--synthetic-local-edit");
   fs.writeFileSync(target, `${JSON.stringify(config, null, 2)}\n`);
+}
+
+function seedRetiredStop(projectRoot, fragment = retiredStop, owned = true) {
+  const settingsPath = path.join(projectRoot, retiredStopOwner.path);
+  const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  settings.hooks.Stop = [{ hooks: [{ type: "command", command: "user-owned-stop" }] }, ...(fragment ? [fragment] : [])];
+  fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+  if (owned) {
+    const value = manifest(projectRoot);
+    value.managed.push(retiredStopOwner);
+    fs.writeFileSync(path.join(projectRoot, INSTALLATION_MANIFEST_PATH), `${JSON.stringify(value, null, 2)}\n`);
+  }
 }
 
 function register(ws, ...projects) {
@@ -259,6 +274,45 @@ test("missing managed files and MCP fragments stay missing while the rest update
   assertCurrent(clean);
 });
 
+test("auto-sync retires unchanged owned Stop, preserves edited or missing ownership and stays idempotent", (t) => {
+  const ws = workspace(t);
+  const clean = project(ws.base, "stop-clean");
+  const edited = project(ws.base, "stop-edited");
+  const missing = project(ws.base, "stop-missing");
+  const unowned = project(ws.base, "stop-unowned");
+  const targets = [clean, edited, missing, unowned];
+  for (const target of targets) {
+    dove(ws, "init", "--project", target, "--host", "claude");
+    markOld(target);
+  }
+  seedRetiredStop(clean);
+  seedRetiredStop(edited, { hooks: [{ ...retiredStop.hooks[0], timeout: 20 }] });
+  seedRetiredStop(missing, null);
+  seedRetiredStop(unowned, retiredStop, false);
+  register(ws, ...targets);
+  const stops = (target) => JSON.parse(fs.readFileSync(path.join(target, retiredStopOwner.path), "utf8")).hooks.Stop;
+  const before = targets.map(stops);
+  const owner = (target) => manifest(target).managed.find((entry) => entry.selector === STOP_SELECTOR);
+
+  const report = JSON.parse(dove(ws, "projects", "sync").stdout);
+  assert.equal(report.status, "current");
+  assert.deepEqual(stops(clean), [before[0][0]], "only the old owned fragment is removed");
+  assert.deepEqual(stops(unowned), before[3], "foreign and identical unowned hooks survive");
+  for (const target of [clean, unowned]) {
+    assert.equal(owner(target), undefined);
+    assertCurrent(target);
+  }
+  for (const target of [edited, missing]) {
+    assert.deepEqual(stops(target), before[targets.indexOf(target)]);
+    assert.deepEqual(owner(target), retiredStopOwner, "retain the old digest rather than adopting local content");
+    assert.deepEqual(report.projects.find((item) => item.target === target).preservedLocalEdits, [{ path: retiredStopOwner.path, selector: STOP_SELECTOR }]);
+  }
+  const synced = targets.map(snapshot);
+  const repeated = JSON.parse(dove(ws, "projects", "sync").stdout);
+  assert.ok(repeated.projects.every((item) => item.status === "unchanged"));
+  assert.deepEqual(targets.map(snapshot), synced, "second sync writes no project files or ownership records");
+});
+
 test("global npm postinstall syncs registered projects and keeps local edits", (t) => {
   const ws = workspace(t);
   const edited = project(ws.base, "edited");
@@ -268,6 +322,7 @@ test("global npm postinstall syncs registered projects and keeps local edits", (
   markOld(edited);
   drift(edited);
   markOld(clean);
+  seedRetiredStop(clean);
   const untouched = snapshot(edited);
   const packed = JSON.parse(checked(ws, "npm", ["pack", root, "--json", "--ignore-scripts"]).stdout);
   assert.equal(packed.length, 1);
@@ -281,6 +336,8 @@ test("global npm postinstall syncs registered projects and keeps local edits", (
   assert.match(fs.readFileSync(path.join(edited, ".dove/install/RESEARCH_QUALITY.md"), "utf8"), /Synthetic local edit/u, "postinstall keeps the local edit");
   assert.notDeepEqual(snapshot(edited), untouched);
   assertCurrent(clean);
+  assert.equal(manifest(clean).managed.some((entry) => entry.selector === STOP_SELECTOR), false);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(clean, retiredStopOwner.path), "utf8")).hooks.Stop, [{ hooks: [{ type: "command", command: "user-owned-stop" }] }]);
   const executable = path.join(ws.env.npm_config_prefix, "bin", process.platform === "win32" ? "dove.cmd" : "dove");
   assert.equal(fs.existsSync(executable), true, "test must exercise an actual isolated global npm installation");
 });

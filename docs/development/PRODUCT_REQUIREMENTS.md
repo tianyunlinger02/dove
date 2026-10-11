@@ -9,9 +9,9 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - 九个公开 Skills 保持为：`research`、`status`、`source`、`experiment`、`draft`、`figure`、`review`、`rebuttal`、`lessons`；它们是同一个 Dove 的专项快捷入口，不是不同人格、固定阶段或独立工作流。
 - 有界独立科研调查可以使用 Dove subagent；需要完整对话、重要用户澄清、跨能力结果采纳或持续主线责任的工作留在普通主会话。主会话收到实质能力结果或更正后，比较其与原命题、未完成目标及当前授权，修改受影响的权威产物并检查真实下游使用，或执行更有辨别力的其他获准行动；不能以能力报告、诊断或计划代替执行。纯判断与有界只读请求按原范围停止。宿主正常路由保持生效；确认主线内的核心执行与写入不重复索要授权，隔离审稿和对外动作仍按用户明确范围进行。
 - 每个全新宿主主上下文亲自读 `.dove/install/RESEARCH_QUALITY.md` 与 `.dove/install/AUTHOR_PREFERENCES.md` 的几百字中文要点；原完整内容保留为各自 `_FULL.md`，具体决策需要时查相关细节，不要求每次读到 EOF。四个确切文件共享托管，不接管整个目录；`docs/AUTHOR_PREFERENCES.md` 保持唯一完整源且不改原文。隔离 reviewer 只获另供的质量要点和全文，无作者偏好；指导不是证据或权限，缺失诚实说明限制。
-- 多轮推进直接执行当前说明至评测结果，保存几行结果和 EVAL 一行，再调用 fresh 只读 `dove-mentor`。导师对照预测与实际、通用能力与特例、方法族共因和剩余价值，给出一页以内下一轮说明或完成／具体用户决策；主会话原样保存说明。说明标明作者：导师／用户／外部；计划或冒烟测试不算轮次结果，负结果可以。
-- 第一份导师说明提出沿用的评测脚本、dev/test 划分和关键列，至少含未见类别等泛化列；用户确认一次完成标准，后续改尺也须确认。每轮追加实测行，重要结果后由导师在 EVAL 给出八维论文判断，最弱且决定性维度进入下一说明，不再要求主会话自评。
-- 不设 Auto 或自我唤醒。Stop 只在卡片 ongoing 且本次未调用导师时阻止一次，`stop_hook_active` 真直接放行；只核对 host 工具事件，不分析或传递会话内容，缺失／读失败放行。用户明确只讨论／停下时，主会话标 paused 并结束；hook 不写状态。
+- Execute authorized research directly through measured results, recording actual changes, values and prediction versus actual in the result and EVAL. Use a fresh read-only `dove-mentor` when requested or when kickoff, methods, evaluation, measured results or the route need independent judgment; reuse existing judgments without new material. Its three-level judgment covers method-family value, general capability versus patches, and problem/method/contribution validity. Save returned briefs verbatim with mentor/user/external authorship. Negative results can end a method round; plans or smoke tests cannot.
+- The user confirms the kickoff reconstruction once, before EVAL. Evaluation covers all user metrics, a strong same-input baseline and generalization. Corrections recompute all historical comparison rows; only a change to the goal's meaning needs renewed confirmation. Important-result eight-dimensional mentor assessments belong in EVAL, not duplicate main-session self-ratings.
+- Status, corrections and blockers can end the current reply without completing or pausing the research round. Report actual attempts, work not done and the concrete blocker. An explicit user pause is respected; records and mentor calls are not prerequisites for ending a reply.
 - Claude Code 获得完整 Dove 集成；DeepSeek Harness 获得 project-local filesystem Skills only。
 
 ## 行为要求
@@ -24,7 +24,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - 导师在轮次说明里给出方法、机制、大概率成功依据和评测预测，主线内换方法／路线写清理由即可，不追加独立设计审查或用户批准。检验效果前说明相对同信息替代方案的预期、适用条件与反证；有依据才估计量级，不编造过线标准。拟声称的新贡献在实质实现前进行能改变设计、范围或投入的定向近邻扣除，但不得把穷尽检索变成 informative prototype、确认复现、bounded implementation、修复或交付的前置门槛。外部知识可能改变判断时定向查阅；已核实推导、已有观察、近邻结论及有关 Lessons 在各自条件仍成立时复用，Lessons 是判断线索而非科研证明；仅为实质变化、矛盾或决策相关缺口补查，不因效果尚未实证就取消理论先行，也不要求实证在试验前完成。
 - 当前命题、方法义务、必要能力、评价路径、约束和资源足以指导获准工作后，Dove 必须停止泛化检索与抽象重审，选出预期最优的必要工程路线：以实际目标能力、有效规模、可靠性、可辨别证据、可用资源、完整实现—实验—下游使用周期及预期返工权衡，再将机制、信息流和可区分预测自然翻译为必要操作、单一权威 producer—consumer 合同、不变量、可见失败和 claim-matched observation，并以决策相关的完整切片迭代完成核心实现及必要上下游变化：每轮连接真实生产、下游消费与相称验证，据实际反馈修复共因、调整设计或扩展至目标能力与规模；切片不必很小，不设固定轮数。不能以能跑的玩具路径、局部测试通过或最小补丁代替目标能力；必要时采用相称的完整实现或共因重构，也不为假设性收益堆基础设施。代码少只在重要能力、证据和使用条件相当时作为择优因素；不把预期最优当作已证明的全局最优。不得等待穷尽替代、完全定型架构、已证收益或先验正向信号，也不得把该转换做成新增 stage、schema、gate 或逐步审批。
 - 实质评价必须把决策相关质量维度和依据连接到受影响命题、候选及依赖，再改变授权内候选行动、依赖投入、主张或交付；若结果不改变行动，必须用已检查依据解释并收束当前评价轮。评级、表格、报告、调用或“已审查”本身不得作为结果，也不得建立运行时 grading state。
-- 委派或跨能力返回后，由持有完整用户上下文的主会话综合决定性证据、实际对象与范围、未验证边界、依赖影响和矛盾，决定采纳、限定或不采纳。活跃研究目标的实质 Source／Experiment／Draft／Figure／Review 结果须传导到受影响方法、评价、主张、稿件、图和进行中工作，并在同一会话执行下一有效授权行动，而非把能力报告当终点。用户纠正推翻共同前提时先暂停依赖工作，再调整计划、任务、委派、资源路线及下游产物；一次执行受限不能变成将来方法的永久限制。代理完成、检查通过、多数意见或报告拼接不替代判断，也不要求重做全部子任务。不得因结果返回自动触发下一 Skill、执行、写入、隔离 Review 或对外动作；有界请求和许可边界仍有效。
+- The main session integrates delegated results against the actual question, evidence, uncertainties, dependencies and authorization, deciding what to adopt, qualify or reject. Apply material findings to affected methods, evaluation, claims and artifacts. A correction overturning a shared premise changes dependent work, not just its report; one execution limit does not become a permanent method prohibition. A return alone triggers no new Skill, writing or review. Bounded requests retain their scope and can end with their answer.
 - 区分支持、反驳、证据不足和当前对照无法识别；不得无限补查来推迟接受反证，新方向成功不得覆盖原命题失败。扩大实验前核实对象所需参考、同信息对照、指标、失败分母与执行权限足以检验预期；完成运行不能代替可评分性。结果后先对照原预期，反常时定向排查实现、数据、评价、对照及机制前提，判断受影响的是实现、比较、局部机制还是原核心命题，并限制依赖它的主张与投入；不得事后改门槛或换目标制造符合预期的结果。组件效应、局部指标或诊断观察只支持实际识别的局部命题，只有它实质强化仍值得推进的整体贡献且重要替代解释得到相称控制时才深化。可靠负结论可以完成命题检验，但不能冒充有效方法或投稿完成。负结果还须在授权范围内用原机制依据和仍有效证据定位共享根因，修复实现／评价或提出机制更好的候选及可辨别的下一检验；确有可迁移错误前提且允许写入时保存有依据、条件和限度的 Lesson，但反思和记录不得代替下一实际行动。停止被否定命题的依赖投入不等于停止整个科研问题；仍须尊重真实权限与用户确认的主线。
 - 同一真实问题、主要输出、贡献和完成含义不变时，允许纠正错误指标/分母、采用更忠实的 baseline、改善识别并复用仍适用证据。若已供或幸存候选实际回答不同问题，必须保留原命题结论，按新范围独立评价价值、新颖性、机制/方法、数据评价、可行性、资源和联合条件，并与严肃替代路线比较后重新准入；不得继承旧任务的成功判定、贡献正当性或完成度。
 - Dove 应比较剩余科研价值、信息收益、结果质量、未来总时间与资源、机会成本、替代路线、切换成本、停止价值和后续影响，而不是机械选择最近或最容易的动作。过去投入只能通过可复用能力或证据、已改变的剩余成本、切换成本和未来选项参与判断，不能自身成为继续投入的收益。收窄主张前先比较可行的补证据行动；确需改变主张时说明证据或现实边界，涉及确认目标的改变仍由用户决策。
@@ -37,7 +37,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - 研究目录不存在时 init 仍只建最小 `RESEARCH.md`；已有目录即使缺少 overview 也保持不变。新的核心只留 IDENTITY／EVAL／rounds；用户和外部任务也作为有作者标记的轮次说明。历史 missions／experiments／claims 原地保留，不迁移删除、不再新增；Source、Review、Lessons 与 DOCTOR 用途不变。
 - 除当前轮次字段、brief 作者标记和评测列外，不增 frontmatter、生成索引、计数、研究哈希或数据库式记录。
 - `dove update`、只读 SessionStart、reinstall 和 uninstall 保留项目身份卡与 `.dove/research/**`、`.dove/reviews/**`、`.dove/runs/**`；短 `UserPromptSubmit` 只读取卡片作提醒，不写研究树或建立 Research Spine。
-- 用户纠正立即更新身份卡中受影响的约束或已否决做法，即使与 Status 或评估请求一起提出；除非明确禁写或宿主拒绝，不得借只读查询漏记，也不得改写未受影响的 Mainline。新实验细节写轮次结果，有可迁移经验时更新 Lessons。其他过程 Markdown 只在用户要求、重要结论／决策／优先级变化或有恢复价值时维护。普通 author-side 会话在重要选择、用户纠正或重复失败时，对当前问题至多有界检查一次 Lessons 索引；实际形成有依据、可迁移且可改善未来选择或避免复发的经验时，可在既有写入范围内按 reusable-value 标准主动保存，无需显式 Skill、主线变化或时间配额；复盘或续接本身不触发写入，也不能代替实际修复。只读查询和 Status 本身不触发无关维护，用户纠正的记录触发仍有效；isolated review 不维护作者材料。索引缺失、init、SessionStart 或 prompt hook 不得触发空 Lessons bootstrap 或扫描。
+- Apply user corrections to current judgment and action. Preserve affected card content only when it has lasting value and writing is allowed; keep original words, dates and sources, and unchanged Mainline wording. Actual experiment details belong in results. Other notes need an explicit request or useful evidence/continuation value. At consequential choices or recurring failures, consult relevant Lessons once for the active question and preserve grounded transferable learning within write scope. Status, reflection and resumption do not themselves require maintenance; recording does not replace repair.
 - 轮次结果保留进入时的预测与实际差异，不事后改写问题或范围制造成功；旧 Mission 作为历史保持原地。跨已注册项目反复出现同类用户纠正时，只用一句话询问是否加入全局 AUTHOR_PREFERENCES，不自动修改。
 - 可在有恢复价值时使用普通 Markdown 相对链接和 project-relative artifact path 指向真实材料，但不得新增 link parser、backlink audit、一致性矩阵或数据库式一致性检查。
 
@@ -93,7 +93,7 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - 显式 update 覆盖有效 manifest-owned 集成的本地修改，并在人类输出及 `replacedLocalEdits` JSON 中提醒；不覆盖用户自有文件或无关配置。
 - SessionStart 完全只读；集成非当前时可用 `systemMessage` 提示显式 update，startup 和 `/clear` 向当前主 agent（普通 Claude 或显式 Dove）交付两个短要点的读取引导，实质工作前亲自读，不能委派；完整原文仅按当前决策需要查阅。不写资源、配置或清理状态；安装或引导不代表已经读过，也不追溯重载当前会话。集成仅四态 `uninitialized`、`current`、`needs-update`、`blocked`，不提供 adoption、旧 manifest migration 或热同步。
 - 状态栏在用户未设状态栏时可显示宿主上下文、身份卡的短 Mainline 与当前轮次；不从分支、最近记录或长 `RESEARCH.md` 猜主线，保留已有用户状态栏。身份卡属于项目，不随包更新覆盖。
-- compact/resume 只读交付短身份卡与延续说明，不扫描历史时间戳或私有会话；主会话读 EVAL 与当前说明继续该轮，没有当前轮次就调用导师。不改写未变 Mainline；hook 不代判断或证明行动。Stop 的有界工具事件检查不分析或传递会话内容。
+- Compact/resume presents the short card and context read-only. The main session reads EVAL and the current brief as needed for the user's request; recovery itself requires no mentor call or card edit. New Claude installations register only SessionStart/UserPromptSubmit context hooks and the conditional status line. Retired Stop cleanup follows [installation ownership](../INSTALL.md#registered-projects-and-global-upgrades); preserved local differences and existing host loading remain separate facts.
 - Run 收据除命令、时间、结果、指标和比较依据外，只保留显式 seed 与 Git commit/dirty 最低事实，不扩展为环境分类清单。Git 不改变比较资格或排名；机器比较不替代科学可比性判断。
 - 重复计算默认选可用 GPU，除非任务确实更适合 CPU 或用户明确限制；不自设 CPU／单卡禁令。总资源由用户约定，运行收据中的预算是比较依据，不是预付额度。
 
@@ -102,5 +102,5 @@ Dove 的实现应支持真实科研推进，而不是以文档数量、工具调
 - 公共文档、实现和生成文件必须与 [研究模型](RESEARCH_MODEL.md) 一致。
 - 工程合同和下游使用需真实可用，但共享 producer—consumer 链路或测试通过不能代替用户目标、研究效果或整体验收，更不能把被用户否决的局部目标写作通过标准。最终研究结论须由匹配主张的评价支持。
 - 普通 Claude 会话通过项目 rule 直接使用 Dove；不增加隐藏 intake、router、审批门或逐工具检查。已有注册的 `UserPromptSubmit` 在每次输入注入短身份卡，上下文压缩后也重新可见，取代冗长提醒而非叠加；主 agent 决定行动，hook 不证明行为效果。宿主加载和更新状态须与实际活会话分开陈述。DSH 保持 Skills 入口。
-- `status` 查询本身只读；窄状态冲突只报告可见来源、影响范围及未决处，不静默裁决、写回、扩查或另选主线。用户同时提出的纠正仍须更新身份卡受影响内容，不因 Status 模式被忽略；明确禁写或宿主拒绝时不写。Status 读身份卡、EVAL 最后几行和当前说明，用四句大白话说清做出什么、核心是否证明、卡在哪和正在做哪轮，不运行评测补空白。
+- Status reads the card, latest EVAL rows and current brief, then reports in four plain sentences what was produced, whether the core is demonstrated, what blocks it and which round is underway. Visible conflicts retain their sources and uncertainty. The answer is read-only and may end there; a simultaneous correction changes understanding and action, not necessarily the card.
 - 软件检查保护实现和发布行为；不得把检查结果表述为科学正确、研究完成、可复现性、接收、独立审稿或 Dove 研究质量证明。

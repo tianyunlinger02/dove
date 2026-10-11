@@ -17,7 +17,7 @@ Paths below are relative to the repository root unless labeled as consumer-proje
 | Project boundary and safe writes | `src/core/project-root.mjs`, `src/core/rooted-filesystem.mjs`, `src/core/file-set-transaction.mjs` |
 | Research bootstrap and document helpers | `src/core/research-defaults.mjs`, `src/core/research-documents.mjs` |
 | Fresh read-only mentor and paper reviewer | `src/core/dove-agent-definition.mjs`, `src/core/dove-agent-persona.mjs` |
-| Identity-card presentation and one Stop reminder | `src/core/identity-card.mjs`, `src/core/stop-hook.mjs` |
+| Identity-card presentation | `src/core/identity-card.mjs` |
 | Local execution receipts | `src/core/run-record.mjs`, `src/core/run-supervisor.mjs`, `src/core/run-environment.mjs` |
 | Package identity and runtime requirements | `package.json`, `src/core/package-metadata.mjs` |
 

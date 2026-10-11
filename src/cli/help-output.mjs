@@ -23,7 +23,6 @@ export function renderDoveHelp() {
   dove hook session-start --project <dir>
   dove hook user-prompt-submit --project <dir>
   dove hook statusline --project <dir>
-  dove hook stop --project <dir>
 
 普通 Claude 会话是 Dove 的主要入口；--agent dove 与九个 /dove:* Skills 只是可选快捷入口。CLI 管理项目接入、诊断和运行收据，不启动审稿模型。/dove:review 保留，导师 dove-mentor 与论文审稿 dove-review 使用宿主原生全新只读子 agent，仅 Read/Grep/Glob，不传执行对话、不续接历史。
 
@@ -31,6 +30,6 @@ dove dashboard 在本机起一个只读网页，集中查看已登记项目的�
 
 科研核心记录是 .dove/research/IDENTITY.md、EVAL.md、rounds/。轮次说明标注作者（导师/用户/外部）；结果几行加 EVAL 一行。评测由用户确认一次，至少含一列未见类别的泛化结果；重要结果后的八维判断由导师给出。已有 missions、experiments、claims 原地保留，不迁移删除；初始化仍只在没有研究树时建立最小 RESEARCH.md。
 
-身份卡顶部保留 Current round 与 Round status（ongoing/paused/completed）；超长显示前 4KB 并提示精简。SessionStart 与 UserPromptSubmit 只读呈现集成和指导；Stop 仅在轮次 ongoing 且本轮未调用导师时提醒并阻止一次，stop_hook_active 为真不再阻止。用户要求只讨论或停下，由主会话标为 paused。Hooks 不写研究或授予权限；完整加载新增宿主配置可能需要新会话。
+身份卡顶部保留 Current round 与 Round status（ongoing/paused/completed）；超长显示前 4KB 并提示精简。SessionStart 与 UserPromptSubmit 只读呈现集成和指导。用户要求只讨论或停下，由主会话标为 paused。Hooks 不写研究或授予权限；完整加载新增宿主配置可能需要新会话。
 `;
 }

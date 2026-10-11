@@ -100,7 +100,7 @@ function setupLines(command, { status, hosts, writtenPaths = [] }) {
   const lines = [];
   if (command === "init" && status === "already-initialized") return ["✓ 现有项目集成保持不变，没有写入任何文件"];
   if (hasClaude) {
-    lines.push("✓ Dove 与 9 个可选专项入口已安装；导师和论文审稿使用原生只读子 agent", "✓ Claude SessionStart、UserPromptSubmit 与单次轮次 Stop 提醒已配置；状态栏空缺时安装只读显示", "✓ 论文检索 MCP、网页 Exa MCP 与项目 WebFetch 禁用已配置");
+    lines.push("✓ Dove 与 9 个可选专项入口已安装；导师和论文审稿使用原生只读子 agent", "✓ Claude SessionStart 与 UserPromptSubmit 已配置；状态栏空缺时安装只读显示", "✓ 论文检索 MCP、网页 Exa MCP 与项目 WebFetch 禁用已配置");
   }
   if (hasDsh) lines.push("✓ DSH 项目级 filesystem Skills 已安装");
   if (command === "init") lines.push(

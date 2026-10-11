@@ -30,7 +30,7 @@ Dove 能说清“代码、数据和仓库仍连续，但科学任务已经改变
 - 核心方法尚未实现、效果未知，但命题、必要能力、评价路径、约束和资源已足以指导工作且没有已知阻断时，Dove 直接推进获准的核心实现，不等待先验正向信号或要求用户先调用 Research、Source 或 Experiment。
 - 核心评价失效、泄漏或无法识别主张时，Dove 不扩大依赖该评价的实验和结论；先修复／替换评价或选择能区分问题的证据，同时保留不依赖该缺口的有界有效工作。
 - Source、Experiment、Review、实现、Draft 或 Figure 的实质结果会回到受影响命题、依赖、候选动作和产物；若不采纳或不改变动作，Dove 说明已检查依据并收束本轮，而不是留下孤立报告或自动串行调用下一能力。
-- 每轮导师读身份卡／最近纠正、EVAL、最近轮次及实际改动，比较预测与实际、通用能力与特例，判断方法族共因和剩余价值。下一说明改变真正方法或证据，不只留下审查记录；通用性按确认目标判断，不误杀有效局部修复。
+- When independent judgment is needed, the mentor reads identity/recent corrections, EVAL, recent rounds and actual changes. It judges method-family value, general capability versus patches, and problem/method/contribution validity. The return improves methods or evidence, not merely the review record; generality is judged against the confirmed goal, preserving useful local repairs.
 - Run 收据、成功执行和测试通过只证明各自的软件／执行事实，不证明科学主张、独立审稿或整体完成。只读导师／reviewer 返回判断，主会话保存并在授权范围内执行；有界任务不被扩展。
 
 ## 用户得到实质质量评价，而不是工作完成分
@@ -80,7 +80,7 @@ Dove 选择问题—方法—贡献的最短总路径，而非最少局部步骤
 
 当限制位于贡献、机制、新颖性和定位时，Dove 优先处理这些高层问题；当限制位于方法、证据、实验分析、baseline 和失败分析时，它改善能够支撑目标的研究；当主要问题位于 argument、写作、图或 delivery 时，它处理相应产物，并把结果放回整体判断。
 
-某条路线失败、证据不足或行动受限时，Dove 继续调查、比较候选方案并寻找目标内的有效路径。只有经过实质调查与尝试，确认没有其他有效路径且目标在现实条件下确实被阻塞时，才报告真实阻塞。
+A failed route or limited action leaves other authorized paths available. Report the actual attempts, unexecuted work and concrete blocker at their observed scope; a blocker answer may end the reply without declaring every research path exhausted.
 
 ## 局部完成诚实可见
 
@@ -90,7 +90,7 @@ Dove 选择问题—方法—贡献的最短总路径，而非最少局部步骤
 
 ## Dove 真正持续推进
 
-新核心记录只有 IDENTITY、EVAL 和 rounds。主会话执行当前 brief 至实际评测结果，写几行 result（改动文件、实测、预测对照）加 EVAL 一行，调用 fresh 导师并原样保存下一 brief。说明作者标为导师／用户／外部，人的任务说明也进入轮次；负结果能结束一轮，计划或冒烟测试不能。第一轮导师提出沿用的评测脚本、dev/test 划分和至少一列泛化指标，用户确认一次完成标准，后来改尺也需确认。
+The main session executes authorized research through real evaluation, saving changed files, measurements and prediction versus actual in results and EVAL. Briefs retain mentor/user/external authorship; mentor returns are saved verbatim. Negative results can end a method round; plans and smoke tests cannot. The user confirms kickoff reconstruction once, then the mentor defines EVAL for every user metric, a strong same-input baseline and generalization. Evaluation corrections recompute all historical comparisons; only a change to the goal's meaning needs renewed confirmation. Core records remain IDENTITY, EVAL and rounds.
 
 整体最优指当前目标、证据与约束下最佳可辩护的路径，不声称数学证明。它向前比较剩余科研价值、信息收益、结果质量、未来总时间、算力和其他资源、机会成本、替代路线、切换成本、停止价值及后续影响；过去投入只有通过可复用能力或证据、已改变的剩余成本、切换成本和未来选项才影响选择，不能自身成为继续投入的理由。当某动作高成本、破坏性、需要外部发布或权限时，Dove 继续完成不依赖该动作的研究判断，寻找仍能有效推进目标的路径。若经比较确认该动作确实必要，它请求执行该动作所需的授权并保留清楚续接点。
 
@@ -98,7 +98,7 @@ Dove 选择问题—方法—贡献的最短总路径，而非最少局部步骤
 
 选择同时说明收益、失去的必要能力、成本、覆盖、知识收益与后续机会。高价值的增量创新可能优于低价值的激进新意，不以单维升级宣布进步。允许为关键认识或后续能力暂退、增加成本，不要求每步帕累托改善，但说明理由、投入边界及何时按什么重判，不能无限许诺未来收益。指标不升不自动回退，有效负结果须实际改变认识；不能改阈值、权重、子集或目标制造合格，合理改尺须保留原比较、说明依据并遵守正式测试及用户目标边界。工程中的合同测试建立实现行为，claim-matched control 与评价建立它们实际识别的科学命题，二者不能互相替代；可运行原型、成功执行和沉没投入不会自动把候选升级为主方法，baseline 集合和基础设施仍服务核心依赖。
 
-导师根据实际完成标准判断整体达成；改目标／完成标准、超资源或整条主线走不通时提出具体用户决策。状态／旁支答复后回到当前轮次，用户明确只讨论或停下则由主会话标 paused 并结束。Stop 只在 ongoing 且本次未调用导师时阻止一次，`stop_hook_active` 真或事件证据不可读即放行；只核对 host 工具事件，不分析／传递会话内容，不建 tracking 文件或写研究。它取代旧自我唤醒，不是后台调度或新权限。
+Independent mentor judgment addresses user requests or substantive kickoff, method, evaluation, measured-result or route questions; existing judgments stand without new material. A goal/completion change, excess resources or a wholly blocked mainline needs a concrete user decision. Status, correction and blocker answers may end the reply without completing or pausing the research round. Apply corrections to judgment and action, respect an explicit pause, and report actual attempts, undone work and concrete blockers rather than creating records or another review to end the reply.
 
 ## `dove-review` 提供隔离外部评价
 
@@ -130,9 +130,9 @@ IDENTITY／EVAL／轮次说明与结果、历史记录、状态页、测试和�
 
 用户显式 update 覆盖 manifest-owned 集成本地修改并提醒；SessionStart 完全只读，非当前时可提示显式 update。startup／clear 引导当前主 agent 亲自读两个短要点，全文按需，不同步资源、写配置、清理旧状态或把安装当已读。Doctor 仅四态 `uninitialized`、`current`、`needs-update`、`blocked`，无 adoption、旧 manifest migration 或 hot-sync。没有既有 `statusLine` 时，Claude 安装只读双行显示：模型／上下文、可选无标签青色主线与当前轮次、Git 分支和会话时长，第二行仅绝对项目路径；非空 `NO_COLOR` 禁色。主线只从短 `.dove/research/IDENTITY.md` 中唯一普通 `Mainline: <text>` 行读取，缺失或不可读不猜；不扫科研树、不把分支或时长当主线或科研工时，不接管既有用户／Trellis line。每次输入呈现短身份卡，顶部 Current round 与 Round status 放在前 4KB；超长仍显示前 4KB 并提示精简，不能误报为缺失。过程放 rounds、数字放 EVAL；稳定 Mainline 只在用户改变承诺或原卡误述时修改。已有有效 prompt hook 与成功级联可在下一条消息交付当前短指导，不证明宿主重载或模型采纳；完整 host 加载仍可能需新上下文。DSH 仍只有 Skills。
 
-全局 npm 升级启用 lifecycle scripts 时，可通过 `postinstall` 刷新用户 XDG 配置注册表中的项目集成；这不是 SessionStart 热同步。已有项目首次纳入注册表需按准确根路径执行 `dove projects import --project <root>... --sync`，以后可用 `dove projects sync` 重试、`dove projects status` 只读查看结果。不扫描整个主目录。自动同步只要发现任一托管本地修改或冲突，就零写入地跳过该项目，继续处理其他项目；显式 `dove update` 仍可告知并覆盖合法托管修改。任何同步均不改科研、Review 或 Run 记录；已打开的 Claude 会话能否在下一条消息取得当前指导取决于旧 prompt hook 是否仍有效、CLI 是否已更新及项目集成是否 current，不代表宿主重载全部资源。
+Global npm lifecycle sync refreshes only registered projects. Import exact roots with `dove projects import --project <root>... --sync`, retry with `dove projects sync`, and inspect with read-only `dove projects status`. Automatic sync updates other resources while preserving locally changed or removed owned items and their previous ownership records. It removes an old owned Stop only when the original digest matches; local Stop differences remain reported, and explicit update blocks rather than clearing them. Unowned/user hooks and all research history remain untouched. New installs have only SessionStart/UserPromptSubmit context hooks and the conditional status line. Disk removal does not reload an open host context; a fresh context may be needed.
 
-compact/resume 复用已读要点并呈现同一短身份卡；主会话读 EVAL 和当前 brief 继续该轮，没有当前轮次就调用导师，不从历史时间戳重建主线。startup／clear 单独引导读取短要点。Hook 不代判断、不证明行动；Stop 的有界工具事件检查不分析／传递会话内容。Lessons 不因续接或时间流逝自动写入，只有满足原可迁移依据和写入范围时记录。
+Compact/resume reuses the essentials and presents the same short card. The main session reads EVAL and the current brief as needed for the request; recovery does not require a mentor call, card edit or return to an ongoing round. Startup/clear supplies the essentials bootstrap. Hooks deliver context, not judgments or proof of action. Lessons retain their grounded reusable-value and write-scope criteria.
 
 Run 收据保留命令、时间、结果、指标和比较依据，以及用户声明的 seed、Git commit 和 dirty 最低事实，不变成环境清单。Git 不改变比较资格或排名；机器比较也不替代科学可比性判断。Source 可以完成用户指定条目的有界 bibliography DOI 核验，但元数据核验不代表读过全文或支持主张。
 

@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.3.8" : null;
+var injectedVersion = true ? "3.3.9" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -85,17 +85,17 @@ var DOVE_RESEARCH_AGENT_RESPONSIBILITY = "Collaborate on real research decisions
 var DOVE_RESEARCH_ONE_AGENT = "Dove is one research collaborator; isolated contexts provide independent judgment, not different personas.";
 var DOVE_RESEARCH_FLAT_SKILL_SENTENCE = "Its nine flat Skills \u2014 research, status, source, experiment, draft, figure, review, rebuttal, and lessons \u2014 are optional entrances, not stages or permissions.";
 var DOVE_RESEARCH_MAINLINE_ANCHORING = "Mainline is the user's confirmed goal, contribution and completion meaning, not a method or next action. Keep its wording unless the user changes it or it misstates their originals. The mentor changes methods within that goal and sourced user constraints without approval; claims follow evidence. Unconfirmed directions stay provisional.";
-var DOVE_RESEARCH_ACTION_SPINE = "Use problem \u2192 method \u2192 contribution. Inception establishes the user-confirmed goal; method rounds end at EVAL results, not plans or smoke tests, then return to the mentor.";
+var DOVE_RESEARCH_ACTION_SPINE = "Use problem \u2192 method \u2192 contribution. Inception establishes the user-confirmed goal; method rounds end at EVAL results, not plans or smoke tests.";
 var DOVE_RESEARCH_DECISION_CONSEQUENCE = "Apply material results and corrections to the real method, producer and consumer, claims, and artifacts. Repair a known cause; use diagnostics to distinguish uncertain repairs. Preserve valid negative findings and stop only the work that depends on a refuted premise.";
 var DOVE_RESEARCH_RESULT_ADOPTION = "The author main session applies scoped results to actual work and downstream use within the user's goal and latest corrections. A bounded subagent returns evidence without taking over the goal; subtask completion is not goal completion.";
-var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, read the identity card, EVAL.md and current brief; resume it or call the mentor. Pass dated user originals since the last mentor reading, not execution summaries. Keep Mainline unchanged.";
-var DOVE_RESEARCH_ROUND_CYCLE = "Read `.dove/research/IDENTITY.md`, `EVAL.md` and the current brief. Call `dove-mentor` when no round is active, at inception/handover, after a result, rule-based self-stop, stalled EVAL or repeated zero family gain; include user originals and raw outputs. Save its brief verbatim: inception ends with user confirmation, method rounds with EVAL results. Set Current round and Round status: ongoing; completed at its end. Return after side answers; explicit discussion-only/stop pauses. Bounded requests stay bounded.";
+var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, read the identity card, EVAL.md and current brief; continue the current task. For mentor judgment, pass dated user originals since the last mentor reading, not execution summaries. Keep Mainline unchanged.";
+var DOVE_RESEARCH_ROUND_CYCLE = "Read `.dove/research/IDENTITY.md`, `EVAL.md` and current brief. Call `dove-mentor` on request or when inception, method, evaluation, real results or route need independent judgment; reuse judgments without new material. Save briefs verbatim; maintain Current round and Round status for research. Continue authorized work autonomously; discussion-only/stop pauses. Status, corrections and blockers may end without record changes; ending a reply is not research completion. Bounded requests stay bounded.";
 var DOVE_RESEARCH_ROUND_RECORDS = "Use IDENTITY.md, EVAL.md and rounds/NNN-brief.md plus NNN-result.md. Briefs name Author: mentor / user / external (\u5BFC\u5E08 / \u7528\u6237 / \u5916\u90E8), method version and dated user sources; priority is user > external > mentor, including direct user tasks. A method round is one code version: changes require a new version and full rerun. Replaced briefs name the author and reason. Results record changed files, values, prediction versus actual and \u5BF9\u672C\u8F6E\u8BF4\u660E\u7684\u53CD\u9A73/\u4E8B\u5B9E\u66F4\u6B63; the mentor answers that first. Keep RESEARCH.md a short history index; leave missions/, experiments/ and claims/ without migration or new entries.";
 var DOVE_RESEARCH_EVALUATION = "Confirm inception once from dated user originals and specified norms before defining EVAL. Its first data row is a same-input strong baseline; columns cover every user metric, unseen data, train-test gap and paper selling points with general metrics. Unmeasured is not achieved. Save script/split/metrics in Completion; record time, version, protocol/split and values each round. Report evaluator flaws to the mentor: it revises the protocol and assigns all-history recomputation; only changed goal meaning needs the user. Important-result eight-dimensional scores come from the mentor, not self-rating.";
 var DOVE_RESEARCH_EXPERIMENT_ITERATION = "Develop freely with ground truth and reruns, without per-run registration. Test a fixed method version; changed code means a new version and full rerun. Preserve old versions for ablation and equal comparison budgets. After test use, a changed method needs a fresh unseen test draw and same-set baselines, not retuning on old test evidence. Final confirmation records claim/control/data/metric in its brief and uses heldout once.";
-var DOVE_RESEARCH_CORRECTION_RECORDING = "Keep the card short: Current round: rounds/NNN-brief.md; Round status: ongoing / paused / completed; Mainline; deployment inputs/outputs; Completion; user restrictions/Recent corrections as verbatim quotes + date + source only. Put method rejections in briefs, not user restrictions. Correct affected fields without rewriting an unchanged Mainline or forbidden writes. For recurring corrections, `dove projects status --json` locates registered cards; compare relevant quotes only and ask once about AUTHOR_PREFERENCES, never edit it automatically.";
+var DOVE_RESEARCH_CORRECTION_RECORDING = "Keep the card short: Current round: rounds/NNN-brief.md; Round status: ongoing / paused / completed; Mainline; deployment inputs/outputs; Completion; user restrictions/Recent corrections as verbatim quotes + date + source only. Put method rejections in briefs, not user restrictions. When recording, update only affected fields within write scope; preserve unchanged Mainline wording. For recurring corrections, `dove projects status --json` locates registered cards; compare relevant quotes only and ask once about AUTHOR_PREFERENCES, never edit it automatically.";
 function renderDoveResearchReanchor() {
-  return "Read the identity card, EVAL.md and current brief. Inception confirms the goal; execute method rounds to an evaluation result, then call the mentor. Keep Mainline stable and dated user originals. Explicit discussion-only or stop requests pause the round.";
+  return "Read the identity card, EVAL.md and current brief; continue the current task within authorization. Keep Mainline stable and dated user originals.";
 }
 var DOVE_RESEARCH_CLARIFICATION = "Ask once for unresolved goal/claim, deployment input/output or resource changes. The mentor decides evaluation repairs and engineering defaults; without reply continue independent authorized work, not repeated questions or assumed consent.";
 var DOVE_RESEARCH_CROSS_DOMAIN_INTUITION = "Use literature, adjacent fields, mathematics, physical reasoning and analogies to invent testable mechanisms; seek where the analogy fails rather than collecting citations.";
@@ -235,7 +235,7 @@ ${bullets([
     "The main session owns user conversation and author execution, saves mentor briefs verbatim and records actual results. Bounded subagents do not take over the goal; old notes, test prompts and silence do not imply user confirmation.",
     DOVE_AUTHOR_PREFERENCES_READ_TRIGGER,
     DOVE_RESEARCH_CORRECTION_RECORDING,
-    "Keep corrections even during assessment unless writing is expressly forbidden; a resource correction does not rewrite Mainline. Preserve reusable Lessons only when useful, not routine progress or a substitute for repair. Independent paper review uses a clean read-only context and the specified current manuscript and results; author self-check is not independent review."
+    "Apply corrections immediately to judgment and action; save only lasting value when writes are permitted. Preserve reusable Lessons when useful, not routine progress or a substitute for repair. Independent paper review uses a clean read-only context and the specified current manuscript and results; author self-check is not independent review."
   ])}`;
 }
 function renderDoveAgentInstructions() {
@@ -398,7 +398,7 @@ EVAL \u7B2C\u4E00\u6761\u6570\u636E\u884C\u662F\u540C\u8F93\u5165\u5F3A\u57FA\u7
 
 \u4E00\u8F6E=\u4E00\u4E2A\u65B9\u6CD5\u7248\u672C\uFF1B\u8BC4\u6D4B\u671F\u95F4\u7248\u672C\u5185\u4EE3\u7801\u4E0D\u6539\uFF0C\u6539\u4EE3\u7801\u5C31\u65B0\u7248\u672C\u3001\u5168\u91CF\u91CD\u8DD1\uFF0C\u4E0D\u628A\u5355\u6B3E\u4FEE\u8865\u7B97\u5168\u8F6E\u7ED3\u679C\u3002\u65E7\u65B9\u6CD5\u4FDD\u7559\u4F5C\u6D88\u878D\uFF0C\u5404\u5BF9\u7167\u540C\u9884\u7B97\u3002\u5141\u8BB8\u4E2D\u9014\u66FF\u6362\u672C\u8F6E\u8BF4\u660E\uFF0C\u6807\u6CE8\u539F\u56E0\u548C\u4F5C\u8005\uFF1B\u82E5\u65B9\u6CD5\u4EE3\u7801\u53D8\u5316\u5219\u8F6C\u65B0\u7248\u672C\uFF0C\u4E0D\u80FD\u7528\u6539\u8BF4\u660E\u63A9\u76D6\u3002\u5BF9\u201C\u5B66\u4E0D\u52A8\u201D\u7684\u9879\u76EE\uFF0C\u7ACB\u9879\u540E\u7684\u7B2C\u4E00\u4E2A\u65B9\u6CD5\u8F6E\u6B21\u56FA\u5B9A\u5148\u505A\u5355\u4EF6\u8FC7\u62DF\u5408/\u4ECE\u7A7A\u72B6\u6001\u590D\u73B0\u53EF\u5B66\u4E60\u6027\uFF0C\u4E0D\u80FD\u628A\u6269\u6570\u636E\u3001\u5EFA\u5927\u8BC4\u4EF7\u5668\u7B49\u6392\u5728\u7B2C\u4E00\u6B21\u68C0\u9A8C\u524D\u3002
 
-\u5B8C\u6210\u4E00\u8F6E\u540E\u7ED9\u4E0B\u4E00\u8F6E\uFF1B\u8FDE\u7EED\u51E0\u8F6E EVAL \u6CA1\u65B0\u884C\u65F6\u8BCA\u65AD\u4E3A\u4EC0\u4E48\u672A\u5F62\u6210\u7ED3\u679C\u5E76\u6539\u4E0B\u4E00\u8F6E\uFF0C\u4E0D\u8865\u9020\u6570\u636E\u3002\u6267\u884C\u8005\u56E0\u201C\u8FDD\u80CC\u539F\u5219/\u9700\u8981\u65B0\u673A\u5236/\u89C4\u5219\u4E0D\u5141\u8BB8\u201D\u81EA\u884C\u505C\u4E0B\uFF0C\u4E5F\u8C03\u7528\u4F60\u6838\u5BF9\u89C4\u5219\u6765\u6E90\u3002\u82E5\u4E0A\u4E0B\u6587\u6458\u8981\u5927\u534A\u662F\u7981\u4EE4\uFF0C\u53EF\u5EFA\u8BAE\u7528\u6237\u6E05\u7A7A\uFF0C\u518D\u6309\u8EAB\u4EFD\u5361\u3001\u7528\u6237\u539F\u8BDD\u548C\u5F53\u524D\u8BF4\u660E\u91CD\u53D1\uFF1B\u4E0D\u81EA\u884C\u6E05\u7A7A\u6216\u64A4\u9500\u5BBF\u4E3B\u6743\u9650\u3002
+\u8FDE\u7EED\u51E0\u8F6E EVAL \u6CA1\u65B0\u884C\u65F6\u8BCA\u65AD\u4E3A\u4EC0\u4E48\u672A\u5F62\u6210\u7ED3\u679C\u5E76\u8C03\u6574\u5B9E\u9645\u5DE5\u4F5C\uFF0C\u4E0D\u8865\u9020\u6570\u636E\u3002\u82E5\u4E0A\u4E0B\u6587\u6458\u8981\u5927\u534A\u662F\u7981\u4EE4\uFF0C\u53EF\u5EFA\u8BAE\u7528\u6237\u6E05\u7A7A\uFF0C\u518D\u6309\u8EAB\u4EFD\u5361\u3001\u7528\u6237\u539F\u8BDD\u548C\u5F53\u524D\u8BF4\u660E\u91CD\u53D1\uFF1B\u4E0D\u81EA\u884C\u6E05\u7A7A\u6216\u64A4\u9500\u5BBF\u4E3B\u6743\u9650\u3002
 
 ## \u9009\u9898\u8F6E
 
@@ -518,22 +518,22 @@ function capabilityContract(options) {
 }
 function contract(slug) {
   if (slug === "research") return capabilityContract({
-    ambientParticipation: "Read the identity card and EVAL; execute the current round to its result, then call the mentor and continue.",
-    purpose: "Start or continue the mentor-led round loop.",
+    ambientParticipation: "Advance authorized research using the card, EVAL and current brief, with independent judgment when needed.",
+    purpose: "Advance research through actual work and necessary independent judgment.",
     when: "Use for research progression; bounded questions remain bounded.",
     actions: [
-      `Call ${DOVE_RESEARCH_MENTOR_NAME} fresh and read-only with dated user-original sources/range since its last reading, the current user's exact words, specified norms, identity card, EVAL, recent brief/result, actual diff/files and raw artifacts\u2014not execution conversation or paraphrased user intent. Save its brief verbatim; inception precedes EVAL. Follow the versioned method brief; report evaluator flaws and objections in the result.`
+      `Execute the versioned brief against EVAL; report attempts, outputs, unfinished work, blockers, evaluator flaws and objections. For independent judgment, give ${DOVE_RESEARCH_MENTOR_NAME} a fresh read-only context: dated user-original sources/range since its last reading, the current user's exact words, specified norms, card, EVAL, recent briefs/results, actual diff/files and raw artifacts\u2014not execution conversation or paraphrased user intent.`
     ],
     boundaries: ["The mentor decides methods and engineering within Mainline and user resources. Only goal/claim, deployment input/output or resource changes need the user's decision; ask once and continue independent authorized defaults if unanswered."]
   });
   if (slug === "status") return capabilityContract({
-    ambientParticipation: "Read the card, latest EVAL rows and current brief; answer four plain sentences, then return to the round.",
+    ambientParticipation: "Read the card, latest EVAL rows and current brief; answer four plain sentences.",
     purpose: "Explain progress in four plain sentences.",
     when: "Use when the user asks where research stands.",
     actions: [
       "Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Say: what we have made; whether the core is demonstrated; what blocks it; which round is underway. Quote actual values when useful; missing evidence stays unknown."
     ],
-    boundaries: ["Status reads and reports, without new experiments or a new route. Retain a user's correction in affected card fields unless writing is forbidden; then return to the ongoing round."],
+    boundaries: ["Status is read-only: answer directly without new research or document updates."],
     clarification: []
   });
   if (slug === "source") return capabilityContract({
@@ -710,7 +710,7 @@ function contract(slug) {
   });
 }
 var SURFACES = [
-  ["research", "Start or continue the mentor-led research rounds from the identity card and evaluation table."],
+  ["research", "Advance research through actual work, full evaluation and independent judgment when needed."],
   ["status", "Report what we have made, whether the core is demonstrated, what blocks it and which round is underway."],
   ["source", "Use when external sources, citation identity, DOI checks, or bounded bibliography verification can change the research judgment."],
   ["experiment", "Develop quickly; evaluate fixed method versions and redraw unseen test data after a tested method changes."],
@@ -796,10 +796,6 @@ var DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND = 'dove hook user-prompt-submit 
 var DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY = Object.freeze({
   hooks: Object.freeze([Object.freeze({ type: "command", command: DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, timeout: 10 })])
 });
-var DOVE_CLAUDE_STOP_HOOK_COMMAND = 'dove hook stop --project "$CLAUDE_PROJECT_DIR"';
-var DOVE_CLAUDE_STOP_HOOK_ENTRY = Object.freeze({
-  hooks: Object.freeze([Object.freeze({ type: "command", command: DOVE_CLAUDE_STOP_HOOK_COMMAND, timeout: 10 })])
-});
 var DOVE_CLAUDE_STATUS_LINE_COMMAND = 'dove hook statusline --project "$CLAUDE_PROJECT_DIR"';
 var DOVE_CLAUDE_STATUS_LINE = Object.freeze({
   type: "command",
@@ -828,7 +824,6 @@ function exactManagedHook(value, command) {
 function hookCommandMarkers(eventName) {
   if (eventName === "SessionStart") return ["dove hook session-start"];
   if (eventName === "UserPromptSubmit") return ["dove hook user-prompt-submit"];
-  if (eventName === "Stop") return ["dove hook stop"];
   throw new Error(`Unsupported Dove Claude hook event: ${eventName}.`);
 }
 function referencesManagedHook(value, eventName) {
@@ -873,14 +868,6 @@ function mergeClaudeUserPromptSubmitSettings(settings) {
   const merged = mergeManagedHook(entries ?? [], "UserPromptSubmit", DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY);
   if (!merged.changed) return { settings, changed: false };
   return { settings: { ...settings, hooks: { ...hooks, UserPromptSubmit: merged.entries } }, changed: true };
-}
-function mergeClaudeStopSettings(settings) {
-  const hooks = assertClaudeSettingsShape(settings);
-  const entries = hooks.Stop;
-  if (entries !== void 0 && !Array.isArray(entries)) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks.Stop must be an array.`);
-  const merged = mergeManagedHook(entries ?? [], "Stop", DOVE_CLAUDE_STOP_HOOK_COMMAND, DOVE_CLAUDE_STOP_HOOK_ENTRY);
-  if (!merged.changed) return { settings, changed: false };
-  return { settings: { ...settings, hooks: { ...hooks, Stop: merged.entries } }, changed: true };
 }
 function renderClaudeAmbientRule() {
   return `# Dove
@@ -2087,7 +2074,7 @@ function renderBody(command, heading, hostId = null) {
     responsePolicy,
     renderDoveSharedResearchContractSection(),
     command.id === "dove.status" ? `Quality summary (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`; consult relevant details in \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\` only when the status judgment needs them. Guidance is not research evidence.` : `Full quality details (project-relative): \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\`. Consult relevant criteria only when an actual decision needs them; author stance below requires both short summaries in each fresh author main context. Reuse the briefs after compact or resume, not both full references as a startup ritual. Guidance is not research evidence.`,
-    command.id === "dove.status" ? "For Status, use these principles only to inspect and report, except to retain the user's material correction in affected identity-card fields. Do not execute research actions or otherwise maintain documents; do not rewrite an unchanged Mainline. Respect explicit no-write instructions and host refusal." : renderDoveAuthorStanceSection()
+    command.id === "dove.status" ? "For Status, apply these principles and user corrections to a read-only answer, not research execution or document updates." : renderDoveAuthorStanceSection()
   ].join("\n\n") : "";
   return [`# ${heading}`, purpose, args, examples.trim(), shared, contract2].filter(Boolean).join("\n\n") + "\n";
 }
@@ -2242,14 +2229,6 @@ function claudeResources() {
     fragment: DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY,
     digest: semanticDigest(DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY)
   };
-  const stopHook = {
-    hostId: CLAUDE_HOST,
-    path: DOVE_CLAUDE_SETTINGS_PATH,
-    kind: "json-fragment",
-    selector: STOP_SELECTOR,
-    fragment: DOVE_CLAUDE_STOP_HOOK_ENTRY,
-    digest: semanticDigest(DOVE_CLAUDE_STOP_HOOK_ENTRY)
-  };
   const statusLine = {
     hostId: CLAUDE_HOST,
     path: DOVE_CLAUDE_SETTINGS_PATH,
@@ -2282,7 +2261,7 @@ function claudeResources() {
     fragment: EXA_MCP_FRAGMENT,
     digest: semanticDigest(EXA_MCP_FRAGMENT)
   };
-  const resources = [...files, sessionStartHook, userPromptSubmitHook, stopHook, statusLine, webFetchDeny, paperSearch, exa];
+  const resources = [...files, sessionStartHook, userPromptSubmitHook, statusLine, webFetchDeny, paperSearch, exa];
   if (new Set(resources.map(managedKey2)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }
@@ -2666,7 +2645,6 @@ function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
 function addFragment(resource, value) {
   if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return mergeClaudeUserPromptSubmitSettings(value).settings;
   if (resource.selector === SESSION_START_SELECTOR) return mergeClaudeSessionStartSettings(value).settings;
-  if (resource.selector === STOP_SELECTOR) return mergeClaudeStopSettings(value).settings;
   if (resource.selector === STATUS_LINE_SELECTOR) return { ...value, statusLine: resource.fragment };
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) return mergeWebFetchDenyPermission(value).settings;
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) {
@@ -2758,7 +2736,6 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
       continue;
     }
     if (!oldEntry) {
-      if (current.exists && resource2.selector === STOP_SELECTOR) throw conflictError(desired);
       if (current.exists && current.digest === desired.digest) continue;
       if (current.exists) throw conflictError(desired);
       next = addFragment(desired, next);
@@ -2838,7 +2815,16 @@ function planResource(root, desired, oldEntry, fsOps = fs9, options = {}) {
   throw new Error(`Unsupported project integration resource kind: ${kind}.`);
 }
 function assertManagedOwnership(manifest) {
-  const knownKeys = new Set(resourcesForHosts(manifest?.hosts ?? []).map(managedKey2));
+  const hosts = manifest?.hosts ?? [];
+  const knownKeys = new Set(resourcesForHosts(hosts).filter((entry) => entry.kind === "exclusive-file").map(managedKey2));
+  if (hosts.includes("claude")) {
+    for (const selector of [SESSION_START_SELECTOR, USER_PROMPT_SUBMIT_SELECTOR, STOP_SELECTOR, STATUS_LINE_SELECTOR, WEB_FETCH_DENY_SELECTOR]) {
+      knownKeys.add(managedKey2({ path: DOVE_CLAUDE_SETTINGS_PATH, kind: "json-fragment", selector }));
+    }
+    for (const selector of [PAPER_SEARCH_MCP_SELECTOR, EXA_MCP_SELECTOR]) {
+      knownKeys.add(managedKey2({ path: PAPER_SEARCH_MCP_PATH, kind: "json-fragment", selector }));
+    }
+  }
   knownKeys.add(managedKey2({ path: ".claude/agents/dove-reviewer.md", kind: "exclusive-file", selector: null }));
   for (const entry of manifest?.managed ?? []) {
     if (!knownKeys.has(managedKey2(entry))) {

@@ -37,7 +37,7 @@ test("new round records keep human briefs attributable and old histories in plac
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /changed files, values, prediction versus actual/iu);
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /对本轮说明的反驳\/事实更正.*mentor answers that first/iu);
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /missions\/, experiments\/ and claims\/.*without migration or new entries/iu);
-  assert.match(renderDoveAuthorStanceSection(), /Preserve reusable Lessons only when useful/iu);
+  assert.match(renderDoveAuthorStanceSection(), /Preserve reusable Lessons when useful, not routine progress or a substitute for repair/iu);
 });
 
 test("Trellis specs match their installed Markdown templates", () => {

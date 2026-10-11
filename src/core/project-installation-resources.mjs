@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 
 import {
   DOVE_CLAUDE_SESSION_START_HOOK_ENTRY,
-  DOVE_CLAUDE_STOP_HOOK_ENTRY,
   DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY,
   DOVE_CLAUDE_SETTINGS_PATH,
   DOVE_CLAUDE_STATUS_LINE
@@ -115,14 +114,6 @@ export function claudeResources() {
     fragment: DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY,
     digest: semanticDigest(DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY)
   };
-  const stopHook = {
-    hostId: CLAUDE_HOST,
-    path: DOVE_CLAUDE_SETTINGS_PATH,
-    kind: "json-fragment",
-    selector: STOP_SELECTOR,
-    fragment: DOVE_CLAUDE_STOP_HOOK_ENTRY,
-    digest: semanticDigest(DOVE_CLAUDE_STOP_HOOK_ENTRY)
-  };
   const statusLine = {
     hostId: CLAUDE_HOST,
     path: DOVE_CLAUDE_SETTINGS_PATH,
@@ -155,7 +146,7 @@ export function claudeResources() {
     fragment: EXA_MCP_FRAGMENT,
     digest: semanticDigest(EXA_MCP_FRAGMENT)
   };
-  const resources = [...files, sessionStartHook, userPromptSubmitHook, stopHook, statusLine, webFetchDeny, paperSearch, exa];
+  const resources = [...files, sessionStartHook, userPromptSubmitHook, statusLine, webFetchDeny, paperSearch, exa];
   if (new Set(resources.map(managedKey)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }

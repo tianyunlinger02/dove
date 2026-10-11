@@ -27,7 +27,7 @@ Ordinary Claude conversation through the shared project rule is the complete pri
 
 Only two host projections are packaged:
 
-- **Claude Code** — `.claude/agents/dove.md`, `.claude/agents/dove-mentor.md`, `.claude/agents/dove-review.md`, nine `.claude/commands/dove/*.md` shortcuts, the shared rule, managed SessionStart/UserPromptSubmit/Stop fragments, conditional status line, and paper/web support.
+- **Claude Code** — `.claude/agents/dove.md`, `.claude/agents/dove-mentor.md`, `.claude/agents/dove-review.md`, nine `.claude/commands/dove/*.md` shortcuts, the shared rule, managed SessionStart/UserPromptSubmit context hooks, conditional status line, and paper/web support.
 - **DSH** — nine `.dsh/skills/dove-*/SKILL.md` filesystem Skills. No Claude agents, hooks, MCP declarations, permissions, or equivalent native agent service is projected.
 
 The mentor and reviewer definitions expose only `Read`, `Grep`, and `Glob`. Each invocation uses a fresh native context with specified files, not previous conversation or reviewer history. The mentor reads identity/evaluation/recent rounds and actual changes; the reviewer reads current manuscript/cited results and supplied grounding. Both return the files actually read. Definition presence alone does not prove that an invocation occurred or was independent.
@@ -64,7 +64,7 @@ Paper search launches user-provided `uvx` with pinned `paper-search-mcp==0.1.4` 
 
 SessionStart inspects integration read-only; startup/clear adds the two-essentials bootstrap, compact/resume the bounded card/continuity reminder. UserPromptSubmit verifies managed integration and presents the bounded identity/current guidance when current, otherwise a nonblocking diagnostic. Neither writes research, classifies prompts, grants permissions, or reloads an active host's configuration.
 
-The managed Stop hook gives one round reminder only when the identity card says ongoing and no mentor was called in the current turn. `stop_hook_active: true` or unavailable transcript evidence allows stopping. It checks host tool-call events without analyzing or sending conversation content to a model, creates no tracking file, and writes nothing. Explicit discussion-only/stop requests cause the main session to mark the round paused. No background scheduler is added.
+New installations have no Dove Stop registration or CLI entry. Installation retains the exact retired selector only to remove an old manifest-owned Stop whose digest still matches. Automatic sync preserves locally modified or removed Stop items with their prior ownership and reports them; explicit update blocks on those differences. Unowned and user hooks remain untouched. Disk removal does not reload an existing host context.
 
 Owned paths/configuration remain contained and unambiguous. Explicit update may replace valid owned local edits and reports `replacedLocalEdits`; automatic/bulk sync preserves locally changed or removed owned items, reports `preservedLocalEdits`, and updates the rest. Preserved items retain their previous ownership record; integration that cannot be safely planned still blocks that project. Unrelated settings and files are preserved. Installed digests protect software ownership, not scientific claims. Exact protections belong in [Installation](INSTALL.md).
 
@@ -91,7 +91,7 @@ The CLI exposes `init`, `update`, `reinstall`, `uninstall`, `doctor`, `projects`
 - `doctor` is read-only software/readability inspection, not a scientific health score or live session probe.
 - `projects import --project <root>... --sync`, `projects sync`, and read-only `projects status` use exact registered roots. Global npm lifecycle sync may cascade safe integration updates; `--ignore-scripts` disables it. Read per-project outcomes; partial success is not an all-project refresh.
 - `run start|status|resume|finalize|compare` records local command facts under `.dove/runs/<id>/`. Start directly spawns a target without a shell; status is read-only; resume never reruns; finalize adds one scalar after terminal completion; compare ranks only compatible finalized runs. Seed and minimum Git commit/dirty facts do not prove reproducibility or affect ranking eligibility.
-- `hook session-start|user-prompt-submit|statusline|stop` provides the narrow read-only integration surfaces above, not hidden intake, a router, scientific approval, or a scheduler.
+- `hook session-start|user-prompt-submit|statusline` provides read-only context and display surfaces.
 
 There is no `mcp` or `migrate-research` command. Public inventory must match the parser, not preserve obsolete commands for documentation compatibility.
 
@@ -100,7 +100,7 @@ The statusline is a two-line native-facts display with optional Mainline and cur
 ## Research and review boundaries
 
 - The main session performs real retrieval, implementation, experiments, analysis, writing, figures, and authorized revision.
-- Research executes the active brief through an evaluation result, then calls the mentor. Status reads identity, last evaluation rows, and brief without executing or filling missing evidence.
+- Research directly executes authorized work through real evaluation; mentor judgment serves user requests or substantive scientific questions, reusing existing judgments without new material. Status reports existing evidence and may end the reply without completing the round.
 - The mentor may change methods within the confirmed goal; goal/completion changes, excess resources, and a wholly blocked mainline need the user's decision.
 - Native `dove-review` reads the specified current version and returns grounded criticism/files read, not execution, scientific PASS, or external acceptance. Self-check remains distinct; unavailable native review is a limitation.
 - Submission completion requires scientific sufficiency, a current independent review for the same complete version, and actual delivery readiness. Historical recommendations do not transfer to revised papers.

@@ -28,9 +28,9 @@ Dove 是一个科研协作者。普通 Claude 主会话通过项目 rule 承担�
 
 ## 导师与轮次循环
 
-`dove-mentor` 是全新、只读的 Dove 上下文，只用 Read/Grep/Glob，不继承或读取完整执行过程对话。SessionStart／UserPromptSubmit 只显示宿主 `transcript_path` 提供的原话 source 路径，不读取、复制或自动解析用户历史。主会话交给导师指定源、上次已读日期／范围，以及可能尚未落盘的当前用户原文。立项／接手按日期读取相关原话，每轮开始再读取上一轮以来的真实用户正文；排除元消息、子会话、工具结果、host／system 注入、自唤醒摘要和 assistant／执行者文字，即使它们包在 user 事件里也不算用户原话。source 不可访问时记为未知，不能撤销已确认限制或宿主拒绝；有依据认定是执行者自加、无用户出处的限制，才在说明中明确撤销。
+`dove-mentor` is a fresh read-only Dove context using Read/Grep/Glob, not the full execution conversation. SessionStart/UserPromptSubmit expose only the host's `transcript_path` pointer. The main session supplies that source, the last-read date/range and any current original user text not yet persisted. When invoked, the mentor reads genuine user bodies: in date order at kickoff/takeover, or since the preceding round for later judgment. Meta/subagent messages, tool output, host/system injections, self-wake summaries and executor text are not user words even inside user events. Inaccessible sources leave provenance unknown; revoke only restrictions established to be executor-added without a user source, not confirmed restrictions or host refusals.
 
-其余输入是身份卡及 Recent corrections、EVAL、最近 brief/result、实际 diff 或改动文件和原始产物。导师每轮抽查图／文件，不只信表；先回应上一 result 的反驳／事实更正，再用一页以内的大白话判断三层：
+Other inputs are the card/Recent corrections, EVAL, recent briefs/results, actual changes and raw artifacts. Inspect the relevant images/files, not only the table; first address result objections/factual corrections, then return at most one page judging three levels:
 
 1. **方法族**：这一族还值不值得继续，预测与实际差在哪，共同原因是什么。
 2. **能力还是补丁**：针对哪一类失败，未见数据列有没有净增；不是靠单样本／类别分支冒充通用能力。导师不替单件样本出领域工艺主意。
@@ -38,11 +38,9 @@ Dove 是一个科研协作者。普通 Claude 主会话通过项目 rule 承担�
 
 导师只读，搭评测、重算、显著性检验等计算写进 brief 交给执行者。立项之后一轮就是一个方法版本，版本内不改代码；代码改动开新版本并全量重跑，旧版保留作消融，单样本修补不算全量结果。学不动的项目，立项后的首个方法版本先做 single-example overfit，不把扩数据、建评价器排在第一次可学习性检验前。
 
-方法轮执行到实测结果，包括负结果，才写 result、追加 EVAL、调用导师并继续；计划或冒烟不是完成。执行者以“违背原则／需要新机制／规则不允许”自停时也调用导师，辨明规则来自用户还是自己。连续几轮 EVAL 没有新行就诊断阻塞，不继续做记录；同族连续净增为零就换族。上下文大半是禁令时，导师可建议用户 `/clear` 后按身份卡和当前轮次重新下发，不能自行清空。
+A method round reaches a measured result, including a negative result; save the actual result and EVAL row. Plans and smoke tests do not complete it. Use the mentor when requested or when kickoff, methods, evaluation, measured results or the route need independent judgment. Reuse existing judgments without new material. Repeated rounds without measurements call for diagnosing the blockage, not more bookkeeping; repeated zero net gain calls for another method family. The mentor may suggest a user-initiated `/clear`, not clear context itself.
 
-已授权目标内的方法、数据规模、下载方式、加速、重跑和 GPU 等工程决定直接推进，不发选择题。仅目标／预期主张／部署输入输出改变或资源超限时问用户一次；无回复继续已授权默认部分，不重复催问，不假定同意越界。状态或旁支回答后回当前轮次；用户明确只讨论／停下则暂停，有界或只读请求不升级成开放目标。
-
-Stop hook 只提供一次续作提醒：有进行中轮次且本次未调用导师就提示写结果并调用；`stop_hook_active` 为真放行。它只检查调用元数据，不替导师判断、不传执行对话、不写追踪。主 hooks 的 source 指针交接与 Stop 检查分开；没有 Cron 自唤醒或第二条续作循环。具体宿主协议属于 Trellis Hook Guidelines。
+Directly execute authorized methods, data work, downloads, acceleration and reruns within the confirmed goal. Ask once only for a goal/claim/deployment-input-output change or resources beyond the user's limits; without a reply, continue the already-authorized portion. Status, correction and blocker answers may end the current reply without completing or pausing the research round. Apply corrections to judgment and action; report actual attempts, undone work and concrete blockers. Record real evidence for its research value, not to make the reply end. Explicit pause and bounded/read-only requests retain their scope.
 
 ## 评测修正与八维质量
 
@@ -85,11 +83,11 @@ EVAL 从立项确认的全部用户要求导出，复用有效已有评测。首
 
 ### Research
 
-启动或继续轮次循环：读身份卡与 EVAL，有当前轮次就执行，没有就调用导师。轮次结果后再调用导师并继续；不另外维护路线审查、设计审查或自我反思流程。
+Start or continue authorized research from the card, EVAL and current brief. Execute the next substantive action, using independent mentor judgment when needed rather than a handoff on every turn.
 
 ### Status
 
-读身份卡、EVAL 最后几行和当前说明，用四句大白话回答：**做出什么／核心证明了没有／卡在哪／正在做哪一轮**。引用实际数值，未知不冒充成立，不为填报告新跑实验。回答后回当前轮次。用户同时纠正时只更新受影响卡片字段，明确禁写时不写。
+Read the card, latest EVAL rows and current brief; answer in four plain sentences: what was produced, whether the core is demonstrated, what blocks it and which round is underway. Cite real values and leave unknowns explicit. Status is read-only and can end the reply; apply any user correction to current understanding and action without requiring a card edit first.
 
 ### Source
 
@@ -131,13 +129,13 @@ Rebuttal 保持作者侧。它分析每个重要意见实际暴露的是来源�
 
 Lessons 是研究者拥有的可复用、可错经验建议。在当前请求第一次作出重要路线、方法、评价、实现、委派、产物采纳或投入决定时，或用户纠正、重复 repair/failure 暴露共同错误前提后，如果 active context 尚未针对该问题检查过，Dove 读取一次 `.dove/research/lessons/LESSONS.md`，再只读直接相关或可能改变当前判断的链接。`RESEARCH.md` 不是此前置条件；索引缺失就继续工作，不创建空文件、不扫描研究树，也不让普通确定性局部任务等待 Lessons。
 
-实际工作产生有依据且可迁移的经验时，在作者侧写入范围内保留最窄 Lesson，含依据、适用条件、反例和限制；不记例行进度、瞬时状态或无迁移价值的 bug。用户纠正先写身份卡 Recent corrections；技术细节进入轮次结果。记录不替代修复，compact/resume 和时间经过本身不触发写入。Lessons 不承载包默认偏好，不是证据或完成证明。
+Preserve the narrowest grounded, transferable Lesson within author write scope, with its basis, conditions, counterexamples and limits. Routine progress, transient status and non-transferable bugs do not qualify. Apply corrections to actual judgment and action; record lasting context only when useful and allowed. Technical results belong in rounds. Lessons neither replace repairs nor establish evidence/completion; compact/resume and elapsed time are not writing triggers.
 
 ## 作者指导、纠正与生命周期
 
 每个全新作者主上下文亲自读 `.dove/install/RESEARCH_QUALITY.md` 和 `AUTHOR_PREFERENCES.md` 两份短中文摘要；细则按需读同目录的 `_FULL.md`，压缩／恢复复用已读内容。Claude startup/clear 提供引导，DSH 首次作者侧 Skill 补读；Status 没有作者立场读取触发。安装或其他 agent 读过不等于当前主会话读过。导师与审稿得到质量指导，不得到作者私有偏好或完整过程对话；导师仅按指定源读取真实用户原文，论文审稿人没有 transcript 访问。
 
-用户纠正只改卡片受影响内容；记录重复纠正时，用 `dove projects status --json` 取得已注册项目根，只比较相关身份卡的 Recent corrections。若跨项目出现同类纠正，一句话问用户是否加入全局 AUTHOR_PREFERENCES，不自动改，也不扫描未注册项目。完整偏好的唯一可编辑源仍是 [通用科研、工程与协作偏好](../AUTHOR_PREFERENCES.md)，不因本次结构改造重写。
+Apply corrections to current judgment and action; save lasting context only when useful and allowed. When recording recurring corrections, use registered roots from `dove projects status --json` and relevant Recent corrections only. Ask once about adding cross-project guidance to AUTHOR_PREFERENCES, without automatically editing it. The sole editable full source remains [Author preferences](../AUTHOR_PREFERENCES.md).
 
 安装 bootstrap 只在研究目录缺失时写最小 RESEARCH；不自动建立空 EVAL／轮次。update、reinstall、uninstall、registered sync 保留研究者所有身份卡、评测、历史 missions/experiments/claims、Lessons、DOCTOR、review/run 历史及普通产物；不迁移，不补账，不清理。SessionStart 只读，不能更新磁盘或证明活会话重载。
 

@@ -14,7 +14,7 @@ import {
 function assertRuntimeCli() {
   assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "init"));
   assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "hook"));
-  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS.hook.subcommands), ["session-start", "user-prompt-submit", "statusline", "stop"], "hook subcommands must be formal parser subcommands");
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS.hook.subcommands), ["session-start", "user-prompt-submit", "statusline"], "hook subcommands must be formal parser subcommands");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "mcp"), false, "CLI must not expose the retired MCP server");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "migrate-research"), false, "CLI must not expose format migration");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "export-research"), false, "CLI must not expose the retired legacy export command");
@@ -42,12 +42,8 @@ function assertRuntimeCli() {
   assert.deepEqual(parseDoveCli(["hook", "user-prompt-submit", "--project=/workspace"]), {
     command: "hook", subcommand: "user-prompt-submit", options: { project: "/workspace" }, passthrough: []
   });
-  assert.deepEqual(parseDoveCli(["hook", "stop"]), {
-    command: "hook", subcommand: "stop", options: {}, passthrough: []
-  });
-  assert.deepEqual(parseDoveCli(["hook", "stop", "--project=/workspace"]), {
-    command: "hook", subcommand: "stop", options: { project: "/workspace" }, passthrough: []
-  });
+  assertParserError(["hook", "stop"], /hook 只接受这些子命令/u, false);
+  assertParserError(["hook", "stop", "--project=/workspace"], /hook 只接受这些子命令/u, false);
   assert.deepEqual(assertParserShape(parseDoveCli(["init", "--host", "claude,dsh", "--host=dsh,claude", "--project=/workspace"])), {
     command: "init",
     subcommand: null,

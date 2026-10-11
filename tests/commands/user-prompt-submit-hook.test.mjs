@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND } from "../../src/core/ambient-policy.mjs";
+import { renderDoveResearchReanchor } from "../../src/core/dove-research-contract.mjs";
 import { initializeProjectIntegration, updateProjectIntegration } from "../../src/core/project-installation.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../src/core/package-metadata.mjs";
 import { currentPromptGuidance, parseUserPromptSubmitPayload, PROMPT_GUIDANCE_PATHS, userPromptSubmitAttentionOutput, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../../src/core/user-prompt-submit-hook.mjs";
@@ -50,9 +51,8 @@ test("pure prompt guidance hands off the original-user source without copying or
   assert.deepEqual(guidance.fingerprints, PROMPT_GUIDANCE_PATHS.map((resourcePath, index) => `${resourcePath} ${String(index + 1).repeat(12)}`));
   const base = userPromptSubmitOutput(event(), guidance);
   assert.equal(base.hookSpecificOutput.hookEventName, "UserPromptSubmit");
-  assert.match(context(base), /Inception confirms the goal.*method rounds.*evaluation result.*mentor/iu);
-  assert.match(context(base), /Keep Mainline stable and dated user originals/iu);
-  assert.match(context(base), /discussion-only or stop requests pause/iu);
+  assert.ok(context(base).includes(renderDoveResearchReanchor()));
+  assert.match(context(base), /continue the current task within authorization/iu);
   assert.match(context(base), /card is context, not a substitute for the user's latest words/iu);
   const payload = event("CURRENT_USER_BODY_NOT_TO_COPY", {
     transcript_path: '/unread/用户 "source".jsonl', session_id: "synthetic", transcript: "PARENT_HISTORY_NOT_TO_COPY"
@@ -97,12 +97,7 @@ test("prompt output is current short guidance, independent of prompt text and no
   assert.match(context(expected), /No readable short identity card at \.dove\/research\/IDENTITY\.md/iu);
   assert.match(context(expected), /do not infer a mainline from old notes/iu);
   assert.match(context(expected), /Create one for a confirmed goal when writing is permitted/iu);
-  assert.match(context(expected), /identity card, EVAL\.md and current brief/iu);
-  assert.match(context(expected), /evaluation result, then call the mentor/iu);
-  assert.match(context(expected), /Keep Mainline stable/iu);
-  assert.match(context(expected), /Inception confirms the goal.*method rounds.*evaluation result.*mentor/iu);
-  assert.match(context(expected), /dated user originals/iu);
-  assert.match(context(expected), /discussion-only or stop requests pause the round/iu);
+  assert.ok(context(expected).includes(renderDoveResearchReanchor()));
   assert.doesNotMatch(context(expected), /^Mainline:/mu, "missing card does not synthesize a goal");
   assert.match(context(expected), /On first use at these fingerprints/iu);
   assert.match(context(expected), /current main agent must personally read the current rule and the two short summaries/iu);
@@ -146,7 +141,7 @@ test("prompt output is current short guidance, independent of prompt text and no
       assert.ok(context(delivered).includes(card), "current identity card is delivered in full without paraphrasing");
       assert.equal(context(delivered).split(mainline).length - 1, 1, "Mainline appears once with its exact user wording");
       assert.match(context(delivered), /corrections affect only relevant fields, not an unchanged Mainline/iu);
-      assert.match(context(delivered), /evaluation result, then call the mentor/iu);
+      assert.ok(context(delivered).includes(renderDoveResearchReanchor()));
       assert.equal(fs.readFileSync(cardPath, "utf8"), card, "hook does not apply card corrections itself");
       assert.equal(fs.statSync(cardPath).mtimeMs, cardBefore, "hook does not write the card");
     }

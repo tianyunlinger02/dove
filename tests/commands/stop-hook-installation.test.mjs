@@ -1,76 +1,82 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DOVE_CLAUDE_STOP_HOOK_ENTRY as stopHook, mergeClaudeStopSettings } from "../../src/core/ambient-policy.mjs";
-import { planJsonFragments, preparePlan } from "../../src/core/project-installation-plan.mjs";
-import { claudeResources, dshResources, resourcesForHosts, semanticDigest, STOP_SELECTOR } from "../../src/core/project-installation-resources.mjs";
+import { parseDoveCli } from "../../src/cli/command-parser.mjs";
+import { PACKAGE_NAME, PACKAGE_VERSION } from "../../src/core/package-metadata.mjs";
+import { createProjectInstallationManifest } from "../../src/core/project-installation-manifest.mjs";
+import { preparePlan } from "../../src/core/project-installation-plan.mjs";
+import { resourcesForHosts, semanticDigest, STOP_SELECTOR } from "../../src/core/project-installation-resources.mjs";
 
+const stopHook = { hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] };
 const foreign = { matcher: "", hooks: [{ type: "command", command: "other stop command" }] };
-const resource = claudeResources().find((entry) => entry.selector === STOP_SELECTOR);
-const owned = (fragment = stopHook) => ({ path: resource.path, kind: resource.kind, selector: STOP_SELECTOR, digest: semanticDigest(fragment) });
+const owned = { path: ".claude/settings.json", kind: "json-fragment", selector: STOP_SELECTOR, digest: semanticDigest(stopHook) };
 
-function plan(settings, desired = [resource], previous = [], replacementPolicy = "explicit-update") {
+function plan(settings = {}, { previous = [], replacementPolicy = "explicit-update", hosts = ["claude"] } = {}) {
+  const root = "/virtual-project";
   const bytes = Buffer.from(JSON.stringify(settings));
   const fsOps = {
     lstatSync(target) {
-      return { isSymbolicLink: () => false, isDirectory: () => target.endsWith(".claude"), isFile: () => target.endsWith("settings.json"), mode: 0o644 };
+      const directory = target === `${root}/.claude`;
+      const file = target === `${root}/.claude/settings.json`;
+      if (!directory && !file) throw Object.assign(new Error("absent"), { code: "ENOENT" });
+      return { isSymbolicLink: () => false, isDirectory: () => directory, isFile: () => file, mode: 0o644 };
     },
     readFileSync: () => bytes
   };
-  const result = planJsonFragments("/virtual-project", resource.path, desired, previous, fsOps, { replacementPolicy });
-  return { ...result, settings: result.entry ? JSON.parse(result.entry.content) : settings };
+  const now = "2026-01-01T00:00:00.000Z";
+  const manifest = previous.length === 0 ? null : createProjectInstallationManifest({
+    package: { name: PACKAGE_NAME, version: "0.0.1" }, hosts, managed: previous, now
+  }, { hostIds: ["claude", "dsh"] });
+  const result = preparePlan({ root, hosts, packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, now, fsOps, manifest, replacementPolicy });
+  const written = result.entries.find((entry) => entry.relativePath === owned.path);
+  return { ...result, settings: written ? JSON.parse(written.content) : settings };
 }
 
-test("Stop is installed once for Claude only", () => {
-  assert.equal(resource.digest, semanticDigest(stopHook));
-  assert.equal(resourcesForHosts(["claude"]).filter((entry) => entry.selector === STOP_SELECTOR).length, 1);
-  assert.equal(dshResources().some((entry) => entry.selector === STOP_SELECTOR), false);
-  const fsOps = { lstatSync() { throw Object.assign(new Error("absent"), { code: "ENOENT" }); } };
-  const input = { root: "/virtual-project", hosts: ["claude"], packageName: "dove", packageVersion: "3.3.0", now: "2026-01-01T00:00:00.000Z", fsOps };
-  assert.equal(preparePlan(input).manifest.managed.some((entry) => entry.selector === STOP_SELECTOR), true);
+test("new installations neither register nor own Stop and the parser rejects its retired command", () => {
+  assert.equal(resourcesForHosts(["claude", "dsh"]).some((entry) => entry.selector === STOP_SELECTOR), false);
+  for (const hosts of [["claude"], ["dsh"]]) {
+    const installed = plan({}, { hosts });
+    assert.equal(installed.manifest.managed.some((entry) => entry.selector === STOP_SELECTOR), false);
+    assert.equal(installed.settings.hooks?.Stop, undefined);
+  }
+  assert.throws(() => parseDoveCli(["hook", "stop", "--project", "/workspace"]), /hook 只接受这些子命令/u);
 });
 
-test("Stop merge preserves unrelated hooks and refuses ambiguous Dove entries", () => {
-  const settings = { hooks: { Stop: [foreign], SessionStart: [foreign] }, user: true };
-  assert.deepEqual(mergeClaudeStopSettings(settings).settings, { ...settings, hooks: { ...settings.hooks, Stop: [foreign, stopHook] } });
-  assert.equal(mergeClaudeStopSettings(mergeClaudeStopSettings(settings).settings).changed, false);
-  assert.deepEqual(settings.hooks.Stop, [foreign]);
-  assert.throws(() => mergeClaudeStopSettings({ hooks: { Stop: {} } }), /must be an array/u);
-  assert.throws(() => mergeClaudeStopSettings({ hooks: { Stop: [{ ...stopHook, matcher: "custom" }] } }), /conflicting/u);
-  assert.throws(() => mergeClaudeStopSettings({ hooks: { Stop: [stopHook, stopHook] } }), /conflicting/u);
+test("preparePlan retires only unchanged manifest-owned Stop through the ownership gate", () => {
+  const settings = { hooks: { Stop: [foreign, stopHook], SessionStart: [foreign] }, user: true };
+  const retired = plan(settings, { previous: [owned] });
+  assert.deepEqual(retired.settings.hooks.Stop, [foreign]);
+  assert.equal(retired.settings.user, true);
+  assert.deepEqual(retired.settings.hooks.SessionStart[0], foreign);
+  assert.equal(retired.manifest.managed.some((entry) => entry.selector === STOP_SELECTOR), false);
+  assert.deepEqual(retired.skippedLocalEdits, []);
+
+  const unowned = plan(settings);
+  assert.deepEqual(unowned.settings.hooks.Stop, settings.hooks.Stop, "even an identical unowned Stop is not deletion authority");
+  assert.equal(unowned.manifest.managed.some((entry) => entry.selector === STOP_SELECTOR), false);
 });
 
-test("Stop lifecycle keeps unowned hooks and refuses to orphan edited owned hooks", () => {
-  const original = { hooks: { Stop: [foreign], SessionStart: [foreign] }, user: true };
-  const installed = plan(original);
-  assert.deepEqual(installed.settings.hooks.Stop, [foreign, stopHook]);
-  assert.equal(plan(installed.settings, [resource], [owned()]).entry, null);
-  assert.deepEqual(plan(installed.settings, [], [owned()], "safe").settings, original);
-  assert.deepEqual(plan(installed.settings, [], [], "safe").settings, installed.settings);
-  assert.throws(() => plan({ hooks: { Stop: [stopHook] } }), /conflicting/u);
-
+test("preparePlan keeps modified or missing retired Stop and its old ownership during auto-inspect", () => {
   const edited = { hooks: [{ ...stopHook.hooks[0], timeout: 20 }] };
-  const modified = { ...original, hooks: { ...original.hooks, Stop: [foreign, edited] } };
-  const inspected = plan(modified, [resource], [owned()], "inspect");
-  assert.equal(inspected.entry, null);
-  assert.deepEqual(inspected.skippedLocalEdits, [{ path: resource.path, selector: STOP_SELECTOR }]);
-  assert.throws(() => plan(modified, [resource], [owned()], "safe"), /drift/u);
-  const repaired = plan(modified, [resource], [owned()]);
-  assert.deepEqual(repaired.settings, installed.settings);
-  assert.deepEqual(repaired.replacedLocalEdits, [{ path: resource.path, selector: STOP_SELECTOR }]);
-  assert.deepEqual(plan(modified, [resource], [owned()], "confirmed-reinstall").settings, installed.settings);
-  assert.throws(() => plan(modified, [], [owned()], "safe"), /ownership drift/u);
-  assert.throws(() => plan(modified, [], [owned()], "explicit-update"), /ownership drift/u);
-  assert.throws(() => plan(modified, [], [owned()], "confirmed-reinstall"), /ownership drift/u);
-  const retiring = plan(modified, [], [owned()], "auto-inspect");
-  assert.deepEqual(retiring.skippedLocalEdits, [{ path: resource.path, selector: STOP_SELECTOR }]);
-  assert.deepEqual(retiring.retainedManaged, [owned()]);
-  assert.equal(retiring.entry, null);
-  assert.throws(() => plan(modified, [], [owned()], "auto-safe"), /ownership drift/u);
-  assert.throws(() => plan(original, [], [owned()], "explicit-update"), /ownership drift/u);
+  for (const stops of [[foreign, edited], [foreign]]) {
+    const settings = { hooks: { Stop: stops } };
+    const inspected = plan(settings, { previous: [owned], replacementPolicy: "auto-inspect" });
+    assert.deepEqual(inspected.settings.hooks.Stop, stops);
+    assert.deepEqual(inspected.skippedLocalEdits, [{ path: owned.path, selector: STOP_SELECTOR }]);
+    assert.deepEqual(inspected.manifest.managed.find((entry) => entry.selector === STOP_SELECTOR), owned);
+    for (const replacementPolicy of ["explicit-update", "confirmed-reinstall", "safe"]) {
+      assert.throws(() => plan(settings, { previous: [owned], replacementPolicy }), /ownership drift/u);
+    }
+  }
 });
 
-test("current Stop is not reported as retired", () => {
-  const settings = { hooks: { Stop: [foreign, stopHook] } };
-  assert.deepEqual(plan(settings, [resource], [owned()], "inspect").retiredHooks.matchedPaths, []);
+test("retired fragment ownership still requires the supported host, path, kind and selector", () => {
+  for (const entry of [
+    { ...owned, path: ".mcp.json" },
+    { ...owned, kind: "text-block" },
+    { ...owned, selector: "/hooks/Stop[unknown]" }
+  ]) {
+    assert.throws(() => plan({}, { previous: [entry] }), /unknown ownership/u);
+  }
+  assert.throws(() => plan({}, { previous: [owned], hosts: ["dsh"] }), /unknown ownership/u);
 });

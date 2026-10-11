@@ -14,7 +14,7 @@ const COMMAND_TEST_FILES = Object.freeze([
   "tests/mentor-amendments.test.mjs",
   "tests/commands/04-cli-parser-renderers.test.mjs",
   "tests/commands/05-interactive-setup.test.mjs",
-  "tests/commands/stop-hook.test.mjs",
+  "tests/commands/identity-card.test.mjs",
   "tests/commands/stop-hook-installation.test.mjs"
 ]);
 

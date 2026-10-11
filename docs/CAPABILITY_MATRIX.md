@@ -6,7 +6,7 @@ Dove is one research agent. Ordinary Claude conversation in an initialized proje
 
 | Skill | Claude Code | DSH | What it helps with |
 |---|---|---|---|
-| `dove.research` | Command | Skill | Start or continue the current round; call the mentor when no round is active. |
+| `dove.research` | Command | Skill | Start or continue authorized research, using independent judgment when needed. |
 | `dove.status` | Command | Skill | Read identity, latest evaluation rows, and current brief; report progress in four plain sentences. |
 | `dove.source` | Command | Skill | Find, read, check, and use relevant sources, including requested bounded bibliography DOI identity checks. |
 | `dove.experiment` | Command | Skill | Develop, rerun, diagnose, or analyze within a round; freeze/preregister only final heldout confirmation. |
@@ -25,7 +25,6 @@ Source, Draft, Figure, Rebuttal, and Lessons are unchanged by the mentor/round s
 | Ordinary main-session rule / optional Dove agent | Installed | Not projected |
 | `dove-mentor` and `dove-review` definitions | Native fresh read-only subagents | No packaged agent service |
 | SessionStart / UserPromptSubmit | Read-only integration and bounded identity/guidance delivery | Not projected |
-| Narrow Stop reminder | Once for an ongoing round without a current-turn mentor call | Not projected |
 | Status line | Installed only if the project has no existing line | Not projected |
 | Paper-search / Exa MCP integration | Project declarations; approval/access remain user-provided | Not projected |
 | Quality/preference essentials and full companions | Four exact shared resources | Four exact shared resources |
@@ -43,10 +42,10 @@ After one user-confirmed kickoff reconstruction, the mentor defines evaluation f
 
 ## Independent judgment
 
-`dove-mentor` reads the identity/recent corrections, evaluation, recent briefs/results, and actual changes. It judges prediction versus actual, general capability versus case-specific patches, and the method family's remaining value, then proposes the next round or a concrete completion/user decision. It may change methods within the confirmed goal and constraints.
+Use `dove-mentor` when requested or when kickoff, methods, evaluation, measured results or the route need independent judgment; reuse an existing judgment without new material. It reads identity/recent corrections, evaluation, recent briefs/results and actual changes, judging method-family value, general capability versus patches, and problem/method/contribution validity. It may change methods within the confirmed goal and constraints.
 
 `dove-review` reads the specified current manuscript and cited results from a reviewer position. Both use native fresh contexts and only `Read`/`Grep`/`Glob`, with no execution conversation, resumed history, commands, or edits. They list the files actually read; the main session saves and applies their returns. Frozen review snapshots, external workspaces, and socket launchers are not prerequisites. Missing independent judgment remains a limitation; author-side self-check is not relabeled independent review.
 
 ## Completion
 
-Requested-work completion, scientific progress, and [software verification](PACKAGING.md#verification-evidence) are separate. A bounded request can finish without a new scientific result. A research round ends at its actual evaluation result, including a negative result; that does not automatically complete the goal. A user-confirmed submission goal requires scientific sufficiency, a current independent review recommendation for the same complete version, and actual delivery readiness.
+Requested-work completion, scientific progress, and [software verification](PACKAGING.md#verification-evidence) are separate. Status, correction and blocker answers may end the reply without completing or pausing a research round. A method round ends at its actual evaluation result, including a negative result; that does not automatically complete the goal. A user-confirmed submission goal requires scientific sufficiency, a current independent review recommendation for the same complete version, and actual delivery readiness.

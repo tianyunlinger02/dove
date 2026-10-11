@@ -7632,10 +7632,10 @@ var require_lib2 = __commonJS({
     exports.analyse = analyse;
     var detectFile = (filepath, opts = {}) => new Promise((resolve, reject) => {
       let fd;
-      const fs23 = (0, node_1.default)();
+      const fs22 = (0, node_1.default)();
       const handler = (err, buffer) => {
         if (fd) {
-          fs23.closeSync(fd);
+          fs22.closeSync(fd);
         }
         if (err) {
           reject(err);
@@ -7647,9 +7647,9 @@ var require_lib2 = __commonJS({
       };
       const sampleSize = (opts === null || opts === void 0 ? void 0 : opts.sampleSize) || 0;
       if (sampleSize > 0) {
-        fd = fs23.openSync(filepath, "r");
+        fd = fs22.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(sampleSize);
-        fs23.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
+        fs22.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
           if (err) {
             handler(err, null);
           } else {
@@ -7661,22 +7661,22 @@ var require_lib2 = __commonJS({
         });
         return;
       }
-      fs23.readFile(filepath, handler);
+      fs22.readFile(filepath, handler);
     });
     exports.detectFile = detectFile;
     var detectFileSync = (filepath, opts = {}) => {
-      const fs23 = (0, node_1.default)();
+      const fs22 = (0, node_1.default)();
       if (opts && opts.sampleSize) {
-        const fd = fs23.openSync(filepath, "r");
+        const fd = fs22.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(opts.sampleSize);
-        const bytesRead = fs23.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
+        const bytesRead = fs22.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
         if (bytesRead < opts.sampleSize) {
           sample = sample.subarray(0, bytesRead);
         }
-        fs23.closeSync(fd);
+        fs22.closeSync(fd);
         return (0, exports.detect)(sample);
       }
-      return (0, exports.detect)(fs23.readFileSync(filepath));
+      return (0, exports.detect)(fs22.readFileSync(filepath));
     };
     exports.detectFileSync = detectFileSync;
     exports.default = {
@@ -11477,7 +11477,7 @@ var require_lib3 = __commonJS({
 });
 
 // bin/dove.mjs
-import fs22 from "node:fs";
+import fs21 from "node:fs";
 import path21 from "node:path";
 import process7 from "node:process";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
@@ -13934,8 +13934,7 @@ var CLI_COMMAND_SPECS = Object.freeze({
     subcommands: {
       "session-start": command([projectOption]),
       "user-prompt-submit": command([projectOption]),
-      statusline: command([projectOption]),
-      stop: command([projectOption])
+      statusline: command([projectOption])
     }
   })
 });
@@ -14178,7 +14177,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.3.8" : null;
+var injectedVersion = true ? "3.3.9" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -14476,17 +14475,17 @@ var DOVE_RESEARCH_AGENT_RESPONSIBILITY = "Collaborate on real research decisions
 var DOVE_RESEARCH_ONE_AGENT = "Dove is one research collaborator; isolated contexts provide independent judgment, not different personas.";
 var DOVE_RESEARCH_FLAT_SKILL_SENTENCE = "Its nine flat Skills \u2014 research, status, source, experiment, draft, figure, review, rebuttal, and lessons \u2014 are optional entrances, not stages or permissions.";
 var DOVE_RESEARCH_MAINLINE_ANCHORING = "Mainline is the user's confirmed goal, contribution and completion meaning, not a method or next action. Keep its wording unless the user changes it or it misstates their originals. The mentor changes methods within that goal and sourced user constraints without approval; claims follow evidence. Unconfirmed directions stay provisional.";
-var DOVE_RESEARCH_ACTION_SPINE = "Use problem \u2192 method \u2192 contribution. Inception establishes the user-confirmed goal; method rounds end at EVAL results, not plans or smoke tests, then return to the mentor.";
+var DOVE_RESEARCH_ACTION_SPINE = "Use problem \u2192 method \u2192 contribution. Inception establishes the user-confirmed goal; method rounds end at EVAL results, not plans or smoke tests.";
 var DOVE_RESEARCH_DECISION_CONSEQUENCE = "Apply material results and corrections to the real method, producer and consumer, claims, and artifacts. Repair a known cause; use diagnostics to distinguish uncertain repairs. Preserve valid negative findings and stop only the work that depends on a refuted premise.";
 var DOVE_RESEARCH_RESULT_ADOPTION = "The author main session applies scoped results to actual work and downstream use within the user's goal and latest corrections. A bounded subagent returns evidence without taking over the goal; subtask completion is not goal completion.";
-var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, read the identity card, EVAL.md and current brief; resume it or call the mentor. Pass dated user originals since the last mentor reading, not execution summaries. Keep Mainline unchanged.";
-var DOVE_RESEARCH_ROUND_CYCLE = "Read `.dove/research/IDENTITY.md`, `EVAL.md` and the current brief. Call `dove-mentor` when no round is active, at inception/handover, after a result, rule-based self-stop, stalled EVAL or repeated zero family gain; include user originals and raw outputs. Save its brief verbatim: inception ends with user confirmation, method rounds with EVAL results. Set Current round and Round status: ongoing; completed at its end. Return after side answers; explicit discussion-only/stop pauses. Bounded requests stay bounded.";
+var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, read the identity card, EVAL.md and current brief; continue the current task. For mentor judgment, pass dated user originals since the last mentor reading, not execution summaries. Keep Mainline unchanged.";
+var DOVE_RESEARCH_ROUND_CYCLE = "Read `.dove/research/IDENTITY.md`, `EVAL.md` and current brief. Call `dove-mentor` on request or when inception, method, evaluation, real results or route need independent judgment; reuse judgments without new material. Save briefs verbatim; maintain Current round and Round status for research. Continue authorized work autonomously; discussion-only/stop pauses. Status, corrections and blockers may end without record changes; ending a reply is not research completion. Bounded requests stay bounded.";
 var DOVE_RESEARCH_ROUND_RECORDS = "Use IDENTITY.md, EVAL.md and rounds/NNN-brief.md plus NNN-result.md. Briefs name Author: mentor / user / external (\u5BFC\u5E08 / \u7528\u6237 / \u5916\u90E8), method version and dated user sources; priority is user > external > mentor, including direct user tasks. A method round is one code version: changes require a new version and full rerun. Replaced briefs name the author and reason. Results record changed files, values, prediction versus actual and \u5BF9\u672C\u8F6E\u8BF4\u660E\u7684\u53CD\u9A73/\u4E8B\u5B9E\u66F4\u6B63; the mentor answers that first. Keep RESEARCH.md a short history index; leave missions/, experiments/ and claims/ without migration or new entries.";
 var DOVE_RESEARCH_EVALUATION = "Confirm inception once from dated user originals and specified norms before defining EVAL. Its first data row is a same-input strong baseline; columns cover every user metric, unseen data, train-test gap and paper selling points with general metrics. Unmeasured is not achieved. Save script/split/metrics in Completion; record time, version, protocol/split and values each round. Report evaluator flaws to the mentor: it revises the protocol and assigns all-history recomputation; only changed goal meaning needs the user. Important-result eight-dimensional scores come from the mentor, not self-rating.";
 var DOVE_RESEARCH_EXPERIMENT_ITERATION = "Develop freely with ground truth and reruns, without per-run registration. Test a fixed method version; changed code means a new version and full rerun. Preserve old versions for ablation and equal comparison budgets. After test use, a changed method needs a fresh unseen test draw and same-set baselines, not retuning on old test evidence. Final confirmation records claim/control/data/metric in its brief and uses heldout once.";
-var DOVE_RESEARCH_CORRECTION_RECORDING = "Keep the card short: Current round: rounds/NNN-brief.md; Round status: ongoing / paused / completed; Mainline; deployment inputs/outputs; Completion; user restrictions/Recent corrections as verbatim quotes + date + source only. Put method rejections in briefs, not user restrictions. Correct affected fields without rewriting an unchanged Mainline or forbidden writes. For recurring corrections, `dove projects status --json` locates registered cards; compare relevant quotes only and ask once about AUTHOR_PREFERENCES, never edit it automatically.";
+var DOVE_RESEARCH_CORRECTION_RECORDING = "Keep the card short: Current round: rounds/NNN-brief.md; Round status: ongoing / paused / completed; Mainline; deployment inputs/outputs; Completion; user restrictions/Recent corrections as verbatim quotes + date + source only. Put method rejections in briefs, not user restrictions. When recording, update only affected fields within write scope; preserve unchanged Mainline wording. For recurring corrections, `dove projects status --json` locates registered cards; compare relevant quotes only and ask once about AUTHOR_PREFERENCES, never edit it automatically.";
 function renderDoveResearchReanchor() {
-  return "Read the identity card, EVAL.md and current brief. Inception confirms the goal; execute method rounds to an evaluation result, then call the mentor. Keep Mainline stable and dated user originals. Explicit discussion-only or stop requests pause the round.";
+  return "Read the identity card, EVAL.md and current brief; continue the current task within authorization. Keep Mainline stable and dated user originals.";
 }
 var DOVE_RESEARCH_CLARIFICATION = "Ask once for unresolved goal/claim, deployment input/output or resource changes. The mentor decides evaluation repairs and engineering defaults; without reply continue independent authorized work, not repeated questions or assumed consent.";
 var DOVE_RESEARCH_CROSS_DOMAIN_INTUITION = "Use literature, adjacent fields, mathematics, physical reasoning and analogies to invent testable mechanisms; seek where the analogy fails rather than collecting citations.";
@@ -14626,7 +14625,7 @@ ${bullets([
     "The main session owns user conversation and author execution, saves mentor briefs verbatim and records actual results. Bounded subagents do not take over the goal; old notes, test prompts and silence do not imply user confirmation.",
     DOVE_AUTHOR_PREFERENCES_READ_TRIGGER,
     DOVE_RESEARCH_CORRECTION_RECORDING,
-    "Keep corrections even during assessment unless writing is expressly forbidden; a resource correction does not rewrite Mainline. Preserve reusable Lessons only when useful, not routine progress or a substitute for repair. Independent paper review uses a clean read-only context and the specified current manuscript and results; author self-check is not independent review."
+    "Apply corrections immediately to judgment and action; save only lasting value when writes are permitted. Preserve reusable Lessons when useful, not routine progress or a substitute for repair. Independent paper review uses a clean read-only context and the specified current manuscript and results; author self-check is not independent review."
   ])}`;
 }
 function renderDoveAgentInstructions() {
@@ -14788,7 +14787,7 @@ EVAL \u7B2C\u4E00\u6761\u6570\u636E\u884C\u662F\u540C\u8F93\u5165\u5F3A\u57FA\u7
 
 \u4E00\u8F6E=\u4E00\u4E2A\u65B9\u6CD5\u7248\u672C\uFF1B\u8BC4\u6D4B\u671F\u95F4\u7248\u672C\u5185\u4EE3\u7801\u4E0D\u6539\uFF0C\u6539\u4EE3\u7801\u5C31\u65B0\u7248\u672C\u3001\u5168\u91CF\u91CD\u8DD1\uFF0C\u4E0D\u628A\u5355\u6B3E\u4FEE\u8865\u7B97\u5168\u8F6E\u7ED3\u679C\u3002\u65E7\u65B9\u6CD5\u4FDD\u7559\u4F5C\u6D88\u878D\uFF0C\u5404\u5BF9\u7167\u540C\u9884\u7B97\u3002\u5141\u8BB8\u4E2D\u9014\u66FF\u6362\u672C\u8F6E\u8BF4\u660E\uFF0C\u6807\u6CE8\u539F\u56E0\u548C\u4F5C\u8005\uFF1B\u82E5\u65B9\u6CD5\u4EE3\u7801\u53D8\u5316\u5219\u8F6C\u65B0\u7248\u672C\uFF0C\u4E0D\u80FD\u7528\u6539\u8BF4\u660E\u63A9\u76D6\u3002\u5BF9\u201C\u5B66\u4E0D\u52A8\u201D\u7684\u9879\u76EE\uFF0C\u7ACB\u9879\u540E\u7684\u7B2C\u4E00\u4E2A\u65B9\u6CD5\u8F6E\u6B21\u56FA\u5B9A\u5148\u505A\u5355\u4EF6\u8FC7\u62DF\u5408/\u4ECE\u7A7A\u72B6\u6001\u590D\u73B0\u53EF\u5B66\u4E60\u6027\uFF0C\u4E0D\u80FD\u628A\u6269\u6570\u636E\u3001\u5EFA\u5927\u8BC4\u4EF7\u5668\u7B49\u6392\u5728\u7B2C\u4E00\u6B21\u68C0\u9A8C\u524D\u3002
 
-\u5B8C\u6210\u4E00\u8F6E\u540E\u7ED9\u4E0B\u4E00\u8F6E\uFF1B\u8FDE\u7EED\u51E0\u8F6E EVAL \u6CA1\u65B0\u884C\u65F6\u8BCA\u65AD\u4E3A\u4EC0\u4E48\u672A\u5F62\u6210\u7ED3\u679C\u5E76\u6539\u4E0B\u4E00\u8F6E\uFF0C\u4E0D\u8865\u9020\u6570\u636E\u3002\u6267\u884C\u8005\u56E0\u201C\u8FDD\u80CC\u539F\u5219/\u9700\u8981\u65B0\u673A\u5236/\u89C4\u5219\u4E0D\u5141\u8BB8\u201D\u81EA\u884C\u505C\u4E0B\uFF0C\u4E5F\u8C03\u7528\u4F60\u6838\u5BF9\u89C4\u5219\u6765\u6E90\u3002\u82E5\u4E0A\u4E0B\u6587\u6458\u8981\u5927\u534A\u662F\u7981\u4EE4\uFF0C\u53EF\u5EFA\u8BAE\u7528\u6237\u6E05\u7A7A\uFF0C\u518D\u6309\u8EAB\u4EFD\u5361\u3001\u7528\u6237\u539F\u8BDD\u548C\u5F53\u524D\u8BF4\u660E\u91CD\u53D1\uFF1B\u4E0D\u81EA\u884C\u6E05\u7A7A\u6216\u64A4\u9500\u5BBF\u4E3B\u6743\u9650\u3002
+\u8FDE\u7EED\u51E0\u8F6E EVAL \u6CA1\u65B0\u884C\u65F6\u8BCA\u65AD\u4E3A\u4EC0\u4E48\u672A\u5F62\u6210\u7ED3\u679C\u5E76\u8C03\u6574\u5B9E\u9645\u5DE5\u4F5C\uFF0C\u4E0D\u8865\u9020\u6570\u636E\u3002\u82E5\u4E0A\u4E0B\u6587\u6458\u8981\u5927\u534A\u662F\u7981\u4EE4\uFF0C\u53EF\u5EFA\u8BAE\u7528\u6237\u6E05\u7A7A\uFF0C\u518D\u6309\u8EAB\u4EFD\u5361\u3001\u7528\u6237\u539F\u8BDD\u548C\u5F53\u524D\u8BF4\u660E\u91CD\u53D1\uFF1B\u4E0D\u81EA\u884C\u6E05\u7A7A\u6216\u64A4\u9500\u5BBF\u4E3B\u6743\u9650\u3002
 
 ## \u9009\u9898\u8F6E
 
@@ -14908,22 +14907,22 @@ function capabilityContract(options2) {
 }
 function contract(slug) {
   if (slug === "research") return capabilityContract({
-    ambientParticipation: "Read the identity card and EVAL; execute the current round to its result, then call the mentor and continue.",
-    purpose: "Start or continue the mentor-led round loop.",
+    ambientParticipation: "Advance authorized research using the card, EVAL and current brief, with independent judgment when needed.",
+    purpose: "Advance research through actual work and necessary independent judgment.",
     when: "Use for research progression; bounded questions remain bounded.",
     actions: [
-      `Call ${DOVE_RESEARCH_MENTOR_NAME} fresh and read-only with dated user-original sources/range since its last reading, the current user's exact words, specified norms, identity card, EVAL, recent brief/result, actual diff/files and raw artifacts\u2014not execution conversation or paraphrased user intent. Save its brief verbatim; inception precedes EVAL. Follow the versioned method brief; report evaluator flaws and objections in the result.`
+      `Execute the versioned brief against EVAL; report attempts, outputs, unfinished work, blockers, evaluator flaws and objections. For independent judgment, give ${DOVE_RESEARCH_MENTOR_NAME} a fresh read-only context: dated user-original sources/range since its last reading, the current user's exact words, specified norms, card, EVAL, recent briefs/results, actual diff/files and raw artifacts\u2014not execution conversation or paraphrased user intent.`
     ],
     boundaries: ["The mentor decides methods and engineering within Mainline and user resources. Only goal/claim, deployment input/output or resource changes need the user's decision; ask once and continue independent authorized defaults if unanswered."]
   });
   if (slug === "status") return capabilityContract({
-    ambientParticipation: "Read the card, latest EVAL rows and current brief; answer four plain sentences, then return to the round.",
+    ambientParticipation: "Read the card, latest EVAL rows and current brief; answer four plain sentences.",
     purpose: "Explain progress in four plain sentences.",
     when: "Use when the user asks where research stands.",
     actions: [
       "Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Say: what we have made; whether the core is demonstrated; what blocks it; which round is underway. Quote actual values when useful; missing evidence stays unknown."
     ],
-    boundaries: ["Status reads and reports, without new experiments or a new route. Retain a user's correction in affected card fields unless writing is forbidden; then return to the ongoing round."],
+    boundaries: ["Status is read-only: answer directly without new research or document updates."],
     clarification: []
   });
   if (slug === "source") return capabilityContract({
@@ -15100,7 +15099,7 @@ function contract(slug) {
   });
 }
 var SURFACES = [
-  ["research", "Start or continue the mentor-led research rounds from the identity card and evaluation table."],
+  ["research", "Advance research through actual work, full evaluation and independent judgment when needed."],
   ["status", "Report what we have made, whether the core is demonstrated, what blocks it and which round is underway."],
   ["source", "Use when external sources, citation identity, DOI checks, or bounded bibliography verification can change the research judgment."],
   ["experiment", "Develop quickly; evaluate fixed method versions and redraw unseen test data after a tested method changes."],
@@ -15183,10 +15182,6 @@ var DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND = 'dove hook user-prompt-submit 
 var DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY = Object.freeze({
   hooks: Object.freeze([Object.freeze({ type: "command", command: DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, timeout: 10 })])
 });
-var DOVE_CLAUDE_STOP_HOOK_COMMAND = 'dove hook stop --project "$CLAUDE_PROJECT_DIR"';
-var DOVE_CLAUDE_STOP_HOOK_ENTRY = Object.freeze({
-  hooks: Object.freeze([Object.freeze({ type: "command", command: DOVE_CLAUDE_STOP_HOOK_COMMAND, timeout: 10 })])
-});
 var DOVE_CLAUDE_STATUS_LINE_COMMAND = 'dove hook statusline --project "$CLAUDE_PROJECT_DIR"';
 var DOVE_CLAUDE_STATUS_LINE = Object.freeze({
   type: "command",
@@ -15215,7 +15210,6 @@ function exactManagedHook(value2, command3) {
 function hookCommandMarkers(eventName) {
   if (eventName === "SessionStart") return ["dove hook session-start"];
   if (eventName === "UserPromptSubmit") return ["dove hook user-prompt-submit"];
-  if (eventName === "Stop") return ["dove hook stop"];
   throw new Error(`Unsupported Dove Claude hook event: ${eventName}.`);
 }
 function referencesManagedHook(value2, eventName) {
@@ -15260,14 +15254,6 @@ function mergeClaudeUserPromptSubmitSettings(settings) {
   const merged = mergeManagedHook(entries ?? [], "UserPromptSubmit", DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY);
   if (!merged.changed) return { settings, changed: false };
   return { settings: { ...settings, hooks: { ...hooks, UserPromptSubmit: merged.entries } }, changed: true };
-}
-function mergeClaudeStopSettings(settings) {
-  const hooks = assertClaudeSettingsShape(settings);
-  const entries = hooks.Stop;
-  if (entries !== void 0 && !Array.isArray(entries)) throw new Error(`${DOVE_CLAUDE_SETTINGS_PATH} hooks.Stop must be an array.`);
-  const merged = mergeManagedHook(entries ?? [], "Stop", DOVE_CLAUDE_STOP_HOOK_COMMAND, DOVE_CLAUDE_STOP_HOOK_ENTRY);
-  if (!merged.changed) return { settings, changed: false };
-  return { settings: { ...settings, hooks: { ...hooks, Stop: merged.entries } }, changed: true };
 }
 function renderClaudeAmbientRule() {
   return `# Dove
@@ -15830,7 +15816,7 @@ function renderBody(command3, heading, hostId = null) {
     responsePolicy,
     renderDoveSharedResearchContractSection(),
     command3.id === "dove.status" ? `Quality summary (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`; consult relevant details in \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\` only when the status judgment needs them. Guidance is not research evidence.` : `Full quality details (project-relative): \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\`. Consult relevant criteria only when an actual decision needs them; author stance below requires both short summaries in each fresh author main context. Reuse the briefs after compact or resume, not both full references as a startup ritual. Guidance is not research evidence.`,
-    command3.id === "dove.status" ? "For Status, use these principles only to inspect and report, except to retain the user's material correction in affected identity-card fields. Do not execute research actions or otherwise maintain documents; do not rewrite an unchanged Mainline. Respect explicit no-write instructions and host refusal." : renderDoveAuthorStanceSection()
+    command3.id === "dove.status" ? "For Status, apply these principles and user corrections to a read-only answer, not research execution or document updates." : renderDoveAuthorStanceSection()
   ].join("\n\n") : "";
   return [`# ${heading}`, purpose, args, examples.trim(), shared, contract2].filter(Boolean).join("\n\n") + "\n";
 }
@@ -15985,14 +15971,6 @@ function claudeResources() {
     fragment: DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY,
     digest: semanticDigest(DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY)
   };
-  const stopHook = {
-    hostId: CLAUDE_HOST,
-    path: DOVE_CLAUDE_SETTINGS_PATH,
-    kind: "json-fragment",
-    selector: STOP_SELECTOR,
-    fragment: DOVE_CLAUDE_STOP_HOOK_ENTRY,
-    digest: semanticDigest(DOVE_CLAUDE_STOP_HOOK_ENTRY)
-  };
   const statusLine = {
     hostId: CLAUDE_HOST,
     path: DOVE_CLAUDE_SETTINGS_PATH,
@@ -16025,7 +16003,7 @@ function claudeResources() {
     fragment: EXA_MCP_FRAGMENT,
     digest: semanticDigest(EXA_MCP_FRAGMENT)
   };
-  const resources = [...files, sessionStartHook, userPromptSubmitHook, stopHook, statusLine, webFetchDeny, paperSearch, exa];
+  const resources = [...files, sessionStartHook, userPromptSubmitHook, statusLine, webFetchDeny, paperSearch, exa];
   if (new Set(resources.map(managedKey2)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }
@@ -16409,7 +16387,6 @@ function planExclusive(root, desired, oldEntry, fsOps, options2 = {}) {
 function addFragment(resource, value2) {
   if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return mergeClaudeUserPromptSubmitSettings(value2).settings;
   if (resource.selector === SESSION_START_SELECTOR) return mergeClaudeSessionStartSettings(value2).settings;
-  if (resource.selector === STOP_SELECTOR) return mergeClaudeStopSettings(value2).settings;
   if (resource.selector === STATUS_LINE_SELECTOR) return { ...value2, statusLine: resource.fragment };
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) return mergeWebFetchDenyPermission(value2).settings;
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) {
@@ -16501,7 +16478,6 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
       continue;
     }
     if (!oldEntry) {
-      if (current.exists && resource2.selector === STOP_SELECTOR) throw conflictError(desired);
       if (current.exists && current.digest === desired.digest) continue;
       if (current.exists) throw conflictError(desired);
       next = addFragment(desired, next);
@@ -16581,7 +16557,16 @@ function planResource(root, desired, oldEntry, fsOps = fs6, options2 = {}) {
   throw new Error(`Unsupported project integration resource kind: ${kind}.`);
 }
 function assertManagedOwnership(manifest) {
-  const knownKeys = new Set(resourcesForHosts(manifest?.hosts ?? []).map(managedKey2));
+  const hosts = manifest?.hosts ?? [];
+  const knownKeys = new Set(resourcesForHosts(hosts).filter((entry) => entry.kind === "exclusive-file").map(managedKey2));
+  if (hosts.includes("claude")) {
+    for (const selector of [SESSION_START_SELECTOR, USER_PROMPT_SUBMIT_SELECTOR, STOP_SELECTOR, STATUS_LINE_SELECTOR, WEB_FETCH_DENY_SELECTOR]) {
+      knownKeys.add(managedKey2({ path: DOVE_CLAUDE_SETTINGS_PATH, kind: "json-fragment", selector }));
+    }
+    for (const selector of [PAPER_SEARCH_MCP_SELECTOR, EXA_MCP_SELECTOR]) {
+      knownKeys.add(managedKey2({ path: PAPER_SEARCH_MCP_PATH, kind: "json-fragment", selector }));
+    }
+  }
   knownKeys.add(managedKey2({ path: ".claude/agents/dove-reviewer.md", kind: "exclusive-file", selector: null }));
   for (const entry of manifest?.managed ?? []) {
     if (!knownKeys.has(managedKey2(entry))) {
@@ -19454,7 +19439,6 @@ function renderDoveHelp() {
   dove hook session-start --project <dir>
   dove hook user-prompt-submit --project <dir>
   dove hook statusline --project <dir>
-  dove hook stop --project <dir>
 
 \u666E\u901A Claude \u4F1A\u8BDD\u662F Dove \u7684\u4E3B\u8981\u5165\u53E3\uFF1B--agent dove \u4E0E\u4E5D\u4E2A /dove:* Skills \u53EA\u662F\u53EF\u9009\u5FEB\u6377\u5165\u53E3\u3002CLI \u7BA1\u7406\u9879\u76EE\u63A5\u5165\u3001\u8BCA\u65AD\u548C\u8FD0\u884C\u6536\u636E\uFF0C\u4E0D\u542F\u52A8\u5BA1\u7A3F\u6A21\u578B\u3002/dove:review \u4FDD\u7559\uFF0C\u5BFC\u5E08 dove-mentor \u4E0E\u8BBA\u6587\u5BA1\u7A3F dove-review \u4F7F\u7528\u5BBF\u4E3B\u539F\u751F\u5168\u65B0\u53EA\u8BFB\u5B50 agent\uFF0C\u4EC5 Read/Grep/Glob\uFF0C\u4E0D\u4F20\u6267\u884C\u5BF9\u8BDD\u3001\u4E0D\u7EED\u63A5\u5386\u53F2\u3002
 
@@ -19462,7 +19446,7 @@ dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u53EA\u8BFB\u7F51\u9875\uFF0
 
 \u79D1\u7814\u6838\u5FC3\u8BB0\u5F55\u662F .dove/research/IDENTITY.md\u3001EVAL.md\u3001rounds/\u3002\u8F6E\u6B21\u8BF4\u660E\u6807\u6CE8\u4F5C\u8005\uFF08\u5BFC\u5E08/\u7528\u6237/\u5916\u90E8\uFF09\uFF1B\u7ED3\u679C\u51E0\u884C\u52A0 EVAL \u4E00\u884C\u3002\u8BC4\u6D4B\u7531\u7528\u6237\u786E\u8BA4\u4E00\u6B21\uFF0C\u81F3\u5C11\u542B\u4E00\u5217\u672A\u89C1\u7C7B\u522B\u7684\u6CDB\u5316\u7ED3\u679C\uFF1B\u91CD\u8981\u7ED3\u679C\u540E\u7684\u516B\u7EF4\u5224\u65AD\u7531\u5BFC\u5E08\u7ED9\u51FA\u3002\u5DF2\u6709 missions\u3001experiments\u3001claims \u539F\u5730\u4FDD\u7559\uFF0C\u4E0D\u8FC1\u79FB\u5220\u9664\uFF1B\u521D\u59CB\u5316\u4ECD\u53EA\u5728\u6CA1\u6709\u7814\u7A76\u6811\u65F6\u5EFA\u7ACB\u6700\u5C0F RESEARCH.md\u3002
 
-\u8EAB\u4EFD\u5361\u9876\u90E8\u4FDD\u7559 Current round \u4E0E Round status\uFF08ongoing/paused/completed\uFF09\uFF1B\u8D85\u957F\u663E\u793A\u524D 4KB \u5E76\u63D0\u793A\u7CBE\u7B80\u3002SessionStart \u4E0E UserPromptSubmit \u53EA\u8BFB\u5448\u73B0\u96C6\u6210\u548C\u6307\u5BFC\uFF1BStop \u4EC5\u5728\u8F6E\u6B21 ongoing \u4E14\u672C\u8F6E\u672A\u8C03\u7528\u5BFC\u5E08\u65F6\u63D0\u9192\u5E76\u963B\u6B62\u4E00\u6B21\uFF0Cstop_hook_active \u4E3A\u771F\u4E0D\u518D\u963B\u6B62\u3002\u7528\u6237\u8981\u6C42\u53EA\u8BA8\u8BBA\u6216\u505C\u4E0B\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u6807\u4E3A paused\u3002Hooks \u4E0D\u5199\u7814\u7A76\u6216\u6388\u4E88\u6743\u9650\uFF1B\u5B8C\u6574\u52A0\u8F7D\u65B0\u589E\u5BBF\u4E3B\u914D\u7F6E\u53EF\u80FD\u9700\u8981\u65B0\u4F1A\u8BDD\u3002
+\u8EAB\u4EFD\u5361\u9876\u90E8\u4FDD\u7559 Current round \u4E0E Round status\uFF08ongoing/paused/completed\uFF09\uFF1B\u8D85\u957F\u663E\u793A\u524D 4KB \u5E76\u63D0\u793A\u7CBE\u7B80\u3002SessionStart \u4E0E UserPromptSubmit \u53EA\u8BFB\u5448\u73B0\u96C6\u6210\u548C\u6307\u5BFC\u3002\u7528\u6237\u8981\u6C42\u53EA\u8BA8\u8BBA\u6216\u505C\u4E0B\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u6807\u4E3A paused\u3002Hooks \u4E0D\u5199\u7814\u7A76\u6216\u6388\u4E88\u6743\u9650\uFF1B\u5B8C\u6574\u52A0\u8F7D\u65B0\u589E\u5BBF\u4E3B\u914D\u7F6E\u53EF\u80FD\u9700\u8981\u65B0\u4F1A\u8BDD\u3002
 `;
 }
 
@@ -19554,7 +19538,7 @@ function setupLines(command3, { status, hosts, writtenPaths = [] }) {
   const lines = [];
   if (command3 === "init" && status === "already-initialized") return ["\u2713 \u73B0\u6709\u9879\u76EE\u96C6\u6210\u4FDD\u6301\u4E0D\u53D8\uFF0C\u6CA1\u6709\u5199\u5165\u4EFB\u4F55\u6587\u4EF6"];
   if (hasClaude) {
-    lines.push("\u2713 Dove \u4E0E 9 \u4E2A\u53EF\u9009\u4E13\u9879\u5165\u53E3\u5DF2\u5B89\u88C5\uFF1B\u5BFC\u5E08\u548C\u8BBA\u6587\u5BA1\u7A3F\u4F7F\u7528\u539F\u751F\u53EA\u8BFB\u5B50 agent", "\u2713 Claude SessionStart\u3001UserPromptSubmit \u4E0E\u5355\u6B21\u8F6E\u6B21 Stop \u63D0\u9192\u5DF2\u914D\u7F6E\uFF1B\u72B6\u6001\u680F\u7A7A\u7F3A\u65F6\u5B89\u88C5\u53EA\u8BFB\u663E\u793A", "\u2713 \u8BBA\u6587\u68C0\u7D22 MCP\u3001\u7F51\u9875 Exa MCP \u4E0E\u9879\u76EE WebFetch \u7981\u7528\u5DF2\u914D\u7F6E");
+    lines.push("\u2713 Dove \u4E0E 9 \u4E2A\u53EF\u9009\u4E13\u9879\u5165\u53E3\u5DF2\u5B89\u88C5\uFF1B\u5BFC\u5E08\u548C\u8BBA\u6587\u5BA1\u7A3F\u4F7F\u7528\u539F\u751F\u53EA\u8BFB\u5B50 agent", "\u2713 Claude SessionStart \u4E0E UserPromptSubmit \u5DF2\u914D\u7F6E\uFF1B\u72B6\u6001\u680F\u7A7A\u7F3A\u65F6\u5B89\u88C5\u53EA\u8BFB\u663E\u793A", "\u2713 \u8BBA\u6587\u68C0\u7D22 MCP\u3001\u7F51\u9875 Exa MCP \u4E0E\u9879\u76EE WebFetch \u7981\u7528\u5DF2\u914D\u7F6E");
   }
   if (hasDsh) lines.push("\u2713 DSH \u9879\u76EE\u7EA7 filesystem Skills \u5DF2\u5B89\u88C5");
   if (command3 === "init") lines.push(
@@ -20052,75 +20036,6 @@ function userPromptSubmitFailureOutput(error) {
   };
 }
 
-// src/core/stop-hook.mjs
-import fs16 from "node:fs";
-function parseStopPayload(input) {
-  try {
-    const payload = JSON.parse(input);
-    return payload?.hook_event_name === "Stop" && payload.stop_hook_active === false ? payload : null;
-  } catch {
-    return null;
-  }
-}
-function userTurn(record) {
-  const content = record.message?.content;
-  return record.type === "user" && !record.isMeta && (typeof content === "string" || Array.isArray(content) && content.length > 0 && !content.some((block) => block.type === "tool_result"));
-}
-function mentorCallInRecord(record, called = false) {
-  if (userTurn(record)) return false;
-  const content = record.message?.content;
-  return called || record.type === "assistant" && Array.isArray(content) && content.some((block) => block.type === "tool_use" && block.name === "Agent" && block.input?.subagent_type === "dove-mentor");
-}
-async function mentorCalled(transcriptPath) {
-  const file = await fs16.promises.open(transcriptPath, "r");
-  const buffer = Buffer.alloc(64 * 1024);
-  let pending = Buffer.alloc(0);
-  let called = false;
-  function inspectLine(bytes) {
-    const line = bytes.toString("utf8").trim();
-    if (!line) return null;
-    const record = JSON.parse(line);
-    if (userTurn(record)) return called;
-    called = mentorCallInRecord(record, called);
-    return null;
-  }
-  try {
-    let position = (await file.stat()).size;
-    while (position > 0) {
-      const length = Math.min(buffer.length, position);
-      position -= length;
-      const { bytesRead } = await file.read(buffer, 0, length, position);
-      const chunk = Buffer.concat([buffer.subarray(0, bytesRead), pending]);
-      let end = chunk.length;
-      while (end > 0) {
-        const start = chunk.lastIndexOf(10, end - 1);
-        if (start < 0) break;
-        const result = inspectLine(chunk.subarray(start + 1, end));
-        if (result !== null) return result;
-        end = start;
-      }
-      pending = chunk.subarray(0, end);
-    }
-    return inspectLine(pending);
-  } finally {
-    await file.close();
-  }
-}
-async function stopHookOutput(payload, options2 = {}) {
-  if (!payload || payload.stop_hook_active !== false) return null;
-  const round = parseDoveCurrentRound(readDoveIdentityCard(options2.project, options2) ?? "");
-  if (!round?.ongoing || typeof payload.transcript_path !== "string") return null;
-  try {
-    if (await (options2.mentorCalled ?? mentorCalled)(payload.transcript_path) !== false) return null;
-  } catch {
-    return null;
-  }
-  return {
-    decision: "block",
-    reason: "\u672C\u8F6E\u8FD8\u5728\u8FDB\u884C\u4E2D\u3002\u5199\u672C\u8F6E\u7ED3\u679C\u5E76\u8C03\u7528\u5BFC\u5E08\u3002\u82E5\u7528\u6237\u660E\u786E\u8981\u6C42\u53EA\u8BA8\u8BBA\u6216\u505C\u4E0B\uFF0C\u628A\u8EAB\u4EFD\u5361\u7684 Round status \u6807\u4E3A paused\uFF0C\u7136\u540E\u7ED3\u675F\uFF1B\u8FD9\u6761\u63D0\u9192\u53EA\u963B\u6B62\u4E00\u6B21\u3002"
-  };
-}
-
 // src/core/statusline.mjs
 import { spawnSync as spawnSync2 } from "node:child_process";
 import path18 from "node:path";
@@ -20280,9 +20195,9 @@ ${project}` : session;
 }
 
 // src/core/dove-lifecycle.mjs
-import fs17 from "node:fs";
+import fs16 from "node:fs";
 function updateDoveLifecycle(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs17;
+  const fsOps = options2.fsOps ?? fs16;
   const root = resolveProjectRootForSetup(start, { fsOps });
   return updateProjectIntegration(root, options2);
 }
@@ -20299,12 +20214,12 @@ function uninstallDoveLifecycle(start, options2 = {}) {
 }
 
 // src/core/project-doctor.mjs
-import fs19 from "node:fs";
+import fs18 from "node:fs";
 import path19 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/core/research-documents.mjs
-import fs18 from "node:fs";
+import fs17 from "node:fs";
 var RESEARCH_DOCUMENT_PATHS = Object.freeze({ ...RESEARCH_DEFAULT_PATHS });
 function readableMarkdown(root, relativePath) {
   const stat = root.tryLstat(relativePath);
@@ -20316,7 +20231,7 @@ function readableMarkdown(root, relativePath) {
 function inspectResearchDocuments(project, options2 = {}) {
   const base = { root: RESEARCH_DOCUMENT_PATHS.root, identity: null, evaluation: null, rounds: null, overview: null };
   try {
-    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs18 });
+    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs17 });
     const directory = root.tryLstat(RESEARCH_DOCUMENT_PATHS.root);
     if (!directory) return { ...base, healthy: true, state: "absent" };
     if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error(`${base.root} must be a real directory.`);
@@ -20371,7 +20286,7 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 function inspectUserCli(options2) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs18;
   const packageRoot = path19.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options2.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
     const absolutePath = path19.resolve(packageRoot, relativePath);
@@ -20516,7 +20431,7 @@ function inspectProjectDoctor(start, options2 = {}) {
 
 // src/core/run-record.mjs
 import crypto5 from "node:crypto";
-import fs20 from "node:fs";
+import fs19 from "node:fs";
 import path20 from "node:path";
 import process5 from "node:process";
 
@@ -20688,7 +20603,7 @@ function normalizeRunId(value2) {
   return value2;
 }
 function normalizeRunProject(project, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   return resolveInstalledProjectRoot(project ?? options2.cwd ?? process5.cwd(), { fsOps });
 }
 function runRelativePaths(runId) {
@@ -20712,7 +20627,7 @@ function runAbsolutePaths(projectRoot, runId) {
   };
 }
 function ensureRunsRoot(projectRoot, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const doveRoot = path20.join(projectRoot, ARTIFACT_PATHS.doveRoot);
   assertRealDirectory(fsOps, doveRoot, "Dove workspace root");
   const runsRoot = path20.join(projectRoot, RUNS_DIRECTORY_PATH);
@@ -20731,7 +20646,7 @@ function ensureRunsRoot(projectRoot, options2 = {}) {
   return runsRoot;
 }
 function reserveRunDirectory(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const runId = normalizeRunId(options2.id ?? createRunId({ now: options2.now }));
   ensureRunsRoot(projectRoot, { fsOps });
@@ -20746,13 +20661,13 @@ function reserveRunDirectory(options2 = {}) {
   return { projectRoot, runId, paths };
 }
 function requireRunDirectory(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const paths = runAbsolutePaths(projectRoot, runId);
   assertRealDirectory(fsOps, paths.absoluteRunDirectory, "Dove run directory");
   return paths;
 }
 function tryRunDirectory(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const paths = runAbsolutePaths(projectRoot, runId);
   const stat = lstatOrNull5(fsOps, paths.absoluteRunDirectory);
   if (stat === null) return null;
@@ -20760,7 +20675,7 @@ function tryRunDirectory(projectRoot, runId, options2 = {}) {
   return paths;
 }
 function acquireRunMutationLock(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const paths = requireRunDirectory(projectRoot, runId, { fsOps });
   const lockPath = path20.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
   for (let attempt = 0; attempt <= RUN_LOCK_WAIT_MS / RUN_LOCK_RETRY_MS; attempt += 1) {
@@ -20784,7 +20699,7 @@ function validateRunEvent(value2, expectedRunId, expectedSeq, label) {
   return value2;
 }
 function readRunEvents(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const id = normalizeRunId(runId);
   const paths = requireRunDirectory(projectRoot, id, { fsOps });
   assertRegularFile(fsOps, paths.absoluteJournalPath, "Dove run journal");
@@ -20799,7 +20714,7 @@ function readRunEvents(projectRoot, runId, options2 = {}) {
   });
 }
 function tryReadRunEvents(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const id = normalizeRunId(runId);
   const paths = tryRunDirectory(projectRoot, id, { fsOps });
   if (paths === null) return null;
@@ -20809,7 +20724,7 @@ function tryReadRunEvents(projectRoot, runId, options2 = {}) {
 }
 function appendRunEvents(projectRoot, runId, items, options2 = {}) {
   if (!Array.isArray(items) || items.length === 0) throw new Error("Dove run event append requires at least one event item.");
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const id = normalizeRunId(runId);
   const lock = acquireRunMutationLock(projectRoot, id, { fsOps });
   try {
@@ -21041,7 +20956,7 @@ function summarizeRun(projectRoot, runId, options2 = {}) {
   return summarizeStatus(projectRoot, normalizeRunId(runId), events);
 }
 function runsRootEntries(projectRoot, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const runsRoot = path20.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat === null) return [];
@@ -21052,7 +20967,7 @@ function runsRootEntries(projectRoot, options2 = {}) {
   }).sort();
 }
 function listRunSummaries(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const group = normalizeRunGroup(options2.group);
   const runs = [];
@@ -21066,7 +20981,7 @@ function listRunSummaries(options2 = {}) {
   return { command: "status", status: "ok", project: projectRoot, group, runs };
 }
 function inspectRunStatus(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const projectRoot = normalizeRunProject(options2.project, options2);
   if (options2.id !== void 0 && options2.id !== null) {
     if (options2.group !== void 0 && options2.group !== null) throw new Error("Use only one of --id or --group for dove run status.");
@@ -21076,7 +20991,7 @@ function inspectRunStatus(options2 = {}) {
   return listRunSummaries({ ...options2, fsOps, project: projectRoot });
 }
 function appendReconciledInterrupted(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const id = normalizeRunId(runId);
   const event = appendRunEvent(projectRoot, id, "run.reconciled", {
     outcome: "interrupted",
@@ -21103,7 +21018,7 @@ function appendReconciledInterrupted(projectRoot, runId, options2 = {}) {
   return { event, summary: summarizeRun(projectRoot, id, { fsOps }) };
 }
 function appendFinalizedRun(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const root = normalizeRunProject(projectRoot, { fsOps, cwd: options2.cwd });
   const id = normalizeRunId(runId);
   const event = appendRunEvent(root, id, "run.finalized", (events) => {
@@ -21144,7 +21059,7 @@ function selectedRunIds(projectRoot, options2 = {}) {
   return [.../* @__PURE__ */ new Set([...explicitIds, ...byGroup])].sort();
 }
 function compareRuns(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs19;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const runIds2 = selectedRunIds(projectRoot, { ...options2, fsOps });
   if (runIds2.length === 0) {
@@ -21203,7 +21118,7 @@ function compareRuns(options2 = {}) {
 
 // src/core/run-supervisor.mjs
 import { spawn as spawn2 } from "node:child_process";
-import fs21 from "node:fs";
+import fs20 from "node:fs";
 import process6 from "node:process";
 var SUPERVISOR_ENTRY = "__dove-run-supervisor";
 var SUPERVISOR_READY_TIMEOUT_MS = 1e4;
@@ -21238,7 +21153,7 @@ function sendSupervisorMessageAsync(message) {
 function closeFd(fd) {
   if (!Number.isInteger(fd)) return;
   try {
-    fs21.closeSync(fd);
+    fs20.closeSync(fd);
   } catch {
   }
 }
@@ -21282,8 +21197,8 @@ function appendTerminalEvent(projectRoot, runId, payload, options2 = {}) {
 }
 function openRunLogFiles(paths) {
   return {
-    stdoutFd: fs21.openSync(paths.absoluteStdoutPath, "wx", 384),
-    stderrFd: fs21.openSync(paths.absoluteStderrPath, "wx", 384)
+    stdoutFd: fs20.openSync(paths.absoluteStdoutPath, "wx", 384),
+    stderrFd: fs20.openSync(paths.absoluteStderrPath, "wx", 384)
   };
 }
 function normalizeStartPayload(raw) {
@@ -21550,7 +21465,7 @@ async function configureSupervisorAndWait(child, payload, acceptedTypes) {
   }
   return await result;
 }
-function removeEmptyReservedRunDirectory(paths, fsOps = fs21) {
+function removeEmptyReservedRunDirectory(paths, fsOps = fs20) {
   try {
     const entries = fsOps.readdirSync(paths.absoluteRunDirectory);
     if (entries.length === 0) fsOps.rmdirSync(paths.absoluteRunDirectory);
@@ -21803,26 +21718,25 @@ function prepareHookProject(project) {
 function assertHookPayloadProject(payload, target) {
   if (payload?.cwd === void 0) return;
   if (typeof payload.cwd !== "string" || !payload.cwd.trim() || payload.cwd.includes("\0")) throw new Error("Dove hook cwd \u5FC5\u987B\u6307\u5411\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u4E2D\u7684\u76EE\u5F55\u3002");
-  const cwd = fs22.realpathSync(payload.cwd);
-  const stat = fs22.statSync(cwd);
+  const cwd = fs21.realpathSync(payload.cwd);
+  const stat = fs21.statSync(cwd);
   const relative = path21.relative(target, cwd);
   if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path21.sep}`) || path21.isAbsolute(relative)) {
     throw new Error("Dove hook cwd \u4E0D\u5C5E\u4E8E\u58F0\u660E\u7684\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u3002");
   }
   let directory = cwd;
   while (directory !== target) {
-    if (fs22.existsSync(path21.join(directory, ".dove/install/manifest.json")) || fs22.existsSync(path21.join(directory, ".dove-install"))) {
+    if (fs21.existsSync(path21.join(directory, ".dove/install/manifest.json")) || fs21.existsSync(path21.join(directory, ".dove-install"))) {
       throw new Error("Dove hook cwd \u5C5E\u4E8E\u53E6\u4E00\u4E2A\u9879\u76EE\u96C6\u6210\u3002");
     }
     directory = path21.dirname(directory);
   }
 }
-async function readStdin(limit = Infinity) {
+async function readStdin() {
   let input = "";
   process7.stdin.setEncoding("utf8");
   for await (const chunk of process7.stdin) {
     input += chunk;
-    if (input.length > limit) return null;
   }
   return input;
 }
@@ -22004,7 +21918,7 @@ try {
     let password = null;
     const passwordFile = options.passwordFile === void 0 ? null : path21.resolve(options.passwordFile);
     if (passwordFile) {
-      password = fs22.readFileSync(passwordFile, "utf8").trim();
+      password = fs21.readFileSync(passwordFile, "utf8").trim();
       if (!password) throw new Error(`\u5BC6\u7801\u6587\u4EF6\u4E3A\u7A7A\uFF1A${options.passwordFile}`);
     }
     const actions = createDashboardActions({ packageOptions: PACKAGE_OPTIONS, passwordFile });
@@ -22024,7 +21938,7 @@ try {
     process7.exit(0);
   }
   if (command2 === "watch") {
-    const roots = options.project ? [path21.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs22.existsSync(root));
+    const roots = options.project ? [path21.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs21.existsSync(root));
     const result = await runWatch(roots, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson2(result);
     else for (const item of result.results) console.log(`${path21.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);
@@ -22063,11 +21977,6 @@ try {
   }
   if (command2 === "hook") {
     const hookName = subcommand;
-    if (hookName === "stop") {
-      const output = await stopHookOutput(parseStopPayload(await readStdin(64e3)), { project: projectOption2(options) });
-      if (output !== null) process7.stdout.write(JSON.stringify(output));
-      process7.exit(0);
-    }
     if (projectOption2(options) === void 0) throw new Error(`dove hook ${hookName} \u9700\u8981 --project <dir>\u3002`);
     const input = await readStdin();
     if (hookName === "user-prompt-submit") {
@@ -22112,7 +22021,7 @@ try {
 `);
       process7.exit(0);
     }
-    throw new Error("dove hook only supports session-start, user-prompt-submit, statusline and stop.");
+    throw new Error("dove hook only supports session-start, user-prompt-submit and statusline.");
   }
 } catch (error) {
   operationalFailure(error, options);

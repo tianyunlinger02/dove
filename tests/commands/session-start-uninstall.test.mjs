@@ -5,6 +5,7 @@ import test from "node:test";
 
 import { sessionStartOutput, userOriginalSourceContext } from "../../src/core/session-start-hook.mjs";
 import { DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP } from "../../src/core/dove-author-preferences.mjs";
+import { DOVE_RESEARCH_REFLECTION_CONTINUITY } from "../../src/core/dove-research-contract.mjs";
 import { renderUninstallInventory } from "../../src/cli/terminal-output.mjs";
 
 test("SessionStart startup and clear anchor the canonical bootstrap to the validated project root", () => {
@@ -58,9 +59,7 @@ test("SessionStart compact and resume include the researcher-owned identity card
     const context = output.hookSpecificOutput.additionalContext;
     assert.ok(context.includes(card.trimEnd()));
     assert.match(context, /corrections affect only relevant fields, not an unchanged Mainline/iu);
-    assert.match(context, /identity card, EVAL\.md and current brief.*resume it or call the mentor/iu);
-    assert.match(context, /dated user originals since the last mentor reading, not execution summaries/iu);
-    assert.match(context, /Keep Mainline unchanged/iu);
+    assert.ok(context.includes(DOVE_RESEARCH_REFLECTION_CONTINUITY));
     assert.match(context, /reuse the two short summaries already read here/iu);
     assert.ok(context.endsWith(userOriginalSourceContext(payload)));
     assert.equal(cardBytes.toString(), card, "continuation presents rather than corrects the card");

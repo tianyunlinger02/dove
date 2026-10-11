@@ -4,7 +4,7 @@
 
 Dove helps you move a research project forward: read sources, build methods, run experiments, interpret evidence, write and revise papers, make figures, review the work, and respond to criticism.
 
-For a confirmed research goal, the main session executes a short round brief until its evaluation result, then asks a fresh read-only `dove-mentor` context to judge the result and propose the next round. The mentor can change methods within the goal; changing the goal, intended claim or deployment inputs/outputs, or exceeding your resources still needs your decision. Ordinary questions and bounded tasks finish within their scope.
+For a confirmed research goal, the main session directly executes authorized work through real evaluation results. A fresh read-only `dove-mentor` provides independent judgment when you ask or when kickoff, methods, evaluation, measured results or the route need it; existing judgments stand without new material. Changing the goal, intended claim or deployment inputs/outputs, or exceeding your resources still needs your decision. Ordinary questions and bounded tasks finish within their scope.
 
 ## Start
 
@@ -26,7 +26,7 @@ Start ordinary `claude` in the initialized project and describe the task. The pr
 
 | Skill | Use it for |
 |---|---|
-| `dove.research` | Start or continue the current round; ask the mentor when no round is active. |
+| `dove.research` | Start or continue authorized research, using independent judgment when needed. |
 | `dove.status` | Read the identity card, latest evaluation rows, and current brief; explain progress in four plain sentences. |
 | `dove.source` | Find, read, check, and use sources that matter to the question. |
 | `dove.experiment` | Develop and rerun experiments within a round; reserve frozen heldout evaluation for final confirmation. |
@@ -50,7 +50,7 @@ Research context is ordinary researcher-owned Markdown under `.dove/research/`:
 
 `RESEARCH.md` is a short history index. Existing `missions/`, `experiments/`, and `claims/` stay in place without migration or deletion; new core work goes into rounds rather than new entries in those directories. Sources, Reviews, Lessons, `DOCTOR.md`, and local run receipts retain their distinct uses. Initialization still creates only the minimal `RESEARCH.md` entry when no research tree exists.
 
-Claude presents the identity card on each valid prompt and after compact/resume. An overlong card shows its first 4KB with a reminder to shorten it, rather than being reported missing. The read-only Stop hook blocks once only when the card says a round is ongoing and no mentor has been called in the current turn; `stop_hook_active: true` prevents another block. If you say “discussion only” or “stop,” the main session marks the round paused and ends. Hooks do not write research or grant permissions.
+Claude presents the identity card on each valid prompt and after compact/resume; an overlong card shows its first 4KB with a shortening reminder. Status, correction and blocker answers can end the reply without completing or pausing the research round. An explicit pause is respected. New installations include only SessionStart/UserPromptSubmit context hooks and an optional status line; [installation ownership](docs/INSTALL.md#registered-projects-and-global-upgrades) governs retired Stop removal.
 
 When a correction repeats across registered projects, Dove asks in one sentence whether to add it to global `AUTHOR_PREFERENCES`; it never changes global preferences automatically. Update, reinstall, and uninstall preserve research, historical review records, and run receipts.
 

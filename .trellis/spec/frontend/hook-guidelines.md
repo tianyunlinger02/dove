@@ -6,7 +6,7 @@ This file governs Dove's installed host integration, not this repository's Trell
 
 Claude Code receives the Dove rule, nine flat Skills, author-side Dove agent, and two read-only subagents: `dove-mentor` and `dove-review`. DeepSeek Harness receives filesystem Skills only; do not imply that it has Claude's agents or hooks. Hosts enforce permissions. Guidance does not grant access.
 
-Dove owns only manifest-listed fragments: paper-search and Exa MCP declarations, the built-in `WebFetch` deny entry, its hooks, and a `statusLine` installed only in an empty slot. Preserve unrelated settings and user status lines. Tool approval, trust, credentials, and runtime availability remain host/user responsibilities. Do not substitute shell retrieval for unavailable web tools.
+Dove owns only manifest-listed fragments: paper-search and Exa MCP declarations, the built-in `WebFetch` deny entry, SessionStart/UserPromptSubmit context hooks, and a `statusLine` installed only in an empty slot. Preserve unrelated settings and user hooks/status lines. Retired Stop cleanup follows [lifecycle ownership](./state-management.md#lifecycle-preservation), not a runtime hook. Tool approval, trust, credentials, and runtime availability remain host/user responsibilities. Do not substitute shell retrieval for unavailable web tools.
 
 ## SessionStart and prompt context
 
@@ -19,15 +19,9 @@ Dove owns only manifest-listed fragments: paper-search and Exa MCP declarations,
 
 ## Original-user source handoff
 
-The main session specifies the host transcript source path, last-read date/range and the current user's original text, which may not yet be persisted, to a fresh read-only mentor. At kickoff/takeover, the mentor uses Grep/Read to select relevant original user records in date order; at each round start, it selects those since the preceding round. Read only genuine user-authored bodies, not meta messages, subagent conversations, assistant/executor text, tool results, host/system injections or self-wake summaries, even if wrapped in a user event. This is scoped reading, not inheritance or automatic parsing of the full parent conversation; do not resume an old mentor context, harvest other transcripts or build a source ledger. Source, dates and the last-read/since-previous-round range live in the brief. Inaccessible sources mean unknown provenance, not permission to invent quotes, revoke confirmed restrictions or override host refusals. `dove-review` receives no transcript access.
+The main session specifies the host transcript source path, last-read date/range and the current user's original text, which may not yet be persisted, to a fresh read-only mentor. When invoked, the mentor uses Grep/Read to select genuine user records: in date order at kickoff/takeover, or since the preceding round for a later judgment. Read only genuine user-authored bodies, not meta messages, subagent conversations, assistant/executor text, tool results, host/system injections or self-wake summaries, even if wrapped in a user event. This is scoped reading, not inheritance or automatic parsing of the full parent conversation; do not resume an old mentor context, harvest other transcripts or build a source ledger. Source, dates and the last-read/since-previous-round range live in the brief. Inaccessible sources mean unknown provenance, not permission to invent quotes, revoke confirmed restrictions or override host refusals. `dove-review` receives no transcript access.
 
 Hooks expose a source pointer only; they do not interpret user intent, collect conversation copies or write research state. A mentor may suggest a user-initiated `/clear` when prohibitions dominate context, but neither mentor nor hook clears it automatically.
-
-## One Stop reminder
-
-The managed Stop hook blocks once only when the identity card points to an ongoing round and the current main-session turn has not called `dove-mentor`. `stop_hook_active: true` always passes. Its only message asks the executor to write the round result and call the mentor. If the user says “discussion only” or “stop”, the main session marks the round paused and ends normally.
-
-The hook reads the card and current-session transcript event/tool metadata to recognize a mentor call, not to judge conversation content. This Stop check is separate from the main-hook source-pointer handoff: it sends no conversation content to either subagent and writes no tracking state. Missing or unreadable context passes. There is no scheduler, Cron wake, per-tool research gate, or persistent continuation service.
 
 ## Read-only status line
 

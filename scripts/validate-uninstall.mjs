@@ -13,6 +13,7 @@ import {
 } from "../src/core/project-installation.mjs";
 import { DOVE_CLAUDE_STATUS_LINE, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY } from "../src/core/ambient-policy.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
+import { semanticDigest, STOP_SELECTOR } from "../src/core/project-installation-resources.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 import { inspectProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
@@ -148,24 +149,32 @@ reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
 const stopSettingsPath = path.join(fixture, ".claude", "settings.json");
 const stopSettings = JSON.parse(fs.readFileSync(stopSettingsPath, "utf8"));
+assert.equal(stopSettings.hooks.Stop, undefined);
+const retiredStop = { hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] };
 stopSettings.hooks.Stop = [
   { hooks: [{ type: "command", command: "user-owned-stop", timeout: 5 }] },
-  { hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] }
+  retiredStop
 ];
 fs.writeFileSync(stopSettingsPath, `${JSON.stringify(stopSettings, null, 2)}\n`);
+const stopManifestPath = path.join(fixture, ".dove/install/manifest.json");
+const stopManifest = JSON.parse(fs.readFileSync(stopManifestPath, "utf8"));
+assert.equal(stopManifest.managed.some((entry) => entry.selector === STOP_SELECTOR), false);
+stopManifest.managed.push({ path: ".claude/settings.json", kind: "json-fragment", selector: STOP_SELECTOR, digest: semanticDigest(retiredStop) });
+fs.writeFileSync(stopManifestPath, `${JSON.stringify(stopManifest, null, 2)}\n`);
 uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
 const stopCleanedSettings = JSON.parse(fs.readFileSync(stopSettingsPath, "utf8"));
 assert.deepEqual(stopCleanedSettings.hooks.Stop, [stopSettings.hooks.Stop[0]]);
 
-reset();
-initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
-const nonArrayStopSettingsPath = path.join(fixture, ".claude", "settings.json");
-const nonArrayStopSettings = JSON.parse(fs.readFileSync(nonArrayStopSettingsPath, "utf8"));
-nonArrayStopSettings.hooks.Stop = "user-owned-stop";
-fs.writeFileSync(nonArrayStopSettingsPath, `${JSON.stringify(nonArrayStopSettings, null, 2)}\n`);
-assert.throws(() => previewProjectUninstall(fixture), /hooks\.Stop must be an array/u);
-const nonArrayStopCleanedSettings = JSON.parse(fs.readFileSync(nonArrayStopSettingsPath, "utf8"));
-assert.equal(nonArrayStopCleanedSettings.hooks.Stop, "user-owned-stop");
+for (const unownedStop of [stopSettings.hooks.Stop, "user-owned-stop"]) {
+  reset();
+  initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
+  const settingsPath = path.join(fixture, ".claude/settings.json");
+  const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  settings.hooks.Stop = unownedStop;
+  fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+  uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
+  assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, "utf8")).hooks.Stop, unownedStop);
+}
 
 reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });

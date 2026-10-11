@@ -67,7 +67,7 @@ export async function assertInteractiveHostSelection() {
       assert.match(text, /现有研究目录保持不变/u);
       assert.doesNotMatch(text, /RESEARCH\.md 已建立/u);
     }
-    if (selectedHosts.includes("claude")) assert.match(text, /SessionStart、UserPromptSubmit 与单次轮次 Stop 提醒已配置/u);
+    if (selectedHosts.includes("claude")) assert.match(text, /SessionStart 与 UserPromptSubmit 已配置/u);
     else assert.doesNotMatch(text, /WebFetch 禁用|Exa MCP/u);
   }
 
