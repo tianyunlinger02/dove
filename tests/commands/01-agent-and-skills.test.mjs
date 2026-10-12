@@ -76,18 +76,33 @@ test("Dove ambient rule projection does not exceed its pre-amendment character o
   assert.ok(bytes <= 9_826, `ambient rule: ${bytes} bytes exceeds the 9826-byte baseline`);
 });
 
-test("research runs to EVAL results with necessary judgment while replies can remain bounded", () => {
+test("research selects topics through core results and follows Mainline while replies remain bounded", () => {
   const shared = renderDoveSharedResearchContractSection();
+  const author = renderDoveAuthorStanceSection();
   const research = work("dove.research");
-  assert.match(shared, /Inception.*user-confirmed goal.*method rounds.*EVAL results/iu);
-  assert.match(shared, /Save briefs verbatim.*maintain Current round and Round status for research/iu);
+  assert.match(shared, /Before Mainline.*narrow.*user's field.*valuable.*accessible.*small problem/iu);
+  assert.match(shared, /few hypotheses.*mechanism\/grounds\/risk\/test.*recommend one/iu);
+  assert.match(shared, /minimal authorized end-to-end core.*Observe mechanism\/benefit.*revise/iu);
+  assert.match(shared, /titles\/claims.*later.*Rounds end at EVAL results.*not plans or smoke tests/iu);
+  assert.match(shared, /provisional stays provisional/iu);
+  assert.match(shared, /field.*recommendation.*card entry.*not confirmation/iu);
+  assert.match(shared, /Follow Mainline.*goal.*contribution.*completion.*fixed methods/iu);
+  assert.match(shared, /user decisions.*misrecorded originals.*not reselect.*downgrade/iu);
+  assert.match(shared, /methods.*conclusions.*follow evidence/iu);
+  assert.match(author, /main session.*saves.*briefs verbatim/iu);
+  assert.match(author, /Current round:.*Round status:/u);
   assert.match(shared, /Continue authorized work autonomously.*discussion-only\/stop pauses/iu);
-  assert.match(shared, /Status, corrections and blockers may end without record changes.*ending a reply is not research completion/iu);
+  assert.match(shared, /Status\/corrections\/blockers.*no record changes.*ending a reply.*not research completion/iu);
   assert.match(shared, /Bounded requests stay bounded/iu);
-  assert.match(research, /Execute.*against EVAL.*report attempts, outputs, unfinished work, blockers/iu);
-  assert.match(research, /mentor decides methods and engineering within Mainline and user resources/iu);
-  assert.match(research, /Only goal\/claim, deployment input\/output or resource changes.*user's decision/iu);
-  assert.match(research, /ask once.*independent authorized defaults if unanswered/iu);
+  assert.match(research, /Follow Mainline.*explore.*same-problem hypotheses/iu);
+  assert.match(research, /hypotheses.*authorized.*core implementation.*observations/iu);
+  assert.match(research, /Execute.*EVAL.*report attempts, outputs, unfinished work, blockers/iu);
+  assert.match(research, /Preserve Mainline.*intent.*user-fixed methods.*not reselect.*downgrade/iu);
+  assert.match(shared, /clear user words.*without reconfirmation/iu);
+  assert.match(shared, /Within user commitments.*mentor.*methods/iu);
+  assert.match(research, /Read-only\/design-only.*do not execute/iu);
+  assert.match(shared, /ask once.*undecided direction.*commitment.*deployment.*resource.*changes/iu);
+  assert.match(shared, /no reply.*independent authorized work.*not assumed consent/iu);
   assert.doesNotMatch(renderClaudeAmbientRule(), /CronCreate|--scope (?:route|design)/u);
 });
 
@@ -107,8 +122,8 @@ test("mentor predicts evaluation columns and owns evidence-grounded quality asse
 
 test("development iteration stays free while final heldout confirmation remains one-use", () => {
   const experiment = `${renderDoveSharedResearchContractSection()}\n${work("dove.experiment")}`;
-  assert.match(experiment, /Develop freely.*ground truth and reruns.*without per-run registration/iu);
-  assert.match(experiment, /fixed method version.*changed code.*new version and full rerun/iu);
+  assert.match(experiment, /Develop freely.*ground truth.*reruns.*no per-run registration/iu);
+  assert.match(experiment, /fixed method version.*code changes.*new version.*full protocol rerun/iu);
   assert.match(experiment, /After test use.*changed method.*fresh unseen test draw.*same-set baselines/iu);
   assert.match(experiment, /Final confirmation.*claim\/control\/data\/metric.*brief.*heldout once/iu);
   assert.match(experiment, /Heldout used for tuning is no longer independent final evidence/iu);
@@ -129,7 +144,7 @@ test("status reads core round context and answers directly without executing or 
 test("corrections affect actual judgment and action before optional durable recording", () => {
   const author = renderDoveAuthorStanceSection();
   assert.match(author, /Apply corrections immediately to judgment and action.*save only lasting value when writes are permitted/iu);
-  assert.match(author, /When recording, update only affected fields within write scope.*preserve unchanged Mainline wording/iu);
+  assert.match(author, /Write only affected fields.*scope.*preserve unchanged Mainline wording/iu);
 });
 
 test("source, draft, figure, rebuttal and Lessons retain their substantive abilities", () => {

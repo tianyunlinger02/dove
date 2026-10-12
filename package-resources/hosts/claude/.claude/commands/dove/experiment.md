@@ -37,7 +37,7 @@ Use for development, diagnostics, confirmation, reproduction or existing-result 
 
 ### When Dove needs input
 
-- Ask once for unresolved goal/claim, deployment input/output or resource changes. The mentor decides evaluation repairs and engineering defaults; without reply continue independent authorized work, not repeated questions or assumed consent.
+- Record clear user words without reconfirmation; ask once for undecided direction or commitment/deployment-I/O/resource changes. Mentor handles evaluation/engineering; no reply permits independent authorized work, not assumed consent.
 
 ### Using host tools
 

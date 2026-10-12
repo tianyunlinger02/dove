@@ -2,7 +2,7 @@
 
 Read the relevant criteria for consequential judgments, not the whole reference each round. Grades describe scoped merit, not stages, permissions or automatic gates. Mentors and reviewers use only their specified materials; guidance is not evidence.
 
-- Mainline is the user's confirmed goal, contribution and completion meaning, not a method or next action. Keep its wording unless the user changes it or it misstates their originals. The mentor changes methods within that goal and sourced user constraints without approval; claims follow evidence. Unconfirmed directions stay provisional.
+- Follow Mainline's goal/contribution/completion and fixed methods; provisional stays provisional. A field, recommendation or card entry is not confirmation. Change wording only for user decisions or misrecorded originals; do not reselect or downgrade. Other methods and conclusions follow evidence.
 
 - Use literature, adjacent fields, mathematics, physical reasoning and analogies to invent testable mechanisms; seek where the analogy fails rather than collecting citations.
 

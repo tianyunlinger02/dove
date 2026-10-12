@@ -227,7 +227,7 @@ function assertInstalledCli(installedBin, cwd) {
   assert.match(help.stdout, /^dove\n/u);
   assert.match(help.stdout, /dove --version/u);
   assert.match(help.stdout, /dove init \[--project <dir>\]/u);
-  assert.match(help.stdout, /(?:Dove 负责|The runtime CLI manages project integration)/u);
+  assert.match(help.stdout, /CLI 管理项目接入、诊断和运行收据/u);
 }
 
 function expectedReferences() {

@@ -22,21 +22,22 @@ test("research bootstrap indexes the three core records without prepopulating re
   assert.equal(RESEARCH_DEFAULT_PATHS.roundsDirectory, ".dove/research/rounds");
   const overview = RESEARCH_DEFAULT_DOCUMENTS[0].content;
   for (const name of ["IDENTITY.md", "EVAL.md", "rounds/"]) assert.ok(overview.includes(name));
-  assert.match(overview, /Confirm inception.*user's originals first.*then.*mentor.*evaluation/iu);
-  assert.match(overview, /short index.*history/iu);
+  assert.match(overview, /Until Mainline.*recorded.*topic.*otherwise follow.*intended/iu);
+  assert.match(overview, /EVAL.*scoped.*observations\/controls.*without.*full-paper prerequisite.*keep confirmed requirements/iu);
+  assert.match(overview, /short.*history index/iu);
   assert.doesNotMatch(overview, /^Mainline:/mu);
 });
 
 test("new round records keep human briefs attributable and old histories in place", () => {
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /IDENTITY\.md, EVAL\.md and rounds\/NNN-brief\.md plus NNN-result\.md/u);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /IDENTITY\.md.*EVAL\.md.*rounds\/NNN-brief\.md.*NNN-result\.md/u);
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /Author: mentor \/ user \/ external/u);
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /method version and dated user sources/iu);
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /priority is user > external > mentor.*direct user tasks/iu);
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /one code version.*changes.*new version and full rerun/iu);
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /Replaced briefs.*author and reason/iu);
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /changed files, values, prediction versus actual/iu);
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /对本轮说明的反驳\/事实更正.*mentor answers that first/iu);
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /missions\/, experiments\/ and claims\/.*without migration or new entries/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /method version.*dated user sources/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /user > external > mentor.*direct user tasks/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /one code version.*method round.*changes.*new version.*full protocol rerun/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /Replacements.*author\/reason/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /Results.*changed files.*values.*prediction versus actual/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /对本轮说明的反驳\/事实更正.*mentor.*first/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /no migration or new.*missions\/.*experiments\/.*claims\/.*entries/iu);
   assert.match(renderDoveAuthorStanceSection(), /Preserve reusable Lessons when useful, not routine progress or a substitute for repair/iu);
 });
 

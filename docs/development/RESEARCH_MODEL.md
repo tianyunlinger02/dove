@@ -10,25 +10,25 @@ Dove 是一个科研协作者。普通 Claude 主会话通过项目 rule 承担�
 
 | 记录 | 用途 |
 |---|---|
-| `IDENTITY.md` | 用户确认的目标、完成含义、有原话出处的用户限制／纠正和当前轮次指针 |
-| `EVAL.md` | 从已确认目标导出的评测定义、各方法版本实测和导师的重要结果八维评分 |
+| `IDENTITY.md` | 用户目标与完成含义，保留暂定原意、有原话出处的限制／纠正和轮次指针 |
+| `EVAL.md` | 相称的探索观察、目标评测、各方法版本实测和导师的重要结果八维评分 |
 | `rounds/NNN-brief.md`、`NNN-result.md` | 本轮说明和实际结果 |
 
 身份卡保持几百字，用大白话。开头放 `Current round: rounds/NNN-brief.md` 和 `Round status: ongoing / paused / completed`，随后是 `Mainline`、部署输入／输出／完成含义、有出处的用户限制、`Recent corrections`。用户限制／纠正栏只收用户原话、日期和出处，不收执行者转述或自加禁令。方法、已否决方法、路线和下一步写在轮次说明，不变成卡片禁令。超过 4096 字节的卡仍是已有卡：hook 展示 UTF-8 安全的前 4096 字节并提示精简，不冒充“没有卡”。
 
-`Mainline` 是用户确认的目标、预期贡献和完成含义，不是当前方法或下一动作。只有用户改变这些承诺，或卡片确实误述已确认意图时才改；资源纠正、实验结果和局部完成不重写它。用户提到另一方向不等于决定转向。只为目标／主张、部署输入输出改变或资源超限问用户一次，其余已授权范围内选择直接做。
+`Mainline` 记录用户目标、预期贡献和完成含义，不是下一动作；已有主线就沿它推进，尊重明确固定的做法，不擅自重选或降级。暂定就保留暂定含义，写入本身不当确认。只有用户改变承诺或卡片误述原意才改写；其他方法与实际主张随证据演进，不拿资源纠正、局部完成或导师推荐替换目标。需改变用户承诺或超资源才问，原话明确不重复确认。
 
 每份 brief 开头标 `Author: mentor / user / external`（导师／用户／外部）。导师说明由主会话原样保存；用户直接对宿主说的话也算用户写的说明，优先级是用户 > 外部 > 导师。brief 记录原话 source 路径、日期及上次已读／上一轮以来的范围，不新增原话账本；中途替换说明标明实际作者和原因。result 写改动文件、方法版本、评测值、预测与实际、评测问题，并固定保留“对本轮说明的反驳／事实更正”一栏，无则写无，下一轮导师先回应。详细说明字段见 [Usage](../USAGE.md#round-briefs-and-results)。
 
 `RESEARCH.md` 只留指向历史的短索引。旧 `missions/`、`experiments/`、`claims/` 原地保留，不迁移、不删除、不新增记录；新实验和主张上下文写进轮次结果并链接实际材料。Sources、审稿返回、Lessons 和普通代码／数据／图／稿件保留各自用途，不再构成第二套核心账本。`DOCTOR.md` 仍记录 Dove 自身反馈。
 
-## 立项先于评测
+## 选题与核心实现相互修正
 
-主线确认／接手时，首轮固定是立项：从按日期整理的用户原话和用户指定的规范文档，重建部署时实际给什么输入、需要什么输出、预期创新／贡献、基线类别、完成含义和“不是什么”。旧历史当反例，不当继承约束；先发散出有宽度的候选，再审查，资源缺口早交给用户。用户确认这份重建结论一次，立项轮即结束，不要求 EVAL 数值；之后导师才据此设 EVAL，不再要求一次初始评测审批。
+主线还没写入时，就是选题确定阶段。从用户领域收窄到有真实意义、数据代码资源可接触的小问题，提出少量工作假设，说明机制、理由、最易失败的假设和观察办法。推荐一个，在已有授权内尽快做触及核心机制的最小端到端实现，看机制能否发生、是否改善问题；据结果修正、替换或暂停想法，论文题目与贡献表述随后收敛，而非先定完整题目、只救外围工程。按日期读相关用户原话和指定要求，以最新原话为准；要定夺才问，原意已明确就记录，不重复确认。接手沿已有主线推进，只有领域或导师推荐不算主线确定。无需新状态、审批或文件存在性门槛。
 
 ## 导师与轮次循环
 
-`dove-mentor` is a fresh read-only Dove context using Read/Grep/Glob, not the full execution conversation. SessionStart/UserPromptSubmit expose only the host's `transcript_path` pointer. The main session supplies that source, the last-read date/range and any current original user text not yet persisted. When invoked, the mentor reads genuine user bodies: in date order at kickoff/takeover, or since the preceding round for later judgment. Meta/subagent messages, tool output, host/system injections, self-wake summaries and executor text are not user words even inside user events. Inaccessible sources leave provenance unknown; revoke only restrictions established to be executor-added without a user source, not confirmed restrictions or host refusals.
+`dove-mentor` is a fresh read-only Dove context using Read/Grep/Glob, not the full execution conversation. SessionStart/UserPromptSubmit expose only the host's `transcript_path` pointer. The main session supplies that source, the last-read date/range and any current original user text not yet persisted. When invoked, the mentor reads genuine user bodies: initially in date order, then since the preceding round. Meta/subagent messages, tool output, host/system injections, self-wake summaries and executor text are not user words even inside user events. Inaccessible sources leave provenance unknown; revoke only restrictions established to be executor-added without a user source, not confirmed restrictions or host refusals.
 
 Other inputs are the card/Recent corrections, EVAL, recent briefs/results, actual changes and raw artifacts. Inspect the relevant images/files, not only the table; first address result objections/factual corrections, then return at most one page judging three levels:
 
@@ -36,15 +36,15 @@ Other inputs are the card/Recent corrections, EVAL, recent briefs/results, actua
 2. **能力还是补丁**：针对哪一类失败，未见数据列有没有净增；不是靠单样本／类别分支冒充通用能力。导师不替单件样本出领域工艺主意。
 3. **问题／方法／贡献**：是否站得住，包括敏感性、对照强弱、部署设定是否现实。区分验证已有主张与真正补强方法或证据，不默认收窄主张；成立则按证据收束，否则给下一份可执行说明。
 
-导师只读，搭评测、重算、显著性检验等计算写进 brief 交给执行者。立项之后一轮就是一个方法版本，版本内不改代码；代码改动开新版本并全量重跑，旧版保留作消融，单样本修补不算全量结果。学不动的项目，立项后的首个方法版本先做 single-example overfit，不把扩数据、建评价器排在第一次可学习性检验前。
+导师只读，搭评测、重算、显著性检验等计算写进 brief 交给执行者。方法轮一轮一个版本，版本内不改代码；改动开新版本并按适用协议全量重跑，旧版留作消融，单样本修补不算全量结果。探索用能辨别核心假设的相称观察，不先建完整论文评价器。学不动的项目先做 single-example overfit，不把扩数据、建评价器排在首次可学习性检验前。
 
-A method round reaches a measured result, including a negative result; save the actual result and EVAL row. Plans and smoke tests do not complete it. Use the mentor when requested or when kickoff, methods, evaluation, measured results or the route need independent judgment. Reuse existing judgments without new material. Repeated rounds without measurements call for diagnosing the blockage, not more bookkeeping; repeated zero net gain calls for another method family. The mentor may suggest a user-initiated `/clear`, not clear context itself.
+A method round reaches a measured result, including a negative result; save the actual result and EVAL row. Plans and smoke tests do not complete it. Use the mentor when requested or when topic selection, methods, evaluation, measured results or the route need independent judgment. Reuse existing judgments without new material. Repeated rounds without measurements call for diagnosing the blockage, not more bookkeeping; repeated zero net gain calls for reassessment or another family within user-fixed constraints. The mentor may suggest a user-initiated `/clear`, not clear context itself.
 
-Directly execute authorized methods, data work, downloads, acceleration and reruns within the confirmed goal. Ask once only for a goal/claim/deployment-input-output change or resources beyond the user's limits; without a reply, continue the already-authorized portion. Status, correction and blocker answers may end the current reply without completing or pausing the research round. Apply corrections to judgment and action; report actual attempts, undone work and concrete blockers. Record real evidence for its research value, not to make the reply end. Explicit pause and bounded/read-only requests retain their scope.
+Execute authorized methods, data work, downloads, acceleration and reruns within user constraints, including fixed methods. Ask for decisions that change user commitments or exceed resources; without a reply, continue only the authorized portion. Status, correction and blocker answers can end the reply without completing or pausing the round. Apply corrections to action; report attempts, undone work and concrete blockers. Records serve research, not reply completion. Respect pauses and bounded/read-only scope.
 
 ## 评测修正与八维质量
 
-EVAL 从立项确认的全部用户要求导出，复用有效已有评测。首个实测行是同输入强基线的完整结果；列覆盖用户提过的每一个指标、未见数据、训练—测试差距、论文卖点（如基线做错而本方法改对的数量）。使用通用指标，不用单样本／领域特例做尺子；没量的不算达标。身份卡 Completion 简短引用脚本、划分和指标。表中标明 protocol、split、test draw、时间、轮次、方法版本及实测值，不混用不同协议结果，预测留在 brief。
+EVAL 服务当前问题与用途，复用有效评测。探索先记录能辨别核心假设的观察，同输入、公平条件与有效强基线仍保留，不把完整论文评价器放在核心实现前。既定目标的全部要求不降低；正式比较首行是同输入强基线的完整结果，列覆盖全部用户指标、未见数据、训练—测试差距和预期优势。使用通用指标，没量不算达标；Completion 引用脚本、划分与指标。记录 protocol、split、test draw、时间、轮次、版本与实测，不混协议；预测留在 brief。
 
 执行者在 result 报评测问题，不自行改协议；导师修评测并要求全部历史方法／基线行在新协议下同列重算，先重评保留的原始产物，缺失时再重跑历史版本。方法版本仍保留作消融，旧协议结果标为历史，不混入当前比较。评测修正本身不是方法改动；只有改变目标含义才找用户。测试用过后方法再变，必须从未用于开发及以往测试的数据 fresh draw，各对照在同一新抽样上比较；旧 test 重新 shuffle 不是新 unseen。
 
@@ -63,7 +63,7 @@ EVAL 从立项确认的全部用户要求导出，复用有效已有评测。首
 
 实质质量、依据与判断把握、当前用途是否够用、工作完成是不同事实。未知、未形成、不适用不填最低分或零；未执行不证明实现失败，也不证明可靠。序数不平均，不换成完成率或录用概率。最弱维度只有在它确实决定下一项工作时才重要，不机械用任意最低分否定项目。评分不是运行时状态、冻结门或审批。
 
-调查需要潜在价值和相称的信息收益；新路线的大额实现需要价值、剩余贡献、具体机制、可行性和资源共同充分；确认需要可靠执行、有效公平比较；核心结论需要与主张匹配的证据和重要反证处理。高分不能抵消泄漏、核心评价失效、理论矛盾、必要资源缺失或核心贡献已被覆盖。已确认复现、修复和交付不默认重开选题。正式开题可以效果未知，但核心操作与论证不能只靠“以后试试”。外部 rubric 只在本次交付要求时读实际定义并映射，不常驻第二套框架。
+判断前提按用途与投入缩放：核心探索需有价值的问题、具体假设、可接触资源及相称观察；大额实现共同考虑价值、剩余贡献、机制与可行性；确认需可靠执行、公平评价；核心结论需匹配证据与反证处理。高分不能抵消泄漏、核心评价失效、理论矛盾、必要资源缺失或贡献已覆盖。已确认复现、修复、交付不重开选题；明确开题交付仍需实质论证，不靠“以后试试”。指定外部标准按项目用途适用，`topic start` 可选整理材料、不作探索前置，最新用户原话优先。
 
 ## 证据与工程判断
 
@@ -83,7 +83,7 @@ EVAL 从立项确认的全部用户要求导出，复用有效已有评测。首
 
 ### Research
 
-Start or continue authorized research from the card, EVAL and current brief. Execute the next substantive action, using independent mentor judgment when needed rather than a handoff on every turn.
+Explore directions through authorized core implementation or continue the user's mainline. Use relevant existing context and mentor judgment when needed, not a handoff on every turn.
 
 ### Status
 

@@ -105,13 +105,13 @@ function capabilityContract(options) {
 
 function contract(slug) {
   if (slug === "research") return capabilityContract({
-    ambientParticipation: "Advance authorized research using the card, EVAL and current brief, with independent judgment when needed.",
-    purpose: "Advance research through actual work and necessary independent judgment.",
-    when: "Use for research progression; bounded questions remain bounded.",
+    ambientParticipation: "Select topics through core observations; follow existing Mainline within authorization.",
+    purpose: "Advance research through core work and independent judgment when needed.",
+    when: "Use for topic selection or existing research; bounded questions stay bounded.",
     actions: [
-      `Execute the versioned brief against EVAL; report attempts, outputs, unfinished work, blockers, evaluator flaws and objections. For independent judgment, give ${DOVE_RESEARCH_MENTOR_NAME} a fresh read-only context: dated user-original sources/range since its last reading, the current user's exact words, specified norms, card, EVAL, recent briefs/results, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent.`
+      `Follow Mainline or explore same-problem hypotheses through authorized core implementation and observations. Execute versioned briefs against scoped EVAL; report attempts, outputs, unfinished work, blockers, evaluator flaws and objections. For independent judgment, give ${DOVE_RESEARCH_MENTOR_NAME} a fresh read-only context: dated user-original sources/range since its last reading, the current user's exact words, specified norms, card, EVAL, recent briefs/results, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent.`
     ],
-    boundaries: ["The mentor decides methods and engineering within Mainline and user resources. Only goal/claim, deployment input/output or resource changes need the user's decision; ask once and continue independent authorized defaults if unanswered."]
+    boundaries: ["Preserve Mainline's intent and user-fixed methods; do not reselect or downgrade them. Read-only/design-only requests do not execute."]
   });
   if (slug === "status") return capabilityContract({
     ambientParticipation: "Read the card, latest EVAL rows and current brief; answer four plain sentences.",
@@ -298,7 +298,7 @@ function contract(slug) {
 }
 
 const SURFACES = [
-  ["research", "Advance research through actual work, full evaluation and independent judgment when needed."],
+  ["research", "Explore topics or advance Mainline through core work, scoped evaluation and needed judgment."],
   ["status", "Report what we have made, whether the core is demonstrated, what blocks it and which round is underway."],
   ["source", "Use when external sources, citation identity, DOI checks, or bounded bibliography verification can change the research judgment."],
   ["experiment", "Develop quickly; evaluate fixed method versions and redraw unseen test data after a tested method changes."],

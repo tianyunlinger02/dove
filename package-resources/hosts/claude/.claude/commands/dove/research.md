@@ -1,11 +1,11 @@
 ---
-description: "Advance research through actual work, full evaluation and independent judgment when needed."
+description: "Explore topics or advance Mainline through core work, scoped evaluation and needed judgment."
 argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
 ---
 
 # dove.research
 
-Advance research through actual work, full evaluation and independent judgment when needed.
+Explore topics or advance Mainline through core work, scoped evaluation and needed judgment.
 
 ## Request
 
@@ -21,23 +21,23 @@ These are flexible research considerations, not a required order or report templ
 
 ### What this is for
 
-Advance research through actual work and necessary independent judgment.
+Advance research through core work and independent judgment when needed.
 
 ### When to use
 
-Use for research progression; bounded questions remain bounded.
+Use for topic selection or existing research; bounded questions stay bounded.
 
 ### Scope and changes
 
-- The mentor decides methods and engineering within Mainline and user resources. Only goal/claim, deployment input/output or resource changes need the user's decision; ask once and continue independent authorized defaults if unanswered.
+- Preserve Mainline's intent and user-fixed methods; do not reselect or downgrade them. Read-only/design-only requests do not execute.
 
 ### Ways Dove may proceed
 
-- Execute the versioned brief against EVAL; report attempts, outputs, unfinished work, blockers, evaluator flaws and objections. For independent judgment, give dove-mentor a fresh read-only context: dated user-original sources/range since its last reading, the current user's exact words, specified norms, card, EVAL, recent briefs/results, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent.
+- Follow Mainline or explore same-problem hypotheses through authorized core implementation and observations. Execute versioned briefs against scoped EVAL; report attempts, outputs, unfinished work, blockers, evaluator flaws and objections. For independent judgment, give dove-mentor a fresh read-only context: dated user-original sources/range since its last reading, the current user's exact words, specified norms, card, EVAL, recent briefs/results, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent.
 
 ### When Dove needs input
 
-- Ask once for unresolved goal/claim, deployment input/output or resource changes. The mentor decides evaluation repairs and engineering defaults; without reply continue independent authorized work, not repeated questions or assumed consent.
+- Record clear user words without reconfirmation; ask once for undecided direction or commitment/deployment-I/O/resource changes. Mentor handles evaluation/engineering; no reply permits independent authorized work, not assumed consent.
 
 ### Using host tools
 

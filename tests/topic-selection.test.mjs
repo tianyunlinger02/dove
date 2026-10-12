@@ -29,12 +29,22 @@ test("criteria are kept at user level and copied into a project when selection s
   const topics = startTopicSelection(root, { env });
   assert.equal(topics.started, true);
   assert.equal(topics.criteria.version, "23");
-  assert.ok(fs.readFileSync(path.join(root, ".dove/research/topics/README.md"), "utf8").includes("开头固定五行"));
+  const readme = fs.readFileSync(path.join(root, ".dove/research/topics/README.md"), "utf8");
+  assert.ok(readme.includes("开头固定五行"));
+  assert.match(readme, /标准.*不是.*探索前置/u);
+  assert.match(readme, /用户原话优先.*指定标准.*本项目/u);
+  assert.match(readme, /没写入主线.*选题.*资源.*问题.*少量假设.*机制.*失败.*观察/u);
+  assert.match(readme, /授权.*核心机制.*端到端.*观察.*发生.*改善.*结果.*修正/u);
+  assert.match(readme, /原话明确.*不重复确认.*写入不等于批准.*暂定按暂定/u);
+  assert.match(readme, /已有主线.*用户固定方法.*不重选\/降级/u);
   const copied = fs.readFileSync(path.join(root, ".dove/research/topics/CRITERIA.md"), "utf8");
   assert.doesNotMatch(copied, /找题期间尽量不做实验/u, "another project's settings stay out of the copy");
   assert.match(copied, /## 修订记录/u, "sections after the project settings are kept");
   assert.equal(info.projectSection, "附录 E：当前项目设置（point1）");
-  assert.match(fs.readFileSync(path.join(root, ".dove/research/topics/PROJECT.md"), "utf8"), /待用户确认/u);
+  const project = fs.readFileSync(path.join(root, ".dove/research/topics/PROJECT.md"), "utf8");
+  assert.match(project, /用户原话.*日期\/出处/u);
+  assert.match(project, /明确.*不重复确认.*未知.*待用户确认.*暂定.*不把记录当批准/u);
+  assert.match(project, /只读\/设计讨论.*资源.*宿主权限.*仍适用/u);
 });
 
 test("card headers give status, stage, position, summary and the six conclusions", () => {
