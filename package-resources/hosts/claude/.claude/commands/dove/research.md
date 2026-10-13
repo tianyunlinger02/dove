@@ -33,7 +33,7 @@ Use for topic selection or existing research; bounded questions stay bounded.
 
 ### Ways Dove may proceed
 
-- Follow Mainline or explore same-problem hypotheses through authorized core implementation and observations. Execute versioned briefs against scoped EVAL; report attempts, outputs, unfinished work, blockers, evaluator flaws and objections. For independent judgment, give dove-mentor a fresh read-only context: dated user-original sources/range since its last reading, the current user's exact words, specified norms, card, EVAL, recent briefs/results, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent.
+- Follow Mainline with benefit-led methods or explore same-problem hypotheses via authorized core implementation/observations. Execute versioned briefs against scoped EVAL; report attempts, outputs, unfinished work, blockers, evaluator flaws and objections. For independent judgment, give dove-mentor a fresh read-only context: dated user-original sources/range since its last reading, the current user's exact words, specified norms, card, EVAL, recent briefs/results, actual diff/files and raw artifacts—not execution conversation or paraphrased user intent.
 
 ### When Dove needs input
 

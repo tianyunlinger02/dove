@@ -77,53 +77,58 @@ test("mentor amendments: all user metrics survive mentor protocol repair, histor
   assert.match(evaluation, /测试集用过后方法再变.*从未用于开发或已用测试的数据.*重抽测试集.*基线\/对照同集重算/u);
   assert.match(evaluation, /旧测试只作历史\/开发证据.*没有新数据.*独立证据缺口.*不假称“未见”/u);
   assert.match(section("先读谁说了什么"), /每轮抽查原始图\/文件.*不能只信表/u);
-  assert.match(DOVE_RESEARCH_EVALUATION, /EVAL.*dated user originals.*specified norms/iu);
+  assert.match(DOVE_RESEARCH_EVALUATION, /EVAL.*dated user originals.*norms/iu);
   assert.match(DOVE_RESEARCH_EVALUATION, /Exploration.*proportionate.*observations\/controls.*not.*full-paper prerequisite/iu);
-  assert.match(DOVE_RESEARCH_EVALUATION, /confirmed requirements.*formal comparisons.*complete.*same-input strong baseline/iu);
-  assert.match(DOVE_RESEARCH_EVALUATION, /evaluator flaws.*mentor.*protocol repair.*all-history recomputation.*only changed goal meaning/iu);
+  assert.match(DOVE_RESEARCH_EVALUATION, /Formal comparisons.*confirmed requirements.*complete.*same-input strong baseline/iu);
+  assert.match(DOVE_RESEARCH_EVALUATION, /evaluator flaws.*mentor.*protocol repair.*all-history recomputation.*only goal-meaning changes/iu);
   assert.match(DOVE_RESEARCH_EXPERIMENT_ITERATION, /After test use.*changed methods.*fresh unseen test draws.*same-set baselines.*not old-test retuning/iu);
   assert.match(COMMAND_SURFACE_BY_ID["dove.experiment"].contract.actions.join("\n"), /do not fix EVAL yourself.*mentor's protocol repair and all-history recomputation/iu);
 });
 
 test("mentor amendments: briefs assign concrete execution and one code version with reasoned replacements", () => {
-  const brief = section("下一轮说明的固定写法");
+  const brief = section("下一轮说明");
   assert.match(brief, /作者：导师.*轮次、方法版本.*原话日期\/出处/u);
-  assert.match(brief, /原因诊断.*本轮唯一改动.*对照与预算.*禁读输入.*数字门槛.*失败汇报格式/u);
-  assert.match(brief, /假设.*理由.*观察.*可量化.*EVAL.*数值预测.*依据.*不确定性/u);
-  assert.match(brief, /失败.*卡在哪一步.*1–2 个原始例子/u);
-  assert.match(brief, /一轮=一个方法版本.*版本内代码不改.*改代码.*新版本.*协议.*全量重跑.*不把单款修补算全轮结果/u);
-  assert.match(brief, /旧方法保留作消融.*各对照同预算/u);
-  assert.match(brief, /中途替换.*说明.*原因和作者.*代码变化.*新版本/u);
-  assert.match(brief, /学不动.*先做单件过拟合\/从空状态复现.*不能把扩数据、建大评价器.*第一次检验前/u);
+  assert.match(brief, /任务收益.*机制依据.*关键未知.*实际实现\/检验/u);
+  assert.match(brief, /假设.*理由.*可辨别观察.*结果怎样决定后续/u);
+  assert.match(brief, /不等完整基线库、全部指标或理论证明才实现/u);
+  assert.match(brief, /按用途.*对照与预算.*禁读输入.*门槛.*失败材料/u);
+  assert.match(brief, /可量化.*EVAL.*数值预测.*依据.*不确定性/u);
+  assert.match(brief, /失败定位.*1–2 个原始例子/u);
+  assert.match(brief, /一轮=一个方法版本.*协同改动.*评测期间代码不改.*改代码.*新版本.*协议.*全量重跑.*不把单款修补算全轮结果/u);
+  assert.match(brief, /旧方法作消融.*同预算对照.*辨别实验控制其他因素/u);
+  assert.match(brief, /中途替换说明.*原因和作者/u);
+  assert.match(brief, /学不动.*先做单件过拟合\/从空状态复现.*不把扩数据、建大评价器.*第一次检验前/u);
   assert.match(mentor, /不计算、不改文件.*搭评测、重算、显著性检验.*说明交给执行者/u);
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /user > external > mentor.*direct user tasks/iu);
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /one code version.*method round.*changes.*new version.*full protocol rerun/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /one code version.*method round.*coordinated changes.*code changes.*new version.*full protocol rerun/iu);
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /Replacements.*author\/reason/iu);
 });
 
 test("mentor amendments: result objections and factual corrections are answered before new judgments", () => {
-  const judgment = section("每轮先回应，再判断三层");
+  const judgment = section("每轮先回应，再选择方法工作");
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /Results.*prediction versus actual.*对本轮说明的反驳\/事实更正.*mentor.*first/iu);
   assert.match(judgment, /^先回应结果中的“对本轮说明的反驳\/事实更正”/u);
   assert.match(judgment, /承认或用实际依据反驳，不能跳过.*引用 EVAL 列名、预测和实际数值，再判断/u);
 });
 
-test("mentor amendments: judgment separates method family, general capability and scientific contribution", () => {
-  const judgment = section("每轮先回应，再判断三层");
-  const levels = judgment.split("\n").filter((line) => /^\d\. /u.test(line));
-  assert.equal(levels.length, 3);
-  assert.match(levels[0], /这一族方法.*继续.*共同原因/u);
-  assert.match(levels[0], /连续无净增.*不再循环补丁.*授权内换族.*不擅改.*固定的方法/u);
-  assert.match(levels[1], /通用能力还是补丁.*哪类失败.*未见数据列.*不是某一件/u);
-  assert.match(levels[2], /问题\/方法\/贡献.*敏感性、对照强弱、设定现实性/u);
-  assert.match(levels[2], /验证.*真补强.*不默认收窄主张.*不要为单件样本出领域工艺主意/u);
+test("mentor amendments: task benefit and mechanism evidence select substantive method work", () => {
+  const judgment = section("每轮先回应，再选择方法工作");
+  assert.match(judgment, /完整目标.*任务收益.*合理替代.*价值/u);
+  assert.match(judgment, /方法族.*潜力.*共因/u);
+  assert.match(judgment, /连续无净增.*不再循环补丁.*授权内.*换族.*不擅改.*固定的方法/u);
+  assert.match(judgment, /机制.*收益.*依据.*关键未知/u);
+  assert.match(judgment, /通用能力还是补丁.*哪类失败.*未见数据列.*不看单件调通/u);
+  assert.match(judgment, /完整任务.*外部比较.*效用.*消融\/机制对照.*归因.*不互代/u);
+  assert.match(judgment, /选核心实现、机制补强或改变决定的取证.*不止诊断/u);
+  assert.match(judgment, /问题\/方法\/贡献.*敏感性、对照强弱、现实性.*不默认收窄主张/u);
+  assert.match(judgment, /已知错误直接修.*不要求修复创新.*不出单件工艺主意/u);
 });
 
 test("mentor amendments: needed independent judgment reuses evidence and diagnoses stalled or zero-gain research", () => {
-  const brief = section("下一轮说明的固定写法");
+  const brief = section("下一轮说明");
   assert.match(DOVE_RESEARCH_ROUND_CYCLE, /dove-mentor.*on request.*independent.*judgment.*needed.*reuse.*without new material/iu);
   assert.match(brief, /连续几轮 EVAL 没新行.*诊断.*未形成结果.*调整实际工作.*不补造数据/u);
-  assert.match(section("每轮先回应，再判断三层"), /连续无净增.*不再循环补丁.*授权内换族/u);
+  assert.match(section("每轮先回应，再选择方法工作"), /连续无净增.*不再循环补丁.*授权内.*换族/u);
   assert.match(brief, /上下文摘要大半是禁令.*建议用户清空.*身份卡、用户原话和当前说明.*不自行清空或撤销宿主权限/u);
 });
 

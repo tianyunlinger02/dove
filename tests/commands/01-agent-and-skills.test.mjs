@@ -80,10 +80,17 @@ test("research selects topics through core results and follows Mainline while re
   const shared = renderDoveSharedResearchContractSection();
   const author = renderDoveAuthorStanceSection();
   const research = work("dove.research");
+  assert.match(shared, /Mainline: task benefit vs alternatives.*mechanism grounds.*key unknown.*implement or discriminate/iu);
   assert.match(shared, /Before Mainline.*narrow.*user's field.*valuable.*accessible.*small problem/iu);
   assert.match(shared, /few hypotheses.*mechanism\/grounds\/risk\/test.*recommend one/iu);
   assert.match(shared, /minimal authorized end-to-end core.*Observe mechanism\/benefit.*revise/iu);
-  assert.match(shared, /titles\/claims.*later.*Rounds end at EVAL results.*not plans or smoke tests/iu);
+  assert.match(shared, /titles\/claims.*later.*Rounds.*EVAL results.*not plans\/smoke tests/iu);
+  assert.match(shared, /Fix known errors.*repair alone is not contribution/iu);
+  assert.match(shared, /Full-task\/fair external comparisons.*utility.*ablations\/controls.*mechanisms.*not replace task evidence/iu);
+  const quality = renderDoveResearchQualityFullReference();
+  assert.match(quality, /Proportionate grounds permit implementation before effects, full theory or baseline libraries/iu);
+  assert.match(quality, /components.*different mechanisms/iu);
+  assert.match(shared, /causal controls fix other factors/iu);
   assert.match(shared, /provisional stays provisional/iu);
   assert.match(shared, /field.*recommendation.*card entry.*not confirmation/iu);
   assert.match(shared, /Follow Mainline.*goal.*contribution.*completion.*fixed methods/iu);

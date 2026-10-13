@@ -2,7 +2,7 @@
 
 Read the relevant criteria for consequential judgments, not the whole reference each round. Grades describe scoped merit, not stages, permissions or automatic gates. Mentors and reviewers use only their specified materials; guidance is not evidence.
 
-- Follow Mainline's goal/contribution/completion and fixed methods; provisional stays provisional. A field, recommendation or card entry is not confirmation. Change wording only for user decisions or misrecorded originals; do not reselect or downgrade. Other methods and conclusions follow evidence.
+- Follow Mainline's goal/contribution/completion and fixed methods; provisional stays provisional. A field, recommendation or card entry is not confirmation. Change wording only for user decisions/misrecorded originals; do not reselect/downgrade. Other methods/conclusions follow evidence.
 
 - Use literature, adjacent fields, mathematics, physical reasoning and analogies to invent testable mechanisms; seek where the analogy fails rather than collecting citations.
 
@@ -26,7 +26,7 @@ Read the relevant criteria for consequential judgments, not the whole reference 
 
 - Expression and delivery (1–4) — misleading/unusable: claims conflict with evidence or the artifact fails its use; understandable but weak: consequential reasoning or usability gaps; accurate/clear/usable: claims, evidence, limits and output align; substantially more efficient: faithful expression reveals the insight and reduces understanding or use costs. Scope follows the artifact and audience. Beauty, draft count and build success cannot replace scientific accuracy.
 
-- Before consequential method work, ground the mechanism and distinguishing prediction relative to a same-information simple alternative in inspected sources, derivation or existing observations. Unknown effects permit justified implementation. Clarify missing definitions, design missing operations and test unknown effects rather than treating them as one gap. Reuse still-applicable evidence.
+- Choose method work by goal benefit, grounded mechanisms and key unknowns; use inspected sources, derivation or observations, predicting differences vs same-information alternatives. Proportionate grounds permit implementation before effects, full theory or baseline libraries. Clarify definitions, design operations or test effects; components may use different mechanisms. Reuse valid evidence.
 
 - An interface, inherited implementation, available dataset or teacher output does not establish scientific value, reference truth or the user's goal. Compare problem, population, allowed information, output, reference, real objective/proxy, contribution and completion meaning when they materially change. A new route cannot erase an old proposition's failure or inherit its success.
 
@@ -42,7 +42,7 @@ Read the relevant criteria for consequential judgments, not the whole reference 
 
 - A problem opportunity can justify ideation without topic endorsement. Method examination needs concrete operations, information flow, a describable difference and non-circular grounds; proposal readiness additionally needs sufficient value, remaining contribution, comparisons, resources and feasible validation. These are uses of the same criteria, not stages or approvals. Design-only requests do not authorize execution.
 
-- Choose by remaining benefit, useful information, total time/resources, opportunity and rework costs, dependencies and alternatives, not sunk effort or completed-task counts. Necessary engineering can be useful without immediate scientific progress. Contract checks establish behavior; scientific effects need claim-matched observation. Avoid unsupported infrastructure, redundant paths and arbitrary progress quotas.
+- Choose by remaining benefit, decision-changing information, resources, opportunity/rework costs, dependencies and alternatives, not sunk effort/task counts. Repairs need not innovate. Contract checks establish behavior; full-task results/fair external comparisons show utility, ablations/controls explain mechanisms. Avoid unsupported infrastructure, redundant paths and progress quotas.
 
 - Resource fit concerns the complete preparation/computation/evaluation/output/use path. Reuse measurements or profile a representative workload when needed and authorized. Use suitable available accelerators without imposing CPU-only, inventing scale or maintaining a redundant full CPU fallback. Preserve capability, information conditions and comparison semantics; a kernel speedup or utilization percentage is not end-to-end benefit.
 
