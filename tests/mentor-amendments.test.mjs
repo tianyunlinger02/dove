@@ -51,10 +51,11 @@ test("mentor amendments: topic selection tests core hypotheses and preserves the
   assert.match(selection, /观察.*发生.*改善.*结果.*修正.*替换.*暂停/u);
   assert.match(selection, /用户.*定夺.*问.*原意.*Mainline/u);
   assert.match(selection, /原话明确.*不重复确认/u);
-  assert.match(selection, /领域.*推荐.*不是已定主线.*暂定按暂定.*写入.*不等于批准/u);
-  assert.match(selection, /已有主线.*继续.*不重选.*降级/u);
-  assert.match(selection, /遵从.*目标.*贡献.*完成条件.*用户.*固定的方法/u);
-  assert.match(selection, /其他方法.*结论.*证据.*改变用户承诺.*问.*不为每次方法/u);
+  assert.match(selection, /领域.*推荐非主线.*暂定按暂定.*写入.*不等于批准/u);
+  assert.match(selection, /已有主线.*不重选.*降级/u);
+  assert.match(selection, /遵从.*目标.*贡献.*完成条件.*用户固定方法/u);
+  assert.match(selection, /其他方法\/架构\/工具合同.*跟证据修订.*brief\/旧建议不是约束/u);
+  assert.match(selection, /结论随证据.*改变用户承诺才问.*不逐次方法审批/u);
   assert.match(selection, /原话.*指定规范.*部署输入输出.*基线.*旧历史.*反例.*不继承.*限制/u);
   assert.match(selection, /只读\/设计.*不执行/u);
   const materials = section("选题材料");
@@ -100,7 +101,7 @@ test("mentor amendments: briefs assign concrete execution and one code version w
   assert.match(brief, /学不动.*先做单件过拟合\/从空状态复现.*不把扩数据、建大评价器.*第一次检验前/u);
   assert.match(mentor, /不计算、不改文件.*搭评测、重算、显著性检验.*说明交给执行者/u);
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /user > external > mentor.*direct user tasks/iu);
-  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /one code version.*method round.*coordinated changes.*code changes.*new version.*full protocol rerun/iu);
+  assert.match(DOVE_RESEARCH_ROUND_RECORDS, /one code version.*method round.*combine changes.*code changes.*new version.*full protocol rerun/iu);
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /Replacements.*author\/reason/iu);
 });
 
@@ -108,27 +109,30 @@ test("mentor amendments: result objections and factual corrections are answered 
   const judgment = section("每轮先回应，再选择方法工作");
   assert.match(DOVE_RESEARCH_ROUND_RECORDS, /Results.*prediction versus actual.*对本轮说明的反驳\/事实更正.*mentor.*first/iu);
   assert.match(judgment, /^先回应结果中的“对本轮说明的反驳\/事实更正”/u);
-  assert.match(judgment, /承认或用实际依据反驳，不能跳过.*引用 EVAL 列名、预测和实际数值，再判断/u);
+  assert.match(judgment, /据事实承认或反驳.*不跳过.*对照 EVAL 列名、预测和实际数值，再判断/u);
 });
 
 test("mentor amendments: task benefit and mechanism evidence select substantive method work", () => {
   const judgment = section("每轮先回应，再选择方法工作");
-  assert.match(judgment, /完整目标.*任务收益.*合理替代.*价值/u);
+  assert.match(judgment, /完整目标.*收益.*合理替代.*价值/u);
   assert.match(judgment, /方法族.*潜力.*共因/u);
-  assert.match(judgment, /连续无净增.*不再循环补丁.*授权内.*换族.*不擅改.*固定的方法/u);
+  assert.match(judgment, /方法\/路线据目标和历轮证据.*质疑核心假设.*不被局部提问框定.*局部任务有界.*局部支持不确认路线/u);
+  assert.match(judgment, /连续无净增.*不循环补丁.*授权内.*换族.*不擅改.*固定的方法/u);
+  const criticism = section("审查口径");
+  assert.match(criticism, /方法回应可据核验文献\/推导\/代码\/观察.*实验效果只据实测.*未测仍未知/u);
   assert.match(judgment, /机制.*收益.*依据.*关键未知/u);
-  assert.match(judgment, /通用能力还是补丁.*哪类失败.*未见数据列.*不看单件调通/u);
+  assert.match(judgment, /通用能力还是补丁.*失败类.*未见数据列.*不看单件调通/u);
   assert.match(judgment, /完整任务.*外部比较.*效用.*消融\/机制对照.*归因.*不互代/u);
-  assert.match(judgment, /选核心实现、机制补强或改变决定的取证.*不止诊断/u);
+  assert.match(judgment, /选核心实现、机制补强或决定性取证.*不止诊断/u);
   assert.match(judgment, /问题\/方法\/贡献.*敏感性、对照强弱、现实性.*不默认收窄主张/u);
   assert.match(judgment, /已知错误直接修.*不要求修复创新.*不出单件工艺主意/u);
 });
 
 test("mentor amendments: needed independent judgment reuses evidence and diagnoses stalled or zero-gain research", () => {
   const brief = section("下一轮说明");
-  assert.match(DOVE_RESEARCH_ROUND_CYCLE, /dove-mentor.*on request.*independent.*judgment.*needed.*reuse.*without new material/iu);
+  assert.match(DOVE_RESEARCH_ROUND_CYCLE, /dove-mentor.*requested\/needed independent.*judgment.*reuse judgments.*without new material/iu);
   assert.match(brief, /连续几轮 EVAL 没新行.*诊断.*未形成结果.*调整实际工作.*不补造数据/u);
-  assert.match(section("每轮先回应，再选择方法工作"), /连续无净增.*不再循环补丁.*授权内.*换族/u);
+  assert.match(section("每轮先回应，再选择方法工作"), /连续无净增.*不循环补丁.*授权内.*换族/u);
   assert.match(brief, /上下文摘要大半是禁令.*建议用户清空.*身份卡、用户原话和当前说明.*不自行清空或撤销宿主权限/u);
 });
 

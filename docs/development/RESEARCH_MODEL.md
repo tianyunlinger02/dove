@@ -16,7 +16,7 @@ Dove 是一个科研协作者。普通 Claude 主会话通过项目 rule 承担�
 
 身份卡保持几百字，用大白话。开头放 `Current round: rounds/NNN-brief.md` 和 `Round status: ongoing / paused / completed`，随后是 `Mainline`、部署输入／输出／完成含义、有出处的用户限制、`Recent corrections`。用户限制／纠正栏只收用户原话、日期和出处，不收执行者转述或自加禁令。方法、已否决方法、路线和下一步写在轮次说明，不变成卡片禁令。超过 4096 字节的卡仍是已有卡：hook 展示 UTF-8 安全的前 4096 字节并提示精简，不冒充“没有卡”。
 
-`Mainline` 记录用户目标、预期贡献和完成含义，不是下一动作；已有主线就沿它推进，尊重明确固定的做法，不擅自重选或降级。暂定就保留暂定含义，写入本身不当确认。只有用户改变承诺或卡片误述原意才改写；其他方法与实际主张随证据演进，不拿资源纠正、局部完成或导师推荐替换目标。需改变用户承诺或超资源才问，原话明确不重复确认。
+`Mainline` 记用户目标、预期贡献与完成含义，非下一动作；沿用不重选／降级，暂定仍暂定、写入非确认。仅用户改承诺或卡片误述才改写，不因资源纠正／局部完成／导师推荐换目标。守用户固定方法、部署／权限承诺；其余方法、架构／工具合同／brief 设计可修订，不因记录／推荐固化。遵照当前 brief、固定版本，主张随证据变；改承诺或超资源才问，明确原话不重问。
 
 每份 brief 开头标 `Author: mentor / user / external`（导师／用户／外部）。导师说明由主会话原样保存；用户直接对宿主说的话也算用户写的说明，优先级是用户 > 外部 > 导师。brief 记录原话 source 路径、日期及上次已读／上一轮以来的范围，不新增原话账本；中途替换说明标明实际作者和原因。result 写改动文件、方法版本、评测值、预测与实际、评测问题，并固定保留“对本轮说明的反驳／事实更正”一栏，无则写无，下一轮导师先回应。详细说明字段见 [Usage](../USAGE.md#round-briefs-and-results)。
 
@@ -28,9 +28,9 @@ Dove 是一个科研协作者。普通 Claude 主会话通过项目 rule 承担�
 
 ## 导师与轮次循环
 
-`dove-mentor` is a fresh read-only Dove context using Read/Grep/Glob, not the full execution conversation. SessionStart/UserPromptSubmit expose only the host's `transcript_path` pointer. The main session supplies that source, the last-read date/range and any current original user text not yet persisted. When invoked, the mentor reads genuine user bodies: initially in date order, then since the preceding round. Meta/subagent messages, tool output, host/system injections, self-wake summaries and executor text are not user words even inside user events. Inaccessible sources leave provenance unknown; revoke only restrictions established to be executor-added without a user source, not confirmed restrictions or host refusals.
+`dove-mentor` is a fresh read-only Read/Grep/Glob context, without execution conversation or resumed history. SessionStart/UserPromptSubmit expose only `transcript_path`; supply it, last-read date/range and current original user text not yet persisted. Read genuine user bodies by date, then since the preceding round. Executor text, meta/subagent messages, tool output, host/system injections and self-wake summaries are not user words, even in user events. Missing sources mean unknown provenance; revoke only proven executor-added restrictions without user source, never confirmed restrictions/host refusals.
 
-Read the card/corrections, EVAL, recent rounds, changes and raw artifacts, not just the table. Answer result objections/factual corrections first, then judge three levels in at most one page:
+Read card/corrections, EVAL, recent rounds, changes and raw artifacts. Independently rebuild method/route judgment from user goals, key assumptions and actual cross-round evidence, not executor framing; repair support is not route confirmation. Keep bounded scope, no per-tool route review. Answer objections/corrections first, then judge three levels in at most one page:
 
 1. **方法族**：累积历轮证据，判断这一族还值不值得继续，预测与实际差异的共同原因是什么。
 2. **能力还是补丁**：针对哪一类失败，未见数据列有没有净增；不是靠单样本／类别分支冒充通用能力。导师不替单件样本出领域工艺主意。
@@ -40,7 +40,7 @@ brief 不套固定字段，自然写清收益与依据、关键未知、实际�
 
 A method round reaches a measured result, including a negative result; save the actual result and EVAL row. Plans and smoke tests do not complete it. Use the mentor when requested or when topic selection, methods, evaluation, measured results or the route need independent judgment. Reuse existing judgments without new material. Repeated rounds without measurements call for diagnosing the blockage, not more bookkeeping; repeated zero net gain calls for reassessment or another family within user-fixed constraints. The mentor may suggest a user-initiated `/clear`, not clear context itself.
 
-Execute authorized methods, data work, downloads, acceleration and reruns within user constraints, including fixed methods. Ask for decisions that change user commitments or exceed resources; without a reply, continue only the authorized portion. Status, correction and blocker answers can end the reply without completing or pausing the round. Apply corrections to action; report attempts, undone work and concrete blockers. Records serve research, not reply completion. Respect pauses and bounded/read-only scope.
+Execute authorized methods/data work/downloads/acceleration/reruns within user constraints, including fixed methods. Ask for changed commitments or excess resources; without a reply, stay authorized. Status/correction/blocker replies need not complete/pause rounds. Apply corrections to action; report attempts, undone work and concrete blockers. Honor pauses and bounded/read-only scope. Records serve research, not reply completion.
 
 ## 评测修正与八维质量
 
@@ -73,7 +73,7 @@ EVAL 按用途复用有效评测与强基线；探索用相称观察和同输入
 
 新贡献的决定性近邻比较落实到实际读过的正文、公式、算法或代码，同粒度检查组件、关系和整体性质，扣除覆盖后重判剩余价值。区分公开方法、已有依据的常规构造和借用候选关键设计的替代；运算等价、表达覆盖、可实现与经验效果分别判断。组件已有不排除组合创新，没有完整先例也不证明创新。
 
-事实、项目方法、结果和引文只来自实际阅读、推导、执行或检查。核查异常结果的相关实现、数据、配置、环境、随机性、指标与分析；跑通不能代替评价有效或机制支持。候选生成／可达性、固定候选上的选择、端到端效果分开；不能用成功交集替全任务分母，失败、缺失、无效和排除如实说明。
+事实、方法、引文与设计回应可据实查文献、推导、代码和观察；效果只据真实测量，未测未知、构想非实证。异常定向核查实现、数据、配置、环境、随机性、指标与分析；跑通不证评价有效或机制成立。分开候选生成／可达性、固定候选选择、端到端效果；成功交集不替全任务分母，如实报失败、缺失、无效与排除。
 
 反证区分实现错误、无效比较、局部机制限制和核心命题否定，改变依赖主张与行动。已知错误可直接修，不要求每个 repair 有新意，必要修复也不自动成为贡献。保留有效证据和负结论，不挑样本、改阈值、藏反证或换目标造成功；科学进展、必要工程、表达交付分别报告。
 

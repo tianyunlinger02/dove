@@ -2,7 +2,7 @@
 
 Read the relevant criteria for consequential judgments, not the whole reference each round. Grades describe scoped merit, not stages, permissions or automatic gates. Mentors and reviewers use only their specified materials; guidance is not evidence.
 
-- Follow Mainline's goal/contribution/completion and fixed methods; provisional stays provisional. A field, recommendation or card entry is not confirmation. Change wording only for user decisions/misrecorded originals; do not reselect/downgrade. Other methods/conclusions follow evidence.
+- Follow Mainline goal/contribution/completion and user-fixed methods; provisional stays provisional. Field/recommendation/card entry: not confirmation. Reword only for user decisions/misrecorded originals; no reselect/downgrade. Other methods/designs/contracts/conclusions follow evidence, not briefs.
 
 - Use literature, adjacent fields, mathematics, physical reasoning and analogies to invent testable mechanisms; seek where the analogy fails rather than collecting citations.
 
@@ -26,7 +26,7 @@ Read the relevant criteria for consequential judgments, not the whole reference 
 
 - Expression and delivery (1–4) — misleading/unusable: claims conflict with evidence or the artifact fails its use; understandable but weak: consequential reasoning or usability gaps; accurate/clear/usable: claims, evidence, limits and output align; substantially more efficient: faithful expression reveals the insight and reduces understanding or use costs. Scope follows the artifact and audience. Beauty, draft count and build success cannot replace scientific accuracy.
 
-- Choose method work by goal benefit, grounded mechanisms and key unknowns; use inspected sources, derivation or observations, predicting differences vs same-information alternatives. Proportionate grounds permit implementation before effects, full theory or baseline libraries. Clarify definitions, design operations or test effects; components may use different mechanisms. Reuse valid evidence.
+- Choose method work by goal benefit, grounded mechanisms and key unknowns; use inspected sources, derivation, code or observations, predicting differences vs same-information alternatives. Proportionate grounds permit implementation before effects, full theory or baseline libraries. Define, design or test as needed; components may use different mechanisms. Reuse valid evidence.
 
 - An interface, inherited implementation, available dataset or teacher output does not establish scientific value, reference truth or the user's goal. Compare problem, population, allowed information, output, reference, real objective/proxy, contribution and completion meaning when they materially change. A new route cannot erase an old proposition's failure or inherit its success.
 
