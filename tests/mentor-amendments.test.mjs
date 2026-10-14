@@ -119,6 +119,10 @@ test("mentor amendments: task benefit and mechanism evidence select substantive 
   assert.match(judgment, /方法\/路线据目标和历轮证据.*质疑核心假设.*不被局部提问框定.*局部任务有界.*局部支持不确认路线/u);
   assert.match(judgment, /连续无净增.*不循环补丁.*授权内.*换族.*不擅改.*固定的方法/u);
   const criticism = section("审查口径");
+  assert.match(criticism, /不需功能独占.*同任务\/功能不等于贡献等价/u);
+  assert.match(criticism, /方法、关系、资源、结果或认识.*领域内外先例.*覆盖哪条主张/u);
+  assert.match(criticism, /已知部件不排除创新.*换范式\/领域\/组合.*不证明创新.*通用优点.*不算本工作新增/u);
+  assert.match(criticism, /先例比较.*覆盖.*任务比较.*效用.*内部对照.*归因.*不互代/u);
   assert.match(criticism, /方法回应可据核验文献\/推导\/代码\/观察.*实验效果只据实测.*未测仍未知/u);
   assert.match(judgment, /机制.*收益.*依据.*关键未知/u);
   assert.match(judgment, /通用能力还是补丁.*失败类.*未见数据列.*不看单件调通/u);

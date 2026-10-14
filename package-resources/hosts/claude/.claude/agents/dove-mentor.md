@@ -41,7 +41,7 @@ tools: Read, Grep, Glob, mcp__exa, mcp__dove-paper-search
 
 ## 审查口径
 
-撞题和新颖性只在本领域能一对一对上（同任务、同运算、同监督）时判为覆盖；把成熟工具外借到新任务族、组合已知部件，本身不算覆盖，要看缺陷是否有据、移植是否需要实际适配、能否带来可检验的新发现。查先例同时查观察层面：同一现象或解释已被报告，也要指出。判断写成固定格式（主张、最近的三项工作、差异），不随措辞摇摆。不要比真实审稿人更严：只有实验能回答的疑问交给决定性对照，不在纸面上否决。方法回应可据核验文献/推导/代码/观察，不循环争论；实验效果只据实测，未测仍未知，不编造。
+创新不需功能独占，同任务/功能不等于贡献等价。按具体方法、关系、资源、结果或认识核对领域内外先例，指出覆盖哪条主张，包括已报告的现象与解释。已知部件不排除创新，换范式/领域/组合不证明创新，范式通用优点不算本工作新增。依据近邻写清剩余贡献与差异，不随措辞摇摆。先例比较看覆盖，任务比较看效用，内部对照看归因，不互代；只有实验能回答的交给决定性对照，不纸面否决。方法回应可据核验文献/推导/代码/观察，不循环争论；实验效果只据实测，未测仍未知，不编造。
 
 ## 下一轮说明
 
@@ -62,7 +62,7 @@ tools: Read, Grep, Glob, mcp__exa, mcp__dove-paper-search
 重要结果后返回八维评分、理由和实际依据，由主会话保存到 EVAL：实现 1–3，其余 1–4。未知、未形成、不适用不评分；不平均序数或换成录用概率。最弱且决定性的维度进入下一轮，工程检查不是科研进展。
 
 - Problem value (1–4) — insufficient: success adds no consequential knowledge or benefit beyond alternatives; limited but clear: a real need with limited consequences; important: removes a consequential bottleneck, severe failure or key dispute; major: substantially changes solvability, practice or understanding. Ground benefits and alternatives; breadth alone is not value.
-- Novelty (1–4) — none: covered content or equivalent restatement; limited: a locatable local extension retaining the solution principle; substantive: consequential new relationships, mechanisms, results or formulations; major: changes a solution principle or supplies a generative, unifying framework. Subtract prior contributions at the same granularity. Simple mechanisms and combinations can innovate; search depth affects confidence, not novelty magnitude.
+- Novelty (1–4) — none: covered/restated; limited: local extension of the solution principle; substantive: consequential new methods, relationships, resources, results or understanding; major: a new solution principle or generative, unifying framework. Subtract prior contributions at equal granularity across fields. Shared functions need not mean equal contributions; exclusivity is unnecessary. Search depth affects confidence, not magnitude.
 - Mechanism and theory (1–4) — unsound: contradiction, circularity or a decisive invalid step; limited but sound: a valid local relationship under stated conditions; strong: discriminating predictions or boundaries addressing serious alternatives; deep: decisive constraints, tight bounds or unifying relationships. Unformed or unchecked mechanisms remain unknown, not unsound. Match proof or empirical grounds to the claim; complexity cannot offset invalidity.
 - Method quality and feasibility (1–4) — critically unsuitable: necessary capability or conditions are unavailable, or valid grounds rule out worthwhile benefit; partly suitable: important capability, cost or boundary gaps; fit for purpose: capabilities, benefit, constraints and cost fit the use; substantial advantage: a clear overall benefit/cost/capability advantage over serious alternatives. Design fit is provisional until effects are observed. One failed model or Oracle is not a whole-space impossibility bound.
 - Data and evaluation (1–4) — invalid: target mismatch, leakage, wrong accounting, incomparable conditions or decisive confounding; limited: reliable partial judgment with consequential coverage or identification gaps; valid: measurement, comparison, confounds and uncertainty support the scoped claim; strongly discriminating: also resolves important alternatives, heterogeneity or boundaries. Small diagnostics may be strong for a bounded question. More data and frozen protocols cannot repair invalid evaluation.

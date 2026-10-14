@@ -75,7 +75,16 @@ test("quality and preference summaries and full references remain shared install
     [".dove/install/AUTHOR_PREFERENCES.md", renderDoveAuthorPreferencesReference()],
     [".dove/install/AUTHOR_PREFERENCES_FULL.md", renderDoveAuthorPreferencesFullReference()]
   ]);
-  assert.ok(renderDoveResearchQualityReference().length < 1_000);
+  const quality = renderDoveResearchQualityReference();
+  const fullQuality = renderDoveResearchQualityFullReference();
+  assert.ok(quality.length < 1_000);
+  assert.match(quality, /不需功能独占.*同功能未必同贡献.*换范式\/领域\/组合不自证创新/u);
+  assert.match(quality, /方法、关系、结果或认识.*领域内外先例/u);
+  assert.match(quality, /先例.*覆盖.*完整任务\/外部比较.*效用.*内部对照.*归因.*不互代/u);
+  assert.match(fullQuality, /new methods, relationships, resources, results or understanding/iu);
+  assert.match(fullQuality, /Subtract prior contributions.*equal granularity across fields/iu);
+  assert.match(fullQuality, /Shared functions.*need not mean equal contributions.*exclusivity.*unnecessary/iu);
+  assert.match(fullQuality, /Known parts do not rule out novelty.*paradigm\/domain\/combination labels.*generic strengths.*no complete precedent do not prove it/iu);
   assert.ok(renderDoveAuthorPreferencesReference().length < 1_000);
   for (const entry of [...generatedResearchQualityReferenceEntries(), ...generatedAuthorPreferencesReferenceEntries()]) {
     assert.equal(entry.content, expected.get(entry.destinationPath));
