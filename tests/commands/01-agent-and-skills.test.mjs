@@ -105,12 +105,21 @@ test("aggregate rule and Skill guidance and all installed guidance do not grow b
   }
 });
 
-test("topic selection belongs to the user and implementation scale answers the research question", () => {
-  assert.match(DOVE_RESEARCH_ACTION_SPINE, /read existing.*CRITERIA\.md.*standards/iu);
-  assert.match(DOVE_RESEARCH_ACTION_SPINE, /broad parallel candidate pool.*without pruning.*searches.*expand/iu);
-  assert.match(DOVE_RESEARCH_ACTION_SPINE, /2–3.*user to choose.*before.*do not implement/iu);
-  assert.match(DOVE_RESEARCH_ACTION_SPINE, /scale and change.*answer the question.*expand or redesign/iu);
-  assert.match(DOVE_RESEARCH_ACTION_SPINE, /pipeline is not.*core mechanism/iu);
+test("topic selection ends in a user choice before method closure and research execution", () => {
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /read.*CRITERIA\.md.*standards/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /RESEARCH_QUALITY\.md.*one round/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /sourced candidates.*neighbors?.*recommendations/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /selection.*not.*closed.*proposal/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /higher standards.*deliverables.*not recommendations/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /conflicts?.*once.*still.*offer.*directions.*not.*static/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /before (?:choice|selection).*implement no methods.*standards-allowed diagnostics/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /confirmation.*end.*selection-only limits/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /ask once.*separate.*resource.*model.*authorization/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /diagnos.*unknowns.*design.*method.*experiment.*then.*proposal/iu);
+  const research = COMMAND_SURFACE_BY_ID["dove.research"].contract.actions.join("\n");
+  assert.match(research, /after confirmation.*diagnos.*unknowns.*design.*method.*experiment.*then.*proposal/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /scale.*answer the question.*expand or redesign/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /pipeline.*not.*core evidence/iu);
   assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /user's confirmed Mainline.*card entry is not confirmation/iu);
   assert.match(DOVE_RESEARCH_MAINLINE_ANCHORING, /old route, new route and reason/iu);
   assert.match(DOVE_RESEARCH_CLARIFICATION, /Without a reply.*authorized work.*not assume consent/iu);

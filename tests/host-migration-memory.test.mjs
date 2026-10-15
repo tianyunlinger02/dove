@@ -159,7 +159,15 @@ test("enabled installation only registers version, time and existing-record task
   assert.ok(store.text(PENDING).includes(NOW));
   assert.ok(store.text(PENDING).includes(HOST_MIGRATION_TASK));
   assert.match(store.text(PENDING), /3\.4\.0/u);
-  for (const marker of ["1200", "Target tier", "EVAL.md", "历史文件", "6000", "3000", "source: mentor"]) assert.ok(store.text(PENDING).includes(marker));
+  for (const marker of ["1200", "Target tier", "EVAL.md", "6000", "3000", "source: mentor"]) assert.ok(store.text(PENDING).includes(marker));
+  const pending = store.text(PENDING);
+  assert.match(pending, /旧.*内容.*原样.*同目录历史.*链接/u);
+  assert.match(pending, /仍在选题.*正常回复.*质量摘要.*一轮.*2[–-]3.*不足.*1\s*个.*不重跑/u);
+  assert.match(pending, /推荐.*定主线.*不等.*方法闭合.*正式产物.*不.*推荐/u);
+  assert.match(pending, /标准.*矛盾.*禁.*证据.*说明一次.*(?:仍|同时).*方向.*用户.*选.*调标准.*不.*静态打磨/u);
+  assert.match(pending, /确认后.*结束.*选题期限制.*独立资源.*授权.*问一次.*诊断.*设计.*实验.*开题/u);
+  assert.match(pending, /已有主线.*续做/u);
+  assert.match(pending, /不改.*项目.*用户级.*标准.*选题材料.*只改.*后续安排/u);
   assert.equal(result.manifest.managed.some((entry) => entry.path === HOST_MIGRATION_PENDING_PATH || entry.path === HOST_MIGRATION_REGISTERED_PATH), false);
   assert.equal(inspectProjectIntegration(ROOT, store.options).status, "current", "migration metadata is not guidance drift");
   assert.equal(inspectCurrentPromptGuidance(ROOT, store.options).version, PACKAGE_VERSION);

@@ -8,14 +8,15 @@ import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 export const HOST_MIGRATION_PENDING_PATH = ".dove/install/MIGRATION_PENDING.md";
 export const HOST_MIGRATION_REGISTERED_PATH = ".dove/install/migration-registered.json";
 
-// This release also brings existing 3.4.0 records into the current format.
+// Carry forward record normalization for consumers skipping earlier releases.
 // Leave empty in a release that has no host-side migration work.
 export const HOST_MIGRATION_TASK = `整理 3.4.0 起已有的研究记录，只处理已有内容，不为迁移另开研究任务：
 
-1. 将 .dove/research/IDENTITY.md 整理为不超过 1200 字符的固定栏目，顺序为 Current round、Round status、Mainline、Target tier、Deployment inputs/outputs、Completion、User restrictions、Recent corrections、Research state。保留未变的 Mainline 和用户原话；过长的原始内容原样留在同目录历史文件并链接，不丢弃。Target tier 缺失且尚未询问时，问用户一次，不自行推定。限制条目注明原话、日期/来源、原话还是转述、长期还是本次任务适用。
-2. 将 .dove/research/EVAL.md 整理为一个方法版本一行，保留完成标准引用，列为 Date、Version/round、Protocol/split、Measurements、Unseen data/train-test gap、Conclusion、Artifacts；单元格以已有数字和至多一句短句为主，不超过 200 字符。旧的长内容原样移到同目录的历史文件并链接，不删除、不改研究结论、不补造或重算任何结果。
-3. 若 .dove/research/MENTOR_NOTES.md 超过 6000 字符，在下一次正常导师调用时请导师合并为不超过 3000 字符的全文，保留关键原因和未解决担忧；不要由执行者代写，不为此中断当前工作或另开导师调用。
-4. 若 .dove/research/watch/config.json 的 source 仍为 draft，在下一次正常导师调用时一并请导师给出针对当前问题的追踪修正建议，由主会话写回并标为 source: mentor。缺少的研究记录无需为迁移创建。等待下一次导师调用的事项应在已有工作记录中留下简短提醒后完成本次待办，不抢跑导师调用。`;
+1. .dove/research/IDENTITY.md 限 1200 字符，依次为 Current round、Round status、Mainline、Target tier、Deployment inputs/outputs、Completion、User restrictions、Recent corrections、Research state。未变 Mainline 与用户原话保留；过长原文留同目录历史并链接，不丢弃。Target tier 缺失且未问过时问一次，不推定；限制注明引文、日期/来源、原话/转述、长期/任务范围。
+2. .dove/research/EVAL.md 一方法版本一行，保留完成标准引用，列为 Date、Version/round、Protocol/split、Measurements、Unseen data/train-test gap、Conclusion、Artifacts；单元格为已有数字加至多一句，限 200 字符。旧长内容原样移至同目录历史并链接，不删除、改结论、补造或重算结果。
+3. .dove/research/MENTOR_NOTES.md 超 6000 字符，下次正常导师调用请导师合并为至多 3000 字符全文，保留关键原因与未解担忧；执行者不代写，不中断工作或另开调用。
+4. .dove/research/watch/config.json 若 source 为 draft，下次正常调用请导师给本问题的追踪修正建议，主会话写回并标 source: mentor。不为迁移创建缺少的研究记录；待下次调用的事项在已有记录留短提醒后完成本待办，不抢跑。
+5. 仍在选题时，下次正常回复按质量摘要一轮交候选、近邻及最佳 2–3 个方向，不足给 1 个，不重跑。推荐供定主线，不等方法闭合，正式产物门槛不扣住推荐；标准矛盾或禁取证据卡住时，说明一次仍给方向，请用户选或调标准，不静态打磨。确认后结束选题期限制，缺的独立资源／跑模型授权合并问一次，再诊断、设计、实验、写开题；已有主线续做。不改项目及用户级标准、进行中选题材料，只改后续安排。`;
 
 function settingsPath(options) {
   const env = options.env ?? process.env;

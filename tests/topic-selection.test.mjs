@@ -31,9 +31,15 @@ test("criteria are kept at user level and copied into a project when selection s
     assert.ok(readme.includes(`${field}：`));
   }
   assert.ok(readme.includes("RESEARCH_QUALITY.md"));
-  assert.match(readme, /必须先读并遵循项目标准/u);
-  assert.match(readme, /用户尚未确认主线.*并列候选.*生成时不砍题/u);
-  assert.match(readme, /真实.*检索.*拓宽候选.*2–3.*用户选定.*选择前不实现方法/u);
+  assert.match(readme, /先读项目标准.*正式产物.*门槛.*不.*推荐/u);
+  assert.match(readme, /并列生成.*比较/u);
+  assert.match(readme, /问题价值.*基线.*失败.*数字来源.*正文.*缺口.*有来源.*思路.*未知/u);
+  assert.match(readme, /不等.*方法闭合.*推荐/u);
+  assert.match(readme, /一轮.*候选.*(?:实查|真实检索).*近邻.*最佳.*2[–-]3.*不足.*1\s*个/u);
+  assert.match(readme, /标准冲突.*(?:禁取证据|证据被禁).*说明一次.*(?:仍|同时).*方向.*用户.*选.*调标准.*不.*静态打磨/u);
+  assert.match(readme, /选择前不实现方法.*标准允许.*诊断/u);
+  assert.match(readme, /确认后.*选题期限制结束.*独立资源.*授权.*(?:合并|一并)问一次/u);
+  assert.match(readme, /诊断.*设计.*实验.*开题/u);
   assert.match(readme, /卡片记录不是选择.*已有主线.*不重选或降级/u);
   const copied = fs.readFileSync(path.join(root, ".dove/research/topics/CRITERIA.md"), "utf8");
   assert.doesNotMatch(copied, /找题期间尽量不做实验/u, "another project's settings stay out of the copy");

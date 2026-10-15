@@ -33,14 +33,14 @@ test("mentor amendments: fresh direction judgment reads genuine user materials, 
 });
 
 test("mentor amendments: triggered calls use the generated template and its fixed questions", () => {
-  assert.match(DOVE_RESEARCH_ROUND_CYCLE, /each round end.*two consecutive rounds.*user corrects direction.*paper claim\/story.*before changing routes/iu);
+  assert.match(DOVE_RESEARCH_ROUND_CYCLE, /after.*mainline.*confirmation.*each round end.*two consecutive rounds.*user corrects direction.*paper claim\/story.*before changing routes/iu);
   assert.match(DOVE_RESEARCH_ROUND_CYCLE, /Engineering and verification failures count.*by the third.*ask the user.*before another round/iu);
+  assert.match(mentor, /主线确认后.*每轮.*两轮.*诊断.*第三轮.*用户.*决定/u);
   const command = "dove mentor brief --project <root>";
   assert.ok(DOVE_RESEARCH_ROUND_CYCLE.includes(command));
   assert.ok(mentor.includes(command));
   assert.match(mentor, /用 Dove 生成的导师调用模板.*材料.*末尾四问/u);
   assert.equal((mentor.match(/^\d+\. .+$/gmu) ?? []).length, 0, "The generator owns the fixed questions, not another handwritten copy");
-  assert.match(mentor, /2–3.*用户选定.*选定前不安排方法实现/u);
 });
 
 test("mentor amendments: mentor-authored memory and bounded returns feed the next round without resumed history", () => {
@@ -85,30 +85,50 @@ test("mentor amendments: every invocation follows shared tracking, impact and sc
 
 test("mentor amendments: both hosts share grounded gap discovery before mechanism invention", () => {
   assert.equal(DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh);
-  assert.ok(DOVE_RESEARCH_ACTION_SPINE.includes("RESEARCH_QUALITY.md"));
-  assert.match(DOVE_RESEARCH_ACTION_SPINE, /first read.*standards.*broad parallel candidate pool.*without pruning/iu);
-  assert.match(DOVE_RESEARCH_ACTION_SPINE, /2–3.*user to choose.*do not implement/iu);
-  assert.match(mentor, /质量摘要的“选题与新意判断”/u);
-  assert.match(quality, /先读项目选题标准.*挑战轴.*每轴.*至多两个缺口/u);
-  assert.ok(quality.includes("已有方法通过 Y 做 X，但 Y 留下问题 Z"));
-  assert.match(quality, /至少.*两篇.*正文.*逐篇说明差在哪里/u);
-  assert.match(quality, /缺陷类别.*缺机制.*算法局限.*归纳偏置.*信用分配.*目标不匹配.*表示局限.*扩展性/u);
-  assert.match(quality, /什么观察或比较.*缺口补上.*不预设解法/u);
-  assert.match(quality, /6–10.*查询.*至少 3 个其他子领域.*机制.*查询与来源/u);
-  assert.match(quality, /本领域来源也可以.*不能只是重新发现最近邻/u);
-  assert.match(quality, /贡献类型由项目标准决定.*只有标准要求时才限方法贡献/u);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /read.*CRITERIA\.md.*standards.*RESEARCH_QUALITY\.md/iu);
+  assert.match(DOVE_RESEARCH_ACTION_SPINE, /candidates.*neighbors?.*recommendations/iu);
+  assert.match(mentor, /未定主线.*质量摘要.*候选.*评审/u);
+  assert.match(quality, /项目标准.*挑战轴.*每轴.*至多两个缺口/u);
+  assert.match(quality, /强基线.*真实失败.*数字来源/u);
+  assert.match(quality, /缺口.*已有方法.*Y.*X.*但.*Y.*Z/u);
+  assert.match(quality, /至少两篇.*正文.*论文.*不足/u);
+  assert.match(quality, /缺陷类别.*闭合观察/u);
+  assert.match(quality, /方法类缺口.*具体到方法.*摘要.*没人做过.*不算/u);
+  assert.match(quality, /6[–-]10.*查询.*至少 3 个其他子领域.*机制.*保留查询.*来源/u);
+  assert.match(quality, /本领域.*不能.*发现最近邻/u);
+  assert.match(quality, /并列生成.*比较/u);
+  assert.match(quality, /贡献类型.*标准/u);
   assert.match(DOVE_RESEARCH_ONE_AGENT, /one research collaborator.*not different personas/iu);
+});
+
+test("mentor amendments: recommendations lead to user selection, not a closed proposal or another static round", () => {
+  assert.match(quality, /用户定主线.*结束选题.*不等.*闭合.*开题/u);
+  assert.match(quality, /正式产物.*门槛.*只约束.*产物.*不.*推荐/u);
+  assert.match(quality, /最大风险.*未知/u);
+  assert.match(quality, /一个.*有来源.*思路.*供选.*方法.*闭合.*主线/u);
+  assert.match(quality, /一轮.*候选.*近邻.*最佳.*2[–-]3.*不足.*1\s*个.*不凑数/u);
+  assert.match(quality, /标准.*矛盾.*禁.*证据.*说明.*一次.*(?:仍|同时).*方向.*用户.*选.*调标准.*不.*静态打磨/u);
+  assert.match(quality, /选定前不实现方法.*标准允许.*诊断/u);
+  for (const guidance of [quality, mentor]) {
+    assert.match(guidance, /确认后.*(?:结束选题期限制|选题期限制结束)/u);
+    assert.match(guidance, /确认后.*独立资源.*授权.*(?:合并|一并)问一次/u);
+    assert.match(guidance, /授权.*问一次.*诊断.*设计.*实验.*开题/u);
+  }
+  assert.match(quality, /跑模型授权.*问一次/u);
+  assert.match(mentor, /一轮.*推荐.*用户定主线.*不.*闭合.*开题.*卡住/u);
+  assert.match(mentor, /标准冲突.*一次.*仍给方向.*不.*静态打磨/u);
+  assert.match(mentor, /已有主线.*不重选.*降档/u);
 });
 
 test("mentor amendments: candidate review attacks novelty and targets one repair dimension", () => {
   for (const field of ["一句话", "缺口", "来源机制", "对应关系", "成立前提", "近邻差别", "最大风险", "改进自"]) {
     assert.ok(quality.includes(field), field);
   }
-  assert.match(quality, /隔离的 Dove 判断上下文.*来源机制与迁移前提.*借用机制＋目标问题.*证伪新意/u);
+  assert.match(quality, /隔离.*Dove.*机制.*迁移前提.*借用机制＋目标问题.*检索.*反证/u);
   assert.ok(quality.includes("留下 / 修改 / 否掉（原因）"));
-  assert.match(quality, /修改只选最弱的一项：新意、连贯、可行、清晰、对应关系或依据/u);
-  assert.match(quality, /论文编号及一两句证据理由.*一句最强反对/u);
-  assert.match(quality, /不是完整稿件的 dove-review/u);
+  assert.match(quality, /修改(?:只|仅).*新意.*连贯.*可行.*清晰.*对应.*依据.*最弱(?:一项|项)/u);
+  assert.match(quality, /附.*编号.*一两句.*证据.*最强反对/u);
+  assert.match(quality, /不替代 dove-review/u);
   assert.deepEqual(tools(renderClaudeDoveReviewAgent()), ["Read", "Grep", "Glob"]);
 });
 

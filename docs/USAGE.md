@@ -47,7 +47,7 @@ Mentors read quality, not private preferences; reviewers read supplied manuscrip
 
 Preserve the user's confirmed Mainline, intended contribution, completion meaning and fixed methods. A field, recommendation or card entry is not confirmation. Record clear intent without asking again; keep provisional intent provisional. Revise other designs with evidence. Changes to user commitments, deployment inputs/outputs or resources need the user, not routine engineering.
 
-After selection, choose work by full-task benefit, alternatives, mechanism grounds and unknowns. Scale must answer the question; a connected pipeline does not prove its core mechanism. Repairs need not be novel or count as contributions.
+Confirmation ends selection-only limits; ask once for any separate resource/model authorization. Diagnose key unknowns, design the core method, experiment, then write the proposal. Scale must answer the question; pipeline connection is not core evidence.
 
 For judgment questions, give the direct conclusion first—达到、没达到、能、不能、还不知道, or equivalent—then one or two sentences of evidence and at most one boundary sentence. Report scientific progress, engineering, delivery and software checks separately.
 
@@ -57,9 +57,9 @@ Records under `.dove/research/` belong to the researcher. Installation does not 
 
 ### Topic selection and original-user grounding
 
-Before selection, read `topics/CRITERIA.md` and project standards. Establish a meaningful direction and its challenge axes. For each axis, investigate at most two substantive gaps. Write each as “prior methods do X through Y, but Y leaves Z unresolved,” naming at least two near-miss papers whose bodies were read and why each falls short. Identify the deficiency—such as mechanism, algorithm, inductive bias, credit assignment, objective, representation or scaling—and the observation that would show it was closed. An unread paper or “nobody has done this” is not gap evidence. Contribution types follow project standards; Dove has no universal method-only gate.
+Read `topics/CRITERIA.md` and project standards. Selection ends with the user's mainline choice, not a closed-method proposal; higher standards bind their deliverables, not recommendations. Ground problem value in real strong-baseline failures and sourced numbers. Per challenge axis, investigate at most two gaps: “prior methods do X through Y, but Y leaves Z unresolved.” Cite two body-read near-miss papers and each shortfall, a deficiency (mechanism, algorithm, inductive bias, credit assignment, objective, representation or scaling) and observable closure. Abstracts or absent precedent are not evidence; no universal method-only gate applies.
 
-For a gap, run 6–10 mechanism-oriented queries across at least three other subfields, looking for solutions to structurally similar problems. An in-domain source is also useful when the transfer is more than rediscovering the closest work. Generate parallel candidates before pruning; retrieval should create possibilities, not just deduct novelty. Cards in `topics/cards/` retain status, stage and position for the Topics page, with these substantive fields:
+Per gap, use 6–10 queries across at least three other subfields for mechanisms solving similar problems; in-domain sources must exceed rediscovery. Generate parallel candidates before pruning. One sourced idea with key unknowns can support selection; method design and closure belong within the mainline. Cards in `topics/cards/` retain status, stage, position and these fields:
 
 - One-sentence idea.
 - Gap it attacks.
@@ -69,7 +69,7 @@ For a gap, run 6–10 mechanism-oriented queries across at least three other sub
 - Specific difference from the closest in-domain work.
 - Main risk; when improving a candidate, identify what changed.
 
-The mentor actively searches “borrowed mechanism + target problem” to challenge novelty. Each candidate receives **留下 / 修改 / 否掉**: revision names only the weakest focus (novelty, coherence, feasibility, clarity, mapping or grounding), and rejection gives its reason. Include paper IDs with one or two sentences of evidence and one strongest objection. Compare the candidates and offer 2–3 grounded recommendations for the user to choose. Before that choice, implement no candidate methods; do only standards-allowed diagnostics.
+The mentor searches “borrowed mechanism + target problem,” returning **留下 / 修改 / 否掉**, a reason, cited evidence and strongest objection; revision names one weakest focus: novelty, coherence, feasibility, clarity, mapping or grounding. Deliver candidates, neighbors and the best 2–3 choices within one round; give just one if that is all. If conflicting standards or prohibited evidence block recommendations, explain once and still offer the best directions for user choice or standards adjustment, not another static round. Before choice, implement no methods; only standards-allowed diagnostics.
 
 `dove topic start [--project <dir>]` optionally copies user-level criteria from Settings, not another project's settings. It does not replace reading the standards. A takeover continues an already confirmed mainline.
 
@@ -204,6 +204,6 @@ Submission completion requires scientific sufficiency, current independent revie
 
 `dove update` can replace valid owned local edits; `dove projects sync` preserves them. Init adds only RESEARCH when the research tree is absent, never a library. User-level `hostMigration` is **off by default**; use Settings or `dove settings --host-migration on|off` (`--json` reports it). When enabled and a release supplies migration tasks, installation/sync writes only a software pending task; read per-project outcomes in [Installation](INSTALL.md).
 
-The next applicable SessionStart/UserPromptSubmit hook delivers the task; the host acts when current work settles, without stopping/restarting jobs, recomputing results or changing conclusions or user wording. The current task shortens the card into fixed fields, preserves long EVAL content in linked same-directory history, and leaves note consolidation and draft-tracking advice to the next mentor. Completion or a stated non-applicability reason closes the version's task once, with a one-sentence report. With the switch off, existing records remain unchanged.
+SessionStart/UserPromptSubmit delivers the task; the host acts at a quiet point without interrupting jobs, recomputing results or changing conclusions or user wording. Tasks normalize existing records, defer notes/tracking to the next mentor, and apply new selection guidance on the next normal reply without rewriting standards or ongoing materials. Close each version once, with completion or non-applicability and a one-sentence report. With the switch off, records stay unchanged.
 
 Context hooks are read-only; verified guidance files enable guidance even with preserved statusLine/MCP differences. Statusline uses session facts and card Mainline/round, not inferred progress. Disk updates do not hot-reload hosts. Report source, build, installation, loading, behavior and scientific outcomes separately. Observe normal authorized use, not test projects or test content in research.
