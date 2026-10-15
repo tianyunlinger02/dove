@@ -1,51 +1,45 @@
 # Capability matrix
 
-Dove is one research agent. Ordinary Claude conversation in an initialized project is the primary entrance; `claude --agent dove` and nine flat Skills are optional, not personas, stages, or permission grants. The main session owns the user conversation, execution, and adoption of delegated findings. Ordinary tasks retain their scope.
+Dove is one research collaborator. Ordinary Claude conversation in an initialized project is the primary entrance; the optional Dove agent and nine flat Skills add no personas, stages or permissions. The main session owns the user conversation, execution and adoption of findings. Bounded requests keep their scope.
 
 ## Nine capabilities
 
 | Skill | Claude Code | DSH | What it helps with |
 |---|---|---|---|
-| `dove.research` | Command | Skill | Start or continue authorized research, using independent judgment when needed. |
-| `dove.status` | Command | Skill | Read identity, latest evaluation rows, and current brief; report progress in four plain sentences. |
-| `dove.source` | Command | Skill | Find, read, check, and use relevant sources, including requested bounded bibliography DOI identity checks. |
-| `dove.experiment` | Command | Skill | Develop, rerun, diagnose, or analyze within a round; freeze/preregister only final heldout confirmation. |
-| `dove.draft` | Command | Skill | Draft, assess, or revise manuscripts, responses, methods, results, and other project text from real evidence. |
-| `dove.figure` | Command | Skill | Gather materials, draw or revise figures, check them in manuscript context, and write captions. |
-| `dove.review` | Command | Skill | Do author-side self-check, delivery review, native paper review where available, or returned-review preservation/inspection. |
-| `dove.rebuttal` | Command | Skill | Analyze review findings, write responses, and make requested evidence-backed revisions. |
-| `dove.lessons` | Command | Skill | Read or maintain reusable lessons that may improve current or future research judgment. |
+| `dove.research` | Command | Skill | Explore parallel candidates for the user's choice, or advance the confirmed mainline through substantive method work. |
+| `dove.status` | Command | Skill | Read the card, recent evaluation and current brief; report results, core evidence, blockers and round without new work. |
+| `dove.source` | Command | Skill | Discover and inspect sources, verify citation identity and claims, and improve affected decisions. |
+| `dove.experiment` | Command | Skill | Develop and evaluate methods through fair comparisons, diagnostics and analysis of actual outputs. |
+| `dove.draft` | Command | Skill | Write evidence-grounded text in the authoritative format and inspect the real build or export. |
+| `dove.figure` | Command | Skill | Gather materials, create or revise visuals, inspect rendered figures, and deliver captions and editable sources. |
+| `dove.review` | Command | Skill | Distinguish author self-check, delivery inspection, independent current-paper review and returned-review inspection. |
+| `dove.rebuttal` | Command | Skill | Verify concerns, write author responses and make requested evidence-backed revisions. |
+| `dove.lessons` | Command | Skill | Read or preserve useful transferable guidance without creating a second progress log. |
 
-Source, Draft, Figure, Rebuttal, and Lessons are unchanged by the mentor/round structure. There is no Auto Skill or command.
+There is no Auto Skill. Existing standards govern topic selection: broad candidate generation and real searches precede 2–3 recommendations for the user's choice. Before that choice, do not implement candidate methods; do only standards-allowed diagnostics. After selection, scale work by whether it can answer the question, not by a default preference for the smallest change.
 
 ## Host support
 
 | Surface | Claude Code | DSH |
 |---|---|---|
-| Ordinary main-session rule / optional Dove agent | Installed | Not projected |
-| `dove-mentor` and `dove-review` definitions | Native fresh read-only subagents | No packaged agent service |
-| SessionStart / UserPromptSubmit | Read-only integration and bounded identity/guidance delivery | Not projected |
-| Status line | Installed only if the project has no existing line | Not projected |
-| Paper-search / Exa MCP integration | Project declarations; approval/access remain user-provided | Not projected |
-| Quality/preference essentials and full companions | Four exact shared resources | Four exact shared resources |
-| `dove run` receipts | User-installed Node CLI | Same CLI, not a host process service |
+| Ordinary project rule / optional Dove agent | Installed | Not projected |
+| `dove-mentor` / `dove-review` definitions | Native fresh read-only contexts | No packaged agent service; equivalent isolated judgment depends on host tools |
+| SessionStart / UserPromptSubmit | Read-only integration and bounded context | Not projected |
+| Status line | Installed only when absent | Not projected |
+| Paper-search / Exa MCP | Project declarations, not access approval | Not projected |
+| Quality/preference essentials and full companions | Four exact shared resources | Same four resources |
+| `dove run` receipts | User-installed Node CLI | Same CLI |
 
-Each fresh main context personally reads the short Chinese quality/preference essentials; full companions are on demand. Claude startup/clear supplies the bootstrap; DSH applies it on first author-side Skill use if needed. DSH Status has no author stance/bootstrap. Neither resource installation nor hook output proves reading or model behavior. See [Usage](USAGE.md#short-core-and-two-reference-read-contracts).
+Fresh author main contexts personally read the two short essentials; full companions are on demand. DSH Status has no author bootstrap. Both hosts' mentors read the quality summary, including shared note and tracking duties, but not private author preferences. Installation does not prove reading or live behavior. See [Usage](USAGE.md#short-core-and-two-reference-read-contracts).
 
-## Research records and evaluation
+## Records and independent judgment
 
-New core records are researcher-owned `IDENTITY.md`, `EVAL.md`, and `rounds/NNN-brief.md` / `NNN-result.md`. Brief authors are mentor, user, or external. Results name changed files, measurements, and prediction versus actual in a few lines, with one evaluation row per round. `RESEARCH.md` is a short history index; existing missions, experiments, and claims remain in place without migration/deletion or new entries. Initialization still creates only minimal `RESEARCH.md` when no research tree exists.
+Researcher-owned records have fixed fields and caps: the identity card includes target tier, research state and sourced restrictions; EVAL holds one row per method version and one replaceable current mentor assessment; each round has one brief and one result linking ordinary artifacts. Mentor memory lives in its own `MENTOR_NOTES.md`, not resumed conversation. Existing missions, experiments and claims stay in place; installation does not migrate research. See [Research Markdown](USAGE.md#research-markdown).
 
-After one user-confirmed kickoff reconstruction, the mentor defines evaluation for all user metrics and generalization, correcting it with all historical rows recomputed; only a change to the goal's meaning needs renewed user confirmation. After important results, the mentor supplies the eight-dimensional paper assessment in `EVAL.md`; the weakest decisive dimension guides the next brief. A plan or smoke test does not end a round.
+Call the mentor at round end, after two rounds without scientific results, on user direction/story corrections, before route changes or when requested. Engineering and verification failures count; ask the user before a third no-result continuation. Supply materials and four fixed direction questions, not an executor-framed verdict request. Engineering, parameters, acceleration and evaluator repairs belong to the executor; the mentor judges direction, scientific adequacy and time spent. Route changes name the old route, new route and reason.
 
-`Current round` and `Round status: ongoing / paused / completed` stay at the top of the identity card within its first 4KB. Overlong cards show their first 4KB plus a shortening notice rather than being declared missing. Explicit discussion-only or stop requests pause the round. Repeated cross-project corrections prompt a one-sentence suggestion about global `AUTHOR_PREFERENCES`, never an automatic edit. See [Research Markdown](USAGE.md#research-markdown).
+Each cross-round judgment uses a fresh context. The mentor may inspect supplied materials and retrieve paper/web sources; the reviewer only reads specified current manuscript materials and grounding through Read/Grep/Glob. Neither executes or edits. The mentor checks draft tracking, unjudged papers and overdue weekly scans on every invocation, independently of rounds. Main-session saves do not turn opinions into empirical evidence.
 
-## Independent judgment
+## Completion and evidence
 
-Use `dove-mentor` when requested or when kickoff, methods, evaluation, measured results or the route need independent judgment; reuse an existing judgment without new material. It reads identity/recent corrections, evaluation, recent briefs/results and actual changes, judging method-family value, general capability versus patches, and problem/method/contribution validity. It may change methods within the confirmed goal and constraints.
-
-`dove-review` reads the specified current manuscript and cited results from a reviewer position. Both use native fresh contexts and only `Read`/`Grep`/`Glob`, with no execution conversation, resumed history, commands, or edits. They list the files actually read; the main session saves and applies their returns. Frozen review snapshots, external workspaces, and socket launchers are not prerequisites. Missing independent judgment remains a limitation; author-side self-check is not relabeled independent review.
-
-## Completion
-
-Requested-work completion, scientific progress, and [software verification](PACKAGING.md#verification-evidence) are separate. Status, correction and blocker answers may end the reply without completing or pausing a research round. A method round ends at its actual evaluation result, including a negative result; that does not automatically complete the goal. A user-confirmed submission goal requires scientific sufficiency, a current independent review recommendation for the same complete version, and actual delivery readiness.
+Requested-work completion, scientific progress and [software verification](PACKAGING.md#verification-evidence) are separate. A negative evaluation can end a round without completing the goal; plans, smoke checks and engineering-only work are not scientific results. Submission completion requires scientific sufficiency, current independent review of the same complete version and actual delivery readiness. None is established by installed rules alone.

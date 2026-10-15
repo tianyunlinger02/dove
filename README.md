@@ -2,13 +2,13 @@
 
 <img src="./dove.png" alt="Dove pixel-art pigeon carrying a branch" width="320">
 
-Dove helps you move a research project forward: read sources, build methods, run experiments, interpret evidence, write and revise papers, make figures, review the work, and respond to criticism.
+Dove helps move research forward: inspect sources, design methods, run experiments, interpret evidence, write papers, create figures, review the work and respond to criticism.
 
-For a confirmed research goal, the main session directly executes authorized work through real evaluation results. A fresh read-only `dove-mentor` provides independent judgment when you ask or when kickoff, methods, evaluation, measured results or the route need it; existing judgments stand without new material. Changing the goal, intended claim or deployment inputs/outputs, or exceeding your resources still needs your decision. Ordinary questions and bounded tasks finish within their scope.
+The main session owns the user conversation, execution and delivery. An isolated mentor judges direction rather than engineering. Work is scaled to answer the question, not to make the smallest possible change. Ordinary questions and bounded tasks retain their scope.
 
 ## Start
 
-Install Dove from an exact trusted artifact, then initialize the target project:
+Install an exact trusted artifact, then initialize the project:
 
 ```bash
 npm install --global <exact-dove-package-specifier>
@@ -16,59 +16,54 @@ cd <target-project>
 dove
 ```
 
-The bare public npm package name `dove` is unrelated. With npm lifecycle scripts enabled, a global Dove upgrade refreshes only registered projects. Import older projects once by exact paths with `dove projects import --project <root>... --sync`; retry with `dove projects sync` and inspect with read-only `dove projects status`. Automatic sync preserves locally changed or removed owned items, reports them as `preservedLocalEdits`, and updates the rest; integration that cannot be safely planned still blocks that project. Explicit `dove update` can replace valid owned edits. Research history is preserved. See [Installation](docs/INSTALL.md).
+The bare public npm name `dove` is unrelated. Global upgrades with lifecycle scripts enabled refresh registered projects, never an arbitrary directory scan. Import older projects with `dove projects import --project <root>... --sync`; inspect `dove projects status`. Bulk sync preserves local owned edits while updating the rest; explicit `dove update` may replace valid owned edits. Research history is preserved. See [Installation](docs/INSTALL.md).
 
 ## Ordinary conversation first
 
-Start ordinary `claude` in the initialized project and describe the task. The project rule makes that main session the complete Dove entrance. `claude --agent dove` and Skills are optional shortcuts, not additional personas, permissions, or workflow stages. The main session owns the user conversation, clarification, execution, and adoption of delegated results.
-
-### Nine optional Skills
+Start ordinary `claude` in the initialized project. The project rule provides the complete primary entrance; `claude --agent dove` and nine flat Skills are optional shortcuts, not personas, stages or permissions. DSH receives filesystem Skills and shared references, not Claude agents or hooks. There is no Auto command.
 
 | Skill | Use it for |
 |---|---|
-| `dove.research` | Start or continue authorized research, using independent judgment when needed. |
-| `dove.status` | Read the identity card, latest evaluation rows, and current brief; explain progress in four plain sentences. |
-| `dove.source` | Find, read, check, and use sources that matter to the question. |
-| `dove.experiment` | Develop and rerun experiments within a round; reserve frozen heldout evaluation for final confirmation. |
-| `dove.draft` | Draft, assess, or revise text and project artifacts from real evidence. |
-| `dove.figure` | Gather materials, draw or revise figures, check them in context, and caption them. |
-| `dove.review` | Do author-side self-check, delivery review, native `dove-review`, or returned-review preservation and inspection. |
-| `dove.rebuttal` | Analyze review findings, write responses, and make requested evidence-backed revisions. |
-| `dove.lessons` | Read or maintain reusable lessons that can improve current or future work. |
+| `dove.research` | Explore parallel candidates for the user's choice, or advance a confirmed mainline. |
+| `dove.status` | Report results, core evidence, blockers and current round without new work. |
+| `dove.source` | Discover and inspect sources, verify citation identity and check claims. |
+| `dove.experiment` | Develop, evaluate and analyze methods through fair comparisons. |
+| `dove.draft` | Write evidence-grounded text and inspect the authoritative build/export. |
+| `dove.figure` | Gather materials, create and inspect visuals, and deliver captions and editable sources. |
+| `dove.review` | Distinguish author self-check, delivery checks and independent current-paper review. |
+| `dove.rebuttal` | Verify review concerns, respond and make requested revisions. |
+| `dove.lessons` | Read or preserve grounded transferable advice. |
 
-Use `/dove:*` when a capability shortcut helps. There is no Auto command. DeepSeek Harness receives the same nine project-local filesystem Skills, not Claude agents or hooks. Source, Draft, Figure, Rebuttal, and Lessons are unchanged by the mentor/round structure. See [Usage](docs/USAGE.md).
+Each fresh author main context personally reads the short Chinese quality and preference essentials; full companions are on demand. Installation and hooks do not prove reading or application.
 
-Every fresh main-agent context personally reads the short Chinese quality and author-preference essentials; full detail stays in their `_FULL.md` companions for on-demand use. Installation and hook delivery do not prove that a model read or applied them.
+## Research direction and records
 
-## Three core research records
+Before the user chooses a mainline, read the project's topic-selection standards, establish a meaningful direction and generate a broad parallel candidate pool. Real searches assess and expand it. Offer 2–3 grounded recommendations for the user to choose; before that choice, do not implement candidate methods, and do only standards-allowed diagnostics. An already confirmed mainline is not reopened merely on takeover.
 
-Research context is ordinary researcher-owned Markdown under `.dove/research/`:
+Researcher-owned Markdown under `.dove/research/` keeps current context short:
 
-- **`IDENTITY.md`** — the stable user-confirmed `Mainline`, completion standard, constraints, recent corrections, and a link to the current round. Keep `Current round: rounds/NNN-brief.md` and `Round status: ongoing / paused / completed` at the top, within the first 4KB.
-- **`EVAL.md`** — the agreed evaluation script, dev/test split, key metrics, and one row per round. After one user-confirmed kickoff reconstruction, the mentor defines evaluation for all user metrics and generalization, correcting it with all historical rows recomputed; only a change to the goal's meaning needs renewed user confirmation. Reuse existing project evaluation. After important results, the mentor supplies the eight-dimensional paper-quality assessment here; its weakest decisive dimension informs the next brief.
-- **`rounds/`** — `NNN-brief.md` states the hypothesis, why it may work, predicted evaluation values, and the result that ends the round. Its author is mentor, user, or external. The main session saves mentor briefs verbatim and writes `NNN-result.md` in a few lines: changed files, actual evaluation values, and prediction versus actual, plus one new `EVAL.md` row. Negative results count; a plan or smoke test does not.
+- **`IDENTITY.md`** holds the mainline, target tier, completion, sourced restrictions and current research state in fixed fields, within 1200 characters.
+- **`EVAL.md`** has one row per method version, seven fixed columns and cells up to 200 characters. The executor repairs evaluation and recomputes comparable history. The mentor's current eight-dimensional assessment replaces the previous one below the table.
+- **`rounds/`** has one authored brief up to 2000 characters and one result up to 3000 per round, linking ordinary artifacts. Results distinguish changes, measurements, predictions and factual objections.
+- **`MENTOR_NOTES.md`** contains only the mentor's own returned memory, saved verbatim by the main session. Dated paper impacts and scans live separately in `watch/`.
 
-`RESEARCH.md` is a short history index. Existing `missions/`, `experiments/`, and `claims/` stay in place without migration or deletion; new core work goes into rounds rather than new entries in those directories. Sources, Reviews, Lessons, `DOCTOR.md`, and local run receipts retain their distinct uses. Initialization still creates only the minimal `RESEARCH.md` entry when no research tree exists.
-
-Claude presents the identity card on each valid prompt and after compact/resume; an overlong card shows its first 4KB with a shortening reminder. Status, correction and blocker answers can end the reply without completing or pausing the research round. An explicit pause is respected. New installations include only SessionStart/UserPromptSubmit context hooks and an optional status line; [installation ownership](docs/INSTALL.md#registered-projects-and-global-upgrades) governs retired Stop removal.
-
-When a correction repeats across registered projects, Dove asks in one sentence whether to add it to global `AUTHOR_PREFERENCES`; it never changes global preferences automatically. Update, reinstall, and uninstall preserve research, historical review records, and run receipts.
+Existing missions, experiments and claims stay in place without migration or new entries. `RESEARCH.md` is a short history index; init creates only that bootstrap when the research tree is absent. Lifecycle operations preserve research, reviews, receipts, Lessons and Doctor notes. Status and bounded replies need no completed round or record update merely to end the answer.
 
 ## Mentor and independent paper review
 
-`dove-mentor` and `dove-review` are native Claude subagents with fresh contexts and only `Read`, `Grep`, and `Glob`. They do not inherit the execution conversation, resume previous reviewer history, run commands, or edit files. They return findings to the main session, which saves and applies them.
+Call the mentor at round end, after two no-science rounds, when the user corrects direction or questions the paper story, before route changes or when requested. Engineering and verification failures count; ask the user before further continuation by the third no-result round. Route changes name the old route, new route and reason.
 
-The mentor reads the identity card and recent corrections, evaluation table, recent round briefs/results, and their actual diffs or changed files. Its one-page return judges prediction versus actual, general capability versus case-specific patches, and the method family's remaining value, then proposes the next round or explains completion/a needed user decision.
+Each cross-round judgment uses a fresh context, its own notes, genuine user wording and actual materials—not resumed execution conversation or executor-framed verdict requests. The mentor asks whether direction follows the user, work builds capability rather than patches, what remains to the goal and target tier, and what should happen next. Engineering, parameters and evaluator repairs remain the executor's responsibility. The mentor may retrieve paper/web sources but does not execute or edit. It also checks draft tracking, unjudged papers and overdue weekly scans independently of rounds.
 
-`/dove:review` retains author-side self-check and independent paper review. `dove-review` reads the specified current manuscript and cited results, challenges the contribution from a reviewer position, and lists the files actually read. No frozen snapshot, external review workspace, socket launcher, or CLI-launched model session is required. Self-check is not independent review; neither model criticism nor software checks certify scientific correctness or acceptance.
+Independent `dove-review` uses only Read/Grep/Glob on the specified complete current manuscript, cited results and supplied grounding. It receives no author conversation or preferences, does not retrieve, execute or edit, and lists what it read. No frozen copy, hashes or external workspace is required. Author self-check is not independent review; submission completion needs scientific sufficiency, current independent review and actual delivery readiness. Software checks do not certify scientific correctness or acceptance.
 
 ## Run receipts
 
-For authorized local experiments or diagnostics, `dove run start [--seed <short text>] -- <command> [args...]` launches a detached supervisor and writes `.dove/runs/<id>/run.jsonl`, `stdout.log`, and `stderr.log`. It directly spawns the command from the project root without a shell. Receipts record timing, outcome, metric and comparison basis, an explicitly declared seed, and minimum Git commit/dirty facts—not an environment inventory. `status` is read-only, `resume` never reruns work, `finalize` records one scalar metric after completion, and `compare` ranks only compatible finalized runs. These are execution facts, not scientific conclusions.
+For authorized local work, optional `dove run start [--seed <short text>] -- <command> [args...]` directly launches a command without a shell and records timing, outcome, metric/comparison basis and minimum seed/Git facts. Status is read-only; resume never reruns; finalize adds a scalar after completion; compare ranks compatible finalized runs. Receipts are execution facts, not scientific conclusions.
 
 ## License
 
-Dove is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) only for purposes that license permits. It is source-available software, not OSI-approved open-source software; no commercial-license path is offered or advertised. Bundled third-party components retain their MIT or ISC terms; see [Third-Party Notices](THIRD_PARTY_NOTICES.md).
+Dove is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) only for purposes that license permits. It is source-available, not OSI-approved open-source software; no commercial-license path is offered. Bundled third-party components retain their MIT/ISC terms; see [Third-Party Notices](THIRD_PARTY_NOTICES.md).
 
 ## Documentation
 

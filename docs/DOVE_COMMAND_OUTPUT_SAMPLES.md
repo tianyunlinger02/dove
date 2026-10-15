@@ -44,19 +44,25 @@ A bounded explanation-only request can finish without research records or execut
 
 Ending the reply needs no card edit, new round result or mentor call.
 
-## One-time kickoff confirmation
+## Topic choice and direct judgments
 
-This example is hypothetical, not an observed user confirmation:
+These are hypothetical examples, not observed user decisions:
 
 ```text
-按你的原话重建，部署时输入未见类别的图像，输出共享对应关系；目标是提高跨类别成功率，而不是增加类别特例。对照是同输入强基线，完成含义也包括你要求的耗时。
+已按项目选题标准展开并列候选并检索近邻。推荐 A、B、C：分别解决对应关系、组合失败和数据需求，依据与关键未知见各候选比较。请你选定主线；选择前不实现候选方法。
+```
 
-请确认这份立项理解。确认后导师据此定义覆盖全部指标和泛化的 EVAL，不再另请你批准初始评测；修正评测会重算历史对照，只有改变目标含义才需再确认。
+Clear user choices are recorded without repeated confirmation. Engineering and evaluator repair belong to the executor; goal-meaning changes go to the user.
+
+```text
+用户：达到要求了吗？
+
+没达到。未见类别成功率仍为 57%，未达到你要求的 70%；耗时达标。最终留出确认也还没做。
 ```
 
 ## Mentor brief
 
-Use a fresh read-only mentor when requested or when kickoff, methods, evaluation, measured results or the route need independent judgment; reuse existing judgments without new material. It reads the specified records and actual artifacts, not the execution conversation. Save returned briefs verbatim. Shape-only example:
+Call a fresh read-only mentor at round end, after two no-science rounds, on user direction/story corrections, before route changes or when requested. Supply materials and four fixed direction questions, not executor framing. It reads its own notes, user originals and actual artifacts, not execution conversation. Save its brief and notes verbatim. Shape-only example:
 
 ```text
 作者：导师
@@ -74,20 +80,25 @@ The mentor's paper-level eight-dimensional assessment belongs in `EVAL.md` after
 
 ## Round result and evaluation row
 
-The result is a few lines, not another long report. Hypothetical example:
-
-```text
-改动：src/mapping.py 移除类别分支，使用共享连接映射；scripts/evaluate.py 未改。
-结果：开发集 80%，未见类别 57%；完整输出见 artifacts/round-003.json。
-预测对照：开发集约 80%、未见类别 55–60%，本轮实际落在预测范围；还未完成最终 heldout 确认。
-```
-
-Append one measured row under the agreed columns:
+Keep a result within 3000 characters and its brief within 2000. Hypothetical example:
 
 ```markdown
-| Time | Round | Dev success | Unseen-category success |
-|---|---|---|---|
-| 2026-10-05 | 003 | 80% | 57% |
+## Changes and version
+v3：src/mapping.py 用共享连接映射替换类别分支。
+## Measurements and artifacts
+开发集 80%，未见类别 57%；artifacts/round-003.json。
+## Prediction versus actual
+与开发集约 80%、未见类别 55–60% 的预测相符；未做最终留出确认。
+## Objections to this brief / factual corrections
+无。
+```
+
+Use one row per method version, with at most 200 characters per cell:
+
+```markdown
+| Date | Version/round | Protocol/split | Measurements | Unseen data/train-test gap | Conclusion | Artifacts |
+|---|---|---|---|---|---|---|
+| 2026-10-05 | v3 / 003 | eval.py / dev-unseen | dev 80% | unseen 57%; gap 23pp | 有改善，未完成目标 | artifacts/round-003.json |
 ```
 
 Briefs identify their actual author as mentor, user, or external. New core records use `rounds/`, not new `missions/`, `experiments/`, or `claims/` entries. Historical files stay in place; `RESEARCH.md` is only a short history index.
@@ -107,12 +118,18 @@ Status may end the reply without completing or pausing the round. Progress comes
 
 ## Bounded identity and compact/resume
 
-Keep the current fields at the top of the card, within its first 4KB:
+Keep the card within 1200 characters, using this fixed field order:
 
 ```text
 Current round: rounds/004-brief.md
 Round status: ongoing
 Mainline: <用户确认的原话>
+Target tier: <用户要求的会议或期刊档次>
+Deployment inputs/outputs: <实际输入输出>
+Completion: <用户确认的完成含义>
+User restrictions: <原话或转述、日期与来源、长期或本任务范围>
+Recent corrections: <近期纠正>
+Research state: <当前证据与缺口>
 ```
 
 Compact/resume presents this same short card and continuity guidance, not a timestamp summary of old Mission/Review/Run records. If overlong, the beginning remains visible:

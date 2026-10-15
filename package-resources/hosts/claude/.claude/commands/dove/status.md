@@ -1,11 +1,11 @@
 ---
-description: "Report what we have made, whether the core is demonstrated, what blocks it and which round is underway."
+description: "Report the current results, core evidence, blockers and active round without running new work."
 argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
 ---
 
 # dove.status
 
-Report what we have made, whether the core is demonstrated, what blocks it and which round is underway.
+Report the current results, core evidence, blockers and active round without running new work.
 
 ## Request
 
@@ -17,29 +17,25 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.
+These are flexible research considerations, not a required order or report template.
 
 ### What this is for
 
-Explain progress in four plain sentences.
+Give a concise, evidence-grounded account of the current research state.
 
 ### When to use
 
-Use when the user asks where research stands.
+Use when the user asks about progress or what remains unresolved.
 
 ### Scope and changes
 
-- Status is read-only: answer directly without new research or document updates.
+- Status is read-only and does not run research or update documents.
 
 ### Ways Dove may proceed
 
-- Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Say: what we have made; whether the core is demonstrated; what blocks it; which round is underway. Quote actual values when useful; missing evidence stays unknown.
+- Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Answer in four plain sentences covering what we have made, whether the core is demonstrated, what blocks it and which round is underway. Include actual values when useful and leave missing evidence unknown.
 
 ### Using host tools
 
-- Use only tools and materials that the current host exposes and current user/project permissions permit. If something needed is unavailable, name it and use any other available material or action that can still advance the request.
-- Use Claude Code waiting or background affordances only for real long-running host actions, then return to Dove's mainline judgment when results arrive.
-
-### Return with
-
-- The author main session applies scoped results to actual work and downstream use within the user's goal and latest corrections. A bounded subagent returns evidence without taking over the goal; subtask completion is not goal completion.
+- Use tools and materials exposed by the current host and permitted by the user and project. If something is unavailable, name the gap and continue with useful permitted alternatives.
+- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.

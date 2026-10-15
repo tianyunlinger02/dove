@@ -542,7 +542,7 @@ function roundBody(root, part) {
 }
 const GROUPS = [["overlap", "撞题：贡献可能被覆盖"], ["baseline", "新基线：该进评测对照"], ["borrow", "可借用：方法或数据"], ["pending", "待导师判断"]];
 function paperHtml(it, judge) {
-  return '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">' + esc(it.id) + " · 分数 " + esc(it.score) + " · " + esc(String(it.published || "").slice(0, 10)) + " · " + esc((it.reasons || []).join("；")) + (it.venue ? " · " + esc(it.venue) : "") + (it.code && String(it.code).startsWith("http") ? ' · <a href="' + esc(it.code) + '" target="_blank" rel="noopener">代码/主页</a>' : "") + "</div>" + (judge ? '<div class="judge">导师（' + esc(judge.round) + "）：" + esc(judge.note) + "</div>" : "") + '<div class="abs">' + esc((it.abstract || "").slice(0, 220)) + (it.abstract && it.abstract.length > 220 ? "…" : "") + "</div></div>";
+  return '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">' + esc(it.id) + " · 分数 " + esc(it.score) + " · " + esc(String(it.published || "").slice(0, 10)) + " · " + esc((it.reasons || []).join("；")) + (it.venue ? " · " + esc(it.venue) : "") + (it.code && String(it.code).startsWith("http") ? ' · <a href="' + esc(it.code) + '" target="_blank" rel="noopener">代码/主页</a>' : "") + "</div>" + (judge ? '<div class="judge">导师（' + esc(judge.file || judge.round) + "）：" + esc(judge.note) + "</div>" : "") + '<div class="abs">' + esc((it.abstract || "").slice(0, 220)) + (it.abstract && it.abstract.length > 220 ? "…" : "") + "</div></div>";
 }
 function papersSection(root) {
   let html = '<section><h2>新论文 <span class="sub">论文追踪 · 按导师的影响判断分组</span></h2>';
@@ -550,21 +550,27 @@ function papersSection(root) {
   if (!w || w.loading) { if (!w) loadWatch(root); return html + '<div class="card note">读取中…</div></section>'; }
   if (w.error) return html + '<div class="card note">' + esc(w.error) + "</div></section>";
   const c = w.config;
+  if (w.guidance) html += '<div class="card note">' + esc(w.guidance) + "</div>";
+  if (w.scan) html += lazyScan(root, w.scan);
+  if (w.scanDue) html += '<div class="note">领域扫描待更新：下一次导师调用顺带完成，由主会话保存到 watch/scan-YYYY-MM-DD.md，不必等下一轮。</div>';
+  const notes = [...new Set([...(w.state?.notes || []), ...(w.digests || []).flatMap((d) => d.notes || [])])];
+  if (notes.length) html += '<details class="note" open><summary>检索说明</summary>' + notes.map((note) => '<div>' + esc(note) + '</div>').join("") + '</details>';
   if (!c.keywords.length && !c.authors.length && !c.seedPapers.length) return html + '<div class="card note">还没有追踪内容。下次运行会根据项目资料自动生成初稿，也可以到「设置」里填写。</div></section>';
   const seenIds = new Set();
   const items = [];
-  for (const digest of w.digests || []) for (const it of digest.items) if (!seenIds.has(it.id)) { seenIds.add(it.id); items.push(it); }
-  if (!items.length) return html + '<div class="card note">' + (w.digests && w.digests.length ? "最近几天没有新的相关论文。" : "还没运行过。可以在设置页点「立即运行」。") + (c.source === "draft" ? '<span class="badge-draft">追踪内容是自动初稿</span>' : "") + "</div></section>";
+  for (const it of [...(w.digests || []).flatMap((d) => d.items), ...(w.pending || [])]) if (!seenIds.has(it.id)) { seenIds.add(it.id); items.push(it); }
+  const incomplete = ["failed", "partial"].includes(w.state?.status) || (w.digests || []).some((d) => ["failed", "partial"].includes(d.status) || (!d.status && d.notes?.length));
+  if (incomplete) html += '<div class="card note">部分来源检索失败或未完成，不能据此判断没有新的相关论文。下方保留已取得的结果。</div>';
+  if (!items.length) return html + '<div class="card note">' + (incomplete ? "暂无可展示的结果，请查看检索说明。" : w.digests?.length ? "最近的检索没有发现新的相关论文。" : "还没运行过。可以在设置页点「立即运行」。") + "</div></section>";
   const impacts = w.impacts || {};
-  html += '<div class="card" style="padding:0"><div class="paper why">最近 ' + (w.digests || []).length + " 天 · " + items.length + " 篇" + (c.source === "draft" ? '<span class="badge-draft">追踪内容是自动初稿，去设置页检查</span>' : "") + "</div>";
+  html += '<div class="card" style="padding:0"><div class="paper why">最近检索与此前待判断论文 · ' + items.length + " 篇</div>";
   for (const [key, label] of GROUPS) {
-    const group = items.filter((it) => (impacts[it.id]?.impact || "pending") === key).slice(0, key === "pending" ? 12 : 50);
+    const group = items.filter((it) => (impacts[it.id]?.impact || "pending") === key);
     if (group.length) html += '<div class="group ' + key + '">' + label + " · " + group.length + "</div>" + group.map((it) => paperHtml(it, impacts[it.id])).join("");
   }
   const ignored = items.filter((it) => impacts[it.id]?.impact === "irrelevant").length;
   if (ignored) html += '<div class="paper why">导师判为无关：' + ignored + " 篇（已隐藏）</div>";
   html += "</div>";
-  if (w.scan) html += lazyScan(root, w.scan);
   return html + "</section>";
 }
 function lazyScan(root, scan) {
@@ -578,11 +584,11 @@ function renderTrends() {
   html += '<section style="margin-top:18px"><h2>各项目最相关的新论文 <span class="sub">导师判过的排在前面</span></h2><div class="card" style="padding:0">';
   html += trends.top.map((it) => paperHtml(it, null).replace('<div class="abs">', '<div class="judge">' + esc(it.projects.join("、")) + (it.impacts.length ? " · " + esc(it.impacts.map((x) => x.project + "：" + x.label).join("；")) : "") + '</div><div class="abs">')).join("") || '<div class="paper note">这一周还没有追踪结果。</div>';
   html += "</div></section>";
-  html += '<section><h2>社区热点里和你方向相关的 <span class="sub">Hugging Face 每日论文榜，命中任一项目关键词</span></h2><div class="card" style="padding:0">';
+  html += '<section><h2>社区热点里和你方向相关的 <span class="sub">Hugging Face 每日论文榜，通过项目相关性筛选</span></h2><div class="card" style="padding:0">';
   html += trends.hot.map((it) => '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">' + esc(it.id) + " · " + esc(it.upvotes) + " 赞 · " + esc(String(it.published || "").slice(0, 10)) + "</div></div>").join("") || '<div class="paper note">暂时没有。</div>';
   html += "</div></section>";
   html += '<section><h2>导师领域扫描 <span class="sub">每周一次，在导师环节用网页和论文检索完成</span></h2>';
-  html += trends.scans.map((x) => '<details class="note"><summary>' + esc(x.project) + " · " + esc(x.date) + '</summary><div class="card md">' + md(x.text) + "</div></details>").join("") || '<div class="card note">还没有扫描记录。</div>';
+  html += trends.scans.map((x) => '<details class="note"><summary>' + esc(x.project) + " · " + esc(x.date || "尚未扫描") + (x.due ? " · 下次导师调用待更新" : "") + '</summary><div class="card md">' + (x.text ? md(x.text) : "不依赖轮次；主会话保存导师返回的领域扫描到 watch/scan-YYYY-MM-DD.md。") + "</div></details>").join("") || '<div class="card note">还没有扫描记录。</div>';
   html += "</section>";
   view.innerHTML = html;
 }
@@ -675,7 +681,23 @@ async function loadSettings() {
   } catch (error) {
     settings = { error: error.message };
   }
-  if (mode === "settings") renderSettings();
+  if (mode === "settings") {
+    renderSettings();
+    clearTimeout(loadSettings.timer);
+    if (settings.watchRunning) loadSettings.timer = setTimeout(loadSettings, 4000);
+  }
+}
+async function startWatchFromPanel(root) {
+  const result = await act("runWatch", root ? { root } : {});
+  toast(result.started ? "已开始运行，完成后自动刷新" : result.reason);
+  watchCache.clear();
+  await loadSettings();
+  if (result.guidance?.length) {
+    const note = document.createElement("div");
+    note.className = "card note";
+    note.textContent = result.guidance.map((item) => item.root.split("/").pop() + "：" + item.message).join("；");
+    document.getElementById("view").prepend(note);
+  }
 }
 const lines = (v) => (v || []).join("\\n");
 function renderSettings() {
@@ -690,7 +712,9 @@ function renderSettings() {
     '<label>每个项目最多保留几篇<input type="number" id="wMax" min="5" max="200" value="' + esc(g.maxPerDigest) + '"></label>' +
     '<label>网络代理（可空）<input type="text" id="wProxy" placeholder="服务器连不上 Hugging Face 时填，例如 http://127.0.0.1:7890" value="' + esc(g.proxy) + '"></label></div>' +
     '<div class="btns"><button class="btn primary" id="wSave">保存</button><button class="btn" id="wRunAll">立即运行全部项目</button><span class="note">' +
-    (settings.watchRunning ? "正在运行…" : st.lastRun ? "上次运行：" + new Date(st.lastRun).toLocaleString() + " · " + (st.results || []).map((r) => r.root.split("/").pop() + " " + ({ done: (r.found ?? 0) + " 篇", unconfigured: "未设关键词", disabled: "已关闭", failed: "失败" }[r.status] || r.status)).join("，") : "还没运行过") + "</span></div>" +
+    esc(settings.watchRunning ? "正在运行…" : (st.lastAttempt || st.lastRun) ? "上次尝试：" + new Date(st.lastAttempt || st.lastRun).toLocaleString() + " · " + (st.results || []).map((r) => r.root.split("/").pop() + " " + ({ done: (r.found ?? 0) + " 篇", partial: "检索未完成，已找到 " + (r.found ?? 0) + " 篇", unconfigured: "未设关键词", disabled: "已关闭", failed: "检索失败" }[r.status] || r.status)).join("，") : "还没运行过") + "</span></div>" +
+    (settings.watchError ? '<div class="note">运行失败：' + esc(settings.watchError) + '</div>' : "") +
+    [...(st.hfErrors || []), ...(st.results || []).flatMap((r) => r.notes || (r.error ? [r.error] : []))].map((note) => '<div class="note">' + esc(note) + '</div>').join("") +
     '<div class="btns" style="margin-top:6px"><label style="flex:1 1 260px">Semantic Scholar API key（可选，' + (settings.s2KeySet ? "已设置" : "未设置") + '；没有也能运行）<input type="password" id="s2Key" placeholder="' + (settings.s2KeySet ? "输入新 key 可替换" : "粘贴 key") + '" autocomplete="off"></label><button class="btn" id="s2Save">保存 key</button>' + (settings.s2KeySet ? '<button class="btn danger" id="s2Clear">清除 key</button>' : "") + "</div></div></section>";
   const tc = settings.topicCriteria || {};
   html += '<section><h2>选题标准 <span class="sub">选题功能以这份文档为准；开始选题时复制进项目</span></h2><div class="card form"><div class="note">' + (tc.present ? "当前：" + esc(tc.title || "") + (tc.version ? "（第 " + esc(tc.version) + " 版）" : "") + " · " + Math.round(tc.bytes / 1024) + " KB · 更新于 " + new Date(tc.updatedAt).toLocaleString() + (tc.projectSection ? "。其中「" + esc(tc.projectSection) + "」是某个项目自己的设置，开始选题时不会带进项目；每个项目的设置写在它自己的 topics/PROJECT.md" : "") : "还没有设置") + '</div><label>粘贴新版本的完整内容来替换<textarea id="tcText" style="min-height:120px" placeholder="# 论文选题要求、论证原则与交付规范 …"></textarea></label><div class="btns"><button class="btn primary" id="tcSave">保存选题标准</button></div></div></section>';
@@ -703,7 +727,7 @@ function renderSettings() {
     '<label>关注机构（一行一个，经 OpenAlex 匹配）<textarea class="wInsts" placeholder="例如：ETH Zurich">' + esc(lines(p.watch.institutions)) + "</textarea></label></div>" +
     '<label>近邻论文（arXiv 编号或链接，一行一个；追踪新引用它们的论文）<textarea class="wSeeds" placeholder="例如：2306.03642">' + esc(lines(p.watch.seedPapers)) + "</textarea></label>" +
     '<label>arXiv 分类（逗号分隔）<input type="text" class="wCats" value="' + esc(p.watch.categories.join(", ")) + '"></label>' +
-    '<div class="btns"><button class="btn primary wSaveP" data-root="' + esc(p.root) + '">保存</button><button class="btn wRunP" data-root="' + esc(p.root) + '">只运行这个项目</button><button class="btn wDraftP" data-root="' + esc(p.root) + '">根据项目资料生成初稿</button>' + (p.watch.source === "draft" ? '<span class="badge-draft">当前是自动初稿</span>' : "") + "</div></div>").join("");
+    '<div class="btns"><button class="btn primary wSaveP" data-root="' + esc(p.root) + '">保存</button><button class="btn wRunP" data-root="' + esc(p.root) + '">只运行这个项目</button><button class="btn wDraftP" data-root="' + esc(p.root) + '">根据项目资料生成初稿</button>' + (p.watch.source === "draft" ? '<span class="badge-draft">当前是自动初稿</span>' : "") + "</div>" + (p.guidance ? '<div class="note">' + esc(p.guidance) + '</div>' : "") + "</div>").join("");
   html += "</section>";
   html += '<section><h2>项目登记 <span class="sub">登记的项目会随 Dove 升级自动更新，并显示在面板里</span></h2><div class="card">' +
     settings.registered.map((r) => '<div class="reg"><span class="p">' + esc(r.root) + "</span>" + (r.exists ? "" : '<span class="chip none">目录不存在</span>') + '<button class="btn danger regRemove" data-root="' + esc(r.root) + '">移出登记</button></div>').join("") +
@@ -713,7 +737,7 @@ function renderSettings() {
   const run = (fn) => async (event) => { const b = event.currentTarget; b.disabled = true; try { await fn(b); } catch (error) { toast(error.message); } finally { b.disabled = false; } };
   const byId = (id) => document.getElementById(id);
   byId("wSave").addEventListener("click", run(async () => { await act("saveWatchGlobal", { settings: { dailyHour: Number(byId("wHour").value), lookbackDays: Number(byId("wDays").value), maxPerDigest: Number(byId("wMax").value), proxy: byId("wProxy").value } }); toast("已保存"); await loadSettings(); }));
-  byId("wRunAll").addEventListener("click", run(async () => { await act("runWatch", {}); toast("已开始运行，完成后刷新可见"); watchCache.clear(); setTimeout(loadSettings, 4000); }));
+  byId("wRunAll").addEventListener("click", run(() => startWatchFromPanel()));
   byId("tcSave").addEventListener("click", run(async () => { const r = await act("saveTopicCriteria", { text: byId("tcText").value }); byId("tcText").value = ""; toast("已保存" + (r.version ? "第 " + r.version + " 版" : "")); await loadSettings(); }));
   byId("s2Save").addEventListener("click", run(async () => { if (!byId("s2Key").value.trim()) throw new Error("先粘贴 key"); await act("saveS2Key", { key: byId("s2Key").value }); toast("key 已保存"); await loadSettings(); }));
   if (byId("s2Clear")) byId("s2Clear").addEventListener("click", run(async () => { await act("saveS2Key", { key: "" }); toast("key 已清除"); await loadSettings(); }));
@@ -729,7 +753,7 @@ function renderSettings() {
     card.querySelector(".wSeeds").value = lines(draft.seedPapers);
     toast("已填入初稿（还没保存），检查后点保存");
   })));
-  view.querySelectorAll(".wRunP").forEach((b) => b.addEventListener("click", run(async (btn) => { await act("runWatch", { root: btn.dataset.root }); watchCache.delete(btn.dataset.root); toast("已开始运行"); setTimeout(loadSettings, 4000); })));
+  view.querySelectorAll(".wRunP").forEach((b) => b.addEventListener("click", run((btn) => startWatchFromPanel(btn.dataset.root))));
   view.querySelectorAll(".regRemove").forEach((b) => b.addEventListener("click", run(async (btn) => { await act("removeProject", { root: btn.dataset.root }); toast("已移出登记"); await loadSettings(); load(); })));
   byId("regAdd").addEventListener("click", run(async () => { await act("addProject", { path: byId("regPath").value.trim() }); toast("已登记"); await loadSettings(); load(); }));
   byId("regSync").addEventListener("click", run(async () => { const r = await act("syncProjects", {}); toast("更新完成：" + (r || []).map((x) => x.target.split("/").pop() + " " + x.status).join("，")); }));

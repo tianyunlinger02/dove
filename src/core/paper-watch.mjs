@@ -2,13 +2,14 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 // Daily paper tracking for registered projects. Fetching and ranking use no
 // model and no required key: arXiv supplies everything new (by keyword and by
 // watched author), OpenAlex finds new papers citing known neighbours and work
 // from watched institutions, Hugging Face daily papers signal what the
 // community notices, and Semantic Scholar (optional key) adds venue and
-// citations. Judging impact on a project is left to the mentor's next round.
+// citations. The next mentor invocation judges impact, independently of rounds.
 const WATCH_DIR = ".dove/research/watch";
 const PROJECT_CONFIG = `${WATCH_DIR}/config.json`;
 const PROJECT_STATE = `${WATCH_DIR}/state.json`;
@@ -16,7 +17,9 @@ const MAX_SEEN = 5000;
 const DEFAULT_CATEGORIES = ["cs.CV", "cs.GR", "cs.LG"];
 const FIRST_RUN_DAYS = 30;
 const ARXIV_INDEX_LAG_DAYS = 3;
-const MIN_RELEVANCE = 2;
+export const MIN_RELEVANCE = 2;
+const ARXIV_INTERVAL_MS = 3000;
+const ARXIV_MAX_BACKOFF_MS = 60000;
 const OPENALEX = "https://api.openalex.org";
 const OPENALEX_FIELDS = "id,title,publication_date,authorships,abstract_inverted_index,locations,primary_location,referenced_works";
 const HOT_FILE = "watch-hot.json";
@@ -79,6 +82,16 @@ export function watchConfigExists(root) {
 
 export function readWatchConfig(root) {
   return normalizeWatchConfig(readJson(path.join(root, PROJECT_CONFIG), {}));
+}
+
+export function watchConfigGuidance(config) {
+  return config.source === "draft"
+    ? "追踪配置仍是自动初稿。请在设置页修正为项目具体问题、方法和近邻论文；也可在下一次导师调用时返回修正建议，由主会话写回 config.json 并标记 source: mentor，不必等下一轮。"
+    : null;
+}
+
+export function readWatchState(root) {
+  return readJson(path.join(root, PROJECT_STATE), {});
 }
 
 export function writeWatchConfig(root, value) {
@@ -197,7 +210,7 @@ async function seedsFromNames(names, { proxy, get }) {
   return seeds;
 }
 
-export async function draftWatchConfigWithSources(root, { proxy = "", get = curlGet } = {}) {
+export async function draftWatchConfigWithSources(root, { proxy = "", get = watchGet } = {}) {
   const draft = draftWatchConfig(root);
   if (draft.seedPapers.length < 3) {
     const found = await seedsFromNames(namedMethods(collectProjectText(root)), { proxy, get });
@@ -261,32 +274,82 @@ function writeGlobalWatchState(state, options = {}) {
   writePrivateFile(path.join(doveConfigDirectory(options), "watch-state.json"), `${JSON.stringify(state, null, 2)}\n`);
 }
 
-// curl honours an explicit proxy and needs no extra dependency.
+// curl honours an explicit proxy and keeps response headers for Retry-After.
 export function curlGet(url, { proxy = "", headers = {}, timeoutSeconds = 40, body = null } = {}) {
-  const args = ["-sS", "-L", "--max-time", String(timeoutSeconds), "-w", "\n%{http_code}"];
+  const args = ["-sS", "-L", "--include", "--suppress-connect-headers", "--max-time", String(timeoutSeconds), "-w", "\n%{http_code}"];
   if (proxy) args.push("-x", proxy);
   for (const [name, value] of Object.entries(headers)) args.push("-H", `${name}: ${value}`);
-  if (body !== null) args.push("-X", "POST", "--data-binary", "@-");
+  if (body !== null) args.push("--data-binary", "@-");
   args.push(url);
   return new Promise((resolve) => {
     const child = execFile("curl", args, { maxBuffer: 32 * 1024 * 1024 }, (error, stdout) => {
-      if (error && !stdout) {
-        resolve({ status: 0, body: "", error: error.message });
-        return;
-      }
       const split = stdout.lastIndexOf("\n");
-      resolve({ status: Number(stdout.slice(split + 1)) || 0, body: stdout.slice(0, split) });
+      let content = stdout.slice(0, split);
+      let responseHeaders = {};
+      // Redirects and interim 100 responses precede the final headers.
+      while (/^HTTP\/\S+ \d{3}\b/u.test(content)) {
+        const boundary = /\r?\n\r?\n/u.exec(content);
+        if (!boundary) break;
+        responseHeaders = {};
+        for (const line of content.slice(0, boundary.index).split(/\r?\n/u).slice(1)) {
+          const colon = line.indexOf(":");
+          if (colon > 0) responseHeaders[line.slice(0, colon).toLowerCase()] = line.slice(colon + 1).trim();
+        }
+        content = content.slice(boundary.index + boundary[0].length);
+      }
+      resolve({ status: Number(stdout.slice(split + 1)) || 0, body: content, headers: responseHeaders, ...(error ? { error: error.message } : {}) });
     });
     if (body !== null) child.stdin.end(body);
   });
 }
+
+function responseError(source, response) {
+  const detail = String(response.body ?? "").replace(/\s+/gu, " ").trim().slice(0, 600);
+  const retryAfter = response.headers?.["retry-after"];
+  return `${source} ${response.status || "请求失败"}${response.error ? `：${response.error}` : ""}${detail ? `：${detail}` : ""}${retryAfter ? `（Retry-After: ${retryAfter}）` : ""}`;
+}
+
+// arXiv asks for one connection and at least three seconds between requests.
+// Share this fetcher across projects; stop after two retries or a wait over a minute.
+export function createWatchFetcher({ get = curlGet, wait = sleep, clock = Date.now } = {}) {
+  let queue = Promise.resolve();
+  let nextRequest = 0;
+  let limited = null;
+  return (url, options = {}) => {
+    if (!url.startsWith("https://export.arxiv.org/api/")) return get(url, options);
+    const request = queue.then(async () => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const delay = Math.max(0, nextRequest - clock());
+        if (delay > ARXIV_MAX_BACKOFF_MS && limited) return limited;
+        if (delay) await wait(delay);
+        const response = await get(url, options);
+        nextRequest = clock() + ARXIV_INTERVAL_MS;
+        if (response.status !== 429) { limited = null; return response; }
+        limited = response;
+        const header = response.headers?.["retry-after"];
+        const seconds = header ? Number(header) : NaN;
+        const retryAfter = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(header ?? "") - clock();
+        nextRequest = clock() + Math.max(ARXIV_INTERVAL_MS * 2 ** attempt, Number.isFinite(retryAfter) ? retryAfter : 0);
+      }
+      return limited;
+    });
+    queue = request.catch(() => {});
+    return request;
+  };
+}
+
+const watchGet = createWatchFetcher();
 
 const decodeXml = (text = "") => text.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gu, "$1")
   .replace(/&lt;/gu, "<").replace(/&gt;/gu, ">").replace(/&quot;/gu, "\"").replace(/&#39;/gu, "'").replace(/&amp;/gu, "&")
   .replace(/\s+/gu, " ").trim();
 
 export function arxivIdFromUrl(value = "") {
-  const match = String(value).match(/(\d{4}\.\d{4,5})(v\d+)?/u);
+  const candidate = String(value).trim()
+    .replace(/^https?:\/\/(?:export\.)?arxiv\.org\/(?:abs|pdf)\//iu, "")
+    .replace(/^(?:https?:\/\/doi\.org\/)?10\.48550\/arxiv\./iu, "")
+    .replace(/^arxiv:\s*/iu, "");
+  const match = candidate.match(/^(\d{2}(?:0[1-9]|1[0-2])\.\d{4,5}|[a-z][a-z.-]*\/\d{2}(?:0[1-9]|1[0-2])\d{3})(?:v\d+)?(?:\.pdf)?(?:[?#].*)?$/iu);
   return match ? match[1] : null;
 }
 
@@ -318,33 +381,35 @@ export function parseArxivFeed(xml = "") {
 
 function arxivQuery(config) {
   const categories = config.categories.map((category) => `cat:${category}`).join(" OR ");
-  const terms = config.keywords.map((keyword) => {
+  const terms = [...new Set(config.keywords)].map((keyword) => {
     const phrase = keyword.replace(/"/gu, "");
     return /\s/u.test(phrase) ? `ti:"${phrase}" OR abs:"${phrase}"` : `ti:${phrase} OR abs:${phrase}`;
   }).join(" OR ");
-  return terms ? `(${categories}) AND (${terms})` : `(${categories})`;
+  const authors = [...new Set(config.authors)].map((name) => `au:"${name.replace(/"/gu, "")}"`).join(" OR ");
+  return [terms && `((${categories}) AND (${terms}))`, authors && `(${authors})`].filter(Boolean).join(" OR ");
 }
 
-export async function fetchArxiv(config, { since, proxy, get = curlGet }) {
-  const url = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(arxivQuery(config))}&sortBy=submittedDate&sortOrder=descending&max_results=200`;
-  const response = await get(url, { proxy });
-  if (response.status !== 200) return { items: [], error: `arXiv ${response.status || response.error}` };
-  return { items: parseArxivFeed(response.body).filter((item) => !since || Date.parse(item.published) >= since) };
-}
-
-// New papers by watched authors, whatever words they use.
-export async function fetchArxivAuthors(config, { since, proxy, get = curlGet }) {
-  if (!config.authors.length) return { items: [] };
-  const query = config.authors.map((name) => `au:"${name.replace(/"/gu, "")}"`).join(" OR ");
-  const response = await get(`https://export.arxiv.org/api/query?search_query=${encodeURIComponent(query)}&sortBy=submittedDate&sortOrder=descending&max_results=100`, { proxy });
-  if (response.status !== 200) return { items: [], error: `arXiv 作者检索 ${response.status || response.error}` };
-  return { items: parseArxivFeed(response.body).filter((item) => !since || Date.parse(item.published) >= since) };
+// One query covers both keywords and authors instead of two requests per project.
+export async function fetchArxiv(config, { since, proxy, get = watchGet } = {}) {
+  const query = arxivQuery(config);
+  if (!query) return { items: [] };
+  const url = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(query)}&sortBy=submittedDate&sortOrder=descending&max_results=200`;
+  try {
+    const response = await get(url, { proxy });
+    if (response.status !== 200 || response.error) return { items: [], error: responseError("arXiv", response) };
+    if (!/<feed\b/u.test(response.body) || /arxiv\.org\/api\/errors/u.test(response.body)) return { items: [], error: responseError("arXiv 返回无效 feed", response) };
+    return { items: parseArxivFeed(response.body).filter((item) => !since || Date.parse(item.published) >= since) };
+  } catch (error) {
+    return { items: [], error: `arXiv：${error.message}` };
+  }
 }
 
 async function openAlexJson(query, { proxy, get }) {
   const response = await get(`${OPENALEX}/${query}`, { proxy });
-  if (response.status !== 200) throw new Error(`OpenAlex ${response.status || response.error}`);
-  return JSON.parse(response.body);
+  if (response.status !== 200 || response.error) throw new Error(responseError("OpenAlex", response));
+  const data = JSON.parse(response.body);
+  if (!Array.isArray(data.results)) throw new Error("OpenAlex 返回无效 results");
+  return data;
 }
 
 function abstractFromIndex(index) {
@@ -374,7 +439,7 @@ export function openAlexWorkToItem(work) {
 
 async function resolveSeed(id, { proxy, get }) {
   if (/^W\d+$/u.test(id)) return id;
-  if (!/^\d{4}\.\d{4,5}$/u.test(id)) return null;
+  if (!arxivIdFromUrl(id)) return null;
   for (const scheme of ["http", "https"]) {
     const data = await openAlexJson(`works?filter=locations.landing_page_url:${scheme}://arxiv.org/abs/${id}&select=id&per-page=1`, { proxy, get });
     if (data.results?.[0]?.id) return String(data.results[0].id).split("/").pop();
@@ -389,12 +454,12 @@ async function resolveInstitution(name, { proxy, get }) {
 
 // Papers citing known neighbours and keyword papers from watched institutions.
 export async function fetchOpenAlex(config, { since, proxy, get = curlGet, cache = {} }) {
-  const notes = [];
+  const errors = [];
   const items = [];
   const nextCache = { seeds: { ...(cache.seeds ?? {}) }, institutions: { ...(cache.institutions ?? {}) } };
   const from = localDate(since);
   try {
-    for (const seed of config.seedPapers) if (!(seed in nextCache.seeds)) nextCache.seeds[seed] = await resolveSeed(seed, { proxy, get });
+    for (const seed of config.seedPapers) if (!nextCache.seeds[seed]) nextCache.seeds[seed] = await resolveSeed(seed, { proxy, get });
     const seedIds = config.seedPapers.map((seed) => nextCache.seeds[seed]).filter(Boolean);
     const seedNames = new Map(config.seedPapers.map((seed) => [nextCache.seeds[seed], seed]));
     for (let index = 0; index < seedIds.length; index += 40) {
@@ -406,7 +471,7 @@ export async function fetchOpenAlex(config, { since, proxy, get = curlGet, cache
         items.push(item);
       }
     }
-    for (const name of config.institutions) if (!(name in nextCache.institutions)) nextCache.institutions[name] = await resolveInstitution(name, { proxy, get });
+    for (const name of config.institutions) if (!nextCache.institutions[name]) nextCache.institutions[name] = await resolveInstitution(name, { proxy, get });
     const institutionIds = config.institutions.map((name) => nextCache.institutions[name]).filter(Boolean);
     if (institutionIds.length && config.keywords.length) {
       const search = config.keywords.map((keyword) => (/\s/u.test(keyword) ? `"${keyword}"` : keyword)).join(" OR ");
@@ -414,11 +479,11 @@ export async function fetchOpenAlex(config, { since, proxy, get = curlGet, cache
       for (const work of data.results ?? []) items.push(openAlexWorkToItem(work));
     }
     const unresolved = [...config.seedPapers.filter((seed) => !nextCache.seeds[seed]), ...config.institutions.filter((name) => !nextCache.institutions[name])];
-    if (unresolved.length) notes.push(`OpenAlex 未找到：${unresolved.slice(0, 5).join("、")}${unresolved.length > 5 ? " 等" : ""}`);
+    if (unresolved.length) errors.push(`OpenAlex 未找到：${unresolved.slice(0, 5).join("、")}${unresolved.length > 5 ? " 等" : ""}，相关追踪尚未完成`);
   } catch (error) {
-    notes.push(error instanceof Error ? error.message : String(error));
+    errors.push(error instanceof Error ? error.message : String(error));
   }
-  return { items, notes, cache: nextCache };
+  return { items, errors, cache: nextCache };
 }
 
 export async function fetchHuggingFaceDaily(days, { proxy, get = curlGet, now = Date.now() }) {
@@ -426,15 +491,14 @@ export async function fetchHuggingFaceDaily(days, { proxy, get = curlGet, now = 
   const errors = [];
   for (let offset = 0; offset < days; offset += 1) {
     const date = new Date(now - offset * 86400000).toISOString().slice(0, 10); // Hugging Face lists by UTC day
-    const response = await get(`https://huggingface.co/api/daily_papers?date=${date}&limit=100`, { proxy });
-    if (response.status !== 200) {
-      errors.push(`Hugging Face ${date} ${response.status || response.error}`);
-      continue;
-    }
-    let list = [];
+    let list;
     try {
+      const response = await get(`https://huggingface.co/api/daily_papers?date=${date}&limit=100`, { proxy });
+      if (response.status !== 200 || response.error) throw new Error(responseError(`Hugging Face ${date}`, response));
       list = JSON.parse(response.body);
-    } catch {
+      if (!Array.isArray(list)) throw new Error("返回内容不是论文列表");
+    } catch (error) {
+      errors.push(`Hugging Face ${date}：${error.message}`);
       continue;
     }
     for (const entry of list) {
@@ -455,27 +519,42 @@ export async function fetchHuggingFaceDaily(days, { proxy, get = curlGet, now = 
   return { papers, errors };
 }
 
-// Optional enrichment: without a key the shared pool may refuse; the run continues.
-export async function fetchSemanticScholar(ids, { key, proxy, get = curlGet }) {
-  if (!ids.length) return { papers: new Map() };
-  const headers = { "content-type": "application/json", ...(key ? { "x-api-key": key } : {}) };
-  const response = await get("https://api.semanticscholar.org/graph/v1/paper/batch?fields=venue,citationCount,externalIds", {
-    proxy, headers, body: JSON.stringify({ ids: ids.slice(0, 100).map((id) => `ARXIV:${id}`) })
-  });
-  if (response.status !== 200) return { papers: new Map(), error: `Semantic Scholar ${response.status || response.error}${key ? "" : "（未设置 key）"}` };
+// Optional enrichment. The documented JSON batch accepts up to 500 ids;
+// no-key callers share a public quota. A refusal never invalidates discovery.
+export async function fetchSemanticScholar(ids, { key, proxy, get = curlGet } = {}) {
   const papers = new Map();
+  const normalized = [...new Set(ids.map(arxivIdFromUrl).filter(Boolean))].slice(0, 500);
+  if (!normalized.length) return { papers };
+  const headers = { "content-type": "application/json", ...(key ? { "x-api-key": key } : {}) };
   try {
-    for (const paper of JSON.parse(response.body)) {
-      const id = paper?.externalIds?.ArXiv;
-      if (id) papers.set(id, { venue: paper.venue || null, citations: paper.citationCount ?? null });
+    const response = await get("https://api.semanticscholar.org/graph/v1/paper/batch?fields=venue,citationCount,externalIds", {
+      proxy, headers, body: JSON.stringify({ ids: normalized.map((id) => `ARXIV:${id}`) })
+    });
+    if (response.status !== 200 || response.error) return { papers, error: `${responseError("Semantic Scholar", response)}${key ? "" : "（未设置 key，使用共享额度）"}；仅缺少会议/引用数增补` };
+    const list = JSON.parse(response.body);
+    if (!Array.isArray(list)) throw new Error(`返回内容不是论文列表：${String(response.body).slice(0, 300)}`);
+    for (const paper of list) {
+      const id = arxivIdFromUrl(paper?.externalIds?.ArXiv);
+      if (id && normalized.includes(id)) papers.set(id, { venue: paper.venue || null, citations: paper.citationCount ?? null });
     }
-  } catch {
-    return { papers, error: "Semantic Scholar 返回无法解析" };
+  } catch (error) {
+    return { papers, error: `Semantic Scholar：${error.message}；仅缺少会议/引用数增补` };
   }
   return { papers };
 }
 
 const lower = (value) => String(value ?? "").toLowerCase();
+const BROAD_TOPIC_WORDS = new Set("image images editing edit single generation generative visual vision learning deep neural network networks diffusion model models framework approach training evaluation efficient robust general vendor success".split(" "));
+const topicText = (value) => lower(value).replace(/[-\s]+/gu, " ").trim();
+
+function substantiveKeyword(keyword) {
+  return (topicText(keyword).match(/[\p{L}\p{N}]+/gu) ?? []).some((word) => !BROAD_TOPIC_WORDS.has(word) && !STOPWORDS.has(word) && !STRUCTURE_WORDS.has(word));
+}
+
+function containsKeyword(text, keyword) {
+  const escaped = topicText(keyword).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return escaped && new RegExp(`(?<![\\p{L}\\p{N}])${escaped}s?(?![\\p{L}\\p{N}])`, "u").test(topicText(text));
+}
 
 export function scorePaper(paper, config, signals = {}) {
   const reasons = [];
@@ -483,19 +562,30 @@ export function scorePaper(paper, config, signals = {}) {
   let relevance = 0;
   const title = lower(paper.title);
   const abstract = lower(paper.abstract);
-  for (const keyword of config.keywords) {
-    const needle = lower(keyword);
-    if (title.includes(needle)) { relevance += 3; reasons.push(`标题含「${keyword}」`); }
-    else if (abstract.includes(needle)) { relevance += 1; reasons.push(`摘要含「${keyword}」`); }
+  const matched = [];
+  const keywords = [...new Set(config.keywords)].filter(substantiveKeyword).sort((a, b) => b.length - a.length);
+  for (const [text, weight, label] of [[title, 3, "标题"], [abstract, 1, "摘要"]]) {
+    for (const keyword of keywords) {
+      if (!containsKeyword(text, keyword) || matched.some((prior) => containsKeyword(prior, keyword) || containsKeyword(keyword, prior))) continue;
+      relevance += weight;
+      matched.push(keyword);
+      reasons.push(`${label}含「${keyword}」`);
+    }
   }
   const authors = (paper.authors ?? []).map(lower);
   for (const watched of config.authors) {
-    if (authors.some((author) => author.includes(lower(watched)))) { relevance += 3; reasons.push(`关注作者 ${watched}`); }
+    if (authors.some((author) => author.includes(lower(watched)))) {
+      // Author-only watches remain useful; a topic watch also needs a
+      // substantive keyword match before its author's paper becomes relevant.
+      if (!config.keywords.length || matched.length) relevance += 3;
+      else score += 3;
+      reasons.push(`关注作者 ${watched}`);
+    }
   }
   for (const seed of paper.citedSeeds ?? []) { relevance += 3; reasons.push(`引用了近邻论文 ${seed}`); }
   const institutions = (paper.institutions ?? []).map(lower);
   for (const watched of config.institutions ?? []) {
-    if (institutions.some((institution) => institution.includes(lower(watched)))) { relevance += 2; reasons.push(`关注机构 ${watched}`); }
+    if (institutions.some((institution) => institution.includes(lower(watched)))) { score += 2; reasons.push(`关注机构 ${watched}`); }
   }
   score += relevance;
   const venue = signals.s2?.venue || paper.venue;
@@ -510,50 +600,52 @@ export function scorePaper(paper, config, signals = {}) {
   return { score: Math.round(score * 10) / 10, relevance, reasons };
 }
 
-function renderDigest(project, date, items, notes) {
-  const lines = [`# 论文追踪 ${date}`, "", `项目：${project}。导师在下一轮开始时判断每篇对本项目的影响，并在说明里按「- 编号 | 撞题/新基线/可借用/无关 | 理由」逐行写出。`, ""];
+function renderDigest(project, date, items, notes, status) {
+  const lines = [`# 论文追踪 ${date}`, "", `项目：${project}。下一次导师调用判断尚未评过的论文，返回「- 编号 | 撞题/新基线/可借用/无关 | 理由」，由主会话保存为 watch/impact-YYYY-MM-DD.md；不依赖轮次。`, ""];
   if (notes.length) lines.push(`说明：${notes.join("；")}`, "");
-  if (!items.length) lines.push("今天没有新的相关论文。");
+  if (status !== "done") lines.push("检索未完成，不能据此判断没有新的相关论文。", "");
+  else if (!items.length) lines.push("本次检索没有发现新的相关论文。");
   for (const item of items) {
     lines.push(`## ${item.title}`, `- 编号：${item.id}  ·  链接：${item.url}  ·  分数 ${item.score}  ·  ${String(item.published).slice(0, 10)}`, `- 作者：${item.authors.slice(0, 6).join(", ")}${item.authors.length > 6 ? " 等" : ""}`, `- 选中原因：${item.reasons.join("；") || "分类内新论文"}`, `- 摘要：${item.abstract.slice(0, 400)}${item.abstract.length > 400 ? "…" : ""}`, "");
   }
   return `${lines.join("\n")}\n`;
 }
 
-export async function runProjectWatch(root, { settings, key, hf, now = Date.now(), get = curlGet }) {
+export async function runProjectWatch(root, { settings, key, hf, now = Date.now(), get = watchGet }) {
   let drafted = false;
   if (!watchConfigExists(root)) {
     writeWatchConfig(root, await draftWatchConfigWithSources(root, { proxy: settings.proxy, get }));
     drafted = true;
   }
   const config = readWatchConfig(root);
+  const guidance = watchConfigGuidance(config);
+  const notes = guidance ? [guidance] : [];
   const date = localDate(now);
-  if (!config.enabled) return { root, status: "disabled" };
-  if (!config.keywords.length && !config.authors.length && !config.seedPapers.length) return { root, status: "unconfigured", drafted };
-  const notes = [];
-  const statePath = path.join(root, PROJECT_STATE);
-  const state = readJson(statePath, {});
+  if (!config.enabled) return { root, status: "disabled", guidance, notes };
+  if (!config.keywords.length && !config.authors.length && !config.seedPapers.length) return { root, status: "unconfigured", drafted, guidance, notes };
+  const state = readWatchState(root);
+  const errors = [...(hf.errors ?? [])];
+  let completedSources = 0;
   const lastRun = Date.parse(state.lastRun ?? "");
   // First run backfills a month; later runs reach back past the last run to cover arXiv's search lag.
   const since = Number.isFinite(lastRun)
     ? Math.min(now - settings.lookbackDays * 86400000, lastRun - ARXIV_INDEX_LAG_DAYS * 86400000)
     : now - FIRST_RUN_DAYS * 86400000;
-  if (drafted) notes.push("追踪配置是根据项目资料自动生成的初稿，请在设置页检查");
   const candidates = new Map();
   const merge = (item) => {
     const existing = candidates.get(item.id);
     candidates.set(item.id, existing ? { ...item, ...existing, citedSeeds: [...new Set([...(existing.citedSeeds ?? []), ...(item.citedSeeds ?? [])])], institutions: existing.institutions?.length ? existing.institutions : item.institutions, venue: existing.venue ?? item.venue } : item);
   };
-  if (config.keywords.length) {
+  if (config.keywords.length || config.authors.length) {
     const arxiv = await fetchArxiv(config, { since, proxy: settings.proxy, get });
-    if (arxiv.error) notes.push(arxiv.error);
+    if (arxiv.error) errors.push(arxiv.error);
+    else completedSources += 1;
     arxiv.items.forEach(merge);
   }
-  const byAuthor = await fetchArxivAuthors(config, { since, proxy: settings.proxy, get });
-  if (byAuthor.error) notes.push(byAuthor.error);
-  byAuthor.items.forEach(merge);
   const openAlex = await fetchOpenAlex(config, { since, proxy: settings.proxy, get, cache: state.openalex });
-  notes.push(...openAlex.notes);
+  errors.push(...openAlex.errors);
+  if (!openAlex.errors.length && (config.seedPapers.length || (config.institutions.length && config.keywords.length))) completedSources += 1;
+  notes.push(...errors);
   openAlex.items.forEach(merge);
   for (const [id, paper] of hf.papers) if (!candidates.has(id)) candidates.set(id, { ...paper, categories: [] });
   const seen = new Set(state.seen ?? []);
@@ -562,7 +654,7 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
     .filter((item) => item.relevance >= MIN_RELEVANCE)
     .sort((left, right) => right.score - left.score)
     .slice(0, settings.maxPerDigest);
-  const s2 = await fetchSemanticScholar(ranked.map((item) => item.id).filter((id) => /^\d{4}\.\d{4,5}$/u.test(id)), { key, proxy: settings.proxy, get });
+  const s2 = await fetchSemanticScholar(ranked.map((item) => item.id), { key, proxy: settings.proxy, get });
   if (s2.error) notes.push(s2.error);
   ranked = ranked.map((item) => ({ ...item, ...s2.papers.get(item.id), ...scorePaper(item, config, { hf: hf.papers.get(item.id), s2: s2.papers.get(item.id) }) }))
     .sort((left, right) => right.score - left.score);
@@ -570,19 +662,20 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
   const earlier = readJson(path.join(root, WATCH_DIR, `${date}.json`), null);
   const merged = [...ranked, ...(earlier?.items ?? []).filter((item) => !ranked.some((fresh) => fresh.id === item.id))]
     .sort((left, right) => right.score - left.score);
-  const digest = { date, generatedAt: new Date(now).toISOString(), notes, items: merged };
+  const status = errors.length ? (completedSources || ranked.length ? "partial" : "failed") : "done";
+  const digest = { date, generatedAt: new Date(now).toISOString(), status, notes, items: merged };
   writeProjectFile(root, `${WATCH_DIR}/${date}.json`, `${JSON.stringify(digest, null, 2)}\n`);
-  writeProjectFile(root, `${WATCH_DIR}/${date}.md`, renderDigest(path.basename(root), date, merged, notes));
+  writeProjectFile(root, `${WATCH_DIR}/${date}.md`, renderDigest(path.basename(root), date, merged, notes, status));
   const nextSeen = [...ranked.map((item) => item.id), ...seen].slice(0, MAX_SEEN);
-  writeProjectFile(root, PROJECT_STATE, `${JSON.stringify({ lastRun: digest.generatedAt, seen: nextSeen, openalex: openAlex.cache }, null, 2)}\n`);
-  return { root, status: "done", found: ranked.length, notes, drafted };
+  writeProjectFile(root, PROJECT_STATE, `${JSON.stringify({ ...state, lastAttempt: digest.generatedAt, lastRun: status === "done" ? digest.generatedAt : state.lastRun ?? null, status, notes, seen: nextSeen, openalex: openAlex.cache }, null, 2)}\n`);
+  return { root, status, found: ranked.length, notes, drafted, guidance, ...(status === "failed" ? { error: errors.join("；") } : {}) };
 }
 
 export async function runWatch(roots, options = {}) {
   const now = options.now ?? Date.now();
   const settings = readGlobalWatchSettings(options);
   const key = readSemanticScholarKey(options);
-  const get = options.get ?? curlGet;
+  const get = options.get ? createWatchFetcher({ get: options.get, wait: options.wait, clock: options.clock }) : watchGet;
   const hf = await fetchHuggingFaceDaily(settings.lookbackDays, { proxy: settings.proxy, get, now });
   const results = [];
   for (const root of roots) {
@@ -592,18 +685,24 @@ export async function runWatch(roots, options = {}) {
       results.push({ root, status: "failed", error: error instanceof Error ? error.message : String(error) });
     }
   }
-  const state = { lastRun: new Date(now).toISOString(), lastRunDate: localDate(now), hfErrors: hf.errors, results };
+  const previous = readGlobalWatchState(options);
+  const complete = !hf.errors.length && results.every((result) => ["done", "disabled", "unconfigured"].includes(result.status));
+  const attemptedAt = new Date(now).toISOString();
+  const state = { lastAttempt: attemptedAt, lastRun: complete ? attemptedAt : previous.lastRun ?? null, lastRunDate: complete ? localDate(now) : null, status: complete ? "done" : "partial", hfErrors: hf.errors, results };
   if (options.recordGlobalState !== false) {
     writeGlobalWatchState(state, options);
-    const hot = [...hf.papers.values()].sort((left, right) => right.upvotes - left.upvotes).slice(0, 60)
-      .map(({ id, title, abstract, upvotes, url, published }) => ({ id, title, abstract: abstract.slice(0, 600), upvotes, url, published }));
-    writePrivateFile(path.join(doveConfigDirectory(options), HOT_FILE), `${JSON.stringify({ generatedAt: state.lastRun, papers: hot }, null, 2)}\n`);
+    const hot = [...hf.papers.values()].sort((left, right) => right.upvotes - left.upvotes).slice(0, 60);
+    writePrivateFile(path.join(doveConfigDirectory(options), HOT_FILE), `${JSON.stringify({ generatedAt: attemptedAt, errors: hf.errors, papers: hot }, null, 2)}\n`);
   }
   return state;
 }
 
 export function readWatchHot(options = {}) {
   return readJson(path.join(doveConfigDirectory(options), HOT_FILE), { papers: [] });
+}
+
+export function watchScanDue(scan, now = Date.now()) {
+  return !scan || localDate(now - 7 * 86400000) >= scan.date;
 }
 
 export function readLatestScan(root) {

@@ -27,10 +27,17 @@ function virtualFiles(entries) {
   return { root, files, reads, fsOps };
 }
 
-test("update retires only the owned reviewer and never plans research history writes", () => {
+test("update retires only the owned reviewer and preserves mentor memory and research history", () => {
   const oldPath = ".claude/agents/dove-reviewer.md";
   const content = "old managed reviewer\n";
-  const fixture = virtualFiles({ [oldPath]: content, ".dove/research/missions/old.md": "history", ".dove/research/experiments/old.md": "results" });
+  const fixture = virtualFiles({
+    [oldPath]: content,
+    ".dove/research/MENTOR_NOTES.md": "Mentor-authored prediction and open concerns\n",
+    ".dove/research/watch/impact-2026-10-15.md": "Paper impact outside any round\n",
+    ".dove/research/watch/scan-2026-10-15.md": "Dated field scan\n",
+    ".dove/research/missions/old.md": "history",
+    ".dove/research/experiments/old.md": "results"
+  });
   const manifest = {
     package: { name: "dove", version: "3.2.27" }, hosts: ["claude"],
     managed: [{ path: oldPath, kind: "exclusive-file", selector: null, digest: sha256(content) }],
@@ -50,13 +57,15 @@ test("doctor reads core documents without requiring or inspecting historical sum
     ".dove/research/IDENTITY.md": "Mainline: unchanged\n",
     ".dove/research/EVAL.md": "| round | unseen |\n",
     ".dove/research/rounds/001-brief.md": "作者：用户\n",
+    ".dove/research/MENTOR_NOTES.md": "Mentor memory is not a required installation summary\n",
+    ".dove/research/watch/impact-2026-10-15.md": "Not an installation diagnostic\n",
     ".dove/research/missions/old.md": "not inspected"
   });
   const result = inspectResearchDocuments(fixture.root, fixture);
   assert.equal(result.healthy, true);
   assert.equal(result.rounds.path, ".dove/research/rounds");
   assert.equal(result.evaluation.path, ".dove/research/EVAL.md");
-  assert.equal(fixture.reads.some((target) => target.includes("/missions/") || target.includes("/rounds/")), false);
+  assert.deepEqual(fixture.reads.map((target) => path.relative(fixture.root, target)).sort(), [".dove/research/EVAL.md", ".dove/research/IDENTITY.md"]);
 });
 
 test("statusline shows the round number from the card without scanning round contents", () => {

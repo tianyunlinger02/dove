@@ -70,7 +70,7 @@ test("runs without a Semantic Scholar key and keeps going when it refuses", asyn
   const state = await runWatch([root, unconfigured], { env, get, now: NOW });
   assert.equal(state.lastRunDate, localDate(NOW));
   assert.deepEqual(state.results.map((item) => item.status), ["done", "unconfigured"]);
-  assert.ok(state.results[0].notes.some((note) => note.includes("Semantic Scholar 429（未设置 key）")));
+  assert.ok(state.results[0].notes.some((note) => /Semantic Scholar 429.*未设置 key.*仅缺少会议/u.test(note)));
   const [digest] = readWatchDigests(root);
   assert.deepEqual(digest.items.map((item) => item.id), ["2610.00001"]);
   assert.ok(fs.readFileSync(path.join(root, `.dove/research/watch/${localDate(NOW)}.md`), "utf8").includes("Sewing Pattern Generation"));
@@ -118,6 +118,8 @@ test("settings API needs the custom header and only allows settings actions", as
 test("scheduler runs once per local day after the configured hour", async () => {
   const env = { HOME: tempDir("dove-watch-home-") };
   writeGlobalWatchSettings({ dailyHour: 8 }, { env });
+  const root = project();
+  changeRegisteredProjects([root], [], { env });
   const runs = [];
   const actions = createDashboardActions({ env, run: async (roots) => { runs.push(roots); } });
   const early = new Date(2026, 9, 8, 7, 0);
@@ -125,7 +127,8 @@ test("scheduler runs once per local day after the configured hour", async () => 
   assert.equal(runs.length, 0);
   const late = new Date(2026, 9, 8, 9, 0);
   clearInterval(actions.startScheduler({ now: () => late, intervalMs: 1e9 }));
-  assert.equal(runs.length, 1);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(runs, [[root]]);
 });
 
 test("drafts keywords and neighbour papers from the project's own records", async () => {
@@ -156,7 +159,7 @@ test("finds papers citing neighbours and by watched authors, and rewards watched
   const get = async (url, options) => {
     if (url.includes("openalex.org/works?filter=locations.landing_page_url")) return { status: 200, body: JSON.stringify({ results: [{ id: "https://openalex.org/W111" }] }) };
     if (url.includes("openalex.org/works?filter=cites:W111")) return { status: 200, body: JSON.stringify({ results: [citing] }) };
-    if (url.includes("search_query=au%3A")) return { status: 200, body: arxivXml.replace("2610.00001v1", "2610.00055v1").replace("Sewing Pattern Generation with Diffusion", "Sewing pattern editing").replace("<name>Alice Zhang</name>", "<name>Carol</name>").replace("We generate sewing patterns &amp; garments.", "Code: https://github.com/x/y") };
+    if (url.includes("export.arxiv.org") && new URL(url).searchParams.get("search_query")?.includes('au:"Carol"')) return { status: 200, body: arxivXml.replace("2610.00001v1", "2610.00055v1").replace("Sewing Pattern Generation with Diffusion", "Sewing pattern editing").replace("<name>Alice Zhang</name>", "<name>Carol</name>").replace("We generate sewing patterns &amp; garments.", "Code: https://github.com/x/y") };
     return base(url, options);
   };
   await runWatch([root], { env, get, now: NOW });

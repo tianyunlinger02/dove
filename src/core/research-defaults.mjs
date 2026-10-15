@@ -19,7 +19,7 @@ export const RESEARCH_DEFAULT_PATHS = Object.freeze({
 export const RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
   Object.freeze({
     path: RESEARCH_DEFAULT_PATHS.overview,
-    content: "# Research\n\nUse `IDENTITY.md`, `EVAL.md`, `rounds/`. Until Mainline is recorded, select a topic; otherwise follow it as intended. EVAL supports scoped observations/controls without a full-paper prerequisite; keep confirmed requirements. Short history index only; leave missions, experiments and claims in place.\n"
+    content: "# Research\n\nUse `IDENTITY.md`, `EVAL.md` and `rounds/` for current research. Until the user confirms Mainline, read the project topic-selection standards, explore parallel candidates and offer recommendations for the user to choose before method implementation. Follow a confirmed mainline and choose work at a scale that can answer the question. The mentor keeps its own `MENTOR_NOTES.md`. This file is a short history index; leave existing missions, experiments and claims in place.\n"
   })
 ]);
 

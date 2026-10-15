@@ -8,7 +8,13 @@ import { changeRegisteredProjects, readRegisteredProjects } from "../core/projec
 import {
   draftWatchConfigWithSources,
   localDate,
+  MIN_RELEVANCE,
+  scorePaper,
   readLatestScan,
+  readWatchState,
+  watchConfigExists,
+  watchConfigGuidance,
+  watchScanDue,
   readWatchHot,
   readGlobalWatchSettings,
   readGlobalWatchState,
@@ -34,29 +40,44 @@ function isDirectory(root) {
 export function createDashboardActions({ packageOptions = {}, passwordFile = null, run = runWatch, env = process.env } = {}) {
   const options = { ...packageOptions, env };
   let running = null;
+  let runError = null;
+  let lastAttempt = 0;
   const registered = () => readRegisteredProjects(options);
-  const startWatch = (roots) => {
-    if (running) return { started: false, reason: "已有一次运行在进行" };
-    running = Promise.resolve(run(roots, options)).catch(() => null).finally(() => { running = null; });
-    return { started: true };
+  const startWatch = (roots, now = Date.now()) => {
+    const guidance = roots.map((root) => ({ root, message: watchConfigGuidance(watchConfigExists(root) ? readWatchConfig(root) : { source: "draft" }) })).filter((item) => item.message);
+    if (running) return { started: false, reason: "已有一次运行在进行", guidance };
+    lastAttempt = now;
+    runError = null;
+    running = Promise.resolve().then(() => run(roots, options)).catch((error) => { runError = error.message; }).finally(() => { running = null; });
+    return { started: true, guidance };
   };
   return {
     getSettings({ passwordSet = false } = {}) {
       const roots = registered();
       return {
         registered: roots.map((root) => ({ root, exists: isDirectory(root) })),
-        projects: roots.filter((root) => isDirectory(path.join(root, ".dove/research"))).map((root) => ({ root, name: path.basename(root), watch: readWatchConfig(root) })),
+        projects: roots.filter((root) => isDirectory(path.join(root, ".dove/research"))).map((root) => {
+          const watch = readWatchConfig(root);
+          return { root, name: path.basename(root), watch, guidance: watchConfigGuidance(watch) };
+        }),
         watchGlobal: readGlobalWatchSettings(options),
         watchState: readGlobalWatchState(options),
         watchRunning: Boolean(running),
+        watchError: runError,
         s2KeySet: Boolean(readSemanticScholarKey(options)),
         topicCriteria: readTopicCriteriaInfo(options),
         passwordSet,
         canChangePassword: Boolean(passwordFile)
       };
     },
-    readWatch({ root }) {
-      return { config: readWatchConfig(root), digests: readWatchDigests(root, 3), impacts: parsePaperImpacts(root), scan: readLatestScan(root) };
+    readWatch({ root, now = Date.now() }) {
+      const config = readWatchConfig(root);
+      const impacts = parsePaperImpacts(root);
+      const scan = readLatestScan(root);
+      const all = readWatchDigests(root, Infinity);
+      const pending = new Map();
+      for (const digest of all.slice(3)) for (const item of digest.items) if (!impacts[item.id] && !pending.has(item.id)) pending.set(item.id, item);
+      return { config, guidance: watchConfigGuidance(config), state: readWatchState(root), digests: all.slice(0, 3), pending: [...pending.values()], impacts, scan, scanDue: watchScanDue(scan, now) };
     },
     readTopicsOverview() {
       return {
@@ -79,11 +100,11 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
       const weekAgo = localDate(now - 7 * 86400000);
       const roots = registered().filter((root) => isDirectory(path.join(root, ".dove/research")));
       const byId = new Map();
-      const keywords = new Set();
+      const configs = [];
       const scans = [];
       for (const root of roots) {
         const config = readWatchConfig(root);
-        config.keywords.forEach((keyword) => keywords.add(keyword.toLowerCase()));
+        if (config.enabled) configs.push(config);
         const impacts = parsePaperImpacts(root);
         for (const digest of readWatchDigests(root, 7).filter((item) => item.date >= weekAgo)) {
           for (const item of digest.items) {
@@ -95,12 +116,9 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
           }
         }
         const scan = readLatestScan(root);
-        if (scan) scans.push({ project: path.basename(root), ...scan });
+        scans.push({ project: path.basename(root), ...(scan ?? {}), due: watchScanDue(scan, now) });
       }
-      const hot = (readWatchHot(options).papers ?? []).filter((paper) => {
-        const text = `${paper.title} ${paper.abstract}`.toLowerCase();
-        return [...keywords].some((keyword) => text.includes(keyword));
-      }).slice(0, 15);
+      const hot = (readWatchHot(options).papers ?? []).filter((paper) => configs.some((config) => scorePaper(paper, config).relevance >= MIN_RELEVANCE)).slice(0, 15);
       const top = [...byId.values()].sort((left, right) => (right.impacts.length - left.impacts.length) || (right.score - left.score)).slice(0, 30);
       return { since: weekAgo, top, hot, scans };
     },
@@ -139,7 +157,17 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
         const settings = readGlobalWatchSettings(options);
         const current = now();
         const today = localDate(current);
-        if (current.getHours() >= settings.dailyHour && readGlobalWatchState(options).lastRunDate !== today) startWatch(registered().filter(isDirectory));
+        const state = readGlobalWatchState(options);
+        const latestAttempt = Math.max(lastAttempt, Date.parse(state.lastAttempt ?? "") || 0);
+        if (current.getHours() >= settings.dailyHour && current.getTime() - latestAttempt >= 3600000) {
+          const roots = registered().filter(isDirectory).filter((root) => {
+            if (!readWatchConfig(root).enabled) return false;
+            if (state.lastRunDate === today && state.results?.some((result) => result.root === root && result.status === "unconfigured")) return false;
+            const project = readWatchState(root);
+            return project.status !== "done" || !project.lastRun || localDate(project.lastRun) !== today;
+          });
+          if (roots.length) startWatch(roots, current.getTime());
+        }
       };
       const timer = setInterval(tick, intervalMs);
       timer.unref?.();

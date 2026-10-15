@@ -1,6 +1,6 @@
 # Usage
 
-Dove explores directions and advances research through short briefs and actual observations. The main session executes authorized work directly. A fresh read-only mentor provides independent judgment when requested or when topic selection, methods, evaluation, measured results or the route need it; reuse existing judgment without new material. Implementation, reruns, diagnosis and engineering stay within your authorization and resource limits. Ask when a decision changes user commitments or exceeds those limits, not for every method or evaluator correction. Ordinary questions and bounded requests retain their scope.
+Dove helps choose research directions and advance a confirmed mainline through real work. The main session owns the user conversation, execution and delivery. Isolated contexts provide independent judgment, not extra personas or approvals. Ordinary questions, local edits and discussion-only requests keep their scope.
 
 ## Start using Dove
 
@@ -10,146 +10,153 @@ cd <target-project>
 dove
 ```
 
-The bare public npm package name `dove` is unrelated. Use an exact trusted artifact; see [Installation](INSTALL.md) for package trust, setup, lifecycle operations, and permissions.
+The bare public npm name `dove` is unrelated. Use a trusted artifact; see [Installation](INSTALL.md).
 
 ## Entry modes
 
-- **Ordinary Claude conversation is the primary and complete Dove entrance.** Start `claude` in the initialized project. The project rule supplies shared judgment and author stance; the main session owns clarification, execution, the user's mainline, and adoption of results.
-- **`claude --agent dove`** is an optional explicit author-side entrance, with no higher judgment authority.
-- **Bounded Dove subagents** can investigate independent questions. Work needing the full user conversation, consequential clarification, or ongoing ownership stays in the main session.
-- **`dove-mentor` and `dove-review`** are native Claude subagents for independent judgment, not additional personas or Skills. Every call uses a fresh context, only `Read`/`Grep`/`Glob`, and specified materials; no execution conversation or resumed history is supplied. The mentor alone reads genuine user records from the specified host source, not executor paraphrases; paper review has no transcript access.
-- **`/dove:*` commands** are nine flat capability shortcuts, not stages or permission grants. DSH receives project-local filesystem Skills only, without Claude agents or hooks. There is no Auto command.
+Ordinary Claude conversation in an initialized project is the complete primary entrance. `claude --agent dove` is optional. Nine flat `/dove:*` commands provide shortcuts; none is a stage or permission grant. DSH receives filesystem Skills and shared references, not Claude agents, hooks or a packaged native agent service. Independent judgment on another host depends on equivalent isolated tools actually available there. There is no Auto command.
 
 | Skill | Use it for |
 |---|---|
-| `dove.research` | Start or continue authorized research, using independent judgment when needed. |
-| `dove.status` | Read the identity card, latest evaluation rows, and current brief; explain progress in four plain sentences. |
-| `dove.source` | Find, read, check, and use relevant sources, including bounded bibliography DOI identity checks. |
-| `dove.experiment` | Develop, rerun, diagnose, and analyze within a round; reserve frozen heldout comparisons for final confirmation. |
-| `dove.draft` | Draft, assess, or revise text and project artifacts from real evidence. |
-| `dove.figure` | Gather materials, draw or revise figures, inspect them in context, and caption them. |
-| `dove.review` | Do author-side self-check, delivery review, native paper review, or returned-review preservation and inspection. |
-| `dove.rebuttal` | Analyze findings, write responses, and make requested evidence-backed revisions. |
-| `dove.lessons` | Read or maintain reusable advice that may improve research judgment. |
-
-Source, Draft, Figure, Rebuttal, and Lessons are unchanged by the mentor/round structure.
+| `dove.research` | Explore parallel candidates for the user's choice, or develop the confirmed mainline. |
+| `dove.status` | Report results, core evidence, blockers and current round without starting work. |
+| `dove.source` | Discover and inspect sources, verify citation identity and claims, and improve decisions. |
+| `dove.experiment` | Develop, diagnose, evaluate and analyze actual method outputs. |
+| `dove.draft` | Write or revise evidence-grounded text and inspect the authoritative build/export. |
+| `dove.figure` | Gather materials, create or revise visuals, inspect them and deliver captions and editable sources. |
+| `dove.review` | Distinguish author self-check, delivery checks, independent paper review and returned opinions. |
+| `dove.rebuttal` | Verify review concerns, respond as the author and make requested revisions. |
+| `dove.lessons` | Read or preserve useful transferable advice, not another progress log. |
 
 ## Short core and two reference read contracts
 
-Both hosts install four exact package-managed resources:
+Both hosts install four exact package-managed files:
 
-| Reference | Role and when to read |
+| Reference under `.dove/install/` | Role |
 |---|---|
-| `.dove/install/RESEARCH_QUALITY.md` | Short Chinese quality essentials; every fresh main-agent context personally reads them before substantive work. |
-| `.dove/install/RESEARCH_QUALITY_FULL.md` | Preserved full quality criteria and joint conditions; consult relevant detail for consequential judgments. |
-| `.dove/install/AUTHOR_PREFERENCES.md` | Short Chinese author-side essentials; the same fresh-context read applies. |
-| `.dove/install/AUTHOR_PREFERENCES_FULL.md` | Preserved full preferences, consulted as needed. [Author preferences](AUTHOR_PREFERENCES.md) remains the sole editable full source. |
+| `RESEARCH_QUALITY.md` | Chinese quality essentials and common mentor note/tracking duties. |
+| `RESEARCH_QUALITY_FULL.md` | Detailed substantive criteria, consulted when relevant. |
+| `AUTHOR_PREFERENCES.md` | Short author-side preferences and fresh-context reading guidance. |
+| `AUTHOR_PREFERENCES_FULL.md` | Full preferences, consulted as needed; [the source](AUTHOR_PREFERENCES.md) remains the sole editable full version. |
 
-Claude startup and `/clear` deliver the two-essentials bootstrap; DSH applies it on first author-side Skill use if not already read in that context. Compact/resume reuses that context's reading. Do not delegate the main agent's read or require full companions through EOF each time. Installation, hook delivery, and another agent's read do not prove application. These references are guidance, not evidence, permissions, or Lessons. Bounded subagents receive relevant constraints; DSH Status has no author stance or bootstrap. Mentor and reviewer access remains limited to their specified materials, without private author preferences; the mentor's original-user source exception does not grant access to the full execution conversation or unrelated private transcripts.
+Every fresh author main context personally reads both short essentials before substantive work. Claude startup and `/clear` supply the bootstrap; DSH applies it on first author-side Skill use if needed. Compact/resume reuses the readings. DSH Status has no author bootstrap. Do not require both full references through EOF at startup or delegate the main context's reading.
+
+Mentors on both hosts read the quality summary, not private author preferences. Paper reviewers read only supplied manuscript materials and grounding. Installation, hooks and another agent's reading do not prove the current context has read or applied guidance; references are not research evidence or permissions.
 
 ## Scope, plans, and progress
 
-Preserve `Mainline`'s goal, contribution, completion and provisional meaning; no reselection/downgrade. Respect user-fixed methods/deployment/permission commitments. Other methods/claims, architecture, tool contracts and brief designs evolve, not fixed by records/mentor advice. Honor current briefs/version freezes; ask for changed user commitments.
+Preserve the user's confirmed Mainline, intended contribution, completion meaning and fixed methods. A field, recommendation or card entry is not confirmation. Record clear intent without asking again; keep provisional intent provisional. Other designs can change with evidence. Ask about changes to user commitments, deployment inputs/outputs or resources, not routine engineering. Without a reply, continue only independent authorized work.
 
-Choose work by full-task benefit, reasonable alternatives, mechanisms and key unknowns: implement the actual core, strengthen mechanisms or gather distinguishing evidence, not defect → cause → one change → local score. Fix known errors directly: repairs need no novelty and are not automatically contributions. Do not gate core work on all baselines/metrics/proofs; controls serve the goal, smoke tests do not complete research.
+Choose substantive work by full-task benefit, serious alternatives, mechanism grounds and the key unknown. Ask whether the scale and change can answer the question: expand or redesign when they cannot, and do not enlarge work needlessly when they can. Connecting a pipeline does not demonstrate a designed and tested core mechanism. Necessary repairs need not be novel and do not automatically become contributions.
 
-Mentors independently rebuild method/route judgment from user goals, key assumptions and actual cross-round/raw evidence, not executor framing; repair support is not route confirmation. Judge family value/shared causes, general capability versus patches (failure classes/unseen data), and problem/method/contribution quality: sensitivity, controls, realistic deployment. Distinguish verification/strengthening, not default narrowing/sample craft fixes. Bounded scope needs no per-tool route review.
-
-The main session applies material findings to affected methods, evaluation, code, claims, manuscripts, figures, and current work. A capability report or saved record is not adoption. Negative results can advance understanding and end a round without establishing an effective method. Useful engineering or delivery can complete a bounded request without producing new scientific evidence. Software checks, actual research results, and completion of the user's goal remain separate claims.
+For judgment questions, put only the direct conclusion in the first sentence—达到、没达到、能、不能、还不知道, or an equally direct answer. Follow with one or two sentences of evidence and at most one boundary sentence, not “可以，但是”. Report scientific progress, necessary engineering, delivery and software checks separately.
 
 ## Research Markdown
 
-New core context has three parts under `.dove/research/`:
-
-```text
-IDENTITY.md
-EVAL.md
-rounds/
-  NNN-brief.md
-  NNN-result.md
-```
+Current records live under `.dove/research/`. The following formats govern future writing; installation does not migrate or shorten existing research.
 
 ### Topic selection and original-user grounding
 
-Before Mainline is recorded, topic selection is underway. Narrow the user's field to a meaningful small problem with accessible data, code and resources. Form a few working hypotheses with mechanisms, reasons, fragile assumptions and observations; recommend one and promptly build the smallest authorized end-to-end core. Observe whether the mechanism occurs and improves the problem; revise, replace or pause ideas from results. Paper titles and contribution wording converge later, rather than being promised before core evidence. Read relevant user originals in date order and designated requirements; latest user words prevail. Ask when a direction needs their decision; record clear intent without reconfirmation. A field or mentor recommendation is not a settled mainline; takeover does not restart selection.
+Until the user confirms a mainline, first read and follow existing `topics/CRITERIA.md` and project topic-selection standards. Establish a meaningful direction, then generate a broad parallel candidate pool without pruning during generation. Use real near-neighbor searches to assess and broaden it. Present 2–3 grounded recommendations for the user to choose. Before that choice, do not implement candidate methods; do only diagnostics allowed by the standards.
 
-When invoked, the fresh mentor reads genuine user records, not executor retellings. Main-session SessionStart/UserPromptSubmit hooks expose only the host's `transcript_path` source path; they do not read/copy transcripts or automatically parse user history. The main session supplies that path, the last-read date/range and the current user's original text, which may not yet be persisted. The mentor uses Grep/Read to select relevant user-authored bodies, in date order initially and since the preceding round thereafter. Exclude meta messages, subagent conversations, host/system injections, self-wake summaries, tool results and assistant/executor text, even if wrapped in a user event. Do not inherit or read the full parent execution conversation. Record source, dates and last-read/since-previous-round range in the brief, not a new ledger. A source that cannot be accessed leaves provenance unknown; it does not revoke confirmed restrictions or host refusals. Restrictions established to be executor-added without user grounding are explicitly revoked in the mentor's brief.
+`dove topic start [--project <dir>]` optionally copies user-level criteria from Settings into the project's topic materials, excluding other projects' settings. Running this helper is optional; reading the standards is not. Candidate cards in `topics/cards/` keep their status, stage, position, summary and six-conclusion headers for the Topics page. A takeover continues an already confirmed mainline rather than reopening selection.
+
+The mentor reads genuine user wording from the supplied host source and date/range. Hooks expose only `transcript_path`, not copied transcript contents. On takeover, read relevant user history; subsequently read since the last recorded range. Exclude meta messages, subagent conversations, tool returns, system injections and executor summaries. The current original message may be supplied directly before it is persisted. Unavailable originals leave provenance unknown; they do not revoke confirmed commitments or host permissions.
 
 ### Identity card
 
-Keep `IDENTITY.md` to a few hundred plain-language words. Put the current round fields at the top, inside the first 4096 bytes:
+Keep `IDENTITY.md` within **1200 characters**, using these fields in order:
 
 ```text
-Current round: rounds/003-brief.md
-Round status: ongoing
-Mainline: <the user's wording, preserving provisional intent>
+Current round: rounds/NNN-brief.md
+Round status: ongoing / paused / completed
+Mainline:
+Target tier:
+Deployment inputs/outputs:
+Completion:
+User restrictions:
+Recent corrections:
+Research state:
 ```
 
-`Round status` is `ongoing`, `paused`, or `completed`. Keep deployment inputs/outputs, completion meaning, sourced restrictions, recent corrections and hard blockers. Restrictions/corrections retain only original user quotations, dates and sources, not executor inventions. Method details and next work belong in the brief. Preserve provisional wording; recording it does not confirm it. Change Mainline only when the user changes commitments or the card misstates their intent; add no new status or file-existence gate.
+Mainline immediately follows the round labels for the existing reader. Target tier is the conference/journal level; ask once if missing rather than invent one. Each restriction includes its quotation, date/source, original-user versus relayed provenance, and long-term versus task-specific scope. Do not turn a relay or a task limit into a standing restriction. Update research state after important results and apply corrections to action, not just to quotations. Method details and rejected families belong in briefs or mentor notes.
 
-Claude shows the card on valid prompts and after compact/resume. If it exceeds 4KB, the hook presents the first 4KB and asks for shortening; it does not treat the card as absent. Missing or unreadable cards remain missing, not inferred from old records. The main session shortens the card without changing confirmed intent, leaving measurements in `EVAL.md` and round details in `rounds/`.
-
-Apply user corrections to current judgment and action. Record only lasting corrections when writing is allowed, preserving original words, dates and sources in affected card fields. When preserving a correction recurring across registered projects, ask once whether to add it to global `AUTHOR_PREFERENCES`; this is a suggestion, not an automatic edit. Installed preference copies are not the editable source.
+Hooks still show the UTF-8-safe first 4096 bytes of an overlong card and request shortening; they do not call it missing. Missing cards are not inferred from other records. Repeated cross-project corrections may prompt one question about adding global author guidance, never an automatic edit of author preferences.
 
 ### Evaluation table
 
-EVAL serves the current question. Exploration uses proportionate core observations, valid strong baselines and fair same-input controls, not a complete evaluator first. Full-task evaluation against reasonable external alternatives tests utility; internal ablations/mechanism controls test attribution. Neither replaces the other. Retain established requirements; formal comparisons need complete strong same-input baseline results, all user metrics, unseen data, train-test gap and intended advantage. Use task-general metrics; unmeasured requirements stay unknown. Completion cites script, split and metrics.
+Begin `EVAL.md` with a short Completion reference to the script, protocol and all user metrics. Use one row per method version:
 
-Each method round appends time, round, method version and measured values to `EVAL.md`; identify the protocol, split and test draw so incompatible results are not mixed. Keep predictions in briefs, retain negative results, and mark missing measurements unknown. If the executor finds evaluator problems, it reports them in the result rather than changing the protocol itself. The mentor corrects evaluation and assigns recomputation of every historical method/baseline row under the new protocol in the same columns: reuse retained raw artifacts first and rerun historical versions only where needed. Preserve old method versions as ablations and distinguish superseded protocol results from current comparisons. A protocol correction alone is not a method change; only a correction changing the goal's meaning needs the user. Once test data have been used, a changed method requires a fresh draw from data never used in development or prior tests, not a reshuffle of old tests, with all comparison rows on that common draw.
+```markdown
+| Date | Version/round | Protocol/split | Measurements | Unseen data/train-test gap | Conclusion | Artifacts |
+|---|---|---|---|---|---|---|
+```
 
-After important results, the mentor supplies a paper-level assessment in `EVAL.md`: problem value, novelty, mechanism/theory, method/feasibility, data/evaluation, implementation, experiment/evidence, and expression/delivery. The main session saves the read-only mentor's returned assessment; it does not duplicate it with another self-rating. Include scope, reasons, evidence, and unknowns. Unknown or not-applicable is not zero, and ordinal grades are not acceptance probabilities. The weakest decisive dimension shapes the next brief.
+Each cell contains numbers and at most one short sentence, within **200 characters**. Link detailed outputs and protocol descriptions in ordinary artifacts; engineering logs and process status stay out. Formal comparisons retain complete strong same-input baselines and every confirmed requirement. Unknown measurements stay unknown. External full-task comparisons test utility; ablations and causal controls test attribution.
+
+The executor repairs evaluator errors and recomputes all comparable historical methods and baselines under the corrected protocol. Reuse retained raw outputs before rerunning; identify superseded protocols as history rather than mix values. Protocol repair alone is not a method-code change. Only changes to the goal's meaning need the user.
+
+After important results, save the mentor's current eight-dimensional assessment below the table in **at most 1000 characters**, replacing the previous current assessment. Give grounds and unknowns; the main session does not add a duplicate self-rating. Implementation has grades 1–3 and the other dimensions 1–4. Unknown is not zero, ordinal grades are not averaged, and scores are not acceptance probabilities. The weakest decisive dimension informs next work.
 
 ### Round briefs and results
 
-Briefs use at most one plain-language page. Mark actual `Author: mentor / user / external` (导师 / 用户 / 外部); direct host user messages count, with priority user > external > mentor. Save mentor briefs verbatim; mid-round replacements name actual author/reason, no extra ledger.
+Each round has one `rounds/NNN-brief.md` of **at most 2000 characters** and one `NNN-result.md` of **at most 3000**. Supporting material belongs in ordinary project directories, linked rather than accumulated as round attachments.
 
-Briefs explain benefit and grounds, decisive unknowns, actual action and how results change decisions, without fixed fields. Controls, budgets, input boundaries, predictions/thresholds and failure materials serve the use; do not invent numbers or cutoffs. Formal causal comparisons hold other factors fixed with fair inputs/budgets. The read-only mentor delegates evaluator work, recomputation and significance checks. If learning fails, test single-example overfitting before scaling data or the evaluator.
+A brief identifies its actual author—mentor, user or external—method version and dated user-source range. Direct user instructions take priority over external and mentor advice. Save mentor briefs verbatim; replacements name author and reason. Explain the benefit, grounds, key unknown, actual action and how results change the decision. Use controls, input boundaries, budgets and grounded predictions appropriate to the question; do not invent thresholds or wait for a complete theory/baseline library before useful core work.
 
-A round fixes one method version, possibly coordinated; code changes require a new version/full applicable evaluation, not sample-only checks. Keep old versions as ablations. `NNN-result.md`: files/version/values, prediction/actual differences, evaluator issues, `Objections to this brief / factual corrections` (even empty); next mentor answers first. Design replies may use inspected literature/derivations/code/observations; effects need real measurements, unmeasured stay unknown, ideas are not empirical evidence. Append measured EVAL rows, even negatives; plans/launches/smoke tests do not complete rounds.
+Results use four fixed headings:
 
-`RESEARCH.md` becomes a short history index. Existing `missions/`, `experiments/`, and `claims/` remain where they are, byte-preserved by installation and updates; do not migrate, delete, or add new core records there. New experiment details go in round results or their linked actual artifacts. Source documents, authored review returns, Lessons, `DOCTOR.md`, and `.dove/runs/**` keep their distinct uses. Initialization still creates only minimal `RESEARCH.md` when no research tree exists; existing trees are untouched even without an overview.
+1. `Changes and version`
+2. `Measurements and artifacts`
+3. `Prediction versus actual`
+4. `Objections to this brief / factual corrections`
 
-Lessons retain their separate reusable-value standard: check the index once for a consequential question when needed, read relevant links, and save only grounded transferable experience within the existing write scope. Missing Lessons do not block work or create an empty index. Reflection, resumption, routine progress, and one-off tool failures do not themselves warrant a Lesson.
+State real values, missing measurements and blockers. The next mentor answers objections first. A valid negative result can add scientific knowledge; a plan, launch, smoke test or engineering check does not. Engineering and verification failures still count toward the no-science limit.
+
+A method round uses one code version and may include coordinated changes. Later method-code changes start a new version with full applicable evaluation. Keep old versions as ablations. After test data have been used, a changed method needs a fresh draw from data unused in development or previous tests, with same-set baselines; reshuffling old test data is not fresh evidence. Only final heldout confirmation states the claim, controls, data and metrics beforehand and uses heldout once.
+
+`RESEARCH.md` is a short history index. Existing `missions/`, `experiments/` and `claims/` stay in place without migration, deletion or new entries. Sources, review returns, Lessons, Doctor feedback and Run receipts retain distinct uses.
+
+### Mentor judgment and memory
+
+Call `dove-mentor` at round end, after two consecutive rounds without scientific results, when the user corrects direction or questions the claim/story, before route changes, or when requested. After two no-science rounds obtain diagnosis; by the third, explain the blockage and ask the user to decide before another round. Engineering and verification failures are not exemptions. Report every route/family change with the old route, new route and reason.
+
+Each cross-round judgment uses a fresh native context, not resumed conversation; 2–3 clarifications may stay within the same judgment. Supply a material list: user originals and source/range, standards, card and target tier, mentor notes, recent EVAL and brief/results, changes, raw artifacts and watch materials. Executor opinion may be a labeled attachment, not a framed verdict request. Ask:
+
+1. Is the direction faithful to the user's original goal?
+2. Are recent rounds building general capability or repeated patches?
+3. What remains to the goal and target tier?
+4. What should the next round do, and why?
+
+The executor decides engineering, numerical equivalence, acceleration, parameters and evaluator repairs. The mentor judges direction, whether evaluation answers the scientific question and whether time is being spent well. It may use paper/web retrieval but does not compute or edit, read private author preferences, or take over engineering decisions.
+
+The mentor returns its own note of **at most 1000 characters**, covering judgments, predictions versus actuals, rejected families and reasons, concerns and the user-source range read. The main session appends it verbatim to `MENTOR_NOTES.md`. Above **6000 characters**, the mentor merges it to replacement text of **at most 3000**. The executor does not author this memory.
 
 ### Replies and research rounds
 
-Status, corrections, side questions and blocker reports can end the current reply without completing or pausing the research round. Continue ordinary authorized research directly; respect an explicit pause or discussion-only request. When blocked, report actual attempts, what remains unexecuted and the concrete obstacle. Preserve real evidence for research and continuation, not records, card edits or reviews solely to end a reply.
+Status, side questions, corrections and blocker reports can end a reply without completing or pausing a round. Honor explicit stop/discussion-only requests. Save useful evidence and continuation context, not extra records merely to end a response. On resume, read the card, recent EVAL and current brief, then continue authorized work.
 
 ## Tools and sources
 
-Dove uses only tools the current host exposes and the project permits. Claude project setup declares paper-search and webpage-reading support; declaration is not approval or proof of connectivity. If a needed source or tool is unavailable, Dove names the gap and uses other available material or asks for the necessary permission. It does not replace unavailable retrieval with shell, `curl`, or custom-fetch scripts.
+Use exposed and permitted host tools. Claude setup declares paper search and Exa; declaration is not connectivity or approval. Search snippets guide discovery but do not replace inspected sources. If retrieval is unavailable, state the gap and use other permitted material, not shell or custom-fetch substitutes.
 
-## Working with the nine capabilities
+Source distinguishes discovery, citation identity, full-text inspection and checked claims. When available, direct DOI lookup precedes fuzzy title search. Compare DOI, title, authors, year and venue/version; retain conflicts, not-found and unknowns. For compound claims, identify supported, contradicted and uncovered parts. Bounded bibliography checks cover requested entries without a ledger or automatic manuscript edits. Explicit systematic reviews and meta-analyses use suitable structured methods; ordinary retrieval does not need that machinery.
 
-### Research
+## Writing, figures and review
 
-Use `/dove:research` to explore a direction through core implementation or continue the existing mainline. Read relevant current context and execute the next authorized action; save actual results and use mentor judgment when needed. Ask for changes to user commitments or excess resources, not routine method choices. Without a reply, continue only the authorized portion. Bounded questions finish at their answer. See the [Research Model](development/RESEARCH_MODEL.md#导师与轮次循环).
+Draft preserves the authoritative manuscript format and claim strength. A new manuscript defaults to LaTeX only when the venue accepts it. Propagate authorized changes through the actual build/export and inspect the output. Facts and effects come from inspected sources and measurements, not invented placeholders or stronger wording.
 
-### Status
+Figure gathers real data or mechanism materials, creates and renders the visual, opens it at realistic dimensions, checks its caption and manuscript context, and delivers editable sources. Quantitative plots use real data and reproducible code; diagrams, image tools and mixed raster/vector routes fit their material. A beautiful standalone preview is not final-context validation.
 
-Use `/dove:status` to read `IDENTITY.md`, the last few `EVAL.md` rows and the current brief. Answer in four plain sentences: what has been produced, whether the core is demonstrated, what blocks it and which round is underway. Cite actual values and leave unknowns explicit. Status is read-only and may end the reply. A simultaneous correction changes current understanding and action; lasting records follow the [identity-card guidance](#identity-card).
+Independent `dove-review` reads the specified complete current manuscript, cited results and supplied venue/literature grounding in a fresh Read/Grep/Glob context. It does not receive execution conversation, identity/round records, private preferences or old reviews, and does not retrieve, execute or edit. No frozen copy, hashes or external workspace is needed. It asks whether the method answers the question, the field reasoning is correct, contribution/evidence fit the venue, and the strongest reasonable objection is answered. Returns cite evidence and actual files read. Author self-check and delivery checks remain distinct; unavailable independent review is a gap.
 
-SessionStart is not Status. After compact/resume it delivers the bounded identity card and continuity guidance; the main session then reads the current evaluation and brief as needed. The hook does not reconstruct research from overview/review/run timestamps or perform the mentor's judgment.
+After substantive changes, a fresh review reads the complete current version; an old recommendation is historical. Rebuttal verifies objections, groups shared causes, writes author responses and makes requested evidence-backed revisions. A reply is not resolution or acceptance. Preserve real reviewer returns separately from commentary.
 
-### Source
+Lessons are optional, fallible reusable guidance. Check the index once for a consequential active question or a recurring mistaken premise; read only useful links. Preserve grounded transferable insights with basis, conditions and counterexamples when permitted. Missing Lessons do not require an empty index; routine progress and one-off failures do not qualify.
 
-Use `/dove:source` to turn external material into research judgment. Material found, identity-verified, retrieved, inspected, and used are different things. Citation identity is separate from support for a claim. For a composite claim, distinguish supported, contradicted, and uncovered parts; support for one part is not support for the whole. A check-only request reports that boundary without automatically editing the manuscript.
+## Run receipts
 
-When a DOI matters and direct lookup is exposed and permitted, check it before fuzzy title search. Compare DOI, title, authors, year, and venue or version; report verified, conflict, not-found, or unknown. A requested **bounded bibliography DOI identity check** is within Source's scope: check only the selected entries. Metadata verification does not establish full-text inspection or claim support. Keep checks transient unless they change a manuscript citation, research judgment, or useful continuation context; do not build a ledger, cache, or BibTeX parser.
-
-Ordinary source work stays proportional. Explicit systematic review, meta-analysis, evidence grading, or auditable synthesis uses an appropriate structured method.
-
-### Experiment
-
-Use `/dove:experiment` for experiment work within a method-version round. Development may inspect available ground truth, diagnose and rerun without per-run registration; method/code changes create a new version and full evaluation, and changing a method after test use requires a fresh test draw. Fix known causes rather than defer a repair. Only final heldout confirmation freezes and preregisters the selected method/protocol for a one-time comparison. Development observations are not independent heldout confirmation.
-
-Design-only stays read-only and delivers a plan with unverified limits; analyze existing results directly and keep retrospective recording retrospective. Exploration can form hypotheses without a predeclared claim; reproduction/delivery checks the agreed capability without reopening novelty. Trace real inputs, outputs, references/proxies, metrics, failures, exclusions, and denominators. Inspect actual ablation changes before claiming a component or mechanism effect. Record actual outcomes in the round result and `EVAL.md`, not new `experiments/` entries.
-
-Use a suitable available GPU for repeated compute unless the user fixes another resource or the task genuinely fits CPU better. Compare end-to-end time to useful evidence, including implementation, transfers, evaluation, downstream use, and reruns—not utilization alone. Preserve output semantics, information boundaries, and comparison basis; design-only does not authorize profiling. Resource limits remain the user's, not a receipt's budget metadata.
-
-### Run receipts
-
-`dove run` is an optional receipt helper for explicit, authorized experiments or diagnostics. It is not required to execute or adopt research work and does not grant execution permission:
+`dove run` optionally records authorized command facts; it is not required for experiments and grants no permission:
 
 ```bash
 dove run start --project <dir> --id <id> --group <name> --seed <short-text> --metric-name <name> --direction min|max --timeout-ms <ms> -- <command> [args...]
@@ -159,68 +166,24 @@ dove run finalize --project <dir> --id <id> --metric-value <number>
 dove run compare --project <dir> --group <name>
 ```
 
-`start` launches a detached supervisor that directly spawns the target from the project root without a shell. It writes `.dove/runs/<id>/run.jsonl`, `stdout.log`, and `stderr.log`. The receipt records command, timing, outcome, metric, budget and comparison basis, plus an explicitly declared seed and minimum Git facts: commit and dirty `true`/`false`/`null`. It is not an environment inventory. Git capture failure leaves unknown facts as `null` without blocking the run; a declared seed does not prove the target used it. Do not put secrets in command arguments or basis fields.
+Start directly spawns the command without a shell through a detached supervisor, writing `.dove/runs/<id>/run.jsonl`, stdout and stderr. Receipts capture command, timing, outcome, metric/comparison basis, declared seed and minimum Git commit/dirty facts; they do not prove reproducibility. Status is read-only; resume never reruns, and reconciles an interrupted receipt only when neither supervisor nor target remains observable. Finalize adds one scalar after terminal completion. Compare ranks only compatible finalized runs; Git facts do not determine comparability. Execution success and receipt compatibility do not establish scientific meaning.
 
-Ordinary completion writes one `run.terminal`. `status` is read-only. `resume` never reruns: it reports terminal, live, or orphaned observations, and records interrupted reconciliation only when neither supervisor nor target is observable and the terminal event is missing. `finalize` appends one scalar metric after terminal completion, with an optional decision or note. `compare` ranks only terminal finalized runs with matching metric, budget, data, evaluator, and resource basis; otherwise it reports `comparable: false` and mismatched fields. Git commit/dirty do not affect comparability or ranking. Receipt compatibility is not a scientific comparability or reproducibility guarantee; terminal, finalized, compared, or successful records do not interpret scientific meaning, adopt a result, or trigger another capability.
+Budget fields describe comparison conditions, not prepaid resources or spending caps. Actual limits and timeouts apply. POSIX timeouts retain process-group observation and grace-period termination after leader exit; descendants leaving the group are outside that claim. Windows termination is direct-child best effort. Converted timeout/grace values cannot exceed 2147483647 ms. An occupied journal lock is reported, never removed by inferred PID/age; inspect before any manual cleanup.
 
-Only `start` uses the hidden supervisor. `resume` and `finalize` append in the current process under the same bounded directory lock. If a journal lock remains occupied, Dove reports its absolute path; it never removes a lock based on PID, ownership metadata, or age. Inspect the reported path and confirm no writer is active before manually removing a leftover lock.
+## Dashboard, tracking and topics
 
-Budget metadata describes the comparison basis, not prepaid resources or an automatically enforced spending cap. Actual work still respects explicit user limits, permissions, and timeout controls. For POSIX Runs with an explicit timeout, leader exit does not complete the receipt while the process group remains observable: the original deadline stays active, and timeout termination retains the grace-period SIGKILL escalation. This does not cover descendants that leave that group; process-group observation is not proof of every descendant's outcome. Windows termination is direct-child best effort. Timeout and kill-grace values, including converted `--wall-time`, cannot exceed 2147483647 milliseconds; larger values are rejected before a Run is created.
+`dove dashboard` serves registered projects at `127.0.0.1:7788` by default. Research views are read-only and refresh periodically; Settings can change registry, tracking and password settings. Remote access can use SSH forwarding. Before exposing a public tunnel, use `--password-file`; all pages/APIs then require login. `--json` returns the research summary without a browser.
 
-### Draft
+Tracking runs daily while the dashboard is up, or with `dove watch run [--project <dir>]`. It uses arXiv discovery, optional community/venue/citation enrichment and OpenAlex neighbor/institution searches. arXiv keyword/author queries are combined and paced, with bounded rate-limit retries. Retrieval errors are shown as errors, not silently called “no relevant papers”. No Semantic Scholar key is required for discovery; enrichment can remain unavailable.
 
-Use `/dove:draft` to create, assess, or revise text from inspected evidence. Dove does not silently strengthen or weaken claims. Methods, Results, citations, samples, data, and field facts come from actual project or source material. Preserve the user's current authoritative manuscript format; for a new manuscript, default to LaTeX source and inspect its actual compiled output when the venue accepts LaTeX. If the venue does not accept LaTeX, use its required format rather than forcing a conversion.
+A new config is a draft, not vetted relevance. Every mentor invocation checks `watch/config.json`; draft or irrelevant tracking calls for project-specific keyword/author/venue/institution/neighbor advice. Main-session writes update the config and set `source: mentor`. Run now also exposes persistent draft guidance. Broad phrases alone do not qualify a paper; daily tracking and Trends use the same relevance owner.
 
-### Figure
+Paper impact does not wait for a round. The mentor reads unjudged papers and existing impacts, returning `- ID | 撞题/新基线/可借用/无关 | reason`. Important suspected overlap needs fuller sources; missing evidence stays pending. Core overlap goes to the user; useful baselines and methods affect actual work. The main session saves `watch/impact-DATE.md`; older brief judgments remain usable. With no scan or one older than seven days, the next mentor checks recent accepted papers, surveys and discussions, returning a sourced project-relevant scan of at most **2000 characters** for `watch/scan-DATE.md`.
 
-Use `/dove:figure` to gather materials, draw, redraw, generate, revise, inspect, and caption figures. Choose tools from what the figure must show. Quantitative figures use real data. Check important figures in their real manuscript context: inspect the rendered figure, caption, nearby claims, placement, and legibility at near-final size in the actual compiled manuscript, not just as isolated previews.
+## Submission readiness and maintenance
 
-### Review
+Submission completion needs scientific sufficiency, current independent review of the same complete version and real delivery readiness. A build, old review or record update alone is not enough.
 
-Use `/dove:review` for author-side scientific self-check, delivery review, native `dove-review`, faithful preservation of a supplied review, or read-only inspection. This Skill remains; the old `dove review` CLI and its model-launching, frozen-snapshot, and persistent-session runtime are removed. Author-side self-check is not independent review, and delivery checks do not decide scientific acceptability.
+`dove update` explicitly refreshes owned integration and can replace valid owned local edits; `dove projects sync` preserves those edits while updating the rest of every registered project. Read per-project outcomes. Init creates only the RESEARCH bootstrap when no research tree exists. Lifecycle operations preserve research, reviews, receipts, Doctor notes and ordinary artifacts. See [Installation](INSTALL.md) for ownership and reinstall/uninstall behavior.
 
-For independent paper review, the main session invokes native `dove-review` in a fresh context with only `Read`, `Grep`, and `Glob`. Specify the current manuscript, its cited results, and necessary supplied venue/literature grounding. For a whole-paper request, include the full authoritative source in its existing format, actual built/exported output, and relevant appendices or supplements. The reviewer reads the listed current files directly; no frozen copy, material hashes, project-external workspace, socket launcher, or persistent reviewer session is needed.
-
-Do not supply author process conversation, private preferences, identity/round records, old author-side reviews, or unlisted material. The reviewer does not retrieve webpages, run commands or experiments, diagnose code, save files, or revise the paper. Missing grounding is an explicit limit, not permission to expand the read scope. Native context/tool/material isolation is not an OS sandbox.
-
-The reviewer asks:
-
-1. Does the method answer the research question?
-2. Are mechanisms, terminology, comparisons, literature, counterexamples, and limits correct for the field?
-3. Do contribution, evidence, scope, and expression fit the target venue and readers?
-4. What is the strongest reasonable objection, and what evidence or revision would answer it?
-
-The return gives the overall judgment, substantive objections, cited manuscript/result locations, and proposed author actions, plus the files actually read (and partial-read limits). The main session saves the actual return when useful and assesses each finding before responding or revising; criticism is not new empirical evidence or automatic permission. A supplied external review is preserved with its real provenance, not relabeled as a native review.
-
-After substantive changes, a new fresh review reads the full current version. An earlier recommendation applies only to the version and evidence it judged; no timestamp or software check makes it current. Unavailable/refused native review remains a limitation, never author self-check presented as independent review.
-
-### Rebuttal
-
-Use `/dove:rebuttal` for author-side response and requested revision. Check which findings hold, identify useful evidence or changes, and respond from inspected material. New citations and experiment explanations require actual sources and results.
-
-### Lessons
-
-Use `/dove:lessons` when a focused read or maintenance request helps, but the command is not required for ordinary author-side participation. At consequential choices, corrections, or recurring failures, Dove can check the Lessons index once for the current question and apply only relevant guidance. When actual work yields transferable experience meeting the reusable-value standard, and the existing author-side write scope and authorization permit it, Dove actively preserves the narrowest Lesson even without a mainline change. Lessons retain applicability, counterexamples, and limits; routine activity and one-off failures stay unrecorded. They do not carry package-default author preferences or replace either reference, and remain fallible guidance rather than proof that a claim or project is correct.
-
-## Submission readiness
-
-Keep the authoritative manuscript format and actual venue requirements. A user-confirmed submission-completion goal needs author-side scientific sufficiency, a current independent `dove-review` recommendation for the same complete version, and real delivery readiness. Unavailable independent review leaves a gap; bounded local work does not become submission completion. A build pass, old review, generated file, or Markdown update alone is not readiness.
-
-## Maintenance commands
-
-- `dove update` refreshes valid manifest-owned integration, replaces its local edits, and reports `replacedLocalEdits`; it does not overwrite user-owned files.
-- SessionStart is entirely read-only and may suggest explicit update. It does not sync resources or reload an active host context.
-- `dove doctor` reports software/readability facts using `uninitialized`, `current`, `needs-update`, and `blocked`; it does not repair, adopt unknown files, or probe live tools.
-- `dove reinstall` and `dove uninstall` preview scope and require default-No confirmation. Research records, historical reviews, run receipts, Doctor notes, and ordinary files remain preserved.
-
-- `dove dashboard` starts a local read-only web view of registered projects: Mainline, current round and status, the EVAL.md tables (latest row highlighted), every round brief/result with its author (mentor / user / external), the identity card, and Doctor notes. It binds to `127.0.0.1:7788` by default (`--port`, `--bind`); from another machine use `ssh -N -L 7788:127.0.0.1:7788 <server>` and open `http://localhost:7788/`. Round texts and raw EVAL/Doctor files load on demand; the page refreshes every 30 seconds and never writes to a project. `dove dashboard --json` prints the same summary. Before exposing it through a public tunnel, start it with `--password-file <file>`: every page and API request then requires a login, the session cookie is HttpOnly and SameSite=Strict (Secure behind HTTPS), and changing the password signs everyone out.
-- The dashboard Settings page manages project registration and sync, paper tracking (per-project keywords, watched authors, arXiv categories; global daily hour, lookback days, proxy and an optional Semantic Scholar key) and the dashboard password. Paper tracking needs no API key: arXiv supplies all new submissions, Hugging Face daily papers mark what the community notices, and Semantic Scholar adds venue and citations when reachable. Results go to `.dove/research/watch/DATE.md|json`; it runs daily while the dashboard is up, or on demand with `dove watch run [--project <dir>]`. The mentor reads new entries at the next round and classifies each as overlap (novelty risk), new baseline, borrowable method/data, or irrelevant.
-
-- Paper tracking drafts its own starting point: when a project has no tracking config, Dove extracts cited arXiv papers and method names (resolved to arXiv by title) as tracked neighbours, and takes keywords from their titles and abstracts plus English prose in the project records; the mentor then proposes corrections in a 追踪建议 section. Besides keyword search it follows watched authors on arXiv, new papers citing the neighbours and keyword papers from watched institutions (via OpenAlex, no key), and rewards watched venues and papers with code or a project page. The mentor writes one line per judged paper (`- ID | 撞题/新基线/可借用/无关 | reason`), which the dashboard groups by; once a week the mentor also writes a short field scan saved as `.dove/research/watch/scan-DATE.md`. The dashboard Trends tab gathers the week across projects.
-- When a criteria document is designated, `dove topic start [--project <dir>]` is an optional materials helper: it copies user-level criteria from dashboard Settings to `.dove/research/topics/CRITERIA.md`. Candidate cards in `topics/cards/` retain their five-line status, stage, position, contribution and six-conclusion headers for the Topics tab. Apply criteria for this project's requested use; latest user words take priority. These materials are not a prerequisite for ordinary field exploration or authorized core implementation, and a card or mentor recommendation is not user confirmation.
-
-Claude installs its read-only two-line status display only when no project status line exists: model/context facts, optional cyan Mainline, Git branch and session duration, then the absolute project path. Mainline comes only from the bounded identity card; branch and duration are not research conclusions. Existing user/Trellis lines remain unowned. Project lifecycle commands do not repair user-level settings. The current round number is also shown when readable from the card; latest evaluation metrics are not statusline fields.
-
-After a successful project update, an already-active Claude session with a working registered Dove prompt hook can receive current guidance on its next prompt and read the changed rule/short essentials. This is context delivery, not host rule/config hot reload or proof of adoption. `/reload-skills` reloads optional Skills only; use a fresh context when hooks, agents, tools, permissions, or complete host configuration need loading. See [Installation](INSTALL.md).
-
-Documentation-only checks do not initialize projects or write test material into real research. Report implementation, software checks, observed behavior, and scientific outcomes separately; see [verification evidence](PACKAGING.md#verification-evidence).
+SessionStart/UserPromptSubmit are read-only context hooks. Statusline shows native session facts, bounded-card Mainline and round, not inferred scientific progress. Disk updates do not hot-reload an active host; complete agent/tool/hook configuration may require a fresh context. Report source, generation/build, installation, loaded context, observed behavior and scientific outcomes separately. This restructuring is observed in normal research use, not by creating test projects or writing test content into real research.

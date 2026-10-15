@@ -16,13 +16,13 @@ const AUTHOR_LABELS = [
   [/外部|external/iu, "external"]
 ];
 
-function readText(file, fsOps) {
+function readText(file, fsOps, maxBytes = MAX_TEXT_BYTES) {
   try {
     const stat = fsOps.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink()) return null;
     const bytes = fsOps.readFileSync(file);
-    const truncated = bytes.length > MAX_TEXT_BYTES;
-    const text = new TextDecoder("utf-8").decode(bytes.subarray(0, MAX_TEXT_BYTES));
+    const truncated = bytes.length > maxBytes;
+    const text = new TextDecoder("utf-8").decode(bytes.subarray(0, maxBytes));
     return { text, truncated, mtime: stat.mtimeMs ?? null };
   } catch {
     return null;
@@ -150,19 +150,23 @@ export function readProjectDocument(root, name, options = {}) {
 
 const IMPACTS = [["撞题", "overlap"], ["新基线", "baseline"], ["可借用", "borrow"], ["无关", "irrelevant"]];
 
-// The mentor writes one line per judged paper in its brief, e.g.
-// "- 2610.00001 | 撞题 | 覆盖了我们的结构编辑主张". The latest judgement wins.
+// Main saves mentor returns in watch/impact-YYYY-MM-DD.md. Historical brief
+// judgements remain readable; standalone records take precedence, latest wins.
 export function parsePaperImpacts(root, options = {}) {
   const fsOps = options.fsOps ?? fs;
-  const directory = path.join(root, RESEARCH_ROOT, "rounds");
+  const research = path.join(root, RESEARCH_ROOT);
+  const briefs = listDirectory(path.join(research, "rounds"), fsOps).filter((name) => /^\d+[-_]brief\.md$/iu.test(name)).sort((a, b) => parseInt(a) - parseInt(b)).map((name) => `rounds/${name}`);
+  const standalone = listDirectory(path.join(research, "watch"), fsOps).filter((name) => /^impact-\d{4}-\d{2}-\d{2}\.md$/u.test(name)).sort().map((name) => `watch/${name}`);
   const impacts = {};
-  for (const name of listDirectory(directory, fsOps).filter((item) => /brief\.md$/iu.test(item)).sort()) {
-    const file = readText(path.join(directory, name), fsOps);
+  for (const name of [...briefs, ...standalone]) {
+    // Old briefs can be long; a judgement near their end must not disappear.
+    const file = readText(path.join(research, name), fsOps, Infinity);
     if (!file) continue;
     for (const line of file.text.split(/\r?\n/u)) {
-      const id = line.match(/(\d{4}\.\d{4,5}|\bW\d{6,}\b)/u)?.[1];
-      const hit = id && IMPACTS.find(([word]) => line.includes(word));
-      if (hit) impacts[id] = { impact: hit[1], label: hit[0], round: name, note: line.replace(/^[-*\s]+/u, "").slice(0, 300) };
+      const match = line.match(/^\s*(?:[-*]\s*)?\|?\s*`?(\d{4}\.\d{4,5}|[a-z][a-z.-]*\/\d{7}|W\d+)(?:v\d+)?`?\s*\|\s*(撞题|新基线|可借用|无关)\s*\|\s*(.*)$/u);
+      if (!match) continue;
+      const hit = IMPACTS.find(([label]) => label === match[2]);
+      impacts[match[1]] = { impact: hit[1], label: hit[0], file: name, ...(name.startsWith("rounds/") ? { round: name.slice(7) } : {}), note: match[3].replace(/\s*\|\s*$/u, "").slice(0, 300) };
     }
   }
   return impacts;

@@ -88,7 +88,7 @@ function renderCapabilityContract(command, hostId = null) {
   const contract = command.contract;
   if (!contract) return "";
   const sections = [
-    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.",
+    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template.",
     `### What this is for\n\n${contract.purpose}`,
     `### When to use\n\n${contract.when}`,
     renderListSection("What Dove will examine", contract.responsibilities),

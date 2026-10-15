@@ -1,11 +1,11 @@
 ---
-description: "Use when external sources, citation identity, DOI checks, or bounded bibliography verification can change the research judgment."
+description: "Find and inspect sources, verify citation identities and claims, and use the findings to improve research decisions."
 argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
 ---
 
 # dove.source
 
-Use when external sources, citation identity, DOI checks, or bounded bibliography verification can change the research judgment.
+Find and inspect sources, verify citation identities and claims, and use the findings to improve research decisions.
 
 ## Request
 
@@ -17,52 +17,31 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.
+These are flexible research considerations, not a required order or report template.
 
 ### What this is for
 
-Find, retrieve when possible, read, verify, and document sources that can change the research judgment.
+Discover, retrieve, inspect and verify sources that can change a research decision or answer a specified question.
 
 ### When to use
 
-Use for source discovery, reading, comparison, verification, bounded bibliography DOI identity checks, source-backed positioning, or route changes that depend on external theory or related work.
-
-### What Dove will examine
-
-- Start from the user's source question and current project need, not a fixed tool order or paper count; stop searching when further retrieval would not change the decision or answer the bounded question.
-- Distinguish ‘发现线索’ (found leads), ‘身份核实’ (verified citation identity), ‘相关全文检查’ (inspected relevant full text), and ‘具体主张核实’ (checked a specific claim). These are source-use facts, not novelty grades; judge novelty by the remaining substantive contribution, with search depth informing confidence. Retrieval alone is not inspection; completed claim verification can find support, contradiction, or insufficient coverage, not necessarily support. When a DOI matters and direct lookup is available, check it before fuzzy title matching; compare DOI, title, authors, year, and venue or version, then report verified, conflict, not-found, or unknown. For a bounded bibliography DOI identity check, verify only the requested entries and do not create a ledger.
-- Extract consensus, contradictions, assumptions, missing controls, transferable mechanisms, and research opportunities from inspected material. Compare nearby work's problem, inputs/outputs, assumptions, components, relationships, mechanisms, and overall properties at the same granularity; locate decisive coverage in actual text, formulas, algorithms, or code, subtract it, and feed the remaining contribution and value back into design before consequential implementation when it can change the candidate. Carry inspected support, contradictions, and remaining contribution into method design, identifying controls, claims, figures, and wording where affected. This targeted inspection shapes the problem and method rather than merely positioning a finished solution; stop when further search cannot change the current design or decision. Use the shared reference to distinguish public combinations, grounded routine constructions, and substitutes borrowing candidate designs, and to keep operation equivalence, expressive coverage, implementation availability, and empirical parity separate. Known components need not exhaust a combination's contribution; no complete precedent is not proof of novelty. Unchecked full text does not establish absence of overlap.
-- For explicit systematic review, meta-analysis, evidence grading, or auditable synthesis, use a suitable structured question, search scope, eligibility criteria, PRISMA-style tracking, risk-of-bias and evidence-certainty judgments when applicable, and pool effects only when studies and data are comparable.
+Use for literature discovery, source reading, citation identity checks, claim verification, related-work comparison or systematic synthesis.
 
 ### Scope and changes
 
-- Save retrieved source material or source notes only when useful and permitted.
-- Keep DOI identity checks transient by default; update ordinary Source notes or bibliography entries only when identity results materially affect research judgment, manuscript citations, or continuation context.
-- Maintain Dove research Markdown other than Lessons only when the user explicitly asks to record, update, or save Dove research context, a result changes a conclusion, route decision, or priority within the confirmed goal, or preserving evidence and continuation context is genuinely useful.
+- Search snippets, abstracts, metadata and absent search results do not establish full-text inspection or absence of overlap. If retrieval is unavailable, state the gap and use other permitted material rather than shell fetching or substitute retrieval chains.
 
 ### Ways Dove may proceed
 
-- When existing Dove research context would materially help the source question, check the short identity card when present, then `.dove/research/sources/SOURCES.md` and directly relevant linked details. Use `.dove/research/RESEARCH.md` only if its short navigation is needed. Otherwise work directly from the user's request and specified materials; avoid broad research-tree scans.
-- Before the first consequential choice for the current request, or after a user correction or recurring repair or failure exposes a possibly shared mistaken premise, read ".dove/research/lessons/LESSONS.md" once if it exists unless it has already been checked for this question in the active context, then only directly relevant or plausibly decision-changing linked Lessons. Reuse still-applicable Lessons instead of rereading them mechanically. Read ".dove/research/RESEARCH.md" separately only when project context is still needed; it is not a prerequisite for Lessons. If Lessons materials are absent, continue without creating them. Treat Lessons as fallible guidance, never as evidence. Ordinary deterministic local work has no Lessons prerequisite.
-- Discover, retrieve when available, read, and verify external material with permitted host tools. State project methods, experiment procedures, result numbers, citation content, and source facts only from material actually read, retrieved, executed, or inspected; use general knowledge only for hypotheses and search directions. For citation checks, verify identity and metadata first, using direct DOI lookup before fuzzy title search when available. A failed lookup is unknown, not permission to recreate retrieval through shell tools. Metadata identity is not full-text inspection or claim support; inspect actual content before using the source for a claim. Split compound claims into their material parts and report each as supported, contradicted, or uncovered by the inspected content, with the passage or evidence and its limits. Partial support is not support for the whole sentence; recommend only the supported wording without automatically editing the manuscript. For explicit systematic work, use the structured method stated above; ordinary paper finding, related-work scans, and single fact checks stay proportional. If needed material is unavailable, say what is missing and continue with any other material that can still inform the question.
-- When a used source deserves durable context, create or update a naturally named source note with the citation or URL, what was inspected and learned, and, when useful for recovery, ordinary links to the Claim, Experiment, Figure artifact, or manuscript location that the inspected source actually supports or challenges. Use ordinary Markdown links and readable artifact paths, not a structured store. Keep new core records in the identity card, EVAL and rounds; preserve useful source material, reviewer returns and Lessons under their own existing scope. Update `.dove/research/sources/SOURCES.md` only when its links or synthesis change, and RESEARCH.md only as a short history index.
-
-### What this should not replace
-
-- Do not treat search snippets, titles, abstracts, verified metadata identity, or missing results as papers read.
-- Do not create source databases, caches, trust scores, research hashes, DOI ledgers, or BibTeX parsers.
-- Do not substitute CLI, shell, curl, ad hoc fetch scripts, or multi-step substitute chains when web or MCP retrieval is unavailable.
-
-### When Dove needs input
-
-- Record clear user words without reconfirmation; ask once for undecided direction or commitment/deployment-I/O/resource changes. Mentor handles evaluation/engineering; no reply permits independent authorized work, not assumed consent.
+- Start from the user's question and decision, using existing source notes only when relevant. Distinguish a discovered lead, verified citation identity, inspected full text and a checked claim. Retrieval is not reading, and metadata identity does not establish claim support.
+- When checking citation identity, use direct DOI lookup before fuzzy title search when available. Compare the DOI, title, authors, year and venue or version, and report verified identity, conflicts, not-found results or unknowns. A bounded bibliography check covers only the requested entries and does not create a ledger or authorize manuscript edits.
+- Inspect actual content before using a source for a claim. Split compound claims into their material parts and report each as supported, contradicted, or uncovered, citing the relevant passage, formula, algorithm or code and its limits. Recommend wording supported by that material rather than treating partial support as support for the whole sentence.
+- Search real near neighbors across relevant fields and compare their contributions at the same granularity. Inspect decisive overlap rather than inferring it from shared functions, titles or known components. Use the findings to identify transferable mechanisms, contradictions, missing controls and new candidates, not just to deduct novelty. Apply them to affected designs, claims, figures or wording, and stop when further retrieval would not change the decision.
+- For an explicit systematic review, meta-analysis or auditable synthesis, define a structured question, search scope and eligibility criteria. Use PRISMA-style tracking and assess bias and evidence certainty when applicable; pool effects only when studies and data are comparable. Ordinary searches and fact checks do not require this machinery.
+- Preserve a source note only when useful and permitted, recording the citation or URL, what was inspected, what it supports or challenges and links to affected artifacts. Update `.dove/research/sources/SOURCES.md` only when its links or synthesis change.
 
 ### Using host tools
 
-- Use only tools and materials that the current host exposes and current user/project permissions permit. If something needed is unavailable, name it and use any other available material or action that can still advance the request.
-- Use Claude Code waiting or background affordances only for real long-running host actions, then return to Dove's mainline judgment when results arrive.
-- In initialized Claude projects, use WebSearch for discovery, dove-paper-search for DOI metadata lookup and academic paper retrieval/full text when exposed, and hosted exa for ordinary webpages and known URLs when exposed; if a material class is missing or not permitted, say so and use other available evidence rather than shell fetching.
-
-### Return with
-
-- The author main session applies scoped results to actual work and downstream use within the user's goal and latest corrections. A bounded subagent returns evidence without taking over the goal; subtask completion is not goal completion.
+- Use tools and materials exposed by the current host and permitted by the user and project. If something is unavailable, name the gap and continue with useful permitted alternatives.
+- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
+- Use exposed WebSearch for discovery, dove-paper-search for DOI metadata and academic papers, and hosted exa for ordinary webpages and known URLs.

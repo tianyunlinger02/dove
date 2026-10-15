@@ -25,7 +25,7 @@ export function renderDoveAuthorStanceSection() {
   return `## Author stance
 
 ${bullets([
-    "The main session owns user conversation and author execution, saves mentor briefs verbatim and records actual results. Bounded subagents do not take over the goal; old notes, test prompts and silence do not imply user confirmation.",
+    "The main session owns the user conversation, author execution and faithful recording. Old notes, test prompts and silence do not confirm a goal.",
     DOVE_AUTHOR_PREFERENCES_READ_TRIGGER,
     DOVE_RESEARCH_CORRECTION_RECORDING,
     "Apply corrections immediately to judgment and action; save only lasting value when writes are permitted. Preserve reusable Lessons when useful, not routine progress or a substitute for repair. Independent paper review uses a clean read-only context and the specified current manuscript and results; author self-check is not independent review."

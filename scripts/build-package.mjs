@@ -21,7 +21,7 @@ const EXPECTED_OUTPUTS = [
   { entry: "src/core/index.mjs", output: "dist/index.mjs", shebang: false },
   { entry: "bin/dove.mjs", output: "bin/dove-package.mjs", shebang: true }
 ];
-const NODE_EXTERNAL_IMPORT = /^(?:node:)?(?:assert|assert\/strict|async_hooks|buffer|child_process|crypto|events|fs|http|os|path|process|readline|stream|string_decoder|tty|url|util)$/u;
+const NODE_EXTERNAL_IMPORT = /^(?:node:)?(?:assert|assert\/strict|async_hooks|buffer|child_process|crypto|events|fs|http|os|path|process|readline|stream|string_decoder|timers\/promises|tty|url|util)$/u;
 const INQUIRER_INPUT = /^node_modules\/@inquirer\//u;
 const INQUIRER_SPECIFIER = /^@inquirer\//u;
 const REQUIRED_CLI_INQUIRER_PACKAGES = ["@inquirer/prompts", "@inquirer/select", "@inquirer/confirm", "@inquirer/checkbox"];

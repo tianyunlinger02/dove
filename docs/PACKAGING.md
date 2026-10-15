@@ -30,13 +30,13 @@ Only two host projections are packaged:
 - **Claude Code** — `.claude/agents/dove.md`, `.claude/agents/dove-mentor.md`, `.claude/agents/dove-review.md`, nine `.claude/commands/dove/*.md` shortcuts, the shared rule, managed SessionStart/UserPromptSubmit context hooks, conditional status line, and paper/web support.
 - **DSH** — nine `.dsh/skills/dove-*/SKILL.md` filesystem Skills. No Claude agents, hooks, MCP declarations, permissions, or equivalent native agent service is projected.
 
-The mentor and reviewer definitions expose only `Read`, `Grep`, and `Glob`. Each invocation uses a fresh native context with specified files, not previous conversation or reviewer history. The mentor reads identity/evaluation/recent rounds and actual changes; the reviewer reads current manuscript/cited results and supplied grounding. Both return the files actually read. Definition presence alone does not prove that an invocation occurred or was independent.
+Every cross-round mentor judgment uses a fresh context, reading specified user originals, its own notes, recent records, artifacts and tracking materials; paper/web retrieval is available. The reviewer uses only `Read`, `Grep` and `Glob` on the current complete manuscript and supplied grounding. Neither receives execution conversation or executes/edits. Both list materials actually read; definition presence does not prove invocation or independence.
 
 Both hosts share four exact exclusive files:
 
 | Installed destination | Canonical source and role |
 |---|---|
-| `.dove/install/RESEARCH_QUALITY.md` | `src/core/dove-research-contract.mjs` renders short Chinese quality essentials. |
+| `.dove/install/RESEARCH_QUALITY.md` | `src/core/dove-research-contract.mjs` renders Chinese quality essentials and both hosts' mentor note/tracking duties. |
 | `.dove/install/RESEARCH_QUALITY_FULL.md` | The same owner preserves full criteria and joint conditions. |
 | `.dove/install/AUTHOR_PREFERENCES.md` | `src/core/dove-author-preferences.mjs` owns short preference essentials and the fresh-context read contract. |
 | `.dove/install/AUTHOR_PREFERENCES_FULL.md` | `docs/AUTHOR_PREFERENCES.md` is the sole editable full source, preserved in `src/core/dove-author-preferences-content.generated.mjs` for bundled rendering. |
@@ -70,11 +70,12 @@ Owned paths/configuration remain contained and unambiguous. Explicit update may 
 
 ## Research Markdown ownership
 
-Three researcher-owned records carry new core work:
+Researcher-owned records have fixed formats and caps, detailed in [Usage](USAGE.md#research-markdown):
 
-- `IDENTITY.md` — stable Mainline, confirmed completion, constraints/recent corrections, and top-of-card `Current round` / `Round status: ongoing / paused / completed` within the first 4KB. Overlong presentation keeps the first 4KB and asks for shortening, not a false missing-card report.
-- `EVAL.md` — the user-confirmed evaluator/dev-test split/metric columns, including generalization, and one actual row per round. After important results, the mentor supplies the eight-dimensional paper assessment here; the main session saves it without another self-rating.
-- `rounds/NNN-brief.md` and `NNN-result.md` — mentor/user/external authored brief and a few-line result naming changes, measurements, and prediction versus actual. The main session saves mentor briefs verbatim. A real evaluation result, positive or negative, ends a round; a plan or smoke test does not.
+- `IDENTITY.md` carries stable Mainline, target tier, completion, sourced restrictions, corrections and current research state within 1200 characters. Top-of-card round labels remain readable by hooks; overlong cards still present the first UTF-8-safe 4KB.
+- `EVAL.md` has seven fixed columns, one row per method version, cells up to 200 characters and a replaceable current mentor assessment up to 1000 characters. Engineering logs stay outside it.
+- Each round has one brief up to 2000 characters and one result up to 3000, linking ordinary artifacts. Briefs identify mentor/user/external authors; results state changes, measurements, prediction versus actual and objections/corrections. Mentor briefs are saved verbatim.
+- `MENTOR_NOTES.md` contains only the mentor's own returned notes; the main session saves them without replacing independent memory with executor summaries. Dated `watch/impact-*.md` and `watch/scan-*.md` do not require a round.
 
 `RESEARCH.md` is a short history index. Init still creates only that entry when the research directory is absent. Existing `missions/`, `experiments/`, and `claims/` remain in place without migration, deletion, or new entries; new experiment work is recorded in round results and linked real artifacts. Sources, actual reviewer returns, Lessons, `DOCTOR.md`, and Run receipts retain their distinct purposes. No research database, hash ledger, generated navigation, or migration framework is added.
 
@@ -82,7 +83,7 @@ Lifecycle operations preserve `.dove/research/**`, historical `.dove/reviews/**`
 
 ## CLI inventory and lifecycle
 
-The CLI exposes `init`, `update`, `reinstall`, `uninstall`, `doctor`, `projects`, `run`, and `hook`. The old `review` CLI is removed; `/dove:review` remains one of the nine Skills. Native mentor and paper-review model calls belong to the host, not CLI lifecycle operations.
+The CLI exposes `init`, `update`, `reinstall`, `uninstall`, `doctor`, `dashboard`, `watch`, `topic`, `projects`, `run` and `hook`. The old `review` CLI is removed; `/dove:review` remains one of the nine Skills. Native mentor and paper-review model calls belong to the host, not CLI lifecycle operations.
 
 - Bare `dove` offers state-appropriate setup, host selection/changes, details, and default-No previews for Complete Reinstall/uninstall.
 - `init` writes declared integration and only the absent-tree `RESEARCH.md` bootstrap; initialized roots register for future upgrades.
@@ -100,8 +101,9 @@ The statusline is a two-line native-facts display with optional Mainline and cur
 ## Research and review boundaries
 
 - The main session performs real retrieval, implementation, experiments, analysis, writing, figures, and authorized revision.
-- Research directly executes authorized work through real evaluation; mentor judgment serves user requests or substantive scientific questions, reusing existing judgments without new material. Status reports existing evidence and may end the reply without completing the round.
-- The mentor may change methods within the confirmed goal; goal/completion changes, excess resources, and a wholly blocked mainline need the user's decision.
+- Topic selection reads project standards, generates parallel candidates and offers recommendations for the user's choice before method implementation. Confirmed-mainline work uses a scale that can answer the question, not a default smallest change. Status remains read-only.
+- The mentor judges direction at round end, after two no-science rounds, on user direction/story corrections and before route changes. It receives materials and fixed questions rather than executor framing. Engineering, parameters and evaluator repairs belong to the executor, including comparable-history recomputation.
+- Engineering and verification failures count as no-science rounds; seek a user decision before further continuation by the third. Explain route changes plainly. Every mentor checks draft tracking, unjudged papers and overdue scans without waiting for a round.
 - Native `dove-review` reads the specified current version and returns grounded criticism/files read, not execution, scientific PASS, or external acceptance. Self-check remains distinct; unavailable native review is a limitation.
 - Submission completion requires scientific sufficiency, a current independent review for the same complete version, and actual delivery readiness. Historical recommendations do not transfer to revised papers.
 - Records and software checks cannot establish research quality by themselves.

@@ -1,11 +1,11 @@
 ---
-description: "Use when reusable research guidance should be read or preserved without recording routine progress twice."
+description: "Read or preserve reusable guidance that improves judgment without turning routine progress into a second log."
 argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
 ---
 
 # dove.lessons
 
-Use when reusable research guidance should be read or preserved without recording routine progress twice.
+Read or preserve reusable guidance that improves judgment without turning routine progress into a second log.
 
 ## Request
 
@@ -17,46 +17,27 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.
+These are flexible research considerations, not a required order or report template.
 
 ### What this is for
 
-Read or maintain researcher-owned Lessons that can improve current or subsequent work.
+Read and preserve researcher-owned Lessons that improve future choices or prevent repeated mistakes.
 
 ### When to use
 
-Use when existing or newly learned guidance could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes, including when the user asks to inspect, remember, reflect on, or preserve Lessons.
-
-### What Dove will examine
-
-- Treat Lessons as broad, fallible guidance for research methods, successful and failed routes, cross-domain intuitions, experiment and source practice, figures, writing, review, collaboration, and other reusable work—not as evidence or a completion certificate. State whether advice is tentative, grounded, or tested through reuse under stated conditions as evidence facts, not grades of usefulness. Judge its validity, conditions, counterexamples, and transfer value: reuse may refute advice rather than strengthen it. Repeated citation, recording, or application alone does not improve a lesson or establish scientific progress.
-- For reading, use the Lessons summary and linked themes whenever they could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes; include directly relevant and plausibly useful material, while reusing active-context Lessons instead of rereading them mechanically.
-- For maintenance, preserve a Lesson whenever the experience could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes. Write the reusable insight with its basis, conditions, counterexamples, and limits when known, not a routine activity log.
+Use when experience can inform a current decision, broaden ideas or improve later work, including explicit requests to remember or reflect.
 
 ### Scope and changes
 
-- Lessons reading only inspects existing material. Lessons maintenance is limited to researcher-owned Lessons files plus natural links from `lessons/LESSONS.md`, and records reusable guidance rather than routine activity.
-- Lessons materials are optional researcher-owned advisory documents, not package-owned defaults.
+- Lessons are optional, fallible guidance, not package defaults, research evidence or completion certificates. Recording advice does not fix the current problem or replace action, and needs no IDs, frontmatter schema or application ledger.
 
 ### Ways Dove may proceed
 
-- Read ".dove/research/lessons/LESSONS.md" if it exists, then linked Lessons that are directly relevant or plausibly useful because they could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes. Read ".dove/research/RESEARCH.md" separately only when project context is still needed and it has not already been read in the active context; it is not a prerequisite for Lessons. Reuse Lessons already read in the active context instead of rereading them mechanically. If no Lessons summary or useful linked Lesson exists, report that naturally and continue from the available context. Do not create or modify files during reading and do not treat Lessons as evidence.
-- When an experience could inspire current or subsequent work, improve judgment, expand the candidate space, or prevent repeated mistakes, preserve its reusable insight and relevant conditions in the narrowest suitable researcher-owned Lessons document. If no Lessons material exists, create a content-bearing ".dove/research/lessons/LESSONS.md" only for that first qualifying experience; do not bootstrap an empty directory or index during reading. Create a naturally named linked Markdown file only when separating a theme is genuinely useful, and update "lessons/LESSONS.md" with a natural link when needed. For a transferable failed approach, include the mistaken premise or root cause, still-applicable earlier grounds, and the better method or repair it informs alongside the actual basis, conditions, counterexamples, and limits when known. Recording a Lesson does not itself fix the problem or replace the next core action. Avoid recording routine progress, transient status, one-off tool failures, non-transferable bugs, or observations with no plausible future value. Do not create lesson IDs, frontmatter, an application ledger, or treat Lessons as evidence.
-
-### What this should not replace
-
-- Do not turn Lessons into a database, frontmatter schema, application ledger, or research-completion record.
-- Do not treat Lessons as evidence that a current research claim or artifact is correct.
-
-### When Dove needs input
-
-- Record clear user words without reconfirmation; ask once for undecided direction or commitment/deployment-I/O/resource changes. Mentor handles evaluation/engineering; no reply permits independent authorized work, not assumed consent.
+- Before the first consequential choice for the current question, or after a correction or recurring failure exposes a shared mistaken premise, check `.dove/research/lessons/LESSONS.md` once if it exists. Follow only relevant or plausibly useful links and reuse Lessons already read in the active context. Missing Lessons and ordinary deterministic local work have no Lessons prerequisite; reading creates no files.
+- Preserve a grounded reusable insight when it can improve research, collaboration or delivery, stating its basis, conditions, counterexamples and limits. For a transferable failure, explain the mistaken premise, still-valid earlier grounds and the better approach it informs. Reuse can refute a Lesson rather than strengthen it, so assess transfer value instead of counting applications.
+- Write in the narrowest suitable researcher-owned Lessons document within author write scope. Create a content-bearing `.dove/research/lessons/LESSONS.md` only for the first qualifying insight, not an empty index during reading. Separate a theme into a naturally named Markdown file only when useful, and update its ordinary summary link. Omit routine progress, transient status, one-off tool failures and non-transferable bugs.
 
 ### Using host tools
 
-- Use only tools and materials that the current host exposes and current user/project permissions permit. If something needed is unavailable, name it and use any other available material or action that can still advance the request.
-- Use Claude Code waiting or background affordances only for real long-running host actions, then return to Dove's mainline judgment when results arrive.
-
-### Return with
-
-- The author main session applies scoped results to actual work and downstream use within the user's goal and latest corrections. A bounded subagent returns evidence without taking over the goal; subtask completion is not goal completion.
+- Use tools and materials exposed by the current host and permitted by the user and project. If something is unavailable, name the gap and continue with useful permitted alternatives.
+- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.

@@ -2,55 +2,92 @@
 
 ## Ownership
 
-Dove is file-first. Research context and ordinary artifacts belong to the researcher; installation owns only its declared software resources.
+Dove is file-first. Research context and ordinary artifacts belong to the researcher; installation owns only declared software resources.
 
-| Material | Owner and meaning |
+| Material | Meaning |
 |---|---|
-| `.dove/research/IDENTITY.md` | Short current goal, user constraints/corrections and round pointer |
-| `.dove/research/EVAL.md` | Proportionate exploratory observations, goal-based evaluation, version results and mentor assessments |
-| `.dove/research/rounds/` | Mentor/user/external briefs and actual round results |
-| `.dove/research/RESEARCH.md` | Short history index, not a second current-state log |
-| Existing `missions/`, `experiments/`, `claims/` | Historical research kept in place; no migration, deletion or new entries |
-| Sources, review returns and `lessons/` | Researcher-owned supporting material; retain useful existing documents |
-| Drafts, code, data, figures, papers, logs, rebuttals | Ordinary project artifacts, not Dove stores |
-| Manifest-listed integration and `.dove/install/manifest.json` | Software-managed installation resources and metadata |
-| Four `.dove/install/` quality/preference references | Package-managed essentials/full detail, not evidence or Lessons |
-| `.dove/install/DOCTOR.md` | Optional natural-language feedback about Dove itself |
-| Existing `.dove/reviews/**`, `.dove/runs/**`, archives | Durable user-owned history/receipts, preserved by lifecycle operations |
+| `.dove/research/IDENTITY.md` | Current user goal, target tier, sourced constraints and round pointer |
+| `.dove/research/EVAL.md` | One row per method version and the current mentor quality assessment |
+| `.dove/research/rounds/` | One authored brief and one result per round |
+| `.dove/research/MENTOR_NOTES.md` | Mentor-authored memory, saved verbatim by the main session |
+| `.dove/research/watch/` | Tracking configuration, discoveries, dated impacts and field scans |
+| `.dove/research/RESEARCH.md` | Short history index, not another current-state log |
+| Existing `missions/`, `experiments/`, `claims/` | Preserved history, without migration, deletion or new entries |
+| Sources, review returns and `lessons/` | Researcher-owned supporting material |
+| Drafts, code, data, figures, papers and logs | Ordinary project artifacts, not round attachments |
+| Manifest-listed integration and `.dove/install/manifest.json` | Software-managed resources and installation metadata |
+| Four exact quality/preference references in `.dove/install/` | Package guidance, not evidence or Lessons |
+| `.dove/install/DOCTOR.md`, existing `.dove/reviews/**`, `.dove/runs/**` and archives | Preserved feedback and user-owned history |
 
-Research Markdown is human-readable context, not a database. The few fields and round filenames needed for continuation do not justify schema validation, generated IDs, hashes, machine indexes, approval gates or a migration framework. Prompts own scientific meaning; hooks only provide their declared context/reminder behavior (see [Hook Guidelines](./hook-guidelines.md)).
+Research Markdown is human-readable context, not a database. Fixed fields and length limits do not call for new schemas, generated IDs, hashes, machine indexes, approval gates or migrations. Prompts own scientific meaning; [hooks](./hook-guidelines.md) deliver context only.
 
 ## Core records
 
-Keep the identity card to a few hundred plain-language words. Start with `Current round: rounds/NNN-brief.md` and `Round status: ongoing|paused|completed` (`进行中` also works), followed by `Mainline`, deployment inputs/outputs/completion, sourced restrictions and Recent corrections. Record clear user intent without reconfirmation; preserve provisional meaning, since writing is not confirmation. Restrictions/corrections contain only user quotations, dates and sources, not executor paraphrases or inventions. Method details, rejected methods and next work stay in the brief, not card prohibitions or duplicate route/action/Quality fields. Overlong cards remain existing cards: the hook shows the UTF-8-safe first 4096 bytes and requests concision, not recreation.
+### Identity card
 
-A mentor brief is saved verbatim as `rounds/NNN-brief.md`; a user or external task uses the same location. Every brief starts with `Author: mentor / user / external` (导师 / 用户 / 外部). Record the original-user source path, dates and last-read/since-previous-round range in the brief, not a new transcript/continuation ledger. Preserve direct host user instructions as user-authored material, with user > external > mentor priority. Brief contents and method-version rules are in [Component Guidelines](./component-guidelines.md#mentor-judgment-and-briefs). A mid-round replacement identifies its actual author and reason.
+Keep `IDENTITY.md` within 1200 characters, using these fields in this order:
 
-The result names actual changed files, method version, EVAL values, prediction versus actual, evaluator problems and a fixed `Objections to this brief / factual corrections` section, even when there are none. Report a blocked step with one or two examples when thresholds are missed. The next mentor first responds to that section. Existing Mission, Experiment and Claim histories remain untouched; new work goes into rounds instead.
+```text
+Current round: rounds/NNN-brief.md
+Round status: ongoing / paused / completed
+Mainline:
+Target tier:
+Deployment inputs/outputs:
+Completion:
+User restrictions:
+Recent corrections:
+Research state:
+```
 
-EVAL serves the current question and use, reusing valid evaluation and strong baselines. Exploration records proportionate core-hypothesis observations with fair same-input controls, without a full paper evaluator before implementation. Established goals retain all agreed requirements. Formal comparisons begin with a complete strong same-input baseline; columns cover every user metric, unseen data, train-test gap and intended advantage. Use task-general metrics, not sample/domain exceptions; unmeasured requirements stay unknown. Keep a short Completion reference. Record script, dev/test split, test draw, protocol, time, round, method version and measurements; predictions stay in briefs.
+Keep `Mainline` immediately after the round labels for the existing parser, with `Target tier` next. Ask once for a missing conference/journal target tier; do not assume one. A card entry is not user confirmation. Preserve clear user wording and provisional intent; change Mainline only when the user changes commitments or the card misstates them.
 
-The executor reports evaluator problems in the result rather than changing the protocol independently. The mentor can correct evaluation without asking the user unless the correction changes the goal's meaning, and directs the executor to recompute every historical method/baseline row under the new protocol in the same columns, using retained raw outputs first and rerunning historical versions only where outputs are missing. A protocol correction alone is not a method-code version change. Retain old method versions as ablations and identify previous protocol/split results as historical, not comparable current rows. A method changed after any test use requires a fresh test draw from data never used in development or prior tests, not a reshuffle of old test data, with all comparison rows evaluated on that common draw. Only the mentor supplies important-result eight-dimensional paper-quality assessments; the main session faithfully saves them, not another self-rating.
+Each restriction records its quotation, date/source, original-user versus relayed provenance, and long-term versus task-specific scope. Do not promote a relay or task-specific limit into a standing restriction. Preserve correction sources and apply them to actual judgment and action. Update research state after important results. Method details, rejected families and next work belong in briefs or mentor notes, not additional card fields. The hook still shows the UTF-8-safe first 4096 bytes of an overlong card and requests shortening rather than treating it as missing.
 
-Apply user corrections to current judgment and action. Record affected card content only when it has lasting value and writing is allowed, preserving original words, dates, sources and unchanged Mainline wording. Status is read-only; ending a reply does not complete or pause a round. When preserving a recurring correction, use registered roots from `dove projects status --json` and relevant Recent corrections only; ask once about adding cross-project guidance to AUTHOR_PREFERENCES, never edit it automatically.
+### Round briefs and results
+
+Each round has exactly one `NNN-brief.md` of at most 2000 characters and one `NNN-result.md` of at most 3000. Keep supporting materials in ordinary project directories and link them; do not accumulate extra files under `rounds/`.
+
+A brief starts with `Author: mentor / user / external` (导师 / 用户 / 外部), identifies the method version, and records dated user-source paths and the last-read/since-previous-round range. Direct host user instructions are user-authored; priority is user > external > mentor. Save mentor briefs verbatim. A replacement names its actual author and reason. Scientific content belongs to [Component Guidelines](./component-guidelines.md#mentor-judgment-and-briefs).
+
+Results use four fixed headings: `Changes and version`; `Measurements and artifacts`; `Prediction versus actual`; `Objections to this brief / factual corrections`. Include changed files, actual values or missing measurements, evaluator issues and concrete blockers. Keep the objections section even when empty; the next mentor answers it first. An engineering failure is recorded honestly, not turned into a scientific measurement or omitted from the no-science count.
+
+### Evaluation
+
+Begin `EVAL.md` with a short Completion reference to the script, protocol and all user metrics. Use one row per method version with these fixed columns:
+
+```markdown
+| Date | Version/round | Protocol/split | Measurements | Unseen data/train-test gap | Conclusion | Artifacts |
+|---|---|---|---|---|---|---|
+```
+
+Each cell contains numbers and at most one short sentence, within 200 characters. Link detailed values, split/test-draw descriptions and outputs in ordinary artifacts. Keep process status and engineering logs out. Formal comparisons retain complete strong same-input baselines and every confirmed requirement; unknown measurements remain unknown. Predictions stay in briefs. Exploratory observations must answer their stated question without pretending to be full confirmation.
+
+The executor repairs evaluator errors and recomputes all comparable historical method and baseline rows under the corrected protocol. Use retained raw outputs first, rerunning historical versions only where needed. Preserve superseded protocol results as linked historical evidence, not comparable current rows. A protocol repair alone is not a method-code change; changing the goal's meaning needs the user's decision. Retain method versions as ablations. After test use, changed methods require a fresh draw from data unused in development or earlier tests, with all comparisons on that common draw.
+
+After important results, the mentor returns the current eight-dimensional assessment, including grounds and unknowns, in at most 1000 characters. The main session replaces the assessment below the table rather than appending a score log or duplicating it with a self-rating. The weakest decisive dimension informs the next brief.
+
+### Mentor memory and paper tracking
+
+After each judgment, the mentor returns a note of at most 1000 characters covering its judgment, predictions and outcomes, rejected families and reasons, remaining concerns and the user-source range read. The main session appends it verbatim to `MENTOR_NOTES.md`; it does not author the mentor's memory. Above 6000 characters, the mentor merges its old entries into replacement text of at most 3000 characters, retaining decisive predictions, reasons and unresolved concerns. Cross-round continuity uses these notes, never a resumed conversation.
+
+Every mentor call checks `watch/config.json`, unjudged discoveries and the latest `watch/scan-DATE.md`, independently of rounds. Draft configuration or irrelevant results call for targeted tracking advice; the main session writes the advice into the config and sets `source: mentor`. The dashboard's Run now also prompts correction of a draft config.
+
+Save new impact judgments separately as `watch/impact-DATE.md`, using `- ID | 撞题/新基线/可借用/无关 | reason`. Existing judgments in briefs remain readable and need not be repeated. Check important possible overlap against fuller sources before declaring coverage; missing evidence stays pending. Core-contribution overlap requires a user decision, while useful baselines and reusable work inform actual next actions. If no field scan exists or the last is more than seven days old, the mentor returns a sourced scan of at most 2000 characters for the main session to save as `watch/scan-DATE.md`. These returns are not extra round attachments.
 
 ## Supporting material
 
-Create/edit ordinary requested artifacts when needed. Beyond the core round records, preserve notes only when explicitly requested or useful for evidence and continuation; a Skill invocation alone is not a maintenance trigger. Read relevant history and actual artifacts, not the whole tree. Use ordinary links and project-relative paths; update RESEARCH only when its short history navigation changes.
+Maintain other notes only when requested or useful for evidence and continuation. A Skill invocation, compact/resume or elapsed time is not itself a writing trigger. Read relevant history and artifacts, not the whole tree; use ordinary project-relative links. Source notes distinguish citations, material inspected and support or contradiction. Preserve review returns with their actual provenance, materials and venue.
 
-Source notes retain citations, what was inspected and what it supports or challenges. Actual reviewer returns remain faithful, with known materials and venue; distinguish user-pasted opinions from independent work. New useful source material or reviewer returns may remain ordinary project files or supporting notes, but do not recreate a parallel core ledger or review-runtime store. Existing topic histories may still be read; their existence does not require extending them.
+Lessons are fallible reusable advice. Check `lessons/LESSONS.md` once for a consequential active question or a correction exposing a shared mistaken premise, then only useful links. Missing Lessons do not block work or require an empty index. Preserve grounded transferable learning within write scope, with basis, conditions, counterexamples and limits; omit routine progress and one-off bugs.
 
-Lessons are optional, fallible reusable guidance. Before a consequential choice, or after a correction/recurring failure exposes a shared mistaken premise, check `lessons/LESSONS.md` once for the active question and only useful links; deterministic local work has no prerequisite. Missing Lessons do not block work or require an empty index. Preserve a grounded insight within author write scope when it could improve future choices or prevent recurrence, including its basis, conditions, counterexamples and limits. Omit routine progress, transient status, one-off failures and non-transferable bugs. A Lesson is not evidence, a fix or a completion certificate. Compact/resume and elapsed time do not themselves trigger writing.
-
-DOCTOR records explicit Dove feedback or actual integration, routing, Skill, guidance or document failures. It is not a general project error log, issue lifecycle or generated JSON store. Default preferences remain in the unchanged sole editable `docs/AUTHOR_PREFERENCES.md`, projected into package-managed references; do not copy them into Lessons. Read triggers belong in Component Guidelines.
+Status is read-only. A simultaneous correction changes understanding and action without requiring a card edit to end the reply. For recurring corrections, inspect relevant cards only at registered roots from `dove projects status --json`; ask once before adding global guidance to `AUTHOR_PREFERENCES`, never edit it automatically. `docs/AUTHOR_PREFERENCES.md` remains the sole editable full source and is unchanged by this restructuring. DOCTOR records Dove-specific feedback, not general project errors or a generated issue lifecycle.
 
 ## Lifecycle preservation
 
-- `init` creates integration and its manifest transactionally. It adds only the minimal researcher-owned RESEARCH bootstrap if the research directory is absent; report whether it was written. Do not bootstrap an empty evaluation or round tree before actual research.
-- Update, reinstall, uninstall and registered-project sync preserve all existing research, review/run history, DOCTOR and ordinary artifacts. They manage only owned integration; they do not convert missions into rounds, move experiments/claims, fill missing summaries or overwrite identity/evaluation/round files.
-- The four exact essentials/full references are owned files, not ownership of `.dove/install/` as a directory. Explicit update/reinstall manages them; uninstall removes still-owned resources. They are not evidence or user Lessons.
-- Normal sync removes an old manifest-owned Stop only when its original digest matches. Automatic sync preserves locally modified or removed Stop items and their prior ownership, reporting them; explicit update blocks on those differences. Unowned/user hooks remain untouched. Exact retired-selector recognition serves installation cleanup only.
-- Legacy research remains in place without automatic conversion, normalization or fallback readers. Unsupported installation manifests remain blocked.
-- SessionStart is read-only and does not update, migrate, clean up or reload a live session. Doctor diagnoses software/readability, not scientific health; missing optional summaries are not corruption.
+- `init` creates integration and its manifest transactionally, adding only the RESEARCH bootstrap if the research directory is absent. It does not prepopulate cards, notes, evaluation or rounds.
+- Update, reinstall, uninstall and registered-project sync manage owned integration, preserving research, mentor notes, watch records, review/run history, DOCTOR and ordinary artifacts. They do not convert old records, fill summaries or rewrite existing research.
+- The four exact quality/preference references are owned files, not ownership of the `.dove/install/` directory. Uninstall removes still-owned resources.
+- Normal sync removes a retired manifest-owned Stop only when its original digest matches. Automatic sync preserves modified or removed owned items with prior ownership and reports them; explicit update blocks on retired-item differences. Unowned/user hooks remain untouched.
+- Legacy research stays in place without conversion or fallback readers. Unsupported installation manifests remain blocked. SessionStart is read-only; Doctor reports software/readability facts, not scientific health or host reload.
 
-Replacement and transaction contracts belong in [Type Safety](./type-safety.md); generation ownership belongs in [Directory Structure](./directory-structure.md).
+Transaction contracts belong in [Type Safety](./type-safety.md); source and projection ownership belongs in [Directory Structure](./directory-structure.md).

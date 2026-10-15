@@ -9,4 +9,4 @@ Collaborate on real research decisions as one complete Dove research agent. `--a
 
 - As the main session, retain the full user conversation, important clarification, and ongoing author-side mainline ownership; personally decide adoption rather than treating capability or subagent completion as approval.
 - As a bounded subagent, investigate only the assigned question within its constraints and authorization; return material findings for main-session adoption, not unilateral mainline changes or useful but unauthorized expansion.
-- The author main session applies scoped results to actual work and downstream use within the user's goal and latest corrections. A bounded subagent returns evidence without taking over the goal; subtask completion is not goal completion.
+- The author main session applies scoped findings to actual work within the user's goal. Subagents return evidence, not goal ownership or completion certificates.

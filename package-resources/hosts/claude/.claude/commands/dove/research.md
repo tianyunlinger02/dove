@@ -1,11 +1,11 @@
 ---
-description: "Explore topics or advance Mainline through core work, scoped evaluation and needed judgment."
+description: "Explore a broad candidate pool for the user's choice, or advance a confirmed mainline with substantive research."
 argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
 ---
 
 # dove.research
 
-Explore topics or advance Mainline through core work, scoped evaluation and needed judgment.
+Explore a broad candidate pool for the user's choice, or advance a confirmed mainline with substantive research.
 
 ## Request
 
@@ -17,33 +17,28 @@ $ARGUMENTS
 
 ## How Dove approaches this work
 
-These are flexible research considerations, not a required order or report template. Quality grades judge substantive merit within scope; evidence confidence and completed work are separate, not stages that automatically promote quality.
+These are flexible research considerations, not a required order or report template.
 
 ### What this is for
 
-Advance research through core work and independent judgment when needed.
+Help the user choose a research direction or advance the confirmed mainline through substantive method work.
 
 ### When to use
 
-Use for topic selection or existing research; bounded questions stay bounded.
+Use for topic exploration, method development or continuation of existing research.
 
 ### Scope and changes
 
-- Preserve Mainline's intent and user-fixed methods; do not reselect or downgrade them. Read-only/design-only requests do not execute.
+- Before the user's mainline choice, do not implement candidate methods; undertake only diagnostics allowed by the topic criteria. Bounded questions stay bounded, and read-only or design-only requests do not authorize execution.
 
 ### Ways Dove may proceed
 
-- Follow Mainline with benefit-led methods or explore same-problem hypotheses via authorized core implementation/observations. Execute briefs against scoped EVAL; report attempts, outputs, unfinished work, blockers, evaluator flaws and objections. For independent judgment, give dove-mentor a fresh read-only context with method/route framing open to challenge: dated user-original sources/range since last reading, current user's exact words, norms, card, EVAL, recent briefs/results, diff/files, raw artifacts—not execution conversation or paraphrased user intent.
-
-### When Dove needs input
-
-- Record clear user words without reconfirmation; ask once for undecided direction or commitment/deployment-I/O/resource changes. Mentor handles evaluation/engineering; no reply permits independent authorized work, not assumed consent.
+- Until the user has confirmed a mainline, first read existing `.dove/research/topics/CRITERIA.md` or the project's topic-selection criteria and follow them. Establish a meaningful direction, then generate a broad pool of parallel candidates without pruning during generation. Use real near-neighbor searches both to assess overlap and to broaden the pool, then present 2–3 grounded recommendations for the user to choose.
+- After the user chooses, design and test the core mechanism. Select the scale and change by whether they can answer the research question; expand or redesign when they cannot, and do not enlarge work needlessly when they can. Connecting an end-to-end pipeline is not evidence that its core mechanism has been designed or tested.
+- The main executor decides engineering, acceleration, parameters and evaluator repairs within the user's commitments, recomputing comparable history when the evaluation changes. Use Experiment for the detailed comparison work.
+- Follow the shared research contract for mainline continuity, round records and dove-mentor's direction-only judgment, including its triggers, fixed questions and note flow.
 
 ### Using host tools
 
-- Use only tools and materials that the current host exposes and current user/project permissions permit. If something needed is unavailable, name it and use any other available material or action that can still advance the request.
-- Use Claude Code waiting or background affordances only for real long-running host actions, then return to Dove's mainline judgment when results arrive.
-
-### Return with
-
-- The author main session applies scoped results to actual work and downstream use within the user's goal and latest corrections. A bounded subagent returns evidence without taking over the goal; subtask completion is not goal completion.
+- Use tools and materials exposed by the current host and permitted by the user and project. If something is unavailable, name the gap and continue with useful permitted alternatives.
+- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
