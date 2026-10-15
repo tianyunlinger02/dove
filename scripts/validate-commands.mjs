@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -24,7 +26,9 @@ const result = spawnSync(process.execPath, [
   ...COMMAND_TEST_FILES
 ], {
   cwd: ROOT,
-  stdio: "inherit"
+  stdio: "inherit",
+  // Keep the developer's real Dove settings (for example hostMigration) out of the tests.
+  env: { ...process.env, XDG_CONFIG_HOME: fs.mkdtempSync(path.join(os.tmpdir(), "dove-test-config-")) }
 });
 
 if (result.error) {

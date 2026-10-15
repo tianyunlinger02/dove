@@ -8,6 +8,11 @@ import { DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP } from "../../src/core/dov
 import { DOVE_RESEARCH_REFLECTION_CONTINUITY } from "../../src/core/dove-research-contract.mjs";
 import { renderUninstallInventory } from "../../src/cli/terminal-output.mjs";
 
+// The hooks consult the user-level hostMigration switch; keep it virtual and absent.
+const env = { HOME: "/virtual-home", XDG_CONFIG_HOME: "/virtual-config" };
+const absentSettings = (target) => String(target).startsWith("/virtual-config/");
+const enoent = () => { throw Object.assign(new Error("absent"), { code: "ENOENT" }); };
+
 test("SessionStart startup and clear anchor the canonical bootstrap to the validated project root", () => {
   const project = path.resolve("synthetic project");
   const reference = path.join(project, ".dove/install/AUTHOR_PREFERENCES.md");
@@ -46,6 +51,7 @@ test("SessionStart compact and resume include the researcher-owned identity card
       return { isSymbolicLink: () => false, isDirectory: () => directories.has(target), isFile: () => isFile };
     },
     readFileSync(target) {
+      if (absentSettings(target)) return enoent();
       assert.equal(target, cardPath, "continuation reads only the identity card, not the transcript or old history");
       reads.push(target);
       return cardBytes;
@@ -54,7 +60,7 @@ test("SessionStart compact and resume include the researcher-owned identity card
   };
   for (const source of ["compact", "resume"]) {
     const payload = { source, transcript_path: "/never-read-transcript" };
-    const output = sessionStartOutput(payload, { status: "current" }, { project, fsOps });
+    const output = sessionStartOutput(payload, { status: "current" }, { project, fsOps, env });
     assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
     const context = output.hookSpecificOutput.additionalContext;
     assert.ok(context.includes(card.trimEnd()));
@@ -67,7 +73,7 @@ test("SessionStart compact and resume include the researcher-owned identity card
   assert.deepEqual(reads, [cardPath, cardPath]);
   cardBytes = null;
   for (const source of ["compact", "resume"]) {
-    const context = sessionStartOutput({ source }, { status: "current" }, { project, fsOps }).hookSpecificOutput.additionalContext;
+    const context = sessionStartOutput({ source }, { status: "current" }, { project, fsOps, env }).hookSpecificOutput.additionalContext;
     assert.match(context, /No readable short identity card/iu);
     assert.match(context, /Do not infer a mainline from old notes/iu);
     assert.match(context, /Create one for a confirmed goal when writing is permitted/iu);
@@ -96,16 +102,16 @@ test("user-original source helper returns only a source hint without reading or 
 });
 
 test("SessionStart startup and clear append the original-user pointer without reading its source", (t) => {
-  const read = t.mock.method(fs, "readFileSync", () => assert.fail("startup source handoff must not read files"));
+  const read = t.mock.method(fs, "readFileSync", (target) => absentSettings(target) ? enoent() : assert.fail("startup source handoff must not read files"));
   const project = "/virtual-session-project";
   for (const source of ["startup", "clear"]) {
     const payload = { source, transcript_path: "/never-read-transcript" };
-    const base = sessionStartOutput({ source }, { status: "current" }, { project });
-    const output = sessionStartOutput(payload, { status: "current" }, { project });
+    const base = sessionStartOutput({ source }, { status: "current" }, { project, env });
+    const output = sessionStartOutput(payload, { status: "current" }, { project, env });
     assert.equal(output.hookSpecificOutput.additionalContext, base.hookSpecificOutput.additionalContext + userOriginalSourceContext(payload));
     assert.equal(output.systemMessage, undefined);
   }
-  assert.equal(read.mock.callCount(), 0);
+  assert.ok(read.mock.calls.every(({ arguments: [target] }) => absentSettings(target)));
 });
 
 test("uninstall inventory separates deleted files from retained shared configuration edits", () => {

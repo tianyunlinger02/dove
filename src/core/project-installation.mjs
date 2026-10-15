@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
 import { PROJECT_HOST_IDS, normalizeHostSelection } from "./host-registry.mjs";
-import { prepareHostMigration } from "./host-migration.mjs";
+import { HOST_MIGRATION_PENDING_PATH, HOST_MIGRATION_REGISTERED_PATH, prepareHostMigration } from "./host-migration.mjs";
 import {
   INSTALLATION_MANIFEST_PATH,
   readProjectInstallationManifest
@@ -255,6 +255,11 @@ function prepareUninstall(start, options = {}) {
   for (const entry of manifest.managed.filter((managed) => managed.kind !== "json-fragment").sort(compareManaged)) {
     const planned = planResource(root, null, entry, fsOps);
     if (planned.entry) entries.push(planned.entry);
+  }
+  // Migration notices are Dove-owned install files outside the manifest; leave none behind.
+  for (const relativePath of [HOST_MIGRATION_PENDING_PATH, HOST_MIGRATION_REGISTERED_PATH]) {
+    const observed = inspectRegularProjectFile(root, relativePath, fsOps);
+    if (observed.exists) entries.push(transactionDelete(root, { path: relativePath }, observed));
   }
   const manifestObserved = inspectRegularProjectFile(root, INSTALLATION_MANIFEST_PATH, fsOps);
   if (!manifestObserved.exists) throw new Error("Dove uninstall requires the current project installation manifest.");

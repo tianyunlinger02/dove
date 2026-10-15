@@ -177,7 +177,7 @@ export function renderMentorBrief(root, options = {}) {
   const evaluation = path.join(research, "EVAL.md");
   const lines = [
     "# Dove 导师调用材料", "", `项目：\`${project}\`（材料路径相对此目录）`,
-    "按路径读材料；执行者意见另附，不改写末尾四问。", "",
+    "本材料原样作为导师调用的全部正文，只在“本次触发”写一句；执行者看法放意见文件，不另列禁令。", "",
     "## 本次触发", "", quote(options.trigger || "未填写"),
     "同轮再调用时，在此注明对应触发（用户纠正、换路线等）。", "",
     "## 用户原话与来源", "",

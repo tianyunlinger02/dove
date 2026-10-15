@@ -10,13 +10,14 @@ export const HOST_MIGRATION_REGISTERED_PATH = ".dove/install/migration-registere
 
 // Carry forward record normalization for consumers skipping earlier releases.
 // Leave empty in a release that has no host-side migration work.
-export const HOST_MIGRATION_TASK = `整理 3.4.0 起已有的研究记录，只处理已有内容，不为迁移另开研究任务：
+export const HOST_MIGRATION_TASK = `整理 3.4.0 起已有的研究记录，只处理已有内容：
 
-1. .dove/research/IDENTITY.md 限 1200 字符，依次为 Current round、Round status、Mainline、Target tier、Deployment inputs/outputs、Completion、User restrictions、Recent corrections、Research state。未变 Mainline 与用户原话保留；过长原文留同目录历史并链接，不丢弃。Target tier 缺失且未问过时问一次，不推定；限制注明引文、日期/来源、原话/转述、长期/任务范围。
-2. .dove/research/EVAL.md 一方法版本一行，保留完成标准引用，列为 Date、Version/round、Protocol/split、Measurements、Unseen data/train-test gap、Conclusion、Artifacts；单元格为已有数字加至多一句，限 200 字符。旧长内容原样移至同目录历史并链接，不删除、改结论、补造或重算结果。
-3. .dove/research/MENTOR_NOTES.md 超 6000 字符，下次正常导师调用请导师合并为至多 3000 字符全文，保留关键原因与未解担忧；执行者不代写，不中断工作或另开调用。
-4. .dove/research/watch/config.json 若 source 为 draft，下次正常调用请导师给本问题的追踪修正建议，主会话写回并标 source: mentor。不为迁移创建缺少的研究记录；待下次调用的事项在已有记录留短提醒后完成本待办，不抢跑。
-5. 仍在选题时，下次正常回复按质量摘要一轮交候选、近邻及最佳 2–3 个方向，不足给 1 个，不重跑。推荐供定主线，不等方法闭合，正式产物门槛不扣住推荐；标准矛盾或禁取证据卡住时，说明一次仍给方向，请用户选或调标准，不静态打磨。确认后结束选题期限制，缺的独立资源／跑模型授权合并问一次，再诊断、设计、实验、写开题；已有主线续做。不改项目及用户级标准、进行中选题材料，只改后续安排。`;
+1. .dove/research/IDENTITY.md 按规则改为固定栏目、1200 字符内；未变 Mainline 与用户原话保留，过长原文移同目录历史并链接；缺 Target tier 且未问过就问一次；限制注明引文、来源、原话/转述、长期/单次。
+2. .dove/research/EVAL.md 按规则一方法版本一行、单元格 200 字符内；旧长内容原样移同目录历史并链接，结论和结果保持原样。
+3. MENTOR_NOTES.md 超 6000 字符时，下次正常导师调用由导师合并为至多 3000 字符。
+4. watch/config.json 仍为 draft 时，下次正常导师调用给修正建议，主会话写回并标 source: mentor。待下次调用的事项留短提醒即算完成。
+5. 仍在选题时，下次正常回复按质量摘要一轮交候选、近邻及最佳 2–3 个方向，不足给 1 个，不重跑。推荐供定主线，不等方法闭合，正式产物门槛不扣住推荐；标准矛盾或禁取证据卡住时，说明一次仍给方向，请用户选或调标准，不静态打磨。确认后结束选题期限制，缺的独立资源／跑模型授权合并问一次，再诊断、设计、实验、写开题；已有主线续做。不改项目及用户级标准、进行中选题材料，只改后续安排。
+6. 清理自设限制：IDENTITY、brief 和执行协议里自加的限制与检查，逐条写保护什么，说不出的删掉；用户原话限制保留。`;
 
 function settingsPath(options) {
   const env = options.env ?? process.env;

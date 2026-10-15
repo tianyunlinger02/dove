@@ -27,8 +27,8 @@ test("mentor amendments: fresh direction judgment reads genuine user materials, 
   assert.match(mentor, /每轮.*新的.*不 resume.*同一轮.*两三个.*跨轮.*笔记/u);
   assert.match(mentor, /宿主原话源路径和日期范围.*真实用户正文/u);
   assert.match(mentor, /排除.*元消息.*子会话.*工具返回.*系统.*执行者总结/u);
-  assert.match(mentor, /来源读不到.*未知.*不.*撤销用户承诺或宿主权限/u);
-  assert.match(mentor, /不读作者私有偏好.*不执行.*不写文件/u);
+  assert.match(mentor, /来源读不到.*未知.*转述只当转述.*用户承诺和宿主权限照旧有效/u);
+  assert.match(mentor, /工具是只读的.*作者私有偏好.*执行和写文件都留给主会话/u);
   assert.match(review, /指定的当前完整稿件.*不读.*对话.*不联网.*不执行.*不改稿/u);
 });
 
@@ -144,4 +144,13 @@ test("mentor amendments: question-led reading accumulates evidence and Draft ver
   assert.match(source, /check-only work.*without creating notes or editing manuscripts/iu);
   assert.match(draft, /papers\/library\.json.*library\.md.*group related work by direction/iu);
   assert.match(draft, /Verify citation metadata.*BibTeX.*never invent authors, venue, date or identifiers/iu);
+});
+
+test("mentor amendments: guidance prefers stated actions over defensive prohibitions", () => {
+  assert.match(mentor, /防御成本.*自设门禁.*重复核验.*措辞免责.*说不出保护什么.*删掉/u);
+  assert.match(mentor, /风险和未知集中写一处/u);
+  assert.match(DOVE_RESEARCH_ROUND_CYCLE, /whole prompt plus the trigger/iu);
+  assert.match(DOVE_RESEARCH_CLARIFICATION, /restrictions name what they protect/iu);
+  const negations = (text) => (text.match(/不/gu) ?? []).length;
+  assert.ok(negations(mentor) <= 26, `mentor definition carries ${negations(mentor)} negations`);
 });
