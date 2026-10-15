@@ -2,46 +2,47 @@
 
 ## Choose checks by impact
 
-Dove is a research agent, not a security project. Check changed contracts and direct consumers without adding speculative defenses or unrelated gates. Documentation work needs terminology/link inspection, source/template byte comparison, length comparison and scoped `git diff --check`. Prompt work also benefits from read-only rendering of the affected rule, Skills and agent definitions. Neither establishes live adoption or scientific quality.
+Dove is a research agent, not a security project. Check changed contracts and direct consumers without new defenses or unrelated gates. Documentation needs read-only terminology/link inspection, source/template byte comparison, length comparison and scoped `git diff --check`. Prompt work can also use read-only rendering. Neither proves live adoption or scientific quality.
 
-Use commands actually declared in `package.json`. This ESM project has no separate lint or typecheck scripts; do not report either as passed. `node --check` checks syntax. Where tests are authorized, select existing cases with `node --test --test-name-pattern '<name>' <test-file>` after inspecting side effects.
+Use declared `package.json` commands. This ESM project has no separate lint or typecheck scripts; do not report them as passed. `node --check` checks syntax. If tests are authorized, inspect side effects before selecting existing cases with `node --test --test-name-pattern '<name>' <test-file>`.
 
 | Changed surface | Relevant checks when authorized |
 |---|---|
-| Specs/templates | Direct byte comparison; the existing mirror case in `tests/commands/03-ambient-docs-research-defaults.test.mjs` |
-| Behavior, Skills and resources | Focused cases in `tests/commands/01-agent-and-skills.test.mjs`, `02-generated-adapters.test.mjs` and `03-ambient-docs-research-defaults.test.mjs`; `npm run commands:check` for projections |
-| Native agents | Rendered material/tool boundaries, mentor handoff and reviewer instructions; no model invocation is needed |
-| CLI | Affected parser/renderer cases in `tests/commands/04-cli-parser-renderers.test.mjs` and setup cases in `05-interactive-setup.test.mjs` |
-| Lifecycle and hooks | Relevant installation/uninstall validators and registered-project cases |
-| Watch, topics and dashboard | Relevant existing cases in `tests/paper-watch.test.mjs`, `tests/topic-selection.test.mjs` and `tests/dashboard.test.mjs` |
-| Receipts and writes | Scoped `runs:validate` options and `runtime:validate`; inspect scratch/Git side effects first |
-| Behavior tooling and release | `behavior:validate`, `build:check`, `check`, `release:check` or `pack:dry-run` only within their authorized scope |
+| Specs/templates | Byte comparison; existing mirror case in `tests/commands/03-ambient-docs-research-defaults.test.mjs` |
+| Behavior, Skills and resources | Focused `01-agent-and-skills`, `02-generated-adapters` and `03-ambient-docs-research-defaults` cases under `tests/commands/`; `npm run commands:check` |
+| Native agents | Rendered boundaries, mentor handoff and reviewer instructions; no model invocation |
+| CLI | Relevant `04-cli-parser-renderers` and `05-interactive-setup` cases under `tests/commands/` |
+| Lifecycle/hooks | Affected installation, uninstall and registered-project validators |
+| Watch/topics/dashboard | Relevant `tests/paper-watch.test.mjs`, `tests/topic-selection.test.mjs`, `tests/dashboard.test.mjs` cases |
+| Receipts/writes | Scoped `runs:validate` and `runtime:validate` after scratch/Git side-effect inspection |
+| Behavior/release | `behavior:validate`, `build:check`, `check`, `release:check`, `pack:dry-run` only within scope |
 
-Generation, build, installation and host loading are separate operations. Leave projections to their owner when work is divided. Do not retain obsolete review runtimes or compatibility behavior just to satisfy stale assertions.
+Generation, build, installation and loading are separate operations. Leave projections to their assigned owner. Do not retain obsolete runtimes or compatibility behavior to satisfy stale assertions.
 
 ## Protect contracts, not incidental wording
 
-Use [Component](./component-guidelines.md), [State](./state-management.md), [Hook](./hook-guidelines.md) and [Type](./type-safety.md) as the owning specifications. Check relationships and consequential behavior, not full-sentence regexes, prose banlists or automatic scientific PASS algorithms. A structural rewrite should remove superseded sections and duplicated duties, use complete sentences and reduce total length rather than append compressed rules.
+[Component](./component-guidelines.md), [State](./state-management.md), [Hook](./hook-guidelines.md) and [Type](./type-safety.md) own their contracts. Check relationships and consequential behavior, not exact-sentence regexes, prose banlists or automatic scientific PASS algorithms. Replace superseded sections and merge repeated duties; keep natural prose and nonincreasing total length.
 
-For this research contract, verify that the affected surfaces agree on:
+Verify agreement on the affected behavior:
 
-- User confirmation, not a card entry, ends topic selection. Existing standards are mandatory; broad parallel generation precedes assessment, real searches expand candidates, and 2–3 recommendations go to the user before method implementation. Only standards-allowed diagnostics precede selection.
-- Scale and change answer the actual question. Pipeline connection is not proof of a designed and tested core mechanism. Engineering, parameters and evaluator repairs belong to the executor, with full comparable-history recomputation.
-- Mentor calls occur at round end, two no-science rounds, user direction/story corrections and before route changes. Engineering/verification failures count; the third no-science round needs a user decision before more work. New rounds use new contexts, while 2–3 clarifications may stay within one judgment. Handoffs contain materials and four fixed questions, with opinions labeled separately.
-- Card field order, record caps, one method-version row, current rather than logged assessment, verbatim mentor notes and ordinary linked attachments follow State Management. Preserve original-versus-relayed and long-term-versus-task provenance.
-- Every mentor checks draft tracking configuration, unjudged impacts and absent/overdue weekly scans without waiting for a round. New dated impact files and existing brief judgments remain readable. Retrieval checks cover no-key Semantic Scholar behavior, rate-limit backoff and relevance beyond one generic title term.
-- Method changes get full applicable evaluation and genuinely fresh tests after prior test use. External utility and internal attribution remain distinct. Status and bounded replies need no handoff or record merely to end the reply.
+- Topic selection reads project standards and uses at most two gaps per challenge axis, each supported by at least two body-read near-miss papers, a named deficiency and observable closure evidence. Abstracts or absent prior work are not gap evidence. No universal method-only gate is introduced.
+- Cross-field mechanism discovery uses 6–10 queries across at least three other subfields. Candidate fields expose sources, mapping, assumptions, nearest-work differences and main risk. Active novelty challenges return keep/revise/reject, one weakest revision focus, cited evidence and a strongest objection. Broad generation precedes assessment and 2–3 choices; no method implementation before user selection.
+- Source reads with 1–5 questions and reuses cumulative, location-grounded Q&A. Abstract/summary-only material retains source and unread-full-text status. Draft groups the direction library and exports checked BibTeX without invented metadata; unknown publication kind uses `@misc`, not a venue-label guess.
+- Chinese watch lines explain what papers do; pending lines stay visibly pending. Impact, direction and reading provenance survive into the library. Normal watch or explicit accumulation may write it; library/dashboard GET and exports remain read-only. Older-paper supplementation is off by default, bounded and nonrepeating, with original dates. Installation neither creates a library nor migrates research.
+- Scale answers the question, pipeline connection is not core evidence, and engineering/evaluator repair stays with the executor. Method changes receive full evaluation and fresh unused tests after prior test use. Utility and attribution remain distinct.
+- Mentor calls use `dove mentor brief --project <root>` in fresh contexts, not arbitrary executor task text. Only capped authored opinions, raw paths and sourced user originals supplement it; same-round repeats name their trigger. Engineering failures count: two rounds need diagnosis, the third a user decision. Records follow State Management.
+- Every mentor checks tracking drafts, unjudged impacts and overdue scans independently of rounds. Old judgments remain usable. Retrieval handles no-key Semantic Scholar, rate-limit backoff and relevance beyond one generic title term; errors are not empty successful searches.
 
-The mentor reads specified genuine user bodies, its own notes and quality guidance, and may retrieve paper/web sources. It does not read execution conversation or author preferences, compute or edit. The paper reviewer reads only listed current manuscript materials and supplied grounding through Read/Grep/Glob, with no transcript or network access. Missing sources mean unknown provenance, not revoked user commitments. Native isolation needs no frozen copy, SHA snapshot, persistent session or new exchange store.
+The mentor can retrieve sources but cannot read execution conversation or private preferences, compute or edit. The paper reviewer reads only supplied current manuscript materials through Read/Grep/Glob, without network or transcript access. Missing sources limit provenance, not confirmed commitments. Native isolation needs no frozen copy, hashes or new exchange store.
 
-Hook checks retain the UTF-8-safe first 4096 bytes of an overlong card and supply a user-source pointer rather than transcript contents. Retired Stop checks cover unchanged owned removal, preservation of modified/missing ownership and unowned hooks, and repeat-sync behavior. Disk changes do not reload an existing context.
+Hooks retain the UTF-8-safe first 4096 card bytes and a source pointer. Verified guidance files, not overall `current` status, enable guidance despite reported statusLine/MCP differences. Default-off host migration registers software pending work only; hosts act at a quiet point without changing conclusions, interrupting jobs or repeating completed versions. Retired Stop checks preserve user hooks and ownership differences. Disk updates do not reload contexts.
 
 ## Authorization and evidence
 
-Keep product development, consumer research and product validation separate. This repository owns software; the selected consumer project owns its research. For this restructuring, do not create test projects, fixtures or test content in real research, inspect private research conversations, invoke models or continue research for validation. Documentation checks are read-only and need none of those actions. Other validation requires its own scope; never manufacture a user confirmation.
+Separate product development, consumer research and validation. Documentation checks are read-only: do not create test projects or fixtures, inspect private research conversations, invoke models, write test content into research or continue it for validation. In this absorption task, leave point1 and `runs/topic_selection_20261015/` untouched; observe any improvement only during its normal authorized progress.
 
-When scratch work is authorized elsewhere, inspect and honor `TMPDIR` rather than silently using system `/tmp`. Retained validation artifacts belong in an authorized location such as `runs/`, not consumer research state.
+Honor the authorized `TMPDIR`, not system `/tmp`. Other validation requires its own scope; retained artifacts belong in that authorized location, not consumer research. Never manufacture user confirmation.
 
-Report actual checks and unrun checks separately. Distinguish source instructions, generated resources/bundles, installed disk resources, loaded host context, observed model behavior and scientific outcomes. A software pass is not generalization, completion, acceptance or mentor effectiveness. Report permission denials and incomplete actions at their actual scope.
+Report actual and unrun checks separately. Distinguish source instructions, generated resources/bundles, installed files, loaded context, observed behavior and scientific results. A software pass, rendered card or successful installation does not prove model adoption, generalization, completion or mentor effectiveness. Report denials and incomplete actions at their actual scope.
 
-Behavioral acceptance comes from authorized normal use in the projects that exposed the problem, not a dedicated test project. The observation targets are in `docs/development/FINAL_EXPECTATIONS.md`; report those outcomes separately from software checks. Installation or an updated prompt alone does not establish improvement.
+Behavioral acceptance comes from normal authorized use, not a dedicated test project. Observation targets in `docs/development/FINAL_EXPECTATIONS.md` are pending until actually observed and remain separate from software checks.

@@ -3,6 +3,8 @@ import path from "node:path";
 
 import { importProjectRoots, syncRegisteredProjects } from "../core/project-cascade.mjs";
 import { parsePaperImpacts } from "../core/dashboard-data.mjs";
+import { readHostSettings, writeHostSettings } from "../core/host-migration.mjs";
+import { exportPaperBibtex, groupPaperLibrary, readPaperLibrary, renderPaperLibrary } from "../core/paper-library.mjs";
 import { readTopicCriteriaInfo, readTopics, startTopicSelection, writeTopicCriteria } from "../core/topic-selection.mjs";
 import { changeRegisteredProjects, readRegisteredProjects } from "../core/project-registry.mjs";
 import {
@@ -22,6 +24,7 @@ import {
   readWatchConfig,
   readWatchDigests,
   runWatch,
+  syncPaperLibrary,
   writeGlobalWatchSettings,
   writeSemanticScholarKey,
   writeWatchConfig
@@ -35,8 +38,8 @@ function isDirectory(root) {
   }
 }
 
-// Everything the dashboard settings page can do. Research records are never
-// written here; only Dove's own settings, registry and watch files.
+// Dashboard reads stay read-only. Settings, watch runs and the explicit
+// literature-library accumulation action perform their named writes.
 export function createDashboardActions({ packageOptions = {}, passwordFile = null, run = runWatch, env = process.env } = {}) {
   const options = { ...packageOptions, env };
   let running = null;
@@ -61,6 +64,7 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
           return { root, name: path.basename(root), watch, guidance: watchConfigGuidance(watch) };
         }),
         watchGlobal: readGlobalWatchSettings(options),
+        hostSettings: readHostSettings(options),
         watchState: readGlobalWatchState(options),
         watchRunning: Boolean(running),
         watchError: runError,
@@ -77,7 +81,16 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
       const all = readWatchDigests(root, Infinity);
       const pending = new Map();
       for (const digest of all.slice(3)) for (const item of digest.items) if (!impacts[item.id] && !pending.has(item.id)) pending.set(item.id, item);
-      return { config, guidance: watchConfigGuidance(config), state: readWatchState(root), digests: all.slice(0, 3), pending: [...pending.values()], impacts, scan, scanDue: watchScanDue(scan, now) };
+      return { config, guidance: watchConfigGuidance(config), state: readWatchState(root), digests: all.slice(0, 3), pending: [...pending.values()], impacts, scan, scanDue: watchScanDue(scan, now), library: groupPaperLibrary(readPaperLibrary(root).papers) };
+    },
+    readLibrary({ root, format = "json" }) {
+      const library = readPaperLibrary(root);
+      if (format === "md") return renderPaperLibrary(library.papers);
+      if (format === "bib") return exportPaperBibtex(library.papers);
+      return library;
+    },
+    syncPaperLibrary({ root }) {
+      return syncPaperLibrary(root);
     },
     readTopicsOverview() {
       return {
@@ -137,6 +150,9 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
     },
     saveWatchGlobal({ settings }) {
       return writeGlobalWatchSettings(settings ?? {}, options);
+    },
+    saveHostSettings({ settings }) {
+      return writeHostSettings(settings ?? {}, options);
     },
     saveS2Key({ key }) {
       return { set: writeSemanticScholarKey(key, options) };

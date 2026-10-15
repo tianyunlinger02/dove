@@ -35,6 +35,9 @@ test("update retires only the owned reviewer and preserves mentor memory and res
     ".dove/research/MENTOR_NOTES.md": "Mentor-authored prediction and open concerns\n",
     ".dove/research/watch/impact-2026-10-15.md": "Paper impact outside any round\n",
     ".dove/research/watch/scan-2026-10-15.md": "Dated field scan\n",
+    ".dove/research/papers/library.json": "[]\n",
+    ".dove/research/papers/library.md": "Grouped literature\n",
+    ".dove/research/papers/2610.04074.md": "Full-text question and answer\n",
     ".dove/research/missions/old.md": "history",
     ".dove/research/experiments/old.md": "results"
   });

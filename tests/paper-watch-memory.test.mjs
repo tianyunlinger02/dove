@@ -5,10 +5,11 @@ import test from "node:test";
 import { createDashboardActions } from "../src/cli/dashboard-actions.mjs";
 import { renderDashboardHtml } from "../src/cli/dashboard-server.mjs";
 import { parsePaperImpacts } from "../src/core/dashboard-data.mjs";
+import { exportPaperBibtex, groupPaperLibrary, readPaperLibrary, renderPaperLibrary } from "../src/core/paper-library.mjs";
 import {
-  arxivIdFromUrl, createWatchFetcher, fetchArxiv, fetchSemanticScholar,
-  MIN_RELEVANCE, normalizeWatchConfig, readWatchDigests, readWatchState,
-  runWatch, scorePaper, watchScanDue
+  arxivIdFromUrl, createWatchFetcher, fetchArxiv, fetchHuggingFaceDaily, fetchSemanticScholar,
+  MIN_RELEVANCE, normalizeGlobalWatchSettings, normalizeWatchConfig, readWatchDigests, readWatchState,
+  runWatch, scorePaper, syncPaperLibrary, watchScanDue
 } from "../src/core/paper-watch.mjs";
 
 const ROOT = "/memory/dove/project";
@@ -281,4 +282,260 @@ test("dashboard browser scripts parse in each mode without writing files", () =>
     const script = renderDashboardHtml(options).split("<script>")[1].split("</script>")[0];
     assert.doesNotThrow(() => new Function(script));
   }
+});
+
+const PAPERS = `${ROOT}/.dove/research/papers`;
+const selectedPaper = (id, extra = {}) => ({ id, title: `Sewing pattern study ${id}`, abstract: "We reconstruct garments from sewing patterns.", authors: ["Alice Zhang", "Bob Li"], published: "2026-10-14T00:00:00Z", url: `https://arxiv.org/abs/${id}`, ...extra });
+const digestText = (items, date = "2026-10-14") => JSON.stringify({ date, items, notes: [], status: "done" });
+
+test("five-column impacts expose authored Chinese lines read-only and keep old three-column judgments", (t) => {
+  const summary = "从服装图像预测二维纸样，并用缝合约束恢复面片连接。";
+  const files = memoryFiles(t, {
+    [`${WATCH}/2026-10-14.json`]: digestText([selectedPaper("2610.00001"), selectedPaper("2610.00002"), selectedPaper("2610.00003")]),
+    [`${WATCH}/impact-2026-10-15.md`]: `- 2610.00001v2 | 可借用 | 可复用 A \\| B，但不是撞题或新基线 | 纸样重建 | ${summary}\n| 2610.00002 | 新基线 | 比较可借用部分 | 拓扑预测 | 预测面片之间的拓扑连接。 |\n- 2610.00003 | 无关 | 提到撞题，但并不相关\n`
+  });
+  const before = [...files];
+  const impacts = parsePaperImpacts(ROOT);
+  assert.equal(impacts["2610.00001"].impact, "borrow");
+  assert.equal(impacts["2610.00001"].note, "可复用 A | B，但不是撞题或新基线");
+  assert.equal(impacts["2610.00001"].direction, "纸样重建");
+  assert.equal(impacts["2610.00001"].line, summary);
+  assert.equal(impacts["2610.00002"].impact, "baseline");
+  assert.equal(impacts["2610.00002"].line, "预测面片之间的拓扑连接。");
+  assert.equal(impacts["2610.00003"].impact, "irrelevant");
+  assert.equal(impacts["2610.00003"].line, "");
+  assert.equal(readWatchDigests(ROOT)[0].items[0].line, summary);
+  assert.equal(readWatchDigests(ROOT)[0].items[2].line, "");
+  assert.deepEqual(readPaperLibrary(ROOT), { papers: [] });
+  assert.deepEqual([...files], before, "reading must not create a library or rewrite a digest");
+});
+
+test("explicit library accumulation groups judgments, deduplicates ids, and leaves cumulative QA untouched", (t) => {
+  const qa = "# 逐问阅读\n问题一：损失函数？\n回答：见正文第 3.2 节；以后继续追加。\n";
+  const files = memoryFiles(t, {
+    [`${PAPERS}/2610.00001.md`]: qa,
+    [`${WATCH}/2026-10-13.json`]: digestText([selectedPaper("2610.00001v2")], "2026-10-13"),
+    [`${WATCH}/2026-10-14.json`]: digestText([
+      selectedPaper("2610.00001"), selectedPaper("2610.00002", { venue: "CVPR", kind: "conference" }),
+      selectedPaper("2610.00003"), selectedPaper("2610.00004"), selectedPaper("W5", { authors: [], published: "", url: "https://openalex.org/W5" })
+    ]),
+    [`${WATCH}/impact-2026-10-15.md`]: "- 2610.00001 | 可借用 | 可借用缝合约束 | 纸样重建 | 用缝合约束重建纸样。\n- 2610.00002 | 新基线 | 同输入协议可比较 | 纸样重建 | 从图像预测纸样。\n- 2610.00003 | 无关 | 不满足输入限制 | 其它 | 研究不同任务。\n- W5 | 撞题 | 需用正文继续核对\n"
+  });
+  const library = syncPaperLibrary(ROOT);
+  assert.deepEqual(library.papers.map((paper) => paper.id), ["2610.00001", "2610.00002", "W5"]);
+  assert.equal(library.papers[0].line, "用缝合约束重建纸样。");
+  assert.equal(library.papers[0].arxivId, "2610.00001");
+  assert.deepEqual(library.papers[0].authors, ["Alice Zhang", "Bob Li"]);
+  assert.equal(library.papers[0].date, "2026-10-14");
+  assert.equal(library.papers[1].venue, "CVPR");
+  const missing = library.papers[2];
+  assert.deepEqual(missing.authors, []);
+  for (const field of ["date", "venue", "arxivId"]) assert.equal(missing[field], null);
+  assert.equal(missing.line, "");
+  assert.equal(missing.direction, "");
+  const groups = groupPaperLibrary(library.papers);
+  assert.equal(groups.find((group) => group.direction === "纸样重建").papers.length, 2);
+  assert.equal(groups.find((group) => group.direction === "待归类").papers[0].id, "W5");
+  const markdown = files.get(`${PAPERS}/library.md`);
+  assert.match(markdown, /## 纸样重建/u);
+  assert.match(markdown, /用缝合约束重建纸样。/u);
+  assert.match(markdown, /不代表读过全文/u);
+  assert.match(markdown, /中文一句话待据摘要补充/u);
+  assert.equal(files.get(`${PAPERS}/2610.00001.md`), qa);
+  assert.deepEqual(JSON.parse(files.get(`${PAPERS}/library.json`)), library);
+  const before = [...files];
+  assert.deepEqual(syncPaperLibrary(ROOT), library);
+  assert.deepEqual([...files], before, "repeat accumulation is idempotent");
+  files.delete(`${WATCH}/2026-10-13.json`);
+  files.delete(`${WATCH}/2026-10-14.json`);
+  files.set(`${WATCH}/impact-2026-10-16.md`, "- 2610.00001 | 新基线 | 重分类 | 拓扑预测 | 用缝合约束预测面片连接。\n- 2610.00002 | 无关 | 已确认协议不匹配\n");
+  const later = syncPaperLibrary(ROOT);
+  assert.deepEqual(later.papers.map((paper) => paper.id), ["2610.00001", "W5"], "accumulated metadata survives pruned digests; latest exclusions win");
+  assert.equal(later.papers[0].direction, "拓扑预测");
+  assert.equal(later.papers[0].line, "用缝合约束预测面片连接。");
+  assert.equal(later.papers[0].impact, "baseline");
+  assert.equal(files.get(`${PAPERS}/2610.00001.md`), qa);
+});
+
+test("BibTeX and Markdown exports are pure and use only known bibliographic metadata", (t) => {
+  const files = memoryFiles(t);
+  const papers = [
+    { id: "2401.00001", arxivId: "2401.00001", kind: "arxiv", title: "A & B: 50% Pattern_Study", authors: ["Alice Zhang", "Bob Li"], date: "2024-01-02", url: "https://arxiv.org/abs/2401.00001", direction: "纸样", impact: "borrow" },
+    { id: "W2", kind: "conference", title: "Conference study", authors: ["Carol"], venue: "ICML 2025", date: null, url: "https://openreview.net/forum?id=example_paper&ref=known", direction: "纸样", impact: "baseline" },
+    { id: "W3", kind: "journal", title: "Journal study", venue: "Known Journal", date: "2023-05-06", impact: "overlap" },
+    { id: "W4", title: "Unknown type", venue: "Known venue", impact: "borrow" },
+    { id: "2610.00005", arxivId: "2610.00005", title: "Unknown metadata", authors: [], impact: "borrow" }
+  ];
+  const before = JSON.stringify(papers);
+  const bibtex = exportPaperBibtex([...papers, papers[0]]);
+  assert.equal((bibtex.match(/^@/gmu) ?? []).length, 5);
+  assert.match(bibtex, /@misc\{dove:2401\.00001/u);
+  assert.ok(bibtex.includes("title = {A \\& B: 50\\% Pattern\\_Study}"));
+  assert.match(bibtex, /author = \{Alice Zhang and Bob Li\}/u);
+  assert.match(bibtex, /eprint = \{2401\.00001\}/u);
+  assert.match(bibtex, /archivePrefix = \{arXiv\}/u);
+  assert.ok(bibtex.includes("url = {https://openreview.net/forum?id=example_paper&ref=known}"));
+  assert.match(bibtex, /@inproceedings\{dove:W2,[\s\S]*?booktitle = \{ICML 2025\}/u);
+  assert.doesNotMatch(bibtex.split("\n\n")[1], /year =/u, "a venue's year is not an independently known publication date");
+  assert.match(bibtex, /@article\{dove:W3,[\s\S]*?journal = \{Known Journal\}/u);
+  const unknownVenue = bibtex.split("\n\n")[3];
+  assert.match(unknownVenue, /@misc/u);
+  assert.doesNotMatch(unknownVenue, /author =|year =|booktitle =|journal =/u);
+  const unknown = bibtex.split("\n\n")[4];
+  assert.doesNotMatch(unknown, /author =|year =|booktitle =|journal =|url =/u);
+  groupPaperLibrary(papers);
+  renderPaperLibrary(papers);
+  assert.equal(JSON.stringify(papers), before);
+  assert.equal(files.size, 0);
+});
+
+test("next watch run syncs saved impact lines while discovery never manufactures a Chinese summary", async (t) => {
+  const files = memoryFiles(t, configFiles());
+  const get = retrieval({ s2: { status: 200, body: "[]" } });
+  await runWatch([ROOT], { env, now: NOW, ...clock(), get });
+  assert.equal(readWatchDigests(ROOT)[0].items[0].line, "");
+  assert.equal(files.has(`${PAPERS}/library.json`), false, "unjudged discoveries do not enter the library");
+  assert.match(files.get(`${WATCH}/2026-10-15.md`), /待导师或主会话据摘要补充中文/u);
+  files.set(`${WATCH}/impact-2026-10-15.md`, "- 2610.00001 | 可借用 | 缝合约束可借用 | 纸样重建 | 由服装图像预测纸样并重建服装。\n");
+  const before = [...files];
+  assert.equal(readWatchDigests(ROOT)[0].items[0].line, "由服装图像预测纸样并重建服装。");
+  assert.deepEqual([...files], before);
+  const state = await runWatch([ROOT], { env, now: NOW + 3600000, ...clock(), get });
+  assert.equal(state.results[0].found, 0);
+  assert.equal(readPaperLibrary(ROOT).papers[0].line, "由服装图像预测纸样并重建服装。");
+  const digest = JSON.parse(files.get(`${WATCH}/2026-10-15.json`));
+  assert.equal(digest.items.length, 1);
+  assert.equal(digest.items[0].line, "由服装图像预测纸样并重建服装。");
+  assert.match(files.get(`${WATCH}/2026-10-15.md`), /一句话（据摘要）：由服装图像预测纸样并重建服装。/u);
+});
+
+test("community discovery does not turn a push date into an unknown publication date", async () => {
+  const result = await fetchHuggingFaceDaily(1, { now: NOW, get: async () => ({ status: 200, body: JSON.stringify([{ publishedAt: "2026-10-15", paper: { id: "2610.00001", title: "Sewing pattern reconstruction" } }]) }) });
+  assert.equal(result.papers.get("2610.00001").published, "");
+});
+
+function olderRetrieval({ count = 8, recent = "<feed></feed>", olderStatus = 200, openalexStatus = 200, cited = true } = {}) {
+  const calls = [];
+  const older = Array.from({ length: count }, (_, index) => feed("Sewing pattern reconstruction", `2401.${String(index + 1).padStart(5, "0")}`, "2024-01-02T00:00:00Z").replace(/^<feed>|<\/feed>$/gu, ""));
+  older.push(feed("Unrelated but very famous robotics", "2401.99999", "2024-01-02T00:00:00Z").replace(/^<feed>|<\/feed>$/gu, "").replace("Garment reconstruction and sewing pattern generation.", "Robots walk."));
+  return { calls, get: async (url, options = {}) => {
+    calls.push(url);
+    if (url.includes("arxiv.org")) {
+      const search = new URL(url).searchParams;
+      if (search.get("search_query").includes("submittedDate:[")) {
+        assert.equal(search.get("sortBy"), "relevance");
+        assert.match(search.get("search_query"), /submittedDate:\[\d{12} TO \d{12}\]/u);
+        return { status: olderStatus, body: `<feed>${older.join("")}</feed>` };
+      }
+      return typeof recent === "string" ? { status: 200, body: recent } : recent;
+    }
+    if (url.includes("openalex.org")) {
+      assert.equal(new URL(url).searchParams.get("sort"), "cited_by_count:desc");
+      assert.match(new URL(url).searchParams.get("filter"), /to_publication_date:/u);
+      return { status: openalexStatus, body: JSON.stringify({ results: [] }) };
+    }
+    if (url.includes("huggingface.co")) return { status: 200, body: "[]" };
+    if (url.includes("semanticscholar.org")) return { status: 200, body: JSON.stringify(JSON.parse(options.body).ids.map((id) => ({ externalIds: { ArXiv: id.slice(6) }, citationCount: cited ? 100 : 0 }))) };
+    throw new Error(`Unexpected request: ${url}`);
+  } };
+}
+
+test("older supplement is opt-in, bounded, relevance-gated and deduplicated across runs", async (t) => {
+  assert.equal(normalizeGlobalWatchSettings().supplementOlder, false);
+  assert.equal(normalizeGlobalWatchSettings({ supplementOlder: "true" }).supplementOlder, false);
+  assert.equal(normalizeGlobalWatchSettings({ supplementOlder: true }).supplementOlder, true);
+  const files = memoryFiles(t, configFiles());
+  const { get, calls } = olderRetrieval();
+  const options = { env, now: NOW, ...clock(), get };
+  await runWatch([ROOT], options);
+  assert.equal(calls.some((url) => url.includes("openalex.org") || url.includes("sortBy=relevance")), false);
+  assert.equal(readWatchDigests(ROOT)[0].items.length, 0);
+  files.set(`${GLOBAL}/watch.json`, JSON.stringify({ lookbackDays: 1, supplementOlder: true }));
+  files.set(`${WATCH}/state.json`, JSON.stringify({ seen: ["2401.00001"] }));
+  const filled = await runWatch([ROOT], { ...options, now: NOW + 3600000 });
+  assert.equal(filled.results[0].found, 5);
+  const items = readWatchDigests(ROOT)[0].items;
+  assert.equal(items.length, 5);
+  assert.ok(items.every((item) => item.supplement && item.relevance >= MIN_RELEVANCE && item.line === ""));
+  assert.ok(items.every((item) => !["2401.00001", "2401.99999"].includes(item.id)));
+  assert.equal(new Set(readWatchState(ROOT).seen).size, 6);
+  assert.match(files.get(`${WATCH}/2026-10-15.md`), /较早论文补充/u);
+  const oldCalls = calls.filter((url) => url.includes("sortBy=relevance")).length;
+  await runWatch([ROOT], { ...options, now: NOW + 7200000 });
+  assert.equal(calls.filter((url) => url.includes("sortBy=relevance")).length, oldCalls, "one day's supplement stays capped across retries");
+  const nextDay = await runWatch([ROOT], { ...options, now: NOW + 86400000 });
+  assert.equal(nextDay.results[0].found, 2, "do not fill three slots by weakening relevance or repeating papers");
+  assert.ok(readWatchDigests(ROOT)[0].items.every((paper) => !items.some((old) => old.id === paper.id)));
+  assert.equal(readWatchState(ROOT).seen.length, 8);
+});
+
+test("supplement never substitutes for failed discovery or crowds out new papers", async (t) => {
+  const files = memoryFiles(t, configFiles({}, { [`${GLOBAL}/watch.json`]: JSON.stringify({ lookbackDays: 1, supplementOlder: true }) }));
+  for (const recent of [{ status: 503, body: "unavailable" }, feed()]) {
+    const { calls, get } = olderRetrieval({ recent });
+    const state = await runWatch([ROOT], { env, now: NOW, ...clock(), get });
+    assert.equal(calls.some((url) => url.includes("sortBy=relevance") || url.includes("openalex.org")), false);
+    if (typeof recent !== "string") {
+      assert.equal(state.results[0].status, "failed");
+      assert.doesNotMatch(files.get(`${WATCH}/2026-10-15.md`), /没有发现新的相关论文/u);
+    } else assert.equal(state.results[0].found, 1);
+  }
+  const { calls, get } = olderRetrieval();
+  await runWatch([ROOT], { env, now: NOW + 3600000, ...clock(), get });
+  assert.equal(calls.some((url) => url.includes("sortBy=relevance")), false, "an empty rerun is not an empty day");
+});
+
+test("older search failures stay incomplete and uncorroborated old papers do not fill a quota", async (t) => {
+  const files = memoryFiles(t, configFiles({}, { [`${GLOBAL}/watch.json`]: JSON.stringify({ lookbackDays: 1, supplementOlder: true }) }));
+  const failed = olderRetrieval({ olderStatus: 503, openalexStatus: 503 });
+  const state = await runWatch([ROOT], { env, now: NOW, ...clock(), get: failed.get });
+  assert.equal(state.results[0].status, "partial");
+  assert.equal(state.results[0].found, 0);
+  assert.match(files.get(`${WATCH}/2026-10-15.md`), /检索未完成/u);
+  assert.doesNotMatch(files.get(`${WATCH}/2026-10-15.md`), /没有发现新的相关论文/u);
+  const uncorroborated = olderRetrieval({ cited: false });
+  const result = await runWatch([ROOT], { env, now: NOW + 3600000, ...clock(), get: uncorroborated.get });
+  assert.equal(result.results[0].status, "done");
+  assert.equal(result.results[0].found, 0);
+  assert.equal(readWatchState(ROOT).seen.length, 0);
+});
+
+test("seen ledger retains earlier pushes beyond the former 5000-item cap", async (t) => {
+  const seen = Array.from({ length: 5001 }, (_, index) => `W${index + 1}`);
+  memoryFiles(t, configFiles({}, { [`${WATCH}/state.json`]: JSON.stringify({ seen }) }));
+  await runWatch([ROOT], { env, now: NOW, ...clock(), get: retrieval() });
+  assert.equal(readWatchState(ROOT).seen.length, 5002);
+  assert.ok(readWatchState(ROOT).seen.includes("W5001"));
+});
+
+test("no executable configured query is not successful empty discovery and cannot trigger supplementation", async (t) => {
+  const files = memoryFiles(t, configFiles({ keywords: [], authors: ['"'] }, { [`${GLOBAL}/watch.json`]: JSON.stringify({ lookbackDays: 1, supplementOlder: true }) }));
+  const calls = [];
+  const state = await runWatch([ROOT], { env, now: NOW, ...clock(), get: async (url) => {
+    calls.push(url);
+    assert.ok(url.includes("huggingface.co"), "no arXiv query or supplement should run");
+    return { status: 200, body: "[]" };
+  } });
+  assert.equal(state.results[0].status, "failed");
+  assert.equal(state.results[0].found, 0);
+  assert.equal(calls.length, 1);
+  assert.match(files.get(`${WATCH}/2026-10-15.md`), /检索未完成/u);
+  assert.doesNotMatch(files.get(`${WATCH}/2026-10-15.md`), /没有发现新的相关论文/u);
+});
+
+test("dated old HF picks enter only opted-in supplements, never masquerade as new papers", async (t) => {
+  const files = memoryFiles(t, configFiles());
+  const older = olderRetrieval({ count: 0 });
+  const get = (url, options) => url.includes("huggingface.co")
+    ? Promise.resolve({ status: 200, body: JSON.stringify([{ paper: { id: "2402.00001", title: "Sewing pattern reconstruction", publishedAt: "2024-02-02T00:00:00Z", upvotes: 10 } }]) })
+    : older.get(url, options);
+  await runWatch([ROOT], { env, now: NOW, ...clock(), get });
+  assert.equal(readWatchDigests(ROOT)[0].items.length, 0);
+  files.set(`${GLOBAL}/watch.json`, JSON.stringify({ lookbackDays: 1, supplementOlder: true }));
+  const state = await runWatch([ROOT], { env, now: NOW + 3600000, ...clock(), get });
+  assert.equal(state.results[0].found, 1);
+  const item = readWatchDigests(ROOT)[0].items[0];
+  assert.equal(item.id, "2402.00001");
+  assert.equal(item.supplement, true);
+  assert.equal(item.published, "2024-02-02T00:00:00Z");
 });

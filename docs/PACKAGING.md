@@ -19,7 +19,7 @@ The package contains:
 
 `dove.png` is the authoritative brand artwork shown by both READMEs. The CLI uses a static hard-outline Unicode rendering, cyan Dove and green branch when colored; no image protocol, decoder, copied consumer asset, or extra bundle is needed.
 
-There is no Auto command, research-state MCP bundle/database, fallback runtime, or separate researcher persona. Native mentor/reviewer invocation uses the host's Agent tool, not a Dove model-launching CLI, frozen snapshot, project-external workspace, or socket launcher. Historical `.dove/reviews/**` is preserved without requiring the old runtime. Source, Draft, Figure, Rebuttal, and Lessons are unchanged by this structure.
+There is no Auto command, research-state MCP bundle/database, fallback runtime, or separate researcher persona. Native mentor/reviewer invocation uses the host's Agent tool, not a Dove model-launching CLI, frozen snapshot, project-external workspace, or socket launcher. Historical `.dove/reviews/**` stays in place. Paper-reading notes and the topic-grouped literature library remain project research, not a copied reference repository or model runtime.
 
 Ordinary Claude conversation through the shared project rule is the complete primary entrance. Optional agent/Skills add no authority or permissions. The main session retains the full user conversation, clarification, execution, and result adoption; read-only subagents return judgments only. See [Usage](USAGE.md).
 
@@ -62,7 +62,7 @@ No MCP server bundle, prompt-hook bundle, third-party Python source, credentials
 
 Paper search launches user-provided `uvx` with pinned `paper-search-mcp==0.1.4` and `mcp<2`. Hosted Exa uses `{ "url": "https://mcp.exa.ai/mcp", "type": "http" }`. These declarations provide scholarly and webpage-reading integration, not access approval or connectivity evidence. Built-in WebSearch stays available for discovery; WebFetch is denied. Dove does not install dependencies, approve project trust, write credentials, or substitute CLI/shell/`curl`/custom-fetch scripts.
 
-SessionStart inspects integration read-only; startup/clear adds the two-essentials bootstrap, compact/resume the bounded card/continuity reminder. UserPromptSubmit verifies managed integration and presents the bounded identity/current guidance when current, otherwise a nonblocking diagnostic. Neither writes research, classifies prompts, grants permissions, or reloads an active host's configuration.
+SessionStart supplies bootstrap/continuity; UserPromptSubmit verifies guidance and presents version/fingerprints, ignoring preserved non-guidance configuration drift. With `hostMigration` on (default off), upgrades register versioned tasks and both hooks deliver them for idle-time host work; neither hook rewrites research, interrupts jobs or reloads the host. `mentor brief` generates actual-material calls and four fixed questions, not a model launch.
 
 New installations have no Dove Stop registration or CLI entry. Installation retains the exact retired selector only to remove an old manifest-owned Stop whose digest still matches. Automatic sync preserves locally modified or removed Stop items with their prior ownership and reports them; explicit update blocks on those differences. Unowned and user hooks remain untouched. Disk removal does not reload an existing host context.
 
@@ -75,7 +75,7 @@ Researcher-owned records have fixed formats and caps, detailed in [Usage](USAGE.
 - `IDENTITY.md` carries stable Mainline, target tier, completion, sourced restrictions, corrections and current research state within 1200 characters. Top-of-card round labels remain readable by hooks; overlong cards still present the first UTF-8-safe 4KB.
 - `EVAL.md` has seven fixed columns, one row per method version, cells up to 200 characters and a replaceable current mentor assessment up to 1000 characters. Engineering logs stay outside it.
 - Each round has one brief up to 2000 characters and one result up to 3000, linking ordinary artifacts. Briefs identify mentor/user/external authors; results state changes, measurements, prediction versus actual and objections/corrections. Mentor briefs are saved verbatim.
-- `MENTOR_NOTES.md` contains only the mentor's own returned notes; the main session saves them without replacing independent memory with executor summaries. Dated `watch/impact-*.md` and `watch/scan-*.md` do not require a round.
+- `MENTOR_NOTES.md` contains mentor-authored memory. Dated watch impacts include direction and a Chinese takeaway; scans do not require a round. `papers/<id>.md` accumulates full-text questions and answers, while `papers/library.json` / `.md` collect judged useful work by direction and support metadata-grounded BibTeX export.
 
 `RESEARCH.md` is a short history index. Init still creates only that entry when the research directory is absent. Existing `missions/`, `experiments/`, and `claims/` remain in place without migration, deletion, or new entries; new experiment work is recorded in round results and linked real artifacts. Sources, actual reviewer returns, Lessons, `DOCTOR.md`, and Run receipts retain their distinct purposes. No research database, hash ledger, generated navigation, or migration framework is added.
 
@@ -83,7 +83,7 @@ Lifecycle operations preserve `.dove/research/**`, historical `.dove/reviews/**`
 
 ## CLI inventory and lifecycle
 
-The CLI exposes `init`, `update`, `reinstall`, `uninstall`, `doctor`, `dashboard`, `watch`, `topic`, `projects`, `run` and `hook`. The old `review` CLI is removed; `/dove:review` remains one of the nine Skills. Native mentor and paper-review model calls belong to the host, not CLI lifecycle operations.
+The CLI exposes `init`, `update`, `reinstall`, `uninstall`, `doctor`, `dashboard`, `watch`, `topic`, `settings`, `mentor brief`, `projects`, `run` and `hook`. The old `review` CLI is removed; `/dove:review` remains one of the nine Skills. Native mentor and paper-review model calls belong to the host, not CLI lifecycle operations.
 
 - Bare `dove` offers state-appropriate setup, host selection/changes, details, and default-No previews for Complete Reinstall/uninstall.
 - `init` writes declared integration and only the absent-tree `RESEARCH.md` bootstrap; initialized roots register for future upgrades.
@@ -101,7 +101,7 @@ The statusline is a two-line native-facts display with optional Mainline and cur
 ## Research and review boundaries
 
 - The main session performs real retrieval, implementation, experiments, analysis, writing, figures, and authorized revision.
-- Topic selection reads project standards, generates parallel candidates and offers recommendations for the user's choice before method implementation. Confirmed-mainline work uses a scale that can answer the question, not a default smallest change. Status remains read-only.
+- Topic selection reads project standards, grounds challenge-axis gaps in full text, searches transferable mechanisms and reviews sourced cards before user choice. No pre-choice implementation; confirmed-mainline scale must answer the question. Status remains read-only.
 - The mentor judges direction at round end, after two no-science rounds, on user direction/story corrections and before route changes. It receives materials and fixed questions rather than executor framing. Engineering, parameters and evaluator repairs belong to the executor, including comparable-history recomputation.
 - Engineering and verification failures count as no-science rounds; seek a user decision before further continuation by the third. Explain route changes plainly. Every mentor checks draft tracking, unjudged papers and overdue scans without waiting for a round.
 - Native `dove-review` reads the specified current version and returns grounded criticism/files read, not execution, scientific PASS, or external acceptance. Self-check remains distinct; unavailable native review is a limitation.

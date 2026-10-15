@@ -22,6 +22,8 @@ import {
 } from "../../src/core/dove-research-contract.mjs";
 import { resourcesForHosts } from "../../src/core/project-installation-resources.mjs";
 import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
+import { renderHostMigrationPending } from "../../src/core/host-migration.mjs";
+import { renderMentorBrief } from "../../src/core/mentor-brief.mjs";
 import { generatedDoveAgentSurfaceEntries } from "../../scripts/generate-command-adapters.mjs";
 
 const SKILLS = ["research", "status", "source", "experiment", "draft", "figure", "review", "rebuttal", "lessons"];
@@ -59,13 +61,13 @@ test("public Dove capability, host and path helpers retain the nine flat Skills"
   assert.throws(() => adapterPathForCommand("unknown", "dove.research"), /Unknown host/u);
 });
 
-test("aggregate rule and Skill guidance and all installed guidance do not grow beyond 3.3.13", (t) => {
-  // Released 3.3.13 projections, counting Unicode code points and UTF-8 bytes.
+test("aggregate rule and Skill guidance and all installed guidance do not grow beyond 3.4.0", (t) => {
+  // Released 3.4.0 projections, counting Unicode code points and UTF-8 bytes.
   // Aggregate budgets allow readable redistribution, including into references,
   // agents or tool support, without a per-rule compression target.
   const baseline = {
-    claude: { primary: { characters: 60_197, bytes: 60_335 }, all: { characters: 111_703, bytes: 167_757 } },
-    dsh: { primary: { characters: 106_456, bytes: 106_978 }, all: { characters: 143_288, bytes: 192_160 } }
+    claude: { primary: { characters: 37_328, bytes: 37_388 }, all: { characters: 82_718, bytes: 136_902 } },
+    dsh: { primary: { characters: 105_609, bytes: 106_129 }, all: { characters: 141_524, bytes: 191_066 } }
   };
   const totals = { primary: { characters: 0, bytes: 0 }, all: { characters: 0, bytes: 0 } };
   for (const host of PROJECT_HOST_IDS) {
@@ -83,10 +85,22 @@ test("aggregate rule and Skill guidance and all installed guidance do not grow b
       for (const unit of ["characters", "bytes"]) totals[scope][unit] += total[unit];
     }
   }
+  // Also count both hosts' new generated-call and migration notice wording;
+  // moving guidance into a runtime renderer must not hide prompt growth.
+  const absent = () => { throw Object.assign(new Error("missing"), { code: "ENOENT" }); };
+  const additional = [
+    renderMentorBrief("/project", { fsOps: { readdirSync: () => [], statSync: absent } }),
+    renderHostMigrationPending("3.4.1", "2026-10-15T00:00:00.000Z")
+  ];
+  for (const text of additional) {
+    totals.all.characters += PROJECT_HOST_IDS.length * [...text].length;
+    totals.all.bytes += PROJECT_HOST_IDS.length * Buffer.byteLength(text, "utf8");
+  }
+  t.diagnostic(`all including generated templates: ${totals.all.characters} Unicode characters / ${totals.all.bytes} UTF-8 bytes`);
   for (const scope of ["primary", "all"]) {
     for (const unit of ["characters", "bytes"]) {
       const previous = PROJECT_HOST_IDS.reduce((sum, host) => sum + baseline[host][scope][unit], 0);
-      assert.ok(totals[scope][unit] <= previous, `${scope}: ${totals[scope][unit]} ${unit} exceeds the 3.3.13 aggregate of ${previous}`);
+      assert.ok(totals[scope][unit] <= previous, `${scope}: ${totals[scope][unit]} ${unit} exceeds the 3.4.0 aggregate of ${previous}`);
     }
   }
 });

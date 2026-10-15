@@ -7,6 +7,7 @@ import {
 } from "./dove-author-preferences.mjs";
 import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS, DOVE_RESEARCH_REFLECTION_CONTINUITY } from "./dove-research-contract.mjs";
 import { identityCardContext } from "./identity-card.mjs";
+import { hostMigrationContext } from "./host-migration.mjs";
 
 export function parseSessionStartPayload(input) {
   let payload;
@@ -52,7 +53,7 @@ export function sessionStartOutput(payload, result = null, options = {}) {
       additionalContext: `${identityCardContext(options.project, options)}\n${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n${DOVE_RESEARCH_REFLECTION_CONTINUITY}`
     };
   }
-  if (output.hookSpecificOutput) output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload);
+  if (output.hookSpecificOutput) output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload) + hostMigrationContext(options.project, options);
   return Object.keys(output).length > 0 ? output : null;
 }
 

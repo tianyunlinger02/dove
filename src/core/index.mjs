@@ -69,6 +69,9 @@ export {
   commandAdapterPathsForHost
 } from "./command-manifest.mjs";
 export { USER_RESPONSE_POLICY } from "./user-response-policy.mjs";
+export { exportPaperBibtex, groupPaperLibrary, readPaperLibrary, renderPaperLibrary } from "./paper-library.mjs";
+export { readHostSettings, writeHostSettings } from "./host-migration.mjs";
+export { renderMentorBrief } from "./mentor-brief.mjs";
 export {
   initializeProjectIntegration,
   inspectProjectIntegration,

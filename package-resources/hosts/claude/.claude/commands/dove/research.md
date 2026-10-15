@@ -33,9 +33,8 @@ Use for topic exploration, method development or continuation of existing resear
 
 ### Ways Dove may proceed
 
-- Until the user has confirmed a mainline, first read existing `.dove/research/topics/CRITERIA.md` or the project's topic-selection criteria and follow them. Establish a meaningful direction, then generate a broad pool of parallel candidates without pruning during generation. Use real near-neighbor searches both to assess overlap and to broaden the pool, then present 2–3 grounded recommendations for the user to choose.
-- After the user chooses, design and test the core mechanism. Select the scale and change by whether they can answer the research question; expand or redesign when they cannot, and do not enlarge work needlessly when they can. Connecting an end-to-end pipeline is not evidence that its core mechanism has been designed or tested.
-- The main executor decides engineering, acceleration, parameters and evaluator repairs within the user's commitments, recomputing comparable history when the evaluation changes. Use Experiment for the detailed comparison work.
+- Apply the shared topic-selection process and RESEARCH_QUALITY.md's sourced gaps, cross-domain mechanism search and adversarial candidate review. Use Source for question-led full-text notes and link candidate cards to that evidence.
+- After the user chooses, design and test the core mechanism at a scale that answers the question. Use Experiment for comparisons and evaluator repairs; the executor owns engineering and recomputes comparable history when evaluation changes.
 - Follow the shared research contract for mainline continuity, round records and dove-mentor's direction-only judgment, including its triggers, fixed questions and note flow.
 
 ### Using host tools

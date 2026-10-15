@@ -57,7 +57,7 @@ For older initialized projects, register exact roots once and optionally synchro
 dove projects import --project <root>... --sync
 ```
 
-Use `dove projects sync` to retry the registered set and read-only `dove projects status` to inspect registration and the last report. Neither discovers arbitrary projects. If a stale registration lock is reported, inspect the exact path and confirm no registration is active before manually removing it; Dove does not steal an occupied lock.
+Use `dove projects sync` to retry and read-only `dove projects status` to inspect the registered set and last report. `dove settings --host-migration on` enables versioned migration notices (default off; also in dashboard settings). Updates register tasks under `.dove/install/`; hooks deliver them for the host to finish after current work without interrupting jobs or altering conclusions/user originals. Completion removes the pending file; the same version is not registered again. No home scan or CLI research rewrite occurs.
 
 Automatic/bulk sync preserves locally changed or removed manifest-owned files and configuration fragments—including MCP entries—and updates the remaining items. Each project is reported as `updated` or `unchanged`, with any `preservedLocalEdits` listed separately; preserving local edits alone is not a `partial` sync. Preserved items keep their previous ownership record, not a digest of local content. The manifest package version advances, but Doctor and prompt hooks can still report local integration drift; that is not a failed update of the remaining items. Integration that cannot be safely planned still blocks that project, while other registered projects continue. Explicit `dove update` is different: it may replace valid manifest-owned edits and reports them. Neither operation changes `.dove/research/**`, historical `.dove/reviews/**`, `.dove/runs/**`, or ordinary project artifacts.
 
@@ -71,7 +71,7 @@ Disk refresh or Stop removal is not host reload. An already-open Claude context 
 
 Start ordinary `claude` in the initialized project and describe the task. The rule is the primary complete entrance, not a prompt router. `claude --agent dove` and the nine flat Skills add no authority or permissions. The main session owns the full user conversation, clarification, execution, and adoption of delegated findings.
 
-`dove-mentor` and `dove-review` share Dove's identity and use fresh read-only native contexts, without execution conversation, resumed history, edits or commands. The mentor reads supplied user originals, its own notes, the card, recent results, artifacts and tracking materials; it may retrieve paper/web sources. The reviewer uses only `Read`, `Grep` and `Glob` on the specified current manuscript, cited results and supplied grounding. The main session saves their returns. The old review CLI and frozen-material/model-launch runtime are removed; `/dove:review` remains a Skill.
+`dove-mentor` and `dove-review` share Dove's identity and use fresh read-only native contexts, without execution conversation, resumed history, edits or commands. Generate its call with `dove mentor brief --project <root>`: actual materials and fixed questions, with only a bounded authored opinion and new raw-artifact paths appended; the mentor may retrieve paper/web sources. The reviewer uses only `Read`, `Grep` and `Glob` on the specified current manuscript, cited results and supplied grounding. The main session saves their returns. The old review CLI and frozen-material/model-launch runtime are removed; `/dove:review` remains a Skill.
 
 Every fresh main context personally reads both short Chinese quality/preference essentials before substantive work. Full companions are consulted for relevant detail, not read through EOF by default. Claude startup and `/clear` deliver this bootstrap; DSH applies it on first author-side Skill use if needed. Compact/resume reuses the same context's reading. Installed copies are guidance, not evidence, Lessons, permissions, or the editable preference source. See [Usage](USAGE.md#short-core-and-two-reference-read-contracts).
 
@@ -88,7 +88,7 @@ dove hook user-prompt-submit --project <project-root>
 
 SessionStart inspects integration read-only. Non-current integration may produce a `systemMessage` suggesting explicit `dove update`; unsupported or ambiguous state requires diagnosis. It never synchronizes, writes research/configuration, or cleans up files. Startup/clear adds the two-essentials bootstrap; compact/resume presents the bounded identity card and round-continuity reminder. It does not reconstruct the mainline from old overview/review/run timestamps or transcripts.
 
-UserPromptSubmit verifies current managed integration and presents the project-owned identity card and bounded current guidance on each prompt. Stale/unsafe integration receives a nonblocking diagnostic. It does not classify prompts, write research, decide permissions, or block submission.
+UserPromptSubmit verifies the guidance files, then presents their version/fingerprints and the identity card. Preserved local status-line or MCP changes do not block it; mismatched or missing guidance gets a nonblocking diagnostic. It never writes research, classifies intent, grants permissions or blocks submission.
 
 Keep `Current round` and `Round status` at the top of `IDENTITY.md`, within its first 4KB. If the card is longer, presentation retains the first 4KB and asks for shortening; it is not reported missing. The main session—not a hook—maintains the card and reads the linked brief and evaluation. Missing/unreadable identity is not inferred from history.
 
@@ -106,7 +106,7 @@ Exa uses hosted `https://mcp.exa.ai/mcp` with `{ "url": "https://mcp.exa.ai/mcp"
 
 ## Integration manifest
 
-`.dove/install/manifest.json` records installed hosts and ownership of declared integration resources. It is software metadata, not research evidence. Within that directory only the manifest and four exact reference files are managed; optional host-maintained `DOCTOR.md` feedback and unknown files are not package-owned.
+`.dove/install/manifest.json` records installed hosts and ownership of declared integration resources. It is software metadata, not research evidence. The manifest and four references are canonical integration; optional migration pending/version records are runtime notices. Host-maintained `DOCTOR.md` and unknown files are not package-owned.
 
 ## Update
 

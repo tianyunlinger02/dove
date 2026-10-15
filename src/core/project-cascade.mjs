@@ -9,8 +9,8 @@ import { changeRegisteredProjects, readLastProjectSync, readRegisteredProjects, 
 export function importProjectRoots(roots, options = {}) {
   if (!Array.isArray(roots) || roots.length === 0) throw new Error("Dove project import requires at least one exact project root.");
   const verified = roots.map((start) => {
-    const root = resolveExactInstalledProjectRoot(start, { hostIds: PROJECT_HOST_IDS });
-    const manifest = readProjectInstallationManifest(root, { hostIds: PROJECT_HOST_IDS });
+    const root = resolveExactInstalledProjectRoot(start, { fsOps: options.fsOps, hostIds: PROJECT_HOST_IDS });
+    const manifest = readProjectInstallationManifest(root, { fsOps: options.fsOps, hostIds: PROJECT_HOST_IDS });
     assertManagedOwnership(manifest);
     const compatibility = classifyPackageCompatibility(manifest.package, { name: options.packageName, version: options.packageVersion });
     if (["identity-mismatch", "invalid-version", "newer"].includes(compatibility)) throw new Error(`Dove cannot register incompatible project integration: ${root}.`);
@@ -24,9 +24,10 @@ export function syncRegisteredProjects(options = {}) {
   const projects = [];
   for (const root of roots) {
     try {
-      const inspection = inspectProjectIntegration(root, { packageName: options.packageName, packageVersion: options.packageVersion, autoSync: true });
+      const projectOptions = { packageName: options.packageName, packageVersion: options.packageVersion, env: options.env, fsOps: options.fsOps, now: options.now };
+      const inspection = inspectProjectIntegration(root, { ...projectOptions, autoSync: true });
       if (inspection.target !== root) throw new Error("Dove registered project root changed.");
-      const result = syncProjectIntegration(root, { packageName: options.packageName, packageVersion: options.packageVersion });
+      const result = syncProjectIntegration(root, projectOptions);
       projects.push({ target: root, status: result.status, changedPaths: result.changedPaths, ...(result.skippedLocalEdits.length ? { preservedLocalEdits: result.skippedLocalEdits } : {}) });
     } catch {
       projects.push({ target: root, status: "blocked", reason: "Integration could not be safely updated; inspect this project's Dove doctor output." });

@@ -1,6 +1,6 @@
 {
   "name": "dove",
-  "version": "3.4.0",
+  "version": "3.4.1",
   "description": "Local-first Markdown research workflow for papers, experiments, figures, review, and revision.",
   "type": "module",
   "bin": {
@@ -36,8 +36,8 @@
     "uninstall:validate": "node ./scripts/validate-uninstall.mjs",
     "review:validate": "node ./scripts/validate-review.mjs",
     "runs:validate": "node ./scripts/validate-runs.mjs",
-    "runtime:validate": "node --test ./tests/file-write-safety.test.mjs",
-    "dashboard:validate": "node --test ./tests/dashboard.test.mjs ./tests/paper-watch.test.mjs ./tests/paper-watch-memory.test.mjs ./tests/topic-selection.test.mjs",
+    "runtime:validate": "node --test ./tests/file-write-safety.test.mjs ./tests/guidance-hook-memory.test.mjs ./tests/host-migration-memory.test.mjs ./tests/mentor-brief-memory.test.mjs",
+    "dashboard:validate": "node --test ./tests/dashboard.test.mjs ./tests/paper-watch.test.mjs ./tests/paper-watch-memory.test.mjs ./tests/reference-absorption-memory.test.mjs ./tests/topic-selection.test.mjs",
     "behavior:validate": "node ./evals/behavior/validate.mjs",
     "behavior:eval": "node ./evals/behavior/eval.mjs",
     "package:validate": "node ./scripts/validate-package.mjs",

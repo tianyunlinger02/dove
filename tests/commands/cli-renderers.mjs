@@ -42,6 +42,14 @@ function assertRuntimeCli() {
   assert.deepEqual(parseDoveCli(["hook", "user-prompt-submit", "--project=/workspace"]), {
     command: "hook", subcommand: "user-prompt-submit", options: { project: "/workspace" }, passthrough: []
   });
+  assert.deepEqual(parseDoveCli(["settings", "--host-migration", "on", "--json"]), {
+    command: "settings", subcommand: null, options: { hostMigration: "on", json: true }, passthrough: []
+  });
+  assertParserError(["settings", "--host-migration", "yes"], /--host-migration 只接受 on 或 off/u, false);
+  assert.deepEqual(parseDoveCli(["mentor", "brief", "--trigger", "用户纠正", "--user-source", "/source", "--since", "2026-10-14", "--until", "2026-10-15", "--user-original", "原话", "--opinion", "opinion.md", "--artifact", "a.csv", "--artifact", "b.png"]), {
+    command: "mentor", subcommand: "brief", options: { trigger: "用户纠正", userSource: "/source", since: "2026-10-14", until: "2026-10-15", userOriginal: "原话", opinion: "opinion.md", artifact: ["a.csv", "b.png"] }, passthrough: []
+  });
+  assertParserError(["mentor", "brief", "--task", "请裁决工程"], /Dove 不支持这个参数：--task/u, false);
   assertParserError(["hook", "stop"], /hook 只接受这些子命令/u, false);
   assertParserError(["hook", "stop", "--project=/workspace"], /hook 只接受这些子命令/u, false);
   assert.deepEqual(assertParserShape(parseDoveCli(["init", "--host", "claude,dsh", "--host=dsh,claude", "--project=/workspace"])), {
@@ -85,7 +93,7 @@ function assertDoveCliHelpRenderer() {
   assert.match(output, /dove run start --project <dir>.*--seed <short-text>.* -- <command> \[args\.\.\.\]/u);
   assert.match(output, /dove hook session-start --project <dir>/u);
   assert.match(output, /dove hook user-prompt-submit --project <dir>/u);
-  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "dashboard", "watch", "topic", "projects", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "dashboard", "watch", "topic", "settings", "mentor", "projects", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
   for (const command of Object.keys(CLI_COMMAND_SPECS)) {
     assert.ok(output.includes(`dove ${command}`), `${command}: help exposes the parser's public commands`);
   }

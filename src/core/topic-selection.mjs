@@ -9,7 +9,23 @@ import { doveConfigDirectory } from "./paper-watch.mjs";
 // candidate cards' header lines for the dashboard.
 const CRITERIA_NAME = "topic-criteria.md";
 const TOPICS_DIR = ".dove/research/topics";
-const CARD_FIELDS = Object.freeze({ 状态: "status", 阶段: "stage", 定位: "position", 一句话: "summary", 六点: "six" });
+const CARD_FIELDS = Object.freeze({
+  状态: "status",
+  阶段: "stage",
+  定位: "position",
+  一句话: "summary",
+  缺口: "gap",
+  来源机制: "source",
+  对应关系: "mapping",
+  成立前提: "assumptions",
+  近邻差别: "novelty",
+  最大风险: "risk",
+  改进自: "improves",
+  评审结论: "verdict",
+  修改焦点: "focus",
+  最强反对: "objection",
+  评审依据: "reviewEvidence"
+});
 
 export function topicCriteriaPath(options = {}) {
   return path.join(doveConfigDirectory(options), CRITERIA_NAME);
@@ -63,12 +79,22 @@ const README = `# 选题
 
 - 用户尚未确认主线就是选题阶段。先确定有意义的方向，再广泛生成并列候选，生成时不砍题；说明各自的机制、依据、关键未知和可区分的结果。
 - 近邻审查用真实论文与网页检索，并用检索拓宽候选，不只扣分。比较后推荐 2–3 个交用户选定；选择前不实现方法，只做标准允许的诊断。选定后用能回答问题的规模设计和检验核心机制，接通链路不等于机制证据。说明与结果写 ../rounds/，标明作者。
-- 每个候选方向一张卡：cards/NN-名称.md，按 CRITERIA.md 的方向卡模板写。卡片开头固定五行，面板据此显示：
+- 每个候选一张 cards/NN-名称.md，按项目标准展开；缺口取证、跨领域检索和评审遵循 .dove/install/RESEARCH_QUALITY.md 的“选题与新意判断”。头部前 40 行逐行写以下栏目，面板读取摘要，详细依据放正文：
   - 状态：候选 / 维持 / 限定 / 暂缓 / 撤回 / 推荐 / 选定
   - 阶段：一 / 二 / 三 / 四
   - 定位：稳健 / 平衡 / 探索
-  - 一句话：问题或工作假设摘要
-  - 六点：问题 满足｜方法 待核实｜贡献 …（六项各写 满足 / 待核实 / 不满足）
+  - 一句话：用大白话说清一个想法
+  - 缺口：攻击的具体缺口及其重要性
+  - 来源机制：来源论文编号、借用机制及它在原处为什么有效
+  - 对应关系：移到本问题后，谁扮演谁
+  - 成立前提：为什么可能有效，哪个关键条件必须成立
+  - 近邻差别：最近的本领域论文编号及具体差别
+  - 最大风险：最可能让想法或迁移失败的原因
+  - 改进自：可选，原候选编号、弱点和本次改动
+  - 评审结论：留下 / 修改 / 否掉（原因）
+  - 修改焦点：仅修改时填写，选最弱的一项：新意 / 连贯 / 可行 / 清晰 / 对应关系 / 依据
+  - 最强反对：一句话说清最大问题
+  - 评审依据：论文编号及一两句理由，正文链接累积阅读笔记
 - 用户明确选择就直接记主线，不重复确认；领域、推荐或卡片记录不是选择。已有主线和用户固定方法按原意推进，不重选或降级；换路线明说原路线、新路线和原因。
 `;
 
@@ -107,15 +133,12 @@ export function startTopicSelection(root, options = {}) {
 export function parseCardHeader(text = "") {
   const card = {};
   for (const line of text.split(/\r?\n/u).slice(0, 40)) {
-    const match = line.match(/^\s*(?:[-*]\s*)?\**\s*(状态|阶段|定位|一句话|六点)\s*\**\s*[:：]\s*(.+)$/u);
-    if (match && !(CARD_FIELDS[match[1]] in card)) card[CARD_FIELDS[match[1]]] = match[2].trim();
+    const match = line.match(/^\s*(?:[-*]\s*)?\**\s*([^:：*]+?)\s*\**\s*[:：]\s*\**\s*(.+)$/u);
+    const field = match && Object.hasOwn(CARD_FIELDS, match[1]) ? CARD_FIELDS[match[1]] : null;
+    if (field && !(field in card) && match[2].trim()) card[field] = match[2].trim();
   }
   const title = text.split(/\r?\n/u).find((line) => /^#\s+\S/u.test(line));
   if (title) card.title = title.replace(/^#\s+/u, "").trim();
-  if (card.six) {
-    card.sixParts = card.six.split(/[｜|;；,，]/u).map((part) => part.trim()).filter(Boolean)
-      .map((part) => ({ text: part, state: /不满足/u.test(part) ? "no" : /待核实|待定/u.test(part) ? "pending" : /满足/u.test(part) ? "yes" : "unknown" }));
-  }
   return card;
 }
 

@@ -7,7 +7,8 @@ import test from "node:test";
 import {
   DOVE_RESEARCH_CORRECTION_RECORDING,
   DOVE_RESEARCH_EVALUATION,
-  DOVE_RESEARCH_ROUND_RECORDS
+  DOVE_RESEARCH_ROUND_RECORDS,
+  renderDoveResearchQualityReference
 } from "../../src/core/dove-research-contract.mjs";
 import {
   RESEARCH_DEFAULT_DIRECTORY_PATHS,
@@ -47,10 +48,10 @@ test("round briefs and results are attributable bounded records linking ordinary
   for (const field of ["rounds/NNN-brief.md", "NNN-result.md", "Author: mentor / user / external", "Changes and version", "Measurements and artifacts", "Prediction versus actual", "Objections to this brief / factual corrections"]) {
     assert.ok(records.includes(field), `Round field: ${field}`);
   }
-  assert.match(records, /one brief.*2000.*one result.*3000/iu);
-  assert.match(records, /supporting materials in ordinary project directories/iu);
-  assert.match(records, /direct user tasks have priority.*external.*mentor/iu);
-  assert.match(records, /Save mentor briefs verbatim.*replacement briefs.*author and reason/iu);
+  assert.match(records, /one rounds\/NNN-brief\.md.*2000.*one NNN-result\.md.*3000/iu);
+  assert.match(records, /support in ordinary project directories/iu);
+  assert.match(records, /priority is user > external > mentor/iu);
+  assert.match(records, /Save mentor briefs verbatim.*replacement authors and reasons/iu);
   assert.match(records, /historical missions\/.*experiments\/.*claims\/.*without adding entries/iu);
 });
 
@@ -59,9 +60,10 @@ test("EVAL is a fixed per-version comparison table with one replaceable current 
   const columns = ["Date", "Version/round", "Protocol/split", "Measurements", "Unseen data/train-test gap", "Conclusion", "Artifacts"];
   assert.ok(evaluation.includes(columns.join("; ")), "The fixed columns keep measurements, generalization and artifact provenance together");
   assert.match(evaluation, /one row per method version/iu);
-  assert.match(evaluation, /one short sentence.*200 characters/iu);
+  assert.match(evaluation, /one (?:short )?sentence.*200 characters/iu);
   assert.match(evaluation, /engineering logs and process status out/iu);
-  assert.match(evaluation, /current eight-dimensional assessment below the table.*1000 characters.*replacing/iu);
+  assert.match(evaluation, /current assessment as specified in RESEARCH_QUALITY\.md/iu);
+  assert.match(renderDoveResearchQualityReference(), /1000 字符的当前八维判断.*替换 EVAL\.md 表后当前评分.*不追加日志或自评/u);
 });
 
 test("Trellis specs match their installed Markdown templates", () => {

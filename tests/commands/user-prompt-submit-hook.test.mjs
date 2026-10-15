@@ -166,7 +166,7 @@ test("prompt output is current short guidance, independent of prompt text and no
   assert.equal(DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"');
 });
 
-test("stale, drifted and unsafe project integration never yields verified guidance", (t) => {
+test("stale, drifted or missing guidance and unsafe projects never yield verified guidance", (t) => {
   const project = workspace(t);
   const manifestPath = path.join(project, ".dove/install/manifest.json");
   const original = fs.readFileSync(manifestPath);
@@ -200,7 +200,7 @@ test("stale, drifted and unsafe project integration never yields verified guidan
   const settings = JSON.parse(settingsBytes);
   settings.hooks.UserPromptSubmit[0].hooks[0].timeout = 9;
   fs.writeFileSync(settingsPath, `${JSON.stringify(settings)}\n`);
-  status();
+  for (const binary of binaries) assert.match(context(invoke(binary, project, event())), /disk guidance, not rule reload/u, "local hook configuration does not change guidance bytes");
   fs.writeFileSync(settingsPath, settingsBytes);
 
   const rule = path.join(project, ".claude/rules/dove.md");

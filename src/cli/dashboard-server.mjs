@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import http from "node:http";
 
-// Local web view of registered projects (research records are read-only). Binds to loopback by
+// Local web view of registered projects; reads never update research. Binds to loopback by
 // default; reach it from another machine with an SSH tunnel, or put it behind
 // a public tunnel with a password so every page and API request is checked.
 export const DEFAULT_DASHBOARD_PORT = 7788;
@@ -54,7 +54,7 @@ function cookieAttributes(request, maxAge) {
 }
 
 const MAX_ACTION_BODY = 1024 * 1024;
-const SETTINGS_ACTIONS = new Set(["addProject", "removeProject", "syncProjects", "saveWatchConfig", "saveWatchGlobal", "saveS2Key", "runWatch", "draftWatchConfig", "startTopics", "saveTopicCriteria"]);
+const SETTINGS_ACTIONS = new Set(["addProject", "removeProject", "syncProjects", "saveWatchConfig", "saveWatchGlobal", "saveS2Key", "runWatch", "draftWatchConfig", "startTopics", "saveTopicCriteria", "syncPaperLibrary", "saveHostSettings"]);
 
 function sendJson(response, status, value) {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -158,6 +158,22 @@ export function createDashboardServer({ collect, listRoots, readDocument, passwo
         sendJson(response, 200, await actions.readTrends());
         return;
       }
+      if (url.pathname === "/api/library" && actions) {
+        const root = url.searchParams.get("project");
+        if (!knownRoot(root)) { response.writeHead(404).end(); return; }
+        const format = url.searchParams.get("format") || "json";
+        if (!["json", "md", "bib"].includes(format)) { sendJson(response, 400, { error: "不支持的文献库格式" }); return; }
+        const result = await actions.readLibrary({ root, format });
+        if (format === "json") {
+          response.setHeader("content-disposition", 'attachment; filename="dove-library.json"');
+          sendJson(response, 200, result);
+        }
+        else {
+          response.writeHead(200, { "content-type": `${format === "bib" ? "application/x-bibtex" : "text/markdown"}; charset=utf-8`, "content-disposition": `attachment; filename="dove-library.${format}"`, "cache-control": "no-store" });
+          response.end(result);
+        }
+        return;
+      }
       if (url.pathname === "/api/watch" && actions) {
         const root = url.searchParams.get("project");
         if (!knownRoot(root)) {
@@ -194,6 +210,13 @@ export function startDashboardServer({ collect, listRoots, readDocument, passwor
       resolve(server);
     });
   });
+}
+
+export function renderPaperCard(it, judge = null) {
+  const esc = (value) => String(value ?? "").replace(/[&<>"']/gu, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+  const line = judge?.line || it.line;
+  const details = [it.id, String(it.published || it.date || "").slice(0, 10), it.venue, (it.authors || []).join("、")].filter(Boolean);
+  return '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="takeaway">' + esc(line || "中文一句话待补充，暂可展开原摘要；关键词命中不是内容总结。") + '</div><div class="why">' + esc(details.join(" · ")) + (it.supplement ? " · 较早论文补充" : "") + (it.code && String(it.code).startsWith("http") ? ' · <a href="' + esc(it.code) + '" target="_blank" rel="noopener">代码/主页</a>' : "") + '</div>' + (judge ? '<div class="judge">影响判断（' + esc(judge.file || judge.round) + '）：' + esc(judge.note) + '</div>' : "") + '<details class="abs"><summary>原摘要与入选依据（不代表已读全文）</summary>' + esc(it.abstract || "未取得摘要") + '<div class="why">' + esc((it.reasons || []).join("；")) + '</div></details></div>';
 }
 
 export function renderLoginHtml(failed = false) {
@@ -348,9 +371,9 @@ nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-colo
 .group { padding: 6px 14px; font-size: 12px; font-weight: 700; background: var(--bg); border-bottom: 1px solid var(--line); }
 .group.overlap { color: var(--user); } .group.baseline { color: var(--done); } .group.borrow { color: var(--accent); } .group.pending { color: var(--warn); }
 .paper .judge { font-size: 12px; margin-top: 3px; }
-.dots { display: inline-flex; gap: 3px; }
-.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--pause-soft); display: inline-block; }
-.dot.yes { background: var(--accent); } .dot.pending { background: var(--warn); } .dot.no { background: var(--user); }
+.paper .takeaway { margin: 5px 0; font-size: 14px; }
+.library { margin-top: 16px; }
+.library .btns { margin-bottom: 8px; }
 tr.cardrow { cursor: pointer; }
 tr.cardrow:hover td { background: var(--accent-soft); }
 .badge-draft { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); margin-left: 6px; }
@@ -478,7 +501,7 @@ function renderView() {
     tile("当前轮次", p.currentRound || "—") + tile("轮次状态", (STATUS[String(p.roundStatus || "").toLowerCase()] || [0, p.roundStatus || "—"])[1]) +
     tile("已有轮次", p.rounds.length) + tile("评测记录", evalRows ? evalRows + " 行" : "—") + tile("最近更新", ago(p.lastActivity)) + "</div>";
   html += '<section><h2>评测表 <span class="sub">EVAL.md · 最新一行高亮</span></h2>';
-  if (!p.evaluation) html += '<div class="card note">还没有 EVAL.md。立项确认后由导师定评测。</div>';
+  if (!p.evaluation) html += '<div class="card note">还没有 EVAL.md。主线确认后，执行者建立能回答问题的评测，导师判断方向。</div>';
   else if (p.evaluation.tables.length) html += p.evaluation.tables.map((t) => '<div class="tablewrap">' + tableHtml([t.header, ...t.rows], true) + "</div>").join("") + lazyDoc(p.root, "EVAL.md", "查看 EVAL.md 原文");
   else html += '<div class="card md">' + md(p.evaluation.text) + "</div>";
   html += "</section>";
@@ -502,6 +525,11 @@ function renderView() {
   html += '<section><h2>身份卡 <span class="sub">IDENTITY.md</span></h2><div class="card md">' + (p.identity ? md(p.identity.text) + (p.identity.text.length > 4096 ? '<div class="note">身份卡超过 4KB，宿主只会看到开头部分。</div>' : "") : '<span class="note">还没有身份卡。</span>') + "</div></section>";
   if (p.doctor) html += "<section>" + lazyDoc(p.root, "DOCTOR.md", "Dove 集成问题记录（DOCTOR.md）") + "</section>";
   view.innerHTML = html;
+  view.querySelectorAll(".librarySync").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { await act("syncPaperLibrary", { root: b.dataset.root }); watchCache.delete(b.dataset.root); await loadWatch(b.dataset.root); toast("已积累已有影响判断，未运行检索"); }
+    catch (error) { toast(error.message); b.disabled = false; }
+  }));
   view.querySelectorAll("details[data-name]").forEach((d) => d.addEventListener("toggle", () => {
     const key = d.dataset.root + "/" + d.dataset.name;
     if (d.open) { openDocs.add(key); loadRound(d.dataset.root, d.dataset.name); } else openDocs.delete(key);
@@ -541,14 +569,20 @@ function roundBody(root, part) {
   return '<div class="body md">' + md(t.text) + (t.truncated ? '<div class="note">内容较长，只显示前 64KB。</div>' : "") + "</div>";
 }
 const GROUPS = [["overlap", "撞题：贡献可能被覆盖"], ["baseline", "新基线：该进评测对照"], ["borrow", "可借用：方法或数据"], ["pending", "待导师判断"]];
-function paperHtml(it, judge) {
-  return '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">' + esc(it.id) + " · 分数 " + esc(it.score) + " · " + esc(String(it.published || "").slice(0, 10)) + " · " + esc((it.reasons || []).join("；")) + (it.venue ? " · " + esc(it.venue) : "") + (it.code && String(it.code).startsWith("http") ? ' · <a href="' + esc(it.code) + '" target="_blank" rel="noopener">代码/主页</a>' : "") + "</div>" + (judge ? '<div class="judge">导师（' + esc(judge.file || judge.round) + "）：" + esc(judge.note) + "</div>" : "") + '<div class="abs">' + esc((it.abstract || "").slice(0, 220)) + (it.abstract && it.abstract.length > 220 ? "…" : "") + "</div></div>";
+const paperHtml = ${renderPaperCard.toString()};
+function librarySection(root, groups) {
+  const endpoint = '/api/library?project=' + encodeURIComponent(root);
+  let html = '<div class="library"><h2>项目文献库 <span class="sub">按方向积累已判断的有用论文</span></h2><div class="btns"><button class="btn librarySync" data-root="' + esc(root) + '">积累已有影响判断</button>' + [["json", "JSON"], ["md", "Markdown"], ["bib", "BibTeX"]].map(([format, label]) => '<a class="btn" href="' + esc(endpoint + '&format=' + format) + '">' + label + '</a>').join("") + '</div>';
+  if (!groups.length) return html + '<div class="note">还没有已积累的论文。主会话保存带方向和中文一句话的影响判断后，点上方积累，或由下一次正常追踪收录。</div></div>';
+  for (const group of groups) html += '<details class="card"><summary>' + esc(group.direction) + ' · ' + group.papers.length + ' 篇</summary>' + group.papers.map((paper) => paperHtml(paper)).join("") + '</details>';
+  return html + '</div>';
 }
 function papersSection(root) {
   let html = '<section><h2>新论文 <span class="sub">论文追踪 · 按导师的影响判断分组</span></h2>';
   const w = watchCache.get(root);
   if (!w || w.loading) { if (!w) loadWatch(root); return html + '<div class="card note">读取中…</div></section>'; }
   if (w.error) return html + '<div class="card note">' + esc(w.error) + "</div></section>";
+  html += librarySection(root, w.library || []);
   const c = w.config;
   if (w.guidance) html += '<div class="card note">' + esc(w.guidance) + "</div>";
   if (w.scan) html += lazyScan(root, w.scan);
@@ -582,10 +616,10 @@ function renderTrends() {
   if (trends.error) { view.innerHTML = '<div class="empty">' + esc(trends.error) + "</div>"; return; }
   let html = '<h1 class="title">本周领域动态</h1><div class="path">自 ' + esc(trends.since) + " 起 · 所有项目的追踪结果汇总</div>";
   html += '<section style="margin-top:18px"><h2>各项目最相关的新论文 <span class="sub">导师判过的排在前面</span></h2><div class="card" style="padding:0">';
-  html += trends.top.map((it) => paperHtml(it, null).replace('<div class="abs">', '<div class="judge">' + esc(it.projects.join("、")) + (it.impacts.length ? " · " + esc(it.impacts.map((x) => x.project + "：" + x.label).join("；")) : "") + '</div><div class="abs">')).join("") || '<div class="paper note">这一周还没有追踪结果。</div>';
+  html += trends.top.map((it) => '<div class="group">' + esc(it.projects.join("、")) + (it.impacts.length ? " · " + esc(it.impacts.map((x) => x.project + "：" + x.label).join("；")) : "") + '</div>' + paperHtml(it, it.impacts.find((impact) => impact.line))).join("") || '<div class="paper note">这一周还没有追踪结果。</div>';
   html += "</div></section>";
   html += '<section><h2>社区热点里和你方向相关的 <span class="sub">Hugging Face 每日论文榜，通过项目相关性筛选</span></h2><div class="card" style="padding:0">';
-  html += trends.hot.map((it) => '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">' + esc(it.id) + " · " + esc(it.upvotes) + " 赞 · " + esc(String(it.published || "").slice(0, 10)) + "</div></div>").join("") || '<div class="paper note">暂时没有。</div>';
+  html += trends.hot.map((it) => paperHtml(it)).join("") || '<div class="paper note">暂时没有。</div>';
   html += "</div></section>";
   html += '<section><h2>导师领域扫描 <span class="sub">每周一次，在导师环节用网页和论文检索完成</span></h2>';
   html += trends.scans.map((x) => '<details class="note"><summary>' + esc(x.project) + " · " + esc(x.date || "尚未扫描") + (x.due ? " · 下次导师调用待更新" : "") + '</summary><div class="card md">' + (x.text ? md(x.text) : "不依赖轮次；主会话保存导师返回的领域扫描到 watch/scan-YYYY-MM-DD.md。") + "</div></details>").join("") || '<div class="card note">还没有扫描记录。</div>';
@@ -607,10 +641,10 @@ function renderTopics() {
   const t = started.find((x) => x.root === topicRoot);
   if (t) {
     if (t.criteria && c.present && t.criteria.version !== c.version) html += '<div class="card note" style="margin-bottom:12px">这个项目用的是第 ' + esc(t.criteria.version || "?") + " 版标准，当前标准是第 " + esc(c.version || "?") + ' 版。<button class="btn tStart" data-root="' + esc(t.root) + '">换成当前版本</button></div>';
-    html += '<section><h2>候选方向 <span class="sub">卡片开头五行：状态、阶段、定位、一句话、六点</span></h2>';
-    if (!t.cards.length) html += '<div class="card note">还没有候选卡。在这个项目的会话里说“开始选题”，导师会按选题标准先发散、再审查，把候选写进 topics/cards/。</div>';
-    else html += '<div class="tablewrap"><table><thead><tr><th>候选</th><th>定位</th><th>阶段</th><th>状态</th><th>六点</th><th>一句话</th></tr></thead><tbody>' + t.cards.map((k) =>
-      '<tr class="cardrow" data-file="' + esc(k.file) + '"><td>' + esc(k.title || k.name) + "</td><td>" + esc(k.position || "—") + "</td><td>" + esc(k.stage || "—") + '</td><td><span class="chip ' + (TOPIC_STATUS[(k.status || "").slice(0, 2)] || "other") + '">' + esc(k.status || "未标") + '</span></td><td><span class="dots" title="' + esc(k.six || "") + '">' + (k.sixParts || []).map((x) => '<span class="dot ' + x.state + '"></span>').join("") + '</span></td><td style="white-space:normal;min-width:240px">' + esc(k.summary || "") + "</td></tr>" +
+    html += '<section><h2>候选方向 <span class="sub">缺口 → 来源机制 → 对应关系；评审只点最弱处</span></h2>';
+    if (!t.cards.length) html += '<div class="card note">还没有候选卡。正常选题时先读标准、找有正文依据的缺口，再跨领域找机制；不替已有项目重开选题。</div>';
+    else html += '<div class="tablewrap"><table><thead><tr><th>候选</th><th>定位</th><th>阶段</th><th>状态</th><th>评审</th><th>想法与依据</th></tr></thead><tbody>' + t.cards.map((k) =>
+      '<tr class="cardrow" data-file="' + esc(k.file) + '"><td>' + esc(k.title || k.name) + "</td><td>" + esc(k.position || "—") + "</td><td>" + esc(k.stage || "—") + '</td><td><span class="chip ' + (TOPIC_STATUS[(k.status || "").slice(0, 2)] || "other") + '">' + esc(k.status || "未标") + '</span></td><td style="white-space:normal;min-width:160px">' + esc(k.verdict || "待判断") + (k.focus ? '<div class="note">最弱：' + esc(k.focus) + '</div>' : "") + (k.reviewEvidence ? '<div class="note">依据：' + esc(k.reviewEvidence) + '</div>' : "") + (k.objection ? '<div class="note">最强反对：' + esc(k.objection) + '</div>' : "") + '</td><td style="white-space:normal;min-width:280px">' + esc(k.summary || "") + [["缺口", k.gap], ["来源机制", k.source], ["对应关系", k.mapping], ["成立前提", k.assumptions], ["近邻差别", k.novelty], ["最大风险", k.risk], ["改进自", k.improves]].filter(([, value]) => value).map(([label, value]) => '<div class="note">' + label + '：' + esc(value) + '</div>').join("") + "</td></tr>" +
       (openDocs.has(t.root + "/" + k.file) ? '<tr><td colspan="6" style="white-space:normal">' + roundBody(t.root, { file: k.file }) + "</td></tr>" : "")).join("") + "</tbody></table></div>";
     html += "</section>";
     if (t.documents.length) html += '<section><h2>阶段材料</h2>' + t.documents.map((d) => lazyDoc(t.root, d, d.replace("topics/", ""))).join("") + "</section>";
@@ -711,6 +745,7 @@ function renderSettings() {
     '<label>每次回看几天<input type="number" id="wDays" min="1" max="14" value="' + esc(g.lookbackDays) + '"></label>' +
     '<label>每个项目最多保留几篇<input type="number" id="wMax" min="5" max="200" value="' + esc(g.maxPerDigest) + '"></label>' +
     '<label>网络代理（可空）<input type="text" id="wProxy" placeholder="服务器连不上 Hugging Face 时填，例如 http://127.0.0.1:7890" value="' + esc(g.proxy) + '"></label></div>' +
+    '<label><span><input type="checkbox" id="wSupplement"' + (g.supplementOlder ? ' checked' : '') + '> 没有新论文时补少量未推过的重要旧文（默认关闭，最多 5 篇，不降低相关性）</span></label>' +
     '<div class="btns"><button class="btn primary" id="wSave">保存</button><button class="btn" id="wRunAll">立即运行全部项目</button><span class="note">' +
     esc(settings.watchRunning ? "正在运行…" : (st.lastAttempt || st.lastRun) ? "上次尝试：" + new Date(st.lastAttempt || st.lastRun).toLocaleString() + " · " + (st.results || []).map((r) => r.root.split("/").pop() + " " + ({ done: (r.found ?? 0) + " 篇", partial: "检索未完成，已找到 " + (r.found ?? 0) + " 篇", unconfigured: "未设关键词", disabled: "已关闭", failed: "检索失败" }[r.status] || r.status)).join("，") : "还没运行过") + "</span></div>" +
     (settings.watchError ? '<div class="note">运行失败：' + esc(settings.watchError) + '</div>' : "") +
@@ -729,6 +764,7 @@ function renderSettings() {
     '<label>arXiv 分类（逗号分隔）<input type="text" class="wCats" value="' + esc(p.watch.categories.join(", ")) + '"></label>' +
     '<div class="btns"><button class="btn primary wSaveP" data-root="' + esc(p.root) + '">保存</button><button class="btn wRunP" data-root="' + esc(p.root) + '">只运行这个项目</button><button class="btn wDraftP" data-root="' + esc(p.root) + '">根据项目资料生成初稿</button>' + (p.watch.source === "draft" ? '<span class="badge-draft">当前是自动初稿</span>' : "") + "</div>" + (p.guidance ? '<div class="note">' + esc(p.guidance) + '</div>' : "") + "</div>").join("");
   html += "</section>";
+  html += '<section><h2>更新后的宿主迁移</h2><div class="card form"><label><span><input type="checkbox" id="hostMigration"' + (settings.hostSettings?.hostMigration ? ' checked' : '') + '> 连带更新时登记迁移待办（默认关闭）</span></label><div class="note">钩子只送达待办；项目宿主在当前工作告一段落后整理已有记录，不暂停或重启训练、评测，不改研究结论和用户原话。完成后同一版本不重复。</div><div class="btns"><button class="btn primary" id="hostSave">保存迁移设置</button></div></div></section>';
   html += '<section><h2>项目登记 <span class="sub">登记的项目会随 Dove 升级自动更新，并显示在面板里</span></h2><div class="card">' +
     settings.registered.map((r) => '<div class="reg"><span class="p">' + esc(r.root) + "</span>" + (r.exists ? "" : '<span class="chip none">目录不存在</span>') + '<button class="btn danger regRemove" data-root="' + esc(r.root) + '">移出登记</button></div>').join("") +
     '<div class="reg"><input type="text" id="regPath" placeholder="已安装 Dove 的项目绝对路径" style="flex:1 1 260px;font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)"><button class="btn" id="regAdd">登记</button><button class="btn" id="regSync">把所有项目更新到当前版本</button></div></div></section>';
@@ -736,8 +772,9 @@ function renderSettings() {
   view.innerHTML = html;
   const run = (fn) => async (event) => { const b = event.currentTarget; b.disabled = true; try { await fn(b); } catch (error) { toast(error.message); } finally { b.disabled = false; } };
   const byId = (id) => document.getElementById(id);
-  byId("wSave").addEventListener("click", run(async () => { await act("saveWatchGlobal", { settings: { dailyHour: Number(byId("wHour").value), lookbackDays: Number(byId("wDays").value), maxPerDigest: Number(byId("wMax").value), proxy: byId("wProxy").value } }); toast("已保存"); await loadSettings(); }));
+  byId("wSave").addEventListener("click", run(async () => { await act("saveWatchGlobal", { settings: { dailyHour: Number(byId("wHour").value), lookbackDays: Number(byId("wDays").value), maxPerDigest: Number(byId("wMax").value), proxy: byId("wProxy").value, supplementOlder: byId("wSupplement").checked } }); toast("已保存"); await loadSettings(); }));
   byId("wRunAll").addEventListener("click", run(() => startWatchFromPanel()));
+  byId("hostSave").addEventListener("click", run(async () => { await act("saveHostSettings", { settings: { hostMigration: byId("hostMigration").checked } }); toast("已保存迁移设置"); await loadSettings(); }));
   byId("tcSave").addEventListener("click", run(async () => { const r = await act("saveTopicCriteria", { text: byId("tcText").value }); byId("tcText").value = ""; toast("已保存" + (r.version ? "第 " + r.version + " 版" : "")); await loadSettings(); }));
   byId("s2Save").addEventListener("click", run(async () => { if (!byId("s2Key").value.trim()) throw new Error("先粘贴 key"); await act("saveS2Key", { key: byId("s2Key").value }); toast("key 已保存"); await loadSettings(); }));
   if (byId("s2Clear")) byId("s2Clear").addEventListener("click", run(async () => { await act("saveS2Key", { key: "" }); toast("key 已清除"); await loadSettings(); }));

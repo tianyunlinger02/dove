@@ -46,13 +46,25 @@ Ending the reply needs no card edit, new round result or mentor call.
 
 ## Topic choice and direct judgments
 
-These are hypothetical examples, not observed user decisions:
+Hypothetical shape, not a real candidate or user choice. Paper IDs below stand for actual full-text-grounded notes, not fabricated references:
 
 ```text
-已按项目选题标准展开并列候选并检索近邻。推荐 A、B、C：分别解决对应关系、组合失败和数据需求，依据与关键未知见各候选比较。请你选定主线；选择前不实现候选方法。
+缺口：已有方法通过 Y 做 X，但 Y 留下 Z；依据为已读正文的 [论文A]、[论文B] 各自未解决之处。
+证明补上它的观察：能区分 Z 与其它原因的比较。
+
+一句话：把来源领域的机制 M 用于这个缺口。
+缺口：上面的 Z。
+来源机制：[来源论文]；M 在原处依赖条件 P。
+对应关系：本问题中的 U 扮演原问题的 V。
+成立前提：P 在这里也成立；证据与未知另列。
+近邻差别：与已读 [最近邻论文] 的具体差别。
+最大风险：P 可能不成立。
+评审结论：修改
+修改焦点：对应关系
+最强反对：U 与 V 的关键结构未对应，见正文位置与检索证据。
 ```
 
-Clear user choices are recorded without repeated confirmation. Engineering and evaluator repair belong to the executor; goal-meaning changes go to the user.
+Search 6–10 mechanism queries across at least three other subfields, then actively try to falsify novelty. Verdicts are keep, revise one weakness, or reject with evidence. Recommend 2–3 for user choice; do not implement before it. Clear choices need no reconfirmation.
 
 ```text
 用户：达到要求了吗？
@@ -62,7 +74,7 @@ Clear user choices are recorded without repeated confirmation. Engineering and e
 
 ## Mentor brief
 
-Call a fresh read-only mentor at round end, after two no-science rounds, on user direction/story corrections, before route changes or when requested. Supply materials and four fixed direction questions, not executor framing. It reads its own notes, user originals and actual artifacts, not execution conversation. Save its brief and notes verbatim. Shape-only example:
+At the existing mentor triggers, generate the call with `dove mentor brief --project <root>`; use `--trigger` for a repeat call's reason, sourced `--user-original` for direct words, and `--opinion` / repeatable `--artifact` for attachments. The generator supplies materials and fixed questions, not a model call. Save the fresh mentor's brief and notes verbatim. Shape-only return:
 
 ```text
 作者：导师

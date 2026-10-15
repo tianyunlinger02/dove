@@ -2,6 +2,12 @@ import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS, renderDoveResearchReanchor } fro
 import { DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS } from "./dove-author-preferences.mjs";
 import { DOVE_CLAUDE_AMBIENT_RULE_PATH } from "./ambient-policy.mjs";
 import { identityCardContext } from "./identity-card.mjs";
+import { hostMigrationContext } from "./host-migration.mjs";
+import { PROJECT_HOST_IDS } from "./host-registry.mjs";
+import { PACKAGE_NAME, PACKAGE_VERSION } from "./package-metadata.mjs";
+import { readProjectInstallationManifest } from "./project-installation-manifest.mjs";
+import { inspectRegularProjectFile } from "./project-installation-plan.mjs";
+import { resourcesForHosts, sameManaged, samePackage } from "./project-installation-resources.mjs";
 import { userOriginalSourceContext } from "./session-start-hook.mjs";
 
 export const PROMPT_GUIDANCE_PATHS = Object.freeze([
@@ -18,6 +24,23 @@ export function currentPromptGuidance(manifest) {
     return `${resourcePath} ${entries[0].digest.slice(0, 12)}`;
   });
   return { version: manifest.package.version, fingerprints };
+}
+
+export function inspectCurrentPromptGuidance(project, options = {}) {
+  const manifest = readProjectInstallationManifest(project, { fsOps: options.fsOps, hostIds: PROJECT_HOST_IDS });
+  const expectedPackage = { name: options.packageName ?? PACKAGE_NAME, version: options.packageVersion ?? PACKAGE_VERSION };
+  if (!manifest.hosts.includes("claude") || !samePackage(manifest.package, expectedPackage)) {
+    throw new Error("Dove prompt guidance requires current Claude integration.");
+  }
+  // Shared host configuration is not guidance; doctor still reports its drift.
+  const resources = resourcesForHosts(manifest.hosts).filter((entry) => entry.kind === "exclusive-file");
+  const managed = manifest.managed.filter((entry) => entry.kind === "exclusive-file");
+  if (!sameManaged(managed, resources)) throw new Error("Dove prompt guidance inventory does not match the current package.");
+  for (const resource of resources) {
+    const observed = inspectRegularProjectFile(project, resource.path, options.fsOps);
+    if (observed.digest !== resource.digest) throw new Error(`Dove prompt guidance is changed or missing: ${resource.path}.`);
+  }
+  return currentPromptGuidance(manifest);
 }
 
 export function parseUserPromptSubmitPayload(input) {
@@ -38,7 +61,7 @@ export function userPromptSubmitOutput(payload, guidance, options = {}) {
     throw new Error("Dove UserPromptSubmit hook requires a valid prompt event.");
   }
   if (!guidance) throw new Error("Dove UserPromptSubmit hook requires verified project guidance.");
-  const context = `Dove ${guidance.version} (disk guidance, not rule reload):\n${guidance.fingerprints.join("\n")}\n${identityCardContext(options.project, options)}\n${renderDoveResearchReanchor()}\nOn first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.${userOriginalSourceContext(payload)}`;
+  const context = `Dove ${guidance.version} (disk guidance, not rule reload):\n${guidance.fingerprints.join("\n")}\n${identityCardContext(options.project, options)}\n${renderDoveResearchReanchor()}\nOn first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.${userOriginalSourceContext(payload)}${hostMigrationContext(options.project, options)}`;
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",

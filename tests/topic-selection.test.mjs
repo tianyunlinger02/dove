@@ -4,10 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { createDashboardActions } from "../src/cli/dashboard-actions.mjs";
-import { renderDashboardHtml, startDashboardServer } from "../src/cli/dashboard-server.mjs";
-import { collectDashboard, readProjectDocument } from "../src/core/dashboard-data.mjs";
-import { changeRegisteredProjects } from "../src/core/project-registry.mjs";
 import { parseCardHeader, readTopicCriteriaInfo, readTopics, startTopicSelection, writeTopicCriteria } from "../src/core/topic-selection.mjs";
 
 const criteria = `# 论文选题要求、论证原则与交付规范\n\n本版为第23版。\n${"## 一、原则\n先发散，再审查。\n".repeat(20)}## 附录 E：当前项目设置（point1）\n\n找题期间尽量不做实验。\n\n## 修订记录\n第22版到第23版。\n`;
@@ -30,7 +26,11 @@ test("criteria are kept at user level and copied into a project when selection s
   assert.equal(topics.started, true);
   assert.equal(topics.criteria.version, "23");
   const readme = fs.readFileSync(path.join(root, ".dove/research/topics/README.md"), "utf8");
-  assert.ok(readme.includes("开头固定五行"));
+  assert.ok(readme.includes("头部前 40 行"));
+  for (const field of ["一句话", "缺口", "来源机制", "对应关系", "成立前提", "近邻差别", "最大风险", "改进自", "评审结论", "修改焦点", "最强反对", "评审依据"]) {
+    assert.ok(readme.includes(`${field}：`));
+  }
+  assert.ok(readme.includes("RESEARCH_QUALITY.md"));
   assert.match(readme, /必须先读并遵循项目标准/u);
   assert.match(readme, /用户尚未确认主线.*并列候选.*生成时不砍题/u);
   assert.match(readme, /真实.*检索.*拓宽候选.*2–3.*用户选定.*选择前不实现方法/u);
@@ -45,19 +45,63 @@ test("criteria are kept at user level and copied into a project when selection s
   assert.match(project, /只读\/设计讨论.*资源.*宿主权限.*仍适用/u);
 });
 
-test("card headers give status, stage, position, summary and the six conclusions", () => {
-  const card = parseCardHeader("# 结构感知纸样编辑\n状态：推荐\n- **阶段**：三\n定位：平衡\n一句话：用穿着反馈决定何时改结构\n六点：问题 满足｜方法 待核实｜贡献 满足｜创新 不满足｜可行 满足｜重要 满足\n\n正文……");
-  assert.equal(card.title, "结构感知纸样编辑");
-  assert.equal(card.status, "推荐");
-  assert.equal(card.stage, "三");
-  assert.deepEqual(card.sixParts.map((part) => part.state), ["yes", "pending", "yes", "no", "yes", "yes"]);
+test("card headers expose seven candidate columns and the adversarial verdict", () => {
+  const card = parseCardHeader(`# 方向甲
+状态：推荐
+- **阶段**：三
+定位：平衡
+一句话：让反馈决定何时改变结构
+缺口：现有方法保留了不适合当前约束的结构假设
+- **来源机制：** [P1] 的分解机制在原问题中保留全局约束
+对应关系：原问题的模块对应这里的结构片段
+成立前提：局部反馈足以识别全局约束变化
+近邻差别：[P2] 只修改固定结构内的参数
+最大风险：局部反馈无法辨别结构变化
+改进自：C1；补充来源机制及成立条件
+评审结论：修改
+修改焦点：依据
+最强反对：现有证据尚不能证明该条件在目标问题成立
+评审依据：[P1] 第三节仅覆盖固定约束，需要核实其边界
+
+## 详细论证
+正文……`);
+  assert.deepEqual(card, {
+    title: "方向甲",
+    status: "推荐",
+    stage: "三",
+    position: "平衡",
+    summary: "让反馈决定何时改变结构",
+    gap: "现有方法保留了不适合当前约束的结构假设",
+    source: "[P1] 的分解机制在原问题中保留全局约束",
+    mapping: "原问题的模块对应这里的结构片段",
+    assumptions: "局部反馈足以识别全局约束变化",
+    novelty: "[P2] 只修改固定结构内的参数",
+    risk: "局部反馈无法辨别结构变化",
+    improves: "C1；补充来源机制及成立条件",
+    verdict: "修改",
+    focus: "依据",
+    objection: "现有证据尚不能证明该条件在目标问题成立",
+    reviewEvidence: "[P1] 第三节仅覆盖固定约束，需要核实其边界"
+  });
+});
+
+test("card headers preserve explicit text without deriving decisions or reading retired fields", () => {
+  assert.deepEqual(parseCardHeader(), {});
+  assert.deepEqual(parseCardHeader("# 旧卡\n状态：候选\n六点：问题 满足｜创新 不满足"), { title: "旧卡", status: "候选" });
+  const card = parseCardHeader("# 简卡\r\n一句话: 想法\r\n修改焦点：   \r\n评审结论：否掉（来源不支持迁移）\r\n评审结论：留下\r\nconstructor：不读取\r\n__proto__：不读取");
+  assert.deepEqual(card, { title: "简卡", summary: "想法", verdict: "否掉（来源不支持迁移）" });
+  assert.deepEqual(parseCardHeader(`${"\n".repeat(40)}评审结论：留下`), {}, "Only the first forty header lines feed the dashboard");
 });
 
 test("dashboard lists topic cards and serves only topic documents", async () => {
+  const { createDashboardActions } = await import("../src/cli/dashboard-actions.mjs");
+  const { renderDashboardHtml, startDashboardServer } = await import("../src/cli/dashboard-server.mjs");
+  const { collectDashboard, readProjectDocument } = await import("../src/core/dashboard-data.mjs");
+  const { changeRegisteredProjects } = await import("../src/core/project-registry.mjs");
   const { env, root } = setup();
   writeTopicCriteria(criteria, { env });
   startTopicSelection(root, { env });
-  fs.writeFileSync(path.join(root, ".dove/research/topics/cards/01-a.md"), "# 方向甲\n状态：候选\n阶段：一\n定位：探索\n一句话：甲\n六点：问题 待核实\n");
+  fs.writeFileSync(path.join(root, ".dove/research/topics/cards/01-a.md"), "# 方向甲\n状态：候选\n阶段：一\n定位：探索\n一句话：甲\n缺口：待正文核实\n来源机制：待阅读\n对应关系：待说明\n成立前提：待核实\n近邻差别：待比较\n最大风险：前提不成立\n");
   fs.writeFileSync(path.join(root, ".dove/research/topics/stage1-问题池.md"), "# 问题池\n");
   assert.deepEqual(readTopics(root).documents, ["topics/PROJECT.md", "topics/README.md", "topics/stage1-问题池.md"]);
   assert.match(readProjectDocument(root, "topics/cards/01-a.md").text, /方向甲/u);

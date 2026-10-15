@@ -38,22 +38,22 @@ Each fresh author main context personally reads the short Chinese quality and pr
 
 ## Research direction and records
 
-Before the user chooses a mainline, read the project's topic-selection standards, establish a meaningful direction and generate a broad parallel candidate pool. Real searches assess and expand it. Offer 2–3 grounded recommendations for the user to choose; before that choice, do not implement candidate methods, and do only standards-allowed diagnostics. An already confirmed mainline is not reopened merely on takeover.
+Before mainline choice, read project standards. Find gaps on distinct challenge axes from full-text near misses, then search other subfields for transferable mechanisms. Parallel candidate cards name the gap, source, mapping, assumptions, closest-work difference and risk. Active counter-search yields keep, revise one weakness, or reject with evidence. Offer 2–3 recommendations for the user's choice; before it, only standards-allowed diagnostics, not method implementation. Confirmed mainlines are not reopened on takeover.
 
 Researcher-owned Markdown under `.dove/research/` keeps current context short:
 
 - **`IDENTITY.md`** holds the mainline, target tier, completion, sourced restrictions and current research state in fixed fields, within 1200 characters.
 - **`EVAL.md`** has one row per method version, seven fixed columns and cells up to 200 characters. The executor repairs evaluation and recomputes comparable history. The mentor's current eight-dimensional assessment replaces the previous one below the table.
 - **`rounds/`** has one authored brief up to 2000 characters and one result up to 3000 per round, linking ordinary artifacts. Results distinguish changes, measurements, predictions and factual objections.
-- **`MENTOR_NOTES.md`** contains only the mentor's own returned memory, saved verbatim by the main session. Dated paper impacts and scans live separately in `watch/`.
+- **`MENTOR_NOTES.md`** holds the mentor's own memory. Dated impacts and scans live in `watch/`; `papers/` keeps cumulative full-text Q&A and a direction-grouped JSON/Markdown library with Chinese takeaways and BibTeX export.
 
-Existing missions, experiments and claims stay in place without migration or new entries. `RESEARCH.md` is a short history index; init creates only that bootstrap when the research tree is absent. Lifecycle operations preserve research, reviews, receipts, Lessons and Doctor notes. Status and bounded replies need no completed round or record update merely to end the answer.
+Existing missions, experiments and claims stay in place without migration or new entries. `RESEARCH.md` is a short history index; init creates only that bootstrap when the research tree is absent. Lifecycle operations preserve research. Optional `dove settings --host-migration on` registers upgrade tasks for the host to finish after current work, not a CLI rewrite; default is off. Status and bounded replies need no round.
 
 ## Mentor and independent paper review
 
 Call the mentor at round end, after two no-science rounds, when the user corrects direction or questions the paper story, before route changes or when requested. Engineering and verification failures count; ask the user before further continuation by the third no-result round. Route changes name the old route, new route and reason.
 
-Each cross-round judgment uses a fresh context, its own notes, genuine user wording and actual materials—not resumed execution conversation or executor-framed verdict requests. The mentor asks whether direction follows the user, work builds capability rather than patches, what remains to the goal and target tier, and what should happen next. Engineering, parameters and evaluator repairs remain the executor's responsibility. The mentor may retrieve paper/web sources but does not execute or edit. It also checks draft tracking, unjudged papers and overdue weekly scans independently of rounds.
+Use `dove mentor brief --project <root>` for actual materials and four fixed questions, with only a bounded authored opinion and new raw-artifact paths appended. Each cross-round judgment uses a fresh context, its own notes and genuine user wording, not resumed execution conversation. Engineering, parameters and evaluator repairs remain the executor's responsibility. The mentor may retrieve paper/web sources but does not execute or edit. It also checks draft tracking, unjudged papers and overdue weekly scans independently of rounds.
 
 Independent `dove-review` uses only Read/Grep/Glob on the specified complete current manuscript, cited results and supplied grounding. It receives no author conversation or preferences, does not retrieve, execute or edit, and lists what it read. No frozen copy, hashes or external workspace is required. Author self-check is not independent review; submission completion needs scientific sufficiency, current independent review and actual delivery readiness. Software checks do not certify scientific correctness or acceptance.
 

@@ -160,7 +160,7 @@ test("installation manifests own references but not core research or historical 
       assert.throws(() => createProjectInstallationManifest({ ...input, managed: [{ path, kind, selector: "/anything", digest: "a".repeat(64) }] }, { hostIds: hosts }), /one exclusive file/u);
     }
   }
-  for (const path of [".dove/install/DOCTOR.md", ".dove/install/manifest.json", ".dove/research/IDENTITY.md", ".dove/research/EVAL.md", ".dove/research/MENTOR_NOTES.md", ".dove/research/rounds/001-brief.md", ".dove/research/rounds/001-result.md", ".dove/research/watch/config.json", ".dove/research/watch/impact-2026-10-15.md", ".dove/research/watch/scan-2026-10-15.md", ".dove/research/missions/old.md", ".dove/research/experiments/old.md", ".dove/research/claims/old.md", ".dove/research/lessons/LESSONS.md"]) {
+  for (const path of [".dove/install/DOCTOR.md", ".dove/install/manifest.json", ".dove/research/IDENTITY.md", ".dove/research/EVAL.md", ".dove/research/MENTOR_NOTES.md", ".dove/research/rounds/001-brief.md", ".dove/research/rounds/001-result.md", ".dove/research/watch/config.json", ".dove/research/watch/impact-2026-10-15.md", ".dove/research/watch/scan-2026-10-15.md", ".dove/research/papers/2610.04074.md", ".dove/research/papers/library.json", ".dove/research/papers/library.md", ".dove/research/missions/old.md", ".dove/research/experiments/old.md", ".dove/research/claims/old.md", ".dove/research/lessons/LESSONS.md"]) {
     assert.throws(() => createProjectInstallationManifest({ ...input, managed: [{ path, kind: "exclusive-file", selector: null, digest: "a".repeat(64) }] }, { hostIds: hosts }), /must not manage/u);
   }
 });

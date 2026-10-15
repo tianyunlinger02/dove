@@ -166,7 +166,9 @@ export function parsePaperImpacts(root, options = {}) {
       const match = line.match(/^\s*(?:[-*]\s*)?\|?\s*`?(\d{4}\.\d{4,5}|[a-z][a-z.-]*\/\d{7}|W\d+)(?:v\d+)?`?\s*\|\s*(撞题|新基线|可借用|无关)\s*\|\s*(.*)$/u);
       if (!match) continue;
       const hit = IMPACTS.find(([label]) => label === match[2]);
-      impacts[match[1]] = { impact: hit[1], label: hit[0], file: name, ...(name.startsWith("rounds/") ? { round: name.slice(7) } : {}), note: match[3].replace(/\s*\|\s*$/u, "").slice(0, 300) };
+      const [note = "", direction = "", summary = ""] = match[3].replace(/(?<!\\)\|\s*$/u, "")
+        .split(/(?<!\\)\|/u).map((field) => field.trim().replace(/\\\|/gu, "|"));
+      impacts[match[1]] = { impact: hit[1], label: hit[0], file: name, ...(name.startsWith("rounds/") ? { round: name.slice(7) } : {}), note: note.slice(0, 300), direction, line: summary };
     }
   }
   return impacts;

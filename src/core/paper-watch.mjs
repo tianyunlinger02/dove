@@ -4,6 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { parsePaperImpacts } from "./dashboard-data.mjs";
+import { readPaperLibrary, writePaperLibrary } from "./paper-library.mjs";
+
 // Daily paper tracking for registered projects. Fetching and ranking use no
 // model and no required key: arXiv supplies everything new (by keyword and by
 // watched author), OpenAlex finds new papers citing known neighbours and work
@@ -13,18 +16,19 @@ import { setTimeout as sleep } from "node:timers/promises";
 const WATCH_DIR = ".dove/research/watch";
 const PROJECT_CONFIG = `${WATCH_DIR}/config.json`;
 const PROJECT_STATE = `${WATCH_DIR}/state.json`;
-const MAX_SEEN = 5000;
 const DEFAULT_CATEGORIES = ["cs.CV", "cs.GR", "cs.LG"];
 const FIRST_RUN_DAYS = 30;
+const SUPPLEMENT_DAYS = 5 * 365;
+const SUPPLEMENT_LIMIT = 5;
 const ARXIV_INDEX_LAG_DAYS = 3;
 export const MIN_RELEVANCE = 2;
 const ARXIV_INTERVAL_MS = 3000;
 const ARXIV_MAX_BACKOFF_MS = 60000;
 const OPENALEX = "https://api.openalex.org";
-const OPENALEX_FIELDS = "id,title,publication_date,authorships,abstract_inverted_index,locations,primary_location,referenced_works";
+const OPENALEX_FIELDS = "id,title,publication_date,authorships,abstract_inverted_index,locations,primary_location,referenced_works,cited_by_count";
 const HOT_FILE = "watch-hot.json";
 
-export const DEFAULT_GLOBAL_WATCH_SETTINGS = Object.freeze({ dailyHour: 8, lookbackDays: 3, proxy: "", maxPerDigest: 30 });
+export const DEFAULT_GLOBAL_WATCH_SETTINGS = Object.freeze({ dailyHour: 8, lookbackDays: 3, proxy: "", maxPerDigest: 30, supplementOlder: false });
 
 export function localDate(value = Date.now()) {
   const date = new Date(value);
@@ -233,7 +237,8 @@ export function normalizeGlobalWatchSettings(value = {}) {
     dailyHour: Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : DEFAULT_GLOBAL_WATCH_SETTINGS.dailyHour,
     lookbackDays: Number.isInteger(days) && days >= 1 && days <= 14 ? days : DEFAULT_GLOBAL_WATCH_SETTINGS.lookbackDays,
     proxy: typeof value.proxy === "string" ? value.proxy.trim() : "",
-    maxPerDigest: Number.isInteger(max) && max >= 5 && max <= 200 ? max : DEFAULT_GLOBAL_WATCH_SETTINGS.maxPerDigest
+    maxPerDigest: Number.isInteger(max) && max >= 5 && max <= 200 ? max : DEFAULT_GLOBAL_WATCH_SETTINGS.maxPerDigest,
+    supplementOlder: value.supplementOlder === true
   };
 }
 
@@ -369,6 +374,7 @@ export function parseArxivFeed(xml = "") {
       id,
       title: field("title"),
       abstract: field("summary"),
+      kind: "arxiv",
       published: field("published"),
       authors: [...block.matchAll(/<name>([\s\S]*?)<\/name>/gu)].map((match) => decodeXml(match[1])),
       categories: [...block.matchAll(/<category[^>]*term="([^"]+)"/gu)].map((match) => match[1]),
@@ -381,24 +387,26 @@ export function parseArxivFeed(xml = "") {
 
 function arxivQuery(config) {
   const categories = config.categories.map((category) => `cat:${category}`).join(" OR ");
-  const terms = [...new Set(config.keywords)].map((keyword) => {
-    const phrase = keyword.replace(/"/gu, "");
-    return /\s/u.test(phrase) ? `ti:"${phrase}" OR abs:"${phrase}"` : `ti:${phrase} OR abs:${phrase}`;
-  }).join(" OR ");
-  const authors = [...new Set(config.authors)].map((name) => `au:"${name.replace(/"/gu, "")}"`).join(" OR ");
+  const terms = [...new Set(config.keywords)].map((keyword) => keyword.replace(/"/gu, "").trim()).filter(Boolean)
+    .map((phrase) => /\s/u.test(phrase) ? `ti:"${phrase}" OR abs:"${phrase}"` : `ti:${phrase} OR abs:${phrase}`).join(" OR ");
+  const authors = [...new Set(config.authors)].map((name) => name.replace(/"/gu, "").trim()).filter(Boolean).map((name) => `au:"${name}"`).join(" OR ");
   return [terms && `((${categories}) AND (${terms}))`, authors && `(${authors})`].filter(Boolean).join(" OR ");
 }
 
 // One query covers both keywords and authors instead of two requests per project.
-export async function fetchArxiv(config, { since, proxy, get = watchGet } = {}) {
-  const query = arxivQuery(config);
-  if (!query) return { items: [] };
-  const url = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(query)}&sortBy=submittedDate&sortOrder=descending&max_results=200`;
+export async function fetchArxiv(config, { since, before, proxy, get = watchGet } = {}) {
+  let query = arxivQuery(config);
+  if (!query) return { items: [], error: "arXiv 没有可用的关键词或作者查询，检索未执行" };
+  if (before) {
+    const stamp = (time) => new Date(time).toISOString().replace(/\D/gu, "").slice(0, 12);
+    query = `(${query}) AND submittedDate:[${stamp(since)} TO ${stamp(before - 1)}]`;
+  }
+  const url = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(query)}&sortBy=${before ? "relevance" : "submittedDate"}&sortOrder=descending&max_results=200`;
   try {
     const response = await get(url, { proxy });
     if (response.status !== 200 || response.error) return { items: [], error: responseError("arXiv", response) };
     if (!/<feed\b/u.test(response.body) || /arxiv\.org\/api\/errors/u.test(response.body)) return { items: [], error: responseError("arXiv 返回无效 feed", response) };
-    return { items: parseArxivFeed(response.body).filter((item) => !since || Date.parse(item.published) >= since) };
+    return { items: parseArxivFeed(response.body).filter((item) => (!since || Date.parse(item.published) >= since) && (!before || Date.parse(item.published) < before)) };
   } catch (error) {
     return { items: [], error: `arXiv：${error.message}` };
   }
@@ -432,6 +440,8 @@ export function openAlexWorkToItem(work) {
     authors: (work.authorships ?? []).map((authorship) => authorship.author?.display_name).filter(Boolean),
     institutions: [...new Set((work.authorships ?? []).flatMap((authorship) => (authorship.institutions ?? []).map((institution) => institution.display_name)).filter(Boolean))],
     venue: work.primary_location?.source?.display_name ?? null,
+    kind: ["conference", "journal"].includes(work.primary_location?.source?.type) ? work.primary_location.source.type : arxiv ? "arxiv" : null,
+    citations: work.cited_by_count ?? null,
     references: (work.referenced_works ?? []).map((reference) => String(reference).split("/").pop()),
     url: arxiv ? `https://arxiv.org/abs/${arxiv}` : landing
   };
@@ -453,18 +463,19 @@ async function resolveInstitution(name, { proxy, get }) {
 }
 
 // Papers citing known neighbours and keyword papers from watched institutions.
-export async function fetchOpenAlex(config, { since, proxy, get = curlGet, cache = {} }) {
+export async function fetchOpenAlex(config, { since, before, proxy, get = curlGet, cache = {} }) {
   const errors = [];
   const items = [];
   const nextCache = { seeds: { ...(cache.seeds ?? {}) }, institutions: { ...(cache.institutions ?? {}) } };
-  const from = localDate(since);
+  const dates = `from_publication_date:${localDate(since)}${before ? `,to_publication_date:${localDate(before - 1)}` : ""}`;
+  const sort = before ? "cited_by_count:desc" : "publication_date:desc";
   try {
     for (const seed of config.seedPapers) if (!nextCache.seeds[seed]) nextCache.seeds[seed] = await resolveSeed(seed, { proxy, get });
     const seedIds = config.seedPapers.map((seed) => nextCache.seeds[seed]).filter(Boolean);
     const seedNames = new Map(config.seedPapers.map((seed) => [nextCache.seeds[seed], seed]));
     for (let index = 0; index < seedIds.length; index += 40) {
       const batch = seedIds.slice(index, index + 40);
-      const data = await openAlexJson(`works?filter=cites:${batch.join("|")},from_publication_date:${from}&select=${OPENALEX_FIELDS}&per-page=100&sort=publication_date:desc`, { proxy, get });
+      const data = await openAlexJson(`works?filter=cites:${batch.join("|")},${dates}&select=${OPENALEX_FIELDS}&per-page=100&sort=${sort}`, { proxy, get });
       for (const work of data.results ?? []) {
         const item = openAlexWorkToItem(work);
         item.citedSeeds = item.references.filter((reference) => seedNames.has(reference)).map((reference) => seedNames.get(reference));
@@ -473,9 +484,10 @@ export async function fetchOpenAlex(config, { since, proxy, get = curlGet, cache
     }
     for (const name of config.institutions) if (!nextCache.institutions[name]) nextCache.institutions[name] = await resolveInstitution(name, { proxy, get });
     const institutionIds = config.institutions.map((name) => nextCache.institutions[name]).filter(Boolean);
-    if (institutionIds.length && config.keywords.length) {
+    if (config.keywords.length && (institutionIds.length || before)) {
       const search = config.keywords.map((keyword) => (/\s/u.test(keyword) ? `"${keyword}"` : keyword)).join(" OR ");
-      const data = await openAlexJson(`works?search=${encodeURIComponent(search)}&filter=authorships.institutions.lineage:${institutionIds.join("|")},from_publication_date:${from}&select=${OPENALEX_FIELDS}&per-page=100&sort=publication_date:desc`, { proxy, get });
+      const institutions = institutionIds.length ? `authorships.institutions.lineage:${institutionIds.join("|")},` : "";
+      const data = await openAlexJson(`works?search=${encodeURIComponent(search)}&filter=${institutions}${dates}&select=${OPENALEX_FIELDS}&per-page=100&sort=${sort}`, { proxy, get });
       for (const work of data.results ?? []) items.push(openAlexWorkToItem(work));
     }
     const unresolved = [...config.seedPapers.filter((seed) => !nextCache.seeds[seed]), ...config.institutions.filter((name) => !nextCache.institutions[name])];
@@ -509,7 +521,8 @@ export async function fetchHuggingFaceDaily(days, { proxy, get = curlGet, now = 
         id,
         title: decodeXml(paper.title ?? entry.title ?? ""),
         abstract: decodeXml(paper.summary ?? ""),
-        published: paper.publishedAt ?? entry.publishedAt ?? date,
+        kind: "arxiv",
+        published: paper.publishedAt ?? "",
         authors: (paper.authors ?? []).map((author) => author.name).filter(Boolean),
         upvotes: Number(paper.upvotes ?? 0),
         url: `https://arxiv.org/abs/${id}`
@@ -595,18 +608,26 @@ export function scorePaper(paper, config, signals = {}) {
   if (paper.code) { score += 1; reasons.push(paper.code.startsWith("http") ? "有代码/主页" : "摘要提到代码/主页"); }
   if (signals.hf) { score += 2 + Math.min(3, Math.log2(1 + (signals.hf.upvotes || 0)) / 2); reasons.push(`HF 每日热门（${signals.hf.upvotes || 0} 赞）`); }
   if (signals.s2?.venue) { score += 1; reasons.push(`已发表：${signals.s2.venue}`); }
-  if (signals.s2?.citations) { score += Math.min(2, Math.log10(1 + signals.s2.citations)); }
+  const citations = signals.s2?.citations ?? paper.citations;
+  if (citations) { score += Math.min(2, Math.log10(1 + citations)); }
   // Popularity and venue only order relevant papers; they never make one relevant.
   return { score: Math.round(score * 10) / 10, relevance, reasons };
 }
 
 function renderDigest(project, date, items, notes, status) {
-  const lines = [`# 论文追踪 ${date}`, "", `项目：${project}。下一次导师调用判断尚未评过的论文，返回「- 编号 | 撞题/新基线/可借用/无关 | 理由」，由主会话保存为 watch/impact-YYYY-MM-DD.md；不依赖轮次。`, ""];
+  const lines = [`# 论文追踪 ${date}`, "", `项目：${project}。导师判断尚未评过的论文，返回「- 编号 | 撞题/新基线/可借用/无关 | 理由 | 方向 | 中文一句话」，由主会话保存为 watch/impact-YYYY-MM-DD.md；中文据摘要写，不代表读过全文。下次追踪或面板的积累动作同步文献库；不依赖轮次。`, ""];
   if (notes.length) lines.push(`说明：${notes.join("；")}`, "");
   if (status !== "done") lines.push("检索未完成，不能据此判断没有新的相关论文。", "");
   else if (!items.length) lines.push("本次检索没有发现新的相关论文。");
   for (const item of items) {
-    lines.push(`## ${item.title}`, `- 编号：${item.id}  ·  链接：${item.url}  ·  分数 ${item.score}  ·  ${String(item.published).slice(0, 10)}`, `- 作者：${item.authors.slice(0, 6).join(", ")}${item.authors.length > 6 ? " 等" : ""}`, `- 选中原因：${item.reasons.join("；") || "分类内新论文"}`, `- 摘要：${item.abstract.slice(0, 400)}${item.abstract.length > 400 ? "…" : ""}`, "");
+    const abstract = item.abstract || "";
+    const authors = item.authors || [];
+    lines.push(`## ${item.title}${item.supplement ? "（较早论文补充）" : ""}`,
+      `- 一句话（据摘要）：${item.line || "待导师或主会话据摘要补充中文。"}`,
+      `- 编号：${item.id}  ·  链接：${item.url}  ·  分数 ${item.score}  ·  ${String(item.published || "").slice(0, 10)}`,
+      `- 作者：${authors.slice(0, 6).join(", ")}${authors.length > 6 ? " 等" : ""}`,
+      `- 摘要：${abstract.slice(0, 400)}${abstract.length > 400 ? "…" : ""}`,
+      `- 检索线索：${(item.reasons || []).join("；")}`, "");
   }
   return `${lines.join("\n")}\n`;
 }
@@ -634,7 +655,18 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
   const candidates = new Map();
   const merge = (item) => {
     const existing = candidates.get(item.id);
-    candidates.set(item.id, existing ? { ...item, ...existing, citedSeeds: [...new Set([...(existing.citedSeeds ?? []), ...(item.citedSeeds ?? [])])], institutions: existing.institutions?.length ? existing.institutions : item.institutions, venue: existing.venue ?? item.venue } : item);
+    candidates.set(item.id, existing ? {
+      ...item, ...existing,
+      title: existing.title || item.title,
+      abstract: existing.abstract || item.abstract,
+      authors: existing.authors?.length ? existing.authors : item.authors,
+      published: existing.published || item.published,
+      citedSeeds: [...new Set([...(existing.citedSeeds ?? []), ...(item.citedSeeds ?? [])])],
+      institutions: existing.institutions?.length ? existing.institutions : item.institutions,
+      venue: existing.venue || item.venue,
+      citations: existing.citations ?? item.citations,
+      kind: ["conference", "journal"].includes(item.kind) ? item.kind : existing.kind ?? item.kind
+    } : item);
   };
   if (config.keywords.length || config.authors.length) {
     const arxiv = await fetchArxiv(config, { since, proxy: settings.proxy, get });
@@ -645,29 +677,56 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
   const openAlex = await fetchOpenAlex(config, { since, proxy: settings.proxy, get, cache: state.openalex });
   errors.push(...openAlex.errors);
   if (!openAlex.errors.length && (config.seedPapers.length || (config.institutions.length && config.keywords.length))) completedSources += 1;
-  notes.push(...errors);
   openAlex.items.forEach(merge);
-  for (const [id, paper] of hf.papers) if (!candidates.has(id)) candidates.set(id, { ...paper, categories: [] });
+  for (const [id, paper] of hf.papers) {
+    if (!candidates.has(id) && !(Date.parse(paper.published) < since)) candidates.set(id, { ...paper, categories: [] });
+  }
+  if (!completedSources && !errors.length) errors.push("没有成功完成的配置检索源，不能判断是否有新论文。");
   const seen = new Set(state.seen ?? []);
-  let ranked = [...candidates.values()].filter((item) => !seen.has(item.id))
+  const earlier = readJson(path.join(root, WATCH_DIR, `${date}.json`), null);
+  const rank = (items) => items.filter((item) => !seen.has(item.id))
     .map((item) => ({ ...item, ...scorePaper(item, config, { hf: hf.papers.get(item.id) }) }))
     .filter((item) => item.relevance >= MIN_RELEVANCE)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, settings.maxPerDigest);
+    .sort((left, right) => right.score - left.score);
+  let ranked = rank([...candidates.values()]).slice(0, settings.maxPerDigest);
+  const supplement = settings.supplementOlder === true && completedSources > 0 && !errors.length && !ranked.length && !earlier?.items?.length;
+  if (supplement) {
+    const olderSince = now - SUPPLEMENT_DAYS * 86400000;
+    const before = Math.min(since, now - FIRST_RUN_DAYS * 86400000);
+    const options = { since: olderSince, before, proxy: settings.proxy, get };
+    if (config.keywords.length || config.authors.length) {
+      const olderArxiv = await fetchArxiv(config, options);
+      if (olderArxiv.error) errors.push(olderArxiv.error);
+      olderArxiv.items.forEach(merge);
+    }
+    const olderOpenAlex = await fetchOpenAlex(config, { ...options, cache: openAlex.cache });
+    errors.push(...olderOpenAlex.errors);
+    olderOpenAlex.items.forEach(merge);
+    for (const paper of hf.papers.values()) if (Date.parse(paper.published) < before) merge(paper);
+    ranked = rank([...candidates.values()].filter((item) => Date.parse(item.published) >= olderSince && Date.parse(item.published) < before)).slice(0, 30);
+    notes.push("尝试补充较早论文（最多回溯五年），最多补 5 篇；仍须满足相关性门槛，并有引用、关注作者/会议或近邻引用等线索，不足不凑数。");
+  }
+  notes.push(...errors);
   const s2 = await fetchSemanticScholar(ranked.map((item) => item.id), { key, proxy: settings.proxy, get });
   if (s2.error) notes.push(s2.error);
-  ranked = ranked.map((item) => ({ ...item, ...s2.papers.get(item.id), ...scorePaper(item, config, { hf: hf.papers.get(item.id), s2: s2.papers.get(item.id) }) }))
+  ranked = ranked.map((item) => ({ ...item, ...s2.papers.get(item.id), venue: s2.papers.get(item.id)?.venue || item.venue || null, citations: s2.papers.get(item.id)?.citations ?? item.citations ?? null, ...scorePaper(item, config, { hf: hf.papers.get(item.id), s2: s2.papers.get(item.id) }) }))
     .sort((left, right) => right.score - left.score);
+  if (supplement) ranked = ranked.filter((item) => item.citations >= 10 || item.citedSeeds?.length
+    || config.venues.some((venue) => lower(item.venue).includes(lower(venue)))
+    || config.authors.some((author) => (item.authors ?? []).some((name) => lower(name).includes(lower(author)))))
+    .slice(0, SUPPLEMENT_LIMIT).map((item) => ({ ...item, supplement: true }));
   // A second run on the same day adds to that day's digest instead of replacing it.
-  const earlier = readJson(path.join(root, WATCH_DIR, `${date}.json`), null);
+  const impacts = parsePaperImpacts(root);
   const merged = [...ranked, ...(earlier?.items ?? []).filter((item) => !ranked.some((fresh) => fresh.id === item.id))]
+    .map((item) => ({ ...item, line: impacts[item.id]?.line || item.line || "", direction: impacts[item.id]?.direction || item.direction || "" }))
     .sort((left, right) => right.score - left.score);
   const status = errors.length ? (completedSources || ranked.length ? "partial" : "failed") : "done";
   const digest = { date, generatedAt: new Date(now).toISOString(), status, notes, items: merged };
   writeProjectFile(root, `${WATCH_DIR}/${date}.json`, `${JSON.stringify(digest, null, 2)}\n`);
   writeProjectFile(root, `${WATCH_DIR}/${date}.md`, renderDigest(path.basename(root), date, merged, notes, status));
-  const nextSeen = [...ranked.map((item) => item.id), ...seen].slice(0, MAX_SEEN);
+  const nextSeen = [...ranked.map((item) => item.id), ...seen];
   writeProjectFile(root, PROJECT_STATE, `${JSON.stringify({ ...state, lastAttempt: digest.generatedAt, lastRun: status === "done" ? digest.generatedAt : state.lastRun ?? null, status, notes, seen: nextSeen, openalex: openAlex.cache }, null, 2)}\n`);
+  syncPaperLibrary(root);
   return { root, status, found: ranked.length, notes, drafted, guidance, ...(status === "failed" ? { error: errors.join("；") } : {}) };
 }
 
@@ -722,5 +781,51 @@ export function readWatchDigests(root, limit = 3) {
   } catch {
     return [];
   }
-  return files.map((name) => readJson(path.join(directory, name), null)).filter(Boolean);
+  const impacts = parsePaperImpacts(root);
+  return files.map((name) => readJson(path.join(directory, name), null)).filter(Boolean).map((digest) => ({
+    ...digest,
+    items: digest.items.map((item) => ({ ...item, line: impacts[item.id]?.line || item.line || "", direction: impacts[item.id]?.direction || item.direction || "" }))
+  }));
+}
+
+// Main owns the impact text. Only a watch run or an explicit panel action calls
+// this writer; reading digests/library never materializes research records.
+export function syncPaperLibrary(root) {
+  const previous = readPaperLibrary(root);
+  const papers = new Map(previous.papers.map((paper) => [paper.id, paper]));
+  const impacts = parsePaperImpacts(root);
+  for (const digest of readWatchDigests(root, Infinity).reverse()) {
+    for (const paper of digest.items) {
+      const id = arxivIdFromUrl(paper.id) ?? arxivIdFromUrl(paper.url) ?? paper.id;
+      const judgment = impacts[id];
+      if (!judgment || !["overlap", "baseline", "borrow"].includes(judgment.impact)) continue;
+      const prior = papers.get(id);
+      papers.set(id, {
+        id,
+        title: paper.title || prior?.title || "",
+        line: judgment.line || paper.line || prior?.line || "",
+        authors: paper.authors?.length ? paper.authors : prior?.authors ?? [],
+        venue: paper.venue || prior?.venue || null,
+        arxivId: arxivIdFromUrl(id) ?? arxivIdFromUrl(paper.url) ?? prior?.arxivId ?? null,
+        date: paper.published?.slice(0, 10) || paper.date || prior?.date || null,
+        url: paper.url || prior?.url || null,
+        direction: judgment.direction || paper.direction || prior?.direction || "",
+        impact: judgment.impact,
+        note: judgment.note,
+        impactFile: judgment.file,
+        kind: ["conference", "journal"].includes(paper.kind) ? paper.kind : prior?.kind || paper.kind || null
+      });
+    }
+  }
+  // Existing library entries survive digest pruning, but current judgments win.
+  for (const [id, paper] of papers) {
+    const judgment = impacts[id];
+    if (!judgment) continue;
+    if (judgment.impact === "irrelevant") papers.delete(id);
+    else papers.set(id, { ...paper, impact: judgment.impact, note: judgment.note, impactFile: judgment.file, direction: judgment.direction || paper.direction, line: judgment.line || paper.line });
+  }
+  const items = [...papers.values()].sort((a, b) => a.id.localeCompare(b.id));
+  if (!items.length && !previous.papers.length) return previous;
+  if (JSON.stringify(items) === JSON.stringify(previous.papers) && fs.existsSync(path.join(root, ".dove/research/papers/library.md"))) return previous;
+  return writePaperLibrary(root, items);
 }

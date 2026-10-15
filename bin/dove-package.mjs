@@ -1128,15 +1128,15 @@ var require_route = __commonJS({
       };
     }
     function wrapConversion(toModel, graph) {
-      const path22 = [graph[toModel].parent, toModel];
+      const path25 = [graph[toModel].parent, toModel];
       let fn = conversions[graph[toModel].parent][toModel];
       let cur = graph[toModel].parent;
       while (graph[cur].parent) {
-        path22.unshift(graph[cur].parent);
+        path25.unshift(graph[cur].parent);
         fn = link(conversions[graph[cur].parent][cur], fn);
         cur = graph[cur].parent;
       }
-      fn.conversion = path22;
+      fn.conversion = path25;
       return fn;
     }
     module.exports = function(fromModel) {
@@ -7632,10 +7632,10 @@ var require_lib2 = __commonJS({
     exports.analyse = analyse;
     var detectFile = (filepath, opts = {}) => new Promise((resolve, reject) => {
       let fd;
-      const fs22 = (0, node_1.default)();
+      const fs25 = (0, node_1.default)();
       const handler = (err, buffer) => {
         if (fd) {
-          fs22.closeSync(fd);
+          fs25.closeSync(fd);
         }
         if (err) {
           reject(err);
@@ -7647,9 +7647,9 @@ var require_lib2 = __commonJS({
       };
       const sampleSize = (opts === null || opts === void 0 ? void 0 : opts.sampleSize) || 0;
       if (sampleSize > 0) {
-        fd = fs22.openSync(filepath, "r");
+        fd = fs25.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(sampleSize);
-        fs22.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
+        fs25.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
           if (err) {
             handler(err, null);
           } else {
@@ -7661,22 +7661,22 @@ var require_lib2 = __commonJS({
         });
         return;
       }
-      fs22.readFile(filepath, handler);
+      fs25.readFile(filepath, handler);
     });
     exports.detectFile = detectFile;
     var detectFileSync = (filepath, opts = {}) => {
-      const fs22 = (0, node_1.default)();
+      const fs25 = (0, node_1.default)();
       if (opts && opts.sampleSize) {
-        const fd = fs22.openSync(filepath, "r");
+        const fd = fs25.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(opts.sampleSize);
-        const bytesRead = fs22.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
+        const bytesRead = fs25.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
         if (bytesRead < opts.sampleSize) {
           sample = sample.subarray(0, bytesRead);
         }
-        fs22.closeSync(fd);
+        fs25.closeSync(fd);
         return (0, exports.detect)(sample);
       }
-      return (0, exports.detect)(fs22.readFileSync(filepath));
+      return (0, exports.detect)(fs25.readFileSync(filepath));
     };
     exports.detectFileSync = detectFileSync;
     exports.default = {
@@ -11477,8 +11477,8 @@ var require_lib3 = __commonJS({
 });
 
 // bin/dove.mjs
-import fs21 from "node:fs";
-import path21 from "node:path";
+import fs24 from "node:fs";
+import path24 from "node:path";
 import process7 from "node:process";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
@@ -12234,15 +12234,15 @@ var Emitter = class {
     this.listeners[ev].push(fn);
   }
   removeListener(ev, fn) {
-    const list = this.listeners[ev];
-    const i = list.indexOf(fn);
+    const list2 = this.listeners[ev];
+    const i = list2.indexOf(fn);
     if (i === -1) {
       return;
     }
-    if (i === 0 && list.length === 1) {
-      list.length = 0;
+    if (i === 0 && list2.length === 1) {
+      list2.length = 0;
     } else {
-      list.splice(i, 1);
+      list2.splice(i, 1);
     }
   }
   emit(ev, code, signal) {
@@ -13913,6 +13913,8 @@ var CLI_COMMAND_SPECS = Object.freeze({
   dashboard: command([value("--port"), value("--bind"), value("--password-file"), ...outputOptions]),
   watch: command([], { subcommands: { run: command([projectOption, ...outputOptions]) } }),
   topic: command([], { subcommands: { start: command([projectOption, ...outputOptions]) } }),
+  settings: command([value("--host-migration", { choices: ["on", "off"] }), ...outputOptions]),
+  mentor: command([], { subcommands: { brief: command([projectOption, value("--trigger"), value("--user-source"), value("--since"), value("--until"), value("--user-original"), value("--opinion"), value("--artifact", { repeatable: true }), ...outputOptions]) } }),
   projects: command([], {
     subcommands: {
       import: command([value("--project", { repeatable: true, dedupe: true }), boolean("--sync"), ...outputOptions]),
@@ -14100,8 +14102,8 @@ function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
 }
 
 // src/cli/dashboard-actions.mjs
-import fs15 from "node:fs";
-import path14 from "node:path";
+import fs17 from "node:fs";
+import path16 from "node:path";
 
 // src/core/host-registry.mjs
 var PROJECT_HOST_IDS = Object.freeze(["claude", "dsh"]);
@@ -14177,7 +14179,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.0" : null;
+var injectedVersion = true ? "3.4.1" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -14475,14 +14477,14 @@ var DOVE_RESEARCH_AGENT_RESPONSIBILITY = "Collaborate on real research decisions
 var DOVE_RESEARCH_ONE_AGENT = "Dove is one research collaborator; isolated contexts provide independent judgment, not different personas.";
 var DOVE_RESEARCH_FLAT_SKILL_SENTENCE = "Its nine flat Skills \u2014 research, status, source, experiment, draft, figure, review, rebuttal, and lessons \u2014 are optional entrances, not stages or permissions.";
 var DOVE_RESEARCH_MAINLINE_ANCHORING = "Follow the user's confirmed Mainline, intended contribution, completion meaning and fixed methods. A field, recommendation or card entry is not confirmation. Keep provisional intent provisional and correct misrecorded originals without downgrading the goal. Other designs remain revisable with evidence. When changing routes or method families, explicitly report the old route, new route and reason; ask if this changes a user commitment.";
-var DOVE_RESEARCH_ACTION_SPINE = "Until the user selects a mainline, treat the work as topic selection. First read existing topics/CRITERIA.md and project topic-selection standards and follow them. Establish a meaningful direction, generate a broad parallel candidate pool without pruning during generation, and use real near-neighbor searches both to assess and expand it. Offer 2\u20133 grounded recommendations for the user to choose; before that choice, do not implement methods and do only diagnostics allowed by the standards. After selection, choose core work by task benefit, alternatives, mechanism grounds and the key unknown. Ask whether the scale and change can answer the question: expand or redesign if not, and do not enlarge it needlessly if they can. Connecting a pipeline is not designing and testing its core mechanism.";
+var DOVE_RESEARCH_ACTION_SPINE = "Until the user selects a mainline, first read existing topics/CRITERIA.md and project standards. Establish a meaningful direction and a broad parallel candidate pool without pruning during generation; real near-neighbor searches assess and expand it. Apply the topic-selection guidance in RESEARCH_QUALITY.md. Offer 2\u20133 grounded recommendations for the user to choose; before then, do not implement methods, only standards-allowed diagnostics. After selection, choose core work by task benefit, alternatives, mechanism grounds and key unknowns. The scale and change must answer the question: expand or redesign if not, otherwise do not enlarge needlessly. Connecting a pipeline is not designing and testing its core mechanism.";
 var DOVE_RESEARCH_DECISION_CONSEQUENCE = "Challenge core premises using cross-round evidence. Local repairs do not establish route value, and repairs need not be novel. Retain sound negative evidence and change work that depends on refuted premises. Judge general capability on failure classes and unseen data, not individual samples.";
 var DOVE_RESEARCH_RESULT_ADOPTION = "The author main session applies scoped findings to actual work within the user's goal. Subagents return evidence, not goal ownership or completion certificates.";
 var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, read the identity card, latest EVAL rows and current brief, then continue the task. Mentor memory comes from MENTOR_NOTES.md, not resumed conversation.";
-var DOVE_RESEARCH_ROUND_CYCLE = "Call dove-mentor at each round end, after two consecutive rounds without new scientific results, when the user corrects direction or questions the paper claim/story, before changing routes, or when requested. Engineering and verification failures count as rounds without scientific results. After two such rounds seek mentor diagnosis; by the third, explain the blockage and ask the user to decide before another round. Each cross-round judgment uses a new context without execution conversation; within the same judgment, 2\u20133 clarification exchanges are fine. Mentors on either host read .dove/install/RESEARCH_QUALITY.md. Supply only a material list: dated user originals and their source/range, standards, card, MENTOR_NOTES.md, recent EVAL rows/results, changes, raw artifacts, watch/config.json, unreviewed digests, impact records and latest scan. Ask the fixed questions: is the direction faithful to the user, are we building general capability or patches, what remains to the goal, and what should the next round do? Executor opinions may be a labeled attachment, not the task framing. Status and bounded side answers need no round or handoff; honor discussion-only and stop requests.";
-var DOVE_RESEARCH_ROUND_RECORDS = "Use IDENTITY.md, EVAL.md and rounds/NNN-brief.md / NNN-result.md. Each round has one brief (at most 2000 characters) and one result (at most 3000); link supporting materials in ordinary project directories, not extra round attachments. A brief starts with Author: mentor / user / external (\u5BFC\u5E08 / \u7528\u6237 / \u5916\u90E8), method version and dated user sources; direct user tasks have priority over external and mentor advice. Save mentor briefs verbatim. Results use fixed headings: Changes and version; Measurements and artifacts; Prediction versus actual; Objections to this brief / factual corrections. The mentor answers objections first. Mark replacement briefs with their author and reason. RESEARCH.md is a short history index; leave historical missions/, experiments/ and claims/ in place without adding entries.";
-var DOVE_RESEARCH_EVALUATION = "EVAL.md has a short completion reference to the script, protocol and all user metrics, then one row per method version with fixed columns: Date; Version/round; Protocol/split; Measurements; Unseen data/train-test gap; Conclusion; Artifacts. Cells contain numbers and at most one short sentence, at most 200 characters; detailed values belong in linked ordinary artifacts. Keep engineering logs and process status out. Formal comparisons include complete strong same-input baselines and all confirmed requirements; unknown stays unknown. Full-task external comparisons test utility, while ablations and controls test attribution. The executor repairs evaluator errors and recomputes all comparable historical rows, using retained outputs before rerunning; identify old protocols as historical. Only changes to goal meaning need the user's decision. At important-result mentor calls, save its current eight-dimensional assessment below the table in at most 1000 characters, replacing the previous assessment rather than adding a log.";
-var DOVE_RESEARCH_EXPERIMENT_ITERATION = "Develop with available ground truth and reruns, without per-run registration. One method round uses one code version and can contain coordinated changes; later method-code changes start a new version and full applicable evaluation. Keep old versions for ablation, fair budgets and causal controls that fix other factors. After test use, changed methods need a fresh draw from data unused in development or previous tests, with same-set baselines. For final confirmation, state the claim, controls, data and metrics in the brief and use the heldout once.";
+var DOVE_RESEARCH_ROUND_CYCLE = "Call dove-mentor at each round end, after two consecutive rounds without new scientific results, when the user corrects direction or questions the paper claim/story, before changing routes, or when requested. Engineering and verification failures count; seek diagnosis after two, and by the third explain the blockage and ask the user before another round. Use a new context per round without execution conversation, allowing 2\u20133 clarifications within a judgment. Mentors on either host read .dove/install/RESEARCH_QUALITY.md for returns and tracking. Use Dove's generated mentor call template (dove mentor brief --project <root>). Status and bounded replies need no round or handoff; honor discussion-only and stop requests.";
+var DOVE_RESEARCH_ROUND_RECORDS = "Each round has one rounds/NNN-brief.md (at most 2000 characters) and one NNN-result.md (at most 3000). Link support in ordinary project directories, not extra round attachments. Start briefs with Author: mentor / user / external (\u5BFC\u5E08 / \u7528\u6237 / \u5916\u90E8), method version and dated user sources; priority is user > external > mentor. Save mentor briefs verbatim; name replacement authors and reasons. Results have four headings: Changes and version; Measurements and artifacts; Prediction versus actual; Objections to this brief / factual corrections. The mentor answers objections first. RESEARCH.md is a short history index; preserve historical missions/, experiments/ and claims/ without adding entries.";
+var DOVE_RESEARCH_EVALUATION = "EVAL.md starts with a completion reference to the script, protocol and all user metrics, then one row per method version: Date; Version/round; Protocol/split; Measurements; Unseen data/train-test gap; Conclusion; Artifacts. Cells hold numbers and at most one sentence within 200 characters; link detailed values. Keep engineering logs and process status out. Formal comparisons include complete strong same-input baselines and all confirmed requirements; unknown stays unknown. The executor repairs evaluator errors and recomputes all comparable historical rows, using retained outputs before rerunning; keep old protocols as history. Save the mentor's current assessment as specified in RESEARCH_QUALITY.md.";
+var DOVE_RESEARCH_EXPERIMENT_ITERATION = "Develop with available ground truth and reruns, without per-run registration. Each round uses one method-code version, including coordinated changes; later code changes need a new version and full applicable evaluation. Retain old versions for ablation, with fair budgets and causal controls fixing other factors. After test use, changed methods need a fresh draw unused in development or previous tests and same-set baselines. For final confirmation, put the claim, controls, data and metrics in the brief and use heldout once.";
 var DOVE_RESEARCH_CORRECTION_RECORDING = "Keep IDENTITY.md within 1200 characters in fixed fields: Current round: rounds/NNN-brief.md; Round status: ongoing / paused / completed; Mainline; Target tier (conference/journal level); Deployment inputs/outputs; Completion; User restrictions; Recent corrections; Research state. Ask once if the target tier is missing; do not assume one. Each restriction names the quotation, date/source, whether it is original user wording or a relay, and whether it is long-term or task-specific. Relays and task-specific limits are not standing restrictions. Update research state after important results and apply corrections to action, not just quotations. Keep method rejections in briefs or mentor notes. Preserve unchanged Mainline wording. For recurring corrections, dove projects status --json locates relevant cards; ask once before changing AUTHOR_PREFERENCES and never edit it automatically.";
 function renderDoveResearchReanchor() {
   return "Read the identity card, EVAL.md and current brief; continue the current task within authorization. Keep Mainline stable and dated user originals.";
@@ -14503,8 +14505,8 @@ var DOVE_RESEARCH_QUALITY_CRITERIA = Object.freeze([
 var DOVE_RESEARCH_REFERENCE_BULLETS = Object.freeze([
   "Judge substantive quality, confidence in evidence, sufficiency for the current use and completed work separately. Explain unknown, unformed or inapplicable items instead of giving zero. State scope and conditions; do not average ordinal grades or infer acceptance probabilities.",
   ...DOVE_RESEARCH_QUALITY_CRITERIA,
-  "Choose core work by the user's goal, benefit over serious alternatives, concrete mechanism and key unknown. Inspected sources, derivation, code or observations can justify implementation before effects are measured or theory and baseline libraries are complete. Ask whether the proposed scale and change can answer the question, not whether they are the smallest. A connected pipeline is not a designed and tested core mechanism.",
-  "Use literature and cross-domain reasoning to generate mechanisms, then seek where they fail. For new claims, inspect decision-changing neighbors across fields at the same contribution granularity. Known parts do not rule out novelty, while paradigm labels, generic strengths and absence of a complete precedent do not prove it. Separate operation equivalence, expressive coverage, public availability and empirical parity. During topic selection, read and follow the project's existing selection standards before generating candidates; outside that stage, consult rubrics relevant to the deliverable.",
+  "Choose core work and its scale using the goal, benefits, alternatives, mechanism and unknowns in the shared contract. Inspected sources, derivation, code or observations can justify implementing a selected method before effects are measured or theory and baseline libraries are complete.",
+  "For topic selection, apply the sourced gaps, mechanism search, candidate cards and adversarial review in RESEARCH_QUALITY.md. For other novelty claims, inspect decisive neighbors across fields at equal contribution granularity. Known parts do not rule out novelty; paradigm labels and absence of precedent do not prove it. Separate operation equivalence, expressive coverage, public availability and empirical parity. Use criteria relevant to the deliverable.",
   "Interfaces, inherited code, available datasets and teacher outputs do not define value, reference truth or the user's goal. If the problem, population, allowed information, output, reference, proxy, contribution or completion meaning changes, explain it. A new route cannot erase an old proposition's failure or inherit its success.",
   DOVE_RESEARCH_ACTUAL_MATERIAL_FACT_BOUNDARY,
   DOVE_RESEARCH_CANDIDATE_COVERAGE,
@@ -14524,13 +14526,23 @@ function renderDoveResearchQualityReference() {
 - \u7531\u4EFB\u52A1\u6536\u76CA\u3001\u5408\u7406\u66FF\u4EE3\u3001\u673A\u5236\u4F9D\u636E\u548C\u5173\u952E\u672A\u77E5\u9009\u62E9\u5B9E\u9645\u5DE5\u4F5C\u3002\u89C4\u6A21\u548C\u6539\u52A8\u5FC5\u987B\u80FD\u56DE\u7B54\u95EE\u9898\uFF0C\u4E0D\u80FD\u5C31\u6269\u5927\u6216\u91CD\u8BBE\u8BA1\uFF0C\u80FD\u5C31\u4E0D\u5FC5\u66F4\u5927\uFF1B\u94FE\u8DEF\u63A5\u901A\u4E0D\u7B49\u4E8E\u6838\u5FC3\u673A\u5236\u5F97\u5230\u8BBE\u8BA1\u4E0E\u68C0\u9A8C\u3002
 - \u5148\u4F8B\u6BD4\u8F83\u5224\u65AD\u8D21\u732E\u8986\u76D6\uFF0C\u5B8C\u6574\u4EFB\u52A1\u4E0E\u5916\u90E8\u6BD4\u8F83\u5224\u65AD\u6548\u7528\uFF0C\u5185\u90E8\u5BF9\u7167\u5224\u65AD\u5F52\u56E0\uFF0C\u4E09\u8005\u4E0D\u4E92\u4EE3\u3002\u4E8B\u5B9E\u6765\u81EA\u5B9E\u8BFB\u3001\u63A8\u5BFC\u3001\u4EE3\u7801\u6216\u89C2\u5BDF\uFF1B\u6548\u679C\u6765\u81EA\u5B9E\u6D4B\u3002\u4FDD\u7559\u4FE1\u606F\u6761\u4EF6\u3001\u9884\u7B97\u3001\u5931\u8D25\u5206\u6BCD\u3001\u672A\u77E5\u4E0E\u53CD\u8BC1\u3002
 - \u5F00\u53D1\u53EF\u770B\u771F\u503C\u91CD\u8DD1\u3002\u65B9\u6CD5\u6539\u53D8\u5C31\u53E6\u5F00\u7248\u672C\u5E76\u5B8C\u6574\u8BC4\u6D4B\uFF1B\u6D4B\u8BD5\u7528\u8FC7\u540E\u518D\u6539\u65B9\u6CD5\uFF0C\u9700\u8981\u771F\u6B63\u672A\u7528\u8FC7\u7684\u6D4B\u8BD5\u6570\u636E\u53CA\u540C\u96C6\u5BF9\u7167\u3002\u6267\u884C\u8005\u4FEE\u8BC4\u6D4B\u5E76\u91CD\u7B97\u53EF\u6BD4\u5386\u53F2\uFF0C\u4E0D\u6362\u76EE\u6807\u5236\u9020\u901A\u8FC7\uFF1B\u5BFC\u5E08\u53EA\u7BA1\u65B9\u5411\u3002
-- \u91CD\u8981\u7ED3\u679C\u7531\u5BFC\u5E08\u7ED9\u51FA\u6709\u4F9D\u636E\u7684\u5F53\u524D\u516B\u7EF4\u5224\u65AD\uFF0C\u6700\u5F31\u4E14\u51B3\u5B9A\u6027\u7684\u7EF4\u5EA6\u5F71\u54CD\u4E0B\u4E00\u8F6E\u3002\u8D1F\u7ED3\u679C\u4E5F\u53EF\u589E\u52A0\u8BA4\u8BC6\uFF1B\u5B9E\u73B0\u9519\u8BEF\u3001\u8BC4\u4EF7\u5931\u6548\u4E0E\u547D\u9898\u88AB\u5426\u5B9A\u8981\u5206\u5F00\uFF0C\u4E0D\u7528\u5DE5\u7A0B\u6838\u9A8C\u3001\u8BA1\u5212\u6216\u8BB0\u5F55\u6570\u5145\u5F53\u79D1\u7814\u7ED3\u679C\u3002
+- \u91CD\u8981\u7ED3\u679C\u7531\u5BFC\u5E08\u7ED9\u51FA\u81F3\u591A 1000 \u5B57\u7B26\u7684\u5F53\u524D\u516B\u7EF4\u5224\u65AD\uFF0C\u8BF4\u660E\u7B49\u7EA7\u3001\u4F9D\u636E\u4E0E\u672A\u77E5\uFF1B\u4E3B\u4F1A\u8BDD\u66FF\u6362 EVAL.md \u8868\u540E\u5F53\u524D\u8BC4\u5206\uFF0C\u4E0D\u8FFD\u52A0\u65E5\u5FD7\u6216\u81EA\u8BC4\u3002\u6700\u5F31\u4E14\u51B3\u5B9A\u6027\u7684\u7EF4\u5EA6\u5F71\u54CD\u4E0B\u4E00\u8F6E\u3002\u8D1F\u7ED3\u679C\u4E5F\u53EF\u589E\u52A0\u8BA4\u8BC6\uFF1B\u5B9E\u73B0\u9519\u8BEF\u3001\u8BC4\u4EF7\u5931\u6548\u4E0E\u547D\u9898\u88AB\u5426\u5B9A\u8981\u5206\u5F00\uFF0C\u4E0D\u7528\u5DE5\u7A0B\u6838\u9A8C\u3001\u8BA1\u5212\u6216\u8BB0\u5F55\u6570\u5145\u5F53\u79D1\u7814\u7ED3\u679C\u3002
+
+## \u9009\u9898\u4E0E\u65B0\u610F\u5224\u65AD
+
+\u7528\u6237\u672A\u9009\u4E3B\u7EBF\u65F6\uFF0C\u5148\u8BFB\u9879\u76EE\u9009\u9898\u6807\u51C6\uFF0C\u6309\u6709\u610F\u4E49\u7684\u65B9\u5411\u5217\u51E0\u6761\u6311\u6218\u8F74\uFF0C\u6BCF\u8F74\u6DF1\u5165\u627E\u81F3\u591A\u4E24\u4E2A\u7F3A\u53E3\u3002\u7F3A\u53E3\u5199\u6210\u201C\u5DF2\u6709\u65B9\u6CD5\u901A\u8FC7 Y \u505A X\uFF0C\u4F46 Y \u7559\u4E0B\u95EE\u9898 Z\u201D\uFF0C\u70B9\u660E\u573A\u666F\u4E0E\u53D7\u6311\u6218\u7684\u5047\u8BBE\uFF1B\u65B9\u6CD5\u7C7B\u7684 Z \u8981\u5177\u4F53\u5230\u65B9\u6CD5\u5C42\u9762\u3002\u6BCF\u4E2A\u7F3A\u53E3\u81F3\u5C11\u5F15\u7528\u4E24\u7BC7\u771F\u6B63\u8BFB\u8FC7\u6B63\u6587\u3001\u5DEE\u4E00\u70B9\u505A\u5230\u7684\u8BBA\u6587\uFF0C\u9010\u7BC7\u8BF4\u660E\u5DEE\u5728\u54EA\u91CC\uFF0C\u4E0D\u80FD\u4EC5\u51ED\u6807\u9898\u3001\u6458\u8981\u6216\u201C\u6CA1\u4EBA\u505A\u8FC7\u201D\u3002\u5199\u660E\u7F3A\u9677\u7C7B\u522B\uFF0C\u5982\u7F3A\u673A\u5236\u3001\u7B97\u6CD5\u5C40\u9650\u3001\u5F52\u7EB3\u504F\u7F6E\u4E0D\u5BF9\u3001\u4FE1\u7528\u5206\u914D\u3001\u76EE\u6807\u4E0D\u5339\u914D\u3001\u8868\u793A\u5C40\u9650\u6216\u6269\u5C55\u6027\uFF0C\u4EE5\u53CA\u8C01\u88AB\u963B\u788D\u3001\u4EC0\u4E48\u89C2\u5BDF\u6216\u6BD4\u8F83\u80FD\u8BC1\u660E\u7F3A\u53E3\u8865\u4E0A\u4E86\uFF1B\u6B64\u65F6\u4E0D\u9884\u8BBE\u89E3\u6CD5\u3002\u8D21\u732E\u7C7B\u578B\u7531\u9879\u76EE\u6807\u51C6\u51B3\u5B9A\uFF0C\u53EA\u6709\u6807\u51C6\u8981\u6C42\u65F6\u624D\u9650\u65B9\u6CD5\u8D21\u732E\u3002
+
+\u9488\u5BF9\u5177\u4F53\u7F3A\u53E3\uFF0C\u7528 6\u201310 \u4E2A\u67E5\u8BE2\u8DE8\u81F3\u5C11 3 \u4E2A\u5176\u4ED6\u5B50\u9886\u57DF\u5BFB\u627E\u89E3\u51B3\u8FC7\u7ED3\u6784\u76F8\u4F3C\u96BE\u9898\u7684\u673A\u5236\uFF0C\u4FDD\u7559\u67E5\u8BE2\u4E0E\u6765\u6E90\u3002\u672C\u9886\u57DF\u6765\u6E90\u4E5F\u53EF\u4EE5\uFF0C\u4F46\u4E0D\u80FD\u53EA\u662F\u91CD\u65B0\u53D1\u73B0\u6700\u8FD1\u90BB\u3002\u9605\u8BFB\u6765\u6E90\u673A\u5236\u548C\u6700\u8FD1\u7684\u672C\u9886\u57DF\u8BBA\u6587\u540E\uFF0C\u751F\u6210\u5E76\u5217\u5019\u9009\uFF0C\u4E0D\u8FB9\u751F\u6210\u8FB9\u780D\u9898\uFF1B\u6539\u8FDB\u5DF2\u6709\u5019\u9009\u65F6\u5199\u660E\u5176\u7F16\u53F7\u3001\u5F31\u70B9\u548C\u6539\u53D8\u3002\u5361\u7247\u56FA\u5B9A\u4E03\u680F\uFF1A\u4E00\u53E5\u8BDD\uFF1B\u7F3A\u53E3\uFF1B\u6765\u6E90\u673A\u5236\uFF08\u8BBA\u6587\u7F16\u53F7\u3001\u673A\u5236\u53CA\u539F\u5904\u4E3A\u4F55\u6709\u6548\uFF09\uFF1B\u5BF9\u5E94\u5173\u7CFB\uFF08\u8C01\u626E\u6F14\u8C01\uFF09\uFF1B\u6210\u7ACB\u524D\u63D0\uFF08\u4E3A\u4F55\u53EF\u80FD\u6210\u7ACB\u53CA\u5FC5\u987B\u6210\u7ACB\u7684\u6761\u4EF6\uFF09\uFF1B\u8FD1\u90BB\u5DEE\u522B\uFF08\u672C\u9886\u57DF\u8BBA\u6587\u7F16\u53F7\u53CA\u5177\u4F53\u5DEE\u522B\uFF09\uFF1B\u6700\u5927\u98CE\u9669\u3002\u6982\u5FF5\u5BF9\u5E94\u8981\u6E05\u695A\uFF0C\u4E0D\u7528\u4F2A\u4EE3\u7801\u3001\u8D85\u53C2\u6570\u6216\u5B8C\u6574\u5B9E\u9A8C\u65B9\u6848\u6324\u6389\u60F3\u6CD5\u672C\u8EAB\u3002
+
+\u5BFC\u5E08\u6216\u5BBF\u4E3B\u4E2D\u9694\u79BB\u7684 Dove \u5224\u65AD\u4E0A\u4E0B\u6587\u5148\u6838\u5BF9\u6765\u6E90\u673A\u5236\u4E0E\u8FC1\u79FB\u524D\u63D0\uFF0C\u518D\u4E3B\u52A8\u7528\u201C\u501F\u7528\u673A\u5236\uFF0B\u76EE\u6807\u95EE\u9898\u201D\u68C0\u7D22\uFF0C\u5C1D\u8BD5\u8BC1\u4F2A\u65B0\u610F\uFF0C\u4E0D\u53EA\u8BFB\u5019\u9009\u81EA\u8FF0\uFF1B\u8FD9\u4E0D\u662F\u5B8C\u6574\u7A3F\u4EF6\u7684 dove-review \u5BA1\u7A3F\u3002\u6BCF\u4E2A\u5019\u9009\u7ED9\u51FA\u201C\u7559\u4E0B / \u4FEE\u6539 / \u5426\u6389\uFF08\u539F\u56E0\uFF09\u201D\uFF1B\u4FEE\u6539\u53EA\u9009\u6700\u5F31\u7684\u4E00\u9879\uFF1A\u65B0\u610F\u3001\u8FDE\u8D2F\u3001\u53EF\u884C\u3001\u6E05\u6670\u3001\u5BF9\u5E94\u5173\u7CFB\u6216\u4F9D\u636E\u3002\u9644\u8BBA\u6587\u7F16\u53F7\u53CA\u4E00\u4E24\u53E5\u8BC1\u636E\u7406\u7531\uFF0C\u5E76\u5199\u4E00\u53E5\u6700\u5F3A\u53CD\u5BF9\u3002\u5361\u7247\u5934\u90E8\u4FDD\u7559\u72B6\u6001\u3001\u9636\u6BB5\u3001\u5B9A\u4F4D\u548C\u4E03\u680F\u6458\u8981\uFF0C\u53E6\u5217\u8BC4\u5BA1\u7ED3\u8BBA\u3001\u4FEE\u6539\u7126\u70B9\u3001\u6700\u5F3A\u53CD\u5BF9\u3001\u8BC4\u5BA1\u4F9D\u636E\uFF1B\u201C\u6539\u8FDB\u81EA\u201D\u53EF\u9009\u3002\u6BD4\u8F83\u540E\u63A8\u8350 2\u20133 \u4E2A\u4EA4\u7528\u6237\u9009\u62E9\uFF0C\u9009\u5B9A\u524D\u4E0D\u5B9E\u73B0\u65B9\u6CD5\uFF0C\u53EA\u505A\u6807\u51C6\u5141\u8BB8\u7684\u8BCA\u65AD\u3002
+
+\u9700\u8981\u6B63\u6587\u7EC6\u8282\u65F6\uFF0C\u5E26 1\u20135 \u4E2A\u5177\u4F53\u95EE\u9898\u8BFB\u5168\u6587\uFF0C\u5728 .dove/research/papers/<id>.md \u8BB0\u6807\u9898\u3001\u6765\u6E90\u3001\u4E00\u6BB5\u201C\u8FD9\u7BC7\u505A\u4E86\u4EC0\u4E48\u201D\u548C\u7D2F\u79EF\u9010\u95EE\u56DE\u7B54\uFF0C\u6CE8\u660E\u7AE0\u8282\u3001\u9875\u7801\u6216\u516C\u5F0F\u7B49\u6B63\u6587\u4F4D\u7F6E\u3002\u590D\u7528\u5DF2\u56DE\u7B54\u7684\u95EE\u9898\uFF0C\u4FDD\u7559\u65E7\u7B54\u6848\uFF0C\u53EA\u8865\u65B0\u95EE\u9898\uFF1B\u6B63\u6587\u4E0D\u80FD\u56DE\u7B54\u7684\u660E\u786E\u8BB0\u672A\u77E5\u3002\u65B0\u610F\u4E0E\u649E\u9898\u5224\u65AD\u5F15\u7528\u8FD9\u4E9B\u7B14\u8BB0\u3002\u53EA\u8BFB\u4E0A\u4E0B\u6587\u8FD4\u56DE\u65B0\u589E\u95EE\u7B54\u7531\u4E3B\u4F1A\u8BDD\u4FDD\u5B58\uFF0C\u4E0D\u81EA\u884C\u5199\u5165\u3002
 
 ## \u4E24\u79CD\u5BBF\u4E3B\u5171\u540C\u7684\u5BFC\u5E08\u8FD4\u56DE
 
 \u5BFC\u5E08\u6BCF\u6B21\u8FD4\u56DE\u81F3\u591A 1000 \u5B57\u7B26\u7684\u81EA\u6709\u7B14\u8BB0\uFF0C\u5199\u5224\u65AD\u3001\u9884\u6D4B\u4E0E\u5151\u73B0\u3001\u5426\u6389\u7684\u65B9\u6CD5\u65CF\u53CA\u539F\u56E0\u3001\u62C5\u5FE7\u548C\u539F\u8BDD\u5DF2\u8BFB\u8303\u56F4\u3002\u4E3B\u4F1A\u8BDD\u539F\u6837\u8FFD\u52A0\u5230 MENTOR_NOTES.md\uFF1B\u8D85\u8FC7 6000 \u5B57\u7B26\u65F6\uFF0C\u7531\u5BFC\u5E08\u5408\u5E76\u6210\u81F3\u591A 3000 \u5B57\u7B26\u7684\u66FF\u6362\u5168\u6587\uFF0C\u4E0D\u7531\u6267\u884C\u8005\u4EE3\u5199\u3002
 
-\u6BCF\u6B21\u5BFC\u5E08\u8C03\u7528\u90FD\u68C0\u67E5 watch/config.json\u3001\u672A\u5224\u65AD\u8BBA\u6587\u3001\u5DF2\u6709\u5F71\u54CD\u548C\u6700\u8FD1\u626B\u63CF\uFF0C\u4E0D\u7B49\u5F85\u65B0\u8F6E\u6B21\u3002\u914D\u7F6E\u4E3A draft \u6216\u660E\u663E\u8DD1\u504F\u65F6\uFF0C\u7ED9\u51FA\u672C\u9879\u76EE\u5173\u952E\u8BCD\u3001\u4F5C\u8005\u3001\u4F1A\u8BAE\u3001\u673A\u6784\u548C\u8FD1\u90BB\u7F16\u53F7\uFF1B\u4E3B\u4F1A\u8BDD\u5199\u56DE\u5E76\u8BBE source \u4E3A mentor\u3002\u8BBA\u6587\u9010\u7BC7\u6309\u201C- \u7F16\u53F7 | \u649E\u9898/\u65B0\u57FA\u7EBF/\u53EF\u501F\u7528/\u65E0\u5173 | \u4E00\u53E5\u7406\u7531\u201D\u8FD4\u56DE\uFF0C\u91CD\u8981\u5224\u65AD\u5148\u67E5\u5168\u6587\u4E0E\u4F5C\u8005\u5DE5\u4F5C\uFF0C\u672A\u77E5\u4FDD\u7559\uFF0C\u8986\u76D6\u6838\u5FC3\u8D21\u732E\u627E\u7528\u6237\uFF1B\u4E3B\u4F1A\u8BDD\u72EC\u7ACB\u4FDD\u5B58\u5230 watch/impact-\u65E5\u671F.md\uFF0C\u5DF2\u6709 brief \u5224\u65AD\u4ECD\u53EF\u7528\u3002\u672A\u626B\u63CF\u6216\u5DF2\u8D85\u8FC7\u4E03\u5929\u65F6\u68C0\u7D22\u8FD1\u671F\u63A5\u6536\u3001\u7EFC\u8FF0\u548C\u8BA8\u8BBA\uFF0C\u8FD4\u56DE\u5E26\u6765\u6E90\u53CA\u9879\u76EE\u5F71\u54CD\u7684\u9886\u57DF\u626B\u63CF\uFF0C\u81F3\u591A 2000 \u5B57\u7B26\uFF0C\u53E6\u5B58 watch/scan-\u65E5\u671F.md\u3002\u4EE5\u4E0A\u5185\u5BB9\u4E0D\u6324\u8FDB\u8F6E\u6B21\u8BF4\u660E\u3002
+\u6BCF\u6B21\u5BFC\u5E08\u8C03\u7528\u90FD\u68C0\u67E5 watch/config.json\u3001\u672A\u5224\u65AD\u8BBA\u6587\u3001\u5DF2\u6709\u5F71\u54CD\u548C\u6700\u8FD1\u626B\u63CF\uFF0C\u4E0D\u7B49\u5F85\u65B0\u8F6E\u6B21\u3002\u914D\u7F6E\u4E3A draft \u6216\u660E\u663E\u8DD1\u504F\u65F6\uFF0C\u7ED9\u51FA\u672C\u9879\u76EE\u5173\u952E\u8BCD\u3001\u4F5C\u8005\u3001\u4F1A\u8BAE\u3001\u673A\u6784\u548C\u8FD1\u90BB\u7F16\u53F7\uFF1B\u4E3B\u4F1A\u8BDD\u5199\u56DE\u5E76\u8BBE source \u4E3A mentor\u3002\u9010\u7BC7\u6309\u201C- ID | \u5224\u65AD | \u7406\u7531 | \u65B9\u5411 | \u4E2D\u6587\u4E00\u53E5\u8BDD\u201D\u8FD4\u56DE\uFF0C\u5224\u65AD\u4E3A\u649E\u9898\u3001\u65B0\u57FA\u7EBF\u3001\u53EF\u501F\u7528\u6216\u65E0\u5173\u3002\u5BFC\u5E08\u6216\u4E3B\u4F1A\u8BDD\u53EF\u636E\u6458\u8981\u5199\u201C\u8FD9\u7BC7\u505A\u4E86\u4EC0\u4E48\u201D\uFF0C\u4E0D\u628A\u6458\u8981\u6216\u6838\u5B9E\u5143\u6570\u636E\u5F53\u5168\u6587\u5DF2\u8BFB\uFF1B\u91CD\u8981\u6216\u7591\u4F3C\u649E\u9898\u5224\u65AD\u5148\u67E5\u5168\u6587\u4E0E\u4F5C\u8005\u5DE5\u4F5C\uFF0C\u672A\u77E5\u4FDD\u7559\uFF0C\u8986\u76D6\u6838\u5FC3\u8D21\u732E\u627E\u7528\u6237\u3002\u4E3B\u4F1A\u8BDD\u53E6\u5B58 watch/impact-\u65E5\u671F.md\uFF1B\u65B0\u57FA\u7EBF\u548C\u53EF\u501F\u7528\u5185\u5BB9\u7528\u4E8E\u4E0B\u4E00\u6B65\u5DE5\u4F5C\u3002\u65B0\u57FA\u7EBF\u3001\u53EF\u501F\u7528\u6216\u649E\u9898\u8BBA\u6587\u7531\u663E\u5F0F\u9762\u677F\u79EF\u7D2F\u6216\u4E0B\u4E00\u6B21 watch \u8FD0\u884C\u6309\u65B9\u5411\u5199\u5165 papers/library.json \u548C papers/library.md\uFF0C\u4F9B Draft \u5206\u7EC4\u5F15\u7528\u548C\u5BFC\u51FA BibTeX\uFF1B\u8BFB\u9762\u677F\u4E0D\u5199\u6587\u732E\u5E93\u3002\u672A\u626B\u63CF\u6216\u5DF2\u8D85\u8FC7\u4E03\u5929\u65F6\u68C0\u7D22\u8FD1\u671F\u63A5\u6536\u3001\u7EFC\u8FF0\u548C\u8BA8\u8BBA\uFF0C\u8FD4\u56DE\u5E26\u6765\u6E90\u53CA\u9879\u76EE\u5F71\u54CD\u7684\u9886\u57DF\u626B\u63CF\uFF0C\u81F3\u591A 2000 \u5B57\u7B26\uFF0C\u53E6\u5B58 watch/scan-\u65E5\u671F.md\u3002\u4EE5\u4E0A\u5185\u5BB9\u4E0D\u6324\u8FDB\u8F6E\u6B21\u8BF4\u660E\u3002
 `;
 }
 function renderDoveResearchQualityFullReference() {
@@ -14747,12 +14759,7 @@ tools: Read, Grep, Glob, mcp__exa, mcp__dove-paper-search
 
 ## \u6750\u6599\u4E0E\u56DB\u4E2A\u95EE\u9898
 
-\u4E3B\u4F1A\u8BDD\u53EA\u4EA4\u6750\u6599\u6E05\u5355\uFF0C\u4E0D\u66FF\u4F60\u6846\u5B9A\u4EFB\u52A1\u3002\u5148\u8BFB .dove/research/MENTOR_NOTES.md\u3001\u8EAB\u4EFD\u5361\u4E2D\u7684\u4E3B\u7EBF\u548C\u76EE\u6807\u6863\u6B21\u3001EVAL \u6700\u8FD1\u51E0\u884C\u3001\u6700\u8FD1\u7684 brief/result\u3001\u5B9E\u9645\u53D8\u66F4\u548C\u539F\u59CB\u4EA7\u7269\u3001\u9879\u76EE\u9009\u9898\u6807\u51C6\uFF0C\u4EE5\u53CA\u7528\u6237\u539F\u8BDD\u3002\u6267\u884C\u8005\u7684\u610F\u89C1\u53EA\u662F\u6807\u660E\u6765\u6E90\u7684\u9644\u5C5E\u6750\u6599\uFF0C\u4E0D\u51B3\u5B9A\u4F60\u8981\u56DE\u7B54\u4EC0\u4E48\u3002\u56FA\u5B9A\u56DE\u7B54\uFF1A
-
-1. \u76F8\u5BF9\u7528\u6237\u539F\u8BDD\uFF0C\u65B9\u5411\u5BF9\u4E0D\u5BF9\uFF1F
-2. \u8FD9\u51E0\u8F6E\u662F\u5728\u5EFA\u7ACB\u901A\u7528\u80FD\u529B\uFF0C\u8FD8\u662F\u53CD\u590D\u6253\u8865\u4E01\uFF1F
-3. \u79BB\u7528\u6237\u76EE\u6807\u548C\u76EE\u6807\u6863\u6B21\u8FD8\u5DEE\u4EC0\u4E48\uFF1F
-4. \u4E0B\u4E00\u8F6E\u8BE5\u505A\u4EC0\u4E48\uFF0C\u4E3A\u4EC0\u4E48\uFF1F
+\u7528 Dove \u751F\u6210\u7684\u5BFC\u5E08\u8C03\u7528\u6A21\u677F\uFF08dove mentor brief --project <root>\uFF09\uFF0C\u9605\u8BFB\u5176\u4E2D\u7684\u6750\u6599\u5E76\u56DE\u7B54\u672B\u5C3E\u56DB\u95EE\u3002
 
 \u6309\u63D0\u4F9B\u7684\u5BBF\u4E3B\u539F\u8BDD\u6E90\u8DEF\u5F84\u548C\u65E5\u671F\u8303\u56F4\u5B9A\u4F4D\u771F\u5B9E\u7528\u6237\u6B63\u6587\uFF1B\u63A5\u624B\u65F6\u8BFB\u76F8\u5173\u5386\u53F2\uFF0C\u4EE5\u540E\u8BFB\u4E0A\u6B21\u5DF2\u8BFB\u8303\u56F4\u4E4B\u540E\u7684\u539F\u8BDD\u3002\u6392\u9664\u5143\u6D88\u606F\u3001\u5B50\u4F1A\u8BDD\u3001\u5DE5\u5177\u8FD4\u56DE\u3001\u7CFB\u7EDF\u6CE8\u5165\u548C\u6267\u884C\u8005\u603B\u7ED3\u3002\u5F53\u524D\u539F\u6587\u5C1A\u672A\u843D\u76D8\u65F6\u53EF\u7531\u4E3B\u4F1A\u8BDD\u76F4\u63A5\u63D0\u4F9B\u3002\u6765\u6E90\u8BFB\u4E0D\u5230\u5C31\u8BF4\u660E\u672A\u77E5\uFF0C\u4E0D\u628A\u8F6C\u8FF0\u5F53\u539F\u8BDD\uFF0C\u4E5F\u4E0D\u636E\u6B64\u64A4\u9500\u7528\u6237\u627F\u8BFA\u6216\u5BBF\u4E3B\u6743\u9650\u3002\u9650\u5236\u8981\u5206\u6E05\u539F\u8BDD\u6216\u8F6C\u8FF0\u3001\u957F\u671F\u6216\u5355\u6B21\u4EFB\u52A1\uFF1B\u53D1\u73B0\u8BB0\u9519\u5C31\u6307\u51FA\u5E94\u600E\u6837\u6539\u505A\u6CD5\u3002
 
@@ -14764,31 +14771,23 @@ tools: Read, Grep, Glob, mcp__exa, mcp__dove-paper-search
 
 \u6570\u503C\u7B49\u4EF7\u3001\u52A0\u901F\u3001\u53C2\u6570\u548C\u8BC4\u4EF7\u5668\u4FEE\u590D\u7531\u6267\u884C\u8005\u51B3\u5B9A\uFF1B\u4F60\u53EA\u5224\u65AD\u8FD9\u4E9B\u5DE5\u4F5C\u662F\u5426\u670D\u52A1\u4E3B\u7EBF\u3001\u662F\u5426\u5360\u65F6\u8FC7\u4E45\u3001\u8BC4\u4EF7\u662F\u5426\u4ECD\u56DE\u7B54\u7528\u6237\u95EE\u9898\u3002\u53D1\u73B0\u79D1\u5B66\u8BC4\u4EF7\u5931\u914D\u65F6\u8BF4\u660E\u7F3A\u53E3\u548C\u9700\u8981\u7684\u6BD4\u8F83\uFF0C\u4E0D\u9010\u9879\u88C1\u5B9A\u5DE5\u7A0B\u65B9\u6848\u3002\u6267\u884C\u8005\u4FEE\u6B63\u534F\u8BAE\u540E\u8981\u628A\u53EF\u6BD4\u8F83\u7684\u5386\u53F2\u65B9\u6CD5\u4E0E\u57FA\u7EBF\u6309\u540C\u4E00\u53E3\u5F84\u91CD\u7B97\uFF0C\u65E7\u534F\u8BAE\u6570\u503C\u4E0D\u6DF7\u7528\uFF1B\u6539\u53D8\u76EE\u6807\u542B\u4E49\u624D\u627E\u7528\u6237\u3002
 
-\u4E0B\u4E00\u6B65\u6309\u5B8C\u6574\u4EFB\u52A1\u6536\u76CA\u3001\u5408\u7406\u66FF\u4EE3\u3001\u673A\u5236\u4F9D\u636E\u548C\u5173\u952E\u672A\u77E5\u9009\u62E9\u6838\u5FC3\u8BBE\u8BA1\u3001\u673A\u5236\u8865\u5F3A\u6216\u8FA8\u522B\u6027\u53D6\u8BC1\u3002\u8FD9\u4E2A\u89C4\u6A21\u548C\u6539\u52A8\u80FD\u4E0D\u80FD\u56DE\u7B54\u95EE\u9898\uFF0C\u662F\u552F\u4E00\u7684\u89C4\u6A21\u5224\u636E\uFF1B\u56DE\u7B54\u4E0D\u4E86\u5C31\u6269\u5927\u6216\u91CD\u8BBE\u8BA1\uFF0C\u80FD\u56DE\u7B54\u5C31\u4E0D\u5FC5\u66F4\u5927\u3002\u94FE\u8DEF\u63A5\u901A\u4E0D\u7B49\u4E8E\u6838\u5FC3\u673A\u5236\u5DF2\u8BBE\u8BA1\u5E76\u68C0\u9A8C\u3002\u4E0D\u8981\u7528\u5C40\u90E8\u8865\u4E01\u3001\u7F29\u4E3B\u5F20\u6216\u53CD\u590D\u6838\u8D26\u4EE3\u66FF\u6838\u5FC3\u6C42\u89E3\u3002
+\u4E0B\u4E00\u6B65\u6309\u5B8C\u6574\u4EFB\u52A1\u6536\u76CA\u3001\u5408\u7406\u66FF\u4EE3\u3001\u673A\u5236\u4F9D\u636E\u548C\u5173\u952E\u672A\u77E5\u9009\u62E9\u6838\u5FC3\u8BBE\u8BA1\u3001\u673A\u5236\u8865\u5F3A\u6216\u8FA8\u522B\u6027\u53D6\u8BC1\uFF0C\u6309\u8D28\u91CF\u6458\u8981\u5224\u65AD\u89C4\u6A21\u4E0E\u673A\u5236\u8BC1\u636E\u3002\u4E0D\u8981\u7528\u5C40\u90E8\u8865\u4E01\u3001\u7F29\u4E3B\u5F20\u6216\u53CD\u590D\u6838\u8D26\u4EE3\u66FF\u6838\u5FC3\u6C42\u89E3\u3002
 
 \u6BCF\u8F6E\u7ED3\u675F\u90FD\u5224\u65AD\u65B9\u5411\uFF1B\u8FDE\u7EED\u4E24\u8F6E\u6CA1\u6709\u79D1\u7814\u7ED3\u679C\u5C31\u8BCA\u65AD\uFF0C\u5DE5\u7A0B\u5931\u8D25\u548C\u6838\u9A8C\u5931\u8D25\u4E5F\u7B97\u3002\u5230\u7B2C\u4E09\u8F6E\u4ECD\u65E0\u79D1\u7814\u7ED3\u679C\uFF0C\u5411\u7528\u6237\u8BF4\u6E05\u5361\u5728\u54EA\u91CC\uFF0C\u8BF7\u7528\u6237\u51B3\u5B9A\u518D\u7EE7\u7EED\u3002\u51C6\u5907\u6362\u8DEF\u7EBF\u5148\u5224\u65AD\uFF0C\u5E76\u5728\u6C47\u62A5\u4E2D\u660E\u8BF4\u539F\u8DEF\u7EBF\u3001\u65B0\u8DEF\u7EBF\u548C\u539F\u56E0\uFF1B\u4E0D\u64C5\u6539\u7528\u6237\u56FA\u5B9A\u7684\u65B9\u6CD5\u6216\u76EE\u6807\u3002
 
-## \u9009\u9898\u5148\u53D1\u6563\uFF0C\u518D\u7531\u7528\u6237\u9009
+## \u9009\u9898\u4E0E\u8BBA\u6587\u8FFD\u8E2A
 
-\u7528\u6237\u5C1A\u672A\u786E\u8BA4\u4E3B\u7EBF\u65F6\uFF0C\u5148\u8BFB topics/CRITERIA.md \u6216\u9879\u76EE\u91CC\u7684\u9009\u9898\u6807\u51C6\uFF0C\u4EE5\u672C\u9879\u76EE\u6807\u51C6\u548C\u6700\u65B0\u7528\u6237\u539F\u8BDD\u4E3A\u51C6\u3002\u5148\u786E\u7ACB\u6709\u610F\u4E49\u7684\u65B9\u5411\uFF0C\u518D\u751F\u6210\u4E00\u6279\u5E76\u5217\u5019\u9009\uFF0C\u751F\u6210\u65F6\u4E0D\u780D\u9898\u3002\u771F\u5B9E\u68C0\u7D22\u65E2\u7528\u4E8E\u8FD1\u90BB\u5BA1\u67E5\uFF0C\u4E5F\u7528\u4E8E\u62D3\u5BBD\u5019\u9009\uFF1B\u6BD4\u8F83\u5177\u4F53\u65B9\u6CD5\u3001\u5173\u7CFB\u3001\u8D44\u6E90\u3001\u7ED3\u679C\u6216\u8BA4\u8BC6\uFF0C\u4E0D\u628A\u540C\u529F\u80FD\u5F53\u8D21\u732E\u7B49\u4EF7\uFF0C\u4E5F\u4E0D\u628A\u6362\u8303\u5F0F\u6216\u5DF2\u77E5\u90E8\u4EF6\u5F53\u6210\u521B\u65B0\u7684\u80AF\u5B9A\u6216\u5426\u5B9A\u3002
+\u672A\u9009\u4E3B\u7EBF\u65F6\uFF0C\u6309\u8D28\u91CF\u6458\u8981\u7684\u201C\u9009\u9898\u4E0E\u65B0\u610F\u5224\u65AD\u201D\u6267\u884C\u6B63\u6587\u53D6\u8BC1\u3001\u5206\u8F74\u627E\u7F3A\u53E3\u3001\u8DE8\u9886\u57DF\u627E\u673A\u5236\u548C\u5BF9\u6297\u8BC4\u5BA1\uFF0C\u4E0D\u9884\u8BBE\u4E0B\u6E38\u60F3\u6CD5\u3002\u7ED9\u51FA 2\u20133 \u4E2A\u6709\u4F9D\u636E\u7684\u63A8\u8350\uFF0C\u4EA4\u7528\u6237\u9009\u5B9A\uFF1B\u9009\u5B9A\u524D\u4E0D\u5B89\u6392\u65B9\u6CD5\u5B9E\u73B0\uFF0C\u53EA\u505A\u6807\u51C6\u5141\u8BB8\u7684\u8BCA\u65AD\u3002\u5DF2\u6709\u4E3B\u7EBF\u5219\u6CBF\u76EE\u6807\u63A8\u8FDB\uFF0C\u4E0D\u56E0\u63A8\u8350\u6216\u5C40\u90E8\u7ED3\u679C\u91CD\u9009\u3001\u964D\u6863\u3002
 
-\u7ED9\u51FA 2\u20133 \u4E2A\u6709\u4F9D\u636E\u7684\u63A8\u8350\uFF0C\u4EA4\u7528\u6237\u9009\u5B9A\uFF1B\u9009\u5B9A\u524D\u4E0D\u5B89\u6392\u65B9\u6CD5\u5B9E\u73B0\uFF0C\u53EA\u505A\u6807\u51C6\u5141\u8BB8\u7684\u8BCA\u65AD\u3002\u9700\u8981\u6574\u7406\u73B0\u6709\u6807\u51C6\u65F6\u53EF\u7528 dove topic start\uFF0C\u4F46\u5FC5\u987B\u8BFB\u6807\u51C6\u4E0D\u7B49\u4E8E\u5FC5\u987B\u6267\u884C\u8FD9\u4E2A\u547D\u4EE4\u3002\u5DF2\u786E\u8BA4\u4E3B\u7EBF\u5219\u6CBF\u76EE\u6807\u63A8\u8FDB\uFF0C\u4E0D\u56E0\u5BFC\u5E08\u63A8\u8350\u6216\u5C40\u90E8\u7ED3\u679C\u91CD\u65B0\u9009\u9898\u3001\u964D\u4F4E\u76EE\u6807\u6863\u6B21\u3002
-
-## \u8BBA\u6587\u8FFD\u8E2A\uFF0C\u6BCF\u6B21\u8C03\u7528\u90FD\u68C0\u67E5
-
-\u8FD9\u9879\u5DE5\u4F5C\u4E0D\u4F9D\u8D56\u8F6E\u6B21\u3002\u8BFB .dove/research/watch/config.json\uFF1B\u82E5 source \u4E3A draft \u6216\u7ED3\u679C\u660E\u663E\u8DD1\u504F\uFF0C\u8FD4\u56DE\u201C\u8FFD\u8E2A\u5EFA\u8BAE\u201D\uFF1A\u9488\u5BF9\u672C\u9879\u76EE\u7684\u82F1\u6587\u5173\u952E\u8BCD\u3001\u4F5C\u8005\u3001\u4F1A\u8BAE\u3001\u673A\u6784\u548C\u8FD1\u90BB arXiv \u7F16\u53F7\u3002\u4E3B\u4F1A\u8BDD\u628A\u5EFA\u8BAE\u5199\u56DE\u914D\u7F6E\u5E76\u8BBE source \u4E3A mentor\uFF0C\u4E0D\u53EA\u628A\u5EFA\u8BAE\u7559\u5728\u8BF4\u660E\u91CC\u3002
-
-\u8BFB\u53D6 watch/ \u4E2D\u5C1A\u672A\u5224\u65AD\u7684\u65B0\u8BBA\u6587\u53CA\u5DF2\u6709\u5F71\u54CD\u8BB0\u5F55\u3002\u76F8\u5173\u8BBA\u6587\u9010\u7BC7\u8FD4\u56DE\u201C- \u7F16\u53F7 | \u649E\u9898/\u65B0\u57FA\u7EBF/\u53EF\u501F\u7528/\u65E0\u5173 | \u4E00\u53E5\u7406\u7531\u201D\u3002\u91CD\u8981\u6216\u7591\u4F3C\u649E\u9898\u7684\u5148\u67E5\u5168\u6587\u3001\u4E3B\u9875\u548C\u4F5C\u8005\u5DE5\u4F5C\uFF1B\u6750\u6599\u4E0D\u8DB3\u5C31\u7559\u4E0B\u5F85\u6838\u5B9E\u9879\uFF0C\u4E0D\u80FD\u53EA\u636E\u6458\u8981\u5BA3\u5E03\u8986\u76D6\u3002\u8986\u76D6\u6838\u5FC3\u8D21\u732E\u65F6\u627E\u7528\u6237\uFF0C\u65B0\u57FA\u7EBF\u548C\u53EF\u501F\u7528\u5185\u5BB9\u8FDB\u5165\u4E0B\u4E00\u6B65\u5B9E\u9645\u5DE5\u4F5C\u3002\u4E3B\u4F1A\u8BDD\u628A\u5224\u65AD\u6309\u65E5\u671F\u4FDD\u5B58\u5230 watch/impact-\u65E5\u671F.md\uFF0C\u72EC\u7ACB\u4E8E\u8F6E\u6B21\uFF1B\u5DF2\u6709\u8F6E\u6B21\u91CC\u7684\u5224\u65AD\u4ECD\u53EF\u7528\uFF0C\u4E0D\u91CD\u590D\u8BC4\u3002
-
-\u8DDD\u6700\u8FD1 watch/scan-\u65E5\u671F.md \u8D85\u8FC7 7 \u5929\u6216\u4ECE\u672A\u626B\u63CF\u65F6\uFF0C\u987A\u5E26\u68C0\u7D22\u8FD1\u671F\u9876\u4F1A\u63A5\u6536\u3001\u7EFC\u8FF0\u548C\u91CD\u8981\u8BA8\u8BBA\u3002\u8FD4\u56DE\u201C\u9886\u57DF\u626B\u63CF\u201D\uFF0C\u6307\u51FA\u5BF9\u672C\u9879\u76EE\u7684\u5F71\u54CD\uFF0C\u6BCF\u6761\u5E26\u6765\u6E90\u94FE\u63A5\uFF0C\u5168\u6587\u81F3\u591A 2000 \u5B57\u7B26\uFF1B\u4E3B\u4F1A\u8BDD\u53E6\u5B58\u540C\u540D\u65E5\u671F\u6587\u4EF6\uFF0C\u4E0D\u7B49\u5F85\u65B0\u8F6E\u6B21\u3002
+\u6BCF\u6B21\u8C03\u7528\u90FD\u6309\u6458\u8981\u7684\u201C\u4E24\u79CD\u5BBF\u4E3B\u5171\u540C\u7684\u5BFC\u5E08\u8FD4\u56DE\u201D\u68C0\u67E5\u8FFD\u8E2A\u914D\u7F6E\u3001\u672A\u5224\u65AD\u8BBA\u6587\u548C\u626B\u63CF\u65E5\u671F\uFF0C\u8FD4\u56DE\u5EFA\u8BAE\u3001\u4E94\u5217\u8BBA\u6587\u5F71\u54CD\u53CA\u5230\u671F\u626B\u63CF\uFF0C\u4E0D\u7B49\u5F85\u65B0\u8F6E\u6B21\u3002\u6B63\u6587\u9605\u8BFB\u95EE\u7B54\u548C\u65B0\u610F\u5224\u65AD\u590D\u7528 papers/<id>.md\uFF0C\u7F3A\u7684\u95EE\u9898\u8FD4\u56DE\u7ED9\u4E3B\u4F1A\u8BDD\u8865\u5B58\uFF0C\u4E0D\u81EA\u884C\u5199\u6587\u4EF6\u3002
 
 ## \u8FD4\u56DE\u4EC0\u4E48
 
 \u8FD4\u56DE\u4E00\u4EFD\u81F3\u591A 2000 \u5B57\u7B26\u7684\u4E0B\u4E00\u8F6E\u8BF4\u660E\uFF0C\u5F00\u5934\u201C\u4F5C\u8005\uFF1A\u5BFC\u5E08\u201D\uFF0C\u6CE8\u660E\u65B9\u6CD5\u7248\u672C\u548C\u7528\u6237\u539F\u8BDD\u6765\u6E90\u8303\u56F4\u3002\u7528\u5B8C\u6574\u53E5\u5B50\u8BF4\u660E\u65B9\u5411\u5224\u65AD\u3001\u4EFB\u52A1\u6536\u76CA\u3001\u5173\u952E\u672A\u77E5\u3001\u884C\u52A8\u53CA\u4E0D\u540C\u7ED3\u679C\u600E\u6837\u6539\u53D8\u51B3\u5B9A\u3002\u6309\u95EE\u9898\u7ED9\u51FA\u516C\u5E73\u5BF9\u7167\u3001\u53EF\u7528\u8F93\u5165\u3001\u9884\u7B97\u3001\u9884\u6D4B\u4F9D\u636E\u548C\u5931\u8D25\u6750\u6599\uFF1B\u4E0D\u7B49\u5B8C\u6574\u7406\u8BBA\u6216\u57FA\u7EBF\u5E93\u624D\u5B89\u6392\u5DF2\u9009\u65B9\u6CD5\u7684\u6838\u5FC3\u5DE5\u4F5C\u3002\u6B63\u5F0F\u56E0\u679C\u6BD4\u8F83\u63A7\u5236\u5176\u4ED6\u56E0\u7D20\uFF0C\u7528\u8FC7\u6D4B\u8BD5\u540E\u65B9\u6CD5\u6539\u53D8\u8981\u53E6\u62BD\u771F\u6B63\u672A\u7528\u8FC7\u7684\u6570\u636E\u5E76\u540C\u96C6\u6BD4\u8F83\u57FA\u7EBF\u3002\u8BA1\u5212\u3001\u5192\u70DF\u548C\u5DE5\u7A0B\u6838\u9A8C\u4E0D\u5192\u5145\u79D1\u7814\u7ED3\u679C\u3002
 
-\u91CD\u8981\u7ED3\u679C\u540E\u53E6\u8FD4\u81F3\u591A 1000 \u5B57\u7B26\u7684\u516B\u7EF4\u8D28\u91CF\u5224\u65AD\uFF0C\u7ED9\u7B49\u7EA7\u3001\u4F9D\u636E\u4E0E\u672A\u77E5\u9879\uFF1B\u5B9E\u73B0 1\u20133\uFF0C\u5176\u4F59 1\u20134\u3002\u5148\u8BFB .dove/install/RESEARCH_QUALITY.md\uFF0C\u7EC6\u5219\u6309\u9700\u770B RESEARCH_QUALITY_FULL.md\uFF0C\u4E0D\u8BFB\u53D6\u4F5C\u8005\u504F\u597D\u3002\u4E3B\u4F1A\u8BDD\u66FF\u6362 EVAL \u8868\u540E\u5F53\u524D\u8BC4\u5206\uFF0C\u4E0D\u91CD\u590D\u81EA\u8BC4\u3002\u6700\u5F31\u4E14\u51B3\u5B9A\u6027\u7684\u7EF4\u5EA6\u5F71\u54CD\u4E0B\u4E00\u8F6E\uFF0C\u4E0D\u5E73\u5747\u5E8F\u6570\u3001\u4E0D\u6362\u7B97\u5F55\u7528\u6982\u7387\u3002
+\u91CD\u8981\u7ED3\u679C\u540E\u53E6\u8FD4\u81F3\u591A 1000 \u5B57\u7B26\u7684\u516B\u7EF4\u8D28\u91CF\u5224\u65AD\uFF0C\u7ED9\u7B49\u7EA7\u3001\u4F9D\u636E\u4E0E\u672A\u77E5\u9879\uFF1B\u5B9E\u73B0 1\u20133\uFF0C\u5176\u4F59 1\u20134\uFF0C\u7EC6\u5219\u6309\u9700\u770B RESEARCH_QUALITY_FULL.md\u3002\u4E3B\u4F1A\u8BDD\u66FF\u6362 EVAL \u8868\u540E\u5F53\u524D\u8BC4\u5206\uFF0C\u4E0D\u91CD\u590D\u81EA\u8BC4\uFF1B\u6700\u5F31\u4E14\u51B3\u5B9A\u6027\u7684\u7EF4\u5EA6\u5F71\u54CD\u4E0B\u4E00\u8F6E\u3002
 
-\u53E6\u8FD4\u201C\u5BFC\u5E08\u7B14\u8BB0\u201D\uFF0C\u81F3\u591A 1000 \u5B57\u7B26\uFF0C\u5199\u672C\u6B21\u5224\u65AD\u3001\u9884\u6D4B\u53CA\u5151\u73B0\u60C5\u51B5\u3001\u5426\u6389\u7684\u65B9\u6CD5\u65CF\u4E0E\u539F\u56E0\u3001\u4ECD\u62C5\u5FC3\u7684\u4E8B\uFF0C\u4EE5\u53CA\u7528\u6237\u539F\u8BDD\u8BFB\u5230\u7684\u65E5\u671F/\u8303\u56F4\u3002\u4E3B\u4F1A\u8BDD\u5C06\u8FD9\u90E8\u5206\u539F\u6837\u8FFD\u52A0\u5230 MENTOR_NOTES.md\uFF1B\u7B14\u8BB0\u8D85\u8FC7 6000 \u5B57\u7B26\u65F6\uFF0C\u7531\u4F60\u5408\u5E76\u65E7\u6761\u76EE\uFF0C\u8FD4\u56DE\u81F3\u591A 3000 \u5B57\u7B26\u7684\u66FF\u6362\u5168\u6587\uFF0C\u4FDD\u7559\u5173\u952E\u9884\u6D4B\u3001\u5426\u5B9A\u7406\u7531\u548C\u672A\u89E3\u95EE\u9898\u3002\u7B14\u8BB0\u53EA\u6765\u81EA\u4F60\u81EA\u5DF1\u7684\u8FD4\u56DE\uFF0C\u4E0D\u7531\u6267\u884C\u8005\u4EE3\u5199\u3002\u8FFD\u8E2A\u5EFA\u8BAE\u3001\u8BBA\u6587\u5F71\u54CD\u548C\u626B\u63CF\u5355\u72EC\u8FD4\u56DE\uFF0C\u4E0D\u6324\u8FDB\u8F6E\u6B21\u8BF4\u660E\u3002\u672B\u5C3E\u5217\u5B9E\u9645\u8BFB\u8FC7\u7684\u6587\u4EF6\u548C\u7528\u6237\u539F\u8BDD\u8303\u56F4\uFF1B\u4E3B\u4F1A\u8BDD\u4FDD\u5B58\uFF0C\u4F60\u4E0D\u5199\u5165\u6216\u6267\u884C\u3002`;
+\u6309\u8D28\u91CF\u6458\u8981\u8FD4\u56DE\u81EA\u5DF1\u7684\u201C\u5BFC\u5E08\u7B14\u8BB0\u201D\uFF0C\u4E0E\u8FFD\u8E2A\u5EFA\u8BAE\u3001\u8BBA\u6587\u5F71\u54CD\u3001\u626B\u63CF\u5206\u5F00\uFF0C\u4E0D\u6324\u8FDB\u8F6E\u6B21\u8BF4\u660E\u3002\u672B\u5C3E\u5217\u5B9E\u9645\u8BFB\u8FC7\u7684\u6587\u4EF6\u548C\u7528\u6237\u539F\u8BDD\u8303\u56F4\uFF1B\u4E3B\u4F1A\u8BDD\u6309\u6458\u8981\u7684\u7BC7\u5E45\u4E0E\u4FDD\u5B58\u89C4\u5219\u539F\u6837\u4FDD\u5B58\uFF0C\u4F60\u4E0D\u5199\u5165\u6216\u6267\u884C\u3002`;
 }
 function renderClaudeDoveReviewAgent() {
   return `---
@@ -14876,9 +14875,8 @@ function contract(slug) {
     purpose: "Help the user choose a research direction or advance the confirmed mainline through substantive method work.",
     when: "Use for topic exploration, method development or continuation of existing research.",
     actions: [
-      "Until the user has confirmed a mainline, first read existing `.dove/research/topics/CRITERIA.md` or the project's topic-selection criteria and follow them. Establish a meaningful direction, then generate a broad pool of parallel candidates without pruning during generation. Use real near-neighbor searches both to assess overlap and to broaden the pool, then present 2\u20133 grounded recommendations for the user to choose.",
-      "After the user chooses, design and test the core mechanism. Select the scale and change by whether they can answer the research question; expand or redesign when they cannot, and do not enlarge work needlessly when they can. Connecting an end-to-end pipeline is not evidence that its core mechanism has been designed or tested.",
-      "The main executor decides engineering, acceleration, parameters and evaluator repairs within the user's commitments, recomputing comparable history when the evaluation changes. Use Experiment for the detailed comparison work.",
+      "Apply the shared topic-selection process and RESEARCH_QUALITY.md's sourced gaps, cross-domain mechanism search and adversarial candidate review. Use Source for question-led full-text notes and link candidate cards to that evidence.",
+      "After the user chooses, design and test the core mechanism at a scale that answers the question. Use Experiment for comparisons and evaluator repairs; the executor owns engineering and recomputes comparable history when evaluation changes.",
       `Follow the shared research contract for mainline continuity, round records and ${DOVE_RESEARCH_MENTOR_NAME}'s direction-only judgment, including its triggers, fixed questions and note flow.`
     ],
     boundaries: [
@@ -14899,12 +14897,11 @@ function contract(slug) {
     purpose: "Discover, retrieve, inspect and verify sources that can change a research decision or answer a specified question.",
     when: "Use for literature discovery, source reading, citation identity checks, claim verification, related-work comparison or systematic synthesis.",
     actions: [
-      "Start from the user's question and decision, using existing source notes only when relevant. Distinguish a discovered lead, verified citation identity, inspected full text and a checked claim. Retrieval is not reading, and metadata identity does not establish claim support.",
-      "When checking citation identity, use direct DOI lookup before fuzzy title search when available. Compare the DOI, title, authors, year and venue or version, and report verified identity, conflicts, not-found results or unknowns. A bounded bibliography check covers only the requested entries and does not create a ledger or authorize manuscript edits.",
-      "Inspect actual content before using a source for a claim. Split compound claims into their material parts and report each as supported, contradicted, or uncovered, citing the relevant passage, formula, algorithm or code and its limits. Recommend wording supported by that material rather than treating partial support as support for the whole sentence.",
-      "Search real near neighbors across relevant fields and compare their contributions at the same granularity. Inspect decisive overlap rather than inferring it from shared functions, titles or known components. Use the findings to identify transferable mechanisms, contradictions, missing controls and new candidates, not just to deduct novelty. Apply them to affected designs, claims, figures or wording, and stop when further retrieval would not change the decision.",
-      "For an explicit systematic review, meta-analysis or auditable synthesis, define a structured question, search scope and eligibility criteria. Use PRISMA-style tracking and assess bias and evidence certainty when applicable; pool effects only when studies and data are comparable. Ordinary searches and fact checks do not require this machinery.",
-      "Preserve a source note only when useful and permitted, recording the citation or URL, what was inspected, what it supports or challenges and links to affected artifacts. Update `.dove/research/sources/SOURCES.md` only when its links or synthesis change."
+      "Start from the user's question and relevant existing notes. Distinguish discovery, verified citation identity, full-text inspection and claim support; none substitutes for the next. For citation identity, use direct DOI lookup before fuzzy title search, checking title, authors, year and venue/version. Report conflicts, missing entries and unknowns.",
+      "For body-level details, read the full text with 1\u20135 concrete questions, using `.dove/research/papers/<id>.md` and the cumulative note format in RESEARCH_QUALITY.md. Reuse answered questions rather than rereading; append only new answers with section, page or equation locations, preserving earlier ones. Check-only work returns answers without creating notes or editing manuscripts.",
+      "Split compound claims and mark each supported, contradicted, or uncovered, with the relevant passage, formula, algorithm or code and its limits. Use the cumulative notes for novelty and overlap judgments, link affected artifacts and recommend wording matching actual support, not support for only part of a sentence.",
+      "Search real neighbors across fields at equal contribution granularity, following the shared topic guidance when selecting ideas. Inspect decisive overlap and use findings to develop mechanisms, candidates and controls, not just deduct novelty. Apply findings to designs or claims; stop when retrieval would not change the decision.",
+      "For explicit systematic reviews or meta-analysis, define the question, search scope and eligibility. Use applicable PRISMA tracking, bias and certainty assessment; pool only comparable effects. Ordinary searches need no such machinery. Update `sources/SOURCES.md` only when useful links or synthesis change."
     ],
     boundaries: [
       "Search snippets, abstracts, metadata and absent search results do not establish full-text inspection or absence of overlap. If retrieval is unavailable, state the gap and use other permitted material rather than shell fetching or substitute retrieval chains."
@@ -14931,9 +14928,9 @@ function contract(slug) {
     purpose: "Draft, assess or revise the specified manuscript, section or claim-bearing artifact.",
     when: "Use for requested writing or revision, or when the argument, expression or delivery artifact needs work.",
     actions: [
-      "Read the target artifact and evidence relevant to its claims. Connect the problem and gap to the insight, method, evidence, claim and limitation so the reader can follow the argument. Keep unchecked facts unknown, preserve certainty, causality, scope, quantitative qualifiers and novelty, and explain any evidence-driven change to claim strength before revising it.",
-      "Write as the author would publish: state findings, setup and limits plainly, and turn gaps in supplied material into author questions rather than manuscript phrases such as 'not provided'. Use reliable author samples for stable style cues, with accuracy and venue norms taking precedence. Check how substantive edits affect the whole argument without turning a local wording request into a new research task.",
-      "For contribution-level work, address in-scope source, method, evidence or figure gaps rather than merely weakening the prose. Polished wording and a complete draft do not establish a sound contribution or supported central claim.",
+      "Read the target and claim evidence. Connect problem, gap, insight, method, evidence and limits; preserve certainty, causality, scope, quantitative qualifiers and novelty. Explain evidence-driven claim changes before revising. Address in-scope source, method, evidence or figure gaps rather than merely weakening prose; polished text does not establish a sound contribution.",
+      "Use `.dove/research/papers/library.json` and `library.md` to group related work by direction, checking claim support against `papers/<id>.md`. Verify citation metadata with Source before citing or exporting BibTeX; never invent authors, venue, date or identifiers. Export only verified fields. Explicit library accumulation or a later watch run maintains the library; merely reading it does not write it.",
+      "Write publishable findings, setup and limits plainly. Ask the author about missing material rather than putting 'not provided' into the manuscript. Follow reliable author style samples within accuracy and venue norms, and check effects on the whole argument without expanding local writing into a new research task.",
       DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY,
       "Carry edits through the real build or export path and inspect the actual output before calling it current. Check compiled pages for overfull boxes, undefined references, float numbering and placement, and wide tables that need full width in two-column layouts. Measure body word count on the source without tables, captions or references against the target. Fix in-scope issues and report remaining material limits.",
       "If a venue template needs missing fonts or packages, obtain them with permitted tools in a project-local texmf and point the build there, rather than silently substituting fonts or changing system installations."
@@ -15936,8 +15933,8 @@ function desiredManaged(resources) {
 }
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path22) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path22 === "$" ? key : `${path22}.${key}`}.`);
+function duplicateKeyError(label, key, path25) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path25 === "$" ? key : `${path25}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -15973,7 +15970,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path22) {
+  function parseArray(path25) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -15982,7 +15979,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path22}[${itemIndex}]`);
+      parseValue(`${path25}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -15994,7 +15991,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path22) {
+  function parseObject(path25) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -16004,12 +16001,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path22);
+      if (keys.has(key)) duplicateKeyError(label, key, path25);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path22 === "$" ? `$.${key}` : `${path22}.${key}`);
+      parseValue(path25 === "$" ? `$.${key}` : `${path25}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -16020,11 +16017,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path22) {
+  function parseValue(path25) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path22);
-    else if (character === "[") parseArray(path22);
+    if (character === "{") parseObject(path25);
+    else if (character === "[") parseArray(path25);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -16560,19 +16557,102 @@ function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs
 }
 
 // src/core/project-installation.mjs
-import fs10 from "node:fs";
-import path9 from "node:path";
+import fs11 from "node:fs";
+import path10 from "node:path";
+
+// src/core/host-migration.mjs
+import fs7 from "node:fs";
+import os2 from "node:os";
+import path8 from "node:path";
+var HOST_MIGRATION_PENDING_PATH = ".dove/install/MIGRATION_PENDING.md";
+var HOST_MIGRATION_REGISTERED_PATH = ".dove/install/migration-registered.json";
+var HOST_MIGRATION_TASK = `\u6574\u7406 3.4.0 \u8D77\u5DF2\u6709\u7684\u7814\u7A76\u8BB0\u5F55\uFF0C\u53EA\u5904\u7406\u5DF2\u6709\u5185\u5BB9\uFF0C\u4E0D\u4E3A\u8FC1\u79FB\u53E6\u5F00\u7814\u7A76\u4EFB\u52A1\uFF1A
+
+1. \u5C06 .dove/research/IDENTITY.md \u6574\u7406\u4E3A\u4E0D\u8D85\u8FC7 1200 \u5B57\u7B26\u7684\u56FA\u5B9A\u680F\u76EE\uFF0C\u987A\u5E8F\u4E3A Current round\u3001Round status\u3001Mainline\u3001Target tier\u3001Deployment inputs/outputs\u3001Completion\u3001User restrictions\u3001Recent corrections\u3001Research state\u3002\u4FDD\u7559\u672A\u53D8\u7684 Mainline \u548C\u7528\u6237\u539F\u8BDD\uFF1B\u8FC7\u957F\u7684\u539F\u59CB\u5185\u5BB9\u539F\u6837\u7559\u5728\u540C\u76EE\u5F55\u5386\u53F2\u6587\u4EF6\u5E76\u94FE\u63A5\uFF0C\u4E0D\u4E22\u5F03\u3002Target tier \u7F3A\u5931\u4E14\u5C1A\u672A\u8BE2\u95EE\u65F6\uFF0C\u95EE\u7528\u6237\u4E00\u6B21\uFF0C\u4E0D\u81EA\u884C\u63A8\u5B9A\u3002\u9650\u5236\u6761\u76EE\u6CE8\u660E\u539F\u8BDD\u3001\u65E5\u671F/\u6765\u6E90\u3001\u539F\u8BDD\u8FD8\u662F\u8F6C\u8FF0\u3001\u957F\u671F\u8FD8\u662F\u672C\u6B21\u4EFB\u52A1\u9002\u7528\u3002
+2. \u5C06 .dove/research/EVAL.md \u6574\u7406\u4E3A\u4E00\u4E2A\u65B9\u6CD5\u7248\u672C\u4E00\u884C\uFF0C\u4FDD\u7559\u5B8C\u6210\u6807\u51C6\u5F15\u7528\uFF0C\u5217\u4E3A Date\u3001Version/round\u3001Protocol/split\u3001Measurements\u3001Unseen data/train-test gap\u3001Conclusion\u3001Artifacts\uFF1B\u5355\u5143\u683C\u4EE5\u5DF2\u6709\u6570\u5B57\u548C\u81F3\u591A\u4E00\u53E5\u77ED\u53E5\u4E3A\u4E3B\uFF0C\u4E0D\u8D85\u8FC7 200 \u5B57\u7B26\u3002\u65E7\u7684\u957F\u5185\u5BB9\u539F\u6837\u79FB\u5230\u540C\u76EE\u5F55\u7684\u5386\u53F2\u6587\u4EF6\u5E76\u94FE\u63A5\uFF0C\u4E0D\u5220\u9664\u3001\u4E0D\u6539\u7814\u7A76\u7ED3\u8BBA\u3001\u4E0D\u8865\u9020\u6216\u91CD\u7B97\u4EFB\u4F55\u7ED3\u679C\u3002
+3. \u82E5 .dove/research/MENTOR_NOTES.md \u8D85\u8FC7 6000 \u5B57\u7B26\uFF0C\u5728\u4E0B\u4E00\u6B21\u6B63\u5E38\u5BFC\u5E08\u8C03\u7528\u65F6\u8BF7\u5BFC\u5E08\u5408\u5E76\u4E3A\u4E0D\u8D85\u8FC7 3000 \u5B57\u7B26\u7684\u5168\u6587\uFF0C\u4FDD\u7559\u5173\u952E\u539F\u56E0\u548C\u672A\u89E3\u51B3\u62C5\u5FE7\uFF1B\u4E0D\u8981\u7531\u6267\u884C\u8005\u4EE3\u5199\uFF0C\u4E0D\u4E3A\u6B64\u4E2D\u65AD\u5F53\u524D\u5DE5\u4F5C\u6216\u53E6\u5F00\u5BFC\u5E08\u8C03\u7528\u3002
+4. \u82E5 .dove/research/watch/config.json \u7684 source \u4ECD\u4E3A draft\uFF0C\u5728\u4E0B\u4E00\u6B21\u6B63\u5E38\u5BFC\u5E08\u8C03\u7528\u65F6\u4E00\u5E76\u8BF7\u5BFC\u5E08\u7ED9\u51FA\u9488\u5BF9\u5F53\u524D\u95EE\u9898\u7684\u8FFD\u8E2A\u4FEE\u6B63\u5EFA\u8BAE\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u5199\u56DE\u5E76\u6807\u4E3A source: mentor\u3002\u7F3A\u5C11\u7684\u7814\u7A76\u8BB0\u5F55\u65E0\u9700\u4E3A\u8FC1\u79FB\u521B\u5EFA\u3002\u7B49\u5F85\u4E0B\u4E00\u6B21\u5BFC\u5E08\u8C03\u7528\u7684\u4E8B\u9879\u5E94\u5728\u5DF2\u6709\u5DE5\u4F5C\u8BB0\u5F55\u4E2D\u7559\u4E0B\u7B80\u77ED\u63D0\u9192\u540E\u5B8C\u6210\u672C\u6B21\u5F85\u529E\uFF0C\u4E0D\u62A2\u8DD1\u5BFC\u5E08\u8C03\u7528\u3002`;
+function settingsPath(options2) {
+  const env = options2.env ?? process.env;
+  const base = env.XDG_CONFIG_HOME || path8.join(env.HOME || os2.homedir(), ".config");
+  if (!path8.isAbsolute(base)) throw new Error("Dove user configuration root must be absolute.");
+  return path8.join(base, "dove/settings.json");
+}
+function hostSettings(value2) {
+  if (!value2 || typeof value2 !== "object" || Array.isArray(value2) || value2.hostMigration !== void 0 && typeof value2.hostMigration !== "boolean") {
+    throw new Error("Dove host settings require a boolean hostMigration value.");
+  }
+  return { hostMigration: value2.hostMigration ?? false };
+}
+function readHostSettings(options2 = {}) {
+  const fsOps = options2.fsOps ?? fs7;
+  try {
+    return hostSettings(JSON.parse(fsOps.readFileSync(settingsPath(options2), "utf8")));
+  } catch (error) {
+    if (error?.code === "ENOENT") return { hostMigration: false };
+    throw error;
+  }
+}
+function writeHostSettings(value2, options2 = {}) {
+  const settings = hostSettings(value2);
+  const fsOps = options2.fsOps ?? fs7;
+  const file = settingsPath(options2);
+  fsOps.mkdirSync(path8.dirname(file), { recursive: true, mode: 448 });
+  const temporary = `${file}.${process.pid}.tmp`;
+  fsOps.writeFileSync(temporary, `${JSON.stringify(settings, null, 2)}
+`, { mode: 384 });
+  fsOps.renameSync(temporary, file);
+  return settings;
+}
+function migrationFile(project, relativePath, options2) {
+  const root = openRootedFilesystem(project, options2);
+  if (!root.exists(relativePath)) return null;
+  return root.readFile(relativePath).toString("utf8");
+}
+function renderHostMigrationPending(version = PACKAGE_VERSION, now = /* @__PURE__ */ new Date()) {
+  const timestamp = new Date(now).toISOString();
+  return `# Dove ${version} \u5BBF\u4E3B\u8FC1\u79FB\u5F85\u529E
+
+\u767B\u8BB0\u65F6\u95F4\uFF1A${timestamp}
+
+Dove \u5DF2\u66F4\u65B0\u5230 ${version}\u3002\u8BF7\u5728\u5F53\u524D\u5DE5\u4F5C\u544A\u4E00\u6BB5\u843D\u65F6\u5B8C\u6210\u4EE5\u4E0B\u8FC1\u79FB\uFF0C\u4E0D\u6253\u65AD\u5F53\u524D\u5728\u8DD1\u7684\u4EFB\u52A1\uFF0C\u4E0D\u6682\u505C\u6216\u91CD\u542F\u8BAD\u7EC3/\u8BC4\u6D4B\uFF0C\u4E0D\u6539\u52A8\u7814\u7A76\u7ED3\u8BBA\u548C\u7528\u6237\u539F\u8BDD\uFF0C\u4E0D\u91CD\u7B97\u4EFB\u4F55\u7ED3\u679C\u3002\u5B8C\u6210\u540E\u5220\u9664 ${HOST_MIGRATION_PENDING_PATH}\uFF0C\u5E76\u5728\u56DE\u590D\u4E2D\u7528\u4E00\u53E5\u8BDD\u8BF4\u660E\u505A\u4E86\u4EC0\u4E48\uFF1B\u4E0D\u9002\u7528\u7684\u4E8B\u9879\u8BF4\u660E\u4E00\u53E5\u539F\u56E0\u4E5F\u7B97\u5B8C\u6210\u3002\u6B64\u5F85\u529E\u4E0D\u53D6\u4EE3\u7528\u6237\u5F53\u524D\u8BF7\u6C42\u6216\u5176\u5199\u5165\u9650\u5236\u3002
+
+${HOST_MIGRATION_TASK}
+`;
+}
+function prepareHostMigration(project, options2 = {}) {
+  const version = options2.packageVersion ?? PACKAGE_VERSION;
+  if (!HOST_MIGRATION_TASK || version !== PACKAGE_VERSION || !readHostSettings(options2).hostMigration) return [];
+  const registered = migrationFile(project, HOST_MIGRATION_REGISTERED_PATH, options2);
+  if (registered && JSON.parse(registered).version === version) return [];
+  const pending = migrationFile(project, HOST_MIGRATION_PENDING_PATH, options2);
+  const content = renderHostMigrationPending(version, options2.now);
+  return [
+    { root: project, relativePath: HOST_MIGRATION_PENDING_PATH, content: pending ? `${pending.trimEnd()}
+
+${content}` : content, force: true },
+    { root: project, relativePath: HOST_MIGRATION_REGISTERED_PATH, content: `${JSON.stringify({ version })}
+`, force: true }
+  ];
+}
+function hostMigrationContext(project, options2 = {}) {
+  if (!project || !readHostSettings(options2).hostMigration) return "";
+  const pending = migrationFile(project, HOST_MIGRATION_PENDING_PATH, options2);
+  return pending?.trim() ? `
+
+${pending.trim()}` : "";
+}
 
 // src/core/project-root.mjs
-import fs7 from "node:fs";
-import path8 from "node:path";
-var INSTALLATION_DIRECTORY = path8.posix.dirname(INSTALLATION_MANIFEST_PATH);
+import fs8 from "node:fs";
+import path9 from "node:path";
+var INSTALLATION_DIRECTORY = path9.posix.dirname(INSTALLATION_MANIFEST_PATH);
 function realpathNative2(fsOps, targetPath) {
   return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
 }
 function canonicalExistingDirectory(value2, label, fsOps) {
   if (typeof value2 !== "string" || !value2.trim() || value2.includes("\0")) throw new Error(`${label} must name an existing directory.`);
-  const resolved = path8.resolve(value2);
+  const resolved = path9.resolve(value2);
   let stat;
   try {
     stat = fsOps.statSync(resolved);
@@ -16588,7 +16668,7 @@ function parentDirectories2(start) {
   let current = start;
   while (true) {
     directories.push(current);
-    const parent = path8.dirname(current);
+    const parent = path9.dirname(current);
     if (parent === current) return directories;
     current = parent;
   }
@@ -16607,16 +16687,16 @@ function preservedInstallationDirectory(directoryPath, directoryStat, fsOps) {
   const children = fsOps.readdirSync(directoryPath).map(String).sort();
   if (children.length > 1 || children.length === 1 && children[0] !== "DOCTOR.md") return false;
   if (children.length === 0) return true;
-  const doctorStat = lstatOrNull3(fsOps, path8.join(directoryPath, "DOCTOR.md"));
+  const doctorStat = lstatOrNull3(fsOps, path9.join(directoryPath, "DOCTOR.md"));
   return doctorStat?.isFile() === true && !doctorStat.isSymbolicLink();
 }
 function installationStateAt(root, options2) {
-  const fsOps = options2.fsOps ?? fs7;
-  const doveStat = lstatOrNull3(fsOps, path8.join(root, ".dove"));
+  const fsOps = options2.fsOps ?? fs8;
+  const doveStat = lstatOrNull3(fsOps, path9.join(root, ".dove"));
   if (doveStat && (doveStat.isSymbolicLink() || !doveStat.isDirectory())) throw new Error(`Dove installation parent must be a real directory: ${root}/.dove.`);
-  if (lstatOrNull3(fsOps, path8.join(root, ".dove-install")) !== null) throw legacyInitError(root);
-  const directoryPath = path8.join(root, INSTALLATION_DIRECTORY);
-  const manifestPath = path8.join(root, INSTALLATION_MANIFEST_PATH);
+  if (lstatOrNull3(fsOps, path9.join(root, ".dove-install")) !== null) throw legacyInitError(root);
+  const directoryPath = path9.join(root, INSTALLATION_DIRECTORY);
+  const manifestPath = path9.join(root, INSTALLATION_MANIFEST_PATH);
   const manifestStat = lstatOrNull3(fsOps, manifestPath);
   if (manifestStat === null) {
     const directoryStat2 = lstatOrNull3(fsOps, directoryPath);
@@ -16642,7 +16722,7 @@ function setupEvidenceAt(root, fsOps) {
     LEGACY_INSTALLATION_MANIFEST_PATH
   ];
   for (const relativePath of paths) {
-    const target = path8.join(root, relativePath);
+    const target = path9.join(root, relativePath);
     const stat = lstatOrNull3(fsOps, target);
     if (stat === null) continue;
     if (stat.isSymbolicLink() || !stat.isFile()) {
@@ -16651,7 +16731,7 @@ function setupEvidenceAt(root, fsOps) {
     return { state: "marker", relativePath };
   }
   for (const relativePath of [INSTALLATION_DIRECTORY, ".dove-install"]) {
-    const target = path8.join(root, relativePath);
+    const target = path9.join(root, relativePath);
     const stat = lstatOrNull3(fsOps, target);
     if (stat === null) continue;
     if (stat.isSymbolicLink() || !stat.isDirectory()) {
@@ -16667,7 +16747,7 @@ function legacyInitError(root) {
 }
 function gitRootFrom(start, fsOps) {
   for (const directory of parentDirectories2(start)) {
-    const dotGit = path8.join(directory, ".git");
+    const dotGit = path9.join(directory, ".git");
     const stat = lstatOrNull3(fsOps, dotGit);
     if (stat === null) continue;
     if (stat.isSymbolicLink()) throw new Error(`Git project marker must not be a symbolic link: ${dotGit}.`);
@@ -16680,7 +16760,7 @@ function initRequiredError(start) {
   return new Error(`Dove project integration is not initialized from ${start}. Run 'dove init' from the project root, or use 'dove init --project <dir>'.`);
 }
 function resolveProjectRootForInit(project, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs7;
+  const fsOps = options2.fsOps ?? fs8;
   const explicitProject = project !== void 0 && project !== null;
   const candidateInput = explicitProject ? project : options2.cwd ?? process.cwd();
   const candidate = canonicalExistingDirectory(candidateInput, explicitProject ? "Dove project" : "Current working directory", fsOps);
@@ -16701,19 +16781,19 @@ function resolveProjectRootForInit(project, options2 = {}) {
   return !explicitProject && gitRoot !== null ? gitRoot : candidate;
 }
 function packageProjectBoundary(directory, fsOps) {
-  const packageJson = lstatOrNull3(fsOps, path8.join(directory, "package.json"));
-  const nodeModules = lstatOrNull3(fsOps, path8.join(directory, "node_modules"));
+  const packageJson = lstatOrNull3(fsOps, path9.join(directory, "package.json"));
+  const nodeModules = lstatOrNull3(fsOps, path9.join(directory, "node_modules"));
   return packageJson?.isFile() && !packageJson.isSymbolicLink() && nodeModules?.isDirectory() && !nodeModules.isSymbolicLink();
 }
 function resolveProjectRootForSetup(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs7;
+  const fsOps = options2.fsOps ?? fs8;
   const candidate = canonicalExistingDirectory(start ?? options2.cwd ?? process.cwd(), "Dove project setup start", fsOps);
   for (const directory of parentDirectories2(candidate)) {
     if (setupEvidenceAt(directory, fsOps).state !== "absent") return directory;
-    const dotGit = lstatOrNull3(fsOps, path8.join(directory, ".git"));
+    const dotGit = lstatOrNull3(fsOps, path9.join(directory, ".git"));
     if (dotGit !== null) {
       if (dotGit.isSymbolicLink() || !dotGit.isDirectory() && !dotGit.isFile()) {
-        throw new Error(`Git project marker must be a file or directory: ${path8.join(directory, ".git")}.`);
+        throw new Error(`Git project marker must be a file or directory: ${path9.join(directory, ".git")}.`);
       }
       return directory;
     }
@@ -16722,20 +16802,20 @@ function resolveProjectRootForSetup(start, options2 = {}) {
   return candidate;
 }
 function resolveInstalledProjectRoot(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs7;
+  const fsOps = options2.fsOps ?? fs8;
   const startingDirectory = canonicalExistingDirectory(start ?? options2.cwd ?? process.cwd(), "Dove project search start", fsOps);
   for (const directory of parentDirectories2(startingDirectory)) {
     const installation = installationStateAt(directory, options2);
     if (installation.state === "initialized") return directory;
     if (installation.state === "residue") throw new Error(`Dove installation state is incomplete at ${directory}.`);
-    if (lstatOrNull3(fsOps, path8.join(directory, ".git")) !== null || packageProjectBoundary(directory, fsOps)) break;
+    if (lstatOrNull3(fsOps, path9.join(directory, ".git")) !== null || packageProjectBoundary(directory, fsOps)) break;
   }
   throw initRequiredError(startingDirectory);
 }
 function resolveExactInstalledProjectRoot(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs7;
+  const fsOps = options2.fsOps ?? fs8;
   if (typeof start !== "string" || !start.trim() || start.includes("\0")) throw new Error("Dove hook project must name an initialized project root.");
-  const resolved = path8.resolve(start);
+  const resolved = path9.resolve(start);
   const stat = lstatOrNull3(fsOps, resolved);
   if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove hook project must be a real directory: ${resolved}.`);
   const root = realpathNative2(fsOps, resolved);
@@ -16746,7 +16826,7 @@ function resolveExactInstalledProjectRoot(start, options2 = {}) {
 function inspectProjectRoot(start, options2 = {}) {
   let canonicalStart = null;
   try {
-    canonicalStart = canonicalExistingDirectory(start ?? options2.cwd ?? process.cwd(), "Dove project search start", options2.fsOps ?? fs7);
+    canonicalStart = canonicalExistingDirectory(start ?? options2.cwd ?? process.cwd(), "Dove project search start", options2.fsOps ?? fs8);
     const root = resolveInstalledProjectRoot(canonicalStart, options2);
     return Object.freeze({ state: "initialized", initialized: true, start: canonicalStart, root, error: null });
   } catch (error) {
@@ -16763,16 +16843,16 @@ function inspectProjectRoot(start, options2 = {}) {
 }
 
 // src/core/research-defaults.mjs
-import fs9 from "node:fs";
+import fs10 from "node:fs";
 
 // src/core/identity-card.mjs
-import fs8 from "node:fs";
+import fs9 from "node:fs";
 var DOVE_IDENTITY_CARD_PATH = ".dove/research/IDENTITY.md";
 var MAX_CARD_BYTES = 4096;
 function readCard(project, options2) {
   if (!project) return null;
   try {
-    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs8 });
+    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs9 });
     const bytes = root.readFile(DOVE_IDENTITY_CARD_PATH);
     const truncated = bytes.length > MAX_CARD_BYTES;
     const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, MAX_CARD_BYTES), { stream: truncated }).trim();
@@ -16816,7 +16896,7 @@ var RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
 ]);
 var RESEARCH_DEFAULT_DIRECTORY_PATHS = Object.freeze([RESEARCH_ROOT]);
 function prepareResearchDefaults(root, options2 = {}) {
-  const anchor = openRootedFilesystem(root, { fsOps: options2.fsOps ?? fs9 });
+  const anchor = openRootedFilesystem(root, { fsOps: options2.fsOps ?? fs10 });
   const directory = anchor.tryLstat(RESEARCH_ROOT);
   if (directory && (directory.isSymbolicLink() || !directory.isDirectory())) {
     throw new Error(`${RESEARCH_ROOT} must be a real directory.`);
@@ -16869,13 +16949,14 @@ function transactionOptions(fsOps, options2 = {}) {
   return { ...options2, fsOps };
 }
 function initializeProjectIntegration(rootOrProject, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs10;
+  const fsOps = options2.fsOps ?? fs11;
   assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const hosts = normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: true });
   const now = exactTimestamp(options2.now);
   const root = resolveProjectRootForInit(rootOrProject, { fsOps, hostIds: PROJECT_HOST_IDS });
   const plan = preparePlan({ root, hosts, packageName: options2.packageName, packageVersion: options2.packageVersion, now, fsOps });
   plan.entries.push(...prepareResearchDefaults(root, { fsOps }).entries);
+  plan.entries.push(...prepareHostMigration(root, { ...options2, fsOps, now }));
   return resultFromTransaction(
     "initialized",
     root,
@@ -16885,7 +16966,7 @@ function initializeProjectIntegration(rootOrProject, options2 = {}) {
   );
 }
 function prepareInstalledPlan(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs10;
+  const fsOps = options2.fsOps ?? fs11;
   const root = resolveInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
   const hosts = options2.hosts === void 0 ? [...manifest.hosts] : normalizeSelectedHosts(options2.hosts, { defaultWhenEmpty: false });
@@ -16897,6 +16978,7 @@ function prepareInstalledPlan(start, options2 = {}) {
 }
 function updateProjectIntegration(start, options2 = {}) {
   const prepared = prepareInstalledPlan(start, { ...options2, replacementPolicy: "explicit-update" });
+  prepared.entries.push(...prepareHostMigration(prepared.root, { ...options2, fsOps: prepared.fsOps, packageVersion: prepared.manifest.package.version }));
   const transaction = writeFileSetTransaction(
     prepared.entries,
     transactionOptions(prepared.fsOps)
@@ -16904,9 +16986,10 @@ function updateProjectIntegration(start, options2 = {}) {
   return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", prepared.root, prepared.hosts, prepared.manifest, transaction, prepared);
 }
 function syncProjectIntegration(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs10;
+  const fsOps = options2.fsOps ?? fs11;
   const root = resolveExactInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
   const prepared = prepareInstalledPlan(root, { ...options2, fsOps, replacementPolicy: "auto-inspect" });
+  prepared.entries.push(...prepareHostMigration(root, { ...options2, fsOps, packageVersion: prepared.manifest.package.version }));
   const transaction = writeFileSetTransaction(prepared.entries, transactionOptions(fsOps));
   return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", root, prepared.hosts, prepared.manifest, transaction, prepared);
 }
@@ -16929,7 +17012,7 @@ function inspectProjectIntegration(start, options2 = {}) {
   };
 }
 function canonicalLifecycleRoot(start, fsOps) {
-  const resolved = path9.resolve(start ?? process.cwd());
+  const resolved = path10.resolve(start ?? process.cwd());
   const stat = fsOps.lstatSync(resolved);
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove lifecycle project root must be a real directory: ${resolved}.`);
   return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
@@ -16941,10 +17024,11 @@ function prepareLifecycleIntegration(root, options2, { hosts, source }) {
     packageName: options2.packageName,
     packageVersion: options2.packageVersion,
     now: exactTimestamp(options2.now),
-    fsOps: options2.fsOps ?? fs10,
+    fsOps: options2.fsOps ?? fs11,
     manifest: source,
     replacementPolicy: "confirmed-reinstall"
   });
+  planned.entries.push(...prepareHostMigration(root, options2));
   return { ...planned, scope: [] };
 }
 function previewShape(kind, root, hosts, prepared, confirmationRequired) {
@@ -16977,7 +17061,7 @@ function previewShape(kind, root, hosts, prepared, confirmationRequired) {
   return preview;
 }
 function previewProjectCompleteReinstall(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs10;
+  const fsOps = options2.fsOps ?? fs11;
   assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
@@ -17000,7 +17084,7 @@ function reinstallPreviewScope(preview) {
 function completeReinstallProjectIntegration(start, options2 = {}) {
   if (options2.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true after displaying the real destructive scope.");
   if (!options2.preview || options2.preview.action !== "reinstall") throw new Error("Complete Reinstall requires the approved reinstall preview.");
-  const fsOps = options2.fsOps ?? fs10;
+  const fsOps = options2.fsOps ?? fs11;
   assertPackageInput(options2.packageName, options2.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
@@ -17025,7 +17109,7 @@ function completeReinstallProjectIntegration(start, options2 = {}) {
   );
 }
 function prepareUninstall(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs10;
+  const fsOps = options2.fsOps ?? fs11;
   const root = canonicalLifecycleRoot(start, fsOps);
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS });
   assertManagedOwnership(manifest);
@@ -17112,18 +17196,18 @@ function uninstallProjectIntegration(start, options2 = {}) {
 
 // src/core/project-registry.mjs
 import crypto3 from "node:crypto";
-import fs11 from "node:fs";
-import os2 from "node:os";
-import path10 from "node:path";
+import fs12 from "node:fs";
+import os3 from "node:os";
+import path11 from "node:path";
 var REGISTRY_NAME = "projects.json";
 var REPORT_NAME = "last-sync.json";
 var LOCK_NAME = ".registry-lock";
 function configDirectory(env = process.env) {
-  const base = env.XDG_CONFIG_HOME || path10.join(env.HOME || os2.homedir(), ".config");
-  if (!path10.isAbsolute(base)) throw new Error("Dove user configuration root must be absolute.");
-  return path10.join(base, "dove");
+  const base = env.XDG_CONFIG_HOME || path11.join(env.HOME || os3.homedir(), ".config");
+  if (!path11.isAbsolute(base)) throw new Error("Dove user configuration root must be absolute.");
+  return path11.join(base, "dove");
 }
-function inspectFile(file, fsOps = fs11) {
+function inspectFile(file, fsOps = fs12) {
   try {
     const stat = fsOps.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Dove user registry requires a regular file: ${file}.`);
@@ -17135,7 +17219,7 @@ function inspectFile(file, fsOps = fs11) {
     throw error;
   }
 }
-function inspectDirectory(directory, fsOps = fs11, privateDirectory = false) {
+function inspectDirectory(directory, fsOps = fs12, privateDirectory = false) {
   try {
     const stat = fsOps.lstatSync(directory);
     if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`Dove user registry directory must be real: ${directory}.`);
@@ -17148,9 +17232,9 @@ function inspectDirectory(directory, fsOps = fs11, privateDirectory = false) {
   }
 }
 function registryDirectory(options2 = {}, create = false) {
-  const fsOps = options2.fsOps ?? fs11;
+  const fsOps = options2.fsOps ?? fs12;
   const directory = configDirectory(options2.env);
-  const base = path10.dirname(directory);
+  const base = path11.dirname(directory);
   if (!inspectDirectory(base, fsOps)) {
     if (!create) return null;
     fsOps.mkdirSync(base, { recursive: true, mode: 448 });
@@ -17168,20 +17252,20 @@ function validateProjects(value2) {
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2) || Object.keys(value2).sort().join(",") !== "projects,revision" || value2.revision !== 1 || !Array.isArray(value2.projects)) throw new Error("Dove user project registry is invalid.");
   const seen = /* @__PURE__ */ new Set();
   for (const root of value2.projects) {
-    if (typeof root !== "string" || !path10.isAbsolute(root) || root !== path10.normalize(root) || root.includes("\0") || seen.has(root)) throw new Error("Dove user project registry contains an invalid project root.");
+    if (typeof root !== "string" || !path11.isAbsolute(root) || root !== path11.normalize(root) || root.includes("\0") || seen.has(root)) throw new Error("Dove user project registry contains an invalid project root.");
     seen.add(root);
   }
   return value2.projects;
 }
 function readJson(file, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs11;
+  const fsOps = options2.fsOps ?? fs12;
   if (!inspectFile(file, fsOps)) return null;
   return JSON.parse(fsOps.readFileSync(file, "utf8"));
 }
 function writeJson(file, data, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs11;
+  const fsOps = options2.fsOps ?? fs12;
   inspectFile(file, fsOps);
-  const temporary = path10.join(path10.dirname(file), `.${path10.basename(file)}.${process.pid}.${crypto3.randomUUID()}.tmp`);
+  const temporary = path11.join(path11.dirname(file), `.${path11.basename(file)}.${process.pid}.${crypto3.randomUUID()}.tmp`);
   try {
     fsOps.writeFileSync(temporary, `${JSON.stringify(data, null, 2)}
 `, { flag: "wx", mode: 384 });
@@ -17191,9 +17275,9 @@ function writeJson(file, data, options2 = {}) {
   }
 }
 function lockedRegistry(options2, operation) {
-  const fsOps = options2.fsOps ?? fs11;
+  const fsOps = options2.fsOps ?? fs12;
   const directory = registryDirectory(options2, true);
-  const lock = path10.join(directory, LOCK_NAME);
+  const lock = path11.join(directory, LOCK_NAME);
   let acquired = false;
   for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
@@ -17207,7 +17291,7 @@ function lockedRegistry(options2, operation) {
   }
   if (!acquired) throw new Error(`Dove project registry is locked at ${lock}; another operation may be active, or a prior operation was interrupted. Inspect it before retrying.`);
   try {
-    return operation(path10.join(directory, REGISTRY_NAME));
+    return operation(path11.join(directory, REGISTRY_NAME));
   } finally {
     fsOps.rmdirSync(lock);
   }
@@ -17215,7 +17299,7 @@ function lockedRegistry(options2, operation) {
 function readRegisteredProjects(options2 = {}) {
   const directory = registryDirectory(options2);
   if (!directory) return [];
-  const value2 = readJson(path10.join(directory, REGISTRY_NAME), options2);
+  const value2 = readJson(path11.join(directory, REGISTRY_NAME), options2);
   return value2 === null ? [] : [...validateProjects(value2)];
 }
 function changeRegisteredProjects(add, remove = [], options2 = {}) {
@@ -17223,7 +17307,7 @@ function changeRegisteredProjects(add, remove = [], options2 = {}) {
     const existing = readJson(file, options2);
     const roots = existing === null ? [] : validateProjects(existing);
     for (const root of [...add, ...remove]) {
-      if (typeof root !== "string" || !path10.isAbsolute(root) || root !== path10.normalize(root)) throw new Error("Dove project registration requires an absolute canonical root.");
+      if (typeof root !== "string" || !path11.isAbsolute(root) || root !== path11.normalize(root)) throw new Error("Dove project registration requires an absolute canonical root.");
     }
     const next = [.../* @__PURE__ */ new Set([...roots, ...add])].filter((root) => !remove.includes(root)).sort();
     if (existing === null || JSON.stringify(roots) !== JSON.stringify(next)) writeJson(file, { revision: 1, projects: next }, options2);
@@ -17233,7 +17317,7 @@ function changeRegisteredProjects(add, remove = [], options2 = {}) {
 function readLastProjectSync(options2 = {}) {
   const directory = registryDirectory(options2);
   if (!directory) return null;
-  const report = readJson(path10.join(directory, REPORT_NAME), options2);
+  const report = readJson(path11.join(directory, REPORT_NAME), options2);
   if (report === null) return null;
   if (!report || report.revision !== 1 || !Array.isArray(report.projects) || typeof report.packageVersion !== "string") throw new Error("Dove last project sync report is invalid.");
   return report;
@@ -17241,7 +17325,7 @@ function readLastProjectSync(options2 = {}) {
 function writeLastProjectSync(report, options2 = {}) {
   return lockedRegistry(options2, () => {
     const directory = registryDirectory(options2);
-    const file = path10.join(directory, REPORT_NAME);
+    const file = path11.join(directory, REPORT_NAME);
     const prior = readLastProjectSync(options2);
     if (prior) {
       const order = comparePackageVersions(prior.packageVersion, report.packageVersion);
@@ -17257,8 +17341,8 @@ function writeLastProjectSync(report, options2 = {}) {
 function importProjectRoots(roots, options2 = {}) {
   if (!Array.isArray(roots) || roots.length === 0) throw new Error("Dove project import requires at least one exact project root.");
   const verified = roots.map((start) => {
-    const root = resolveExactInstalledProjectRoot(start, { hostIds: PROJECT_HOST_IDS });
-    const manifest = readProjectInstallationManifest(root, { hostIds: PROJECT_HOST_IDS });
+    const root = resolveExactInstalledProjectRoot(start, { fsOps: options2.fsOps, hostIds: PROJECT_HOST_IDS });
+    const manifest = readProjectInstallationManifest(root, { fsOps: options2.fsOps, hostIds: PROJECT_HOST_IDS });
     assertManagedOwnership(manifest);
     const compatibility = classifyPackageCompatibility(manifest.package, { name: options2.packageName, version: options2.packageVersion });
     if (["identity-mismatch", "invalid-version", "newer"].includes(compatibility)) throw new Error(`Dove cannot register incompatible project integration: ${root}.`);
@@ -17271,9 +17355,10 @@ function syncRegisteredProjects(options2 = {}) {
   const projects = [];
   for (const root of roots) {
     try {
-      const inspection = inspectProjectIntegration(root, { packageName: options2.packageName, packageVersion: options2.packageVersion, autoSync: true });
+      const projectOptions = { packageName: options2.packageName, packageVersion: options2.packageVersion, env: options2.env, fsOps: options2.fsOps, now: options2.now };
+      const inspection = inspectProjectIntegration(root, { ...projectOptions, autoSync: true });
       if (inspection.target !== root) throw new Error("Dove registered project root changed.");
-      const result = syncProjectIntegration(root, { packageName: options2.packageName, packageVersion: options2.packageVersion });
+      const result = syncProjectIntegration(root, projectOptions);
       projects.push({ target: root, status: result.status, changedPaths: result.changedPaths, ...result.skippedLocalEdits.length ? { preservedLocalEdits: result.skippedLocalEdits } : {} });
     } catch {
       projects.push({ target: root, status: "blocked", reason: "Integration could not be safely updated; inspect this project's Dove doctor output." });
@@ -17293,8 +17378,8 @@ function inspectRegisteredProjects(options2 = {}) {
 }
 
 // src/core/dashboard-data.mjs
-import fs12 from "node:fs";
-import path11 from "node:path";
+import fs13 from "node:fs";
+import path12 from "node:path";
 var RESEARCH_ROOT2 = ".dove/research";
 var MAX_TEXT_BYTES = 64 * 1024;
 var MAX_ROUNDS = 40;
@@ -17369,7 +17454,7 @@ function collectRounds(directory, fsOps) {
     if (!match) continue;
     const number = Number(match[1]);
     const kind = match[2].toLowerCase();
-    const file = readText(path11.join(directory, name), fsOps);
+    const file = readText(path12.join(directory, name), fsOps);
     if (!file) continue;
     const entry = byNumber.get(number) ?? { number, label: match[1] };
     entry[kind] = { file: name, truncated: file.truncated, mtime: file.mtime };
@@ -17386,25 +17471,25 @@ function evaluationSummary(evaluation) {
   return { mtime: evaluation.mtime, truncated: evaluation.truncated, tables, text: tables.length ? null : evaluation.text };
 }
 function summarizeProject(root, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs12;
-  const research = path11.join(root, RESEARCH_ROOT2);
+  const fsOps = options2.fsOps ?? fs13;
+  const research = path12.join(root, RESEARCH_ROOT2);
   let exists = false;
   try {
     exists = fsOps.lstatSync(root).isDirectory();
   } catch {
     exists = false;
   }
-  const identity = readText(path11.join(research, "IDENTITY.md"), fsOps);
-  const evaluation = readText(path11.join(research, "EVAL.md"), fsOps);
-  const doctor = readText(path11.join(root, ".dove/install/DOCTOR.md"), fsOps);
-  const rounds = exists ? collectRounds(path11.join(research, "rounds"), fsOps) : [];
+  const identity = readText(path12.join(research, "IDENTITY.md"), fsOps);
+  const evaluation = readText(path12.join(research, "EVAL.md"), fsOps);
+  const doctor = readText(path12.join(root, ".dove/install/DOCTOR.md"), fsOps);
+  const rounds = exists ? collectRounds(path12.join(research, "rounds"), fsOps) : [];
   const fields = identity ? parseCardFields(identity.text) : {};
   const current = identity ? parseDoveCurrentRound(identity.text) : null;
   const statusMatch = identity?.text.match(/^Round status:[ \t]*(.+)$/mu)?.[1]?.trim() ?? null;
   const times = [identity?.mtime, evaluation?.mtime, ...rounds.flatMap((round) => [round.brief?.mtime, round.result?.mtime])].filter((value2) => typeof value2 === "number");
   return {
     root,
-    name: path11.basename(root),
+    name: path12.basename(root),
     exists,
     mainline: fields.Mainline ?? fields["\u4E3B\u7EBF"] ?? null,
     currentRound: current?.brief ?? null,
@@ -17421,23 +17506,24 @@ function readProjectDocument(root, name, options2 = {}) {
   if (typeof name !== "string") return null;
   const topic = /^topics\/(?:cards\/)?[^/\\]+\.md$/u.test(name) && !name.includes("..") ? `${RESEARCH_ROOT2}/${name}` : null;
   const relative = ROUND_FILE.test(name) ? `${RESEARCH_ROOT2}/rounds/${name}` : topic ?? NAMED_DOCUMENTS[name];
-  return relative ? readText(path11.join(root, relative), options2.fsOps ?? fs12) : null;
+  return relative ? readText(path12.join(root, relative), options2.fsOps ?? fs13) : null;
 }
 var IMPACTS = [["\u649E\u9898", "overlap"], ["\u65B0\u57FA\u7EBF", "baseline"], ["\u53EF\u501F\u7528", "borrow"], ["\u65E0\u5173", "irrelevant"]];
 function parsePaperImpacts(root, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs12;
-  const research = path11.join(root, RESEARCH_ROOT2);
-  const briefs = listDirectory(path11.join(research, "rounds"), fsOps).filter((name) => /^\d+[-_]brief\.md$/iu.test(name)).sort((a, b) => parseInt(a) - parseInt(b)).map((name) => `rounds/${name}`);
-  const standalone = listDirectory(path11.join(research, "watch"), fsOps).filter((name) => /^impact-\d{4}-\d{2}-\d{2}\.md$/u.test(name)).sort().map((name) => `watch/${name}`);
+  const fsOps = options2.fsOps ?? fs13;
+  const research = path12.join(root, RESEARCH_ROOT2);
+  const briefs = listDirectory(path12.join(research, "rounds"), fsOps).filter((name) => /^\d+[-_]brief\.md$/iu.test(name)).sort((a, b) => parseInt(a) - parseInt(b)).map((name) => `rounds/${name}`);
+  const standalone = listDirectory(path12.join(research, "watch"), fsOps).filter((name) => /^impact-\d{4}-\d{2}-\d{2}\.md$/u.test(name)).sort().map((name) => `watch/${name}`);
   const impacts = {};
   for (const name of [...briefs, ...standalone]) {
-    const file = readText(path11.join(research, name), fsOps, Infinity);
+    const file = readText(path12.join(research, name), fsOps, Infinity);
     if (!file) continue;
     for (const line of file.text.split(/\r?\n/u)) {
       const match = line.match(/^\s*(?:[-*]\s*)?\|?\s*`?(\d{4}\.\d{4,5}|[a-z][a-z.-]*\/\d{7}|W\d+)(?:v\d+)?`?\s*\|\s*(撞题|新基线|可借用|无关)\s*\|\s*(.*)$/u);
       if (!match) continue;
       const hit = IMPACTS.find(([label]) => label === match[2]);
-      impacts[match[1]] = { impact: hit[1], label: hit[0], file: name, ...name.startsWith("rounds/") ? { round: name.slice(7) } : {}, note: match[3].replace(/\s*\|\s*$/u, "").slice(0, 300) };
+      const [note = "", direction = "", summary = ""] = match[3].replace(/(?<!\\)\|\s*$/u, "").split(/(?<!\\)\|/u).map((field) => field.trim().replace(/\\\|/gu, "|"));
+      impacts[match[1]] = { impact: hit[1], label: hit[0], file: name, ...name.startsWith("rounds/") ? { round: name.slice(7) } : {}, note: note.slice(0, 300), direction, line: summary };
     }
   }
   return impacts;
@@ -17449,58 +17535,131 @@ function collectDashboard(options2 = {}) {
   return { generatedAt: new Date(options2.now ?? Date.now()).toISOString(), version: options2.packageVersion ?? null, projects };
 }
 
-// src/core/topic-selection.mjs
+// src/core/paper-library.mjs
 import fs14 from "node:fs";
 import path13 from "node:path";
+var LIBRARY = ".dove/research/papers/library";
+var IMPACT_LABELS = { overlap: "\u649E\u9898", baseline: "\u65B0\u57FA\u7EBF", borrow: "\u53EF\u501F\u7528" };
+function readPaperLibrary(root) {
+  try {
+    return JSON.parse(fs14.readFileSync(path13.join(root, `${LIBRARY}.json`), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return { papers: [] };
+    throw error;
+  }
+}
+function groupPaperLibrary(papers) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const paper of papers) {
+    const direction = paper.direction || "\u5F85\u5F52\u7C7B";
+    if (!groups.has(direction)) groups.set(direction, []);
+    groups.get(direction).push(paper);
+  }
+  return [...groups].sort(([a], [b]) => a.localeCompare(b, "zh-CN")).map(([direction, items]) => ({ direction, papers: items.sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")) || a.id.localeCompare(b.id)) }));
+}
+var markdown = (value2) => String(value2 ?? "").replace(/[\r\n]+/gu, " ").replace(/[\\`*\[\]<>]/gu, "\\$&");
+function renderPaperLibrary(papers) {
+  const lines = ["# \u9879\u76EE\u6587\u732E\u5E93", "", "\u6309\u65B9\u5411\u7D2F\u79EF\u5DF2\u5224\u4E3A\u65B0\u57FA\u7EBF\u3001\u53EF\u501F\u7528\u6216\u649E\u9898\u7684\u8FFD\u8E2A\u8BBA\u6587\u3002\u4E00\u53E5\u8BDD\u7531\u5BFC\u5E08\u6216\u4E3B\u4F1A\u8BDD\u636E\u6458\u8981\u63D0\u4F9B\uFF0C\u4E0D\u4EE3\u8868\u8BFB\u8FC7\u5168\u6587\uFF1B\u6B63\u6587\u95EE\u7B54\u53E6\u5B58\u540C\u76EE\u5F55\u7684\u8BBA\u6587\u7B14\u8BB0\u3002", ""];
+  for (const group of groupPaperLibrary(papers)) {
+    lines.push(`## ${markdown(group.direction)}`, "");
+    for (const paper of group.papers) {
+      const title = markdown(paper.title || paper.id);
+      const metadata = [paper.authors?.length ? paper.authors.join(", ") : null, paper.venue, paper.arxivId ? `arXiv ${paper.arxivId}` : null, paper.date].filter(Boolean);
+      lines.push(
+        `- **${paper.url ? `[${title}](<${paper.url}>)` : title}** \xB7 ${markdown(paper.id)}`,
+        `  ${markdown(paper.line || "\u4E2D\u6587\u4E00\u53E5\u8BDD\u5F85\u636E\u6458\u8981\u8865\u5145\u3002")}`,
+        `  ${metadata.map(markdown).join(" \xB7 ")}`,
+        `  ${IMPACT_LABELS[paper.impact]}\uFF1A${markdown(paper.note)}${paper.impactFile ? `\uFF08${markdown(paper.impactFile)}\uFF09` : ""}`,
+        ""
+      );
+    }
+  }
+  return `${lines.join("\n")}
+`;
+}
+var bibtexText = (value2) => String(value2).replace(/\s+/gu, " ").replace(/[\\{}%&#_$~^]/gu, (char) => ({ "\\": "\\textbackslash{}", "~": "\\textasciitilde{}", "^": "\\textasciicircum{}" })[char] ?? `\\${char}`);
+function exportPaperBibtex(papers) {
+  return [...new Map(papers.map((paper) => [paper.id, paper])).values()].map((paper) => {
+    const type = paper.kind === "conference" ? "inproceedings" : paper.kind === "journal" ? "article" : "misc";
+    const fields = { title: paper.title };
+    if (paper.authors?.length) fields.author = paper.authors.join(" and ");
+    const year = String(paper.date ?? "").match(/^(\d{4})(?:-|$)/u)?.[1];
+    if (year) fields.year = year;
+    if (paper.venue) fields[type === "inproceedings" ? "booktitle" : type === "article" ? "journal" : "howpublished"] = paper.venue;
+    if (paper.arxivId) Object.assign(fields, { eprint: paper.arxivId, archivePrefix: "arXiv" });
+    if (paper.url) fields.url = paper.url;
+    const key = `dove:${paper.id.replace(/[^a-zA-Z0-9.:-]/gu, "-")}`;
+    return `@${type}{${key},
+${Object.entries(fields).filter(([, value2]) => value2).map(([name, value2]) => `  ${name} = {${name === "url" ? String(value2).replace(/[{}]/gu, "\\$&") : bibtexText(value2)}}`).join(",\n")}
+}`;
+  }).join("\n\n") + (papers.length ? "\n" : "");
+}
+function writePaperLibrary(root, papers) {
+  const library = { papers };
+  for (const [extension, content] of [["json", `${JSON.stringify(library, null, 2)}
+`], ["md", renderPaperLibrary(papers)]]) {
+    const file = path13.join(root, `${LIBRARY}.${extension}`);
+    fs14.mkdirSync(path13.dirname(file), { recursive: true });
+    const temporary = `${file}.${process.pid}.tmp`;
+    fs14.writeFileSync(temporary, content);
+    fs14.renameSync(temporary, file);
+  }
+  return library;
+}
+
+// src/core/topic-selection.mjs
+import fs16 from "node:fs";
+import path15 from "node:path";
 
 // src/core/paper-watch.mjs
 import { execFile } from "node:child_process";
-import fs13 from "node:fs";
-import os3 from "node:os";
-import path12 from "node:path";
+import fs15 from "node:fs";
+import os4 from "node:os";
+import path14 from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 var WATCH_DIR = ".dove/research/watch";
 var PROJECT_CONFIG = `${WATCH_DIR}/config.json`;
 var PROJECT_STATE = `${WATCH_DIR}/state.json`;
-var MAX_SEEN = 5e3;
 var DEFAULT_CATEGORIES = ["cs.CV", "cs.GR", "cs.LG"];
 var FIRST_RUN_DAYS = 30;
+var SUPPLEMENT_DAYS = 5 * 365;
+var SUPPLEMENT_LIMIT = 5;
 var ARXIV_INDEX_LAG_DAYS = 3;
 var MIN_RELEVANCE = 2;
 var ARXIV_INTERVAL_MS = 3e3;
 var ARXIV_MAX_BACKOFF_MS = 6e4;
 var OPENALEX = "https://api.openalex.org";
-var OPENALEX_FIELDS = "id,title,publication_date,authorships,abstract_inverted_index,locations,primary_location,referenced_works";
+var OPENALEX_FIELDS = "id,title,publication_date,authorships,abstract_inverted_index,locations,primary_location,referenced_works,cited_by_count";
 var HOT_FILE = "watch-hot.json";
-var DEFAULT_GLOBAL_WATCH_SETTINGS = Object.freeze({ dailyHour: 8, lookbackDays: 3, proxy: "", maxPerDigest: 30 });
+var DEFAULT_GLOBAL_WATCH_SETTINGS = Object.freeze({ dailyHour: 8, lookbackDays: 3, proxy: "", maxPerDigest: 30, supplementOlder: false });
 function localDate(value2 = Date.now()) {
   const date = new Date(value2);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 function doveConfigDirectory(options2 = {}) {
   const env = options2.env ?? process.env;
-  const base = env.XDG_CONFIG_HOME || path12.join(env.HOME || os3.homedir(), ".config");
-  return path12.join(base, "dove");
+  const base = env.XDG_CONFIG_HOME || path14.join(env.HOME || os4.homedir(), ".config");
+  return path14.join(base, "dove");
 }
 function readJson2(file, fallback) {
   try {
-    return JSON.parse(fs13.readFileSync(file, "utf8"));
+    return JSON.parse(fs15.readFileSync(file, "utf8"));
   } catch {
     return fallback;
   }
 }
 function writePrivateFile(file, content) {
-  fs13.mkdirSync(path12.dirname(file), { recursive: true, mode: 448 });
+  fs15.mkdirSync(path14.dirname(file), { recursive: true, mode: 448 });
   const temporary = `${file}.${process.pid}.tmp`;
-  fs13.writeFileSync(temporary, content, { mode: 384 });
-  fs13.renameSync(temporary, file);
+  fs15.writeFileSync(temporary, content, { mode: 384 });
+  fs15.renameSync(temporary, file);
 }
 function writeProjectFile(root, relative, content) {
-  const file = path12.join(root, relative);
-  fs13.mkdirSync(path12.dirname(file), { recursive: true });
+  const file = path14.join(root, relative);
+  fs15.mkdirSync(path14.dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.tmp`;
-  fs13.writeFileSync(temporary, content);
-  fs13.renameSync(temporary, file);
+  fs15.writeFileSync(temporary, content);
+  fs15.renameSync(temporary, file);
 }
 var cleanList = (value2) => (Array.isArray(value2) ? value2 : String(value2 ?? "").split(/\r?\n|[,，]/u)).map((item) => String(item).trim()).filter(Boolean).slice(0, 100);
 function normalizeWatchConfig(value2 = {}) {
@@ -17516,16 +17675,16 @@ function normalizeWatchConfig(value2 = {}) {
   };
 }
 function watchConfigExists(root) {
-  return fs13.existsSync(path12.join(root, PROJECT_CONFIG));
+  return fs15.existsSync(path14.join(root, PROJECT_CONFIG));
 }
 function readWatchConfig(root) {
-  return normalizeWatchConfig(readJson2(path12.join(root, PROJECT_CONFIG), {}));
+  return normalizeWatchConfig(readJson2(path14.join(root, PROJECT_CONFIG), {}));
 }
 function watchConfigGuidance(config) {
   return config.source === "draft" ? "\u8FFD\u8E2A\u914D\u7F6E\u4ECD\u662F\u81EA\u52A8\u521D\u7A3F\u3002\u8BF7\u5728\u8BBE\u7F6E\u9875\u4FEE\u6B63\u4E3A\u9879\u76EE\u5177\u4F53\u95EE\u9898\u3001\u65B9\u6CD5\u548C\u8FD1\u90BB\u8BBA\u6587\uFF1B\u4E5F\u53EF\u5728\u4E0B\u4E00\u6B21\u5BFC\u5E08\u8C03\u7528\u65F6\u8FD4\u56DE\u4FEE\u6B63\u5EFA\u8BAE\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u5199\u56DE config.json \u5E76\u6807\u8BB0 source: mentor\uFF0C\u4E0D\u5FC5\u7B49\u4E0B\u4E00\u8F6E\u3002" : null;
 }
 function readWatchState(root) {
-  return readJson2(path12.join(root, PROJECT_STATE), {});
+  return readJson2(path14.join(root, PROJECT_STATE), {});
 }
 function writeWatchConfig(root, value2) {
   const config = normalizeWatchConfig(value2);
@@ -17566,24 +17725,24 @@ function topPhrases(phrases, { minCount, limit, exclude = [] }) {
 }
 var STOPWORDS = new Set("the a an and or of for to in on with by from as is are was were be been this that these those it its into via using use used we our not no than then also can may per each all any both more most other such only same so very will would should could have has had which while when where what who how than at about after before over under between within without based new one two three first second via vs etc et al data model method methods result results paper work task tasks approach figure table section appendix".split(" "));
 function collectProjectText(root) {
-  const research = path12.join(root, ".dove/research");
+  const research = path14.join(root, ".dove/research");
   const files = [];
   const add = (file) => {
     try {
-      if (fs13.statSync(file).isFile()) files.push(file);
+      if (fs15.statSync(file).isFile()) files.push(file);
     } catch {
     }
   };
-  for (const name of ["IDENTITY.md", "EVAL.md", "RESEARCH.md"]) add(path12.join(research, name));
+  for (const name of ["IDENTITY.md", "EVAL.md", "RESEARCH.md"]) add(path14.join(research, name));
   for (const directory of ["rounds", "sources", "missions", "experiments", "claims"]) {
     try {
-      for (const name of fs13.readdirSync(path12.join(research, directory)).filter((item) => item.endsWith(".md")).sort().reverse().slice(0, 40)) add(path12.join(research, directory, name));
+      for (const name of fs15.readdirSync(path14.join(research, directory)).filter((item) => item.endsWith(".md")).sort().reverse().slice(0, 40)) add(path14.join(research, directory, name));
     } catch {
     }
   }
-  for (const directory of [root, path12.join(root, "docs")]) {
+  for (const directory of [root, path14.join(root, "docs")]) {
     try {
-      for (const name of fs13.readdirSync(directory).filter((item) => /\.md$/iu.test(item)).sort().slice(0, 20)) add(path12.join(directory, name));
+      for (const name of fs15.readdirSync(directory).filter((item) => /\.md$/iu.test(item)).sort().slice(0, 20)) add(path14.join(directory, name));
     } catch {
     }
   }
@@ -17592,7 +17751,7 @@ function collectProjectText(root) {
   for (const file of files) {
     if (total > 3 * 1024 * 1024) break;
     try {
-      const text = fs13.readFileSync(file, "utf8").slice(0, 256 * 1024);
+      const text = fs15.readFileSync(file, "utf8").slice(0, 256 * 1024);
       total += text.length;
       texts.push(text);
     } catch {
@@ -17651,40 +17810,41 @@ function normalizeGlobalWatchSettings(value2 = {}) {
     dailyHour: Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : DEFAULT_GLOBAL_WATCH_SETTINGS.dailyHour,
     lookbackDays: Number.isInteger(days) && days >= 1 && days <= 14 ? days : DEFAULT_GLOBAL_WATCH_SETTINGS.lookbackDays,
     proxy: typeof value2.proxy === "string" ? value2.proxy.trim() : "",
-    maxPerDigest: Number.isInteger(max) && max >= 5 && max <= 200 ? max : DEFAULT_GLOBAL_WATCH_SETTINGS.maxPerDigest
+    maxPerDigest: Number.isInteger(max) && max >= 5 && max <= 200 ? max : DEFAULT_GLOBAL_WATCH_SETTINGS.maxPerDigest,
+    supplementOlder: value2.supplementOlder === true
   };
 }
 function readGlobalWatchSettings(options2 = {}) {
-  return normalizeGlobalWatchSettings(readJson2(path12.join(doveConfigDirectory(options2), "watch.json"), {}));
+  return normalizeGlobalWatchSettings(readJson2(path14.join(doveConfigDirectory(options2), "watch.json"), {}));
 }
 function writeGlobalWatchSettings(value2, options2 = {}) {
   const settings = normalizeGlobalWatchSettings(value2);
-  writePrivateFile(path12.join(doveConfigDirectory(options2), "watch.json"), `${JSON.stringify(settings, null, 2)}
+  writePrivateFile(path14.join(doveConfigDirectory(options2), "watch.json"), `${JSON.stringify(settings, null, 2)}
 `);
   return settings;
 }
 function readSemanticScholarKey(options2 = {}) {
   try {
-    return fs13.readFileSync(path12.join(doveConfigDirectory(options2), "s2-api-key"), "utf8").trim() || null;
+    return fs15.readFileSync(path14.join(doveConfigDirectory(options2), "s2-api-key"), "utf8").trim() || null;
   } catch {
     return null;
   }
 }
 function writeSemanticScholarKey(key, options2 = {}) {
-  const file = path12.join(doveConfigDirectory(options2), "s2-api-key");
+  const file = path14.join(doveConfigDirectory(options2), "s2-api-key");
   const value2 = String(key ?? "").trim();
   if (!value2) {
-    fs13.rmSync(file, { force: true });
+    fs15.rmSync(file, { force: true });
     return false;
   }
   writePrivateFile(file, value2);
   return true;
 }
 function readGlobalWatchState(options2 = {}) {
-  return readJson2(path12.join(doveConfigDirectory(options2), "watch-state.json"), {});
+  return readJson2(path14.join(doveConfigDirectory(options2), "watch-state.json"), {});
 }
 function writeGlobalWatchState(state2, options2 = {}) {
-  writePrivateFile(path12.join(doveConfigDirectory(options2), "watch-state.json"), `${JSON.stringify(state2, null, 2)}
+  writePrivateFile(path14.join(doveConfigDirectory(options2), "watch-state.json"), `${JSON.stringify(state2, null, 2)}
 `);
 }
 function curlGet(url, { proxy = "", headers = {}, timeoutSeconds = 40, body = null } = {}) {
@@ -17770,6 +17930,7 @@ function parseArxivFeed(xml = "") {
       id,
       title: field("title"),
       abstract: field("summary"),
+      kind: "arxiv",
       published: field("published"),
       authors: [...block.matchAll(/<name>([\s\S]*?)<\/name>/gu)].map((match) => decodeXml(match[1])),
       categories: [...block.matchAll(/<category[^>]*term="([^"]+)"/gu)].map((match) => match[1]),
@@ -17781,22 +17942,23 @@ function parseArxivFeed(xml = "") {
 }
 function arxivQuery(config) {
   const categories = config.categories.map((category) => `cat:${category}`).join(" OR ");
-  const terms = [...new Set(config.keywords)].map((keyword) => {
-    const phrase = keyword.replace(/"/gu, "");
-    return /\s/u.test(phrase) ? `ti:"${phrase}" OR abs:"${phrase}"` : `ti:${phrase} OR abs:${phrase}`;
-  }).join(" OR ");
-  const authors = [...new Set(config.authors)].map((name) => `au:"${name.replace(/"/gu, "")}"`).join(" OR ");
+  const terms = [...new Set(config.keywords)].map((keyword) => keyword.replace(/"/gu, "").trim()).filter(Boolean).map((phrase) => /\s/u.test(phrase) ? `ti:"${phrase}" OR abs:"${phrase}"` : `ti:${phrase} OR abs:${phrase}`).join(" OR ");
+  const authors = [...new Set(config.authors)].map((name) => name.replace(/"/gu, "").trim()).filter(Boolean).map((name) => `au:"${name}"`).join(" OR ");
   return [terms && `((${categories}) AND (${terms}))`, authors && `(${authors})`].filter(Boolean).join(" OR ");
 }
-async function fetchArxiv(config, { since, proxy, get = watchGet } = {}) {
-  const query = arxivQuery(config);
-  if (!query) return { items: [] };
-  const url = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(query)}&sortBy=submittedDate&sortOrder=descending&max_results=200`;
+async function fetchArxiv(config, { since, before, proxy, get = watchGet } = {}) {
+  let query = arxivQuery(config);
+  if (!query) return { items: [], error: "arXiv \u6CA1\u6709\u53EF\u7528\u7684\u5173\u952E\u8BCD\u6216\u4F5C\u8005\u67E5\u8BE2\uFF0C\u68C0\u7D22\u672A\u6267\u884C" };
+  if (before) {
+    const stamp = (time) => new Date(time).toISOString().replace(/\D/gu, "").slice(0, 12);
+    query = `(${query}) AND submittedDate:[${stamp(since)} TO ${stamp(before - 1)}]`;
+  }
+  const url = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(query)}&sortBy=${before ? "relevance" : "submittedDate"}&sortOrder=descending&max_results=200`;
   try {
     const response = await get(url, { proxy });
     if (response.status !== 200 || response.error) return { items: [], error: responseError("arXiv", response) };
     if (!/<feed\b/u.test(response.body) || /arxiv\.org\/api\/errors/u.test(response.body)) return { items: [], error: responseError("arXiv \u8FD4\u56DE\u65E0\u6548 feed", response) };
-    return { items: parseArxivFeed(response.body).filter((item) => !since || Date.parse(item.published) >= since) };
+    return { items: parseArxivFeed(response.body).filter((item) => (!since || Date.parse(item.published) >= since) && (!before || Date.parse(item.published) < before)) };
   } catch (error) {
     return { items: [], error: `arXiv\uFF1A${error.message}` };
   }
@@ -17826,6 +17988,8 @@ function openAlexWorkToItem(work) {
     authors: (work.authorships ?? []).map((authorship) => authorship.author?.display_name).filter(Boolean),
     institutions: [...new Set((work.authorships ?? []).flatMap((authorship) => (authorship.institutions ?? []).map((institution) => institution.display_name)).filter(Boolean))],
     venue: work.primary_location?.source?.display_name ?? null,
+    kind: ["conference", "journal"].includes(work.primary_location?.source?.type) ? work.primary_location.source.type : arxiv ? "arxiv" : null,
+    citations: work.cited_by_count ?? null,
     references: (work.referenced_works ?? []).map((reference) => String(reference).split("/").pop()),
     url: arxiv ? `https://arxiv.org/abs/${arxiv}` : landing
   };
@@ -17843,18 +18007,19 @@ async function resolveInstitution(name, { proxy, get }) {
   const data = await openAlexJson(`institutions?search=${encodeURIComponent(name)}&select=id,display_name&per-page=1`, { proxy, get });
   return data.results?.[0]?.id ? String(data.results[0].id).split("/").pop() : null;
 }
-async function fetchOpenAlex(config, { since, proxy, get = curlGet, cache = {} }) {
+async function fetchOpenAlex(config, { since, before, proxy, get = curlGet, cache = {} }) {
   const errors = [];
   const items = [];
   const nextCache = { seeds: { ...cache.seeds ?? {} }, institutions: { ...cache.institutions ?? {} } };
-  const from = localDate(since);
+  const dates = `from_publication_date:${localDate(since)}${before ? `,to_publication_date:${localDate(before - 1)}` : ""}`;
+  const sort = before ? "cited_by_count:desc" : "publication_date:desc";
   try {
     for (const seed of config.seedPapers) if (!nextCache.seeds[seed]) nextCache.seeds[seed] = await resolveSeed(seed, { proxy, get });
     const seedIds = config.seedPapers.map((seed) => nextCache.seeds[seed]).filter(Boolean);
     const seedNames = new Map(config.seedPapers.map((seed) => [nextCache.seeds[seed], seed]));
     for (let index = 0; index < seedIds.length; index += 40) {
       const batch = seedIds.slice(index, index + 40);
-      const data = await openAlexJson(`works?filter=cites:${batch.join("|")},from_publication_date:${from}&select=${OPENALEX_FIELDS}&per-page=100&sort=publication_date:desc`, { proxy, get });
+      const data = await openAlexJson(`works?filter=cites:${batch.join("|")},${dates}&select=${OPENALEX_FIELDS}&per-page=100&sort=${sort}`, { proxy, get });
       for (const work of data.results ?? []) {
         const item = openAlexWorkToItem(work);
         item.citedSeeds = item.references.filter((reference) => seedNames.has(reference)).map((reference) => seedNames.get(reference));
@@ -17863,9 +18028,10 @@ async function fetchOpenAlex(config, { since, proxy, get = curlGet, cache = {} }
     }
     for (const name of config.institutions) if (!nextCache.institutions[name]) nextCache.institutions[name] = await resolveInstitution(name, { proxy, get });
     const institutionIds = config.institutions.map((name) => nextCache.institutions[name]).filter(Boolean);
-    if (institutionIds.length && config.keywords.length) {
+    if (config.keywords.length && (institutionIds.length || before)) {
       const search = config.keywords.map((keyword) => /\s/u.test(keyword) ? `"${keyword}"` : keyword).join(" OR ");
-      const data = await openAlexJson(`works?search=${encodeURIComponent(search)}&filter=authorships.institutions.lineage:${institutionIds.join("|")},from_publication_date:${from}&select=${OPENALEX_FIELDS}&per-page=100&sort=publication_date:desc`, { proxy, get });
+      const institutions = institutionIds.length ? `authorships.institutions.lineage:${institutionIds.join("|")},` : "";
+      const data = await openAlexJson(`works?search=${encodeURIComponent(search)}&filter=${institutions}${dates}&select=${OPENALEX_FIELDS}&per-page=100&sort=${sort}`, { proxy, get });
       for (const work of data.results ?? []) items.push(openAlexWorkToItem(work));
     }
     const unresolved = [...config.seedPapers.filter((seed) => !nextCache.seeds[seed]), ...config.institutions.filter((name) => !nextCache.institutions[name])];
@@ -17880,17 +18046,17 @@ async function fetchHuggingFaceDaily(days, { proxy, get = curlGet, now = Date.no
   const errors = [];
   for (let offset = 0; offset < days; offset += 1) {
     const date = new Date(now - offset * 864e5).toISOString().slice(0, 10);
-    let list;
+    let list2;
     try {
       const response = await get(`https://huggingface.co/api/daily_papers?date=${date}&limit=100`, { proxy });
       if (response.status !== 200 || response.error) throw new Error(responseError(`Hugging Face ${date}`, response));
-      list = JSON.parse(response.body);
-      if (!Array.isArray(list)) throw new Error("\u8FD4\u56DE\u5185\u5BB9\u4E0D\u662F\u8BBA\u6587\u5217\u8868");
+      list2 = JSON.parse(response.body);
+      if (!Array.isArray(list2)) throw new Error("\u8FD4\u56DE\u5185\u5BB9\u4E0D\u662F\u8BBA\u6587\u5217\u8868");
     } catch (error) {
       errors.push(`Hugging Face ${date}\uFF1A${error.message}`);
       continue;
     }
-    for (const entry of list) {
+    for (const entry of list2) {
       const paper = entry.paper ?? entry;
       const id = arxivIdFromUrl(paper.id);
       if (!id) continue;
@@ -17898,7 +18064,8 @@ async function fetchHuggingFaceDaily(days, { proxy, get = curlGet, now = Date.no
         id,
         title: decodeXml(paper.title ?? entry.title ?? ""),
         abstract: decodeXml(paper.summary ?? ""),
-        published: paper.publishedAt ?? entry.publishedAt ?? date,
+        kind: "arxiv",
+        published: paper.publishedAt ?? "",
         authors: (paper.authors ?? []).map((author) => author.name).filter(Boolean),
         upvotes: Number(paper.upvotes ?? 0),
         url: `https://arxiv.org/abs/${id}`
@@ -17919,9 +18086,9 @@ async function fetchSemanticScholar(ids, { key, proxy, get = curlGet } = {}) {
       body: JSON.stringify({ ids: normalized.map((id) => `ARXIV:${id}`) })
     });
     if (response.status !== 200 || response.error) return { papers, error: `${responseError("Semantic Scholar", response)}${key ? "" : "\uFF08\u672A\u8BBE\u7F6E key\uFF0C\u4F7F\u7528\u5171\u4EAB\u989D\u5EA6\uFF09"}\uFF1B\u4EC5\u7F3A\u5C11\u4F1A\u8BAE/\u5F15\u7528\u6570\u589E\u8865` };
-    const list = JSON.parse(response.body);
-    if (!Array.isArray(list)) throw new Error(`\u8FD4\u56DE\u5185\u5BB9\u4E0D\u662F\u8BBA\u6587\u5217\u8868\uFF1A${String(response.body).slice(0, 300)}`);
-    for (const paper of list) {
+    const list2 = JSON.parse(response.body);
+    if (!Array.isArray(list2)) throw new Error(`\u8FD4\u56DE\u5185\u5BB9\u4E0D\u662F\u8BBA\u6587\u5217\u8868\uFF1A${String(response.body).slice(0, 300)}`);
+    for (const paper of list2) {
       const id = arxivIdFromUrl(paper?.externalIds?.ArXiv);
       if (id && normalized.includes(id)) papers.set(id, { venue: paper.venue || null, citations: paper.citationCount ?? null });
     }
@@ -17995,18 +18162,29 @@ function scorePaper(paper, config, signals2 = {}) {
     score += 1;
     reasons.push(`\u5DF2\u53D1\u8868\uFF1A${signals2.s2.venue}`);
   }
-  if (signals2.s2?.citations) {
-    score += Math.min(2, Math.log10(1 + signals2.s2.citations));
+  const citations = signals2.s2?.citations ?? paper.citations;
+  if (citations) {
+    score += Math.min(2, Math.log10(1 + citations));
   }
   return { score: Math.round(score * 10) / 10, relevance, reasons };
 }
 function renderDigest(project, date, items, notes, status) {
-  const lines = [`# \u8BBA\u6587\u8FFD\u8E2A ${date}`, "", `\u9879\u76EE\uFF1A${project}\u3002\u4E0B\u4E00\u6B21\u5BFC\u5E08\u8C03\u7528\u5224\u65AD\u5C1A\u672A\u8BC4\u8FC7\u7684\u8BBA\u6587\uFF0C\u8FD4\u56DE\u300C- \u7F16\u53F7 | \u649E\u9898/\u65B0\u57FA\u7EBF/\u53EF\u501F\u7528/\u65E0\u5173 | \u7406\u7531\u300D\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u4FDD\u5B58\u4E3A watch/impact-YYYY-MM-DD.md\uFF1B\u4E0D\u4F9D\u8D56\u8F6E\u6B21\u3002`, ""];
+  const lines = [`# \u8BBA\u6587\u8FFD\u8E2A ${date}`, "", `\u9879\u76EE\uFF1A${project}\u3002\u5BFC\u5E08\u5224\u65AD\u5C1A\u672A\u8BC4\u8FC7\u7684\u8BBA\u6587\uFF0C\u8FD4\u56DE\u300C- \u7F16\u53F7 | \u649E\u9898/\u65B0\u57FA\u7EBF/\u53EF\u501F\u7528/\u65E0\u5173 | \u7406\u7531 | \u65B9\u5411 | \u4E2D\u6587\u4E00\u53E5\u8BDD\u300D\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u4FDD\u5B58\u4E3A watch/impact-YYYY-MM-DD.md\uFF1B\u4E2D\u6587\u636E\u6458\u8981\u5199\uFF0C\u4E0D\u4EE3\u8868\u8BFB\u8FC7\u5168\u6587\u3002\u4E0B\u6B21\u8FFD\u8E2A\u6216\u9762\u677F\u7684\u79EF\u7D2F\u52A8\u4F5C\u540C\u6B65\u6587\u732E\u5E93\uFF1B\u4E0D\u4F9D\u8D56\u8F6E\u6B21\u3002`, ""];
   if (notes.length) lines.push(`\u8BF4\u660E\uFF1A${notes.join("\uFF1B")}`, "");
   if (status !== "done") lines.push("\u68C0\u7D22\u672A\u5B8C\u6210\uFF0C\u4E0D\u80FD\u636E\u6B64\u5224\u65AD\u6CA1\u6709\u65B0\u7684\u76F8\u5173\u8BBA\u6587\u3002", "");
   else if (!items.length) lines.push("\u672C\u6B21\u68C0\u7D22\u6CA1\u6709\u53D1\u73B0\u65B0\u7684\u76F8\u5173\u8BBA\u6587\u3002");
   for (const item of items) {
-    lines.push(`## ${item.title}`, `- \u7F16\u53F7\uFF1A${item.id}  \xB7  \u94FE\u63A5\uFF1A${item.url}  \xB7  \u5206\u6570 ${item.score}  \xB7  ${String(item.published).slice(0, 10)}`, `- \u4F5C\u8005\uFF1A${item.authors.slice(0, 6).join(", ")}${item.authors.length > 6 ? " \u7B49" : ""}`, `- \u9009\u4E2D\u539F\u56E0\uFF1A${item.reasons.join("\uFF1B") || "\u5206\u7C7B\u5185\u65B0\u8BBA\u6587"}`, `- \u6458\u8981\uFF1A${item.abstract.slice(0, 400)}${item.abstract.length > 400 ? "\u2026" : ""}`, "");
+    const abstract = item.abstract || "";
+    const authors = item.authors || [];
+    lines.push(
+      `## ${item.title}${item.supplement ? "\uFF08\u8F83\u65E9\u8BBA\u6587\u8865\u5145\uFF09" : ""}`,
+      `- \u4E00\u53E5\u8BDD\uFF08\u636E\u6458\u8981\uFF09\uFF1A${item.line || "\u5F85\u5BFC\u5E08\u6216\u4E3B\u4F1A\u8BDD\u636E\u6458\u8981\u8865\u5145\u4E2D\u6587\u3002"}`,
+      `- \u7F16\u53F7\uFF1A${item.id}  \xB7  \u94FE\u63A5\uFF1A${item.url}  \xB7  \u5206\u6570 ${item.score}  \xB7  ${String(item.published || "").slice(0, 10)}`,
+      `- \u4F5C\u8005\uFF1A${authors.slice(0, 6).join(", ")}${authors.length > 6 ? " \u7B49" : ""}`,
+      `- \u6458\u8981\uFF1A${abstract.slice(0, 400)}${abstract.length > 400 ? "\u2026" : ""}`,
+      `- \u68C0\u7D22\u7EBF\u7D22\uFF1A${(item.reasons || []).join("\uFF1B")}`,
+      ""
+    );
   }
   return `${lines.join("\n")}
 `;
@@ -18031,7 +18209,19 @@ async function runProjectWatch(root, { settings, key, hf, now = Date.now(), get 
   const candidates = /* @__PURE__ */ new Map();
   const merge = (item) => {
     const existing = candidates.get(item.id);
-    candidates.set(item.id, existing ? { ...item, ...existing, citedSeeds: [.../* @__PURE__ */ new Set([...existing.citedSeeds ?? [], ...item.citedSeeds ?? []])], institutions: existing.institutions?.length ? existing.institutions : item.institutions, venue: existing.venue ?? item.venue } : item);
+    candidates.set(item.id, existing ? {
+      ...item,
+      ...existing,
+      title: existing.title || item.title,
+      abstract: existing.abstract || item.abstract,
+      authors: existing.authors?.length ? existing.authors : item.authors,
+      published: existing.published || item.published,
+      citedSeeds: [.../* @__PURE__ */ new Set([...existing.citedSeeds ?? [], ...item.citedSeeds ?? []])],
+      institutions: existing.institutions?.length ? existing.institutions : item.institutions,
+      venue: existing.venue || item.venue,
+      citations: existing.citations ?? item.citations,
+      kind: ["conference", "journal"].includes(item.kind) ? item.kind : existing.kind ?? item.kind
+    } : item);
   };
   if (config.keywords.length || config.authors.length) {
     const arxiv = await fetchArxiv(config, { since, proxy: settings.proxy, get });
@@ -18042,24 +18232,48 @@ async function runProjectWatch(root, { settings, key, hf, now = Date.now(), get 
   const openAlex = await fetchOpenAlex(config, { since, proxy: settings.proxy, get, cache: state2.openalex });
   errors.push(...openAlex.errors);
   if (!openAlex.errors.length && (config.seedPapers.length || config.institutions.length && config.keywords.length)) completedSources += 1;
-  notes.push(...errors);
   openAlex.items.forEach(merge);
-  for (const [id, paper] of hf.papers) if (!candidates.has(id)) candidates.set(id, { ...paper, categories: [] });
+  for (const [id, paper] of hf.papers) {
+    if (!candidates.has(id) && !(Date.parse(paper.published) < since)) candidates.set(id, { ...paper, categories: [] });
+  }
+  if (!completedSources && !errors.length) errors.push("\u6CA1\u6709\u6210\u529F\u5B8C\u6210\u7684\u914D\u7F6E\u68C0\u7D22\u6E90\uFF0C\u4E0D\u80FD\u5224\u65AD\u662F\u5426\u6709\u65B0\u8BBA\u6587\u3002");
   const seen = new Set(state2.seen ?? []);
-  let ranked = [...candidates.values()].filter((item) => !seen.has(item.id)).map((item) => ({ ...item, ...scorePaper(item, config, { hf: hf.papers.get(item.id) }) })).filter((item) => item.relevance >= MIN_RELEVANCE).sort((left, right) => right.score - left.score).slice(0, settings.maxPerDigest);
+  const earlier = readJson2(path14.join(root, WATCH_DIR, `${date}.json`), null);
+  const rank = (items) => items.filter((item) => !seen.has(item.id)).map((item) => ({ ...item, ...scorePaper(item, config, { hf: hf.papers.get(item.id) }) })).filter((item) => item.relevance >= MIN_RELEVANCE).sort((left, right) => right.score - left.score);
+  let ranked = rank([...candidates.values()]).slice(0, settings.maxPerDigest);
+  const supplement = settings.supplementOlder === true && completedSources > 0 && !errors.length && !ranked.length && !earlier?.items?.length;
+  if (supplement) {
+    const olderSince = now - SUPPLEMENT_DAYS * 864e5;
+    const before = Math.min(since, now - FIRST_RUN_DAYS * 864e5);
+    const options2 = { since: olderSince, before, proxy: settings.proxy, get };
+    if (config.keywords.length || config.authors.length) {
+      const olderArxiv = await fetchArxiv(config, options2);
+      if (olderArxiv.error) errors.push(olderArxiv.error);
+      olderArxiv.items.forEach(merge);
+    }
+    const olderOpenAlex = await fetchOpenAlex(config, { ...options2, cache: openAlex.cache });
+    errors.push(...olderOpenAlex.errors);
+    olderOpenAlex.items.forEach(merge);
+    for (const paper of hf.papers.values()) if (Date.parse(paper.published) < before) merge(paper);
+    ranked = rank([...candidates.values()].filter((item) => Date.parse(item.published) >= olderSince && Date.parse(item.published) < before)).slice(0, 30);
+    notes.push("\u5C1D\u8BD5\u8865\u5145\u8F83\u65E9\u8BBA\u6587\uFF08\u6700\u591A\u56DE\u6EAF\u4E94\u5E74\uFF09\uFF0C\u6700\u591A\u8865 5 \u7BC7\uFF1B\u4ECD\u987B\u6EE1\u8DB3\u76F8\u5173\u6027\u95E8\u69DB\uFF0C\u5E76\u6709\u5F15\u7528\u3001\u5173\u6CE8\u4F5C\u8005/\u4F1A\u8BAE\u6216\u8FD1\u90BB\u5F15\u7528\u7B49\u7EBF\u7D22\uFF0C\u4E0D\u8DB3\u4E0D\u51D1\u6570\u3002");
+  }
+  notes.push(...errors);
   const s2 = await fetchSemanticScholar(ranked.map((item) => item.id), { key, proxy: settings.proxy, get });
   if (s2.error) notes.push(s2.error);
-  ranked = ranked.map((item) => ({ ...item, ...s2.papers.get(item.id), ...scorePaper(item, config, { hf: hf.papers.get(item.id), s2: s2.papers.get(item.id) }) })).sort((left, right) => right.score - left.score);
-  const earlier = readJson2(path12.join(root, WATCH_DIR, `${date}.json`), null);
-  const merged = [...ranked, ...(earlier?.items ?? []).filter((item) => !ranked.some((fresh) => fresh.id === item.id))].sort((left, right) => right.score - left.score);
+  ranked = ranked.map((item) => ({ ...item, ...s2.papers.get(item.id), venue: s2.papers.get(item.id)?.venue || item.venue || null, citations: s2.papers.get(item.id)?.citations ?? item.citations ?? null, ...scorePaper(item, config, { hf: hf.papers.get(item.id), s2: s2.papers.get(item.id) }) })).sort((left, right) => right.score - left.score);
+  if (supplement) ranked = ranked.filter((item) => item.citations >= 10 || item.citedSeeds?.length || config.venues.some((venue) => lower(item.venue).includes(lower(venue))) || config.authors.some((author) => (item.authors ?? []).some((name) => lower(name).includes(lower(author))))).slice(0, SUPPLEMENT_LIMIT).map((item) => ({ ...item, supplement: true }));
+  const impacts = parsePaperImpacts(root);
+  const merged = [...ranked, ...(earlier?.items ?? []).filter((item) => !ranked.some((fresh) => fresh.id === item.id))].map((item) => ({ ...item, line: impacts[item.id]?.line || item.line || "", direction: impacts[item.id]?.direction || item.direction || "" })).sort((left, right) => right.score - left.score);
   const status = errors.length ? completedSources || ranked.length ? "partial" : "failed" : "done";
   const digest = { date, generatedAt: new Date(now).toISOString(), status, notes, items: merged };
   writeProjectFile(root, `${WATCH_DIR}/${date}.json`, `${JSON.stringify(digest, null, 2)}
 `);
-  writeProjectFile(root, `${WATCH_DIR}/${date}.md`, renderDigest(path12.basename(root), date, merged, notes, status));
-  const nextSeen = [...ranked.map((item) => item.id), ...seen].slice(0, MAX_SEEN);
+  writeProjectFile(root, `${WATCH_DIR}/${date}.md`, renderDigest(path14.basename(root), date, merged, notes, status));
+  const nextSeen = [...ranked.map((item) => item.id), ...seen];
   writeProjectFile(root, PROJECT_STATE, `${JSON.stringify({ ...state2, lastAttempt: digest.generatedAt, lastRun: status === "done" ? digest.generatedAt : state2.lastRun ?? null, status, notes, seen: nextSeen, openalex: openAlex.cache }, null, 2)}
 `);
+  syncPaperLibrary(root);
   return { root, status, found: ranked.length, notes, drafted, guidance, ...status === "failed" ? { error: errors.join("\uFF1B") } : {} };
 }
 async function runWatch(roots, options2 = {}) {
@@ -18083,42 +18297,100 @@ async function runWatch(roots, options2 = {}) {
   if (options2.recordGlobalState !== false) {
     writeGlobalWatchState(state2, options2);
     const hot = [...hf.papers.values()].sort((left, right) => right.upvotes - left.upvotes).slice(0, 60);
-    writePrivateFile(path12.join(doveConfigDirectory(options2), HOT_FILE), `${JSON.stringify({ generatedAt: attemptedAt, errors: hf.errors, papers: hot }, null, 2)}
+    writePrivateFile(path14.join(doveConfigDirectory(options2), HOT_FILE), `${JSON.stringify({ generatedAt: attemptedAt, errors: hf.errors, papers: hot }, null, 2)}
 `);
   }
   return state2;
 }
 function readWatchHot(options2 = {}) {
-  return readJson2(path12.join(doveConfigDirectory(options2), HOT_FILE), { papers: [] });
+  return readJson2(path14.join(doveConfigDirectory(options2), HOT_FILE), { papers: [] });
 }
 function watchScanDue(scan, now = Date.now()) {
   return !scan || localDate(now - 7 * 864e5) >= scan.date;
 }
 function readLatestScan(root) {
   try {
-    const name = fs13.readdirSync(path12.join(root, WATCH_DIR)).filter((item) => /^scan-\d{4}-\d{2}-\d{2}\.md$/u.test(item)).sort().pop();
-    return name ? { date: name.slice(5, 15), text: fs13.readFileSync(path12.join(root, WATCH_DIR, name), "utf8").slice(0, 64 * 1024) } : null;
+    const name = fs15.readdirSync(path14.join(root, WATCH_DIR)).filter((item) => /^scan-\d{4}-\d{2}-\d{2}\.md$/u.test(item)).sort().pop();
+    return name ? { date: name.slice(5, 15), text: fs15.readFileSync(path14.join(root, WATCH_DIR, name), "utf8").slice(0, 64 * 1024) } : null;
   } catch {
     return null;
   }
 }
 function readWatchDigests(root, limit = 3) {
-  const directory = path12.join(root, WATCH_DIR);
+  const directory = path14.join(root, WATCH_DIR);
   let files = [];
   try {
-    files = fs13.readdirSync(directory).filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/u.test(name)).sort().reverse().slice(0, limit);
+    files = fs15.readdirSync(directory).filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/u.test(name)).sort().reverse().slice(0, limit);
   } catch {
     return [];
   }
-  return files.map((name) => readJson2(path12.join(directory, name), null)).filter(Boolean);
+  const impacts = parsePaperImpacts(root);
+  return files.map((name) => readJson2(path14.join(directory, name), null)).filter(Boolean).map((digest) => ({
+    ...digest,
+    items: digest.items.map((item) => ({ ...item, line: impacts[item.id]?.line || item.line || "", direction: impacts[item.id]?.direction || item.direction || "" }))
+  }));
+}
+function syncPaperLibrary(root) {
+  const previous = readPaperLibrary(root);
+  const papers = new Map(previous.papers.map((paper) => [paper.id, paper]));
+  const impacts = parsePaperImpacts(root);
+  for (const digest of readWatchDigests(root, Infinity).reverse()) {
+    for (const paper of digest.items) {
+      const id = arxivIdFromUrl(paper.id) ?? arxivIdFromUrl(paper.url) ?? paper.id;
+      const judgment = impacts[id];
+      if (!judgment || !["overlap", "baseline", "borrow"].includes(judgment.impact)) continue;
+      const prior = papers.get(id);
+      papers.set(id, {
+        id,
+        title: paper.title || prior?.title || "",
+        line: judgment.line || paper.line || prior?.line || "",
+        authors: paper.authors?.length ? paper.authors : prior?.authors ?? [],
+        venue: paper.venue || prior?.venue || null,
+        arxivId: arxivIdFromUrl(id) ?? arxivIdFromUrl(paper.url) ?? prior?.arxivId ?? null,
+        date: paper.published?.slice(0, 10) || paper.date || prior?.date || null,
+        url: paper.url || prior?.url || null,
+        direction: judgment.direction || paper.direction || prior?.direction || "",
+        impact: judgment.impact,
+        note: judgment.note,
+        impactFile: judgment.file,
+        kind: ["conference", "journal"].includes(paper.kind) ? paper.kind : prior?.kind || paper.kind || null
+      });
+    }
+  }
+  for (const [id, paper] of papers) {
+    const judgment = impacts[id];
+    if (!judgment) continue;
+    if (judgment.impact === "irrelevant") papers.delete(id);
+    else papers.set(id, { ...paper, impact: judgment.impact, note: judgment.note, impactFile: judgment.file, direction: judgment.direction || paper.direction, line: judgment.line || paper.line });
+  }
+  const items = [...papers.values()].sort((a, b) => a.id.localeCompare(b.id));
+  if (!items.length && !previous.papers.length) return previous;
+  if (JSON.stringify(items) === JSON.stringify(previous.papers) && fs15.existsSync(path14.join(root, ".dove/research/papers/library.md"))) return previous;
+  return writePaperLibrary(root, items);
 }
 
 // src/core/topic-selection.mjs
 var CRITERIA_NAME = "topic-criteria.md";
 var TOPICS_DIR = ".dove/research/topics";
-var CARD_FIELDS = Object.freeze({ \u72B6\u6001: "status", \u9636\u6BB5: "stage", \u5B9A\u4F4D: "position", \u4E00\u53E5\u8BDD: "summary", \u516D\u70B9: "six" });
+var CARD_FIELDS = Object.freeze({
+  \u72B6\u6001: "status",
+  \u9636\u6BB5: "stage",
+  \u5B9A\u4F4D: "position",
+  \u4E00\u53E5\u8BDD: "summary",
+  \u7F3A\u53E3: "gap",
+  \u6765\u6E90\u673A\u5236: "source",
+  \u5BF9\u5E94\u5173\u7CFB: "mapping",
+  \u6210\u7ACB\u524D\u63D0: "assumptions",
+  \u8FD1\u90BB\u5DEE\u522B: "novelty",
+  \u6700\u5927\u98CE\u9669: "risk",
+  \u6539\u8FDB\u81EA: "improves",
+  \u8BC4\u5BA1\u7ED3\u8BBA: "verdict",
+  \u4FEE\u6539\u7126\u70B9: "focus",
+  \u6700\u5F3A\u53CD\u5BF9: "objection",
+  \u8BC4\u5BA1\u4F9D\u636E: "reviewEvidence"
+});
 function topicCriteriaPath(options2 = {}) {
-  return path13.join(doveConfigDirectory(options2), CRITERIA_NAME);
+  return path15.join(doveConfigDirectory(options2), CRITERIA_NAME);
 }
 function splitProjectSettings(text = "") {
   const lines = String(text).split(/\r?\n/u);
@@ -18140,7 +18412,7 @@ function describe(text, stat) {
 function readTopicCriteriaInfo(options2 = {}) {
   const file = topicCriteriaPath(options2);
   try {
-    return { present: true, ...describe(fs14.readFileSync(file, "utf8"), fs14.statSync(file)) };
+    return { present: true, ...describe(fs16.readFileSync(file, "utf8"), fs16.statSync(file)) };
   } catch {
     return { present: false };
   }
@@ -18149,10 +18421,10 @@ function writeTopicCriteria(text, options2 = {}) {
   const value2 = String(text ?? "");
   if (value2.trim().length < 200) throw new Error("\u9009\u9898\u6807\u51C6\u5185\u5BB9\u592A\u77ED\uFF0C\u50CF\u662F\u6CA1\u7C98\u8D34\u5B8C\u6574");
   const file = topicCriteriaPath(options2);
-  fs14.mkdirSync(path13.dirname(file), { recursive: true, mode: 448 });
+  fs16.mkdirSync(path15.dirname(file), { recursive: true, mode: 448 });
   const temporary = `${file}.${process.pid}.tmp`;
-  fs14.writeFileSync(temporary, value2, { mode: 384 });
-  fs14.renameSync(temporary, file);
+  fs16.writeFileSync(temporary, value2, { mode: 384 });
+  fs16.renameSync(temporary, file);
   return readTopicCriteriaInfo(options2);
 }
 var README = `# \u9009\u9898
@@ -18161,12 +18433,22 @@ var README = `# \u9009\u9898
 
 - \u7528\u6237\u5C1A\u672A\u786E\u8BA4\u4E3B\u7EBF\u5C31\u662F\u9009\u9898\u9636\u6BB5\u3002\u5148\u786E\u5B9A\u6709\u610F\u4E49\u7684\u65B9\u5411\uFF0C\u518D\u5E7F\u6CDB\u751F\u6210\u5E76\u5217\u5019\u9009\uFF0C\u751F\u6210\u65F6\u4E0D\u780D\u9898\uFF1B\u8BF4\u660E\u5404\u81EA\u7684\u673A\u5236\u3001\u4F9D\u636E\u3001\u5173\u952E\u672A\u77E5\u548C\u53EF\u533A\u5206\u7684\u7ED3\u679C\u3002
 - \u8FD1\u90BB\u5BA1\u67E5\u7528\u771F\u5B9E\u8BBA\u6587\u4E0E\u7F51\u9875\u68C0\u7D22\uFF0C\u5E76\u7528\u68C0\u7D22\u62D3\u5BBD\u5019\u9009\uFF0C\u4E0D\u53EA\u6263\u5206\u3002\u6BD4\u8F83\u540E\u63A8\u8350 2\u20133 \u4E2A\u4EA4\u7528\u6237\u9009\u5B9A\uFF1B\u9009\u62E9\u524D\u4E0D\u5B9E\u73B0\u65B9\u6CD5\uFF0C\u53EA\u505A\u6807\u51C6\u5141\u8BB8\u7684\u8BCA\u65AD\u3002\u9009\u5B9A\u540E\u7528\u80FD\u56DE\u7B54\u95EE\u9898\u7684\u89C4\u6A21\u8BBE\u8BA1\u548C\u68C0\u9A8C\u6838\u5FC3\u673A\u5236\uFF0C\u63A5\u901A\u94FE\u8DEF\u4E0D\u7B49\u4E8E\u673A\u5236\u8BC1\u636E\u3002\u8BF4\u660E\u4E0E\u7ED3\u679C\u5199 ../rounds/\uFF0C\u6807\u660E\u4F5C\u8005\u3002
-- \u6BCF\u4E2A\u5019\u9009\u65B9\u5411\u4E00\u5F20\u5361\uFF1Acards/NN-\u540D\u79F0.md\uFF0C\u6309 CRITERIA.md \u7684\u65B9\u5411\u5361\u6A21\u677F\u5199\u3002\u5361\u7247\u5F00\u5934\u56FA\u5B9A\u4E94\u884C\uFF0C\u9762\u677F\u636E\u6B64\u663E\u793A\uFF1A
+- \u6BCF\u4E2A\u5019\u9009\u4E00\u5F20 cards/NN-\u540D\u79F0.md\uFF0C\u6309\u9879\u76EE\u6807\u51C6\u5C55\u5F00\uFF1B\u7F3A\u53E3\u53D6\u8BC1\u3001\u8DE8\u9886\u57DF\u68C0\u7D22\u548C\u8BC4\u5BA1\u9075\u5FAA .dove/install/RESEARCH_QUALITY.md \u7684\u201C\u9009\u9898\u4E0E\u65B0\u610F\u5224\u65AD\u201D\u3002\u5934\u90E8\u524D 40 \u884C\u9010\u884C\u5199\u4EE5\u4E0B\u680F\u76EE\uFF0C\u9762\u677F\u8BFB\u53D6\u6458\u8981\uFF0C\u8BE6\u7EC6\u4F9D\u636E\u653E\u6B63\u6587\uFF1A
   - \u72B6\u6001\uFF1A\u5019\u9009 / \u7EF4\u6301 / \u9650\u5B9A / \u6682\u7F13 / \u64A4\u56DE / \u63A8\u8350 / \u9009\u5B9A
   - \u9636\u6BB5\uFF1A\u4E00 / \u4E8C / \u4E09 / \u56DB
   - \u5B9A\u4F4D\uFF1A\u7A33\u5065 / \u5E73\u8861 / \u63A2\u7D22
-  - \u4E00\u53E5\u8BDD\uFF1A\u95EE\u9898\u6216\u5DE5\u4F5C\u5047\u8BBE\u6458\u8981
-  - \u516D\u70B9\uFF1A\u95EE\u9898 \u6EE1\u8DB3\uFF5C\u65B9\u6CD5 \u5F85\u6838\u5B9E\uFF5C\u8D21\u732E \u2026\uFF08\u516D\u9879\u5404\u5199 \u6EE1\u8DB3 / \u5F85\u6838\u5B9E / \u4E0D\u6EE1\u8DB3\uFF09
+  - \u4E00\u53E5\u8BDD\uFF1A\u7528\u5927\u767D\u8BDD\u8BF4\u6E05\u4E00\u4E2A\u60F3\u6CD5
+  - \u7F3A\u53E3\uFF1A\u653B\u51FB\u7684\u5177\u4F53\u7F3A\u53E3\u53CA\u5176\u91CD\u8981\u6027
+  - \u6765\u6E90\u673A\u5236\uFF1A\u6765\u6E90\u8BBA\u6587\u7F16\u53F7\u3001\u501F\u7528\u673A\u5236\u53CA\u5B83\u5728\u539F\u5904\u4E3A\u4EC0\u4E48\u6709\u6548
+  - \u5BF9\u5E94\u5173\u7CFB\uFF1A\u79FB\u5230\u672C\u95EE\u9898\u540E\uFF0C\u8C01\u626E\u6F14\u8C01
+  - \u6210\u7ACB\u524D\u63D0\uFF1A\u4E3A\u4EC0\u4E48\u53EF\u80FD\u6709\u6548\uFF0C\u54EA\u4E2A\u5173\u952E\u6761\u4EF6\u5FC5\u987B\u6210\u7ACB
+  - \u8FD1\u90BB\u5DEE\u522B\uFF1A\u6700\u8FD1\u7684\u672C\u9886\u57DF\u8BBA\u6587\u7F16\u53F7\u53CA\u5177\u4F53\u5DEE\u522B
+  - \u6700\u5927\u98CE\u9669\uFF1A\u6700\u53EF\u80FD\u8BA9\u60F3\u6CD5\u6216\u8FC1\u79FB\u5931\u8D25\u7684\u539F\u56E0
+  - \u6539\u8FDB\u81EA\uFF1A\u53EF\u9009\uFF0C\u539F\u5019\u9009\u7F16\u53F7\u3001\u5F31\u70B9\u548C\u672C\u6B21\u6539\u52A8
+  - \u8BC4\u5BA1\u7ED3\u8BBA\uFF1A\u7559\u4E0B / \u4FEE\u6539 / \u5426\u6389\uFF08\u539F\u56E0\uFF09
+  - \u4FEE\u6539\u7126\u70B9\uFF1A\u4EC5\u4FEE\u6539\u65F6\u586B\u5199\uFF0C\u9009\u6700\u5F31\u7684\u4E00\u9879\uFF1A\u65B0\u610F / \u8FDE\u8D2F / \u53EF\u884C / \u6E05\u6670 / \u5BF9\u5E94\u5173\u7CFB / \u4F9D\u636E
+  - \u6700\u5F3A\u53CD\u5BF9\uFF1A\u4E00\u53E5\u8BDD\u8BF4\u6E05\u6700\u5927\u95EE\u9898
+  - \u8BC4\u5BA1\u4F9D\u636E\uFF1A\u8BBA\u6587\u7F16\u53F7\u53CA\u4E00\u4E24\u53E5\u7406\u7531\uFF0C\u6B63\u6587\u94FE\u63A5\u7D2F\u79EF\u9605\u8BFB\u7B14\u8BB0
 - \u7528\u6237\u660E\u786E\u9009\u62E9\u5C31\u76F4\u63A5\u8BB0\u4E3B\u7EBF\uFF0C\u4E0D\u91CD\u590D\u786E\u8BA4\uFF1B\u9886\u57DF\u3001\u63A8\u8350\u6216\u5361\u7247\u8BB0\u5F55\u4E0D\u662F\u9009\u62E9\u3002\u5DF2\u6709\u4E3B\u7EBF\u548C\u7528\u6237\u56FA\u5B9A\u65B9\u6CD5\u6309\u539F\u610F\u63A8\u8FDB\uFF0C\u4E0D\u91CD\u9009\u6216\u964D\u7EA7\uFF1B\u6362\u8DEF\u7EBF\u660E\u8BF4\u539F\u8DEF\u7EBF\u3001\u65B0\u8DEF\u7EBF\u548C\u539F\u56E0\u3002
 `;
 var PROJECT_TEMPLATE = `# \u672C\u9879\u76EE\u7684\u9009\u9898\u8BBE\u7F6E
@@ -18191,53 +18473,51 @@ var PROJECT_TEMPLATE = `# \u672C\u9879\u76EE\u7684\u9009\u9898\u8BBE\u7F6E
 `;
 function startTopicSelection(root, options2 = {}) {
   const source = topicCriteriaPath(options2);
-  if (!fs14.existsSync(source)) throw new Error("\u8FD8\u6CA1\u6709\u9009\u9898\u6807\u51C6\uFF1A\u5148\u5728\u9762\u677F\u8BBE\u7F6E\u9875\u7C98\u8D34\uFF0C\u6216\u653E\u5230 " + source);
-  const directory = path13.join(root, TOPICS_DIR);
-  fs14.mkdirSync(path13.join(directory, "cards"), { recursive: true });
-  fs14.writeFileSync(path13.join(directory, "CRITERIA.md"), splitProjectSettings(fs14.readFileSync(source, "utf8")).general);
-  fs14.writeFileSync(path13.join(directory, "README.md"), README);
-  if (!fs14.existsSync(path13.join(directory, "PROJECT.md"))) fs14.writeFileSync(path13.join(directory, "PROJECT.md"), PROJECT_TEMPLATE);
+  if (!fs16.existsSync(source)) throw new Error("\u8FD8\u6CA1\u6709\u9009\u9898\u6807\u51C6\uFF1A\u5148\u5728\u9762\u677F\u8BBE\u7F6E\u9875\u7C98\u8D34\uFF0C\u6216\u653E\u5230 " + source);
+  const directory = path15.join(root, TOPICS_DIR);
+  fs16.mkdirSync(path15.join(directory, "cards"), { recursive: true });
+  fs16.writeFileSync(path15.join(directory, "CRITERIA.md"), splitProjectSettings(fs16.readFileSync(source, "utf8")).general);
+  fs16.writeFileSync(path15.join(directory, "README.md"), README);
+  if (!fs16.existsSync(path15.join(directory, "PROJECT.md"))) fs16.writeFileSync(path15.join(directory, "PROJECT.md"), PROJECT_TEMPLATE);
   return readTopics(root);
 }
 function parseCardHeader(text = "") {
   const card = {};
   for (const line of text.split(/\r?\n/u).slice(0, 40)) {
-    const match = line.match(/^\s*(?:[-*]\s*)?\**\s*(状态|阶段|定位|一句话|六点)\s*\**\s*[:：]\s*(.+)$/u);
-    if (match && !(CARD_FIELDS[match[1]] in card)) card[CARD_FIELDS[match[1]]] = match[2].trim();
+    const match = line.match(/^\s*(?:[-*]\s*)?\**\s*([^:：*]+?)\s*\**\s*[:：]\s*\**\s*(.+)$/u);
+    const field = match && Object.hasOwn(CARD_FIELDS, match[1]) ? CARD_FIELDS[match[1]] : null;
+    if (field && !(field in card) && match[2].trim()) card[field] = match[2].trim();
   }
   const title = text.split(/\r?\n/u).find((line) => /^#\s+\S/u.test(line));
   if (title) card.title = title.replace(/^#\s+/u, "").trim();
-  if (card.six) {
-    card.sixParts = card.six.split(/[｜|;；,，]/u).map((part) => part.trim()).filter(Boolean).map((part) => ({ text: part, state: /不满足/u.test(part) ? "no" : /待核实|待定/u.test(part) ? "pending" : /满足/u.test(part) ? "yes" : "unknown" }));
-  }
   return card;
 }
 function readTopics(root) {
-  const directory = path13.join(root, TOPICS_DIR);
-  if (!fs14.existsSync(directory)) return { started: false };
+  const directory = path15.join(root, TOPICS_DIR);
+  if (!fs16.existsSync(directory)) return { started: false };
   let criteria = null;
   try {
-    const file = path13.join(directory, "CRITERIA.md");
-    criteria = describe(fs14.readFileSync(file, "utf8"), fs14.statSync(file));
+    const file = path15.join(directory, "CRITERIA.md");
+    criteria = describe(fs16.readFileSync(file, "utf8"), fs16.statSync(file));
   } catch {
   }
   const cards = [];
   try {
-    for (const name of fs14.readdirSync(path13.join(directory, "cards")).filter((item) => item.endsWith(".md")).sort()) {
-      const file = path13.join(directory, "cards", name);
-      const text = fs14.readFileSync(file, "utf8").slice(0, 64 * 1024);
-      cards.push({ file: `topics/cards/${name}`, name: name.replace(/\.md$/u, ""), mtime: fs14.statSync(file).mtimeMs, ...parseCardHeader(text) });
+    for (const name of fs16.readdirSync(path15.join(directory, "cards")).filter((item) => item.endsWith(".md")).sort()) {
+      const file = path15.join(directory, "cards", name);
+      const text = fs16.readFileSync(file, "utf8").slice(0, 64 * 1024);
+      cards.push({ file: `topics/cards/${name}`, name: name.replace(/\.md$/u, ""), mtime: fs16.statSync(file).mtimeMs, ...parseCardHeader(text) });
     }
   } catch {
   }
-  const documents = fs14.readdirSync(directory).filter((name) => name.endsWith(".md") && name !== "CRITERIA.md").sort().map((name) => `topics/${name}`);
+  const documents = fs16.readdirSync(directory).filter((name) => name.endsWith(".md") && name !== "CRITERIA.md").sort().map((name) => `topics/${name}`);
   return { started: true, criteria, cards, documents };
 }
 
 // src/cli/dashboard-actions.mjs
 function isDirectory(root) {
   try {
-    return fs15.statSync(root).isDirectory();
+    return fs17.statSync(root).isDirectory();
   } catch {
     return false;
   }
@@ -18265,11 +18545,12 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
       const roots = registered();
       return {
         registered: roots.map((root) => ({ root, exists: isDirectory(root) })),
-        projects: roots.filter((root) => isDirectory(path14.join(root, ".dove/research"))).map((root) => {
+        projects: roots.filter((root) => isDirectory(path16.join(root, ".dove/research"))).map((root) => {
           const watch = readWatchConfig(root);
-          return { root, name: path14.basename(root), watch, guidance: watchConfigGuidance(watch) };
+          return { root, name: path16.basename(root), watch, guidance: watchConfigGuidance(watch) };
         }),
         watchGlobal: readGlobalWatchSettings(options2),
+        hostSettings: readHostSettings(options2),
         watchState: readGlobalWatchState(options2),
         watchRunning: Boolean(running),
         watchError: runError,
@@ -18286,12 +18567,21 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
       const all = readWatchDigests(root, Infinity);
       const pending = /* @__PURE__ */ new Map();
       for (const digest of all.slice(3)) for (const item of digest.items) if (!impacts[item.id] && !pending.has(item.id)) pending.set(item.id, item);
-      return { config, guidance: watchConfigGuidance(config), state: readWatchState(root), digests: all.slice(0, 3), pending: [...pending.values()], impacts, scan, scanDue: watchScanDue(scan, now) };
+      return { config, guidance: watchConfigGuidance(config), state: readWatchState(root), digests: all.slice(0, 3), pending: [...pending.values()], impacts, scan, scanDue: watchScanDue(scan, now), library: groupPaperLibrary(readPaperLibrary(root).papers) };
+    },
+    readLibrary({ root, format = "json" }) {
+      const library = readPaperLibrary(root);
+      if (format === "md") return renderPaperLibrary(library.papers);
+      if (format === "bib") return exportPaperBibtex(library.papers);
+      return library;
+    },
+    syncPaperLibrary({ root }) {
+      return syncPaperLibrary(root);
     },
     readTopicsOverview() {
       return {
         criteria: readTopicCriteriaInfo(options2),
-        projects: registered().filter((root) => isDirectory(path14.join(root, ".dove/research"))).map((root) => ({ root, name: path14.basename(root), ...readTopics(root) }))
+        projects: registered().filter((root) => isDirectory(path16.join(root, ".dove/research"))).map((root) => ({ root, name: path16.basename(root), ...readTopics(root) }))
       };
     },
     startTopics({ root }) {
@@ -18307,7 +18597,7 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
     // hot papers that touch any project's keywords, and each project's latest scan.
     readTrends({ now = Date.now() } = {}) {
       const weekAgo = localDate(now - 7 * 864e5);
-      const roots = registered().filter((root) => isDirectory(path14.join(root, ".dove/research")));
+      const roots = registered().filter((root) => isDirectory(path16.join(root, ".dove/research")));
       const byId = /* @__PURE__ */ new Map();
       const configs = [];
       const scans = [];
@@ -18318,22 +18608,22 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
         for (const digest of readWatchDigests(root, 7).filter((item) => item.date >= weekAgo)) {
           for (const item of digest.items) {
             const entry = byId.get(item.id) ?? { ...item, projects: [], impacts: [] };
-            if (!entry.projects.includes(path14.basename(root))) entry.projects.push(path14.basename(root));
-            if (impacts[item.id]) entry.impacts.push({ project: path14.basename(root), ...impacts[item.id] });
+            if (!entry.projects.includes(path16.basename(root))) entry.projects.push(path16.basename(root));
+            if (impacts[item.id]) entry.impacts.push({ project: path16.basename(root), ...impacts[item.id] });
             entry.score = Math.max(entry.score ?? 0, item.score ?? 0);
             byId.set(item.id, entry);
           }
         }
         const scan = readLatestScan(root);
-        scans.push({ project: path14.basename(root), ...scan ?? {}, due: watchScanDue(scan, now) });
+        scans.push({ project: path16.basename(root), ...scan ?? {}, due: watchScanDue(scan, now) });
       }
       const hot = (readWatchHot(options2).papers ?? []).filter((paper) => configs.some((config) => scorePaper(paper, config).relevance >= MIN_RELEVANCE)).slice(0, 15);
       const top = [...byId.values()].sort((left, right) => right.impacts.length - left.impacts.length || right.score - left.score).slice(0, 30);
       return { since: weekAgo, top, hot, scans };
     },
     addProject({ path: target }) {
-      if (typeof target !== "string" || !path14.isAbsolute(target)) throw new Error("\u8BF7\u586B\u5199\u9879\u76EE\u7684\u7EDD\u5BF9\u8DEF\u5F84");
-      return importProjectRoots([path14.normalize(target)], options2);
+      if (typeof target !== "string" || !path16.isAbsolute(target)) throw new Error("\u8BF7\u586B\u5199\u9879\u76EE\u7684\u7EDD\u5BF9\u8DEF\u5F84");
+      return importProjectRoots([path16.normalize(target)], options2);
     },
     removeProject({ root }) {
       return changeRegisteredProjects([], [root], options2);
@@ -18347,6 +18637,9 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
     saveWatchGlobal({ settings }) {
       return writeGlobalWatchSettings(settings ?? {}, options2);
     },
+    saveHostSettings({ settings }) {
+      return writeHostSettings(settings ?? {}, options2);
+    },
     saveS2Key({ key }) {
       return { set: writeSemanticScholarKey(key, options2) };
     },
@@ -18357,8 +18650,8 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
     changePassword(next) {
       if (!passwordFile) throw new Error("\u9762\u677F\u6CA1\u6709\u7528 --password-file \u542F\u52A8\uFF0C\u4E0D\u80FD\u5728\u8FD9\u91CC\u6539\u5BC6\u7801");
       const temporary = `${passwordFile}.${process.pid}.tmp`;
-      fs15.writeFileSync(temporary, next, { mode: 384 });
-      fs15.renameSync(temporary, passwordFile);
+      fs17.writeFileSync(temporary, next, { mode: 384 });
+      fs17.renameSync(temporary, passwordFile);
     },
     // Runs once a day at the configured hour while the dashboard is up.
     startScheduler({ intervalMs = 10 * 60 * 1e3, now = () => /* @__PURE__ */ new Date() } = {}) {
@@ -18431,7 +18724,7 @@ function cookieAttributes(request, maxAge) {
   return `Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
 }
 var MAX_ACTION_BODY = 1024 * 1024;
-var SETTINGS_ACTIONS = /* @__PURE__ */ new Set(["addProject", "removeProject", "syncProjects", "saveWatchConfig", "saveWatchGlobal", "saveS2Key", "runWatch", "draftWatchConfig", "startTopics", "saveTopicCriteria"]);
+var SETTINGS_ACTIONS = /* @__PURE__ */ new Set(["addProject", "removeProject", "syncProjects", "saveWatchConfig", "saveWatchGlobal", "saveS2Key", "runWatch", "draftWatchConfig", "startTopics", "saveTopicCriteria", "syncPaperLibrary", "saveHostSettings"]);
 function sendJson(response, status, value2) {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   response.end(JSON.stringify(value2));
@@ -18530,6 +18823,27 @@ function createDashboardServer({ collect, listRoots, readDocument, password = nu
         sendJson(response, 200, await actions.readTrends());
         return;
       }
+      if (url.pathname === "/api/library" && actions) {
+        const root = url.searchParams.get("project");
+        if (!knownRoot(root)) {
+          response.writeHead(404).end();
+          return;
+        }
+        const format = url.searchParams.get("format") || "json";
+        if (!["json", "md", "bib"].includes(format)) {
+          sendJson(response, 400, { error: "\u4E0D\u652F\u6301\u7684\u6587\u732E\u5E93\u683C\u5F0F" });
+          return;
+        }
+        const result = await actions.readLibrary({ root, format });
+        if (format === "json") {
+          response.setHeader("content-disposition", 'attachment; filename="dove-library.json"');
+          sendJson(response, 200, result);
+        } else {
+          response.writeHead(200, { "content-type": `${format === "bib" ? "application/x-bibtex" : "text/markdown"}; charset=utf-8`, "content-disposition": `attachment; filename="dove-library.${format}"`, "cache-control": "no-store" });
+          response.end(result);
+        }
+        return;
+      }
       if (url.pathname === "/api/watch" && actions) {
         const root = url.searchParams.get("project");
         if (!knownRoot(root)) {
@@ -18565,6 +18879,12 @@ function startDashboardServer({ collect, listRoots, readDocument, password = nul
       resolve(server);
     });
   });
+}
+function renderPaperCard(it, judge = null) {
+  const esc = (value2) => String(value2 ?? "").replace(/[&<>"']/gu, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+  const line = judge?.line || it.line;
+  const details = [it.id, String(it.published || it.date || "").slice(0, 10), it.venue, (it.authors || []).join("\u3001")].filter(Boolean);
+  return '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="takeaway">' + esc(line || "\u4E2D\u6587\u4E00\u53E5\u8BDD\u5F85\u8865\u5145\uFF0C\u6682\u53EF\u5C55\u5F00\u539F\u6458\u8981\uFF1B\u5173\u952E\u8BCD\u547D\u4E2D\u4E0D\u662F\u5185\u5BB9\u603B\u7ED3\u3002") + '</div><div class="why">' + esc(details.join(" \xB7 ")) + (it.supplement ? " \xB7 \u8F83\u65E9\u8BBA\u6587\u8865\u5145" : "") + (it.code && String(it.code).startsWith("http") ? ' \xB7 <a href="' + esc(it.code) + '" target="_blank" rel="noopener">\u4EE3\u7801/\u4E3B\u9875</a>' : "") + "</div>" + (judge ? '<div class="judge">\u5F71\u54CD\u5224\u65AD\uFF08' + esc(judge.file || judge.round) + "\uFF09\uFF1A" + esc(judge.note) + "</div>" : "") + '<details class="abs"><summary>\u539F\u6458\u8981\u4E0E\u5165\u9009\u4F9D\u636E\uFF08\u4E0D\u4EE3\u8868\u5DF2\u8BFB\u5168\u6587\uFF09</summary>' + esc(it.abstract || "\u672A\u53D6\u5F97\u6458\u8981") + '<div class="why">' + esc((it.reasons || []).join("\uFF1B")) + "</div></details></div>";
 }
 function renderLoginHtml(failed = false) {
   return `<!doctype html>
@@ -18717,9 +19037,9 @@ nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-colo
 .group { padding: 6px 14px; font-size: 12px; font-weight: 700; background: var(--bg); border-bottom: 1px solid var(--line); }
 .group.overlap { color: var(--user); } .group.baseline { color: var(--done); } .group.borrow { color: var(--accent); } .group.pending { color: var(--warn); }
 .paper .judge { font-size: 12px; margin-top: 3px; }
-.dots { display: inline-flex; gap: 3px; }
-.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--pause-soft); display: inline-block; }
-.dot.yes { background: var(--accent); } .dot.pending { background: var(--warn); } .dot.no { background: var(--user); }
+.paper .takeaway { margin: 5px 0; font-size: 14px; }
+.library { margin-top: 16px; }
+.library .btns { margin-bottom: 8px; }
 tr.cardrow { cursor: pointer; }
 tr.cardrow:hover td { background: var(--accent-soft); }
 .badge-draft { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); margin-left: 6px; }
@@ -18847,7 +19167,7 @@ function renderView() {
     tile("\u5F53\u524D\u8F6E\u6B21", p.currentRound || "\u2014") + tile("\u8F6E\u6B21\u72B6\u6001", (STATUS[String(p.roundStatus || "").toLowerCase()] || [0, p.roundStatus || "\u2014"])[1]) +
     tile("\u5DF2\u6709\u8F6E\u6B21", p.rounds.length) + tile("\u8BC4\u6D4B\u8BB0\u5F55", evalRows ? evalRows + " \u884C" : "\u2014") + tile("\u6700\u8FD1\u66F4\u65B0", ago(p.lastActivity)) + "</div>";
   html += '<section><h2>\u8BC4\u6D4B\u8868 <span class="sub">EVAL.md \xB7 \u6700\u65B0\u4E00\u884C\u9AD8\u4EAE</span></h2>';
-  if (!p.evaluation) html += '<div class="card note">\u8FD8\u6CA1\u6709 EVAL.md\u3002\u7ACB\u9879\u786E\u8BA4\u540E\u7531\u5BFC\u5E08\u5B9A\u8BC4\u6D4B\u3002</div>';
+  if (!p.evaluation) html += '<div class="card note">\u8FD8\u6CA1\u6709 EVAL.md\u3002\u4E3B\u7EBF\u786E\u8BA4\u540E\uFF0C\u6267\u884C\u8005\u5EFA\u7ACB\u80FD\u56DE\u7B54\u95EE\u9898\u7684\u8BC4\u6D4B\uFF0C\u5BFC\u5E08\u5224\u65AD\u65B9\u5411\u3002</div>';
   else if (p.evaluation.tables.length) html += p.evaluation.tables.map((t) => '<div class="tablewrap">' + tableHtml([t.header, ...t.rows], true) + "</div>").join("") + lazyDoc(p.root, "EVAL.md", "\u67E5\u770B EVAL.md \u539F\u6587");
   else html += '<div class="card md">' + md(p.evaluation.text) + "</div>";
   html += "</section>";
@@ -18871,6 +19191,11 @@ function renderView() {
   html += '<section><h2>\u8EAB\u4EFD\u5361 <span class="sub">IDENTITY.md</span></h2><div class="card md">' + (p.identity ? md(p.identity.text) + (p.identity.text.length > 4096 ? '<div class="note">\u8EAB\u4EFD\u5361\u8D85\u8FC7 4KB\uFF0C\u5BBF\u4E3B\u53EA\u4F1A\u770B\u5230\u5F00\u5934\u90E8\u5206\u3002</div>' : "") : '<span class="note">\u8FD8\u6CA1\u6709\u8EAB\u4EFD\u5361\u3002</span>') + "</div></section>";
   if (p.doctor) html += "<section>" + lazyDoc(p.root, "DOCTOR.md", "Dove \u96C6\u6210\u95EE\u9898\u8BB0\u5F55\uFF08DOCTOR.md\uFF09") + "</section>";
   view.innerHTML = html;
+  view.querySelectorAll(".librarySync").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { await act("syncPaperLibrary", { root: b.dataset.root }); watchCache.delete(b.dataset.root); await loadWatch(b.dataset.root); toast("\u5DF2\u79EF\u7D2F\u5DF2\u6709\u5F71\u54CD\u5224\u65AD\uFF0C\u672A\u8FD0\u884C\u68C0\u7D22"); }
+    catch (error) { toast(error.message); b.disabled = false; }
+  }));
   view.querySelectorAll("details[data-name]").forEach((d) => d.addEventListener("toggle", () => {
     const key = d.dataset.root + "/" + d.dataset.name;
     if (d.open) { openDocs.add(key); loadRound(d.dataset.root, d.dataset.name); } else openDocs.delete(key);
@@ -18910,14 +19235,20 @@ function roundBody(root, part) {
   return '<div class="body md">' + md(t.text) + (t.truncated ? '<div class="note">\u5185\u5BB9\u8F83\u957F\uFF0C\u53EA\u663E\u793A\u524D 64KB\u3002</div>' : "") + "</div>";
 }
 const GROUPS = [["overlap", "\u649E\u9898\uFF1A\u8D21\u732E\u53EF\u80FD\u88AB\u8986\u76D6"], ["baseline", "\u65B0\u57FA\u7EBF\uFF1A\u8BE5\u8FDB\u8BC4\u6D4B\u5BF9\u7167"], ["borrow", "\u53EF\u501F\u7528\uFF1A\u65B9\u6CD5\u6216\u6570\u636E"], ["pending", "\u5F85\u5BFC\u5E08\u5224\u65AD"]];
-function paperHtml(it, judge) {
-  return '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">' + esc(it.id) + " \xB7 \u5206\u6570 " + esc(it.score) + " \xB7 " + esc(String(it.published || "").slice(0, 10)) + " \xB7 " + esc((it.reasons || []).join("\uFF1B")) + (it.venue ? " \xB7 " + esc(it.venue) : "") + (it.code && String(it.code).startsWith("http") ? ' \xB7 <a href="' + esc(it.code) + '" target="_blank" rel="noopener">\u4EE3\u7801/\u4E3B\u9875</a>' : "") + "</div>" + (judge ? '<div class="judge">\u5BFC\u5E08\uFF08' + esc(judge.file || judge.round) + "\uFF09\uFF1A" + esc(judge.note) + "</div>" : "") + '<div class="abs">' + esc((it.abstract || "").slice(0, 220)) + (it.abstract && it.abstract.length > 220 ? "\u2026" : "") + "</div></div>";
+const paperHtml = ${renderPaperCard.toString()};
+function librarySection(root, groups) {
+  const endpoint = '/api/library?project=' + encodeURIComponent(root);
+  let html = '<div class="library"><h2>\u9879\u76EE\u6587\u732E\u5E93 <span class="sub">\u6309\u65B9\u5411\u79EF\u7D2F\u5DF2\u5224\u65AD\u7684\u6709\u7528\u8BBA\u6587</span></h2><div class="btns"><button class="btn librarySync" data-root="' + esc(root) + '">\u79EF\u7D2F\u5DF2\u6709\u5F71\u54CD\u5224\u65AD</button>' + [["json", "JSON"], ["md", "Markdown"], ["bib", "BibTeX"]].map(([format, label]) => '<a class="btn" href="' + esc(endpoint + '&format=' + format) + '">' + label + '</a>').join("") + '</div>';
+  if (!groups.length) return html + '<div class="note">\u8FD8\u6CA1\u6709\u5DF2\u79EF\u7D2F\u7684\u8BBA\u6587\u3002\u4E3B\u4F1A\u8BDD\u4FDD\u5B58\u5E26\u65B9\u5411\u548C\u4E2D\u6587\u4E00\u53E5\u8BDD\u7684\u5F71\u54CD\u5224\u65AD\u540E\uFF0C\u70B9\u4E0A\u65B9\u79EF\u7D2F\uFF0C\u6216\u7531\u4E0B\u4E00\u6B21\u6B63\u5E38\u8FFD\u8E2A\u6536\u5F55\u3002</div></div>';
+  for (const group of groups) html += '<details class="card"><summary>' + esc(group.direction) + ' \xB7 ' + group.papers.length + ' \u7BC7</summary>' + group.papers.map((paper) => paperHtml(paper)).join("") + '</details>';
+  return html + '</div>';
 }
 function papersSection(root) {
   let html = '<section><h2>\u65B0\u8BBA\u6587 <span class="sub">\u8BBA\u6587\u8FFD\u8E2A \xB7 \u6309\u5BFC\u5E08\u7684\u5F71\u54CD\u5224\u65AD\u5206\u7EC4</span></h2>';
   const w = watchCache.get(root);
   if (!w || w.loading) { if (!w) loadWatch(root); return html + '<div class="card note">\u8BFB\u53D6\u4E2D\u2026</div></section>'; }
   if (w.error) return html + '<div class="card note">' + esc(w.error) + "</div></section>";
+  html += librarySection(root, w.library || []);
   const c = w.config;
   if (w.guidance) html += '<div class="card note">' + esc(w.guidance) + "</div>";
   if (w.scan) html += lazyScan(root, w.scan);
@@ -18951,10 +19282,10 @@ function renderTrends() {
   if (trends.error) { view.innerHTML = '<div class="empty">' + esc(trends.error) + "</div>"; return; }
   let html = '<h1 class="title">\u672C\u5468\u9886\u57DF\u52A8\u6001</h1><div class="path">\u81EA ' + esc(trends.since) + " \u8D77 \xB7 \u6240\u6709\u9879\u76EE\u7684\u8FFD\u8E2A\u7ED3\u679C\u6C47\u603B</div>";
   html += '<section style="margin-top:18px"><h2>\u5404\u9879\u76EE\u6700\u76F8\u5173\u7684\u65B0\u8BBA\u6587 <span class="sub">\u5BFC\u5E08\u5224\u8FC7\u7684\u6392\u5728\u524D\u9762</span></h2><div class="card" style="padding:0">';
-  html += trends.top.map((it) => paperHtml(it, null).replace('<div class="abs">', '<div class="judge">' + esc(it.projects.join("\u3001")) + (it.impacts.length ? " \xB7 " + esc(it.impacts.map((x) => x.project + "\uFF1A" + x.label).join("\uFF1B")) : "") + '</div><div class="abs">')).join("") || '<div class="paper note">\u8FD9\u4E00\u5468\u8FD8\u6CA1\u6709\u8FFD\u8E2A\u7ED3\u679C\u3002</div>';
+  html += trends.top.map((it) => '<div class="group">' + esc(it.projects.join("\u3001")) + (it.impacts.length ? " \xB7 " + esc(it.impacts.map((x) => x.project + "\uFF1A" + x.label).join("\uFF1B")) : "") + '</div>' + paperHtml(it, it.impacts.find((impact) => impact.line))).join("") || '<div class="paper note">\u8FD9\u4E00\u5468\u8FD8\u6CA1\u6709\u8FFD\u8E2A\u7ED3\u679C\u3002</div>';
   html += "</div></section>";
   html += '<section><h2>\u793E\u533A\u70ED\u70B9\u91CC\u548C\u4F60\u65B9\u5411\u76F8\u5173\u7684 <span class="sub">Hugging Face \u6BCF\u65E5\u8BBA\u6587\u699C\uFF0C\u901A\u8FC7\u9879\u76EE\u76F8\u5173\u6027\u7B5B\u9009</span></h2><div class="card" style="padding:0">';
-  html += trends.hot.map((it) => '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="why">' + esc(it.id) + " \xB7 " + esc(it.upvotes) + " \u8D5E \xB7 " + esc(String(it.published || "").slice(0, 10)) + "</div></div>").join("") || '<div class="paper note">\u6682\u65F6\u6CA1\u6709\u3002</div>';
+  html += trends.hot.map((it) => paperHtml(it)).join("") || '<div class="paper note">\u6682\u65F6\u6CA1\u6709\u3002</div>';
   html += "</div></section>";
   html += '<section><h2>\u5BFC\u5E08\u9886\u57DF\u626B\u63CF <span class="sub">\u6BCF\u5468\u4E00\u6B21\uFF0C\u5728\u5BFC\u5E08\u73AF\u8282\u7528\u7F51\u9875\u548C\u8BBA\u6587\u68C0\u7D22\u5B8C\u6210</span></h2>';
   html += trends.scans.map((x) => '<details class="note"><summary>' + esc(x.project) + " \xB7 " + esc(x.date || "\u5C1A\u672A\u626B\u63CF") + (x.due ? " \xB7 \u4E0B\u6B21\u5BFC\u5E08\u8C03\u7528\u5F85\u66F4\u65B0" : "") + '</summary><div class="card md">' + (x.text ? md(x.text) : "\u4E0D\u4F9D\u8D56\u8F6E\u6B21\uFF1B\u4E3B\u4F1A\u8BDD\u4FDD\u5B58\u5BFC\u5E08\u8FD4\u56DE\u7684\u9886\u57DF\u626B\u63CF\u5230 watch/scan-YYYY-MM-DD.md\u3002") + "</div></details>").join("") || '<div class="card note">\u8FD8\u6CA1\u6709\u626B\u63CF\u8BB0\u5F55\u3002</div>';
@@ -18976,10 +19307,10 @@ function renderTopics() {
   const t = started.find((x) => x.root === topicRoot);
   if (t) {
     if (t.criteria && c.present && t.criteria.version !== c.version) html += '<div class="card note" style="margin-bottom:12px">\u8FD9\u4E2A\u9879\u76EE\u7528\u7684\u662F\u7B2C ' + esc(t.criteria.version || "?") + " \u7248\u6807\u51C6\uFF0C\u5F53\u524D\u6807\u51C6\u662F\u7B2C " + esc(c.version || "?") + ' \u7248\u3002<button class="btn tStart" data-root="' + esc(t.root) + '">\u6362\u6210\u5F53\u524D\u7248\u672C</button></div>';
-    html += '<section><h2>\u5019\u9009\u65B9\u5411 <span class="sub">\u5361\u7247\u5F00\u5934\u4E94\u884C\uFF1A\u72B6\u6001\u3001\u9636\u6BB5\u3001\u5B9A\u4F4D\u3001\u4E00\u53E5\u8BDD\u3001\u516D\u70B9</span></h2>';
-    if (!t.cards.length) html += '<div class="card note">\u8FD8\u6CA1\u6709\u5019\u9009\u5361\u3002\u5728\u8FD9\u4E2A\u9879\u76EE\u7684\u4F1A\u8BDD\u91CC\u8BF4\u201C\u5F00\u59CB\u9009\u9898\u201D\uFF0C\u5BFC\u5E08\u4F1A\u6309\u9009\u9898\u6807\u51C6\u5148\u53D1\u6563\u3001\u518D\u5BA1\u67E5\uFF0C\u628A\u5019\u9009\u5199\u8FDB topics/cards/\u3002</div>';
-    else html += '<div class="tablewrap"><table><thead><tr><th>\u5019\u9009</th><th>\u5B9A\u4F4D</th><th>\u9636\u6BB5</th><th>\u72B6\u6001</th><th>\u516D\u70B9</th><th>\u4E00\u53E5\u8BDD</th></tr></thead><tbody>' + t.cards.map((k) =>
-      '<tr class="cardrow" data-file="' + esc(k.file) + '"><td>' + esc(k.title || k.name) + "</td><td>" + esc(k.position || "\u2014") + "</td><td>" + esc(k.stage || "\u2014") + '</td><td><span class="chip ' + (TOPIC_STATUS[(k.status || "").slice(0, 2)] || "other") + '">' + esc(k.status || "\u672A\u6807") + '</span></td><td><span class="dots" title="' + esc(k.six || "") + '">' + (k.sixParts || []).map((x) => '<span class="dot ' + x.state + '"></span>').join("") + '</span></td><td style="white-space:normal;min-width:240px">' + esc(k.summary || "") + "</td></tr>" +
+    html += '<section><h2>\u5019\u9009\u65B9\u5411 <span class="sub">\u7F3A\u53E3 \u2192 \u6765\u6E90\u673A\u5236 \u2192 \u5BF9\u5E94\u5173\u7CFB\uFF1B\u8BC4\u5BA1\u53EA\u70B9\u6700\u5F31\u5904</span></h2>';
+    if (!t.cards.length) html += '<div class="card note">\u8FD8\u6CA1\u6709\u5019\u9009\u5361\u3002\u6B63\u5E38\u9009\u9898\u65F6\u5148\u8BFB\u6807\u51C6\u3001\u627E\u6709\u6B63\u6587\u4F9D\u636E\u7684\u7F3A\u53E3\uFF0C\u518D\u8DE8\u9886\u57DF\u627E\u673A\u5236\uFF1B\u4E0D\u66FF\u5DF2\u6709\u9879\u76EE\u91CD\u5F00\u9009\u9898\u3002</div>';
+    else html += '<div class="tablewrap"><table><thead><tr><th>\u5019\u9009</th><th>\u5B9A\u4F4D</th><th>\u9636\u6BB5</th><th>\u72B6\u6001</th><th>\u8BC4\u5BA1</th><th>\u60F3\u6CD5\u4E0E\u4F9D\u636E</th></tr></thead><tbody>' + t.cards.map((k) =>
+      '<tr class="cardrow" data-file="' + esc(k.file) + '"><td>' + esc(k.title || k.name) + "</td><td>" + esc(k.position || "\u2014") + "</td><td>" + esc(k.stage || "\u2014") + '</td><td><span class="chip ' + (TOPIC_STATUS[(k.status || "").slice(0, 2)] || "other") + '">' + esc(k.status || "\u672A\u6807") + '</span></td><td style="white-space:normal;min-width:160px">' + esc(k.verdict || "\u5F85\u5224\u65AD") + (k.focus ? '<div class="note">\u6700\u5F31\uFF1A' + esc(k.focus) + '</div>' : "") + (k.reviewEvidence ? '<div class="note">\u4F9D\u636E\uFF1A' + esc(k.reviewEvidence) + '</div>' : "") + (k.objection ? '<div class="note">\u6700\u5F3A\u53CD\u5BF9\uFF1A' + esc(k.objection) + '</div>' : "") + '</td><td style="white-space:normal;min-width:280px">' + esc(k.summary || "") + [["\u7F3A\u53E3", k.gap], ["\u6765\u6E90\u673A\u5236", k.source], ["\u5BF9\u5E94\u5173\u7CFB", k.mapping], ["\u6210\u7ACB\u524D\u63D0", k.assumptions], ["\u8FD1\u90BB\u5DEE\u522B", k.novelty], ["\u6700\u5927\u98CE\u9669", k.risk], ["\u6539\u8FDB\u81EA", k.improves]].filter(([, value]) => value).map(([label, value]) => '<div class="note">' + label + '\uFF1A' + esc(value) + '</div>').join("") + "</td></tr>" +
       (openDocs.has(t.root + "/" + k.file) ? '<tr><td colspan="6" style="white-space:normal">' + roundBody(t.root, { file: k.file }) + "</td></tr>" : "")).join("") + "</tbody></table></div>";
     html += "</section>";
     if (t.documents.length) html += '<section><h2>\u9636\u6BB5\u6750\u6599</h2>' + t.documents.map((d) => lazyDoc(t.root, d, d.replace("topics/", ""))).join("") + "</section>";
@@ -19080,6 +19411,7 @@ function renderSettings() {
     '<label>\u6BCF\u6B21\u56DE\u770B\u51E0\u5929<input type="number" id="wDays" min="1" max="14" value="' + esc(g.lookbackDays) + '"></label>' +
     '<label>\u6BCF\u4E2A\u9879\u76EE\u6700\u591A\u4FDD\u7559\u51E0\u7BC7<input type="number" id="wMax" min="5" max="200" value="' + esc(g.maxPerDigest) + '"></label>' +
     '<label>\u7F51\u7EDC\u4EE3\u7406\uFF08\u53EF\u7A7A\uFF09<input type="text" id="wProxy" placeholder="\u670D\u52A1\u5668\u8FDE\u4E0D\u4E0A Hugging Face \u65F6\u586B\uFF0C\u4F8B\u5982 http://127.0.0.1:7890" value="' + esc(g.proxy) + '"></label></div>' +
+    '<label><span><input type="checkbox" id="wSupplement"' + (g.supplementOlder ? ' checked' : '') + '> \u6CA1\u6709\u65B0\u8BBA\u6587\u65F6\u8865\u5C11\u91CF\u672A\u63A8\u8FC7\u7684\u91CD\u8981\u65E7\u6587\uFF08\u9ED8\u8BA4\u5173\u95ED\uFF0C\u6700\u591A 5 \u7BC7\uFF0C\u4E0D\u964D\u4F4E\u76F8\u5173\u6027\uFF09</span></label>' +
     '<div class="btns"><button class="btn primary" id="wSave">\u4FDD\u5B58</button><button class="btn" id="wRunAll">\u7ACB\u5373\u8FD0\u884C\u5168\u90E8\u9879\u76EE</button><span class="note">' +
     esc(settings.watchRunning ? "\u6B63\u5728\u8FD0\u884C\u2026" : (st.lastAttempt || st.lastRun) ? "\u4E0A\u6B21\u5C1D\u8BD5\uFF1A" + new Date(st.lastAttempt || st.lastRun).toLocaleString() + " \xB7 " + (st.results || []).map((r) => r.root.split("/").pop() + " " + ({ done: (r.found ?? 0) + " \u7BC7", partial: "\u68C0\u7D22\u672A\u5B8C\u6210\uFF0C\u5DF2\u627E\u5230 " + (r.found ?? 0) + " \u7BC7", unconfigured: "\u672A\u8BBE\u5173\u952E\u8BCD", disabled: "\u5DF2\u5173\u95ED", failed: "\u68C0\u7D22\u5931\u8D25" }[r.status] || r.status)).join("\uFF0C") : "\u8FD8\u6CA1\u8FD0\u884C\u8FC7") + "</span></div>" +
     (settings.watchError ? '<div class="note">\u8FD0\u884C\u5931\u8D25\uFF1A' + esc(settings.watchError) + '</div>' : "") +
@@ -19098,6 +19430,7 @@ function renderSettings() {
     '<label>arXiv \u5206\u7C7B\uFF08\u9017\u53F7\u5206\u9694\uFF09<input type="text" class="wCats" value="' + esc(p.watch.categories.join(", ")) + '"></label>' +
     '<div class="btns"><button class="btn primary wSaveP" data-root="' + esc(p.root) + '">\u4FDD\u5B58</button><button class="btn wRunP" data-root="' + esc(p.root) + '">\u53EA\u8FD0\u884C\u8FD9\u4E2A\u9879\u76EE</button><button class="btn wDraftP" data-root="' + esc(p.root) + '">\u6839\u636E\u9879\u76EE\u8D44\u6599\u751F\u6210\u521D\u7A3F</button>' + (p.watch.source === "draft" ? '<span class="badge-draft">\u5F53\u524D\u662F\u81EA\u52A8\u521D\u7A3F</span>' : "") + "</div>" + (p.guidance ? '<div class="note">' + esc(p.guidance) + '</div>' : "") + "</div>").join("");
   html += "</section>";
+  html += '<section><h2>\u66F4\u65B0\u540E\u7684\u5BBF\u4E3B\u8FC1\u79FB</h2><div class="card form"><label><span><input type="checkbox" id="hostMigration"' + (settings.hostSettings?.hostMigration ? ' checked' : '') + '> \u8FDE\u5E26\u66F4\u65B0\u65F6\u767B\u8BB0\u8FC1\u79FB\u5F85\u529E\uFF08\u9ED8\u8BA4\u5173\u95ED\uFF09</span></label><div class="note">\u94A9\u5B50\u53EA\u9001\u8FBE\u5F85\u529E\uFF1B\u9879\u76EE\u5BBF\u4E3B\u5728\u5F53\u524D\u5DE5\u4F5C\u544A\u4E00\u6BB5\u843D\u540E\u6574\u7406\u5DF2\u6709\u8BB0\u5F55\uFF0C\u4E0D\u6682\u505C\u6216\u91CD\u542F\u8BAD\u7EC3\u3001\u8BC4\u6D4B\uFF0C\u4E0D\u6539\u7814\u7A76\u7ED3\u8BBA\u548C\u7528\u6237\u539F\u8BDD\u3002\u5B8C\u6210\u540E\u540C\u4E00\u7248\u672C\u4E0D\u91CD\u590D\u3002</div><div class="btns"><button class="btn primary" id="hostSave">\u4FDD\u5B58\u8FC1\u79FB\u8BBE\u7F6E</button></div></div></section>';
   html += '<section><h2>\u9879\u76EE\u767B\u8BB0 <span class="sub">\u767B\u8BB0\u7684\u9879\u76EE\u4F1A\u968F Dove \u5347\u7EA7\u81EA\u52A8\u66F4\u65B0\uFF0C\u5E76\u663E\u793A\u5728\u9762\u677F\u91CC</span></h2><div class="card">' +
     settings.registered.map((r) => '<div class="reg"><span class="p">' + esc(r.root) + "</span>" + (r.exists ? "" : '<span class="chip none">\u76EE\u5F55\u4E0D\u5B58\u5728</span>') + '<button class="btn danger regRemove" data-root="' + esc(r.root) + '">\u79FB\u51FA\u767B\u8BB0</button></div>').join("") +
     '<div class="reg"><input type="text" id="regPath" placeholder="\u5DF2\u5B89\u88C5 Dove \u7684\u9879\u76EE\u7EDD\u5BF9\u8DEF\u5F84" style="flex:1 1 260px;font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)"><button class="btn" id="regAdd">\u767B\u8BB0</button><button class="btn" id="regSync">\u628A\u6240\u6709\u9879\u76EE\u66F4\u65B0\u5230\u5F53\u524D\u7248\u672C</button></div></div></section>';
@@ -19105,8 +19438,9 @@ function renderSettings() {
   view.innerHTML = html;
   const run = (fn) => async (event) => { const b = event.currentTarget; b.disabled = true; try { await fn(b); } catch (error) { toast(error.message); } finally { b.disabled = false; } };
   const byId = (id) => document.getElementById(id);
-  byId("wSave").addEventListener("click", run(async () => { await act("saveWatchGlobal", { settings: { dailyHour: Number(byId("wHour").value), lookbackDays: Number(byId("wDays").value), maxPerDigest: Number(byId("wMax").value), proxy: byId("wProxy").value } }); toast("\u5DF2\u4FDD\u5B58"); await loadSettings(); }));
+  byId("wSave").addEventListener("click", run(async () => { await act("saveWatchGlobal", { settings: { dailyHour: Number(byId("wHour").value), lookbackDays: Number(byId("wDays").value), maxPerDigest: Number(byId("wMax").value), proxy: byId("wProxy").value, supplementOlder: byId("wSupplement").checked } }); toast("\u5DF2\u4FDD\u5B58"); await loadSettings(); }));
   byId("wRunAll").addEventListener("click", run(() => startWatchFromPanel()));
+  byId("hostSave").addEventListener("click", run(async () => { await act("saveHostSettings", { settings: { hostMigration: byId("hostMigration").checked } }); toast("\u5DF2\u4FDD\u5B58\u8FC1\u79FB\u8BBE\u7F6E"); await loadSettings(); }));
   byId("tcSave").addEventListener("click", run(async () => { const r = await act("saveTopicCriteria", { text: byId("tcText").value }); byId("tcText").value = ""; toast("\u5DF2\u4FDD\u5B58" + (r.version ? "\u7B2C " + r.version + " \u7248" : "")); await loadSettings(); }));
   byId("s2Save").addEventListener("click", run(async () => { if (!byId("s2Key").value.trim()) throw new Error("\u5148\u7C98\u8D34 key"); await act("saveS2Key", { key: byId("s2Key").value }); toast("key \u5DF2\u4FDD\u5B58"); await loadSettings(); }));
   if (byId("s2Clear")) byId("s2Clear").addEventListener("click", run(async () => { await act("saveS2Key", { key: "" }); toast("key \u5DF2\u6E05\u9664"); await loadSettings(); }));
@@ -19180,6 +19514,218 @@ setInterval(load, 30000);
 </script>
 </body>
 </html>
+`;
+}
+
+// src/core/mentor-brief.mjs
+import fs18 from "node:fs";
+import path17 from "node:path";
+var RESEARCH = ".dove/research";
+var ROUND_FILE2 = /^(\d+)[-_](brief|result)\.md$/iu;
+var IMPACT_FILE = /^impact-\d{4}-\d{2}-\d{2}\.md$/u;
+var DIGEST_FILE = /^\d{4}-\d{2}-\d{2}\.json$/u;
+var SCAN_FILE = /^scan-\d{4}-\d{2}-\d{2}\.md$/u;
+var QUESTIONS = [
+  "\u76F8\u5BF9\u7528\u6237\u539F\u8BDD\uFF0C\u65B9\u5411\u5BF9\u4E0D\u5BF9\uFF1F",
+  "\u8FD9\u51E0\u8F6E\u662F\u5728\u5EFA\u7ACB\u901A\u7528\u80FD\u529B\uFF0C\u8FD8\u662F\u53CD\u590D\u6253\u8865\u4E01\uFF1F",
+  "\u79BB\u7528\u6237\u76EE\u6807\u548C\u76EE\u6807\u6863\u6B21\u8FD8\u5DEE\u4EC0\u4E48\uFF1F",
+  "\u4E0B\u4E00\u8F6E\u8BE5\u505A\u4EC0\u4E48\uFF0C\u4E3A\u4EC0\u4E48\uFF1F"
+];
+function list(directory, fsOps) {
+  try {
+    return fsOps.readdirSync(directory);
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return [];
+    throw error;
+  }
+}
+function describe2(root, relative, fsOps) {
+  try {
+    return `\`${relative}\`${fsOps.statSync(path17.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
+  } catch (error) {
+    return `\`${relative}\`\uFF08${error.code === "ENOENT" ? "\u7F3A\u5931" : `\u65E0\u6CD5\u8BFB\u53D6\uFF1A${error.code ?? error.message}`}\uFF09`;
+  }
+}
+function readWindow(file, fsOps, maxBytes = 16384, tail = false) {
+  let fd;
+  try {
+    const stat = fsOps.statSync(file);
+    if (!stat.isFile()) return { error: "\u4E0D\u662F\u6587\u4EF6" };
+    fd = fsOps.openSync(file, "r");
+    const bytes = Buffer.alloc(Math.min(stat.size, maxBytes));
+    const position = tail ? Math.max(0, stat.size - bytes.length) : 0;
+    const count = fsOps.readSync(fd, bytes, 0, bytes.length, position);
+    let start = 0;
+    while (start < count && (bytes[start] & 192) === 128) start += 1;
+    const truncated = stat.size > count;
+    const text = new TextDecoder().decode(bytes.subarray(start, count), { stream: truncated && !tail });
+    return { text, truncated, partialFirstLine: position > 0 };
+  } catch (error) {
+    return { error: error.code === "ENOENT" ? "\u7F3A\u5931" : `\u65E0\u6CD5\u8BFB\u53D6\uFF1A${error.code ?? error.message}` };
+  } finally {
+    if (fd !== void 0) fsOps.closeSync(fd);
+  }
+}
+function clip(text, limit, tail = false) {
+  const characters = Array.from(String(text));
+  return characters.length <= limit ? characters.join("") : tail ? `\u2026${characters.slice(-limit).join("")}` : `${characters.slice(0, limit).join("")}\u2026`;
+}
+function quote(text) {
+  return String(text).split("\n").map((line) => `> ${line}`).join("\n");
+}
+function evaluationExcerpt(file, fsOps) {
+  const result = readWindow(file, fsOps, 16384, true);
+  if (result.error) return result.error;
+  const lines = result.text.split(/\r?\n/u);
+  if (result.partialFirstLine) lines.shift();
+  while (lines.length && !lines.at(-1).trim()) lines.pop();
+  return clip(lines.slice(-12).join("\n"), 2400, true) || "\u6CA1\u6709\u53EF\u6458\u5F55\u7684\u8FD1\u671F\u5B8C\u6574\u884C\uFF1B\u6309\u8DEF\u5F84\u8BFB\u53D6\u3002";
+}
+function recentRounds(names) {
+  const sorted = names.filter((name) => ROUND_FILE2.test(name)).sort((left, right) => Number(right.match(ROUND_FILE2)[1]) - Number(left.match(ROUND_FILE2)[1]) || left.localeCompare(right));
+  const counts = { brief: 0, result: 0 };
+  return sorted.filter((name) => ++counts[name.match(ROUND_FILE2)[2].toLowerCase()] <= 2);
+}
+function watchMaterials(root, rounds, fsOps) {
+  const relative = `${RESEARCH}/watch`;
+  const directory = path17.join(root, relative);
+  const names = list(directory, fsOps).sort().reverse();
+  const config = `${relative}/config.json`;
+  const lines = [`- \u914D\u7F6E\uFF1A${describe2(root, config, fsOps)}`];
+  const configText = readWindow(path17.join(root, config), fsOps, 8192);
+  if (!configText.error) lines.push(quote(clip(configText.text.trim(), 1600)), "\u914D\u7F6E\u4EC5\u6458\u5F55\uFF0C\u5168\u6587\u89C1\u8DEF\u5F84\u3002");
+  const judged = /* @__PURE__ */ new Set();
+  let incomplete = false;
+  const impacts = names.filter((name) => IMPACT_FILE.test(name));
+  const records = [
+    ...rounds.filter((name) => ROUND_FILE2.test(name) && /brief\.md$/iu.test(name)).map((name) => path17.join(root, RESEARCH, "rounds", name)),
+    ...impacts.map((name) => path17.join(directory, name))
+  ];
+  for (const file of records) {
+    const record = readWindow(file, fsOps, 65536, true);
+    incomplete ||= Boolean(record.error || record.truncated);
+    if (record.error) continue;
+    for (const match of record.text.matchAll(/^\s*(?:[-*]\s*)?\|?\s*`?(\d{4}\.\d{4,5}|[a-z][a-z.-]*\/\d{7}|W\d+)(?:v\d+)?`?\s*\|\s*(撞题|新基线|可借用|无关)\s*\|/gmu)) {
+      judged.add(match[1]);
+    }
+  }
+  if (impacts.length) lines.push(`- \u5F71\u54CD\u8BB0\u5F55\uFF1A\`${relative}/\`\uFF08\u542B\u5386\u53F2 brief \u5224\u65AD\uFF09`);
+  for (const name of impacts.slice(0, 3)) lines.push(`- \u6700\u8FD1\u5F71\u54CD\uFF1A${describe2(root, `${relative}/${name}`, fsOps)}`);
+  if (incomplete) lines.push("\u5224\u65AD\u8BB0\u5F55\u6709\u7F3A\u5931\u6216\u8D85\u8FC7\u6BCF\u6587\u4EF6\u672B\u5C3E 64 KiB \u7684\u8BFB\u53D6\u8303\u56F4\uFF1B\u4EE5\u4E0B\u4EC5\u8868\u793A\u5728\u5DF2\u8BFB\u7247\u6BB5\u4E2D\u672A\u627E\u5230\u5224\u65AD\uFF0C\u8BF7\u6838\u5BF9\u5386\u53F2\uFF0C\u4E0D\u91CD\u590D\u5224\u65AD\u5DF2\u8BC4\u8BBA\u6587\u3002");
+  const digests = names.filter((name) => DIGEST_FILE.test(name));
+  const pending = /* @__PURE__ */ new Map();
+  for (const name of digests.slice(0, 3)) {
+    const file = path17.join(directory, name);
+    lines.push(`- \u8FD1\u671F\u6E05\u5355\uFF1A${describe2(root, `${relative}/${name}`, fsOps)}`);
+    const result = readWindow(file, fsOps, 262144);
+    if (result.error || result.truncated) {
+      lines.push(`  ${result.error ?? "\u8D85\u8FC7 256 KiB\uFF0C\u672A\u5C55\u5F00"}\uFF1B\u8BF7\u6309\u8DEF\u5F84\u6838\u5BF9\u672A\u5224\u65AD\u9879\u3002`);
+      continue;
+    }
+    let digest;
+    try {
+      digest = JSON.parse(result.text);
+    } catch {
+      lines.push("  JSON \u65E0\u6CD5\u89E3\u6790\uFF0C\u672A\u5224\u65AD\u9879\u672A\u77E5\u3002");
+      continue;
+    }
+    if (!Array.isArray(digest?.items)) {
+      lines.push("  \u7F3A\u5C11\u8BBA\u6587\u6E05\u5355\uFF0C\u672A\u5224\u65AD\u9879\u672A\u77E5\u3002");
+      continue;
+    }
+    lines.push(`  \u68C0\u7D22\u72B6\u6001\uFF1A${digest.status ?? "\u672A\u8BB0\u5F55"}\uFF1B\u5931\u8D25\u6216\u90E8\u5206\u5B8C\u6210\u4E0D\u4EE3\u8868\u6CA1\u6709\u65B0\u8BBA\u6587\u3002`);
+    for (const item of digest.items) {
+      if (!item?.id) continue;
+      const id = String(item.id).replace(/v\d+$/u, "");
+      if (!judged.has(id) && !pending.has(id)) pending.set(id, { item, file });
+    }
+  }
+  lines.push(
+    "",
+    `### ${incomplete ? "\u672A\u627E\u5230\u5224\u65AD\u7684\u8FD1\u671F\u6458\u8981\uFF08\u5F85\u6838\u5BF9\u5386\u53F2\uFF09" : "\u672A\u5224\u65AD\u7684\u8FD1\u671F\u6458\u8981"}`,
+    digests.length ? `\u4ECE\u6700\u8FD1 ${Math.min(3, digests.length)} / ${digests.length} \u4EFD\u6E05\u5355\u627E\u5230 ${pending.size} \u9879\uFF0C\u6700\u591A\u5C55\u5F00 8 \u9879\uFF1B\u5176\u4F59\u89C1 \`${relative}/\`\uFF0C\u4E0D\u4EE3\u8868\u5168\u90E8\u5386\u53F2\u3002` : "\u672A\u627E\u5230\u8FFD\u8E2A\u6E05\u5355\u3002"
+  );
+  for (const [id, { item, file }] of [...pending].slice(0, 8)) {
+    lines.push("", quote(`${id} \xB7 ${clip(item.title ?? "\u672A\u63D0\u4F9B\u6807\u9898", 200)}
+\u539F\u59CB\u53D1\u8868\u65E5\u671F\uFF1A${item.published || "\u672A\u8BB0\u5F55"}
+\u6765\u6E90\uFF1A${file}
+${item.line ? "\u5DF2\u6709\u4E00\u53E5\u8BDD" : "\u539F\u6458\u8981"}\uFF08\u4E0D\u4EE3\u8868\u5168\u6587\u5DF2\u8BFB\uFF09\uFF1A${clip(item.line || item.abstract || "\u672A\u63D0\u4F9B\u6458\u8981", 400)}`));
+  }
+  const scan = names.find((name) => SCAN_FILE.test(name));
+  lines.push("", scan ? `- \u6700\u8FD1\u626B\u63CF\uFF08${scan.slice(5, 15)}\uFF09\uFF1A${describe2(root, `${relative}/${scan}`, fsOps)}` : "- \u6700\u8FD1\u626B\u63CF\uFF1A\u672A\u627E\u5230\u3002");
+  return lines.join("\n");
+}
+function opinionAttachment(root, opinion, fsOps) {
+  if (!opinion) return "\u672A\u9644\u610F\u89C1\u6587\u4EF6\u3002";
+  const file = path17.resolve(root, opinion);
+  const result = readWindow(file, fsOps, 4096);
+  if (result.error) throw new Error(`\u610F\u89C1\u6587\u4EF6${result.error}\uFF1A${file}`);
+  const length = Array.from(result.text).length;
+  if (result.truncated || length > 1e3) throw new Error(`\u610F\u89C1\u6587\u4EF6\u987B\u4E0D\u8D85\u8FC7 1000 \u5B57\uFF08\u542B\u7F72\u540D\uFF09\uFF1A${file}`);
+  const author = result.text.match(/^\s*(?:[-*]\s*)?(?:\*\*)?(?:Author|作者)(?:\*\*)?\s*[:：][ \t]*(\S[^\r\n]*)$/imu)?.[1];
+  if (!author) throw new Error(`\u610F\u89C1\u6587\u4EF6\u987B\u6807\u660E\u4F5C\u8005\uFF08Author: \u6216 \u4F5C\u8005\uFF1A\uFF09\uFF1A${file}`);
+  return `- \u610F\u89C1\u6587\u4EF6\uFF1A\`${file}\`
+${quote(`\u4F5C\u8005\uFF1A${author}
+\u7BC7\u5E45\uFF1A${length} / 1000 \u5B57\uFF08\u542B\u7F72\u540D\uFF09`)}`;
+}
+function renderMentorBrief(root, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs18;
+  const project = path17.resolve(root);
+  const research = path17.join(project, RESEARCH);
+  const rounds = list(path17.join(research, "rounds"), fsOps);
+  const selected = recentRounds(rounds);
+  const evaluation = path17.join(research, "EVAL.md");
+  const lines = [
+    "# Dove \u5BFC\u5E08\u8C03\u7528\u6750\u6599",
+    "",
+    `\u9879\u76EE\uFF1A\`${project}\`\uFF08\u6750\u6599\u8DEF\u5F84\u76F8\u5BF9\u6B64\u76EE\u5F55\uFF09`,
+    "\u6309\u8DEF\u5F84\u8BFB\u6750\u6599\uFF1B\u6267\u884C\u8005\u610F\u89C1\u53E6\u9644\uFF0C\u4E0D\u6539\u5199\u672B\u5C3E\u56DB\u95EE\u3002",
+    "",
+    "## \u672C\u6B21\u89E6\u53D1",
+    "",
+    quote(options2.trigger || "\u672A\u586B\u5199"),
+    "\u540C\u8F6E\u518D\u8C03\u7528\u65F6\uFF0C\u5728\u6B64\u6CE8\u660E\u5BF9\u5E94\u89E6\u53D1\uFF08\u7528\u6237\u7EA0\u6B63\u3001\u6362\u8DEF\u7EBF\u7B49\uFF09\u3002",
+    "",
+    "## \u7528\u6237\u539F\u8BDD\u4E0E\u6765\u6E90",
+    "",
+    quote(`\u6765\u6E90\uFF1A${options2.userSource || "\u672A\u63D0\u4F9B"}
+\u65E5\u671F\u8303\u56F4\uFF1A${options2.since || "\u672A\u63D0\u4F9B\u8D77\u70B9"} \u2014 ${options2.until || "\u672A\u63D0\u4F9B\u7EC8\u70B9"}`),
+    "",
+    options2.userOriginal ? quote(options2.userOriginal) : "\u672A\u76F4\u63A5\u9644\u539F\u8BDD\u3002",
+    "\u7531\u5BFC\u5E08\u8BFB\u53D6\u6307\u5B9A\u6765\u6E90\uFF1B\u751F\u6210\u5668\u4E0D\u8BFB\u53D6\u79C1\u6709 session\u3002",
+    "",
+    "## \u9879\u76EE\u6750\u6599",
+    "",
+    ...[".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`].map((file) => `- ${describe2(project, file, fsOps)}`),
+    "",
+    "EVAL \u8FD1\u671F\u6458\u5F55\uFF08\u672B\u5C3E 16 KiB \u5185\u81F3\u591A 12 \u884C\u30012400 \u5B57\uFF09\uFF1A",
+    "",
+    quote(evaluationExcerpt(evaluation, fsOps)),
+    "",
+    "### \u6700\u8FD1 brief/result",
+    "",
+    ...selected.length ? selected.map((name) => `- ${describe2(project, `${RESEARCH}/rounds/${name}`, fsOps)}`) : ["\u672A\u627E\u5230\u8F6E\u6B21\u6587\u4EF6\u3002"],
+    "",
+    "### \u9009\u9898\u9636\u6BB5\u9002\u7528\u7684\u6807\u51C6",
+    "",
+    ...["CRITERIA.md", "PROJECT.md"].map((name) => `- ${describe2(project, `${RESEARCH}/topics/${name}`, fsOps)}`),
+    "",
+    "## \u8BBA\u6587\u8FFD\u8E2A",
+    "",
+    watchMaterials(project, rounds, fsOps),
+    "",
+    "## \u6267\u884C\u8005\u9644\u5C5E\u6750\u6599",
+    "",
+    opinionAttachment(project, options2.opinion, fsOps),
+    "",
+    "\u65B0\u589E\u539F\u59CB\u4EA7\u7269\uFF08\u53EA\u5217\u8DEF\u5F84\uFF09\uFF1A",
+    ...options2.artifact?.length ? options2.artifact.map((file) => `- \`${path17.resolve(project, file)}\``) : ["\u672A\u63D0\u4F9B\u3002"],
+    "",
+    "## \u56FA\u5B9A\u56DB\u95EE",
+    "",
+    ...QUESTIONS.map((question, index) => `${index + 1}. ${question}`)
+  ];
+  return `${lines.join("\n")}
 `;
 }
 
@@ -19466,6 +20012,8 @@ function renderDoveHelp() {
   dove dashboard [--port <port>] [--bind <address>] [--password-file <file>] [--json|--format json]
   dove watch run [--project <dir>] [--json|--format json]
   dove topic start [--project <dir>] [--json|--format json]
+  dove settings [--host-migration on|off] [--json|--format json]
+  dove mentor brief [--project <dir>] [--trigger <text>] [--user-source <path>] [--since <range>] [--until <range>] [--user-original <text>] [--opinion <path>] [--artifact <path>...] [--json|--format json]
   dove run start --project <dir> [--id <id>] [--group <name>] [--seed <short-text>] [--wall-time <duration>|--timeout-ms <ms>] [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--data <basis>] [--evaluator <basis>] [--resource-basis <basis>] [--kill-grace-ms <ms>] [--json|--format json] -- <command> [args...]
   dove run status --project <dir> [--id <id>|--group <name>] [--json|--format json]
   dove run resume --project <dir> --id <id> [--json|--format json]
@@ -19477,19 +20025,19 @@ function renderDoveHelp() {
 
 \u666E\u901A Claude \u4F1A\u8BDD\u662F Dove \u7684\u4E3B\u8981\u5165\u53E3\uFF1B--agent dove \u4E0E\u4E5D\u4E2A /dove:* Skills \u53EA\u662F\u53EF\u9009\u5FEB\u6377\u5165\u53E3\u3002CLI \u7BA1\u7406\u9879\u76EE\u63A5\u5165\u3001\u8BCA\u65AD\u548C\u8FD0\u884C\u6536\u636E\uFF0C\u4E0D\u542F\u52A8\u5BA1\u7A3F\u6A21\u578B\u3002/dove:review \u4FDD\u7559\uFF0C\u5BFC\u5E08 dove-mentor \u4E0E\u8BBA\u6587\u5BA1\u7A3F dove-review \u4F7F\u7528\u5BBF\u4E3B\u539F\u751F\u5168\u65B0\u53EA\u8BFB\u5B50 agent\uFF0C\u4E0D\u4F20\u6267\u884C\u5BF9\u8BDD\u3001\u4E0D\u7EED\u63A5\u5386\u53F2\u3002\u5BFC\u5E08\u53EF\u68C0\u7D22\u7F51\u9875\u548C\u8BBA\u6587\uFF0C\u9760\u81EA\u5DF1\u7684 MENTOR_NOTES.md \u5EF6\u7EED\u5224\u65AD\uFF1B\u5BA1\u7A3F\u53EA\u8BFB\u6307\u5B9A\u7A3F\u4EF6\u4E0E\u4F9D\u636E\u3002
 
-dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u53EA\u8BFB\u7F51\u9875\uFF0C\u96C6\u4E2D\u67E5\u770B\u5DF2\u767B\u8BB0\u9879\u76EE\u7684\u4E3B\u7EBF\u3001\u5F53\u524D\u8F6E\u6B21\u3001EVAL \u8BC4\u6D4B\u8868\u548C\u6BCF\u8F6E\u8BF4\u660E/\u7ED3\u679C\uFF08\u9ED8\u8BA4 127.0.0.1:7788\uFF0C\u8FDC\u7A0B\u7528 SSH \u7AEF\u53E3\u8F6C\u53D1\u6253\u5F00\uFF1B\u6302\u5230\u516C\u7F51\u96A7\u9053\u65F6\u7528 --password-file \u5F00\u542F\u5BC6\u7801\u767B\u5F55\uFF0C\u6240\u6709\u9875\u9762\u548C\u6570\u636E\u63A5\u53E3\u90FD\u8981\u5148\u767B\u5F55\uFF09\u3002\u9762\u677F\u7684\u300C\u8BBE\u7F6E\u300D\u9875\u53EF\u7BA1\u7406\u9879\u76EE\u767B\u8BB0\u3001\u8BBA\u6587\u8FFD\u8E2A\uFF08\u5173\u952E\u8BCD\u3001\u4F5C\u8005\u3001arXiv \u5206\u7C7B\u3001\u6BCF\u5929\u8FD0\u884C\u65F6\u95F4\u3001\u4EE3\u7406\u3001\u53EF\u9009\u7684 Semantic Scholar key\uFF09\u548C\u9762\u677F\u5BC6\u7801\uFF1B\u8BBA\u6587\u8FFD\u8E2A\u5728\u9762\u677F\u8FD0\u884C\u671F\u95F4\u6BCF\u5929\u81EA\u52A8\u6267\u884C\uFF0C\u4E5F\u53EF\u7528 dove watch run \u624B\u52A8\u6267\u884C\uFF0C\u7ED3\u679C\u5199\u5165\u5404\u9879\u76EE .dove/research/watch/\u3002\u5BFC\u5E08\u6BCF\u6B21\u8C03\u7528\u90FD\u68C0\u67E5\u5173\u952E\u8BCD\u3001\u672A\u5224\u65AD\u8BBA\u6587\u548C\u6BCF\u5468\u9886\u57DF\u626B\u63CF\uFF0C\u5F71\u54CD\u8BB0\u5F55\u4E0D\u4F9D\u8D56\u8F6E\u6B21\u3002dove topic start \u53EF\u8F85\u52A9\u6574\u7406\u5DF2\u6709\u6807\u51C6\uFF1B\u9009\u9898\u5FC5\u987B\u5148\u8BFB\u9879\u76EE\u6807\u51C6\uFF0C\u5E7F\u6CDB\u4EA7\u751F\u5E76\u5217\u5019\u9009\uFF0C\u63A8\u8350\u4E24\u4E09\u4E2A\u4EA4\u7528\u6237\u9009\u5B9A\uFF0C\u4E4B\u524D\u4E0D\u5B9E\u73B0\u65B9\u6CD5\u3002\u5019\u9009\u5361\u53EF\u5728\u9762\u677F\u300C\u9009\u9898\u300D\u9875\u67E5\u770B\u3002
+dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u7F51\u9875\uFF0C\u53EA\u8BFB\u67E5\u770B\u5DF2\u767B\u8BB0\u9879\u76EE\u7684\u4E3B\u7EBF\u3001\u5F53\u524D\u8F6E\u6B21\u3001EVAL \u8BC4\u6D4B\u8868\u548C\u6BCF\u8F6E\u8BF4\u660E/\u7ED3\u679C\uFF08\u9ED8\u8BA4 127.0.0.1:7788\uFF0C\u8FDC\u7A0B\u7528 SSH \u7AEF\u53E3\u8F6C\u53D1\u6253\u5F00\uFF1B\u6302\u5230\u516C\u7F51\u96A7\u9053\u65F6\u7528 --password-file \u5F00\u542F\u5BC6\u7801\u767B\u5F55\uFF0C\u6240\u6709\u9875\u9762\u548C\u6570\u636E\u63A5\u53E3\u90FD\u8981\u5148\u767B\u5F55\uFF09\u3002\u9762\u677F\u7684\u300C\u8BBE\u7F6E\u300D\u9875\u53EF\u7BA1\u7406\u9879\u76EE\u767B\u8BB0\u3001\u8BBA\u6587\u8FFD\u8E2A\uFF08\u5173\u952E\u8BCD\u3001\u4F5C\u8005\u3001arXiv \u5206\u7C7B\u3001\u6BCF\u5929\u8FD0\u884C\u65F6\u95F4\u3001\u4EE3\u7406\u3001\u53EF\u9009\u7684 Semantic Scholar key\uFF09\u548C\u9762\u677F\u5BC6\u7801\uFF1B\u8BBA\u6587\u8FFD\u8E2A\u5728\u9762\u677F\u8FD0\u884C\u671F\u95F4\u6BCF\u5929\u81EA\u52A8\u6267\u884C\uFF0C\u4E5F\u53EF\u7528 dove watch run \u624B\u52A8\u6267\u884C\uFF0C\u7ED3\u679C\u5199\u5165\u5404\u9879\u76EE .dove/research/watch/\u3002\u5BFC\u5E08\u6BCF\u6B21\u68C0\u67E5\u5173\u952E\u8BCD\u3001\u672A\u5224\u65AD\u8BBA\u6587\u548C\u626B\u63CF\uFF0C\u8FD4\u56DE\u4E2D\u6587\u4E00\u53E5\u8BDD\u4E0E\u65B9\u5411\uFF1B\u6709\u7528\u8BBA\u6587\u7D2F\u79EF\u4E3A\u53EF\u5BFC BibTeX \u7684\u9879\u76EE\u6587\u732E\u5E93\u3002\u65E0\u65B0\u8BBA\u6587\u65F6\u8865\u65E7\u6587\u9ED8\u8BA4\u5173\u95ED\u3002\u9009\u9898\u5148\u8BFB\u6807\u51C6\uFF0C\u4ECE\u6B63\u6587\u8FD1\u672A\u6210\u5DE5\u4F5C\u627E\u7F3A\u53E3\uFF0C\u8DE8\u9886\u57DF\u627E\u673A\u5236\uFF1B\u5019\u9009\u5199\u5BF9\u5E94\u5173\u7CFB\u3001\u524D\u63D0\u3001\u8FD1\u90BB\u5DEE\u522B\u4E0E\u98CE\u9669\uFF0C\u7ECF\u7559\u4E0B\uFF0F\u4FEE\u6539\uFF0F\u5426\u6389\u8BC4\u5BA1\uFF0C\u63A8\u8350\u4E24\u4E09\u4E2A\u4EA4\u7528\u6237\u9009\uFF0C\u4E4B\u524D\u4E0D\u5B9E\u73B0\u65B9\u6CD5\u3002\u9762\u677F\u53EF\u67E5\u770B\u5019\u9009\u5361\u4E0E\u6587\u732E\u5E93\u3002
 
 \u79D1\u7814\u8BB0\u5F55\u6709\u56FA\u5B9A\u683C\u5F0F\u548C\u957F\u5EA6\u4E0A\u9650\uFF1A\u8EAB\u4EFD\u5361\u5305\u542B\u76EE\u6807\u6863\u6B21\u548C\u9650\u5236\u6765\u6E90\uFF0C\u8F6E\u6B21\u8BF4\u660E\u6807\u4F5C\u8005\uFF0C\u7ED3\u679C\u94FE\u63A5\u771F\u5B9E\u4EA7\u7269\uFF0CEVAL \u6BCF\u65B9\u6CD5\u7248\u672C\u4E00\u884C\u3002\u5DF2\u6709\u4E3B\u7EBF\u6309\u7528\u6237\u539F\u610F\u63A8\u8FDB\uFF0C\u7528\u80FD\u56DE\u7B54\u95EE\u9898\u7684\u89C4\u6A21\u8BC4\u6D4B\uFF1B\u5BFC\u5E08\u5224\u65AD\u65B9\u5411\uFF0C\u6267\u884C\u8005\u51B3\u5B9A\u5DE5\u7A0B\u3002\u8FDE\u7EED\u4E24\u8F6E\u65E0\u79D1\u7814\u7ED3\u679C\u5C31\u8BCA\u65AD\uFF0C\u7B2C\u4E09\u8F6E\u524D\u627E\u7528\u6237\u51B3\u5B9A\uFF1B\u6362\u8DEF\u7EBF\u660E\u8BF4\u539F\u8DEF\u7EBF\u3001\u65B0\u8DEF\u7EBF\u548C\u539F\u56E0\u3002\u5DF2\u6709 missions\u3001experiments\u3001claims \u539F\u5730\u4FDD\u7559\uFF0C\u4E0D\u8FC1\u79FB\u5220\u9664\uFF1B\u521D\u59CB\u5316\u53EA\u5728\u6CA1\u6709\u7814\u7A76\u6811\u65F6\u5EFA\u7ACB\u7B80\u77ED RESEARCH.md\u3002
 
-\u8EAB\u4EFD\u5361\u9876\u90E8\u4FDD\u7559 Current round \u4E0E Round status\uFF08ongoing/paused/completed\uFF09\uFF1B\u8D85\u957F\u663E\u793A\u524D 4KB \u5E76\u63D0\u793A\u7CBE\u7B80\u3002SessionStart \u4E0E UserPromptSubmit \u53EA\u8BFB\u5448\u73B0\u96C6\u6210\u548C\u6307\u5BFC\u3002\u7528\u6237\u8981\u6C42\u53EA\u8BA8\u8BBA\u6216\u505C\u4E0B\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u6807\u4E3A paused\u3002Hooks \u4E0D\u5199\u7814\u7A76\u6216\u6388\u4E88\u6743\u9650\uFF1B\u5B8C\u6574\u52A0\u8F7D\u65B0\u589E\u5BBF\u4E3B\u914D\u7F6E\u53EF\u80FD\u9700\u8981\u65B0\u4F1A\u8BDD\u3002
+\u8EAB\u4EFD\u5361\u4FDD\u7559 Mainline\u3001Current round \u4E0E Round status\uFF1B\u8D85\u957F\u663E\u793A\u524D 4KB\u3002\u5BFC\u5E08\u8C03\u7528\u7528 dove mentor brief \u751F\u6210\u56FA\u5B9A\u6750\u6599\u4E0E\u56DB\u95EE\uFF0C\u53EA\u9644\u7F72\u540D\u610F\u89C1\u548C\u65B0\u589E\u539F\u59CB\u4EA7\u7269\u8DEF\u5F84\u3002hostMigration \u9ED8\u8BA4\u5173\u95ED\uFF0C\u53EF\u5728\u8BBE\u7F6E\u9875\u6216 CLI \u5F00\u542F\uFF1A\u5347\u7EA7\u53EA\u767B\u8BB0\u8FC1\u79FB\u5F85\u529E\uFF0CSessionStart/UserPromptSubmit \u53EA\u8BFB\u9001\u8FBE\uFF0C\u5BBF\u4E3B\u5728\u5F53\u524D\u5DE5\u4F5C\u544A\u4E00\u6BB5\u843D\u540E\u5904\u7406\uFF0C\u4E0D\u505C\u8BAD\u7EC3\u8BC4\u6D4B\u3001\u4E0D\u6539\u7ED3\u8BBA\u6216\u7528\u6237\u539F\u8BDD\uFF1B\u5B8C\u6210\u540E\u5220\u9664\u5F85\u529E\uFF0C\u540C\u7248\u4E0D\u91CD\u590D\u3002\u5F00\u5173\u5173\u95ED\u4E0D\u9001\u8FBE\u8FC1\u79FB\u3002Hooks \u4E0D\u5199\u7814\u7A76\u6216\u6388\u4E88\u6743\u9650\uFF0C\u78C1\u76D8\u66F4\u65B0\u4E0D\u7B49\u4E8E\u6D3B\u4F1A\u8BDD\u91CD\u8F7D\u3002
 `;
 }
 
 // src/cli/interactive-setup.mjs
-import path16 from "node:path";
+import path19 from "node:path";
 
 // src/cli/project-integration-output.mjs
-import path15 from "node:path";
+import path18 from "node:path";
 var INTERNAL_FIELD_NAMES = /* @__PURE__ */ new Set([
   "writtenPaths",
   "removedPaths",
@@ -19596,7 +20144,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
   const showMascot = options2.showMascot !== false;
   const color = terminalColorEnabled(stream, env);
   const heading = headingFor(command3, result.status);
-  const projectName = terminalSafeText2(path15.basename(result.target) || result.target);
+  const projectName = terminalSafeText2(path18.basename(result.target) || result.target);
   const lines = [];
   if (showMascot && command3 === "init" && ["initialized", "already-initialized"].includes(result.status) && interactive) {
     lines.push(renderDovePixelArt({ color }), "");
@@ -19637,7 +20185,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
 
 // src/cli/interactive-setup.mjs
 function safeProjectName(target) {
-  return path16.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
+  return path19.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
 }
 function resultHosts(result) {
   return result.hosts ?? result.projectIntegration?.manifest?.hosts ?? [];
@@ -19957,7 +20505,7 @@ function renderRunResult(result) {
 }
 
 // src/core/session-start-hook.mjs
-import path17 from "node:path";
+import path20 from "node:path";
 function parseSessionStartPayload(input) {
   let payload;
   try {
@@ -19984,14 +20532,14 @@ function sessionStartOutput(payload, result = null, options2 = {}) {
     output.systemMessage = "Dove project integration needs attention. SessionStart is read-only; run dove update explicitly to update supported manifest-owned integration. If blocked, inspect dove doctor --json before changing files.";
   }
   if (payload.source === "startup" || payload.source === "clear") {
-    if (typeof options2.project !== "string" || !path17.isAbsolute(options2.project)) {
+    if (typeof options2.project !== "string" || !path20.isAbsolute(options2.project)) {
       throw new Error("Dove SessionStart bootstrap requires an explicit absolute project root.");
     }
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
       additionalContext: renderDoveAuthorPreferencesBootstrap(
-        path17.join(options2.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude),
-        path17.join(options2.project, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude)
+        path20.join(options2.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude),
+        path20.join(options2.project, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude)
       )
     };
   } else if (payload.source === "compact" || payload.source === "resume") {
@@ -20002,7 +20550,7 @@ ${DOVE_AUTHOR_PREFERENCES_CONTINUITY}
 ${DOVE_RESEARCH_REFLECTION_CONTINUITY}`
     };
   }
-  if (output.hookSpecificOutput) output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload);
+  if (output.hookSpecificOutput) output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload) + hostMigrationContext(options2.project, options2);
   return Object.keys(output).length > 0 ? output : null;
 }
 function sessionStartFailureOutput(error) {
@@ -20026,6 +20574,21 @@ function currentPromptGuidance(manifest) {
   });
   return { version: manifest.package.version, fingerprints };
 }
+function inspectCurrentPromptGuidance(project, options2 = {}) {
+  const manifest = readProjectInstallationManifest(project, { fsOps: options2.fsOps, hostIds: PROJECT_HOST_IDS });
+  const expectedPackage = { name: options2.packageName ?? PACKAGE_NAME, version: options2.packageVersion ?? PACKAGE_VERSION };
+  if (!manifest.hosts.includes("claude") || !samePackage(manifest.package, expectedPackage)) {
+    throw new Error("Dove prompt guidance requires current Claude integration.");
+  }
+  const resources = resourcesForHosts(manifest.hosts).filter((entry) => entry.kind === "exclusive-file");
+  const managed = manifest.managed.filter((entry) => entry.kind === "exclusive-file");
+  if (!sameManaged(managed, resources)) throw new Error("Dove prompt guidance inventory does not match the current package.");
+  for (const resource of resources) {
+    const observed = inspectRegularProjectFile(project, resource.path, options2.fsOps);
+    if (observed.digest !== resource.digest) throw new Error(`Dove prompt guidance is changed or missing: ${resource.path}.`);
+  }
+  return currentPromptGuidance(manifest);
+}
 function parseUserPromptSubmitPayload(input) {
   let payload;
   try {
@@ -20047,7 +20610,7 @@ function userPromptSubmitOutput(payload, guidance, options2 = {}) {
 ${guidance.fingerprints.join("\n")}
 ${identityCardContext(options2.project, options2)}
 ${renderDoveResearchReanchor()}
-On first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.${userOriginalSourceContext(payload)}`;
+On first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.${userOriginalSourceContext(payload)}${hostMigrationContext(options2.project, options2)}`;
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
@@ -20073,7 +20636,7 @@ function userPromptSubmitFailureOutput(error) {
 
 // src/core/statusline.mjs
 import { spawnSync as spawnSync2 } from "node:child_process";
-import path18 from "node:path";
+import path21 from "node:path";
 import process4 from "node:process";
 var MAX_MAINLINE_CODE_POINTS = 80;
 var STATUS_SEPARATOR = " \xB7 ";
@@ -20129,7 +20692,7 @@ function inspectGitBranch(projectRoot, options2 = {}) {
       windowsHide: true,
       env: {
         ...process4.env,
-        GIT_CEILING_DIRECTORIES: path18.dirname(path18.resolve(projectRoot))
+        GIT_CEILING_DIRECTORIES: path21.dirname(path21.resolve(projectRoot))
       }
     });
     if (result?.status !== 0 || result.signal || result.error) return null;
@@ -20149,13 +20712,13 @@ function isBlockContinuation(line) {
 function isMainlineBoundary(line) {
   return !(line ?? "").trim() || /^ {0,3}#{1,6}(?:[ \t]|$)/u.test(line ?? "") || /^ {0,3}(?:`{3,}|~{3,})/u.test(line ?? "") || /^ {0,3}(?:---|\.\.\.|-->)\s*$/u.test(line ?? "") || /^ {0,3}<!--/u.test(line ?? "") || /^(?:Current round|Round status):/u.test(line ?? "");
 }
-function parseResearchMainline(markdown, options2 = {}) {
+function parseResearchMainline(markdown2, options2 = {}) {
   let fence = null;
   let frontmatter = false;
   let comment = false;
   let htmlBlock = null;
   const matches = [];
-  const lines = markdown.split(/\r?\n/u);
+  const lines = markdown2.split(/\r?\n/u);
   for (const [index, line] of lines.entries()) {
     if (index === 0 && line === "---") {
       frontmatter = true;
@@ -20208,7 +20771,7 @@ function renderDoveStatusLine(input, options2 = {}) {
   const remainingValue = nonNegativeNumber(payload.context_window?.remaining_percentage);
   const remaining = remainingValue === null ? null : Math.min(100, Math.round(remainingValue));
   const duration = formatSessionDuration(payload.cost?.total_duration_ms);
-  const project = options2.projectRoot ? oneLine(path18.resolve(options2.projectRoot)) : null;
+  const project = options2.projectRoot ? oneLine(path21.resolve(options2.projectRoot)) : null;
   const card = readDoveIdentityCard(options2.projectRoot, options2) ?? "";
   const mainline = shortMainline(Object.hasOwn(options2, "mainline") ? options2.mainline : parseResearchMainline(card));
   const noColorValue = (options2.env ?? process4.env).NO_COLOR;
@@ -20230,9 +20793,9 @@ ${project}` : session;
 }
 
 // src/core/dove-lifecycle.mjs
-import fs16 from "node:fs";
+import fs19 from "node:fs";
 function updateDoveLifecycle(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
+  const fsOps = options2.fsOps ?? fs19;
   const root = resolveProjectRootForSetup(start, { fsOps });
   return updateProjectIntegration(root, options2);
 }
@@ -20249,12 +20812,12 @@ function uninstallDoveLifecycle(start, options2 = {}) {
 }
 
 // src/core/project-doctor.mjs
-import fs18 from "node:fs";
-import path19 from "node:path";
+import fs21 from "node:fs";
+import path22 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/core/research-documents.mjs
-import fs17 from "node:fs";
+import fs20 from "node:fs";
 var RESEARCH_DOCUMENT_PATHS = Object.freeze({ ...RESEARCH_DEFAULT_PATHS });
 function readableMarkdown(root, relativePath) {
   const stat = root.tryLstat(relativePath);
@@ -20266,7 +20829,7 @@ function readableMarkdown(root, relativePath) {
 function inspectResearchDocuments(project, options2 = {}) {
   const base = { root: RESEARCH_DOCUMENT_PATHS.root, identity: null, evaluation: null, rounds: null, overview: null };
   try {
-    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs17 });
+    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs20 });
     const directory = root.tryLstat(RESEARCH_DOCUMENT_PATHS.root);
     if (!directory) return { ...base, healthy: true, state: "absent" };
     if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error(`${base.root} must be a real directory.`);
@@ -20300,8 +20863,8 @@ function classifyProjectSetup(result) {
 }
 
 // src/core/project-doctor.mjs
-var MODULE_DIRECTORY = path19.dirname(fileURLToPath3(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path19.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path19.basename(MODULE_DIRECTORY)) ? ".." : "../..");
+var MODULE_DIRECTORY = path22.dirname(fileURLToPath3(import.meta.url));
+var DEFAULT_PACKAGE_ROOT = path22.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path22.basename(MODULE_DIRECTORY)) ? ".." : "../..");
 function messageFor(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -20321,18 +20884,18 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 function inspectUserCli(options2) {
-  const fsOps = options2.fsOps ?? fs18;
-  const packageRoot = path19.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
+  const fsOps = options2.fsOps ?? fs21;
+  const packageRoot = path22.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options2.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
-    const absolutePath = path19.resolve(packageRoot, relativePath);
-    const relative = path19.relative(packageRoot, absolutePath);
-    const contained = relative !== "" && !relative.startsWith("..") && !path19.isAbsolute(relative);
+    const absolutePath = path22.resolve(packageRoot, relativePath);
+    const relative = path22.relative(packageRoot, absolutePath);
+    const contained = relative !== "" && !relative.startsWith("..") && !path22.isAbsolute(relative);
     const healthy2 = contained && regularNonSymlink(fsOps, absolutePath);
     return { path: relativePath, healthy: healthy2, state: healthy2 ? "current" : contained ? "missing-or-invalid" : "outside-package-root" };
   });
-  const executablePath = path19.resolve(options2.executablePath ?? path19.join(packageRoot, "bin/dove-package.mjs"));
-  const executableRelative = path19.relative(packageRoot, executablePath);
-  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path19.isAbsolute(executableRelative);
+  const executablePath = path22.resolve(options2.executablePath ?? path22.join(packageRoot, "bin/dove-package.mjs"));
+  const executableRelative = path22.relative(packageRoot, executablePath);
+  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path22.isAbsolute(executableRelative);
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
   const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
@@ -20444,7 +21007,7 @@ function inspectProjectDoctor(start, options2 = {}) {
   try {
     setupRoot = resolveProjectRootForSetup(start, { fsOps: options2.fsOps });
   } catch {
-    setupRoot = typeof start === "string" ? path19.resolve(start) : null;
+    setupRoot = typeof start === "string" ? path22.resolve(start) : null;
   }
   const projectIntegration = inspectIntegration(start, options2);
   const safeRoot = projectIntegration.root ?? setupRoot;
@@ -20466,8 +21029,8 @@ function inspectProjectDoctor(start, options2 = {}) {
 
 // src/core/run-record.mjs
 import crypto5 from "node:crypto";
-import fs19 from "node:fs";
-import path20 from "node:path";
+import fs22 from "node:fs";
+import path23 from "node:path";
 import process5 from "node:process";
 
 // src/core/run-environment.mjs
@@ -20638,7 +21201,7 @@ function normalizeRunId(value2) {
   return value2;
 }
 function normalizeRunProject(project, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   return resolveInstalledProjectRoot(project ?? options2.cwd ?? process5.cwd(), { fsOps });
 }
 function runRelativePaths(runId) {
@@ -20655,17 +21218,17 @@ function runAbsolutePaths(projectRoot, runId) {
   const relative = runRelativePaths(runId);
   return {
     ...relative,
-    absoluteRunDirectory: path20.join(projectRoot, relative.runDirectory),
-    absoluteJournalPath: path20.join(projectRoot, relative.journalPath),
-    absoluteStdoutPath: path20.join(projectRoot, relative.stdoutPath),
-    absoluteStderrPath: path20.join(projectRoot, relative.stderrPath)
+    absoluteRunDirectory: path23.join(projectRoot, relative.runDirectory),
+    absoluteJournalPath: path23.join(projectRoot, relative.journalPath),
+    absoluteStdoutPath: path23.join(projectRoot, relative.stdoutPath),
+    absoluteStderrPath: path23.join(projectRoot, relative.stderrPath)
   };
 }
 function ensureRunsRoot(projectRoot, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
-  const doveRoot = path20.join(projectRoot, ARTIFACT_PATHS.doveRoot);
+  const fsOps = options2.fsOps ?? fs22;
+  const doveRoot = path23.join(projectRoot, ARTIFACT_PATHS.doveRoot);
   assertRealDirectory(fsOps, doveRoot, "Dove workspace root");
-  const runsRoot = path20.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const runsRoot = path23.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat !== null) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -20681,7 +21244,7 @@ function ensureRunsRoot(projectRoot, options2 = {}) {
   return runsRoot;
 }
 function reserveRunDirectory(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const runId = normalizeRunId(options2.id ?? createRunId({ now: options2.now }));
   ensureRunsRoot(projectRoot, { fsOps });
@@ -20696,13 +21259,13 @@ function reserveRunDirectory(options2 = {}) {
   return { projectRoot, runId, paths };
 }
 function requireRunDirectory(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const paths = runAbsolutePaths(projectRoot, runId);
   assertRealDirectory(fsOps, paths.absoluteRunDirectory, "Dove run directory");
   return paths;
 }
 function tryRunDirectory(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const paths = runAbsolutePaths(projectRoot, runId);
   const stat = lstatOrNull5(fsOps, paths.absoluteRunDirectory);
   if (stat === null) return null;
@@ -20710,9 +21273,9 @@ function tryRunDirectory(projectRoot, runId, options2 = {}) {
   return paths;
 }
 function acquireRunMutationLock(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const paths = requireRunDirectory(projectRoot, runId, { fsOps });
-  const lockPath = path20.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
+  const lockPath = path23.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
   for (let attempt = 0; attempt <= RUN_LOCK_WAIT_MS / RUN_LOCK_RETRY_MS; attempt += 1) {
     try {
       fsOps.mkdirSync(lockPath, { mode: 448 });
@@ -20734,7 +21297,7 @@ function validateRunEvent(value2, expectedRunId, expectedSeq, label) {
   return value2;
 }
 function readRunEvents(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const id = normalizeRunId(runId);
   const paths = requireRunDirectory(projectRoot, id, { fsOps });
   assertRegularFile(fsOps, paths.absoluteJournalPath, "Dove run journal");
@@ -20749,7 +21312,7 @@ function readRunEvents(projectRoot, runId, options2 = {}) {
   });
 }
 function tryReadRunEvents(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const id = normalizeRunId(runId);
   const paths = tryRunDirectory(projectRoot, id, { fsOps });
   if (paths === null) return null;
@@ -20759,7 +21322,7 @@ function tryReadRunEvents(projectRoot, runId, options2 = {}) {
 }
 function appendRunEvents(projectRoot, runId, items, options2 = {}) {
   if (!Array.isArray(items) || items.length === 0) throw new Error("Dove run event append requires at least one event item.");
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const id = normalizeRunId(runId);
   const lock = acquireRunMutationLock(projectRoot, id, { fsOps });
   try {
@@ -20991,8 +21554,8 @@ function summarizeRun(projectRoot, runId, options2 = {}) {
   return summarizeStatus(projectRoot, normalizeRunId(runId), events);
 }
 function runsRootEntries(projectRoot, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
-  const runsRoot = path20.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const fsOps = options2.fsOps ?? fs22;
+  const runsRoot = path23.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat === null) return [];
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -21002,7 +21565,7 @@ function runsRootEntries(projectRoot, options2 = {}) {
   }).sort();
 }
 function listRunSummaries(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const group = normalizeRunGroup(options2.group);
   const runs = [];
@@ -21016,7 +21579,7 @@ function listRunSummaries(options2 = {}) {
   return { command: "status", status: "ok", project: projectRoot, group, runs };
 }
 function inspectRunStatus(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const projectRoot = normalizeRunProject(options2.project, options2);
   if (options2.id !== void 0 && options2.id !== null) {
     if (options2.group !== void 0 && options2.group !== null) throw new Error("Use only one of --id or --group for dove run status.");
@@ -21026,7 +21589,7 @@ function inspectRunStatus(options2 = {}) {
   return listRunSummaries({ ...options2, fsOps, project: projectRoot });
 }
 function appendReconciledInterrupted(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const id = normalizeRunId(runId);
   const event = appendRunEvent(projectRoot, id, "run.reconciled", {
     outcome: "interrupted",
@@ -21053,7 +21616,7 @@ function appendReconciledInterrupted(projectRoot, runId, options2 = {}) {
   return { event, summary: summarizeRun(projectRoot, id, { fsOps }) };
 }
 function appendFinalizedRun(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const root = normalizeRunProject(projectRoot, { fsOps, cwd: options2.cwd });
   const id = normalizeRunId(runId);
   const event = appendRunEvent(root, id, "run.finalized", (events) => {
@@ -21094,7 +21657,7 @@ function selectedRunIds(projectRoot, options2 = {}) {
   return [.../* @__PURE__ */ new Set([...explicitIds, ...byGroup])].sort();
 }
 function compareRuns(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs19;
+  const fsOps = options2.fsOps ?? fs22;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const runIds2 = selectedRunIds(projectRoot, { ...options2, fsOps });
   if (runIds2.length === 0) {
@@ -21153,7 +21716,7 @@ function compareRuns(options2 = {}) {
 
 // src/core/run-supervisor.mjs
 import { spawn as spawn2 } from "node:child_process";
-import fs20 from "node:fs";
+import fs23 from "node:fs";
 import process6 from "node:process";
 var SUPERVISOR_ENTRY = "__dove-run-supervisor";
 var SUPERVISOR_READY_TIMEOUT_MS = 1e4;
@@ -21188,7 +21751,7 @@ function sendSupervisorMessageAsync(message) {
 function closeFd(fd) {
   if (!Number.isInteger(fd)) return;
   try {
-    fs20.closeSync(fd);
+    fs23.closeSync(fd);
   } catch {
   }
 }
@@ -21232,8 +21795,8 @@ function appendTerminalEvent(projectRoot, runId, payload, options2 = {}) {
 }
 function openRunLogFiles(paths) {
   return {
-    stdoutFd: fs20.openSync(paths.absoluteStdoutPath, "wx", 384),
-    stderrFd: fs20.openSync(paths.absoluteStderrPath, "wx", 384)
+    stdoutFd: fs23.openSync(paths.absoluteStdoutPath, "wx", 384),
+    stderrFd: fs23.openSync(paths.absoluteStderrPath, "wx", 384)
   };
 }
 function normalizeStartPayload(raw) {
@@ -21500,7 +22063,7 @@ async function configureSupervisorAndWait(child, payload, acceptedTypes) {
   }
   return await result;
 }
-function removeEmptyReservedRunDirectory(paths, fsOps = fs20) {
+function removeEmptyReservedRunDirectory(paths, fsOps = fs23) {
   try {
     const entries = fsOps.readdirSync(paths.absoluteRunDirectory);
     if (entries.length === 0) fsOps.rmdirSync(paths.absoluteRunDirectory);
@@ -21636,8 +22199,8 @@ async function runSupervisorMain(argv = process6.argv.slice(2)) {
 
 // bin/dove.mjs
 var __filename2 = fileURLToPath4(import.meta.url);
-var __dirname2 = path21.dirname(__filename2);
-var PACKAGE_ROOT2 = path21.resolve(__dirname2, "..");
+var __dirname2 = path24.dirname(__filename2);
+var PACKAGE_ROOT2 = path24.resolve(__dirname2, "..");
 var PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
 if (isRunSupervisorInvocation(process7.argv.slice(2))) await runSupervisorMain(process7.argv.slice(2));
 function projectOption2(options2) {
@@ -21753,18 +22316,18 @@ function prepareHookProject(project) {
 function assertHookPayloadProject(payload, target) {
   if (payload?.cwd === void 0) return;
   if (typeof payload.cwd !== "string" || !payload.cwd.trim() || payload.cwd.includes("\0")) throw new Error("Dove hook cwd \u5FC5\u987B\u6307\u5411\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u4E2D\u7684\u76EE\u5F55\u3002");
-  const cwd = fs21.realpathSync(payload.cwd);
-  const stat = fs21.statSync(cwd);
-  const relative = path21.relative(target, cwd);
-  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path21.sep}`) || path21.isAbsolute(relative)) {
+  const cwd = fs24.realpathSync(payload.cwd);
+  const stat = fs24.statSync(cwd);
+  const relative = path24.relative(target, cwd);
+  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path24.sep}`) || path24.isAbsolute(relative)) {
     throw new Error("Dove hook cwd \u4E0D\u5C5E\u4E8E\u58F0\u660E\u7684\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u3002");
   }
   let directory = cwd;
   while (directory !== target) {
-    if (fs21.existsSync(path21.join(directory, ".dove/install/manifest.json")) || fs21.existsSync(path21.join(directory, ".dove-install"))) {
+    if (fs24.existsSync(path24.join(directory, ".dove/install/manifest.json")) || fs24.existsSync(path24.join(directory, ".dove-install"))) {
       throw new Error("Dove hook cwd \u5C5E\u4E8E\u53E6\u4E00\u4E2A\u9879\u76EE\u96C6\u6210\u3002");
     }
-    directory = path21.dirname(directory);
+    directory = path24.dirname(directory);
   }
 }
 async function readStdin() {
@@ -21870,7 +22433,7 @@ try {
     process7.exit(0);
   }
   if (command2 === "reinstall") {
-    const target = path21.resolve(projectOption2(options) ?? process7.cwd());
+    const target = path24.resolve(projectOption2(options) ?? process7.cwd());
     if (wantsJson(options)) {
       const preview2 = previewProjectCompleteReinstall(target, PACKAGE_OPTIONS);
       const { manifest, ...publicPreview } = preview2;
@@ -21895,7 +22458,7 @@ try {
     process7.exit(0);
   }
   if (command2 === "uninstall") {
-    const target = path21.resolve(projectOption2(options) ?? process7.cwd());
+    const target = path24.resolve(projectOption2(options) ?? process7.cwd());
     const preview = previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS);
     if (wantsJson(options)) {
       writeJson2(preview);
@@ -21951,9 +22514,9 @@ try {
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`--port \u9700\u8981 1 \u5230 65535 \u4E4B\u95F4\u7684\u6574\u6570\uFF1A${options.port}`);
     const bind = options.bind ?? DEFAULT_DASHBOARD_BIND;
     let password = null;
-    const passwordFile = options.passwordFile === void 0 ? null : path21.resolve(options.passwordFile);
+    const passwordFile = options.passwordFile === void 0 ? null : path24.resolve(options.passwordFile);
     if (passwordFile) {
-      password = fs21.readFileSync(passwordFile, "utf8").trim();
+      password = fs24.readFileSync(passwordFile, "utf8").trim();
       if (!password) throw new Error(`\u5BC6\u7801\u6587\u4EF6\u4E3A\u7A7A\uFF1A${options.passwordFile}`);
     }
     const actions = createDashboardActions({ packageOptions: PACKAGE_OPTIONS, passwordFile });
@@ -21965,18 +22528,31 @@ try {
     await new Promise(() => {
     });
   }
+  if (command2 === "settings") {
+    const result = options.hostMigration === void 0 ? readHostSettings(PACKAGE_OPTIONS) : writeHostSettings({ hostMigration: options.hostMigration === "on" }, PACKAGE_OPTIONS);
+    if (wantsJson(options)) writeJson2(result);
+    else console.log(`\u5BBF\u4E3B\u8FC1\u79FB\uFF1A${result.hostMigration ? "\u6253\u5F00" : "\u5173\u95ED"}\uFF08\u9ED8\u8BA4\u5173\u95ED\uFF1B\u6253\u5F00\u540E\uFF0C\u66F4\u65B0\u767B\u8BB0\u5F85\u529E\uFF0C\u7531\u9879\u76EE\u5BBF\u4E3B\u95F2\u4E0B\u65F6\u5904\u7406\uFF09`);
+    process7.exit(0);
+  }
+  if (command2 === "mentor") {
+    const root = path24.resolve(options.project ?? process7.cwd());
+    const brief = renderMentorBrief(root, options);
+    if (wantsJson(options)) writeJson2({ brief });
+    else console.log(brief);
+    process7.exit(0);
+  }
   if (command2 === "topic") {
-    const root = path21.resolve(options.project ?? process7.cwd());
+    const root = path24.resolve(options.project ?? process7.cwd());
     const result = startTopicSelection(root, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson2(result);
-    else console.log(`\u9009\u9898\u76EE\u5F55\u5DF2\u5C31\u7EEA\uFF1A${path21.join(root, ".dove/research/topics")}\uFF08\u4F9D\u636E\uFF1A${result.criteria?.title ?? "\u9009\u9898\u6807\u51C6"}${result.criteria?.version ? `\uFF0C\u7B2C ${result.criteria.version} \u7248` : ""}\uFF1B\u5DF2\u6709\u5019\u9009 ${result.cards.length} \u4E2A\uFF09`);
+    else console.log(`\u9009\u9898\u76EE\u5F55\u5DF2\u5C31\u7EEA\uFF1A${path24.join(root, ".dove/research/topics")}\uFF08\u4F9D\u636E\uFF1A${result.criteria?.title ?? "\u9009\u9898\u6807\u51C6"}${result.criteria?.version ? `\uFF0C\u7B2C ${result.criteria.version} \u7248` : ""}\uFF1B\u5DF2\u6709\u5019\u9009 ${result.cards.length} \u4E2A\uFF09`);
     process7.exit(0);
   }
   if (command2 === "watch") {
-    const roots = options.project ? [path21.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs21.existsSync(root));
+    const roots = options.project ? [path24.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs24.existsSync(root));
     const result = await runWatch(roots, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson2(result);
-    else for (const item of result.results) console.log(`${path21.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);
+    else for (const item of result.results) console.log(`${path24.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);
     process7.exit(0);
   }
   if (command2 === "doctor") {
@@ -22025,12 +22601,8 @@ try {
       try {
         const target = prepareHookProject(projectOption2(options));
         assertHookPayloadProject(payload, target);
-        const inspected = inspectProjectIntegration(target, PACKAGE_OPTIONS);
-        if (inspected.status !== "current") {
-          process7.stdout.write(JSON.stringify(userPromptSubmitAttentionOutput()));
-        } else {
-          process7.stdout.write(JSON.stringify(userPromptSubmitOutput(payload, currentPromptGuidance(inspected.manifest), { project: target })));
-        }
+        const guidance = inspectCurrentPromptGuidance(target, PACKAGE_OPTIONS);
+        process7.stdout.write(JSON.stringify(userPromptSubmitOutput(payload, guidance, { project: target })));
       } catch {
         process7.stdout.write(JSON.stringify(userPromptSubmitAttentionOutput()));
       }
@@ -22052,7 +22624,7 @@ try {
       }
     }
     if (hookName === "statusline") {
-      process7.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path21.resolve(projectOption2(options)) })}
+      process7.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path24.resolve(projectOption2(options)) })}
 `);
       process7.exit(0);
     }

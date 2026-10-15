@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
 import { PROJECT_HOST_IDS, normalizeHostSelection } from "./host-registry.mjs";
+import { prepareHostMigration } from "./host-migration.mjs";
 import {
   INSTALLATION_MANIFEST_PATH,
   readProjectInstallationManifest
@@ -67,6 +68,7 @@ export function initializeProjectIntegration(rootOrProject, options = {}) {
   const root = resolveProjectRootForInit(rootOrProject, { fsOps, hostIds: PROJECT_HOST_IDS });
   const plan = preparePlan({ root, hosts, packageName: options.packageName, packageVersion: options.packageVersion, now, fsOps });
   plan.entries.push(...prepareResearchDefaults(root, { fsOps }).entries);
+  plan.entries.push(...prepareHostMigration(root, { ...options, fsOps, now }));
   return resultFromTransaction(
     "initialized",
     root,
@@ -90,6 +92,7 @@ function prepareInstalledPlan(start, options = {}) {
 
 export function updateProjectIntegration(start, options = {}) {
   const prepared = prepareInstalledPlan(start, { ...options, replacementPolicy: "explicit-update" });
+  prepared.entries.push(...prepareHostMigration(prepared.root, { ...options, fsOps: prepared.fsOps, packageVersion: prepared.manifest.package.version }));
   const transaction = writeFileSetTransaction(
     prepared.entries,
     transactionOptions(prepared.fsOps)
@@ -104,6 +107,7 @@ export function syncProjectIntegration(start, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const root = resolveExactInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
   const prepared = prepareInstalledPlan(root, { ...options, fsOps, replacementPolicy: "auto-inspect" });
+  prepared.entries.push(...prepareHostMigration(root, { ...options, fsOps, packageVersion: prepared.manifest.package.version }));
   const transaction = writeFileSetTransaction(prepared.entries, transactionOptions(fsOps));
   return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", root, prepared.hosts, prepared.manifest, transaction, prepared);
 }
@@ -145,6 +149,7 @@ function prepareLifecycleIntegration(root, options, { hosts, source }) {
     manifest: source,
     replacementPolicy: "confirmed-reinstall"
   });
+  planned.entries.push(...prepareHostMigration(root, options));
   return { ...planned, scope: [] };
 }
 

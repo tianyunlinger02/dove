@@ -12,6 +12,8 @@ import { createDashboardActions } from "../src/cli/dashboard-actions.mjs";
 import { DEFAULT_DASHBOARD_BIND, DEFAULT_DASHBOARD_PORT, startDashboardServer } from "../src/cli/dashboard-server.mjs";
 import { runWatch } from "../src/core/paper-watch.mjs";
 import { startTopicSelection } from "../src/core/topic-selection.mjs";
+import { readHostSettings, writeHostSettings } from "../src/core/host-migration.mjs";
+import { renderMentorBrief } from "../src/core/mentor-brief.mjs";
 import { renderDoveDoctor } from "../src/cli/doctor-output.mjs";
 import { renderDoveHelp } from "../src/cli/help-output.mjs";
 import { runInteractiveDoveSetup } from "../src/cli/interactive-setup.mjs";
@@ -25,7 +27,7 @@ import {
   renderUninstallInventory,
   terminalColorEnabled
 } from "../src/cli/terminal-output.mjs";
-import { currentPromptGuidance, parseUserPromptSubmitPayload, userPromptSubmitAttentionOutput, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../src/core/user-prompt-submit-hook.mjs";
+import { inspectCurrentPromptGuidance, parseUserPromptSubmitPayload, userPromptSubmitAttentionOutput, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../src/core/user-prompt-submit-hook.mjs";
 import { parseSessionStartPayload, sessionStartFailureOutput, sessionStartOutput } from "../src/core/session-start-hook.mjs";
 import { renderDoveStatusLine } from "../src/core/statusline.mjs";
 import { collectDashboard, readProjectDocument } from "../src/core/dashboard-data.mjs";
@@ -396,6 +398,23 @@ try {
     await new Promise(() => {});
   }
 
+  if (command === "settings") {
+    const result = options.hostMigration === undefined
+      ? readHostSettings(PACKAGE_OPTIONS)
+      : writeHostSettings({ hostMigration: options.hostMigration === "on" }, PACKAGE_OPTIONS);
+    if (wantsJson(options)) writeJson(result);
+    else console.log(`宿主迁移：${result.hostMigration ? "打开" : "关闭"}（默认关闭；打开后，更新登记待办，由项目宿主闲下时处理）`);
+    process.exit(0);
+  }
+
+  if (command === "mentor") {
+    const root = path.resolve(options.project ?? process.cwd());
+    const brief = renderMentorBrief(root, options);
+    if (wantsJson(options)) writeJson({ brief });
+    else console.log(brief);
+    process.exit(0);
+  }
+
   if (command === "topic") {
     const root = path.resolve(options.project ?? process.cwd());
     const result = startTopicSelection(root, PACKAGE_OPTIONS);
@@ -460,12 +479,8 @@ try {
       try {
         const target = prepareHookProject(projectOption(options));
         assertHookPayloadProject(payload, target);
-        const inspected = inspectProjectIntegration(target, PACKAGE_OPTIONS);
-        if (inspected.status !== "current") {
-          process.stdout.write(JSON.stringify(userPromptSubmitAttentionOutput()));
-        } else {
-          process.stdout.write(JSON.stringify(userPromptSubmitOutput(payload, currentPromptGuidance(inspected.manifest), { project: target })));
-        }
+        const guidance = inspectCurrentPromptGuidance(target, PACKAGE_OPTIONS);
+        process.stdout.write(JSON.stringify(userPromptSubmitOutput(payload, guidance, { project: target })));
       } catch {
         // An invalid or unsafe installation does not authorize new project guidance.
         process.stdout.write(JSON.stringify(userPromptSubmitAttentionOutput()));
