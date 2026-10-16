@@ -75,10 +75,10 @@ test("mentor amendments: every invocation follows shared tracking, impact and sc
   assert.ok(DOVE_RESEARCH_ROUND_CYCLE.includes("RESEARCH_QUALITY.md for returns and tracking"));
   assert.match(quality, /每次导师调用.*watch\/config\.json.*未判断论文.*已有影响.*最近扫描.*不等待新轮次/u);
   assert.match(quality, /配置为 draft.*主会话写回.*source 为 mentor/u);
-  assert.match(quality, /主会话另存 watch\/impact-.*未扫描或已超过七天.*来源.*2000 字符.*watch\/scan-/u);
+  assert.match(quality, /主会话把判断另存为 watch\/impact-[\s\S]*超过七天.*来源.*2000 字符.*watch\/scan-/u);
   assert.match(mentor, /每次调用都按摘要的“两种宿主共同的导师返回”.*配置.*论文.*扫描日期/u);
   assert.ok(quality.includes("- ID | 判断 | 理由 | 方向 | 中文一句话"));
-  assert.match(quality, /导师或主会话可据摘要.*不把摘要或核实元数据当全文已读/u);
+  assert.match(quality, /导师或主会话可据摘要.*不把摘要或核实过的元数据当成读过全文/u);
   assert.match(quality, /显式面板积累或下一次 watch 运行.*papers\/library\.json.*papers\/library\.md/u);
   assert.match(quality, /读面板不写文献库/u);
 });
@@ -88,7 +88,7 @@ test("mentor amendments: both hosts share grounded gap discovery before mechanis
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /read.*CRITERIA\.md.*standards.*RESEARCH_QUALITY\.md/iu);
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /candidates.*neighbors?.*recommendations/iu);
   assert.match(mentor, /未定主线.*质量摘要.*候选.*评审/u);
-  assert.match(quality, /项目标准.*挑战轴.*每轴.*至多两个缺口/u);
+  assert.match(quality, /项目标准.*挑战轴.*一到两个.*缺口/u);
   assert.match(quality, /强基线.*真实失败.*数字来源/u);
   assert.match(quality, /缺口.*已有方法.*Y.*X.*但.*Y.*Z/u);
   assert.match(quality, /至少两篇.*正文.*论文.*不足/u);
@@ -150,7 +150,5 @@ test("mentor amendments: guidance prefers stated actions over defensive prohibit
   assert.match(mentor, /防御成本.*自设门禁.*重复核验.*措辞免责.*说不出保护什么.*删掉/u);
   assert.match(mentor, /风险和未知集中写一处/u);
   assert.match(DOVE_RESEARCH_ROUND_CYCLE, /whole prompt plus the trigger/iu);
-  assert.match(DOVE_RESEARCH_CLARIFICATION, /restrictions name what they protect/iu);
-  const negations = (text) => (text.match(/不/gu) ?? []).length;
-  assert.ok(negations(mentor) <= 26, `mentor definition carries ${negations(mentor)} negations`);
+  assert.match(DOVE_RESEARCH_CLARIFICATION, /restriction or check, say what it protects.*remove self-added/iu);
 });

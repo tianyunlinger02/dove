@@ -49,7 +49,7 @@ test("round briefs and results are attributable bounded records linking ordinary
     assert.ok(records.includes(field), `Round field: ${field}`);
   }
   assert.match(records, /one rounds\/NNN-brief\.md.*2000.*one NNN-result\.md.*3000/iu);
-  assert.match(records, /support in ordinary project directories/iu);
+  assert.match(records, /details in ordinary project files and link them/iu);
   assert.match(records, /priority is user > external > mentor/iu);
   assert.match(records, /Save mentor briefs verbatim.*replacement authors and reasons/iu);
   assert.match(records, /historical missions\/.*experiments\/.*claims\/.*without adding entries/iu);

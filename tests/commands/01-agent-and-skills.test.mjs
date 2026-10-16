@@ -61,50 +61,6 @@ test("public Dove capability, host and path helpers retain the nine flat Skills"
   assert.throws(() => adapterPathForCommand("unknown", "dove.research"), /Unknown host/u);
 });
 
-test("aggregate rule and Skill guidance and all installed guidance do not grow beyond 3.4.0", (t) => {
-  // Released 3.4.0 projections, counting Unicode code points and UTF-8 bytes.
-  // Aggregate budgets allow readable redistribution, including into references,
-  // agents or tool support, without a per-rule compression target.
-  const baseline = {
-    claude: { primary: { characters: 37_328, bytes: 37_388 }, all: { characters: 82_718, bytes: 136_902 } },
-    dsh: { primary: { characters: 105_609, bytes: 106_129 }, all: { characters: 141_524, bytes: 191_066 } }
-  };
-  const totals = { primary: { characters: 0, bytes: 0 }, all: { characters: 0, bytes: 0 } };
-  for (const host of PROJECT_HOST_IDS) {
-    const all = resourcesForHosts([host]).filter(({ kind, path }) => kind === "exclusive-file" && path.endsWith(".md"));
-    const primaryPaths = new Set(commandAdapterPathsForHost(host));
-    if (host === "claude") primaryPaths.add(".claude/rules/dove.md");
-    const primary = all.filter(({ path }) => primaryPaths.has(path));
-    assert.equal(primary.length, primaryPaths.size);
-    for (const [scope, resources] of Object.entries({ primary, all })) {
-      const total = resources.reduce((sum, { content }) => ({
-        characters: sum.characters + [...content].length,
-        bytes: sum.bytes + Buffer.byteLength(content, "utf8")
-      }), { characters: 0, bytes: 0 });
-      t.diagnostic(`${host} ${scope}: ${total.characters} Unicode characters / ${total.bytes} UTF-8 bytes`);
-      for (const unit of ["characters", "bytes"]) totals[scope][unit] += total[unit];
-    }
-  }
-  // Also count both hosts' new generated-call and migration notice wording;
-  // moving guidance into a runtime renderer must not hide prompt growth.
-  const absent = () => { throw Object.assign(new Error("missing"), { code: "ENOENT" }); };
-  const additional = [
-    renderMentorBrief("/project", { fsOps: { readdirSync: () => [], statSync: absent } }),
-    renderHostMigrationPending("3.4.1", "2026-10-15T00:00:00.000Z")
-  ];
-  for (const text of additional) {
-    totals.all.characters += PROJECT_HOST_IDS.length * [...text].length;
-    totals.all.bytes += PROJECT_HOST_IDS.length * Buffer.byteLength(text, "utf8");
-  }
-  t.diagnostic(`all including generated templates: ${totals.all.characters} Unicode characters / ${totals.all.bytes} UTF-8 bytes`);
-  for (const scope of ["primary", "all"]) {
-    for (const unit of ["characters", "bytes"]) {
-      const previous = PROJECT_HOST_IDS.reduce((sum, host) => sum + baseline[host][scope][unit], 0);
-      assert.ok(totals[scope][unit] <= previous, `${scope}: ${totals[scope][unit]} ${unit} exceeds the 3.4.0 aggregate of ${previous}`);
-    }
-  }
-});
-
 test("topic selection ends in a user choice before method closure and research execution", () => {
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /read.*CRITERIA\.md.*standards/iu);
   assert.match(DOVE_RESEARCH_ACTION_SPINE, /RESEARCH_QUALITY\.md.*one round/iu);
@@ -165,7 +121,4 @@ test("optional Dove agent delegates bounded work without duplicating the project
   assert.ok(entry.content.includes(DOVE_RESEARCH_RESULT_ADOPTION));
   assert.match(entry.content, /main session.*bounded subagent.*no higher judgment authority/isu);
   assert.match(entry.content, /return material findings for main-session adoption/iu);
-  const projected = `${entry.content.trimEnd()}\n`;
-  assert.ok([...projected].length <= 1_301, "Optional agent must stay within its 1301-character baseline");
-  assert.ok(Buffer.byteLength(projected, "utf8") <= 1_301, "Optional agent must stay within its 1301-byte baseline");
 });

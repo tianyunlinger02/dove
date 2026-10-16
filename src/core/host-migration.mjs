@@ -10,14 +10,14 @@ export const HOST_MIGRATION_REGISTERED_PATH = ".dove/install/migration-registere
 
 // Carry forward record normalization for consumers skipping earlier releases.
 // Leave empty in a release that has no host-side migration work.
-export const HOST_MIGRATION_TASK = `整理 3.4.0 起已有的研究记录，只处理已有内容：
+export const HOST_MIGRATION_TASK = `整理 3.4.0 起已有的研究记录，只处理已有内容，不为迁移另开研究任务：
 
-1. .dove/research/IDENTITY.md 按规则改为固定栏目、1200 字符内；未变 Mainline 与用户原话保留，过长原文移同目录历史并链接；缺 Target tier 且未问过就问一次；限制注明引文、来源、原话/转述、长期/单次。
-2. .dove/research/EVAL.md 按规则一方法版本一行、单元格 200 字符内；旧长内容原样移同目录历史并链接，结论和结果保持原样。
-3. MENTOR_NOTES.md 超 6000 字符时，下次正常导师调用由导师合并为至多 3000 字符。
-4. watch/config.json 仍为 draft 时，下次正常导师调用给修正建议，主会话写回并标 source: mentor。待下次调用的事项留短提醒即算完成。
+1. .dove/research/IDENTITY.md 改为规则里的固定栏目，篇幅一眼能读完（约 1200 字符）；未变的 Mainline 和用户原话保留，过长的原文移到同目录历史文件并链接；缺 Target tier 且没问过就问一次；每条限制注明引文、来源、原话还是转述、长期还是单次任务。
+2. .dove/research/EVAL.md 改为一个方法版本一行，单元格写已有数字加一句话（约 200 字符）；旧的长内容原样移到同目录历史文件并链接，结论和结果保持原样。
+3. MENTOR_NOTES.md 超过约 6000 字符时，下次正常导师调用请导师合并成约 3000 字符的全文。
+4. watch/config.json 仍是 draft 时，下次正常导师调用请导师给出追踪修正建议，主会话写回并标 source: mentor。要等下次调用的事项在已有记录里留一句提醒，这一项就算完成。
 5. 仍在选题时，下次正常回复按质量摘要一轮交候选、近邻及最佳 2–3 个方向，不足给 1 个，不重跑。推荐供定主线，不等方法闭合，正式产物门槛不扣住推荐；标准矛盾或禁取证据卡住时，说明一次仍给方向，请用户选或调标准，不静态打磨。确认后结束选题期限制，缺的独立资源／跑模型授权合并问一次，再诊断、设计、实验、写开题；已有主线续做。不改项目及用户级标准、进行中选题材料，只改后续安排。
-6. 清理自设限制：IDENTITY、brief 和执行协议里自加的限制与检查，逐条写保护什么，说不出的删掉；用户原话限制保留。`;
+6. 清理自设限制：看 IDENTITY 的 User restrictions、当前 brief 和在用的执行协议，执行者或导师自己加的限制与检查（哈希、冻结、等价门禁、只读清单等）逐条写一句它保护什么；说不出保护对象的删掉或改为一句说明，用户原话定的限制原样保留。`;
 
 function settingsPath(options) {
   const env = options.env ?? process.env;

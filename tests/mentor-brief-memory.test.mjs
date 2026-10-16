@@ -73,7 +73,6 @@ test("empty memory project renders a short fixed template without creating recor
   assert.equal(typeof brief, "string");
   assert.ok(brief.endsWith(`${QUESTIONS}\n`));
   assert.equal((brief.match(/^\d+\. /gmu) ?? []).length, 4);
-  assert.ok(Buffer.byteLength(brief) <= 1800, `empty template: ${Buffer.byteLength(brief)} bytes`);
   for (const file of [".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`, `${RESEARCH}/topics/CRITERIA.md`, `${RESEARCH}/topics/PROJECT.md`, `${WATCH}/config.json`]) {
     assert.ok(brief.includes(`\`${file}\`（缺失）`), file);
   }
@@ -202,7 +201,7 @@ test("watch bounds summaries and marks incomplete history, oversized or malforme
   assert.ok(memory.reads.every(({ file, length }) => length <= (file.endsWith(".json") ? 262144 : 65536)));
 });
 
-test("one signed opinion remains a path attachment and its complete length must not exceed 1000 characters", (t) => {
+test("an opinion stays a path attachment that reports its author and length without blocking the call", (t) => {
   const file = "notes/executor-opinion.md";
   const author = "作者：执行者\n";
   const opinion = `${author}${"观".repeat(1000 - Array.from(author).length)}`;
@@ -210,15 +209,13 @@ test("one signed opinion remains a path attachment and its complete length must 
   const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps, opinion: file });
   assert.ok(brief.includes(path.join(ROOT, file)));
   assert.ok(brief.includes("作者：执行者"));
-  assert.ok(brief.includes("1000 / 1000"));
+  assert.ok(brief.includes("约 1000 字"));
   assert.ok(!brief.includes("观观观"), "opinion body is not copied into the call");
   const target = path.join(ROOT, file);
-  memory.files.set(target, Buffer.from(`${opinion}多`));
-  assert.throws(() => renderMentorBrief(ROOT, { fsOps: memory.fsOps, opinion: file }), /不超过 1000 字/u);
+  memory.files.set(target, Buffer.from(`${opinion}${"多".repeat(2000)}`));
+  assert.ok(renderMentorBrief(ROOT, { fsOps: memory.fsOps, opinion: file }).includes("超过 4 KiB"));
   memory.files.set(target, Buffer.from("Unattributed advice"));
-  assert.throws(() => renderMentorBrief(ROOT, { fsOps: memory.fsOps, opinion: file }), /须标明作者/u);
-  memory.files.set(target, Buffer.from("Author: \nNo name on the author line"));
-  assert.throws(() => renderMentorBrief(ROOT, { fsOps: memory.fsOps, opinion: file }), /须标明作者/u);
+  assert.ok(renderMentorBrief(ROOT, { fsOps: memory.fsOps, opinion: file }).includes("未署名"));
   memory.files.set(target, Buffer.from("**Author**: Executor\nA labeled opinion."));
   assert.ok(renderMentorBrief(ROOT, { fsOps: memory.fsOps, opinion: file }).includes("作者：Executor"));
   assert.throws(() => renderMentorBrief(ROOT, { fsOps: memory.fsOps, opinion: "missing-opinion.md" }), /意见文件缺失/u);

@@ -156,10 +156,9 @@ function opinionAttachment(root, opinion, fsOps) {
   const result = readWindow(file, fsOps, 4096);
   if (result.error) throw new Error(`意见文件${result.error}：${file}`);
   const length = Array.from(result.text).length;
-  if (result.truncated || length > 1000) throw new Error(`意见文件须不超过 1000 字（含署名）：${file}`);
   const author = result.text.match(/^\s*(?:[-*]\s*)?(?:\*\*)?(?:Author|作者)(?:\*\*)?\s*[:：][ \t]*(\S[^\r\n]*)$/imu)?.[1];
-  if (!author) throw new Error(`意见文件须标明作者（Author: 或 作者：）：${file}`);
-  return `- 意见文件：\`${file}\`\n${quote(`作者：${author}\n篇幅：${length} / 1000 字（含署名）`)}`;
+  // Report authorship and length; a long or unsigned opinion is still the executor's material.
+  return `- 意见文件：\`${file}\`\n${quote(`作者：${author ?? "未署名（按执行者意见看待）"}\n篇幅：${result.truncated ? "超过 4 KiB，导师按路径读全文" : `约 ${length} 字（建议 1000 字内）`}`)}`;
 }
 
 /**
