@@ -32,6 +32,6 @@ dove dashboard 在本机起一个网页，只读查看已登记项目的主线�
 
 科研记录有固定格式和长度上限：身份卡包含目标档次和限制来源，轮次说明标作者，结果链接真实产物，EVAL 每方法版本一行。已有主线按用户原意推进，用能回答问题的规模评测；导师判断方向，执行者决定工程。连续两轮无科研结果就诊断，第三轮前找用户决定；换路线明说原路线、新路线和原因。已有 missions、experiments、claims 原地保留，不迁移删除；初始化只在没有研究树时建立简短 RESEARCH.md。
 
-身份卡保留 Mainline、Current round 与 Round status；超长显示前 4KB。导师调用用 dove mentor brief 生成固定材料与四问，只附署名意见和新增原始产物路径。hostMigration 默认关闭，可在设置页或 CLI 开启：升级只登记迁移待办，SessionStart/UserPromptSubmit 只读送达，宿主在当前工作告一段落后处理，不停训练评测、不改结论或用户原话；完成后删除待办，同版不重复。开关关闭不送达迁移。Hooks 不写研究或授予权限，磁盘更新不等于活会话重载。
+身份卡保留 Mainline、Current round 与 Round status；超长显示前 4KB。导师调用用 dove mentor brief 生成固定材料与固定问题，只附署名意见和新增原始产物路径。hostMigration 默认关闭，可在设置页或 CLI 开启：升级只登记迁移待办，SessionStart/UserPromptSubmit 只读送达，宿主在当前工作告一段落后处理，不停训练评测、不改结论或用户原话；完成后删除待办，同版不重复。开关关闭不送达迁移。Hooks 不写研究或授予权限，磁盘更新不等于活会话重载。
 `;
 }

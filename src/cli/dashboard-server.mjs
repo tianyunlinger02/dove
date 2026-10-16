@@ -522,7 +522,7 @@ function renderList() {
   picker.innerHTML = data.projects.map((p) => '<option value="' + esc(p.root) + '"' + (p.root === selected ? " selected" : "") + ">" + esc(p.name) + "</option>").join("");
 }
 const COLUMNS = { "Date": "日期", "Version/round": "版本/轮次", "Protocol/split": "协议与数据", "Measurements": "测量结果", "Unseen data/train-test gap": "未见数据与泛化差距", "Conclusion": "结论", "Artifacts": "产物" };
-const CARD = { "Current round": "当前轮次", "Round status": "轮次状态", "Mainline": "主线", "Target tier": "目标档次", "Target tier (conference/journal level)": "目标档次", "Deployment inputs/outputs": "输入与输出", "Completion": "完成标准", "User restrictions": "用户限制", "Recent corrections": "最近纠正", "Research state": "研究现状" };
+const CARD = { "Current round": "当前轮次", "Round status": "轮次状态", "Mainline": "主线", "Core capability": "核心能力", "Target tier": "目标档次", "Target tier (conference/journal level)": "目标档次", "Deployment inputs/outputs": "输入与输出", "Completion": "完成标准", "User restrictions": "用户限制", "Recent corrections": "最近纠正", "Research state": "研究现状" };
 function roundNo(file) { const m = String(file || "").match(/(\\d+)[-_]brief/); return m ? "第 " + m[1] + " 轮" : String(file || ""); }
 function statusOf(p, r, newestDone) {
   const current = p.currentRound && p.currentRound.includes(r.label);

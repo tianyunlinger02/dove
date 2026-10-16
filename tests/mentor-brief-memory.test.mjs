@@ -9,10 +9,11 @@ const ROOT = "/memory/dove/project";
 const RESEARCH = ".dove/research";
 const WATCH = `${RESEARCH}/watch`;
 const QUESTIONS = [
-  "1. 相对用户原话，方向对不对？",
+  "1. 相对用户原话和身份卡的核心能力，方向对不对？",
   "2. 这几轮是在建立通用能力，还是反复打补丁？",
   "3. 离用户目标和目标档次还差什么？",
-  "4. 下一轮该做什么，为什么？"
+  "4. 下一轮该做什么，为什么？",
+  "5. 相对最接近的已有工作，新在哪里？按目标档次的审稿人看，贡献够不够？"
 ].join("\n");
 
 // Every project byte lives in this Map. No disk fixtures or real project reads.
@@ -72,7 +73,8 @@ test("empty memory project renders a short fixed template without creating recor
   const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps });
   assert.equal(typeof brief, "string");
   assert.ok(brief.endsWith(`${QUESTIONS}\n`));
-  assert.equal((brief.match(/^\d+\. /gmu) ?? []).length, 4);
+  assert.equal((brief.match(/^\d+\. /gmu) ?? []).length, 5);
+  assert.match(brief, /导师笔记还不存在.*长期意图/u, "a first mentor reads the project's whole goal history");
   for (const file of [".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`, `${RESEARCH}/topics/CRITERIA.md`, `${RESEARCH}/topics/PROJECT.md`, `${WATCH}/config.json`]) {
     assert.ok(brief.includes(`\`${file}\`（缺失）`), file);
   }

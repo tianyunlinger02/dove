@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const RESEARCH = ".dove/research";
@@ -9,10 +10,11 @@ const SCAN_FILE = /^scan-\d{4}-\d{2}-\d{2}\.md$/u;
 
 // Moved verbatim from the canonical mentor definition's four questions.
 const QUESTIONS = [
-  "相对用户原话，方向对不对？",
+  "相对用户原话和身份卡的核心能力，方向对不对？",
   "这几轮是在建立通用能力，还是反复打补丁？",
   "离用户目标和目标档次还差什么？",
-  "下一轮该做什么，为什么？"
+  "下一轮该做什么，为什么？",
+  "相对最接近的已有工作，新在哪里？按目标档次的审稿人看，贡献够不够？"
 ];
 
 function list(directory, fsOps) {
@@ -182,7 +184,8 @@ export function renderMentorBrief(root, options = {}) {
     "## 用户原话与来源", "",
     quote(`来源：${options.userSource || "未提供"}\n日期范围：${options.since || "未提供起点"} — ${options.until || "未提供终点"}`), "",
     options.userOriginal ? quote(options.userOriginal) : "未直接附原话。",
-    "由导师读取指定来源；生成器不读取私有 session。", "",
+    "由导师读取指定来源；生成器不读取私有 session。",
+    ...(describe(project, `${RESEARCH}/MENTOR_NOTES.md`, fsOps).includes("缺失") ? ["导师笔记还不存在：先读本项目全部历史会话里用户说过的目标（会话目录见下），在笔记写“长期意图”。", `- 会话目录：\`${path.join(os.homedir(), ".claude/projects", project.replace(/[^A-Za-z0-9]/gu, "-"))}\``] : []), "",
     "## 项目材料", "",
     ...[".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`]
       .map((file) => `- ${describe(project, file, fsOps)}`), "",
@@ -197,7 +200,7 @@ export function renderMentorBrief(root, options = {}) {
     opinionAttachment(project, options.opinion, fsOps), "",
     "新增原始产物（只列路径）：",
     ...(options.artifact?.length ? options.artifact.map((file) => `- \`${path.resolve(project, file)}\``) : ["未提供。"]), "",
-    "## 固定四问", "",
+    "## 固定问题", "",
     ...QUESTIONS.map((question, index) => `${index + 1}. ${question}`)
   ];
   return `${lines.join("\n")}\n`;
