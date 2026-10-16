@@ -49,7 +49,7 @@ Preserve the user's confirmed Mainline, intended contribution, completion meanin
 
 Confirmation ends selection-only limits; ask once for any separate resource/model authorization. Diagnose key unknowns, design the core method, experiment, then write the proposal. Scale must answer the question; pipeline connection is not core evidence.
 
-For judgment questions, give the direct conclusion first—达到、没达到、能、不能、还不知道, or equivalent—then one or two sentences of evidence and at most one boundary sentence. Report scientific progress, engineering, delivery and software checks separately.
+Answer judgment questions directly, then give the evidence and key unknowns the user needs to decide. Use natural language without a fixed verdict vocabulary, sentence budget or banned opening; previously explained, unchanged boundaries need not be repeated. Report scientific progress, engineering, delivery and software checks separately.
 
 ## Research Markdown
 
@@ -57,9 +57,9 @@ Records under `.dove/research/` belong to the researcher. Installation does not 
 
 ### Topic selection and original-user grounding
 
-Read `topics/CRITERIA.md` and project standards. Selection ends with the user's mainline choice, not a closed-method proposal; higher standards bind their deliverables, not recommendations. Ground problem value in real strong-baseline failures and sourced numbers. Per challenge axis, investigate at most two gaps: “prior methods do X through Y, but Y leaves Z unresolved.” Cite two body-read near-miss papers and each shortfall, a deficiency (mechanism, algorithm, inductive bias, credit assignment, objective, representation or scaling) and observable closure. Abstracts or absent precedent are not evidence; no universal method-only gate applies.
+First establish the current request and completion conditions. Already-authorized implementation, repair, reproduction and bounded delivery proceed without being recast as topic selection or assigned research scores and rounds. For actual topic selection, read `topics/CRITERIA.md` and project standards. Selection ends with the user's mainline choice, not a closed-method proposal; higher standards bind their deliverables, not recommendations. Ground value in real strong-baseline failures and sourced numbers. Focus each challenge axis on consequential gaps: “prior methods do X through Y, but Y leaves Z unresolved.” Cite two body-read near-miss papers, their shortfalls, a deficiency and observable closure. Abstracts or absent precedent are not evidence.
 
-Per gap, use 6–10 queries across at least three other subfields for mechanisms solving similar problems; in-domain sources must exceed rediscovery. Generate parallel candidates before pruning. One sourced idea with key unknowns can support selection; method design and closure belong within the mainline. Cards in `topics/cards/` retain status, stage, position and these fields:
+Search in-domain and cross-field mechanisms according to key unknowns, reading the source mechanism and closest prior work. Six to ten queries and three other subfields can help broaden a search; they are not delivery quotas or proof of novelty. Explicit user requirements still apply. Generate parallel candidates before pruning. One sourced idea with key unknowns can support selection; method design and closure belong within the mainline. Cards in `topics/cards/` retain status, stage, position and these fields:
 
 - One-sentence idea.
 - Gap it attacks.
@@ -69,7 +69,7 @@ Per gap, use 6–10 queries across at least three other subfields for mechanisms
 - Specific difference from the closest in-domain work.
 - Main risk; when improving a candidate, identify what changed.
 
-The mentor searches “borrowed mechanism + target problem,” returning **留下 / 修改 / 否掉**, a reason, cited evidence and strongest objection; revision names one weakest focus: novelty, coherence, feasibility, clarity, mapping or grounding. Deliver candidates, neighbors and the best 2–3 choices within one round; give just one if that is all. If conflicting standards or prohibited evidence block recommendations, explain once and still offer the best directions for user choice or standards adjustment, not another static round. Before choice, implement no methods; only standards-allowed diagnostics.
+The mentor searches “borrowed mechanism + target problem” and gives its judgment with cited evidence and the strongest objection. Revision addresses bottlenecks and shared causes, comparing coordinated changes or alternative routes rather than mechanically patching one weakest item. Deliver candidates, neighbors and the best 2–3 choices within one round; give just one if that is all. If conflicting standards or prohibited evidence block recommendations, explain once and still offer the best directions for user choice or standards adjustment, not another static round. Before choice, implement no methods; only standards-allowed diagnostics.
 
 `dove topic start [--project <dir>]` optionally copies user-level criteria from Settings, not another project's settings. It does not replace reading the standards. A takeover continues an already confirmed mainline.
 
@@ -106,9 +106,9 @@ Begin `EVAL.md` with a short Completion reference to the script, protocol and al
 
 Each cell contains numbers and at most one short sentence, within **200 characters**. Link detailed outputs and protocols; exclude engineering logs and process status. Formal comparisons retain complete strong same-input baselines and all confirmed requirements. Unknown measurements stay unknown. External comparisons test utility; ablations and causal controls test attribution.
 
-The executor repairs evaluator errors and recomputes all comparable historical methods and baselines, reusing raw outputs before rerunning. Keep superseded protocols as history, not mixed values. Protocol repair alone is not a method-code change; changes to the goal's meaning need the user.
+The executor repairs evaluator errors, immediately marks affected results, and first restores comparability for the current claim, necessary historical comparisons and strong baselines, reusing raw outputs where valid. Other affected history remains clearly marked under its old protocol and is revisited when it matters. Never mix protocols or hide unfavorable evidence. Protocol repair alone is not a method-code change; changes to the goal's meaning need the user.
 
-After important results, replace the current mentor assessment below the table in **at most 1000 characters**, with grounds and unknowns; do not add a duplicate self-rating. Implementation uses grades 1–3, the other seven dimensions 1–4. Unknown is not zero; ordinal grades are not averaged or treated as acceptance probabilities. The weakest decisive dimension informs next work.
+After important results, replace the current mentor assessment below the table in **at most 1000 characters**, with grounds and unknowns; do not add a duplicate self-rating. Implementation uses grades 1–3, the other seven dimensions 1–4. Unknown is not zero; ordinal grades are not averaged or treated as acceptance probabilities. Quality dimensions identify bottlenecks, shared causes and key unknowns. Compare whole alternatives and choose the next work by expected value, evidence and total cost; do not mechanically patch whichever dimension is lowest.
 
 ### Round briefs and results
 
@@ -125,20 +125,21 @@ Results use four fixed headings:
 
 State values, missing measurements and blockers; the next mentor answers objections first. A valid negative result can add knowledge; a plan, launch, smoke test or engineering check cannot. Engineering and verification failures count toward the no-science limit.
 
-A method round uses one code version, possibly with coordinated changes. Later method-code changes require a new version and full applicable evaluation; retain old versions as ablations. After test use, a changed method needs a fresh draw unused in development or previous tests and same-set baselines, not reshuffled old data. Only final heldout confirmation declares claim, controls, data and metrics beforehand and uses heldout once.
+Keep method changes and measurements version-traceable, including coordinated changes and useful old versions for ablation. Development first uses diagnostics that answer the key unknown; formal comparison, result adoption and paper claims require the applicable protocol, all user metrics, fair strong baselines and unseen-data evidence. Unmeasured effects of a new version remain unknown, not inherited passes. After test use, formal comparison of a changed method needs a fresh draw unused in development or previous tests and same-set baselines, not reshuffled old data. Only final heldout confirmation declares claim, controls, data and metrics beforehand and uses heldout once.
 
 `RESEARCH.md` is a short history index. Existing `missions/`, `experiments/` and `claims/` stay in place without migration, deletion or new entries. Sources, reviews, Lessons, Doctor feedback and Run receipts retain distinct uses.
 
 ### Mentor judgment and memory
 
-Call `dove-mentor` at round end, after two consecutive rounds without scientific results, on user direction/story corrections, before route changes or when requested. Obtain diagnosis after two no-science rounds; before the third, explain the blockage and ask the user to decide. Report route changes with old route, new route and reason.
+Call `dove-mentor` at round end, after two consecutive rounds without scientific results, on user direction/story corrections, before route changes or when requested. Two no-science rounds call for an independent diagnosis; the count itself does not revoke authorization. Continue a credible next step within scope, and ask the user when commitments, fixed methods, completion meaning or resources must change, or no credible path remains. Report route changes with old route, new route and reason.
 
-Each cross-round judgment uses a fresh native context; 2–3 clarifications may stay within one judgment. Use `dove mentor brief --project <root>` for the call body: it lists current materials and four questions. Add only a capped, author-labeled opinion file and new raw-artifact paths, not executor task instructions. Supply current user requests verbatim with sources. For another call within a round, identify its trigger in the template. The four questions are:
+Each cross-round judgment uses a fresh native context; 2–3 clarifications may stay within one judgment. Use `dove mentor brief --project <root>` for the call body: it lists current materials and five questions. Add only relevant, author-labeled opinions and new raw-artifact paths as materials, not executor task instructions; long or unsigned opinions are noted rather than rejected. Supply current user requests verbatim with sources. For another call within a round, identify its trigger in the template. The questions are:
 
-1. Is the direction faithful to the user's original goal?
+1. Is the direction faithful to the user's original goal and the identity card's core capability?
 2. Are recent rounds building general capability or repeated patches?
 3. What remains to the goal and target tier?
 4. What should the next round do, and why?
+5. What is new relative to the closest prior work, and is the contribution sufficient for the target tier?
 
 The executor owns engineering, equivalence, acceleration, parameters and evaluator repairs. The mentor judges direction, scientific adequacy and time spent. It may retrieve papers/web sources but does not compute, edit or read private author preferences.
 

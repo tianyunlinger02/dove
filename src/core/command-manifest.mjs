@@ -73,16 +73,16 @@ function capabilityContract(options) {
 
 function contract(slug) {
   if (slug === "research") return capabilityContract({
-    ambientParticipation: "Follow the shared topic-selection process until the user chooses a mainline, then advance it through work that can answer the research question.",
+    ambientParticipation: "For topic exploration, follow the shared selection process; for a confirmed mainline or authorized bounded task, advance the current goal through substantive work within scope.",
     purpose: "Help the user choose a research direction or advance the confirmed mainline through substantive method work.",
     when: "Use for topic exploration, method development or continuation of existing research.",
     actions: [
-      "Apply the shared topic-selection process and RESEARCH_QUALITY.md's sourced gaps, cross-domain mechanism search and adversarial candidate review. Use Source for question-led full-text notes and link candidate cards to that evidence.",
-      "After confirmation, diagnose key unknowns, design the core method, experiment, then write the proposal. Scale must answer the question. Use Experiment for comparisons and evaluator repairs; the executor recomputes comparable history when evaluation changes.",
+      "When selecting a direction, apply the shared topic-selection process and RESEARCH_QUALITY.md's sourced gaps, cross-domain mechanism search and adversarial candidate review. Use Source for question-led full-text notes and link candidate cards to that evidence.",
+      "After confirmation, diagnose key unknowns, design the core method, experiment, then write the proposal. Scale must answer the question. Use Experiment to distinguish development diagnostics from formal comparisons and restore required comparability after evaluator repair.",
       `Follow the shared research contract for mainline continuity, round records and ${DOVE_RESEARCH_MENTOR_NAME}'s direction-only judgment, including its triggers, fixed questions and note flow.`
     ],
     boundaries: [
-      "Before the user's mainline choice, do not implement candidate methods; undertake only diagnostics allowed by the topic criteria. Bounded questions stay bounded, and read-only or design-only requests do not authorize execution."
+      "During topic selection before the user's mainline choice, do not implement candidate methods; undertake only diagnostics allowed by the topic criteria. These selection-only limits do not reopen selection for authorized implementation, repair or reproduction. Bounded questions stay bounded, and read-only or design-only requests do not authorize execution."
     ]
   });
   if (slug === "status") return capabilityContract({
@@ -90,7 +90,7 @@ function contract(slug) {
     purpose: "Give a concise, evidence-grounded account of the current research state.",
     when: "Use when the user asks about progress or what remains unresolved.",
     actions: [
-      "Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Answer in four plain sentences covering what we have made, whether the core is demonstrated, what blocks it and which round is underway. Include actual values when useful and leave missing evidence unknown."
+      "Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Give a concise account of what we have made, whether the core is demonstrated, what blocks it and which round is underway, with the evidence needed for the user's judgment. Include actual values when useful and leave missing evidence unknown."
     ],
     boundaries: ["Status is read-only and does not run research or update documents."]
   });
@@ -118,8 +118,9 @@ function contract(slug) {
     when: "Use for authorized development, diagnostics, confirmation, reproduction or analysis of existing results.",
     actions: [
       "Inspect the relevant code, data, configuration, outputs and analysis before interpreting results. When a model cannot learn, test single-example overfitting to diagnose the learning mechanism rather than treating larger data or a larger evaluator as the first remedy. A diagnostic supports only the question it actually tests.",
-      "Use complete-task comparisons against strong same-input alternatives to assess utility, and ablations or controlled comparisons to test attribution. Keep budgets, uncertainty and failure denominators visible, including missing or invalid outputs. Follow the shared experiment contract for method versions, full evaluation, fresh test draws and final heldout confirmation.",
-      "The main executor repairs evaluator errors and recomputes every historical method and baseline under the corrected protocol on comparable data. Reuse retained raw outputs first and rerun historical versions where outputs are missing. Keep earlier protocol results as history rather than mixing them with current comparisons. Protocol repair alone is not a method-version change; ask the user only if the correction changes the goal's meaning."
+      "During development, keep code changes and diagnostic results traceable and choose tests that answer the key unknown, rather than requiring complete evaluation after every edit. Before formal comparison, result adoption or paper claims, evaluate the current method version under the full applicable protocol and all confirmed user metrics. Unmeasured effects remain unknown; a new version does not inherit an earlier version's passing conclusion.",
+      "Use complete-task comparisons against strong same-input alternatives to assess utility, and ablations or controlled comparisons to test attribution. Keep budgets, uncertainty and failure denominators visible, including missing or invalid outputs. Follow the shared experiment contract for method versions, fresh unused test draws for formal comparisons when methods change after test use, and final heldout confirmation.",
+      "The main executor repairs evaluator errors and immediately marks all affected results. Restore comparability for the current claim, necessary historical comparisons and strong baselines under the corrected protocol, reusing retained raw outputs before rerunning needed versions. Results not used in the current judgment may remain clearly labeled old-protocol history until needed; restore their comparability before using them again. Do not require every historical method to rerun first, mix protocols or hide valid negative evidence. Protocol repair alone is not a method-version change; ask the user if the correction changes the goal's meaning."
     ],
     boundaries: [
       "Read-only or design-only requests do not execute. Heldout data used for tuning is no longer independent final evidence."

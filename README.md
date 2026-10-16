@@ -38,12 +38,12 @@ Each fresh author main context personally reads the short Chinese quality and pr
 
 ## Research direction and records
 
-Before mainline choice, read project standards. Find gaps on distinct challenge axes from full-text near misses, then search other subfields for transferable mechanisms. Parallel candidate cards name the gap, source, mapping, assumptions, closest-work difference and risk. Active counter-search yields keep, revise one weakness, or reject with evidence. Offer 2–3 recommendations for the user's choice; before it, only standards-allowed diagnostics, not method implementation. Confirmed mainlines are not reopened on takeover.
+For actual topic selection, read project standards. Ground gaps in full-text near misses and search transferable mechanisms according to key unknowns, not query or field quotas. Candidate cards name the gap, source, mapping, assumptions, closest-work difference and risk. Active counter-search informs the judgment and changes addressing shared causes. Offer the best 2–3 choices, or one without padding; before selection, only standards-allowed diagnostics, not method implementation. These limits do not recast already-authorized bounded work as selection or reopen confirmed mainlines on takeover.
 
 Researcher-owned Markdown under `.dove/research/` keeps current context short:
 
 - **`IDENTITY.md`** holds the mainline, core capability with the user's words, target tier, completion, sourced restrictions and current research state in readable fixed fields.
-- **`EVAL.md`** has one row per method version and seven columns, with numbers and plain-language conclusions linking to details. The executor repairs evaluation and recomputes comparable history. The mentor's current eight-dimensional assessment replaces the previous one below the table.
+- **`EVAL.md`** has one row per method version and seven columns, with numbers and plain-language conclusions linking to details. The executor repairs evaluation and restores comparability for the current claim, necessary history and strong baselines; affected older results retain their protocol labels. The mentor's current eight-dimensional assessment replaces the previous one below the table.
 - **`rounds/`** has one authored brief and one result per round, linking ordinary artifacts. Both use natural Chinese full sentences: the brief explains expected outcomes, and the result compares them with actual measurements and records changes and factual objections.
 - **`MENTOR_NOTES.md`** holds the mentor's own memory; consolidation preserves the latest long-term intent comparison and its date, along with issues already raised and their answers. Dated impacts and scans live in `watch/`; `papers/` keeps cumulative full-text Q&A and a direction-grouped JSON/Markdown library with Chinese takeaways and BibTeX export. The dashboard shows core capability beneath the mainline and the latest long-term intent comparison with its date in a collapsed section.
 
@@ -51,7 +51,7 @@ Existing missions, experiments and claims stay in place without migration or new
 
 ## Mentor and independent paper review
 
-Call the mentor at round end, after two no-science rounds, when the user corrects direction or questions the paper story, before route changes or when requested. Engineering and verification failures count; ask the user before further continuation by the third no-result round. Route changes name the old route, new route and reason.
+Call the mentor at round end, after two no-science rounds, when the user corrects direction or questions the paper story, before route changes or when requested. Engineering and verification failures count for diagnosis, not automatic reauthorization; continue a credible authorized next step and ask the user when goals, fixed methods, completion meaning or resources must change, or no credible path remains. Route changes name the old route, new route and reason.
 
 Use `dove mentor brief --project <root>` as the call body plus its trigger. Its five questions cover direction against the user's words and core capability, general capability versus patches, remaining gaps, next work, and contribution against the closest prior work at the target tier. Executor opinions belong in an attributed file; length or a missing signature does not block the call. Each cross-round judgment uses a fresh context and the mentor's own notes, not resumed execution conversation. Engineering, parameters and evaluator repairs remain the executor's responsibility; the mentor may retrieve sources but does not execute or edit.
 

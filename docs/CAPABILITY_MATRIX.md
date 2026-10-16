@@ -16,7 +16,7 @@ Dove is one research collaborator. Ordinary Claude conversation is the primary e
 | `dove.rebuttal` | Command | Skill | Verify concerns, respond and make requested evidence-backed revisions. |
 | `dove.lessons` | Command | Skill | Read or preserve transferable guidance, not another progress log. |
 
-There is no Auto Skill. Project standards govern contribution types; Dove imposes no method-only gate. Topic selection uses at least two body-read near-miss papers per gap and 6–10 mechanism queries across at least three other subfields. The mentor challenges novelty and returns 留下 / 修改 / 否掉, with one weakest revision focus, evidence and a strongest objection. Parallel generation precedes assessment and 2–3 recommendations for the user's choice; only standards-allowed diagnostics precede selection. See [Usage](USAGE.md#topic-selection-and-original-user-grounding).
+There is no Auto Skill. Project standards govern contribution types. Actual topic selection grounds gaps in body-read near-misses and searches mechanisms according to key unknowns; query and field counts are breadth strategies, not quotas or proof of novelty. The mentor tests novelty and compares changes addressing bottlenecks and shared causes, with evidence and the strongest objection. Parallel generation precedes recommendations for user choice; selection-only limits do not block already-authorized bounded work. See [Usage](USAGE.md#topic-selection-and-original-user-grounding).
 
 ## Host support
 
@@ -36,7 +36,7 @@ Fresh author contexts personally read the two short essentials; full companions 
 
 Researcher-owned records preserve goals, version-level evidence, briefs/results and mentor memory. Q&A is reused; summary-only material names its source and remains 未读全文. Notes/library are not managed software. Default-off `hostMigration` lets updates register software tasks for the host to apply at a quiet point, never stopping jobs or altering conclusions/user wording. See [records](USAGE.md#research-markdown) and [migration](USAGE.md#submission-readiness-and-maintenance).
 
-Call the mentor at round end, after two no-science rounds, on direction/story corrections, before route changes or when requested. Failures count; ask the user before the third no-science round. Use `dove mentor brief --project <root>` unchanged, adding only a capped authored opinion file and raw-artifact paths; repeat calls name their trigger. Engineering remains the executor's responsibility.
+Call the mentor at round end, after two no-science rounds, on direction/story corrections, before route changes or when requested. Engineering failures count toward stagnation diagnosis, not automatic reauthorization: continue a credible next step within scope; ask the user when commitments or resources must change or no credible path remains. Use `dove mentor brief --project <root>` plus the trigger, with attributed opinions and relevant raw-artifact paths as materials. Engineering remains the executor's responsibility.
 
 Cross-round judgment uses a fresh context. The mentor may retrieve sources; the paper reviewer only reads supplied current manuscript materials through Read/Grep/Glob. Neither executes nor edits. Every mentor checks tracking configuration, unjudged impacts and overdue weekly scans, independently of rounds.
 

@@ -64,9 +64,9 @@ Begin `EVAL.md` with a Completion reference to the script, protocol and all user
 
 Cells contain numbers and a short sentence, about 200 characters, so comparisons remain easy to read. Link details and raw outputs; keep engineering status out and predictions in briefs. Formal comparisons retain complete strong same-input baselines and all requirements. Unknown stays unknown; diagnostics do not pretend to be full confirmation.
 
-The executor repairs evaluators and recomputes all comparable history, using raw outputs before reruns. Link superseded protocols separately. Protocol repair is not method-code change; goal changes need the user. Retain old versions as ablations. Changed methods after test use need fresh unused data and same-draw comparisons.
+On evaluator repair, immediately mark affected results and restore comparability for the current claim, necessary historical comparisons and strong baselines, reusing valid raw outputs first. Other results remain clearly labeled old-protocol history until needed; do not mix protocols or hide unfavorable evidence. Goal changes still need the user. Development and formal comparison follow [Component Guidelines](./component-guidelines.md#mainline-and-rounds).
 
-After important results, replace the current mentor assessment below the table with about 1000 characters explaining grades, grounds and unknowns. Do not append score logs or duplicate self-ratings. The weakest decisive dimension informs next work; a decisive dimension judged unknown twice becomes the next round's priority.
+After important results, replace the current mentor assessment below the table with about 1000 characters explaining grades, grounds and unknowns. Do not append score logs or duplicate self-ratings. Use the dimensions to identify bottlenecks, shared causes and key unknowns; choose coordinated work or alternatives by their overall value, evidence and lifecycle cost.
 
 ### Mentor memory and paper tracking
 

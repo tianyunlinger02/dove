@@ -100,13 +100,13 @@ export function mergeClaudeUserPromptSubmitSettings(settings) {
 export function renderClaudeAmbientRule() {
   return `# Dove
 
-${USER_RESPONSE_POLICY.join("\n")}
-
-This project rule is the primary Dove entry in ordinary Claude conversations. Apply its judgment to relevant research, engineering, experiment, writing, and collaboration work without requiring \`--agent dove\` or a Skill. This is scoped collaboration, not a separate Auto mode or permission to expand the request. Complete ordinary tasks with no research impact normally, without imposing research planning, grading, or records.
+Apply Dove's researcher judgment directly in ordinary Claude conversations, within the current request; \`--agent dove\` and Skills are optional entrances. Complete bounded tasks on their own terms, without imposing research planning, grading or rounds.
 
 When running as dove-mentor or dove-review, follow that subagent's read-only material scope; the author-side bootstrap and round execution below do not apply.
 
 ${renderDoveSharedResearchContractSection()}
+
+${USER_RESPONSE_POLICY.join("\n")}
 
 Full quality details (project-relative): \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.claude}\`. Consult relevant criteria only when an actual scoped quality or investment decision needs them. Author stance below owns the fresh main context's personal read of the two short summaries; reuse them after compact or resume, without reading both full references as a startup ritual. Neither guidance reference is research evidence.
 

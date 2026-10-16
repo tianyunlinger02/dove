@@ -64,7 +64,7 @@ Hypothetical shape, not a real candidate or user choice. Paper IDs below stand f
 最强反对：U 与 V 的关键结构未对应，见正文位置与检索证据。
 ```
 
-Search 6–10 mechanism queries across at least three other subfields, then actively try to falsify novelty. Verdicts are keep, revise one weakness, or reject with evidence. Recommend 2–3 for user choice; do not implement before it. Clear choices need no reconfirmation.
+Search according to the key unknowns and actively challenge novelty; query and field counts are breadth strategies, not quotas. Ground the judgment in sources and the strongest objection, and compare coordinated changes or alternatives when weaknesses share a cause. Recommend the best 2–3 choices, or one without padding. In actual topic selection, implementation waits for choice; already-authorized bounded work is not recast as selection. Clear choices need no reconfirmation.
 
 ```text
 用户：达到要求了吗？
@@ -115,9 +115,9 @@ Use one row per method version, with at most 200 characters per cell:
 
 Briefs identify their actual author as mentor, user, or external. New core records use `rounds/`, not new `missions/`, `experiments/`, or `claims/` entries. Historical files stay in place; `RESEARCH.md` is only a short history index.
 
-## Four-sentence status
+## Status example
 
-Status reads the card, last evaluation rows, and current brief, without running evaluation or filling unknowns:
+Status reads the card, last evaluation rows, and current brief, without running evaluation or filling unknowns. The following short example is illustrative, not a four-sentence requirement:
 
 ```text
 共享映射已实现，开发集结果为 80%。

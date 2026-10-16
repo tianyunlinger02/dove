@@ -12,9 +12,10 @@ function bullets(items) {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
-// Claude's project rule owns this body once; DSH carries it in each standalone Skill.
+// The canonical bullets lead with researcher stance and include it once.
+// Claude's project rule owns this body; DSH carries it in each standalone Skill.
 export function renderDoveSharedResearchContractSection() {
-  return `## Shared researcher judgment
+  return `## Researcher stance and shared judgment
 
 ${DOVE_RESEARCH_ONE_AGENT} ${DOVE_RESEARCH_FLAT_SKILL_SENTENCE}
 

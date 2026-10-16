@@ -17,6 +17,7 @@ import {
   DOVE_RESEARCH_ACTION_SPINE,
   DOVE_RESEARCH_CLARIFICATION,
   DOVE_RESEARCH_CORRECTION_RECORDING,
+  DOVE_RESEARCH_CROSS_DOMAIN_INTUITION,
   DOVE_RESEARCH_DECISION_CONSEQUENCE,
   DOVE_RESEARCH_EVALUATION,
   DOVE_RESEARCH_EXPERIMENT_ITERATION,
@@ -25,6 +26,7 @@ import {
   DOVE_RESEARCH_REVIEW_DUAL_COMPLETION,
   DOVE_RESEARCH_ROUND_CYCLE,
   DOVE_RESEARCH_ROUND_RECORDS,
+  DOVE_RESEARCH_STANCE_BULLETS,
   renderDoveResearchQualityReference,
   renderDoveResearchQualityFullReference
 } from "../../src/core/dove-research-contract.mjs";
@@ -81,7 +83,7 @@ test("ordinary Claude and standalone DSH carry one applicable shared and author 
   assert.ok(rule.includes(participation));
   assert.ok(author.includes(DOVE_RESEARCH_CORRECTION_RECORDING));
   assert.match(author, /main session owns.*user conversation.*author execution/iu);
-  for (const contract of [DOVE_RESEARCH_MAINLINE_ANCHORING, DOVE_RESEARCH_ACTION_SPINE, DOVE_RESEARCH_DECISION_CONSEQUENCE, DOVE_RESEARCH_ROUND_CYCLE, DOVE_RESEARCH_ROUND_RECORDS, DOVE_RESEARCH_EVALUATION, DOVE_RESEARCH_CLARIFICATION, DOVE_RESEARCH_EXPERIMENT_ITERATION, DOVE_RESEARCH_REVIEW_DUAL_COMPLETION]) {
+  for (const contract of [DOVE_RESEARCH_MAINLINE_ANCHORING, DOVE_RESEARCH_ACTION_SPINE, DOVE_RESEARCH_DECISION_CONSEQUENCE, DOVE_RESEARCH_CROSS_DOMAIN_INTUITION, DOVE_RESEARCH_ROUND_CYCLE, DOVE_RESEARCH_ROUND_RECORDS, DOVE_RESEARCH_EVALUATION, DOVE_RESEARCH_CLARIFICATION, DOVE_RESEARCH_EXPERIMENT_ITERATION, DOVE_RESEARCH_REVIEW_DUAL_COMPLETION]) {
     assert.equal(shared.split(contract).length - 1, 1, "Each shared owner reaches the host contract once");
   }
   for (const command of COMMAND_SURFACES) assert.ok(participation.includes(command.contract.ambientParticipation));
@@ -110,6 +112,11 @@ test("quality and preference summaries and full references remain shared install
   ]);
   const quality = renderDoveResearchQualityReference();
   const fullQuality = renderDoveResearchQualityFullReference();
+  for (const stance of DOVE_RESEARCH_STANCE_BULLETS) {
+    for (const surface of [renderDoveSharedResearchContractSection(), quality, fullQuality]) {
+      assert.equal(surface.split(stance).length - 1, 1, "The canonical stance reaches shared and quality consumers once");
+    }
+  }
   assert.ok(quality.includes("RESEARCH_QUALITY_FULL.md"), "The short reference points to its full criteria");
   assert.ok(renderDoveAuthorPreferencesReference().includes("AUTHOR_PREFERENCES_FULL.md"));
   assert.deepEqual(DOVE_RESEARCH_QUALITY_CRITERIA.map((criterion) => criterion.split(" — ")[0]), [

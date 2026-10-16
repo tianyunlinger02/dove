@@ -29,12 +29,12 @@ Use for topic exploration, method development or continuation of existing resear
 
 ### Scope and changes
 
-- Before the user's mainline choice, do not implement candidate methods; undertake only diagnostics allowed by the topic criteria. Bounded questions stay bounded, and read-only or design-only requests do not authorize execution.
+- During topic selection before the user's mainline choice, do not implement candidate methods; undertake only diagnostics allowed by the topic criteria. These selection-only limits do not reopen selection for authorized implementation, repair or reproduction. Bounded questions stay bounded, and read-only or design-only requests do not authorize execution.
 
 ### Ways Dove may proceed
 
-- Apply the shared topic-selection process and RESEARCH_QUALITY.md's sourced gaps, cross-domain mechanism search and adversarial candidate review. Use Source for question-led full-text notes and link candidate cards to that evidence.
-- After confirmation, diagnose key unknowns, design the core method, experiment, then write the proposal. Scale must answer the question. Use Experiment for comparisons and evaluator repairs; the executor recomputes comparable history when evaluation changes.
+- When selecting a direction, apply the shared topic-selection process and RESEARCH_QUALITY.md's sourced gaps, cross-domain mechanism search and adversarial candidate review. Use Source for question-led full-text notes and link candidate cards to that evidence.
+- After confirmation, diagnose key unknowns, design the core method, experiment, then write the proposal. Scale must answer the question. Use Experiment to distinguish development diagnostics from formal comparisons and restore required comparability after evaluator repair.
 - Follow the shared research contract for mainline continuity, round records and dove-mentor's direction-only judgment, including its triggers, fixed questions and note flow.
 
 ### Using host tools

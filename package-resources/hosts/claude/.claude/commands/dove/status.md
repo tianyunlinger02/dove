@@ -33,7 +33,7 @@ Use when the user asks about progress or what remains unresolved.
 
 ### Ways Dove may proceed
 
-- Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Answer in four plain sentences covering what we have made, whether the core is demonstrated, what blocks it and which round is underway. Include actual values when useful and leave missing evidence unknown.
+- Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Give a concise account of what we have made, whether the core is demonstrated, what blocks it and which round is underway, with the evidence needed for the user's judgment. Include actual values when useful and leave missing evidence unknown.
 
 ### Using host tools
 
