@@ -127,6 +127,15 @@ test("project data keeps the latest intent after long notes and reads without mu
   assert.equal(readProjectDocument(root, "MENTOR_NOTES.md"), null, "notes are not exposed as arbitrary documents");
 });
 
+test("core capability is read with English or Chinese explanatory labels", () => {
+  for (const label of ["Core capability", "Core capability（核心能力）", "Core capability (核心能力)", "核心能力"]) {
+    const identity = `${label}: 学会通用能力而不是逐例修补\n`;
+    const root = fixtureProject({ ".dove/research/IDENTITY.md": identity });
+    assert.equal(summarizeProject(root).coreCapability, "学会通用能力而不是逐例修补", label);
+    assert.equal(fs.readFileSync(path.join(root, ".dove/research/IDENTITY.md"), "utf8"), identity);
+  }
+});
+
 test("project view renders capability and collapsed intent, preserves toggle state and escapes text", () => {
   const root = "/memory/project";
   const project = {

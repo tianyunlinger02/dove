@@ -17817,7 +17817,7 @@ function summarizeProject(root, options2 = {}) {
     name: path13.basename(root),
     exists,
     mainline: fields.Mainline ?? fields["\u4E3B\u7EBF"] ?? null,
-    coreCapability: fields["Core capability"] ?? fields["Core capability\uFF08\u6838\u5FC3\u80FD\u529B\uFF09"] ?? fields["\u6838\u5FC3\u80FD\u529B"] ?? null,
+    coreCapability: fields["Core capability"] ?? fields["Core capability\uFF08\u6838\u5FC3\u80FD\u529B\uFF09"] ?? fields["Core capability (\u6838\u5FC3\u80FD\u529B)"] ?? fields["\u6838\u5FC3\u80FD\u529B"] ?? null,
     longTermIntent: intent ? { ...intent, due: longTermIntentDue(intent, options2.now) } : null,
     currentRound: current?.brief ?? null,
     currentSummary: rounds.find((round) => current?.brief?.includes(round.label))?.brief?.summary ?? null,

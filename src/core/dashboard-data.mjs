@@ -191,7 +191,7 @@ export function summarizeProject(root, options = {}) {
     name: path.basename(root),
     exists,
     mainline: fields.Mainline ?? fields["主线"] ?? null,
-    coreCapability: fields["Core capability"] ?? fields["Core capability（核心能力）"] ?? fields["核心能力"] ?? null,
+    coreCapability: fields["Core capability"] ?? fields["Core capability（核心能力）"] ?? fields["Core capability (核心能力)"] ?? fields["核心能力"] ?? null,
     longTermIntent: intent ? { ...intent, due: longTermIntentDue(intent, options.now) } : null,
     currentRound: current?.brief ?? null,
     currentSummary: rounds.find((round) => current?.brief?.includes(round.label))?.brief?.summary ?? null,
