@@ -14,6 +14,7 @@ import { runWatch } from "../src/core/paper-watch.mjs";
 import { startTopicSelection } from "../src/core/topic-selection.mjs";
 import { readHostSettings, writeHostSettings } from "../src/core/host-migration.mjs";
 import { renderMentorBrief } from "../src/core/mentor-brief.mjs";
+import { refreshUserOriginals } from "../src/core/user-originals.mjs";
 import { renderDoveDoctor } from "../src/cli/doctor-output.mjs";
 import { renderDoveHelp } from "../src/cli/help-output.mjs";
 import { runInteractiveDoveSetup } from "../src/cli/interactive-setup.mjs";
@@ -409,7 +410,10 @@ try {
 
   if (command === "mentor") {
     const root = path.resolve(options.project ?? process.cwd());
-    const brief = renderMentorBrief(root, options);
+    let userOriginals = null;
+    // Gather the user's own words for the mentor; a call still works if sessions are unreadable.
+    try { userOriginals = refreshUserOriginals(root); } catch { userOriginals = null; }
+    const brief = renderMentorBrief(root, { ...options, userOriginals });
     if (wantsJson(options)) writeJson({ brief });
     else console.log(brief);
     process.exit(0);

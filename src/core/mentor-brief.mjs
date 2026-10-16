@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 const RESEARCH = ".dove/research";
@@ -185,7 +184,10 @@ export function renderMentorBrief(root, options = {}) {
     quote(`来源：${options.userSource || "未提供"}\n日期范围：${options.since || "未提供起点"} — ${options.until || "未提供终点"}`), "",
     options.userOriginal ? quote(options.userOriginal) : "未直接附原话。",
     "由导师读取指定来源；生成器不读取私有 session。",
-    ...(describe(project, `${RESEARCH}/MENTOR_NOTES.md`, fsOps).includes("缺失") ? ["导师笔记还不存在：先读本项目全部历史会话里用户说过的目标（会话目录见下），在笔记写“长期意图”。", `- 会话目录：\`${path.join(os.homedir(), ".claude/projects", project.replace(/[^A-Za-z0-9]/gu, "-"))}\``] : []), "",
+    ...(options.userOriginals
+      ? [`- 本人原话汇总（自动整理，转述已单独标出）：\`${options.userOriginals.path}\`，本人 ${options.userOriginals.own} 条、转述 ${options.userOriginals.relay} 条，覆盖 ${options.userOriginals.directories.length} 个会话目录。先读它把握长期意图，需要上下文再按会话路径查原文。`]
+      : []),
+    ...(describe(project, `${RESEARCH}/MENTOR_NOTES.md`, fsOps).includes("缺失") ? ["导师笔记还不存在：先读用户在本项目全部历史里说过的目标，在笔记写“长期意图”。"] : []), "",
     "## 项目材料", "",
     ...[".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`]
       .map((file) => `- ${describe(project, file, fsOps)}`), "",

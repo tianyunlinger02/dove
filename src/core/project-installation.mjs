@@ -4,6 +4,7 @@ import path from "node:path";
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
 import { PROJECT_HOST_IDS, normalizeHostSelection } from "./host-registry.mjs";
 import { HOST_MIGRATION_PENDING_PATH, HOST_MIGRATION_REGISTERED_PATH, prepareHostMigration } from "./host-migration.mjs";
+import { USER_ORIGINALS_INDEX_PATH, USER_ORIGINALS_PATH } from "./user-originals.mjs";
 import {
   INSTALLATION_MANIFEST_PATH,
   readProjectInstallationManifest
@@ -257,7 +258,7 @@ function prepareUninstall(start, options = {}) {
     if (planned.entry) entries.push(planned.entry);
   }
   // Migration notices are Dove-owned install files outside the manifest; leave none behind.
-  for (const relativePath of [HOST_MIGRATION_PENDING_PATH, HOST_MIGRATION_REGISTERED_PATH]) {
+  for (const relativePath of [HOST_MIGRATION_PENDING_PATH, HOST_MIGRATION_REGISTERED_PATH, USER_ORIGINALS_PATH, USER_ORIGINALS_INDEX_PATH]) {
     const observed = inspectRegularProjectFile(root, relativePath, fsOps);
     if (observed.exists) entries.push(transactionDelete(root, { path: relativePath }, observed));
   }
