@@ -14179,7 +14179,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.8" : null;
+var injectedVersion = true ? "3.4.9" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -16679,7 +16679,9 @@ var SKIP = /^(?:<|\[Image|\[Your previous response|\[Request interrupted|This se
 var RELAY = /^(?:主会话 ?Claude|Claude[:：，,]|用户已同意|【用户已同意|告知[:：]|更正上一条|转达|用户 ?\d{4}-\d{2}-\d{2} ?决定|用户原话（|请先完整阅读)/u;
 var SHORT = 6;
 var LIMIT = 700;
-var CHUNK = 1 << 20;
+var CHUNK = 8 << 20;
+var MAX_LINE = 256 << 10;
+var BUDGET_MS = 2e4;
 var encode = (value2) => value2.replace(/[^A-Za-z0-9]/gu, "-");
 function sessionDirectories(project, options2 = {}) {
   const fsOps = options2.fsOps ?? fs8;
@@ -16706,55 +16708,69 @@ function classifyUserText(text) {
   if (!trimmed || SKIP.test(trimmed)) return null;
   return RELAY.test(trimmed) ? "relay" : "own";
 }
-function readNewLines(file, start, fsOps) {
+function scanNewLines(file, start, fsOps, onLine, deadline) {
   const fd = fsOps.openSync(file, "r");
-  const lines = [];
   let position = start;
-  let carry = Buffer.alloc(0);
+  let consumed = start;
+  let carry = [];
+  let carried = 0;
+  let skipping = false;
   try {
     const chunk = Buffer.alloc(CHUNK);
-    for (; ; ) {
+    while (Date.now() < deadline) {
       const count = fsOps.readSync(fd, chunk, 0, CHUNK, position);
       if (!count) break;
+      const base = position;
       position += count;
-      const combined = Buffer.concat([carry, chunk.subarray(0, count)]);
-      const end = combined.lastIndexOf(10);
-      if (end === -1) {
-        carry = combined;
-        continue;
+      let from = 0;
+      for (; ; ) {
+        const newline = chunk.indexOf(10, from);
+        if (newline === -1 || newline >= count) {
+          if (!skipping) {
+            carry.push(Buffer.from(chunk.subarray(from, count)));
+            carried += count - from;
+            if (carried > MAX_LINE) {
+              carry = [];
+              carried = 0;
+              skipping = true;
+            }
+          }
+          break;
+        }
+        if (!skipping && carried + newline - from <= MAX_LINE) {
+          const line = carried ? Buffer.concat([...carry, chunk.subarray(from, newline)]) : chunk.subarray(from, newline);
+          onLine(line.toString("utf8"));
+        }
+        carry = [];
+        carried = 0;
+        skipping = false;
+        from = newline + 1;
+        consumed = base + from;
       }
-      lines.push(...combined.subarray(0, end).toString("utf8").split("\n"));
-      carry = combined.subarray(end + 1);
     }
   } finally {
     fsOps.closeSync(fd);
   }
-  return { lines, offset: position - carry.length };
+  return consumed;
 }
-function extract(lines, session) {
-  const entries = [];
-  let short = 0;
-  for (const line of lines) {
-    if (!line.includes('"user"')) continue;
-    let record;
-    try {
-      record = JSON.parse(line);
-    } catch {
+function collect(line, session, found) {
+  if (!line.includes('"user"') || line.includes('"tool_use_id"')) return;
+  let record;
+  try {
+    record = JSON.parse(line);
+  } catch {
+    return;
+  }
+  for (const text of messageTexts(record)) {
+    const kind = classifyUserText(text);
+    if (!kind) continue;
+    const characters = Array.from(text.replace(/\s+/gu, " ").trim());
+    if (characters.length <= SHORT) {
+      found.short += 1;
       continue;
     }
-    for (const text of messageTexts(record)) {
-      const kind = classifyUserText(text);
-      if (!kind) continue;
-      const flat = text.replace(/\s+/gu, " ").trim();
-      if (Array.from(flat).length <= SHORT) {
-        short += 1;
-        continue;
-      }
-      const characters = Array.from(flat);
-      entries.push({ time: String(record.timestamp ?? "").slice(0, 16), session, kind, text: characters.length > LIMIT ? `${characters.slice(0, LIMIT).join("")}\u2026` : flat });
-    }
+    found.entries.push({ time: String(record.timestamp ?? "").slice(0, 16), session, kind, text: characters.length > LIMIT ? `${characters.slice(0, LIMIT).join("")}\u2026` : characters.join("") });
   }
-  return { entries, short };
 }
 function readIndex(file, fsOps) {
   try {
@@ -16770,7 +16786,7 @@ function writeAtomic(file, content, fsOps) {
   fsOps.writeFileSync(temporary, content);
   fsOps.renameSync(temporary, file);
 }
-function render(directories, entries, short) {
+function render(directories, entries, short, pending) {
   const own = entries.filter((entry) => entry.kind === "own").length;
   const lines = [
     "# \u7528\u6237\u672C\u4EBA\u539F\u8BDD\u6C47\u603B",
@@ -16779,6 +16795,7 @@ function render(directories, entries, short) {
     "",
     `\u4F1A\u8BDD\u76EE\u5F55\uFF1A${directories.map((directory) => `\`${directory}\``).join("\u3001") || "\u672A\u627E\u5230"}`,
     `\u672C\u4EBA ${own} \u6761\uFF0C\u8F6C\u8FF0 ${entries.length - own} \u6761\uFF0C\u77ED\u6D88\u606F ${short} \u6761\u3002\u6309\u65F6\u95F4\u6392\u5217\u3002`,
+    ...pending ? [`\u4F1A\u8BDD\u8BB0\u5F55\u8F83\u5927\uFF0C\u8FD8\u6709\u7EA6 ${Math.ceil(pending / (1 << 20))} MB \u672A\u6574\u7406\uFF0C\u4E0B\u6B21\u751F\u6210\u5BFC\u5E08\u8C03\u7528\u6750\u6599\u65F6\u7EE7\u7EED\uFF1B\u76EE\u524D\u7684\u6C47\u603B\u53EF\u80FD\u7F3A\u5C11\u90E8\u5206\u65F6\u6BB5\u3002`] : [],
     ""
   ];
   for (const entry of entries) lines.push(`- ${entry.time.replace("T", " ")} \xB7 ${entry.kind === "own" ? "\u672C\u4EBA" : "\u8F6C\u8FF0"} \xB7 ${entry.text}`);
@@ -16792,6 +16809,8 @@ function refreshUserOriginals(project, options2 = {}) {
   const indexFile = path9.join(root, USER_ORIGINALS_INDEX_PATH);
   const previous = readIndex(indexFile, fsOps);
   const files = {};
+  const deadline = Date.now() + (options2.budgetMs ?? BUDGET_MS);
+  let pending = 0;
   for (const directory of directories) {
     let names = [];
     try {
@@ -16813,17 +16832,18 @@ function refreshUserOriginals(project, options2 = {}) {
         files[file] = resume;
         continue;
       }
-      const { lines, offset } = readNewLines(file, resume.offset, fsOps);
-      const found = extract(lines, name.slice(0, 8));
+      const found = { entries: [], short: 0 };
+      const offset = Date.now() < deadline ? scanNewLines(file, resume.offset, fsOps, (line) => collect(line, name.slice(0, 8), found), deadline) : resume.offset;
       files[file] = { offset, entries: [...resume.entries, ...found.entries], short: resume.short + found.short };
+      if (offset < size) pending += size - offset;
     }
   }
   const entries = Object.values(files).flatMap((item) => item.entries).sort((left, right) => left.time.localeCompare(right.time));
   const short = Object.values(files).reduce((sum, item) => sum + item.short, 0);
   writeAtomic(indexFile, `${JSON.stringify({ files })}
 `, fsOps);
-  writeAtomic(path9.join(root, USER_ORIGINALS_PATH), render(directories, entries, short), fsOps);
-  return { path: USER_ORIGINALS_PATH, directories, own: entries.filter((entry) => entry.kind === "own").length, relay: entries.filter((entry) => entry.kind === "relay").length };
+  writeAtomic(path9.join(root, USER_ORIGINALS_PATH), render(directories, entries, short, pending), fsOps);
+  return { path: USER_ORIGINALS_PATH, directories, own: entries.filter((entry) => entry.kind === "own").length, relay: entries.filter((entry) => entry.kind === "relay").length, pendingBytes: pending };
 }
 
 // src/core/project-root.mjs
@@ -18978,7 +18998,7 @@ function sendJson(response, status, value2) {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   response.end(JSON.stringify(value2));
 }
-function createDashboardServer({ collect, listRoots, readDocument, password = null, actions = null }) {
+function createDashboardServer({ collect: collect2, listRoots, readDocument, password = null, actions = null }) {
   let currentPassword = password || null;
   const session = () => currentPassword ? sessionValue(currentPassword) : null;
   const signedIn = (request) => !currentPassword || sameSecret(readCookie(request, SESSION_COOKIE) ?? "", session());
@@ -19057,7 +19077,7 @@ function createDashboardServer({ collect, listRoots, readDocument, password = nu
     }
     try {
       if (url.pathname === "/api/dashboard") {
-        sendJson(response, 200, collect());
+        sendJson(response, 200, collect2());
         return;
       }
       if (url.pathname === "/api/settings" && actions) {
@@ -19119,8 +19139,8 @@ function createDashboardServer({ collect, listRoots, readDocument, password = nu
     response.writeHead(404).end();
   });
 }
-function startDashboardServer({ collect, listRoots, readDocument, password = null, actions = null, bind = DEFAULT_DASHBOARD_BIND, port = DEFAULT_DASHBOARD_PORT }) {
-  const server = createDashboardServer({ collect, listRoots, readDocument, password, actions });
+function startDashboardServer({ collect: collect2, listRoots, readDocument, password = null, actions = null, bind = DEFAULT_DASHBOARD_BIND, port = DEFAULT_DASHBOARD_PORT }) {
+  const server = createDashboardServer({ collect: collect2, listRoots, readDocument, password, actions });
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, bind, () => {
@@ -20039,7 +20059,7 @@ function renderMentorBrief(root, options2 = {}) {
     "",
     options2.userOriginal ? quote(options2.userOriginal) : "\u672A\u76F4\u63A5\u9644\u539F\u8BDD\u3002",
     "\u7531\u5BFC\u5E08\u8BFB\u53D6\u6307\u5B9A\u6765\u6E90\uFF1B\u751F\u6210\u5668\u4E0D\u8BFB\u53D6\u79C1\u6709 session\u3002",
-    ...options2.userOriginals ? [`- \u672C\u4EBA\u539F\u8BDD\u6C47\u603B\uFF08\u81EA\u52A8\u6574\u7406\uFF0C\u8F6C\u8FF0\u5DF2\u5355\u72EC\u6807\u51FA\uFF09\uFF1A\`${options2.userOriginals.path}\`\uFF0C\u672C\u4EBA ${options2.userOriginals.own} \u6761\u3001\u8F6C\u8FF0 ${options2.userOriginals.relay} \u6761\uFF0C\u8986\u76D6 ${options2.userOriginals.directories.length} \u4E2A\u4F1A\u8BDD\u76EE\u5F55\u3002\u5148\u8BFB\u5B83\u628A\u63E1\u957F\u671F\u610F\u56FE\uFF0C\u9700\u8981\u4E0A\u4E0B\u6587\u518D\u6309\u4F1A\u8BDD\u8DEF\u5F84\u67E5\u539F\u6587\u3002`] : [],
+    ...options2.userOriginals ? [`- \u672C\u4EBA\u539F\u8BDD\u6C47\u603B\uFF08\u81EA\u52A8\u6574\u7406\uFF0C\u8F6C\u8FF0\u5DF2\u5355\u72EC\u6807\u51FA\uFF09\uFF1A\`${options2.userOriginals.path}\`\uFF0C\u672C\u4EBA ${options2.userOriginals.own} \u6761\u3001\u8F6C\u8FF0 ${options2.userOriginals.relay} \u6761\uFF0C\u8986\u76D6 ${options2.userOriginals.directories.length} \u4E2A\u4F1A\u8BDD\u76EE\u5F55${options2.userOriginals.pendingBytes ? "\uFF08\u8F83\u5927\uFF0C\u5C1A\u672A\u6574\u7406\u5B8C\uFF0C\u4E0B\u6B21\u7EE7\u7EED\uFF09" : ""}\u3002\u5148\u8BFB\u5B83\u628A\u63E1\u957F\u671F\u610F\u56FE\uFF0C\u9700\u8981\u4E0A\u4E0B\u6587\u518D\u6309\u4F1A\u8BDD\u8DEF\u5F84\u67E5\u539F\u6587\u3002`] : [],
     ...describe2(project, `${RESEARCH}/MENTOR_NOTES.md`, fsOps).includes("\u7F3A\u5931") ? ["\u5BFC\u5E08\u7B14\u8BB0\u8FD8\u4E0D\u5B58\u5728\uFF1A\u5148\u8BFB\u7528\u6237\u5728\u672C\u9879\u76EE\u5168\u90E8\u5386\u53F2\u91CC\u8BF4\u8FC7\u7684\u76EE\u6807\uFF0C\u5728\u7B14\u8BB0\u5199\u201C\u957F\u671F\u610F\u56FE\u201D\u3002"] : [],
     "",
     "## \u9879\u76EE\u6750\u6599",
@@ -22851,9 +22871,9 @@ try {
     process7.exit(0);
   }
   if (command2 === "dashboard") {
-    const collect = () => collectDashboard({ ...PACKAGE_OPTIONS, packageVersion: PACKAGE_VERSION });
+    const collect2 = () => collectDashboard({ ...PACKAGE_OPTIONS, packageVersion: PACKAGE_VERSION });
     if (wantsJson(options)) {
-      process7.stdout.write(`${JSON.stringify(collect(), null, 2)}
+      process7.stdout.write(`${JSON.stringify(collect2(), null, 2)}
 `, () => process7.exit(0));
       await new Promise(() => {
       });
@@ -22868,7 +22888,7 @@ try {
       if (!password) throw new Error(`\u5BC6\u7801\u6587\u4EF6\u4E3A\u7A7A\uFF1A${options.passwordFile}`);
     }
     const actions = createDashboardActions({ packageOptions: PACKAGE_OPTIONS, passwordFile });
-    await startDashboardServer({ collect, listRoots: () => readRegisteredProjects(PACKAGE_OPTIONS), readDocument: readProjectDocument, password, actions, bind, port });
+    await startDashboardServer({ collect: collect2, listRoots: () => readRegisteredProjects(PACKAGE_OPTIONS), readDocument: readProjectDocument, password, actions, bind, port });
     actions.startScheduler();
     console.log(`Dove \u79D1\u7814\u9762\u677F\uFF08${password ? "\u9700\u5BC6\u7801\u767B\u5F55" : "\u65E0\u5BC6\u7801\uFF0C\u53EA\u5E94\u5728\u672C\u673A\u6216 SSH \u96A7\u9053\u91CC\u6253\u5F00"}\uFF09\uFF1Ahttp://${bind}:${port}/   Ctrl+C \u9000\u51FA`);
     console.log("\u8BBA\u6587\u8FFD\u8E2A\u4F1A\u5728\u9762\u677F\u8FD0\u884C\u671F\u95F4\u6309\u8BBE\u7F6E\u6BCF\u5929\u81EA\u52A8\u6267\u884C\u4E00\u6B21\u3002");

@@ -40,3 +40,20 @@ test("the user's own words are gathered from current and legacy sessions, with r
   const second = refreshUserOriginals(project, { home });
   assert.equal(second.own, 3, "appended messages are read incrementally without losing earlier ones");
 });
+
+test("huge tool and image lines are skipped and a time budget defers the rest to the next call", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "dove-originals-home-"));
+  const project = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "dove-originals-")), "big-study");
+  fs.mkdirSync(project);
+  const directory = path.join(home, ".claude/projects", project.replace(/[^A-Za-z0-9]/gu, "-"));
+  fs.mkdirSync(directory, { recursive: true });
+  const image = JSON.stringify({ type: "user", timestamp: "2026-10-01T00:00:00Z", message: { role: "user", content: [{ type: "text", text: "x".repeat(600 << 10) }] } });
+  fs.writeFileSync(path.join(directory, "dddddddd-1.jsonl"), `${image}\n${user("2026-10-02T00:00:00Z", "我问的就是自主完整生成整件衣服")}\n`);
+  const deferred = refreshUserOriginals(project, { home, budgetMs: 0 });
+  assert.equal(deferred.own, 0);
+  assert.ok(deferred.pendingBytes > 0);
+  assert.match(fs.readFileSync(path.join(project, USER_ORIGINALS_PATH), "utf8"), /未整理/u);
+  const done = refreshUserOriginals(project, { home });
+  assert.deepEqual([done.own, done.pendingBytes], [1, 0]);
+  assert.doesNotMatch(fs.readFileSync(path.join(project, USER_ORIGINALS_PATH), "utf8"), /xxxx/u);
+});

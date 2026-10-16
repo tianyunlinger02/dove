@@ -185,7 +185,7 @@ export function renderMentorBrief(root, options = {}) {
     options.userOriginal ? quote(options.userOriginal) : "未直接附原话。",
     "由导师读取指定来源；生成器不读取私有 session。",
     ...(options.userOriginals
-      ? [`- 本人原话汇总（自动整理，转述已单独标出）：\`${options.userOriginals.path}\`，本人 ${options.userOriginals.own} 条、转述 ${options.userOriginals.relay} 条，覆盖 ${options.userOriginals.directories.length} 个会话目录。先读它把握长期意图，需要上下文再按会话路径查原文。`]
+      ? [`- 本人原话汇总（自动整理，转述已单独标出）：\`${options.userOriginals.path}\`，本人 ${options.userOriginals.own} 条、转述 ${options.userOriginals.relay} 条，覆盖 ${options.userOriginals.directories.length} 个会话目录${options.userOriginals.pendingBytes ? "（较大，尚未整理完，下次继续）" : ""}。先读它把握长期意图，需要上下文再按会话路径查原文。`]
       : []),
     ...(describe(project, `${RESEARCH}/MENTOR_NOTES.md`, fsOps).includes("缺失") ? ["导师笔记还不存在：先读用户在本项目全部历史里说过的目标，在笔记写“长期意图”。"] : []), "",
     "## 项目材料", "",

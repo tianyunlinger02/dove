@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.8" : null;
+var injectedVersion = true ? "3.4.9" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -3158,7 +3158,7 @@ function renderMentorBrief(root, options = {}) {
     "",
     options.userOriginal ? quote(options.userOriginal) : "\u672A\u76F4\u63A5\u9644\u539F\u8BDD\u3002",
     "\u7531\u5BFC\u5E08\u8BFB\u53D6\u6307\u5B9A\u6765\u6E90\uFF1B\u751F\u6210\u5668\u4E0D\u8BFB\u53D6\u79C1\u6709 session\u3002",
-    ...options.userOriginals ? [`- \u672C\u4EBA\u539F\u8BDD\u6C47\u603B\uFF08\u81EA\u52A8\u6574\u7406\uFF0C\u8F6C\u8FF0\u5DF2\u5355\u72EC\u6807\u51FA\uFF09\uFF1A\`${options.userOriginals.path}\`\uFF0C\u672C\u4EBA ${options.userOriginals.own} \u6761\u3001\u8F6C\u8FF0 ${options.userOriginals.relay} \u6761\uFF0C\u8986\u76D6 ${options.userOriginals.directories.length} \u4E2A\u4F1A\u8BDD\u76EE\u5F55\u3002\u5148\u8BFB\u5B83\u628A\u63E1\u957F\u671F\u610F\u56FE\uFF0C\u9700\u8981\u4E0A\u4E0B\u6587\u518D\u6309\u4F1A\u8BDD\u8DEF\u5F84\u67E5\u539F\u6587\u3002`] : [],
+    ...options.userOriginals ? [`- \u672C\u4EBA\u539F\u8BDD\u6C47\u603B\uFF08\u81EA\u52A8\u6574\u7406\uFF0C\u8F6C\u8FF0\u5DF2\u5355\u72EC\u6807\u51FA\uFF09\uFF1A\`${options.userOriginals.path}\`\uFF0C\u672C\u4EBA ${options.userOriginals.own} \u6761\u3001\u8F6C\u8FF0 ${options.userOriginals.relay} \u6761\uFF0C\u8986\u76D6 ${options.userOriginals.directories.length} \u4E2A\u4F1A\u8BDD\u76EE\u5F55${options.userOriginals.pendingBytes ? "\uFF08\u8F83\u5927\uFF0C\u5C1A\u672A\u6574\u7406\u5B8C\uFF0C\u4E0B\u6B21\u7EE7\u7EED\uFF09" : ""}\u3002\u5148\u8BFB\u5B83\u628A\u63E1\u957F\u671F\u610F\u56FE\uFF0C\u9700\u8981\u4E0A\u4E0B\u6587\u518D\u6309\u4F1A\u8BDD\u8DEF\u5F84\u67E5\u539F\u6587\u3002`] : [],
     ...describe(project, `${RESEARCH}/MENTOR_NOTES.md`, fsOps).includes("\u7F3A\u5931") ? ["\u5BFC\u5E08\u7B14\u8BB0\u8FD8\u4E0D\u5B58\u5728\uFF1A\u5148\u8BFB\u7528\u6237\u5728\u672C\u9879\u76EE\u5168\u90E8\u5386\u53F2\u91CC\u8BF4\u8FC7\u7684\u76EE\u6807\uFF0C\u5728\u7B14\u8BB0\u5199\u201C\u957F\u671F\u610F\u56FE\u201D\u3002"] : [],
     "",
     "## \u9879\u76EE\u6750\u6599",
@@ -3206,7 +3206,8 @@ import os2 from "node:os";
 import path12 from "node:path";
 var USER_ORIGINALS_PATH = ".dove/install/USER_ORIGINALS.md";
 var USER_ORIGINALS_INDEX_PATH = ".dove/install/user-originals-index.json";
-var CHUNK = 1 << 20;
+var CHUNK = 8 << 20;
+var MAX_LINE = 256 << 10;
 
 // src/core/project-root.mjs
 import fs14 from "node:fs";
