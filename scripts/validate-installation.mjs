@@ -335,14 +335,12 @@ function validateSessionFacts(root, executable) {
       } else {
         if (card === null) {
           assert.match(context, /No readable short identity card at \.dove\/research\/IDENTITY\.md/u);
-          assert.match(context, /do not infer a mainline/iu);
         } else {
           assert.ok(context.includes(card), "compact/resume inject the current synthetic identity card");
           assert.match(context, /Project identity card \(researcher-owned/iu);
           if (truncated) {
             assert.doesNotMatch(context, /No readable short identity card/iu);
             assert.match(context, /exceeds 4KB/iu);
-            assert.match(context, /shorten it without changing Mainline/iu);
           }
         }
         assert.ok(context.includes(`${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n`));

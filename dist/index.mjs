@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.4" : null;
+var injectedVersion = true ? "3.4.5" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -1097,14 +1097,11 @@ function prepareHostMigration(project, options = {}) {
   const version = options.packageVersion ?? PACKAGE_VERSION;
   if (!HOST_MIGRATION_TASK || version !== PACKAGE_VERSION || !readHostSettings(options).hostMigration) return [];
   const registered = migrationFile(project, HOST_MIGRATION_REGISTERED_PATH, options);
-  if (registered && JSON.parse(registered).version === version) return [];
-  const pending = migrationFile(project, HOST_MIGRATION_PENDING_PATH, options);
-  const content = renderHostMigrationPending(version, options.now);
+  const prior = registered ? JSON.parse(registered) : null;
+  if (prior && (prior.task === void 0 ? prior.version === version : prior.task === HOST_MIGRATION_TASK)) return [];
   return [
-    { root: project, relativePath: HOST_MIGRATION_PENDING_PATH, content: pending ? `${pending.trimEnd()}
-
-${content}` : content, force: true },
-    { root: project, relativePath: HOST_MIGRATION_REGISTERED_PATH, content: `${JSON.stringify({ version })}
+    { root: project, relativePath: HOST_MIGRATION_PENDING_PATH, content: renderHostMigrationPending(version, options.now), force: true },
+    { root: project, relativePath: HOST_MIGRATION_REGISTERED_PATH, content: `${JSON.stringify({ version, task: HOST_MIGRATION_TASK })}
 `, force: true }
   ];
 }

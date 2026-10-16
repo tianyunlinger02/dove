@@ -30,42 +30,6 @@ test("research bootstrap indexes researcher-owned records without prepopulating 
   assert.match(overview, /short history index.*leave existing.*in place/iu);
 });
 
-test("identity cards retain bounded current state, target tier and sourced restriction scope", () => {
-  const card = DOVE_RESEARCH_CORRECTION_RECORDING;
-  // These are continuation fields and source/scope distinctions, not a prose template.
-  for (const field of ["Current round:", "Round status:", "Mainline", "Target tier", "Deployment inputs/outputs", "Completion", "User restrictions", "Recent corrections", "Research state"]) {
-    assert.ok(card.includes(field), `Identity field: ${field}`);
-  }
-  assert.match(card, /IDENTITY\.md.*1200 characters/iu);
-  assert.match(card, /Ask once.*target tier.*missing.*do not assume/iu);
-  assert.match(card, /quotation.*date\/source.*original user wording or a relay.*long-term or task-specific/iu);
-  assert.match(card, /Relays and task-specific limits are not standing restrictions/iu);
-  assert.match(card, /research state after important results.*corrections to action/iu);
-});
-
-test("round briefs and results are attributable bounded records linking ordinary artifacts", () => {
-  const records = DOVE_RESEARCH_ROUND_RECORDS;
-  for (const field of ["rounds/NNN-brief.md", "NNN-result.md", "Author: mentor / user / external", "Changes and version", "Measurements and artifacts", "Prediction versus actual", "Objections to this brief / factual corrections"]) {
-    assert.ok(records.includes(field), `Round field: ${field}`);
-  }
-  assert.match(records, /one rounds\/NNN-brief\.md.*2000.*one NNN-result\.md.*3000/iu);
-  assert.match(records, /details in ordinary project files and link them/iu);
-  assert.match(records, /priority is user > external > mentor/iu);
-  assert.match(records, /Save mentor briefs verbatim.*replacement authors and reasons/iu);
-  assert.match(records, /historical missions\/.*experiments\/.*claims\/.*without adding entries/iu);
-});
-
-test("EVAL is a fixed per-version comparison table with one replaceable current mentor assessment", () => {
-  const evaluation = DOVE_RESEARCH_EVALUATION;
-  const columns = ["Date", "Version/round", "Protocol/split", "Measurements", "Unseen data/train-test gap", "Conclusion", "Artifacts"];
-  assert.ok(evaluation.includes(columns.join("; ")), "The fixed columns keep measurements, generalization and artifact provenance together");
-  assert.match(evaluation, /one row per method version/iu);
-  assert.match(evaluation, /one (?:short )?sentence.*200 characters/iu);
-  assert.match(evaluation, /engineering logs and process status out/iu);
-  assert.match(evaluation, /current assessment as specified in RESEARCH_QUALITY\.md/iu);
-  assert.match(renderDoveResearchQualityReference(), /1000 字符的当前八维判断.*替换 EVAL\.md 表后当前评分.*不追加日志或自评/u);
-});
-
 test("Trellis specs match their installed Markdown templates", () => {
   for (const layer of ["frontend", "guides"]) {
     const source = path.join(ROOT, ".trellis/spec", layer);

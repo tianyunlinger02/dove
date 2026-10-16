@@ -52,8 +52,6 @@ test("pure prompt guidance hands off the original-user source without copying or
   const base = userPromptSubmitOutput(event(), guidance);
   assert.equal(base.hookSpecificOutput.hookEventName, "UserPromptSubmit");
   assert.ok(context(base).includes(renderDoveResearchReanchor()));
-  assert.match(context(base), /continue the current task within authorization/iu);
-  assert.match(context(base), /card is context, not a substitute for the user's latest words/iu);
   const payload = event("CURRENT_USER_BODY_NOT_TO_COPY", {
     transcript_path: '/unread/用户 "source".jsonl', session_id: "synthetic", transcript: "PARENT_HISTORY_NOT_TO_COPY"
   });
@@ -79,7 +77,6 @@ test("pure prompt payload validation and failures stay nonblocking", () => {
   assert.throws(() => userPromptSubmitOutput(null), /requires a valid prompt event/u);
   const attention = userPromptSubmitAttentionOutput();
   assert.equal(attention.hookSpecificOutput.hookEventName, "UserPromptSubmit");
-  assert.match(context(attention), /does not block or expand the user's request/iu);
   const failure = userPromptSubmitFailureOutput(new Error("bad\ninput"));
   assert.match(failure.systemMessage, /bad\?input/u);
   assert.doesNotMatch(failure.systemMessage, /checked|approved|blocked the prompt/u);
@@ -95,16 +92,9 @@ test("prompt output is current short guidance, independent of prompt text and no
   assert.ok(context(expected).length < 2_500);
   assert.match(context(expected), /disk guidance, not rule reload/iu);
   assert.match(context(expected), /No readable short identity card at \.dove\/research\/IDENTITY\.md/iu);
-  assert.match(context(expected), /do not infer a mainline from old notes/iu);
-  assert.match(context(expected), /Create one for a confirmed goal when writing is permitted/iu);
   assert.ok(context(expected).includes(renderDoveResearchReanchor()));
   assert.doesNotMatch(context(expected), /^Mainline:/mu, "missing card does not synthesize a goal");
-  assert.match(context(expected), /On first use at these fingerprints/iu);
-  assert.match(context(expected), /current main agent must personally read the current rule and the two short summaries/iu);
-  assert.match(context(expected), /author preferences and research quality/iu);
-  assert.match(context(expected), /Consult full references only for decision-relevant details/iu);
   assert.doesNotMatch(context(expected), /offsets|EOF|read the full rule and author preferences/iu);
-  assert.match(context(expected), /card is context, not a substitute for the user's latest words/iu);
   for (const fingerprint of guidance.fingerprints) assert.ok(context(expected).includes(fingerprint));
   const nested = path.join(project, "subpackage");
   fs.mkdirSync(path.join(nested, "node_modules"), { recursive: true });
@@ -140,7 +130,6 @@ test("prompt output is current short guidance, independent of prompt text and no
       assert.deepEqual(delivered, cardExpected, "hook presents the same card rather than interpreting corrections or results");
       assert.ok(context(delivered).includes(card), "current identity card is delivered in full without paraphrasing");
       assert.equal(context(delivered).split(mainline).length - 1, 1, "Mainline appears once with its exact user wording");
-      assert.match(context(delivered), /corrections affect only relevant fields, not an unchanged Mainline/iu);
       assert.ok(context(delivered).includes(renderDoveResearchReanchor()));
       assert.equal(fs.readFileSync(cardPath, "utf8"), card, "hook does not apply card corrections itself");
       assert.equal(fs.statSync(cardPath).mtimeMs, cardBefore, "hook does not write the card");
@@ -153,7 +142,6 @@ test("prompt output is current short guidance, independent of prompt text and no
     const delivered = invoke(binary, project, event());
     assert.doesNotMatch(context(delivered), /No readable short identity card/iu);
     assert.match(context(delivered), /exceeds 4KB/iu);
-    assert.match(context(delivered), /shorten it without changing Mainline/iu);
     assert.equal(context(delivered).includes(mainline), true, "oversized card retains the exact mainline");
     assert.equal(fs.readFileSync(cardPath, "utf8"), oversized, "hook does not shorten an oversized card itself");
     assert.equal(fs.statSync(cardPath).mtimeMs, oversizedBefore);

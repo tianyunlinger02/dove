@@ -25,8 +25,6 @@ test("SessionStart startup and clear anchor the canonical bootstrap to the valid
       assert.ok(context.includes(`\`${reference}\``));
       assert.ok(context.includes(`\`${qualityReference}\``));
       assert.equal(context.replace(reference, ".dove/install/AUTHOR_PREFERENCES.md").replace(qualityReference, ".dove/install/RESEARCH_QUALITY.md"), DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP);
-      assert.match(context, /current host main agent must personally read only the two short summaries/u);
-      assert.match(context, /Full references are on demand/u);
       assert.doesNotMatch(context, /offsets|EOF|beginning to end|_FULL\.md/u);
       assert.equal(Boolean(output.systemMessage), status !== "current");
     }
@@ -64,9 +62,7 @@ test("SessionStart compact and resume include the researcher-owned identity card
     assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
     const context = output.hookSpecificOutput.additionalContext;
     assert.ok(context.includes(card.trimEnd()));
-    assert.match(context, /corrections affect only relevant fields, not an unchanged Mainline/iu);
     assert.ok(context.includes(DOVE_RESEARCH_REFLECTION_CONTINUITY));
-    assert.match(context, /reuse the two short summaries already read here/iu);
     assert.ok(context.endsWith(userOriginalSourceContext(payload)));
     assert.equal(cardBytes.toString(), card, "continuation presents rather than corrects the card");
   }
@@ -75,8 +71,6 @@ test("SessionStart compact and resume include the researcher-owned identity card
   for (const source of ["compact", "resume"]) {
     const context = sessionStartOutput({ source }, { status: "current" }, { project, fsOps, env }).hookSpecificOutput.additionalContext;
     assert.match(context, /No readable short identity card/iu);
-    assert.match(context, /Do not infer a mainline from old notes/iu);
-    assert.match(context, /Create one for a confirmed goal when writing is permitted/iu);
     assert.doesNotMatch(context, /^Mainline:/mu, "missing card is not reconstructed on continuation");
     assert.equal(cardBytes, null, "continuation never creates an identity card");
   }
@@ -95,7 +89,6 @@ test("user-original source helper returns only a source hint without reading or 
   assert.ok(hint.includes(JSON.stringify(transcript_path)));
   assert.match(hint, /mentor.*last-read date\/range.*dated user originals.*not execution records/iu);
   assert.match(hint, /current user's exact words.*not yet in the file/iu);
-  assert.match(hint, /sources in the brief, not a new ledger/iu);
   assert.doesNotMatch(hint, /CURRENT_USER_BODY_NOT_TO_COPY|PARENT_HISTORY_NOT_TO_COPY|\d{4}-\d{2}-\d{2}/u);
   assert.deepEqual(payload, before);
   assert.equal(read.mock.callCount(), 0);

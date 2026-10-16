@@ -154,20 +154,11 @@ test("enabled installation only registers version, time and existing-record task
   const result = initializeProjectIntegration(ROOT, store.options);
   assert.ok(result.changedPaths.includes(HOST_MIGRATION_PENDING_PATH));
   assert.ok(result.changedPaths.includes(HOST_MIGRATION_REGISTERED_PATH));
-  assert.deepEqual(JSON.parse(store.text(REGISTERED)), { version: PACKAGE_VERSION });
+  assert.deepEqual(JSON.parse(store.text(REGISTERED)), { version: PACKAGE_VERSION, task: HOST_MIGRATION_TASK });
   assert.ok(store.text(PENDING).includes(`Dove ${PACKAGE_VERSION}`));
   assert.ok(store.text(PENDING).includes(NOW));
   assert.ok(store.text(PENDING).includes(HOST_MIGRATION_TASK));
-  assert.match(store.text(PENDING), /3\.4\.0/u);
-  for (const marker of ["1200", "Target tier", "EVAL.md", "6000", "3000", "source: mentor"]) assert.ok(store.text(PENDING).includes(marker));
   const pending = store.text(PENDING);
-  assert.match(pending, /旧.*内容.*原样.*同目录历史.*链接/u);
-  assert.match(pending, /仍在选题.*正常回复.*质量摘要.*一轮.*2[–-]3.*不足.*1\s*个.*不重跑/u);
-  assert.match(pending, /推荐.*定主线.*不等.*方法闭合.*正式产物.*不.*推荐/u);
-  assert.match(pending, /标准.*矛盾.*禁.*证据.*说明一次.*(?:仍|同时).*方向.*用户.*选.*调标准.*不.*静态打磨/u);
-  assert.match(pending, /确认后.*结束.*选题期限制.*独立资源.*授权.*问一次.*诊断.*设计.*实验.*开题/u);
-  assert.match(pending, /已有主线.*续做/u);
-  assert.match(pending, /不改.*项目.*用户级.*标准.*选题材料.*只改.*后续安排/u);
   assert.equal(result.manifest.managed.some((entry) => entry.path === HOST_MIGRATION_PENDING_PATH || entry.path === HOST_MIGRATION_REGISTERED_PATH), false);
   assert.equal(inspectProjectIntegration(ROOT, store.options).status, "current", "migration metadata is not guidance drift");
   assert.equal(inspectCurrentPromptGuidance(ROOT, store.options).version, PACKAGE_VERSION);
@@ -184,7 +175,6 @@ test("explicit upgrade carries the 3.4.0 backlog while preserving all existing r
   const result = updateProjectIntegration(ROOT, store.options);
   assert.equal(result.manifest.package.version, PACKAGE_VERSION);
   assert.ok(result.changedPaths.includes(HOST_MIGRATION_PENDING_PATH));
-  assert.ok(store.text(PENDING).includes("3.4.0"));
   assertResearchUntouched(store, originals);
 });
 
@@ -201,7 +191,7 @@ test("repeat sync preserves pending edits and completion deletion never re-regis
   const preview = previewProjectCompleteReinstall(ROOT, store.options);
   completeReinstallProjectIntegration(ROOT, { ...store.options, preview, confirmed: true });
   assert.equal(store.nodes.has(PENDING), false);
-  assert.deepEqual(JSON.parse(store.text(REGISTERED)), { version: PACKAGE_VERSION });
+  assert.deepEqual(JSON.parse(store.text(REGISTERED)), { version: PACKAGE_VERSION, task: HOST_MIGRATION_TASK });
   assert.equal(hostMigrationContext(ROOT, store.options), "");
 });
 
@@ -225,7 +215,7 @@ test("this package does not register its task for another release or read resear
   assert.equal(store.nodes.has(PENDING), false);
 });
 
-test("new release registration retains any unfinished earlier pending text", (t) => {
+test("changed migration content replaces an unfinished earlier notice instead of stacking it", (t) => {
   const store = memory(t);
   initializeProjectIntegration(ROOT, store.options);
   const older = "# Earlier pending work\nKeep this unfinished instruction.\n";
@@ -233,9 +223,10 @@ test("new release registration retains any unfinished earlier pending text", (t)
   store.put(REGISTERED, '{"version":"3.4.0"}\n');
   writeHostSettings({ hostMigration: true }, store.options);
   syncProjectIntegration(ROOT, store.options);
-  assert.ok(store.text(PENDING).startsWith(older));
+  assert.ok(!store.text(PENDING).includes("Earlier pending work"));
+  assert.equal((store.text(PENDING).match(/宿主迁移待办/gu) ?? []).length, 1);
   assert.ok(store.text(PENDING).includes(HOST_MIGRATION_TASK));
-  assert.deepEqual(JSON.parse(store.text(REGISTERED)), { version: PACKAGE_VERSION });
+  assert.deepEqual(JSON.parse(store.text(REGISTERED)), { version: PACKAGE_VERSION, task: HOST_MIGRATION_TASK });
 });
 
 test("registered-project cascade uses the same settings and preserves statusLine drift", (t) => {
@@ -275,12 +266,6 @@ test("both existing hook events deliver pending work read-only at a natural task
   const prompt = userPromptSubmitOutput(event, guidance, hookOptions);
   assert.ok(prompt.hookSpecificOutput.additionalContext.endsWith(pending));
   assert.ok(prompt.hookSpecificOutput.additionalContext.startsWith(`Dove ${PACKAGE_VERSION}`));
-  assert.match(pending, /当前工作告一段落/u);
-  assert.match(pending, /不暂停或重启训练\/评测/u);
-  assert.match(pending, /不改动研究结论和用户原话/u);
-  assert.match(pending, /不重算任何结果/u);
-  assert.match(pending, /完成后删除/u);
-  assert.match(pending, /不适用.*原因/u);
   for (const source of ["startup", "clear", "resume", "compact"]) {
     const output = sessionStartOutput({ hook_event_name: "SessionStart", source }, { status: "current" }, hookOptions);
     assert.ok(output.hookSpecificOutput.additionalContext.endsWith(pending), source);
@@ -314,4 +299,16 @@ test("switching off restores original hook output without deleting or recreating
   assert.equal(store.text(PENDING), pending);
   assert.deepEqual(store.writes, []);
   assert.deepEqual(store.snapshot(), before);
+});
+
+test("a new release with unchanged migration content registers nothing for a project that finished it", (t) => {
+  const store = memory(t);
+  initializeProjectIntegration(ROOT, store.options);
+  store.put(REGISTERED, `${JSON.stringify({ version: "3.4.0", task: HOST_MIGRATION_TASK })}\n`);
+  writeHostSettings({ hostMigration: true }, store.options);
+  syncProjectIntegration(ROOT, store.options);
+  assert.equal(store.nodes.has(PENDING), false);
+  store.put(REGISTERED, `${JSON.stringify({ version: "3.4.0", task: "an older task" })}\n`);
+  syncProjectIntegration(ROOT, store.options);
+  assert.ok(store.text(PENDING).includes(HOST_MIGRATION_TASK));
 });

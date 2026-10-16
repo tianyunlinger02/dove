@@ -70,12 +70,16 @@ export function prepareHostMigration(project, options = {}) {
   const version = options.packageVersion ?? PACKAGE_VERSION;
   if (!HOST_MIGRATION_TASK || version !== PACKAGE_VERSION || !readHostSettings(options).hostMigration) return [];
   const registered = migrationFile(project, HOST_MIGRATION_REGISTERED_PATH, options);
-  if (registered && JSON.parse(registered).version === version) return [];
-  const pending = migrationFile(project, HOST_MIGRATION_PENDING_PATH, options);
-  const content = renderHostMigrationPending(version, options.now);
+  const prior = registered ? JSON.parse(registered) : null;
+  // Register only when the migration content itself changed; a release that
+  // keeps the same task leaves completed projects alone. Records written
+  // before the task was stored compare by version, as they did then.
+  if (prior && (prior.task === undefined ? prior.version === version : prior.task === HOST_MIGRATION_TASK)) return [];
+  // The current task already contains every earlier item, so it replaces any
+  // unfinished notice instead of stacking another copy after it.
   return [
-    { root: project, relativePath: HOST_MIGRATION_PENDING_PATH, content: pending ? `${pending.trimEnd()}\n\n${content}` : content, force: true },
-    { root: project, relativePath: HOST_MIGRATION_REGISTERED_PATH, content: `${JSON.stringify({ version })}\n`, force: true }
+    { root: project, relativePath: HOST_MIGRATION_PENDING_PATH, content: renderHostMigrationPending(version, options.now), force: true },
+    { root: project, relativePath: HOST_MIGRATION_REGISTERED_PATH, content: `${JSON.stringify({ version, task: HOST_MIGRATION_TASK })}\n`, force: true }
   ];
 }
 
