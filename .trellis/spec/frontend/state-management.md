@@ -50,7 +50,7 @@ Each round has one `NNN-brief.md` of at most 2000 characters and one `NNN-result
 
 A brief starts with `Author: mentor / user / external`, method version and dated user-source paths/range. User instructions outrank external advice, which outranks mentor advice. Save mentor briefs verbatim; replacements name the actual author and reason. Scientific content belongs in [Component Guidelines](./component-guidelines.md#mentor-judgment-and-briefs).
 
-Results use `Changes and version`, `Measurements and artifacts`, `Prediction versus actual`, and `Objections to this brief / factual corrections`. Include files, actual or missing measurements, evaluator issues and blockers. Keep the last heading even when empty; the next mentor responds first. Engineering failures are neither scientific measurements nor exemptions from the no-science count.
+Results start with `一句话：` and use `改了什么`, `测到了什么`, `预期与实际`, and `对本轮说明的反驳与事实更正` (older results use the English equivalents). Briefs carry `一句话：` and `## 预期结果` so the dashboard can show the research trajectory. Include files, actual or missing measurements, evaluator issues and blockers. Keep the last heading even when empty; the next mentor responds first. Engineering failures are neither scientific measurements nor exemptions from the no-science count.
 
 ### Evaluation
 

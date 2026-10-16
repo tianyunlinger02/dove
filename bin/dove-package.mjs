@@ -14179,7 +14179,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.5" : null;
+var injectedVersion = true ? "3.4.6" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -14482,8 +14482,8 @@ var DOVE_RESEARCH_DECISION_CONSEQUENCE = "Challenge core premises using cross-ro
 var DOVE_RESEARCH_RESULT_ADOPTION = "The author main session applies scoped findings to actual work within the user's goal. Subagents return evidence, not goal ownership or completion certificates.";
 var DOVE_RESEARCH_REFLECTION_CONTINUITY = "After compact or resume, read the identity card, latest EVAL rows and current brief, then continue the task. Mentor memory comes from MENTOR_NOTES.md, not resumed conversation.";
 var DOVE_RESEARCH_ROUND_CYCLE = "After mainline confirmation, call dove-mentor at each round end, after two consecutive rounds without new scientific results, when the user corrects direction or questions the paper claim/story, before changing routes, or when requested. Engineering and verification failures count as rounds without results: seek the mentor's diagnosis after two, and by the third explain the blockage and ask the user before another round. Use a new mentor context for each round, without the execution conversation; two or three clarifications within one judgment are fine. Mentors on either host read .dove/install/RESEARCH_QUALITY.md for returns and tracking. Send Dove's generated mentor call template (dove mentor brief --project <root>) as the whole prompt plus the trigger. Status questions and bounded replies need no round or handoff; honor discussion-only and stop requests.";
-var DOVE_RESEARCH_ROUND_RECORDS = "Each round has one rounds/NNN-brief.md (about 2000 characters) and one NNN-result.md (about 3000), written in full sentences for the user and mentor; put details in ordinary project files and link them, not extra round attachments. Start briefs with Author: mentor / user / external (\u5BFC\u5E08 / \u7528\u6237 / \u5916\u90E8), method version and dated user sources; priority is user > external > mentor. Save mentor briefs verbatim; name replacement authors and reasons. Results have four headings: Changes and version; Measurements and artifacts; Prediction versus actual; Objections to this brief / factual corrections. The mentor answers objections first. RESEARCH.md is a short history index; preserve historical missions/, experiments/ and claims/ without adding entries.";
-var DOVE_RESEARCH_EVALUATION = "EVAL.md starts with a completion reference to the script, protocol and all user metrics, then one row per method version: Date; Version/round; Protocol/split; Measurements; Unseen data/train-test gap; Conclusion; Artifacts. Cells hold numbers and one short sentence (about 200 characters); link detailed values. Keep engineering logs and process status out. Formal comparisons include complete strong same-input baselines and all confirmed requirements; unknown stays unknown. The executor repairs evaluator errors and recomputes all comparable historical rows, using retained outputs before rerunning; keep old protocols as history. Save the mentor's current assessment as specified in RESEARCH_QUALITY.md.";
+var DOVE_RESEARCH_ROUND_RECORDS = "Research records are read by the user on the Dove dashboard, so write the identity card, EVAL conclusions, briefs and results in natural Chinese full sentences. Explain internal codes, version names and abbreviations in plain words on first use or leave them out, and keep process detail in linked files. Each round has one rounds/NNN-brief.md (about 2000 characters) and one NNN-result.md (about 3000); put details in ordinary project files and link them, not extra round attachments. A brief starts with Author: mentor / user / external (\u5BFC\u5E08 / \u7528\u6237 / \u5916\u90E8), method version and dated user sources, then a line \u4E00\u53E5\u8BDD\uFF1Asaying in plain words what this round does, and has a section ## \u9884\u671F\u7ED3\u679C stating the expected result and which outcomes would change the decision; priority is user > external > mentor. Save mentor briefs verbatim; name replacement authors and reasons. A result starts with \u4E00\u53E5\u8BDD\uFF1Asaying what happened and has four sections: ## \u6539\u4E86\u4EC0\u4E48, ## \u6D4B\u5230\u4E86\u4EC0\u4E48, ## \u9884\u671F\u4E0E\u5B9E\u9645, ## \u5BF9\u672C\u8F6E\u8BF4\u660E\u7684\u53CD\u9A73\u4E0E\u4E8B\u5B9E\u66F4\u6B63. The mentor answers the objections first. RESEARCH.md is a short history index; preserve historical missions/, experiments/ and claims/ without adding entries.";
+var DOVE_RESEARCH_EVALUATION = "EVAL.md starts with a completion reference to the script, protocol and all user metrics, then one row per method version with the columns \u65E5\u671F\u3001\u7248\u672C/\u8F6E\u6B21\u3001\u534F\u8BAE\u4E0E\u6570\u636E\u3001\u6D4B\u91CF\u7ED3\u679C\u3001\u672A\u89C1\u6570\u636E\u4E0E\u6CDB\u5316\u5DEE\u8DDD\u3001\u7ED3\u8BBA\u3001\u4EA7\u7269 (existing English headers may stay). Cells hold numbers and one short sentence (about 200 characters); link detailed values. Keep engineering logs and process status out. Formal comparisons include complete strong same-input baselines and all confirmed requirements; unknown stays unknown. The executor repairs evaluator errors and recomputes all comparable historical rows, using retained outputs before rerunning; keep old protocols as history. Save the mentor's current assessment as specified in RESEARCH_QUALITY.md.";
 var DOVE_RESEARCH_EXPERIMENT_ITERATION = "Develop with available ground truth and reruns, without per-run registration. Each round uses one method-code version, including coordinated changes; later code changes need a new version and full applicable evaluation. Retain old versions for ablation, with fair budgets and causal controls fixing other factors. After test use, changed methods need a fresh draw unused in development or previous tests and same-set baselines. For final confirmation, put the claim, controls, data and metrics in the brief and use heldout once.";
 var DOVE_RESEARCH_CORRECTION_RECORDING = "Keep IDENTITY.md short enough to read at a glance (about 1200 characters), in fixed fields: Current round: rounds/NNN-brief.md; Round status: ongoing / paused / completed; Mainline; Target tier (conference/journal level); Deployment inputs/outputs; Completion; User restrictions; Recent corrections; Research state. Ask once if the target tier is missing; do not assume one. Each restriction names the quotation, date/source, whether it is original user wording or a relay, and whether it is long-term or task-specific. Relays and task-specific limits are not standing restrictions. Update research state after important results and apply corrections to action, not just quotations. Keep method rejections in briefs or mentor notes. Preserve unchanged Mainline wording. For recurring corrections, dove projects status --json locates relevant cards; ask once before changing AUTHOR_PREFERENCES and never edit it automatically.";
 function renderDoveResearchReanchor() {
@@ -14786,7 +14786,7 @@ tools: Read, Grep, Glob, mcp__exa, mcp__dove-paper-search
 
 ## \u5224\u65AD\u65B9\u5411\uFF0C\u5DE5\u7A0B\u4EA4\u7ED9\u6267\u884C\u8005
 
-\u5148\u56DE\u5E94 result \u7684\u201CObjections to this brief / factual corrections\u201D\uFF08\u5BF9\u672C\u8F6E\u8BF4\u660E\u7684\u53CD\u9A73/\u4E8B\u5B9E\u66F4\u6B63\uFF09\uFF0C\u518D\u4ECE\u7528\u6237\u76EE\u6807\u3001\u5386\u8F6E\u9884\u6D4B\u4E0E\u5B9E\u9645\u3001\u65B9\u6CD5\u65CF\u7684\u5171\u540C\u539F\u56E0\u91CD\u5EFA\u5224\u65AD\u3002\u770B\u771F\u5B9E\u8F93\u51FA\u548C\u5931\u8D25\u7C7B\uFF1B\u8DEF\u7EBF\u503C\u4E0D\u503C\u5F97\u7EE7\u7EED\uFF0C\u770B\u672A\u89C1\u6570\u636E\u4E0A\u7684\u6539\u5584\uFF0C\u800C\u4E0D\u662F\u5C40\u90E8\u4FEE\u590D\u662F\u5426\u6210\u529F\u3002
+\u5148\u56DE\u5E94 result \u91CC\u201C\u5BF9\u672C\u8F6E\u8BF4\u660E\u7684\u53CD\u9A73\u4E0E\u4E8B\u5B9E\u66F4\u6B63\u201D\uFF08\u65E7\u8BB0\u5F55\u53EB Objections to this brief / factual corrections\uFF09\uFF0C\u518D\u4ECE\u7528\u6237\u76EE\u6807\u3001\u5386\u8F6E\u9884\u6D4B\u4E0E\u5B9E\u9645\u3001\u65B9\u6CD5\u65CF\u7684\u5171\u540C\u539F\u56E0\u91CD\u5EFA\u5224\u65AD\u3002\u770B\u771F\u5B9E\u8F93\u51FA\u548C\u5931\u8D25\u7C7B\uFF1B\u8DEF\u7EBF\u503C\u4E0D\u503C\u5F97\u7EE7\u7EED\uFF0C\u770B\u672A\u89C1\u6570\u636E\u4E0A\u7684\u6539\u5584\uFF0C\u800C\u4E0D\u662F\u5C40\u90E8\u4FEE\u590D\u662F\u5426\u6210\u529F\u3002
 
 \u6570\u503C\u7B49\u4EF7\u3001\u52A0\u901F\u3001\u53C2\u6570\u548C\u8BC4\u4EF7\u5668\u4FEE\u590D\u7531\u6267\u884C\u8005\u51B3\u5B9A\uFF1B\u4F60\u53EA\u5224\u65AD\u8FD9\u4E9B\u5DE5\u4F5C\u662F\u5426\u670D\u52A1\u4E3B\u7EBF\u3001\u662F\u5426\u5360\u65F6\u8FC7\u4E45\u3001\u8BC4\u4EF7\u662F\u5426\u4ECD\u56DE\u7B54\u7528\u6237\u95EE\u9898\u3002\u770B\u5230\u79D1\u5B66\u8BC4\u4EF7\u5931\u914D\uFF0C\u8BF4\u660E\u7F3A\u53E3\u548C\u9700\u8981\u7684\u6BD4\u8F83\u3002\u6267\u884C\u8005\u4FEE\u6B63\u534F\u8BAE\u540E\uFF0C\u53EF\u6BD4\u8F83\u7684\u5386\u53F2\u65B9\u6CD5\u4E0E\u57FA\u7EBF\u6309\u540C\u4E00\u53E3\u5F84\u91CD\u7B97\uFF1B\u6539\u53D8\u76EE\u6807\u542B\u4E49\u624D\u627E\u7528\u6237\u3002
 
@@ -14804,7 +14804,7 @@ tools: Read, Grep, Glob, mcp__exa, mcp__dove-paper-search
 
 ## \u8FD4\u56DE\u4EC0\u4E48
 
-\u8FD4\u56DE\u4E00\u4EFD\u7EA6 2000 \u5B57\u7B26\u7684\u4E0B\u4E00\u8F6E\u8BF4\u660E\uFF0C\u5F00\u5934\u201C\u4F5C\u8005\uFF1A\u5BFC\u5E08\u201D\uFF0C\u6CE8\u660E\u65B9\u6CD5\u7248\u672C\u548C\u7528\u6237\u539F\u8BDD\u6765\u6E90\u8303\u56F4\u3002\u7528\u5B8C\u6574\u53E5\u5B50\u5199\u8981\u505A\u4EC0\u4E48\u3001\u4E3A\u4EC0\u4E48\u3001\u5173\u952E\u672A\u77E5\uFF0C\u4EE5\u53CA\u4E0D\u540C\u7ED3\u679C\u600E\u6837\u6539\u53D8\u51B3\u5B9A\uFF1B\u98CE\u9669\u548C\u672A\u77E5\u96C6\u4E2D\u5199\u4E00\u5904\uFF0C\u4E0D\u5728\u6BCF\u53E5\u540E\u52A0\u9650\u5B9A\u3002\u6309\u95EE\u9898\u7ED9\u51FA\u516C\u5E73\u5BF9\u7167\u3001\u53EF\u7528\u8F93\u5165\u3001\u9884\u7B97\u3001\u9884\u6D4B\u4F9D\u636E\u548C\u5931\u8D25\u6750\u6599\uFF1B\u5DF2\u9009\u65B9\u6CD5\u7684\u6838\u5FC3\u5DE5\u4F5C\u53EF\u4EE5\u5728\u7406\u8BBA\u548C\u57FA\u7EBF\u5E93\u5B8C\u6574\u4E4B\u524D\u5F00\u59CB\u3002\u6B63\u5F0F\u56E0\u679C\u6BD4\u8F83\u63A7\u5236\u5176\u4ED6\u56E0\u7D20\uFF0C\u7528\u8FC7\u6D4B\u8BD5\u540E\u65B9\u6CD5\u6539\u53D8\u8981\u53E6\u62BD\u771F\u6B63\u672A\u7528\u8FC7\u7684\u6570\u636E\u5E76\u540C\u96C6\u6BD4\u8F83\u57FA\u7EBF\u3002\u8BA1\u5212\u3001\u5192\u70DF\u548C\u5DE5\u7A0B\u6838\u9A8C\u5355\u72EC\u5217\u51FA\uFF0C\u4E0D\u7B97\u79D1\u7814\u7ED3\u679C\u3002
+\u8FD4\u56DE\u4E00\u4EFD\u7EA6 2000 \u5B57\u7B26\u7684\u4E0B\u4E00\u8F6E\u8BF4\u660E\uFF0C\u5F00\u5934\u201C\u4F5C\u8005\uFF1A\u5BFC\u5E08\u201D\uFF0C\u6CE8\u660E\u65B9\u6CD5\u7248\u672C\u548C\u7528\u6237\u539F\u8BDD\u6765\u6E90\u8303\u56F4\uFF0C\u63A5\u7740\u4E00\u884C\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u7528\u5927\u767D\u8BDD\u8BF4\u8FD9\u8F6E\u505A\u4EC0\u4E48\uFF0C\u5E76\u5199\u201C## \u9884\u671F\u7ED3\u679C\u201D\u3002\u8BF4\u660E\u662F\u7ED9\u7528\u6237\u5728\u9762\u677F\u4E0A\u8BFB\u7684\uFF0C\u7528\u81EA\u7136\u4E2D\u6587\uFF0C\u5185\u90E8\u4EE3\u53F7\u7B2C\u4E00\u6B21\u51FA\u73B0\u65F6\u89E3\u91CA\u6E05\u695A\u3002\u7528\u5B8C\u6574\u53E5\u5B50\u5199\u8981\u505A\u4EC0\u4E48\u3001\u4E3A\u4EC0\u4E48\u3001\u5173\u952E\u672A\u77E5\uFF0C\u4EE5\u53CA\u4E0D\u540C\u7ED3\u679C\u600E\u6837\u6539\u53D8\u51B3\u5B9A\uFF1B\u98CE\u9669\u548C\u672A\u77E5\u96C6\u4E2D\u5199\u4E00\u5904\uFF0C\u4E0D\u5728\u6BCF\u53E5\u540E\u52A0\u9650\u5B9A\u3002\u6309\u95EE\u9898\u7ED9\u51FA\u516C\u5E73\u5BF9\u7167\u3001\u53EF\u7528\u8F93\u5165\u3001\u9884\u7B97\u3001\u9884\u6D4B\u4F9D\u636E\u548C\u5931\u8D25\u6750\u6599\uFF1B\u5DF2\u9009\u65B9\u6CD5\u7684\u6838\u5FC3\u5DE5\u4F5C\u53EF\u4EE5\u5728\u7406\u8BBA\u548C\u57FA\u7EBF\u5E93\u5B8C\u6574\u4E4B\u524D\u5F00\u59CB\u3002\u6B63\u5F0F\u56E0\u679C\u6BD4\u8F83\u63A7\u5236\u5176\u4ED6\u56E0\u7D20\uFF0C\u7528\u8FC7\u6D4B\u8BD5\u540E\u65B9\u6CD5\u6539\u53D8\u8981\u53E6\u62BD\u771F\u6B63\u672A\u7528\u8FC7\u7684\u6570\u636E\u5E76\u540C\u96C6\u6BD4\u8F83\u57FA\u7EBF\u3002\u8BA1\u5212\u3001\u5192\u70DF\u548C\u5DE5\u7A0B\u6838\u9A8C\u5355\u72EC\u5217\u51FA\uFF0C\u4E0D\u7B97\u79D1\u7814\u7ED3\u679C\u3002
 
 \u91CD\u8981\u7ED3\u679C\u540E\u53E6\u8FD4\u7EA6 1000 \u5B57\u7B26\u7684\u516B\u7EF4\u8D28\u91CF\u5224\u65AD\uFF0C\u7ED9\u7B49\u7EA7\u3001\u4F9D\u636E\u4E0E\u672A\u77E5\u9879\uFF1B\u5B9E\u73B0 1\u20133\uFF0C\u5176\u4F59 1\u20134\uFF0C\u7EC6\u5219\u6309\u9700\u770B RESEARCH_QUALITY_FULL.md\u3002\u4E3B\u4F1A\u8BDD\u66FF\u6362 EVAL \u8868\u540E\u5F53\u524D\u8BC4\u5206\uFF0C\u4E0D\u91CD\u590D\u81EA\u8BC4\uFF1B\u6700\u5F31\u4E14\u51B3\u5B9A\u6027\u7684\u7EF4\u5EA6\u5F71\u54CD\u4E0B\u4E00\u8F6E\u3002
 
@@ -16594,7 +16594,8 @@ var HOST_MIGRATION_TASK = `\u6574\u7406 3.4.0 \u8D77\u5DF2\u6709\u7684\u7814\u7A
 3. MENTOR_NOTES.md \u8D85\u8FC7\u7EA6 6000 \u5B57\u7B26\u65F6\uFF0C\u4E0B\u6B21\u6B63\u5E38\u5BFC\u5E08\u8C03\u7528\u8BF7\u5BFC\u5E08\u5408\u5E76\u6210\u7EA6 3000 \u5B57\u7B26\u7684\u5168\u6587\u3002
 4. watch/config.json \u4ECD\u662F draft \u65F6\uFF0C\u4E0B\u6B21\u6B63\u5E38\u5BFC\u5E08\u8C03\u7528\u8BF7\u5BFC\u5E08\u7ED9\u51FA\u8FFD\u8E2A\u4FEE\u6B63\u5EFA\u8BAE\uFF0C\u4E3B\u4F1A\u8BDD\u5199\u56DE\u5E76\u6807 source: mentor\u3002\u8981\u7B49\u4E0B\u6B21\u8C03\u7528\u7684\u4E8B\u9879\u5728\u5DF2\u6709\u8BB0\u5F55\u91CC\u7559\u4E00\u53E5\u63D0\u9192\uFF0C\u8FD9\u4E00\u9879\u5C31\u7B97\u5B8C\u6210\u3002
 5. \u4ECD\u5728\u9009\u9898\u65F6\uFF0C\u4E0B\u6B21\u6B63\u5E38\u56DE\u590D\u6309\u8D28\u91CF\u6458\u8981\u4E00\u8F6E\u4EA4\u5019\u9009\u3001\u8FD1\u90BB\u53CA\u6700\u4F73 2\u20133 \u4E2A\u65B9\u5411\uFF0C\u4E0D\u8DB3\u7ED9 1 \u4E2A\uFF0C\u4E0D\u91CD\u8DD1\u3002\u63A8\u8350\u4F9B\u5B9A\u4E3B\u7EBF\uFF0C\u4E0D\u7B49\u65B9\u6CD5\u95ED\u5408\uFF0C\u6B63\u5F0F\u4EA7\u7269\u95E8\u69DB\u4E0D\u6263\u4F4F\u63A8\u8350\uFF1B\u6807\u51C6\u77DB\u76FE\u6216\u7981\u53D6\u8BC1\u636E\u5361\u4F4F\u65F6\uFF0C\u8BF4\u660E\u4E00\u6B21\u4ECD\u7ED9\u65B9\u5411\uFF0C\u8BF7\u7528\u6237\u9009\u6216\u8C03\u6807\u51C6\uFF0C\u4E0D\u9759\u6001\u6253\u78E8\u3002\u786E\u8BA4\u540E\u7ED3\u675F\u9009\u9898\u671F\u9650\u5236\uFF0C\u7F3A\u7684\u72EC\u7ACB\u8D44\u6E90\uFF0F\u8DD1\u6A21\u578B\u6388\u6743\u5408\u5E76\u95EE\u4E00\u6B21\uFF0C\u518D\u8BCA\u65AD\u3001\u8BBE\u8BA1\u3001\u5B9E\u9A8C\u3001\u5199\u5F00\u9898\uFF1B\u5DF2\u6709\u4E3B\u7EBF\u7EED\u505A\u3002\u4E0D\u6539\u9879\u76EE\u53CA\u7528\u6237\u7EA7\u6807\u51C6\u3001\u8FDB\u884C\u4E2D\u9009\u9898\u6750\u6599\uFF0C\u53EA\u6539\u540E\u7EED\u5B89\u6392\u3002
-6. \u6E05\u7406\u81EA\u8BBE\u9650\u5236\uFF1A\u770B IDENTITY \u7684 User restrictions\u3001\u5F53\u524D brief \u548C\u5728\u7528\u7684\u6267\u884C\u534F\u8BAE\uFF0C\u6267\u884C\u8005\u6216\u5BFC\u5E08\u81EA\u5DF1\u52A0\u7684\u9650\u5236\u4E0E\u68C0\u67E5\uFF08\u54C8\u5E0C\u3001\u51BB\u7ED3\u3001\u7B49\u4EF7\u95E8\u7981\u3001\u53EA\u8BFB\u6E05\u5355\u7B49\uFF09\u9010\u6761\u5199\u4E00\u53E5\u5B83\u4FDD\u62A4\u4EC0\u4E48\uFF1B\u8BF4\u4E0D\u51FA\u4FDD\u62A4\u5BF9\u8C61\u7684\u5220\u6389\u6216\u6539\u4E3A\u4E00\u53E5\u8BF4\u660E\uFF0C\u7528\u6237\u539F\u8BDD\u5B9A\u7684\u9650\u5236\u539F\u6837\u4FDD\u7559\u3002`;
+6. \u6E05\u7406\u81EA\u8BBE\u9650\u5236\uFF1A\u770B IDENTITY \u7684 User restrictions\u3001\u5F53\u524D brief \u548C\u5728\u7528\u7684\u6267\u884C\u534F\u8BAE\uFF0C\u6267\u884C\u8005\u6216\u5BFC\u5E08\u81EA\u5DF1\u52A0\u7684\u9650\u5236\u4E0E\u68C0\u67E5\uFF08\u54C8\u5E0C\u3001\u51BB\u7ED3\u3001\u7B49\u4EF7\u95E8\u7981\u3001\u53EA\u8BFB\u6E05\u5355\u7B49\uFF09\u9010\u6761\u5199\u4E00\u53E5\u5B83\u4FDD\u62A4\u4EC0\u4E48\uFF1B\u8BF4\u4E0D\u51FA\u4FDD\u62A4\u5BF9\u8C61\u7684\u5220\u6389\u6216\u6539\u4E3A\u4E00\u53E5\u8BF4\u660E\uFF0C\u7528\u6237\u539F\u8BDD\u5B9A\u7684\u9650\u5236\u539F\u6837\u4FDD\u7559\u3002
+7. \u8BB0\u5F55\u5199\u6210\u4EBA\u8BDD\uFF1A\u8EAB\u4EFD\u5361\u7684\u7814\u7A76\u73B0\u72B6\u3001\u5F53\u524D\u8F6E\u6B21\u7684\u8BF4\u660E\u548C\u7ED3\u679C\u6539\u6210\u81EA\u7136\u4E2D\u6587\uFF0C\u5185\u90E8\u4EE3\u53F7\u7B2C\u4E00\u6B21\u51FA\u73B0\u65F6\u89E3\u91CA\u6216\u5220\u6389\uFF1B\u5F53\u524D\u8BF4\u660E\u8865\u4E00\u884C\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u548C\u201C## \u9884\u671F\u7ED3\u679C\u201D\uFF0C\u5F53\u524D\u7ED3\u679C\u8865\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u548C\u201C## \u9884\u671F\u4E0E\u5B9E\u9645\u201D\u3002\u65E7\u8F6E\u6B21\u4E0D\u5FC5\u56DE\u6539\u3002`;
 function settingsPath(options2) {
   const env = options2.env ?? process.env;
   const base = env.XDG_CONFIG_HOME || path8.join(env.HOME || os2.homedir(), ".config");
@@ -17449,6 +17450,65 @@ function parseAuthor(text = "") {
   for (const [pattern, label] of AUTHOR_LABELS) if (pattern.test(value2)) return label;
   return "other";
 }
+var SUMMARY_LINE = /^\s*(?:[-*]\s*)?\**\s*一句话\s*\**\s*[:：]\s*(.+)$/u;
+var META_LINE = /^\s*(?:[-*]\s*)?\**\s*[^:：\s][^:：]{0,15}?\s*\**\s*[:：]/u;
+var HEADING = /^\s*#{1,4}\s+(.*)$/u;
+var EXPECTED_HEADING = /预期|预测|expected|prediction/iu;
+var ACTUAL_HEADING = /预期与实际|预测与实际|prediction versus actual|prediction vs/iu;
+function plainLine(text, limit = 240) {
+  if (!text) return null;
+  const flat = String(text).replace(/\[([^\]]+)\]\([^)]*\)/gu, "$1").replace(/[`*]/gu, "").replace(/\s+/gu, " ").trim();
+  if (!flat) return null;
+  const characters = Array.from(flat);
+  return characters.length > limit ? `${characters.slice(0, limit).join("")}\u2026` : flat;
+}
+function sectionText(lines, pattern) {
+  const start = lines.findIndex((line) => HEADING.test(line) && pattern.test(line.match(HEADING)[1]));
+  if (start === -1) return null;
+  const body = [];
+  let tableHeader = true;
+  for (const line of lines.slice(start + 1)) {
+    if (HEADING.test(line)) break;
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^\|.*\|$/u.test(trimmed)) {
+      const cells = trimmed.slice(1, -1).split("|").map((cell) => cell.trim());
+      if (cells.every((cell) => /^:?-+:?$/u.test(cell))) continue;
+      if (tableHeader) {
+        tableHeader = false;
+        continue;
+      }
+      body.push(`${cells[0]}\uFF1A${cells.slice(1).filter(Boolean).join(" \u2192 ")}\uFF1B`);
+      continue;
+    }
+    body.push(trimmed.replace(/^[-*+]\s+/u, ""));
+  }
+  return body.join(" ");
+}
+function firstParagraph(lines) {
+  const body = [];
+  for (const line of lines) {
+    if (HEADING.test(line) || META_LINE.test(line)) {
+      if (body.length) break;
+      continue;
+    }
+    if (!line.trim()) {
+      if (body.length) break;
+      continue;
+    }
+    body.push(line.trim().replace(/^[-*+]\s+/u, ""));
+  }
+  return body.join(" ");
+}
+function summarizeRoundText(text = "", kind = "brief") {
+  const lines = String(text).split(/\r?\n/u);
+  const summary = lines.map((line) => line.match(SUMMARY_LINE)?.[1]).find(Boolean) ?? firstParagraph(lines);
+  return {
+    summary: plainLine(summary),
+    ...kind === "brief" ? { expected: plainLine(sectionText(lines.filter((line) => !ACTUAL_HEADING.test(line)), EXPECTED_HEADING)) } : {},
+    ...kind === "result" ? { actual: plainLine(sectionText(lines, ACTUAL_HEADING)) } : {}
+  };
+}
 function firstHeading(text = "") {
   const heading = text.split(/\r?\n/u).find((line) => /^#{1,3}\s+\S/u.test(line));
   return heading ? heading.replace(/^#{1,3}\s+/u, "").trim() : null;
@@ -17481,7 +17541,7 @@ function collectRounds(directory, fsOps) {
     const file = readText(path12.join(directory, name), fsOps);
     if (!file) continue;
     const entry = byNumber.get(number) ?? { number, label: match[1] };
-    entry[kind] = { file: name, truncated: file.truncated, mtime: file.mtime };
+    entry[kind] = { file: name, truncated: file.truncated, mtime: file.mtime, ...summarizeRoundText(file.text, kind) };
     if (kind === "brief") {
       entry.author = parseAuthor(file.text);
       entry.title = firstHeading(file.text);
@@ -17517,6 +17577,9 @@ function summarizeProject(root, options2 = {}) {
     exists,
     mainline: fields.Mainline ?? fields["\u4E3B\u7EBF"] ?? null,
     currentRound: current?.brief ?? null,
+    currentSummary: rounds.find((round) => current?.brief?.includes(round.label))?.brief?.summary ?? null,
+    targetTier: fields["Target tier"] ?? fields["Target tier (conference/journal level)"] ?? fields["\u76EE\u6807\u6863\u6B21"] ?? null,
+    researchState: plainLine(fields["Research state"] ?? fields["\u7814\u7A76\u73B0\u72B6"] ?? null, 600),
     roundStatus: statusMatch,
     lastActivity: times.length ? Math.max(...times) : null,
     identity: identity ? { text: identity.text, truncated: identity.truncated, mtime: identity.mtime } : null,
@@ -18987,6 +19050,8 @@ aside { border-right: 1px solid var(--line); padding: 14px; overflow-y: auto; }
 .project .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project .main { color: var(--muted); font-size: 12.5px; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .project .foot { color: var(--muted); font-size: 12px; margin-top: 6px; display: flex; justify-content: space-between; gap: 8px; }
+.project .foot span:first-child { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.project .foot span:last-child { white-space: nowrap; flex: none; }
 .chip { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 999px; white-space: nowrap; font-weight: 600; }
 .chip.ongoing { background: var(--accent-soft); color: var(--accent); }
 .chip.paused { background: var(--pause-soft); color: var(--pause); }
@@ -19021,12 +19086,40 @@ td.num { font-variant-numeric: tabular-nums; }
 .round .no { font-weight: 700; }
 .round .rtitle { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .round .time { color: var(--muted); font-size: 12px; }
-.round .tabs { display: flex; gap: 6px; }
-.round .tabs button { border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 12px; cursor: pointer; }
-.round .tabs button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
-.round .tabs button:disabled { opacity: .45; cursor: default; }
+.tabs { display: inline-flex; gap: 6px; }
+.tabs button { border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 12px; cursor: pointer; }
+.tabs button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.tabs button:disabled { opacity: .45; cursor: default; }
 .round .body { border-top: 1px solid var(--line); padding: 12px 16px; }
 .round.current { border-color: var(--accent); }
+.hero { margin: 10px 0 18px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.hero .label { color: var(--muted); font-size: 12px; }
+.hero .goal { font-size: 17px; font-weight: 600; margin: 2px 0 8px; }
+.hero .facts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 12.5px; }
+.hero .state { margin-top: 10px; font-size: 13.5px; }
+.now { border: 1px solid var(--accent); border-radius: 12px; background: var(--panel); padding: 14px 16px; box-shadow: var(--shadow); }
+.now .what { font-size: 15.5px; font-weight: 600; margin: 4px 0 10px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.box { background: var(--bg); border-radius: 8px; padding: 9px 11px; font-size: 13.5px; }
+.box .k { color: var(--muted); font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.box.expect { border-left: 3px solid var(--done); }
+.box.actual { border-left: 3px solid var(--accent); }
+.box.missing { color: var(--muted); }
+.timeline { position: relative; padding-left: 22px; }
+.timeline::before { content: ""; position: absolute; left: 7px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+.tl { position: relative; margin-bottom: 12px; }
+.tl .dot { position: absolute; left: -20px; top: 14px; width: 12px; height: 12px; border-radius: 50%; background: var(--panel); border: 2px solid var(--pause); }
+.tl.done .dot { border-color: var(--done); background: var(--done-soft); }
+.tl.running .dot { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.tl .round { margin-bottom: 0; }
+.tl .lines { padding: 0 14px 10px; display: grid; gap: 4px; font-size: 13.5px; }
+.tl .lines .k { color: var(--muted); font-size: 12px; margin-right: 6px; font-weight: 600; }
+.more { display: block; margin: 6px 0 0; }
+table.wrap td { white-space: normal; min-width: 90px; max-width: 420px; }
+table.wrap td:first-child { white-space: nowrap; }
+dl.kv { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 13.5px; }
+dl.kv dt { color: var(--muted); font-weight: 600; }
+dl.kv dd { margin: 0; overflow-wrap: anywhere; }
 .md h1, .md h2, .md h3, .md h4 { font-size: 14.5px; margin: 14px 0 6px; }
 .md p { margin: 6px 0; }
 .md ul, .md ol { margin: 6px 0; padding-left: 22px; }
@@ -19063,6 +19156,7 @@ nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-colo
 .paper .judge { font-size: 12px; margin-top: 3px; }
 .paper .takeaway { margin: 5px 0; font-size: 14px; }
 .library { margin-top: 16px; }
+.library h2 { font-size: 14px; margin: 0 0 8px; display: flex; align-items: baseline; gap: 8px; }
 .library .btns { margin-bottom: 8px; }
 tr.cardrow { cursor: pointer; }
 tr.cardrow:hover td { background: var(--accent-soft); }
@@ -19175,44 +19269,109 @@ function renderList() {
     '<button class="project' + (p.root === selected ? " active" : "") + '" data-root="' + esc(p.root) + '">' +
       '<div class="row"><span class="name">' + esc(p.name) + "</span>" + statusChip(p.roundStatus) + "</div>" +
       '<div class="main">' + esc(p.mainline || "\u672A\u5199\u4E3B\u7EBF") + "</div>" +
-      '<div class="foot"><span>' + esc(p.currentRound || "\u2014") + "</span><span>" + ago(p.lastActivity) + "</span></div>" +
+      '<div class="foot"><span>' + esc(p.currentSummary ? "\u672C\u8F6E\uFF1A" + p.currentSummary : (p.currentRound ? "\u672C\u8F6E\uFF1A" + roundNo(p.currentRound) : "\u2014")) + "</span><span>" + ago(p.lastActivity) + "</span></div>" +
     "</button>").join("") || '<div class="empty">\u6CA1\u6709\u5DF2\u767B\u8BB0\u4E14\u6709\u7814\u7A76\u8BB0\u5F55\u7684\u9879\u76EE\u3002</div>';
   list.querySelectorAll(".project").forEach((el) => el.addEventListener("click", () => select(el.dataset.root)));
   picker.innerHTML = data.projects.map((p) => '<option value="' + esc(p.root) + '"' + (p.root === selected ? " selected" : "") + ">" + esc(p.name) + "</option>").join("");
+}
+const COLUMNS = { "Date": "\u65E5\u671F", "Version/round": "\u7248\u672C/\u8F6E\u6B21", "Protocol/split": "\u534F\u8BAE\u4E0E\u6570\u636E", "Measurements": "\u6D4B\u91CF\u7ED3\u679C", "Unseen data/train-test gap": "\u672A\u89C1\u6570\u636E\u4E0E\u6CDB\u5316\u5DEE\u8DDD", "Conclusion": "\u7ED3\u8BBA", "Artifacts": "\u4EA7\u7269" };
+const CARD = { "Current round": "\u5F53\u524D\u8F6E\u6B21", "Round status": "\u8F6E\u6B21\u72B6\u6001", "Mainline": "\u4E3B\u7EBF", "Target tier": "\u76EE\u6807\u6863\u6B21", "Target tier (conference/journal level)": "\u76EE\u6807\u6863\u6B21", "Deployment inputs/outputs": "\u8F93\u5165\u4E0E\u8F93\u51FA", "Completion": "\u5B8C\u6210\u6807\u51C6", "User restrictions": "\u7528\u6237\u9650\u5236", "Recent corrections": "\u6700\u8FD1\u7EA0\u6B63", "Research state": "\u7814\u7A76\u73B0\u72B6" };
+function roundNo(file) { const m = String(file || "").match(/(\\d+)[-_]brief/); return m ? "\u7B2C " + m[1] + " \u8F6E" : String(file || ""); }
+function statusOf(p, r, newestDone) {
+  const current = p.currentRound && p.currentRound.includes(r.label);
+  if (r.result) return ["done", "\u6709\u7ED3\u679C"];
+  if (current || r.number > newestDone) return ["running", "\u8FDB\u884C\u4E2D"];
+  return ["idle", "\u672A\u51FA\u7ED3\u679C"];
+}
+function line(k, v, cls) { return v ? '<div' + (cls ? ' class="' + cls + '"' : "") + '><span class="k">' + k + "</span>" + esc(v) + "</div>" : ""; }
+function roundTabs(p, r) {
+  const key = p.root + "#" + r.number;
+  const which = open.get(key);
+  return '<span class="tabs"><button data-key="' + esc(key) + '" data-root="' + esc(p.root) + '" data-file="' + esc(r.brief ? r.brief.file : "") + '" data-which="brief"' + (r.brief ? "" : " disabled") + (which === "brief" ? ' class="on"' : "") + ">\u8BF4\u660E\u5168\u6587</button>" +
+    '<button data-key="' + esc(key) + '" data-root="' + esc(p.root) + '" data-file="' + esc(r.result ? r.result.file : "") + '" data-which="result"' + (r.result ? "" : " disabled") + (which === "result" ? ' class="on"' : "") + ">\u7ED3\u679C\u5168\u6587</button></span>";
+}
+function roundBodyOpen(p, r) { const which = open.get(p.root + "#" + r.number); return which && r[which] ? roundBody(p.root, r[which]) : ""; }
+function nowSection(p, running, latest) {
+  let html = '<section><h2>\u73B0\u5728\u5728\u505A\u4EC0\u4E48 <span class="sub">\u53D6\u81EA\u5F53\u524D\u8F6E\u6B21\u7684\u8BF4\u660E\u548C\u7ED3\u679C</span></h2>';
+  const list = running.length ? running : (latest ? [latest] : []);
+  if (!list.length) return html + '<div class="card note">\u8FD8\u6CA1\u6709\u8F6E\u6B21\u8BB0\u5F55\u3002</div></section>';
+  for (const r of list) {
+    const b = r.brief || {}, res = r.result || {};
+    const isRunning = !r.result;
+    html += '<div class="now" style="margin-bottom:10px"><div class="facts" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+      '<strong>\u7B2C ' + esc(r.label) + ' \u8F6E</strong>' + authorChip(r.author) + '<span class="chip ' + (isRunning ? "ongoing" : "completed") + '">' + (isRunning ? "\u8FDB\u884C\u4E2D" : "\u6700\u8FD1\u4E00\u8F6E\u5DF2\u6709\u7ED3\u679C") + '</span><span class="note" style="margin:0">' + ago((r.result || r.brief || {}).mtime) + "</span>" + roundTabs(p, r) + "</div>" +
+      '<div class="what">' + esc(b.summary || r.title || "\u8FD9\u4E00\u8F6E\u7684\u8BF4\u660E\u6CA1\u6709\u5199\u4E00\u53E5\u8BDD\u76EE\u6807\u3002") + "</div>" +
+      '<div class="grid2">' +
+      '<div class="box expect' + (b.expected ? "" : " missing") + '"><div class="k">\u9884\u671F\u7ED3\u679C</div>' + esc(b.expected || "\u8BF4\u660E\u91CC\u6CA1\u6709\u5199\u9884\u671F\u7ED3\u679C\u3002") + "</div>" +
+      '<div class="box actual' + (res.summary || res.actual ? "" : " missing") + '"><div class="k">' + (isRunning ? "\u5B9E\u9645\u7ED3\u679C" : "\u5B9E\u9645\u7ED3\u679C\u4E0E\u9884\u671F\u5BF9\u7167") + "</div>" + esc(isRunning ? "\u8FD8\u5728\u8FDB\u884C\uFF0C\u7ED3\u679C\u51FA\u6765\u540E\u663E\u793A\u5728\u8FD9\u91CC\u3002" : (res.actual || res.summary || "\u7ED3\u679C\u91CC\u6CA1\u6709\u5199\u9884\u671F\u4E0E\u5B9E\u9645\u7684\u5BF9\u7167\u3002")) + "</div>" +
+      "</div>" + roundBodyOpen(p, r) + "</div>";
+  }
+  return html + "</section>";
+}
+function trajectorySection(p, newestDone) {
+  let html = '<section><h2>\u79D1\u7814\u8F68\u8FF9 <span class="sub">\u6BCF\u8F6E\u7684\u76EE\u6807\u3001\u9884\u671F\u548C\u5B9E\u9645\u7ED3\u679C \xB7 \u65B0\u7684\u5728\u4E0A</span></h2>';
+  if (!p.rounds.length) return html + '<div class="card note">\u8FD8\u6CA1\u6709\u8F6E\u6B21\u8BB0\u5F55\u3002</div></section>';
+  const showAll = open.get(p.root + "#trajectory") === "all";
+  const rounds = showAll ? p.rounds : p.rounds.slice(0, 8);
+  html += '<div class="timeline">' + rounds.map((r) => {
+    const [cls, label] = statusOf(p, r, newestDone);
+    const b = r.brief || {}, res = r.result || {};
+    return '<div class="tl ' + cls + '"><span class="dot"></span><div class="round' + (cls === "running" ? " current" : "") + '"><div class="head">' +
+      '<span class="no">\u7B2C ' + esc(r.label) + " \u8F6E</span>" + authorChip(r.author) + '<span class="chip ' + (cls === "done" ? "completed" : cls === "running" ? "ongoing" : "none") + '">' + label + "</span>" +
+      '<span class="time">' + ago((r.result || r.brief || {}).mtime) + "</span>" + roundTabs(p, r) + "</div>" +
+      '<div class="lines">' + line("\u76EE\u6807", b.summary || r.title) + line("\u9884\u671F", b.expected) + line("\u7ED3\u679C", res.actual || res.summary) + "</div>" +
+      roundBodyOpen(p, r) + "</div></div>";
+  }).join("") + "</div>";
+  if (p.rounds.length > 8) html += '<button class="btn more" data-toggle="' + esc(p.root + "#trajectory") + '">' + (showAll ? "\u53EA\u770B\u6700\u8FD1 8 \u8F6E" : "\u5C55\u5F00\u5168\u90E8 " + p.rounds.length + " \u8F6E") + "</button>";
+  return html + "</section>";
+}
+function evaluationSection(p) {
+  let html = '<section><h2>\u8BC4\u6D4B\u7ED3\u679C <span class="sub">EVAL.md \xB7 \u6BCF\u4E2A\u65B9\u6CD5\u7248\u672C\u4E00\u884C</span></h2>';
+  if (!p.evaluation) return html + '<div class="card note">\u8FD8\u6CA1\u6709\u8BC4\u6D4B\u8868\u3002\u4E3B\u7EBF\u786E\u8BA4\u540E\uFF0C\u6267\u884C\u8005\u5EFA\u7ACB\u80FD\u56DE\u7B54\u7814\u7A76\u95EE\u9898\u7684\u8BC4\u6D4B\u3002</div></section>';
+  if (!p.evaluation.tables.length) return html + '<div class="card md">' + md(p.evaluation.text) + "</div></section>";
+  const showAll = open.get(p.root + "#eval") === "all";
+  for (const t of p.evaluation.tables) {
+    const assessment = t.header.some((c) => /\u7EF4\u5EA6|dimension/i.test(c));
+    if (assessment) continue;
+    const rows = showAll ? t.rows : t.rows.slice(-5);
+    html += '<div class="tablewrap">' + tableHtml([t.header.map((c) => COLUMNS[c] || c), ...rows], true).replace("<table>", '<table class="wrap">') + "</div>";
+    if (t.rows.length > 5) html += '<button class="btn more" data-toggle="' + esc(p.root + "#eval") + '">' + (showAll ? "\u53EA\u770B\u6700\u8FD1 5 \u884C" : "\u5C55\u5F00\u5168\u90E8 " + t.rows.length + " \u884C") + "</button>";
+  }
+  const judged = p.evaluation.tables.filter((t) => t.header.some((c) => /\u7EF4\u5EA6|dimension/i.test(c)));
+  if (judged.length) html += '<details class="card" style="margin-top:10px"><summary>\u5BFC\u5E08\u5BF9\u7814\u7A76\u8D28\u91CF\u7684\u5F53\u524D\u5224\u65AD\uFF08\u516B\u4E2A\u7EF4\u5EA6\uFF09</summary>' + judged.map((t) => '<div class="tablewrap" style="margin-top:8px">' + tableHtml([t.header, ...t.rows], false).replace("<table>", '<table class="wrap">') + "</div>").join("") + "</details>";
+  html += lazyDoc(p.root, "EVAL.md", "\u67E5\u770B EVAL.md \u539F\u6587");
+  return html + "</section>";
+}
+function identitySection(p) {
+  let html = '<section><details class="card"' + (open.get(p.root + "#card") === "open" ? " open" : "") + ' data-card="' + esc(p.root) + '"><summary>\u9879\u76EE\u6863\u6848\uFF08\u8EAB\u4EFD\u5361 IDENTITY.md\uFF09</summary>';
+  if (!p.identity) return html + '<div class="note">\u8FD8\u6CA1\u6709\u8EAB\u4EFD\u5361\u3002</div></details></section>';
+  const rows = [];
+  let rest = [];
+  for (const raw of p.identity.text.split(/\\r?\\n/)) {
+    const m = raw.match(/^\\s*(?:[-*]\\s*)?\\**([^:\uFF1A*]{1,40}?)\\**\\s*[:\uFF1A]\\s*(.+)$/);
+    if (m && CARD[m[1].trim()]) rows.push([CARD[m[1].trim()], m[2].trim()]);
+    else if (raw.trim() && !/^#/.test(raw)) rest.push(raw);
+  }
+  html += '<dl class="kv" style="margin-top:10px">' + rows.map(([k, v]) => "<dt>" + esc(k) + "</dt><dd>" + inline(v) + "</dd>").join("") + "</dl>";
+  if (rest.length) html += '<div class="md">' + md(rest.join("\\n")) + "</div>";
+  if (p.identity.text.length > 4096) html += '<div class="note">\u8EAB\u4EFD\u5361\u8D85\u8FC7 4KB\uFF0C\u5BBF\u4E3B\u53EA\u4F1A\u770B\u5230\u5F00\u5934\u90E8\u5206\u3002</div>';
+  return html + "</details></section>";
 }
 function renderView() {
   const view = document.getElementById("view");
   const p = data.projects.find((item) => item.root === selected);
   if (!p) { view.innerHTML = '<div class="empty">\u4ECE\u5DE6\u4FA7\u9009\u62E9\u4E00\u4E2A\u9879\u76EE\u3002</div>'; return; }
-  const evalRows = p.evaluation ? p.evaluation.tables.reduce((n, t) => n + t.rows.length, 0) : 0;
+  const newestDone = Math.max(0, ...p.rounds.filter((r) => r.result).map((r) => r.number));
+  const running = p.rounds.filter((r) => statusOf(p, r, newestDone)[0] === "running");
   let html = '<h1 class="title">' + esc(p.name) + '</h1><div class="path">' + esc(p.root) + "</div>";
-  html += '<div class="mainline"><span class="label">\u4E3B\u7EBF</span>' + esc(p.mainline || "\u8EAB\u4EFD\u5361\u91CC\u8FD8\u6CA1\u6709 Mainline\u3002") + "</div>";
-  html += '<div class="tiles">' +
-    tile("\u5F53\u524D\u8F6E\u6B21", p.currentRound || "\u2014") + tile("\u8F6E\u6B21\u72B6\u6001", (STATUS[String(p.roundStatus || "").toLowerCase()] || [0, p.roundStatus || "\u2014"])[1]) +
-    tile("\u5DF2\u6709\u8F6E\u6B21", p.rounds.length) + tile("\u8BC4\u6D4B\u8BB0\u5F55", evalRows ? evalRows + " \u884C" : "\u2014") + tile("\u6700\u8FD1\u66F4\u65B0", ago(p.lastActivity)) + "</div>";
-  html += '<section><h2>\u8BC4\u6D4B\u8868 <span class="sub">EVAL.md \xB7 \u6700\u65B0\u4E00\u884C\u9AD8\u4EAE</span></h2>';
-  if (!p.evaluation) html += '<div class="card note">\u8FD8\u6CA1\u6709 EVAL.md\u3002\u4E3B\u7EBF\u786E\u8BA4\u540E\uFF0C\u6267\u884C\u8005\u5EFA\u7ACB\u80FD\u56DE\u7B54\u95EE\u9898\u7684\u8BC4\u6D4B\uFF0C\u5BFC\u5E08\u5224\u65AD\u65B9\u5411\u3002</div>';
-  else if (p.evaluation.tables.length) html += p.evaluation.tables.map((t) => '<div class="tablewrap">' + tableHtml([t.header, ...t.rows], true) + "</div>").join("") + lazyDoc(p.root, "EVAL.md", "\u67E5\u770B EVAL.md \u539F\u6587");
-  else html += '<div class="card md">' + md(p.evaluation.text) + "</div>";
-  html += "</section>";
+  html += '<div class="hero"><div class="label">\u4E3B\u7EBF</div><div class="goal">' + esc(p.mainline || "\u8EAB\u4EFD\u5361\u91CC\u8FD8\u6CA1\u6709\u4E3B\u7EBF\u3002") + '</div><div class="facts">' +
+    statusChip(p.roundStatus) + (p.targetTier ? "<span>\u76EE\u6807\u6863\u6B21\uFF1A" + esc(p.targetTier) + "</span>" : "") + "<span>\u5171 " + p.rounds.length + " \u8F6E</span><span>\u6700\u8FD1\u66F4\u65B0 " + ago(p.lastActivity) + "</span></div>" +
+    (p.researchState ? '<div class="state"><span class="note" style="margin-right:6px">\u7814\u7A76\u73B0\u72B6</span>' + esc(p.researchState) + "</div>" : "") + "</div>";
+  html += nowSection(p, running, p.rounds[0]);
+  html += trajectorySection(p, newestDone);
+  html += evaluationSection(p);
   if (CAN_EDIT) html += papersSection(p.root);
-  html += '<section><h2>\u8F6E\u6B21 <span class="sub">rounds/ \xB7 \u65B0\u7684\u5728\u4E0A</span></h2>';
-  if (!p.rounds.length) html += '<div class="card note">\u8FD8\u6CA1\u6709\u8F6E\u6B21\u8BB0\u5F55\u3002</div>';
-  html += p.rounds.map((r) => {
-    const key = p.root + "#" + r.number;
-    const which = open.get(key);
-    const current = p.currentRound && p.currentRound.includes(r.label);
-    return '<div class="round' + (current ? " current" : "") + '"><div class="head">' +
-      '<span class="no">\u7B2C ' + esc(r.label) + " \u8F6E</span>" + authorChip(r.author) +
-      '<span class="rtitle">' + esc(r.title || "") + "</span>" +
-      (r.result ? "" : '<span class="chip ' + (current ? "ongoing" : "none") + '">' + (current ? "\u8FDB\u884C\u4E2D" : "\u672A\u51FA\u7ED3\u679C") + "</span>") +
-      '<span class="time">' + ago((r.result || r.brief || {}).mtime) + "</span>" +
-      '<span class="tabs"><button data-key="' + esc(key) + '" data-root="' + esc(p.root) + '" data-file="' + esc(r.brief ? r.brief.file : "") + '" data-which="brief"' + (r.brief ? "" : " disabled") + (which === "brief" ? ' class="on"' : "") + ">\u8BF4\u660E</button>" +
-      '<button data-key="' + esc(key) + '" data-root="' + esc(p.root) + '" data-file="' + esc(r.result ? r.result.file : "") + '" data-which="result"' + (r.result ? "" : " disabled") + (which === "result" ? ' class="on"' : "") + ">\u7ED3\u679C</button></span></div>" +
-      (which && r[which] ? roundBody(p.root, r[which]) : "") + "</div>";
-  }).join("");
-  html += "</section>";
-  html += '<section><h2>\u8EAB\u4EFD\u5361 <span class="sub">IDENTITY.md</span></h2><div class="card md">' + (p.identity ? md(p.identity.text) + (p.identity.text.length > 4096 ? '<div class="note">\u8EAB\u4EFD\u5361\u8D85\u8FC7 4KB\uFF0C\u5BBF\u4E3B\u53EA\u4F1A\u770B\u5230\u5F00\u5934\u90E8\u5206\u3002</div>' : "") : '<span class="note">\u8FD8\u6CA1\u6709\u8EAB\u4EFD\u5361\u3002</span>') + "</div></section>";
+  html += identitySection(p);
   if (p.doctor) html += "<section>" + lazyDoc(p.root, "DOCTOR.md", "Dove \u96C6\u6210\u95EE\u9898\u8BB0\u5F55\uFF08DOCTOR.md\uFF09") + "</section>";
   view.innerHTML = html;
   view.querySelectorAll(".librarySync").forEach((b) => b.addEventListener("click", async () => {
@@ -19224,6 +19383,8 @@ function renderView() {
     const key = d.dataset.root + "/" + d.dataset.name;
     if (d.open) { openDocs.add(key); loadRound(d.dataset.root, d.dataset.name); } else openDocs.delete(key);
   }));
+  view.querySelectorAll("details[data-card]").forEach((d) => d.addEventListener("toggle", () => open.set(d.dataset.card + "#card", d.open ? "open" : null)));
+  view.querySelectorAll("button[data-toggle]").forEach((b) => b.addEventListener("click", () => { open.set(b.dataset.toggle, open.get(b.dataset.toggle) === "all" ? null : "all"); renderView(); }));
   view.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
     const which = open.get(b.dataset.key) === b.dataset.which ? null : b.dataset.which;
     open.set(b.dataset.key, which);
@@ -19278,7 +19439,7 @@ function papersSection(root) {
   if (w.scan) html += lazyScan(root, w.scan);
   if (w.scanDue) html += '<div class="note">\u9886\u57DF\u626B\u63CF\u5F85\u66F4\u65B0\uFF1A\u4E0B\u4E00\u6B21\u5BFC\u5E08\u8C03\u7528\u987A\u5E26\u5B8C\u6210\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u4FDD\u5B58\u5230 watch/scan-YYYY-MM-DD.md\uFF0C\u4E0D\u5FC5\u7B49\u4E0B\u4E00\u8F6E\u3002</div>';
   const notes = [...new Set([...(w.state?.notes || []), ...(w.digests || []).flatMap((d) => d.notes || [])])];
-  if (notes.length) html += '<details class="note" open><summary>\u68C0\u7D22\u8BF4\u660E</summary>' + notes.map((note) => '<div>' + esc(note) + '</div>').join("") + '</details>';
+  if (notes.length) html += '<details class="note"><summary>\u68C0\u7D22\u8BF4\u660E\uFF08' + notes.length + ' \u6761\uFF09</summary>' + notes.map((note) => '<div>' + esc(note) + '</div>').join("") + '</details>';
   if (!c.keywords.length && !c.authors.length && !c.seedPapers.length) return html + '<div class="card note">\u8FD8\u6CA1\u6709\u8FFD\u8E2A\u5185\u5BB9\u3002\u4E0B\u6B21\u8FD0\u884C\u4F1A\u6839\u636E\u9879\u76EE\u8D44\u6599\u81EA\u52A8\u751F\u6210\u521D\u7A3F\uFF0C\u4E5F\u53EF\u4EE5\u5230\u300C\u8BBE\u7F6E\u300D\u91CC\u586B\u5199\u3002</div></section>';
   const seenIds = new Set();
   const items = [];

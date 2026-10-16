@@ -56,6 +56,66 @@ export function parseAuthor(text = "") {
   return "other";
 }
 
+const SUMMARY_LINE = /^\s*(?:[-*]\s*)?\**\s*一句话\s*\**\s*[:：]\s*(.+)$/u;
+// Short "key: value" lines at the top of a record are metadata, not its purpose.
+const META_LINE = /^\s*(?:[-*]\s*)?\**\s*[^:：\s][^:：]{0,15}?\s*\**\s*[:：]/u;
+const HEADING = /^\s*#{1,4}\s+(.*)$/u;
+const EXPECTED_HEADING = /预期|预测|expected|prediction/iu;
+const ACTUAL_HEADING = /预期与实际|预测与实际|prediction versus actual|prediction vs/iu;
+
+// Plain text for one dashboard line: no Markdown link targets, code marks or emphasis.
+function plainLine(text, limit = 240) {
+  if (!text) return null;
+  const flat = String(text).replace(/\[([^\]]+)\]\([^)]*\)/gu, "$1").replace(/[`*]/gu, "").replace(/\s+/gu, " ").trim();
+  if (!flat) return null;
+  const characters = Array.from(flat);
+  return characters.length > limit ? `${characters.slice(0, limit).join("")}…` : flat;
+}
+
+function sectionText(lines, pattern) {
+  const start = lines.findIndex((line) => HEADING.test(line) && pattern.test(line.match(HEADING)[1]));
+  if (start === -1) return null;
+  const body = [];
+  let tableHeader = true;
+  for (const line of lines.slice(start + 1)) {
+    if (HEADING.test(line)) break;
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^\|.*\|$/u.test(trimmed)) {
+      // A prediction-versus-actual table reads as "item: cells" per row, without its header or rule.
+      const cells = trimmed.slice(1, -1).split("|").map((cell) => cell.trim());
+      if (cells.every((cell) => /^:?-+:?$/u.test(cell))) continue;
+      if (tableHeader) { tableHeader = false; continue; }
+      body.push(`${cells[0]}：${cells.slice(1).filter(Boolean).join(" → ")}；`);
+      continue;
+    }
+    body.push(trimmed.replace(/^[-*+]\s+/u, ""));
+  }
+  return body.join(" ");
+}
+
+function firstParagraph(lines) {
+  const body = [];
+  for (const line of lines) {
+    if (HEADING.test(line) || META_LINE.test(line)) { if (body.length) break; continue; }
+    if (!line.trim()) { if (body.length) break; continue; }
+    body.push(line.trim().replace(/^[-*+]\s+/u, ""));
+  }
+  return body.join(" ");
+}
+
+// What a round set out to do, what it expected and what actually happened,
+// taken from the record's own one-line summary and headings.
+export function summarizeRoundText(text = "", kind = "brief") {
+  const lines = String(text).split(/\r?\n/u);
+  const summary = lines.map((line) => line.match(SUMMARY_LINE)?.[1]).find(Boolean) ?? firstParagraph(lines);
+  return {
+    summary: plainLine(summary),
+    ...(kind === "brief" ? { expected: plainLine(sectionText(lines.filter((line) => !ACTUAL_HEADING.test(line)), EXPECTED_HEADING)) } : {}),
+    ...(kind === "result" ? { actual: plainLine(sectionText(lines, ACTUAL_HEADING)) } : {})
+  };
+}
+
 function firstHeading(text = "") {
   const heading = text.split(/\r?\n/u).find((line) => /^#{1,3}\s+\S/u.test(line));
   return heading ? heading.replace(/^#{1,3}\s+/u, "").trim() : null;
@@ -90,7 +150,7 @@ function collectRounds(directory, fsOps) {
     const file = readText(path.join(directory, name), fsOps);
     if (!file) continue;
     const entry = byNumber.get(number) ?? { number, label: match[1] };
-    entry[kind] = { file: name, truncated: file.truncated, mtime: file.mtime };
+    entry[kind] = { file: name, truncated: file.truncated, mtime: file.mtime, ...summarizeRoundText(file.text, kind) };
     if (kind === "brief") {
       entry.author = parseAuthor(file.text);
       entry.title = firstHeading(file.text);
@@ -129,6 +189,9 @@ export function summarizeProject(root, options = {}) {
     exists,
     mainline: fields.Mainline ?? fields["主线"] ?? null,
     currentRound: current?.brief ?? null,
+    currentSummary: rounds.find((round) => current?.brief?.includes(round.label))?.brief?.summary ?? null,
+    targetTier: fields["Target tier"] ?? fields["Target tier (conference/journal level)"] ?? fields["目标档次"] ?? null,
+    researchState: plainLine(fields["Research state"] ?? fields["研究现状"] ?? null, 600),
     roundStatus: statusMatch,
     lastActivity: times.length ? Math.max(...times) : null,
     identity: identity ? { text: identity.text, truncated: identity.truncated, mtime: identity.mtime } : null,

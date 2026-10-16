@@ -297,6 +297,8 @@ aside { border-right: 1px solid var(--line); padding: 14px; overflow-y: auto; }
 .project .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project .main { color: var(--muted); font-size: 12.5px; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .project .foot { color: var(--muted); font-size: 12px; margin-top: 6px; display: flex; justify-content: space-between; gap: 8px; }
+.project .foot span:first-child { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.project .foot span:last-child { white-space: nowrap; flex: none; }
 .chip { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 999px; white-space: nowrap; font-weight: 600; }
 .chip.ongoing { background: var(--accent-soft); color: var(--accent); }
 .chip.paused { background: var(--pause-soft); color: var(--pause); }
@@ -331,12 +333,40 @@ td.num { font-variant-numeric: tabular-nums; }
 .round .no { font-weight: 700; }
 .round .rtitle { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .round .time { color: var(--muted); font-size: 12px; }
-.round .tabs { display: flex; gap: 6px; }
-.round .tabs button { border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 12px; cursor: pointer; }
-.round .tabs button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
-.round .tabs button:disabled { opacity: .45; cursor: default; }
+.tabs { display: inline-flex; gap: 6px; }
+.tabs button { border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 12px; cursor: pointer; }
+.tabs button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.tabs button:disabled { opacity: .45; cursor: default; }
 .round .body { border-top: 1px solid var(--line); padding: 12px 16px; }
 .round.current { border-color: var(--accent); }
+.hero { margin: 10px 0 18px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.hero .label { color: var(--muted); font-size: 12px; }
+.hero .goal { font-size: 17px; font-weight: 600; margin: 2px 0 8px; }
+.hero .facts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 12.5px; }
+.hero .state { margin-top: 10px; font-size: 13.5px; }
+.now { border: 1px solid var(--accent); border-radius: 12px; background: var(--panel); padding: 14px 16px; box-shadow: var(--shadow); }
+.now .what { font-size: 15.5px; font-weight: 600; margin: 4px 0 10px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.box { background: var(--bg); border-radius: 8px; padding: 9px 11px; font-size: 13.5px; }
+.box .k { color: var(--muted); font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.box.expect { border-left: 3px solid var(--done); }
+.box.actual { border-left: 3px solid var(--accent); }
+.box.missing { color: var(--muted); }
+.timeline { position: relative; padding-left: 22px; }
+.timeline::before { content: ""; position: absolute; left: 7px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+.tl { position: relative; margin-bottom: 12px; }
+.tl .dot { position: absolute; left: -20px; top: 14px; width: 12px; height: 12px; border-radius: 50%; background: var(--panel); border: 2px solid var(--pause); }
+.tl.done .dot { border-color: var(--done); background: var(--done-soft); }
+.tl.running .dot { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.tl .round { margin-bottom: 0; }
+.tl .lines { padding: 0 14px 10px; display: grid; gap: 4px; font-size: 13.5px; }
+.tl .lines .k { color: var(--muted); font-size: 12px; margin-right: 6px; font-weight: 600; }
+.more { display: block; margin: 6px 0 0; }
+table.wrap td { white-space: normal; min-width: 90px; max-width: 420px; }
+table.wrap td:first-child { white-space: nowrap; }
+dl.kv { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 13.5px; }
+dl.kv dt { color: var(--muted); font-weight: 600; }
+dl.kv dd { margin: 0; overflow-wrap: anywhere; }
 .md h1, .md h2, .md h3, .md h4 { font-size: 14.5px; margin: 14px 0 6px; }
 .md p { margin: 6px 0; }
 .md ul, .md ol { margin: 6px 0; padding-left: 22px; }
@@ -373,6 +403,7 @@ nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-colo
 .paper .judge { font-size: 12px; margin-top: 3px; }
 .paper .takeaway { margin: 5px 0; font-size: 14px; }
 .library { margin-top: 16px; }
+.library h2 { font-size: 14px; margin: 0 0 8px; display: flex; align-items: baseline; gap: 8px; }
 .library .btns { margin-bottom: 8px; }
 tr.cardrow { cursor: pointer; }
 tr.cardrow:hover td { background: var(--accent-soft); }
@@ -485,44 +516,109 @@ function renderList() {
     '<button class="project' + (p.root === selected ? " active" : "") + '" data-root="' + esc(p.root) + '">' +
       '<div class="row"><span class="name">' + esc(p.name) + "</span>" + statusChip(p.roundStatus) + "</div>" +
       '<div class="main">' + esc(p.mainline || "未写主线") + "</div>" +
-      '<div class="foot"><span>' + esc(p.currentRound || "—") + "</span><span>" + ago(p.lastActivity) + "</span></div>" +
+      '<div class="foot"><span>' + esc(p.currentSummary ? "本轮：" + p.currentSummary : (p.currentRound ? "本轮：" + roundNo(p.currentRound) : "—")) + "</span><span>" + ago(p.lastActivity) + "</span></div>" +
     "</button>").join("") || '<div class="empty">没有已登记且有研究记录的项目。</div>';
   list.querySelectorAll(".project").forEach((el) => el.addEventListener("click", () => select(el.dataset.root)));
   picker.innerHTML = data.projects.map((p) => '<option value="' + esc(p.root) + '"' + (p.root === selected ? " selected" : "") + ">" + esc(p.name) + "</option>").join("");
+}
+const COLUMNS = { "Date": "日期", "Version/round": "版本/轮次", "Protocol/split": "协议与数据", "Measurements": "测量结果", "Unseen data/train-test gap": "未见数据与泛化差距", "Conclusion": "结论", "Artifacts": "产物" };
+const CARD = { "Current round": "当前轮次", "Round status": "轮次状态", "Mainline": "主线", "Target tier": "目标档次", "Target tier (conference/journal level)": "目标档次", "Deployment inputs/outputs": "输入与输出", "Completion": "完成标准", "User restrictions": "用户限制", "Recent corrections": "最近纠正", "Research state": "研究现状" };
+function roundNo(file) { const m = String(file || "").match(/(\\d+)[-_]brief/); return m ? "第 " + m[1] + " 轮" : String(file || ""); }
+function statusOf(p, r, newestDone) {
+  const current = p.currentRound && p.currentRound.includes(r.label);
+  if (r.result) return ["done", "有结果"];
+  if (current || r.number > newestDone) return ["running", "进行中"];
+  return ["idle", "未出结果"];
+}
+function line(k, v, cls) { return v ? '<div' + (cls ? ' class="' + cls + '"' : "") + '><span class="k">' + k + "</span>" + esc(v) + "</div>" : ""; }
+function roundTabs(p, r) {
+  const key = p.root + "#" + r.number;
+  const which = open.get(key);
+  return '<span class="tabs"><button data-key="' + esc(key) + '" data-root="' + esc(p.root) + '" data-file="' + esc(r.brief ? r.brief.file : "") + '" data-which="brief"' + (r.brief ? "" : " disabled") + (which === "brief" ? ' class="on"' : "") + ">说明全文</button>" +
+    '<button data-key="' + esc(key) + '" data-root="' + esc(p.root) + '" data-file="' + esc(r.result ? r.result.file : "") + '" data-which="result"' + (r.result ? "" : " disabled") + (which === "result" ? ' class="on"' : "") + ">结果全文</button></span>";
+}
+function roundBodyOpen(p, r) { const which = open.get(p.root + "#" + r.number); return which && r[which] ? roundBody(p.root, r[which]) : ""; }
+function nowSection(p, running, latest) {
+  let html = '<section><h2>现在在做什么 <span class="sub">取自当前轮次的说明和结果</span></h2>';
+  const list = running.length ? running : (latest ? [latest] : []);
+  if (!list.length) return html + '<div class="card note">还没有轮次记录。</div></section>';
+  for (const r of list) {
+    const b = r.brief || {}, res = r.result || {};
+    const isRunning = !r.result;
+    html += '<div class="now" style="margin-bottom:10px"><div class="facts" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+      '<strong>第 ' + esc(r.label) + ' 轮</strong>' + authorChip(r.author) + '<span class="chip ' + (isRunning ? "ongoing" : "completed") + '">' + (isRunning ? "进行中" : "最近一轮已有结果") + '</span><span class="note" style="margin:0">' + ago((r.result || r.brief || {}).mtime) + "</span>" + roundTabs(p, r) + "</div>" +
+      '<div class="what">' + esc(b.summary || r.title || "这一轮的说明没有写一句话目标。") + "</div>" +
+      '<div class="grid2">' +
+      '<div class="box expect' + (b.expected ? "" : " missing") + '"><div class="k">预期结果</div>' + esc(b.expected || "说明里没有写预期结果。") + "</div>" +
+      '<div class="box actual' + (res.summary || res.actual ? "" : " missing") + '"><div class="k">' + (isRunning ? "实际结果" : "实际结果与预期对照") + "</div>" + esc(isRunning ? "还在进行，结果出来后显示在这里。" : (res.actual || res.summary || "结果里没有写预期与实际的对照。")) + "</div>" +
+      "</div>" + roundBodyOpen(p, r) + "</div>";
+  }
+  return html + "</section>";
+}
+function trajectorySection(p, newestDone) {
+  let html = '<section><h2>科研轨迹 <span class="sub">每轮的目标、预期和实际结果 · 新的在上</span></h2>';
+  if (!p.rounds.length) return html + '<div class="card note">还没有轮次记录。</div></section>';
+  const showAll = open.get(p.root + "#trajectory") === "all";
+  const rounds = showAll ? p.rounds : p.rounds.slice(0, 8);
+  html += '<div class="timeline">' + rounds.map((r) => {
+    const [cls, label] = statusOf(p, r, newestDone);
+    const b = r.brief || {}, res = r.result || {};
+    return '<div class="tl ' + cls + '"><span class="dot"></span><div class="round' + (cls === "running" ? " current" : "") + '"><div class="head">' +
+      '<span class="no">第 ' + esc(r.label) + " 轮</span>" + authorChip(r.author) + '<span class="chip ' + (cls === "done" ? "completed" : cls === "running" ? "ongoing" : "none") + '">' + label + "</span>" +
+      '<span class="time">' + ago((r.result || r.brief || {}).mtime) + "</span>" + roundTabs(p, r) + "</div>" +
+      '<div class="lines">' + line("目标", b.summary || r.title) + line("预期", b.expected) + line("结果", res.actual || res.summary) + "</div>" +
+      roundBodyOpen(p, r) + "</div></div>";
+  }).join("") + "</div>";
+  if (p.rounds.length > 8) html += '<button class="btn more" data-toggle="' + esc(p.root + "#trajectory") + '">' + (showAll ? "只看最近 8 轮" : "展开全部 " + p.rounds.length + " 轮") + "</button>";
+  return html + "</section>";
+}
+function evaluationSection(p) {
+  let html = '<section><h2>评测结果 <span class="sub">EVAL.md · 每个方法版本一行</span></h2>';
+  if (!p.evaluation) return html + '<div class="card note">还没有评测表。主线确认后，执行者建立能回答研究问题的评测。</div></section>';
+  if (!p.evaluation.tables.length) return html + '<div class="card md">' + md(p.evaluation.text) + "</div></section>";
+  const showAll = open.get(p.root + "#eval") === "all";
+  for (const t of p.evaluation.tables) {
+    const assessment = t.header.some((c) => /维度|dimension/i.test(c));
+    if (assessment) continue;
+    const rows = showAll ? t.rows : t.rows.slice(-5);
+    html += '<div class="tablewrap">' + tableHtml([t.header.map((c) => COLUMNS[c] || c), ...rows], true).replace("<table>", '<table class="wrap">') + "</div>";
+    if (t.rows.length > 5) html += '<button class="btn more" data-toggle="' + esc(p.root + "#eval") + '">' + (showAll ? "只看最近 5 行" : "展开全部 " + t.rows.length + " 行") + "</button>";
+  }
+  const judged = p.evaluation.tables.filter((t) => t.header.some((c) => /维度|dimension/i.test(c)));
+  if (judged.length) html += '<details class="card" style="margin-top:10px"><summary>导师对研究质量的当前判断（八个维度）</summary>' + judged.map((t) => '<div class="tablewrap" style="margin-top:8px">' + tableHtml([t.header, ...t.rows], false).replace("<table>", '<table class="wrap">') + "</div>").join("") + "</details>";
+  html += lazyDoc(p.root, "EVAL.md", "查看 EVAL.md 原文");
+  return html + "</section>";
+}
+function identitySection(p) {
+  let html = '<section><details class="card"' + (open.get(p.root + "#card") === "open" ? " open" : "") + ' data-card="' + esc(p.root) + '"><summary>项目档案（身份卡 IDENTITY.md）</summary>';
+  if (!p.identity) return html + '<div class="note">还没有身份卡。</div></details></section>';
+  const rows = [];
+  let rest = [];
+  for (const raw of p.identity.text.split(/\\r?\\n/)) {
+    const m = raw.match(/^\\s*(?:[-*]\\s*)?\\**([^:：*]{1,40}?)\\**\\s*[:：]\\s*(.+)$/);
+    if (m && CARD[m[1].trim()]) rows.push([CARD[m[1].trim()], m[2].trim()]);
+    else if (raw.trim() && !/^#/.test(raw)) rest.push(raw);
+  }
+  html += '<dl class="kv" style="margin-top:10px">' + rows.map(([k, v]) => "<dt>" + esc(k) + "</dt><dd>" + inline(v) + "</dd>").join("") + "</dl>";
+  if (rest.length) html += '<div class="md">' + md(rest.join("\\n")) + "</div>";
+  if (p.identity.text.length > 4096) html += '<div class="note">身份卡超过 4KB，宿主只会看到开头部分。</div>';
+  return html + "</details></section>";
 }
 function renderView() {
   const view = document.getElementById("view");
   const p = data.projects.find((item) => item.root === selected);
   if (!p) { view.innerHTML = '<div class="empty">从左侧选择一个项目。</div>'; return; }
-  const evalRows = p.evaluation ? p.evaluation.tables.reduce((n, t) => n + t.rows.length, 0) : 0;
+  const newestDone = Math.max(0, ...p.rounds.filter((r) => r.result).map((r) => r.number));
+  const running = p.rounds.filter((r) => statusOf(p, r, newestDone)[0] === "running");
   let html = '<h1 class="title">' + esc(p.name) + '</h1><div class="path">' + esc(p.root) + "</div>";
-  html += '<div class="mainline"><span class="label">主线</span>' + esc(p.mainline || "身份卡里还没有 Mainline。") + "</div>";
-  html += '<div class="tiles">' +
-    tile("当前轮次", p.currentRound || "—") + tile("轮次状态", (STATUS[String(p.roundStatus || "").toLowerCase()] || [0, p.roundStatus || "—"])[1]) +
-    tile("已有轮次", p.rounds.length) + tile("评测记录", evalRows ? evalRows + " 行" : "—") + tile("最近更新", ago(p.lastActivity)) + "</div>";
-  html += '<section><h2>评测表 <span class="sub">EVAL.md · 最新一行高亮</span></h2>';
-  if (!p.evaluation) html += '<div class="card note">还没有 EVAL.md。主线确认后，执行者建立能回答问题的评测，导师判断方向。</div>';
-  else if (p.evaluation.tables.length) html += p.evaluation.tables.map((t) => '<div class="tablewrap">' + tableHtml([t.header, ...t.rows], true) + "</div>").join("") + lazyDoc(p.root, "EVAL.md", "查看 EVAL.md 原文");
-  else html += '<div class="card md">' + md(p.evaluation.text) + "</div>";
-  html += "</section>";
+  html += '<div class="hero"><div class="label">主线</div><div class="goal">' + esc(p.mainline || "身份卡里还没有主线。") + '</div><div class="facts">' +
+    statusChip(p.roundStatus) + (p.targetTier ? "<span>目标档次：" + esc(p.targetTier) + "</span>" : "") + "<span>共 " + p.rounds.length + " 轮</span><span>最近更新 " + ago(p.lastActivity) + "</span></div>" +
+    (p.researchState ? '<div class="state"><span class="note" style="margin-right:6px">研究现状</span>' + esc(p.researchState) + "</div>" : "") + "</div>";
+  html += nowSection(p, running, p.rounds[0]);
+  html += trajectorySection(p, newestDone);
+  html += evaluationSection(p);
   if (CAN_EDIT) html += papersSection(p.root);
-  html += '<section><h2>轮次 <span class="sub">rounds/ · 新的在上</span></h2>';
-  if (!p.rounds.length) html += '<div class="card note">还没有轮次记录。</div>';
-  html += p.rounds.map((r) => {
-    const key = p.root + "#" + r.number;
-    const which = open.get(key);
-    const current = p.currentRound && p.currentRound.includes(r.label);
-    return '<div class="round' + (current ? " current" : "") + '"><div class="head">' +
-      '<span class="no">第 ' + esc(r.label) + " 轮</span>" + authorChip(r.author) +
-      '<span class="rtitle">' + esc(r.title || "") + "</span>" +
-      (r.result ? "" : '<span class="chip ' + (current ? "ongoing" : "none") + '">' + (current ? "进行中" : "未出结果") + "</span>") +
-      '<span class="time">' + ago((r.result || r.brief || {}).mtime) + "</span>" +
-      '<span class="tabs"><button data-key="' + esc(key) + '" data-root="' + esc(p.root) + '" data-file="' + esc(r.brief ? r.brief.file : "") + '" data-which="brief"' + (r.brief ? "" : " disabled") + (which === "brief" ? ' class="on"' : "") + ">说明</button>" +
-      '<button data-key="' + esc(key) + '" data-root="' + esc(p.root) + '" data-file="' + esc(r.result ? r.result.file : "") + '" data-which="result"' + (r.result ? "" : " disabled") + (which === "result" ? ' class="on"' : "") + ">结果</button></span></div>" +
-      (which && r[which] ? roundBody(p.root, r[which]) : "") + "</div>";
-  }).join("");
-  html += "</section>";
-  html += '<section><h2>身份卡 <span class="sub">IDENTITY.md</span></h2><div class="card md">' + (p.identity ? md(p.identity.text) + (p.identity.text.length > 4096 ? '<div class="note">身份卡超过 4KB，宿主只会看到开头部分。</div>' : "") : '<span class="note">还没有身份卡。</span>') + "</div></section>";
+  html += identitySection(p);
   if (p.doctor) html += "<section>" + lazyDoc(p.root, "DOCTOR.md", "Dove 集成问题记录（DOCTOR.md）") + "</section>";
   view.innerHTML = html;
   view.querySelectorAll(".librarySync").forEach((b) => b.addEventListener("click", async () => {
@@ -534,6 +630,8 @@ function renderView() {
     const key = d.dataset.root + "/" + d.dataset.name;
     if (d.open) { openDocs.add(key); loadRound(d.dataset.root, d.dataset.name); } else openDocs.delete(key);
   }));
+  view.querySelectorAll("details[data-card]").forEach((d) => d.addEventListener("toggle", () => open.set(d.dataset.card + "#card", d.open ? "open" : null)));
+  view.querySelectorAll("button[data-toggle]").forEach((b) => b.addEventListener("click", () => { open.set(b.dataset.toggle, open.get(b.dataset.toggle) === "all" ? null : "all"); renderView(); }));
   view.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
     const which = open.get(b.dataset.key) === b.dataset.which ? null : b.dataset.which;
     open.set(b.dataset.key, which);
@@ -588,7 +686,7 @@ function papersSection(root) {
   if (w.scan) html += lazyScan(root, w.scan);
   if (w.scanDue) html += '<div class="note">领域扫描待更新：下一次导师调用顺带完成，由主会话保存到 watch/scan-YYYY-MM-DD.md，不必等下一轮。</div>';
   const notes = [...new Set([...(w.state?.notes || []), ...(w.digests || []).flatMap((d) => d.notes || [])])];
-  if (notes.length) html += '<details class="note" open><summary>检索说明</summary>' + notes.map((note) => '<div>' + esc(note) + '</div>').join("") + '</details>';
+  if (notes.length) html += '<details class="note"><summary>检索说明（' + notes.length + ' 条）</summary>' + notes.map((note) => '<div>' + esc(note) + '</div>').join("") + '</details>';
   if (!c.keywords.length && !c.authors.length && !c.seedPapers.length) return html + '<div class="card note">还没有追踪内容。下次运行会根据项目资料自动生成初稿，也可以到「设置」里填写。</div></section>';
   const seenIds = new Set();
   const items = [];

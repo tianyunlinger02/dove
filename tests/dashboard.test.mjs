@@ -115,3 +115,11 @@ test("page scripts parse in every mode", () => {
     assert.doesNotThrow(() => new Function(html.split("<script>")[1].split("</script>")[0]), JSON.stringify(options));
   }
 });
+
+test("round summaries give the trajectory its goal, expected result and actual outcome", async () => {
+  const { summarizeRoundText } = await import("../src/core/dashboard-data.mjs");
+  const brief = "作者：导师\n方法版本：v2\n\n一句话：用 [全量数据](x.md) 检验 **新解码器** 是否减少漏报。\n\n## 预期结果\n- 漏报下降一半；没下降就换对应方法。\n\n## 细节\n略";
+  assert.deepEqual(summarizeRoundText(brief, "brief"), { summary: "用 全量数据 检验 新解码器 是否减少漏报。", expected: "漏报下降一半；没下降就换对应方法。" });
+  const result = "# 结果\nAuthor: mentor\n\n漏报从 30% 降到 18%。\n\n## 预期与实际\n| 项目 | 预测 | 实际 |\n|---|---|---|\n| 漏报 | 15% | 18% |\n\n## 改了什么\n解码器";
+  assert.deepEqual(summarizeRoundText(result, "result"), { summary: "漏报从 30% 降到 18%。", actual: "漏报：15% → 18%；" });
+});
