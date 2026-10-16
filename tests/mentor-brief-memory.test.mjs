@@ -74,7 +74,7 @@ test("empty memory project renders a short fixed template without creating recor
   assert.equal(typeof brief, "string");
   assert.ok(brief.endsWith(`${QUESTIONS}\n`));
   assert.equal((brief.match(/^\d+\. /gmu) ?? []).length, 5);
-  assert.match(brief, /导师笔记还不存在.*长期意图/u, "a first mentor reads the project's whole goal history");
+  assert.match(brief, /长期意图对照到期（导师笔记缺失）/u, "a first mentor reads the project's whole goal history");
   for (const file of [".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`, `${RESEARCH}/topics/CRITERIA.md`, `${RESEARCH}/topics/PROJECT.md`, `${WATCH}/config.json`]) {
     assert.ok(brief.includes(`\`${file}\`（缺失）`), file);
   }
@@ -132,7 +132,7 @@ test("materials use actual paths, recent numbered rounds, and verbatim user fiel
   assert.ok(!brief.includes("custom template"));
   assert.ok(brief.endsWith(`${QUESTIONS}\n`));
   const opened = memory.reads.map(({ file }) => path.relative(ROOT, file));
-  assert.ok(opened.every((file) => file === `${RESEARCH}/EVAL.md` || /^\.dove\/research\/rounds\/\d+-brief\.md$/u.test(file)));
+  assert.ok(opened.every((file) => file === `${RESEARCH}/EVAL.md` || file === `${RESEARCH}/MENTOR_NOTES.md` || /^\.dove\/research\/rounds\/\d+-brief\.md$/u.test(file)));
   assert.ok(!memory.inspected.includes(source), "source pointer is not even stat-ed");
   assert.ok(!memory.inspected.includes(path.join(ROOT, artifact)), "raw artifacts are path-only attachments");
   assert.deepEqual([...memory.files], before);
@@ -201,6 +201,37 @@ test("watch bounds summaries and marks incomplete history, oversized or malforme
   assert.ok(!brief.includes("2610.00001"), "judgment at the end of an old long brief remains usable");
   assert.ok(!brief.includes("2610.00010"));
   assert.ok(memory.reads.every(({ file, length }) => length <= (file.endsWith(".json") ? 262144 : 65536)));
+});
+
+test("existing mentor notes receive periodic intent reminders, not just a first-use reminder", (t) => {
+  const file = `${RESEARCH}/MENTOR_NOTES.md`;
+  const memory = memoryFiles(t, { [file]: "# 导师笔记\n普通判断 2026-10-16。" });
+  const options = { fsOps: memory.fsOps, now: new Date(2026, 9, 16, 18) };
+  for (const [notes, due] of [
+    ["# 导师笔记\n普通判断 2026-10-16。", true],
+    ["## 长期意图\n无日期。", true],
+    ["## 长期意图（2026-10-09）\n最近对照。", false],
+    ["## 长期意图（2026-10-08）\n已过期。", true],
+    [`${"历史。\n".repeat(20000)}\n## 长期意图（2026-10-16）\n今天的对照。`, false]
+  ]) {
+    memory.files.set(path.join(ROOT, file), Buffer.from(notes));
+    assert.equal(renderMentorBrief(ROOT, options).includes("长期意图对照到期"), due);
+  }
+});
+
+test("tracking guidance reflects the saved source and never treats broken configuration as adopted", (t) => {
+  const file = path.join(ROOT, WATCH, "config.json");
+  const memory = memoryFiles(t);
+  const render = () => renderMentorBrief(ROOT, { fsOps: memory.fsOps });
+  assert.match(render(), /追踪配置待导师修正/u);
+  for (const source of ["draft", "mentor", "user"]) {
+    memory.files.set(file, Buffer.from(JSON.stringify({ source, keywords: ["mechanism"] })));
+    assert.equal(render().includes("追踪配置待导师修正"), source === "draft");
+  }
+  for (const text of ["{broken JSON", JSON.stringify({ source: "mentor", keywords: ["x".repeat(9000)] })]) {
+    memory.files.set(file, Buffer.from(text));
+    assert.match(render(), /追踪配置待导师修正/u);
+  }
 });
 
 test("an opinion stays a path attachment that reports its author and length without blocking the call", (t) => {

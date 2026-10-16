@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import childProcess from "node:child_process";
 import fs from "node:fs";
 import test from "node:test";
 
@@ -7,7 +8,7 @@ import { renderDashboardHtml } from "../src/cli/dashboard-server.mjs";
 import { parsePaperImpacts } from "../src/core/dashboard-data.mjs";
 import { exportPaperBibtex, groupPaperLibrary, readPaperLibrary, renderPaperLibrary } from "../src/core/paper-library.mjs";
 import {
-  arxivIdFromUrl, createWatchFetcher, fetchArxiv, fetchHuggingFaceDaily, fetchSemanticScholar,
+  arxivIdFromUrl, createWatchFetcher, curlGet, fetchArxiv, fetchHuggingFaceDaily, fetchSemanticScholar,
   MIN_RELEVANCE, normalizeGlobalWatchSettings, normalizeWatchConfig, readWatchDigests, readWatchState,
   runWatch, scorePaper, syncPaperLibrary, watchScanDue
 } from "../src/core/paper-watch.mjs";
@@ -137,6 +138,176 @@ test("arXiv retry count and excessive Retry-After stay bounded without violating
   assert.match(invalid.error, /无效 feed/u);
 });
 
+test("curl preserves transport exit codes, final headers and stderr without command credentials", async (t) => {
+  let attempts = 0;
+  const bodies = [];
+  t.mock.method(childProcess, "execFile", (command, args, _options, callback) => {
+    assert.equal(command, "curl");
+    assert.ok(args.includes("--data-binary"));
+    assert.ok(args.includes("http://user:proxy-secret@proxy.invalid"));
+    attempts += 1;
+    if (attempts === 1) callback(Object.assign(new Error("curl -x proxy-secret -H x-api-key: key-secret"), { code: 35 }), "\n000", "curl: (35) unexpected eof while reading\n");
+    else callback(null, "HTTP/1.1 100 Continue\r\n\r\nHTTP/2 429\r\nRetry-After: 5\r\nContent-Type: application/json\r\n\r\n{\"message\":\"quota\"}\n429", "");
+    return { stdin: { end: (body) => bodies.push(body) } };
+  });
+  const options = { proxy: "http://user:proxy-secret@proxy.invalid", headers: { "x-api-key": "key-secret" }, body: '{"ids":["ARXIV:1706.03762"]}' };
+  const failed = await curlGet("https://example.invalid/batch", options);
+  assert.equal(failed.exitCode, 35);
+  assert.equal(failed.status, 0);
+  assert.match(failed.error, /unexpected eof/u);
+  assert.doesNotMatch(JSON.stringify(failed), /proxy-secret|key-secret/u);
+  const response = await curlGet("https://example.invalid/batch", options);
+  assert.equal(response.status, 429);
+  assert.equal(response.exitCode, 0);
+  assert.equal(response.headers["retry-after"], "5");
+  assert.equal(response.body, '{"message":"quota"}');
+  assert.deepEqual(bodies, [options.body, options.body]);
+});
+
+const HF_DAILY = "https://huggingface.co/api/daily_papers?date=2026-10-15&limit=100";
+const SSL_EOF = { status: 0, body: "", exitCode: 35, error: "curl: (35) OpenSSL: unexpected eof while reading" };
+
+test("HF daily and arXiv recover transient transport and temporary HTTP failures with bounded backoff", async () => {
+  for (const url of [HF_DAILY, "https://export.arxiv.org/api/query"]) {
+    for (const failure of [
+      SSL_EOF,
+      { status: 200, body: "partial", exitCode: 28, error: "Operation timed out" },
+      { status: 0, body: "", exitCode: 56, error: "Recv failure: Connection reset by peer" },
+      { status: 0, body: "", exitCode: 52, error: "Empty reply from server" },
+      ...[500, 502, 503, 504].map((status) => ({ status, body: "temporarily unavailable" }))
+    ]) {
+      const time = clock();
+      const calledAt = [];
+      const get = createWatchFetcher({ ...time, get: async () => {
+        calledAt.push(time.clock());
+        return calledAt.length < 3 ? failure : { status: 200, body: "[]" };
+      } });
+      const response = await get(url);
+      assert.deepEqual(calledAt.map((at) => at - NOW), [0, 3000, 9000]);
+      assert.equal(response.status, 200);
+      assert.equal(response.error, undefined);
+      assert.equal(response.retry.reason, "recovered");
+      assert.equal(response.retry.attempts, 3);
+      assert.deepEqual(response.retry.delaysMs, [3000, 6000]);
+      assert.equal(response.retry.failures.length, 2);
+    }
+  }
+});
+
+test("HF daily never retries 400, certificate failures, permanent TLS errors or valid empty responses", async () => {
+  for (const response of [
+    { status: 400, body: '{"error":"bad date, not a timeout"}', headers: { "retry-after": "5" } },
+    { status: 0, body: "", exitCode: 60, error: "SSL certificate problem" },
+    { status: 0, body: "", exitCode: 35, error: "certificate verify failed: EOF" },
+    { status: 0, body: "", exitCode: 35, error: "unsupported protocol" },
+    { status: 501, body: "Not implemented" },
+    { status: 200, body: "[]" },
+    { status: 200, body: '[{"paper":{"id":"1706.03762","title":"EOF timeout methods"}}]' }
+  ]) {
+    let calls = 0;
+    const get = createWatchFetcher({ ...clock(), wait: async () => assert.fail("permanent response must not wait"), get: async () => { calls += 1; return response; } });
+    const result = await fetchHuggingFaceDaily(1, { now: NOW, get });
+    assert.equal(calls, 1);
+    assert.equal(result.errors.length, response.status === 200 ? 0 : 1);
+    if (response.status === 400) assert.match(result.errors[0], /400.*bad date/u);
+    if (response.exitCode) assert.match(result.errors[0], new RegExp(`exitCode: ${response.exitCode}`, "u"));
+  }
+});
+
+test("HF daily honors Retry-After dates and seconds, with a one-minute wait ceiling and host-local cooldown", async () => {
+  const time = clock();
+  const calledAt = [];
+  const get = createWatchFetcher({ ...time, get: async () => {
+    calledAt.push(time.clock());
+    if (calledAt.length === 1) return { status: 429, body: "quota", headers: { "retry-after": "5" } };
+    if (calledAt.length === 2) return { status: 503, body: "busy", headers: { "Retry-After": new Date(NOW + 12000).toUTCString() } };
+    return { status: 200, body: "[]" };
+  } });
+  await get(HF_DAILY);
+  assert.deepEqual(calledAt.map((at) => at - NOW), [0, 5000, 12000]);
+  for (const header of ["3600", new Date(NOW + 3600000).toUTCString()]) {
+    let calls = 0;
+    const paused = createWatchFetcher({ ...clock(), wait: async () => assert.fail("do not shorten a long server delay"), get: async (url) => {
+      if (!url.includes("huggingface.co")) return { status: 200, body: feed() };
+      calls += 1;
+      return { status: 429, body: "long pause", headers: { "retry-after": header } };
+    } });
+    const first = await paused(HF_DAILY);
+    const second = await paused(`${HF_DAILY}&other=1`);
+    assert.equal(calls, 1);
+    assert.equal(first.retry.attempts, 1);
+    assert.equal(second.retry.attempts, 0, "a deferred request must not claim it was sent");
+    assert.equal(first.retry.reason, "wait-limit");
+    assert.equal((await paused("https://export.arxiv.org/api/query")).status, 200);
+  }
+  for (const [header, expected] of [["60", 60000], ["0", 3000], ["invalid", 3000]]) {
+    const time = clock();
+    let calls = 0;
+    const get = createWatchFetcher({ ...time, get: async () => ++calls === 1
+      ? { status: 503, body: "busy", headers: { "retry-after": header } } : { status: 200, body: "[]" } });
+    await get(HF_DAILY);
+    assert.equal(time.clock() - NOW, expected);
+  }
+});
+
+test("HF daily exhaustion retains partial days and marks the watch incomplete rather than empty", async (t) => {
+  const files = memoryFiles(t, configFiles());
+  let calls = 0;
+  const failed = await runWatch([ROOT], { env, now: NOW, ...clock(), get: async (url) => {
+    if (url.includes("huggingface.co")) { calls += 1; return SSL_EOF; }
+    return retrieval()(url);
+  } });
+  assert.equal(calls, 3);
+  assert.equal(failed.status, "partial");
+  assert.equal(failed.results[0].status, "partial");
+  assert.equal(failed.lastRun, null);
+  assert.match(failed.hfErrors.join(" "), /exitCode: 35.*unexpected eof.*请求 3 次.*三次请求上限/u);
+  assert.match(files.get(`${WATCH}/2026-10-15.md`), /检索未完成/u);
+  assert.doesNotMatch(files.get(`${WATCH}/2026-10-15.md`), /没有发现新的相关论文/u);
+  calls = 0;
+  const partial = await fetchHuggingFaceDaily(2, { now: NOW, get: createWatchFetcher({ ...clock(), get: async (url) => {
+    calls += 1;
+    return url.includes("2026-10-15") ? SSL_EOF : { status: 200, body: '[{"paper":{"id":"1706.03762","title":"Attention Is All You Need"}}]' };
+  } }) });
+  assert.equal(calls, 4);
+  assert.equal(partial.papers.size, 1);
+  assert.equal(partial.errors.length, 1);
+});
+
+test("recovered HF daily and arXiv retain recovery evidence without leaving a failed watermark", async (t) => {
+  const files = memoryFiles(t, configFiles());
+  const counts = new Map();
+  const recovered = await runWatch([ROOT], { env, now: NOW, ...clock(), get: async (url) => {
+    const host = new URL(url).hostname;
+    const count = (counts.get(host) ?? 0) + 1;
+    counts.set(host, count);
+    if (count === 1 && ["huggingface.co", "export.arxiv.org"].includes(host)) return SSL_EOF;
+    return retrieval()(url);
+  } });
+  assert.equal(recovered.status, "done");
+  assert.equal(recovered.results[0].status, "done");
+  assert.deepEqual(recovered.hfErrors, []);
+  assert.match(recovered.hfNotes.join(" "), /Hugging Face.*请求 2 次.*unexpected eof.*请求已恢复/u);
+  assert.ok(recovered.results[0].notes.some((note) => /arXiv.*unexpected eof.*请求已恢复/u.test(note)));
+  assert.equal(readWatchState(ROOT).lastRun, new Date(NOW).toISOString());
+  assert.match(files.get(`${WATCH}/2026-10-15.json`), /unexpected eof/u);
+  assert.match(files.get(`${GLOBAL}/watch-state.json`), /unexpected eof/u);
+  assert.equal(counts.get("api.semanticscholar.org"), 1, "S2 429 remains a single optional request");
+});
+
+test("Semantic Scholar stays single-attempt through the watch fetcher and preserves a 429 response", async () => {
+  let calls = 0;
+  const get = createWatchFetcher({ ...clock(), wait: async () => assert.fail("S2 quota must not be retried"), get: async (_url, options) => {
+    calls += 1;
+    assert.deepEqual(JSON.parse(options.body), { ids: ["ARXIV:1706.03762"] });
+    return { status: 429, body: '{"message":"shared quota"}', headers: { "retry-after": "30" } };
+  } });
+  const result = await fetchSemanticScholar(["1706.03762"], { get });
+  assert.equal(calls, 1);
+  assert.equal(result.papers.size, 0);
+  assert.match(result.error, /429.*shared quota.*Retry-After: 30.*未设置 key/u);
+});
+
 test("topic relevance rejects broad titles and substring accidents but keeps garment-specific positive examples", () => {
   const config = normalizeWatchConfig({ keywords: ["image editing", "single image", "vendor success", "sewing pattern", "garment", "cloth"], authors: ["Alice"], institutions: ["Example Lab"] });
   for (const title of ["ThinkDrag: Image Editing from a Single Image", "Vendor Success with Image Editing", "Clothing-free robot control"]) {
@@ -260,7 +431,7 @@ test("scheduler retries failed work after an hour, not every tick or as a comple
     [`${WATCH}/state.json`]: JSON.stringify({ status: "failed", lastRun: null })
   }));
   const calls = [];
-  const actions = createDashboardActions({ env, run: async (roots) => calls.push(roots) });
+  const actions = createDashboardActions({ env, run: async (roots) => calls.push(roots), refreshOriginals: async () => {} });
   clearInterval(actions.startScheduler({ now: () => current, intervalMs: 1e9 }));
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(calls.length, 0);

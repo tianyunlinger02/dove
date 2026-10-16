@@ -1,13 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
+
 const RESEARCH = ".dove/research";
 const ROUND_FILE = /^(\d+)[-_](brief|result)\.md$/iu;
 const IMPACT_FILE = /^impact-\d{4}-\d{2}-\d{2}\.md$/u;
 const DIGEST_FILE = /^\d{4}-\d{2}-\d{2}\.json$/u;
 const SCAN_FILE = /^scan-\d{4}-\d{2}-\d{2}\.md$/u;
 
-// Moved verbatim from the canonical mentor definition's four questions.
+// Shared questions for the mentor's independent research judgment.
 const QUESTIONS = [
   "相对用户原话和身份卡的核心能力，方向对不对？",
   "这几轮是在建立通用能力，还是反复打补丁？",
@@ -90,6 +92,13 @@ function watchMaterials(root, rounds, fsOps) {
   const lines = [`- 配置：${describe(root, config, fsOps)}`];
   const configText = readWindow(path.join(root, config), fsOps, 8192);
   if (!configText.error) lines.push(quote(clip(configText.text.trim(), 1600)), "配置仅摘录，全文见路径。");
+  let source = null;
+  if (!configText.error && !configText.truncated) {
+    try { source = JSON.parse(configText.text)?.source; } catch { /* Keep unreadable configuration distinct from an adopted suggestion. */ }
+  }
+  lines.push(source === "mentor" || source === "user"
+    ? `- 配置来源：${source}（已保存）。本次仍核对是否服务主线。`
+    : `- 追踪配置待导师修正（${configText.error ?? (configText.truncated ? "读取不完整" : source === "draft" ? "draft 初稿" : "来源未确认或 JSON 无法解析")}）：返回实际建议字段 JSON；主会话用 dove watch configure --project <root> --mentor <建议.json> 合并保存并核对回执，不只修改来源标签。`);
 
   // Only extract explicit saved labels, never infer a paper's scientific impact.
   // Historical brief labels remain usable; oversized records are not silently
@@ -175,6 +184,9 @@ export function renderMentorBrief(root, options = {}) {
   const rounds = list(path.join(research, "rounds"), fsOps);
   const selected = recentRounds(rounds);
   const evaluation = path.join(research, "EVAL.md");
+  const notes = readWindow(path.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
+  const intent = notes.error ? null : latestLongTermIntent(notes.text);
+  const intentStatus = notes.error ? `导师笔记${notes.error}` : !intent ? "笔记中没有长期意图一节" : !intent.date ? "长期意图没有有效日期" : `最近一次为 ${intent.date}`;
   const lines = [
     "# Dove 导师调用材料", "", `项目：\`${project}\`（材料路径相对此目录）`,
     "本材料原样作为导师调用的全部正文，只在“本次触发”写一句；执行者看法放意见文件，不另列禁令。", "",
@@ -187,7 +199,8 @@ export function renderMentorBrief(root, options = {}) {
     ...(options.userOriginals
       ? [`- 本人原话汇总（自动整理，转述已单独标出）：\`${options.userOriginals.path}\`，本人 ${options.userOriginals.own} 条、转述 ${options.userOriginals.relay} 条，覆盖 ${options.userOriginals.directories.length} 个会话目录${options.userOriginals.pendingBytes ? "（较大，尚未整理完，下次继续）" : ""}。先读它把握长期意图，需要上下文再按会话路径查原文。`]
       : []),
-    ...(describe(project, `${RESEARCH}/MENTOR_NOTES.md`, fsOps).includes("缺失") ? ["导师笔记还不存在：先读用户在本项目全部历史里说过的目标，在笔记写“长期意图”。"] : []), "",
+    ...(options.userOriginalsError ? [`- 本人原话汇总整理失败：${options.userOriginalsError}。已有汇总可能不完整，需要时按来源读原会话，调用继续。`] : []),
+    longTermIntentDue(intent, options.now) ? `- 长期意图对照到期（${intentStatus}）：先读 USER_ORIGINALS.md，核对长期目标与记录归因，按质量摘要返回带日期的“长期意图”。` : `- 长期意图对照：${intentStatus}，尚未到期。`, "",
     "## 项目材料", "",
     ...[".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`]
       .map((file) => `- ${describe(project, file, fsOps)}`), "",

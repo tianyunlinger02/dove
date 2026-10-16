@@ -604,6 +604,11 @@ function identitySection(p) {
   if (p.identity.text.length > 4096) html += '<div class="note">身份卡超过 4KB，宿主只会看到开头部分。</div>';
   return html + "</details></section>";
 }
+function intentSection(p) {
+  const intent = p.longTermIntent;
+  if (!intent) return '<div class="note">尚未读到长期意图对照；下次导师调用时核对笔记并补充。</div>';
+  return '<details class="card" data-intent="' + esc(p.root) + '"' + (open.get(p.root + "#intent") === "open" ? " open" : "") + '><summary>长期意图 · ' + esc(intent.date || "未注明日期") + (intent.due ? " · 对照到期" : "") + '</summary><div class="md">' + md(intent.text) + '</div></details>';
+}
 function renderView() {
   const view = document.getElementById("view");
   const p = data.projects.find((item) => item.root === selected);
@@ -611,9 +616,11 @@ function renderView() {
   const newestDone = Math.max(0, ...p.rounds.filter((r) => r.result).map((r) => r.number));
   const running = p.rounds.filter((r) => statusOf(p, r, newestDone)[0] === "running");
   let html = '<h1 class="title">' + esc(p.name) + '</h1><div class="path">' + esc(p.root) + "</div>";
-  html += '<div class="hero"><div class="label">主线</div><div class="goal">' + esc(p.mainline || "身份卡里还没有主线。") + '</div><div class="facts">' +
-    statusChip(p.roundStatus) + (p.targetTier ? "<span>目标档次：" + esc(p.targetTier) + "</span>" : "") + "<span>共 " + p.rounds.length + " 轮</span><span>最近更新 " + ago(p.lastActivity) + "</span></div>" +
+  html += '<div class="hero"><div class="label">主线</div><div class="goal">' + esc(p.mainline || "身份卡里还没有主线。") + '</div>' +
+    (p.coreCapability ? '<div class="state"><span class="note" style="margin-right:6px">核心能力</span>' + esc(p.coreCapability) + "</div>" : '<div class="state"><span class="note" style="margin-right:6px">核心能力</span>身份卡里还没有写。</div>') +
+    '<div class="facts">' + statusChip(p.roundStatus) + (p.targetTier ? "<span>目标档次：" + esc(p.targetTier) + "</span>" : "") + "<span>共 " + p.rounds.length + " 轮</span><span>最近更新 " + ago(p.lastActivity) + "</span></div>" +
     (p.researchState ? '<div class="state"><span class="note" style="margin-right:6px">研究现状</span>' + esc(p.researchState) + "</div>" : "") + "</div>";
+  html += '<section><h2>长期意图 <span class="sub">导师最近一次对照</span></h2>' + intentSection(p) + "</section>";
   html += nowSection(p, running, p.rounds[0]);
   html += trajectorySection(p, newestDone);
   html += evaluationSection(p);
@@ -631,6 +638,7 @@ function renderView() {
     if (d.open) { openDocs.add(key); loadRound(d.dataset.root, d.dataset.name); } else openDocs.delete(key);
   }));
   view.querySelectorAll("details[data-card]").forEach((d) => d.addEventListener("toggle", () => open.set(d.dataset.card + "#card", d.open ? "open" : null)));
+  view.querySelectorAll("details[data-intent]").forEach((d) => d.addEventListener("toggle", () => open.set(d.dataset.intent + "#intent", d.open ? "open" : null)));
   view.querySelectorAll("button[data-toggle]").forEach((b) => b.addEventListener("click", () => { open.set(b.dataset.toggle, open.get(b.dataset.toggle) === "all" ? null : "all"); renderView(); }));
   view.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
     const which = open.get(b.dataset.key) === b.dataset.which ? null : b.dataset.which;

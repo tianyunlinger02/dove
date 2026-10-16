@@ -11,6 +11,7 @@ import { parseDoveCli } from "../src/cli/command-parser.mjs";
 import { createDashboardActions } from "../src/cli/dashboard-actions.mjs";
 import { DEFAULT_DASHBOARD_BIND, DEFAULT_DASHBOARD_PORT, startDashboardServer } from "../src/cli/dashboard-server.mjs";
 import { runWatch } from "../src/core/paper-watch.mjs";
+import { configureWatchFromMentor } from "../src/core/watch-configure.mjs";
 import { startTopicSelection } from "../src/core/topic-selection.mjs";
 import { readHostSettings, writeHostSettings } from "../src/core/host-migration.mjs";
 import { renderMentorBrief } from "../src/core/mentor-brief.mjs";
@@ -411,9 +412,14 @@ try {
   if (command === "mentor") {
     const root = path.resolve(options.project ?? process.cwd());
     let userOriginals = null;
+    let userOriginalsError = null;
     // Gather the user's own words for the mentor; a call still works if sessions are unreadable.
-    try { userOriginals = refreshUserOriginals(root); } catch { userOriginals = null; }
-    const brief = renderMentorBrief(root, { ...options, userOriginals });
+    try {
+      userOriginals = refreshUserOriginals(root);
+    } catch (error) {
+      userOriginalsError = error instanceof Error ? error.message : String(error);
+    }
+    const brief = renderMentorBrief(root, { ...options, userOriginals, userOriginalsError });
     if (wantsJson(options)) writeJson({ brief });
     else console.log(brief);
     process.exit(0);
@@ -424,6 +430,13 @@ try {
     const result = startTopicSelection(root, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson(result);
     else console.log(`选题目录已就绪：${path.join(root, ".dove/research/topics")}（依据：${result.criteria?.title ?? "选题标准"}${result.criteria?.version ? `，第 ${result.criteria.version} 版` : ""}；已有候选 ${result.cards.length} 个）`);
+    process.exit(0);
+  }
+
+  if (command === "watch" && subcommand === "configure") {
+    const result = configureWatchFromMentor(options.project, options.mentor, PACKAGE_OPTIONS);
+    if (wantsJson(options)) writeJson(result);
+    else console.log(`导师追踪建议已保存并回读确认：${result.configPath}\n已替换字段：${result.updatedFields.join("、")}；未提供的字段保持原值。source: mentor 仅表示建议已落盘，不代表用户确认；未执行追踪。`);
     process.exit(0);
   }
 

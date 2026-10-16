@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import vm from "node:vm";
 
 import { collectDashboard, parseAuthor, parseMarkdownTables, readProjectDocument, summarizeProject } from "../src/core/dashboard-data.mjs";
 import { renderDashboardHtml, startDashboardServer } from "../src/cli/dashboard-server.mjs";
@@ -18,7 +19,7 @@ function fixtureProject(files) {
 }
 
 const researchFiles = {
-  ".dove/research/IDENTITY.md": "Current round: rounds/002-brief.md\nRound status: ongoing\nMainline: 从四张图恢复完整服装结构\n",
+  ".dove/research/IDENTITY.md": "Current round: rounds/002-brief.md\nRound status: ongoing\nMainline: 从四张图恢复完整服装结构\nCore capability: 从稀疏输入恢复完整结构并在未见类别上泛化\n",
   ".dove/research/EVAL.md": "# EVAL\n\n| 轮次 | 基线 | 未见类别 |\n|---|---:|---:|\n| 001 | 0.31 | 0.12 |\n| 002 | 0.31 | 0.18 |\n",
   ".dove/research/rounds/001-brief.md": "# 统一解码\nAuthor: 导师\n\n预测：未见类别 0.15\n",
   ".dove/research/rounds/001-result.md": "未见类别 0.12，低于预测。\n",
@@ -114,6 +115,39 @@ test("page scripts parse in every mode", () => {
     const html = renderDashboardHtml(options);
     assert.doesNotThrow(() => new Function(html.split("<script>")[1].split("</script>")[0]), JSON.stringify(options));
   }
+});
+
+test("project data keeps the latest intent after long notes and reads without mutation", () => {
+  const note = `${"历史笔记。\n".repeat(12000)}\n## 长期意图（2026-10-15）\n要证明通用能力。\n### 指标\n未见数据。\n## 预测\n下一轮预测。`;
+  const root = fixtureProject({ ...researchFiles, ".dove/research/MENTOR_NOTES.md": note });
+  const project = summarizeProject(root, { now: new Date(2026, 9, 16) });
+  assert.equal(project.coreCapability, "从稀疏输入恢复完整结构并在未见类别上泛化");
+  assert.deepEqual(project.longTermIntent, { date: "2026-10-15", text: "要证明通用能力。\n### 指标\n未见数据。", due: false });
+  assert.equal(fs.readFileSync(path.join(root, ".dove/research/MENTOR_NOTES.md"), "utf8"), note);
+  assert.equal(readProjectDocument(root, "MENTOR_NOTES.md"), null, "notes are not exposed as arbitrary documents");
+});
+
+test("project view renders capability and collapsed intent, preserves toggle state and escapes text", () => {
+  const root = "/memory/project";
+  const project = {
+    root, name: "Project", mainline: "主线目标", coreCapability: "核心 <能力>", rounds: [],
+    longTermIntent: { date: "2026-10-15", text: "真实目标 <script>alert(1)</script>", due: false }
+  };
+  const handlers = {};
+  const detail = { dataset: { intent: root }, open: false, addEventListener: (event, fn) => { handlers[event] = fn; } };
+  const view = { innerHTML: "", querySelectorAll: (selector) => selector === "details[data-intent]" ? [detail] : [] };
+  const script = renderDashboardHtml().split("<script>")[1].split("</script>")[0];
+  const section = script.slice(script.indexOf("function esc("), script.indexOf("const texts ="));
+  const context = { document: { getElementById: () => view }, data: { projects: [project] }, selected: root, open: new Map(), CAN_EDIT: false, STATUS: {}, AUTHOR: {} };
+  vm.runInNewContext(`${section}\nrenderView();`, context);
+  assert.ok(view.innerHTML.indexOf("核心 &lt;能力&gt;") < view.innerHTML.indexOf("现在在做什么"));
+  assert.match(view.innerHTML, /<details class="card" data-intent="\/memory\/project"><summary>长期意图 · 2026-10-15/u);
+  assert.ok(view.innerHTML.includes("&lt;script&gt;alert(1)&lt;/script&gt;"));
+  assert.ok(!view.innerHTML.includes("<script>"));
+  detail.open = true;
+  handlers.toggle();
+  vm.runInNewContext("renderView();", context);
+  assert.match(view.innerHTML, /data-intent="\/memory\/project" open>/u);
 });
 
 test("round summaries give the trajectory its goal, expected result and actual outcome", async () => {

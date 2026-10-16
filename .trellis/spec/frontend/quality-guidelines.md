@@ -2,7 +2,7 @@
 
 ## Choose checks by impact
 
-Dove is a research agent, not a security project. Check changed contracts and direct consumers without new defenses or unrelated gates. Documentation needs read-only terminology/link inspection, source/template byte comparison, length comparison and scoped `git diff --check`. Prompt work can also use read-only rendering. Neither proves live adoption or scientific quality.
+Dove is a research agent, not a security project. Check changed contracts and direct consumers without new defenses or unrelated gates. Documentation needs read-only terminology/link inspection, source/template byte comparison and scoped `git diff --check`. Prompt work can also use read-only rendering. Neither proves live adoption or scientific quality.
 
 Use declared `package.json` commands. This ESM project has no separate lint or typecheck scripts; do not report them as passed. `node --check` checks syntax. If tests are authorized, inspect side effects before selecting existing cases with `node --test --test-name-pattern '<name>' <test-file>`.
 
@@ -10,7 +10,7 @@ Use declared `package.json` commands. This ESM project has no separate lint or t
 |---|---|
 | Specs/templates | Byte comparison; existing mirror case in `tests/commands/03-ambient-docs-research-defaults.test.mjs` |
 | Behavior, Skills and resources | Focused `01-agent-and-skills`, `02-generated-adapters` and `03-ambient-docs-research-defaults` cases under `tests/commands/`; `npm run commands:check` |
-| Native agents | Rendered boundaries, mentor handoff and reviewer instructions; no model invocation |
+| Native agents | Read-only rendering for review and functional mentor-handoff checks, not prose-locking assertions; no model invocation |
 | CLI | Relevant `04-cli-parser-renderers` and `05-interactive-setup` cases under `tests/commands/` |
 | Lifecycle/hooks | Affected installation, uninstall and registered-project validators |
 | Watch/topics/dashboard | Relevant `tests/paper-watch.test.mjs`, `tests/topic-selection.test.mjs`, `tests/dashboard.test.mjs` cases |
@@ -21,7 +21,7 @@ Generation, build, installation and loading are separate operations. Leave proje
 
 ## Protect contracts, not incidental wording
 
-[Component](./component-guidelines.md), [State](./state-management.md), [Hook](./hook-guidelines.md) and [Type](./type-safety.md) own their contracts. Check relationships and consequential behavior, not exact-sentence regexes, prose banlists or automatic scientific PASS algorithms. Replace superseded sections and merge repeated duties; keep natural prose and nonincreasing total length.
+[Component](./component-guidelines.md), [State](./state-management.md), [Hook](./hook-guidelines.md) and [Type](./type-safety.md) own their contracts. Tests check functional behavior, not exact prompt sentences, prose banlists, word or negation counts, or text-size ceilings. Replace superseded wording and merge repeated duties using natural full sentences; do not compress guidance into fragments to satisfy a length limit or add gates that block user requests. Software tests do not produce scientific PASS judgments.
 
 Verify agreement on the affected behavior:
 
@@ -30,8 +30,9 @@ Verify agreement on the affected behavior:
 - Source reads with 1–5 questions and reuses cumulative, location-grounded Q&A. Abstract/summary-only material retains source and unread-full-text status. Draft groups the direction library and exports checked BibTeX without invented metadata; unknown publication kind uses `@misc`, not a venue-label guess.
 - Chinese watch lines explain what papers do; pending lines stay visibly pending. Impact, direction and reading provenance survive into the library. Normal watch or explicit accumulation may write it; library/dashboard GET and exports remain read-only. Older-paper supplementation is off by default, bounded and nonrepeating, with original dates. Installation neither creates a library nor migrates research.
 - Scale answers the question, pipeline connection is not core evidence, and engineering/evaluator repair stays with the executor. Method changes receive full evaluation and fresh unused tests after prior test use. Utility and attribution remain distinct.
-- Mentor calls use `dove mentor brief --project <root>` in fresh contexts, not arbitrary executor task text. Only capped authored opinions, raw paths and sourced user originals supplement it; same-round repeats name their trigger. Engineering failures count: two rounds need diagnosis, the third a user decision. Records follow State Management.
-- Every mentor checks tracking drafts, unjudged impacts and overdue scans independently of rounds. Old judgments remain usable. Retrieval handles no-key Semantic Scholar, rate-limit backoff and relevance beyond one generic title term; errors are not empty successful searches.
+- Mentor calls use the generated `dove mentor brief --project <root>` template plus the trigger in fresh contexts. Its five questions include core capability and contribution against the closest prior work. Authored opinions, raw paths and sourced user originals remain materials, not executor-written instructions; long or unsigned opinions are noted rather than rejected. Engineering failures count: two rounds need diagnosis, the third a user decision. Records follow State Management.
+- Long-term intent comparison is due when notes lack a dated section or its date is strictly more than seven days old, not at exactly seven days. Consolidation preserves the latest section and date, issues already raised and their answers. Attribution distinguishes the user's own words from relays in `USER_ORIGINALS.md`; incomplete coverage does not mean the user never said something. Daily prewarming covers every registered project, including disabled paper-watch projects, with the existing scan budget and explicit Claude Code-only coverage, not DSH. The dashboard shows core capability and a collapsed latest intent section with its date.
+- Every mentor checks tracking, unjudged impacts and overdue scans independently of rounds. The main session saves actual advice JSON and runs `dove watch configure --project <root> --mentor <建议.json> [--json]`, replacing only suggested fields and preserving `enabled`, `categories` and other settings. Verify the saved values and `source: mentor`; the latter means advice was saved, not that the user confirmed research direction. Without advice, draft configuration remains draft. Old judgments remain usable. Retrieval handles no-key Semantic Scholar, rate-limit backoff and relevance beyond one generic title term; errors are not empty successful searches.
 
 The mentor can retrieve sources but cannot read execution conversation or private preferences, compute or edit. The paper reviewer reads only supplied current manuscript materials through Read/Grep/Glob, without network or transcript access. Missing sources limit provenance, not confirmed commitments. Native isolation needs no frozen copy, hashes or new exchange store.
 

@@ -28,7 +28,12 @@ export const CLI_COMMAND_SPECS = Object.freeze({
   uninstall: command([projectOption, ...outputOptions]),
   doctor: command([projectOption, ...outputOptions]),
   dashboard: command([value("--port"), value("--bind"), value("--password-file"), ...outputOptions]),
-  watch: command([], { subcommands: { run: command([projectOption, ...outputOptions]) } }),
+  watch: command([], {
+    subcommands: {
+      run: command([projectOption, ...outputOptions]),
+      configure: command([projectOption, value("--mentor"), ...outputOptions])
+    }
+  }),
   topic: command([], { subcommands: { start: command([projectOption, ...outputOptions]) } }),
   settings: command([value("--host-migration", { choices: ["on", "off"] }), ...outputOptions]),
   mentor: command([], { subcommands: { brief: command([projectOption, value("--trigger"), value("--user-source"), value("--since"), value("--until"), value("--user-original"), value("--opinion"), value("--artifact", { repeatable: true }), ...outputOptions]) } }),

@@ -50,6 +50,29 @@ function assertRuntimeCli() {
     command: "mentor", subcommand: "brief", options: { trigger: "用户纠正", userSource: "/source", since: "2026-10-14", until: "2026-10-15", userOriginal: "原话", opinion: "opinion.md", artifact: ["a.csv", "b.png"] }, passthrough: []
   });
   assertParserError(["mentor", "brief", "--task", "请裁决工程"], /Dove 不支持这个参数：--task/u, false);
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS.watch.subcommands), ["run", "configure"]);
+  assert.deepEqual(parseDoveCli(["watch", "configure", "--project", "/workspace", "--mentor", "advice file.json", "--json"]), {
+    command: "watch", subcommand: "configure", options: { project: "/workspace", mentor: "advice file.json", json: true }, passthrough: []
+  });
+  assert.deepEqual(parseDoveCli(["watch", "configure", "--project=/workspace", "--mentor=advice.json", "--format=json"]), {
+    command: "watch", subcommand: "configure", options: { project: "/workspace", mentor: "advice.json", format: "json" }, passthrough: []
+  });
+  assert.deepEqual(parseDoveCli(["watch", "run"]), {
+    command: "watch", subcommand: "run", options: {}, passthrough: []
+  });
+  assert.deepEqual(parseDoveCli(["watch", "run", "--project", "/workspace", "--json"]), {
+    command: "watch", subcommand: "run", options: { project: "/workspace", json: true }, passthrough: []
+  });
+  assertParserError(["watch", "configure", "--mentor"], /--mentor 需要一个值/u, false);
+  assertParserError(["watch", "configure", "--mentor", "--json"], /--mentor 需要一个值/u, true);
+  assertParserError(["watch", "configure", "--mentor="], /--mentor 需要一个值/u, false);
+  assertParserError(["watch", "configure", "--mentor", "a.json", "--mentor", "b.json"], /--mentor 只能提供一次/u, false);
+  assertParserError(["watch", "configure", "--project", "/one", "--project", "/two", "--json"], /--project 只能提供一次/u, true);
+  assertParserError(["watch", "configure", "advice.json"], /不接受位置参数/u, false);
+  for (const option of ["--enabled", "--categories", "--source", "--all", "--run", "--model"]) {
+    assertParserError(["watch", "configure", option, "--json"], /Dove 不支持这个参数/u, true);
+  }
+  assertParserError(["watch", "run", "--mentor", "advice.json"], /Dove 不支持这个参数：--mentor/u, false);
   assertParserError(["hook", "stop"], /hook 只接受这些子命令/u, false);
   assertParserError(["hook", "stop", "--project=/workspace"], /hook 只接受这些子命令/u, false);
   assert.deepEqual(assertParserShape(parseDoveCli(["init", "--host", "claude,dsh", "--host=dsh,claude", "--project=/workspace"])), {

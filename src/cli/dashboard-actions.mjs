@@ -7,6 +7,8 @@ import { readHostSettings, writeHostSettings } from "../core/host-migration.mjs"
 import { exportPaperBibtex, groupPaperLibrary, readPaperLibrary, renderPaperLibrary } from "../core/paper-library.mjs";
 import { readTopicCriteriaInfo, readTopics, startTopicSelection, writeTopicCriteria } from "../core/topic-selection.mjs";
 import { changeRegisteredProjects, readRegisteredProjects } from "../core/project-registry.mjs";
+import { USER_ORIGINALS_BUDGET_MS, USER_ORIGINALS_PATH } from "../core/user-originals.mjs";
+import { refreshUserOriginalsInBackground } from "./user-originals-worker.mjs";
 import {
   draftWatchConfigWithSources,
   localDate,
@@ -38,14 +40,50 @@ function isDirectory(root) {
   }
 }
 
-// Dashboard reads stay read-only. Settings, watch runs and the explicit
-// literature-library accumulation action perform their named writes.
-export function createDashboardActions({ packageOptions = {}, passwordFile = null, run = runWatch, env = process.env } = {}) {
+// A successful mentor refresh also satisfies today's prewarm. The derived
+// summary's atomic replacement time survives dashboard restarts without a
+// second schedule store or reading the potentially large transcript index.
+function originalsRefreshedToday(root, today) {
+  try {
+    const stat = fs.statSync(path.join(root, USER_ORIGINALS_PATH));
+    return stat.isFile() && localDate(stat.mtime) === today;
+  } catch {
+    return false;
+  }
+}
+
+// Dashboard reads stay read-only. Explicit actions and the daily scheduler
+// perform their named writes; only prewarming touches the derived originals.
+export function createDashboardActions({ packageOptions = {}, passwordFile = null, run = runWatch, refreshOriginals = refreshUserOriginalsInBackground, env = process.env } = {}) {
   const options = { ...packageOptions, env };
   let running = null;
   let runError = null;
   let lastAttempt = 0;
+  let prewarming = null;
+  let prewarmErrors = [];
+  const prewarmAttempts = new Map();
   const registered = () => readRegisteredProjects(options);
+  const startPrewarm = (roots, today) => {
+    if (prewarming) return;
+    const due = roots.filter((root) => prewarmAttempts.get(root) !== today && !originalsRefreshedToday(root, today));
+    if (!due.length) return;
+    // Reserve before yielding so overlapping ticks cannot enqueue duplicates.
+    // A failed project retries tomorrow (or on restart), not every ten minutes.
+    for (const root of due) prewarmAttempts.set(root, today);
+    prewarmErrors = [];
+    prewarming = Promise.resolve().then(async () => {
+      // One child at a time bounds memory and disk load across large projects.
+      for (const root of due) {
+        try {
+          await refreshOriginals(root, { env, home: env.HOME, budgetMs: USER_ORIGINALS_BUDGET_MS });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          prewarmErrors.push({ root, error: message });
+          console.error(`用户原话预热失败（${root}）：${message}`);
+        }
+      }
+    }).finally(() => { prewarming = null; });
+  };
   const startWatch = (roots, now = Date.now()) => {
     const guidance = roots.map((root) => ({ root, message: watchConfigGuidance(watchConfigExists(root) ? readWatchConfig(root) : { source: "draft" }) })).filter((item) => item.message);
     if (running) return { started: false, reason: "已有一次运行在进行", guidance };
@@ -68,6 +106,8 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
         watchState: readGlobalWatchState(options),
         watchRunning: Boolean(running),
         watchError: runError,
+        userOriginalsRunning: Boolean(prewarming),
+        userOriginalsErrors: [...prewarmErrors],
         s2KeySet: Boolean(readSemanticScholarKey(options)),
         topicCriteria: readTopicCriteriaInfo(options),
         passwordSet,
@@ -172,17 +212,20 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
       const tick = () => {
         const settings = readGlobalWatchSettings(options);
         const current = now();
+        if (current.getHours() < settings.dailyHour) return;
         const today = localDate(current);
+        const roots = registered().filter(isDirectory);
+        startPrewarm(roots, today);
         const state = readGlobalWatchState(options);
         const latestAttempt = Math.max(lastAttempt, Date.parse(state.lastAttempt ?? "") || 0);
-        if (current.getHours() >= settings.dailyHour && current.getTime() - latestAttempt >= 3600000) {
-          const roots = registered().filter(isDirectory).filter((root) => {
+        if (current.getTime() - latestAttempt >= 3600000) {
+          const watchRoots = roots.filter((root) => {
             if (!readWatchConfig(root).enabled) return false;
             if (state.lastRunDate === today && state.results?.some((result) => result.root === root && result.status === "unconfigured")) return false;
             const project = readWatchState(root);
             return project.status !== "done" || !project.lastRun || localDate(project.lastRun) !== today;
           });
-          if (roots.length) startWatch(roots, current.getTime());
+          if (watchRoots.length) startWatch(watchRoots, current.getTime());
         }
       };
       const timer = setInterval(tick, intervalMs);

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { parseDoveCurrentRound } from "./identity-card.mjs";
+import { latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
 import { readRegisteredProjects } from "./project-registry.mjs";
 
 // Read-only view of each registered project's research core: identity card,
@@ -177,6 +178,8 @@ export function summarizeProject(root, options = {}) {
   }
   const identity = readText(path.join(research, "IDENTITY.md"), fsOps);
   const evaluation = readText(path.join(research, "EVAL.md"), fsOps);
+  const notes = readText(path.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
+  const intent = notes ? latestLongTermIntent(notes.text) : null;
   const doctor = readText(path.join(root, ".dove/install/DOCTOR.md"), fsOps);
   const rounds = exists ? collectRounds(path.join(research, "rounds"), fsOps) : [];
   const fields = identity ? parseCardFields(identity.text) : {};
@@ -188,6 +191,8 @@ export function summarizeProject(root, options = {}) {
     name: path.basename(root),
     exists,
     mainline: fields.Mainline ?? fields["主线"] ?? null,
+    coreCapability: fields["Core capability"] ?? fields["Core capability（核心能力）"] ?? fields["核心能力"] ?? null,
+    longTermIntent: intent ? { ...intent, due: longTermIntentDue(intent, options.now) } : null,
     currentRound: current?.brief ?? null,
     currentSummary: rounds.find((round) => current?.brief?.includes(round.label))?.brief?.summary ?? null,
     targetTier: fields["Target tier"] ?? fields["Target tier (conference/journal level)"] ?? fields["目标档次"] ?? null,

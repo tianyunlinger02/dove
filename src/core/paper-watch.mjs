@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import childProcess from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -23,7 +23,8 @@ const SUPPLEMENT_LIMIT = 5;
 const ARXIV_INDEX_LAG_DAYS = 3;
 export const MIN_RELEVANCE = 2;
 const ARXIV_INTERVAL_MS = 3000;
-const ARXIV_MAX_BACKOFF_MS = 60000;
+const WATCH_MAX_BACKOFF_MS = 60000;
+const WATCH_MAX_ATTEMPTS = 3;
 const OPENALEX = "https://api.openalex.org";
 const OPENALEX_FIELDS = "id,title,publication_date,authorships,abstract_inverted_index,locations,primary_location,referenced_works,cited_by_count";
 const HOT_FILE = "watch-hot.json";
@@ -90,7 +91,7 @@ export function readWatchConfig(root) {
 
 export function watchConfigGuidance(config) {
   return config.source === "draft"
-    ? "追踪配置仍是自动初稿。请在设置页修正为项目具体问题、方法和近邻论文；也可在下一次导师调用时返回修正建议，由主会话写回 config.json 并标记 source: mentor，不必等下一轮。"
+    ? "追踪配置仍是自动初稿。请在设置页修正为项目具体问题、方法和近邻论文；也可在下一次导师调用时返回实际建议 JSON，由主会话保存为文件并运行 dove watch configure --project <root> --mentor <建议.json>，核对保存值和 source: mentor，不必等下一轮。"
     : null;
 }
 
@@ -287,7 +288,7 @@ export function curlGet(url, { proxy = "", headers = {}, timeoutSeconds = 40, bo
   if (body !== null) args.push("--data-binary", "@-");
   args.push(url);
   return new Promise((resolve) => {
-    const child = execFile("curl", args, { maxBuffer: 32 * 1024 * 1024 }, (error, stdout) => {
+    const child = childProcess.execFile("curl", args, { maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
       const split = stdout.lastIndexOf("\n");
       let content = stdout.slice(0, split);
       let responseHeaders = {};
@@ -302,43 +303,93 @@ export function curlGet(url, { proxy = "", headers = {}, timeoutSeconds = 40, bo
         }
         content = content.slice(boundary.index + boundary[0].length);
       }
-      resolve({ status: Number(stdout.slice(split + 1)) || 0, body: content, headers: responseHeaders, ...(error ? { error: error.message } : {}) });
+      // execFile's message embeds argv, including proxy credentials and API keys.
+      const exitCode = error ? (Number.isInteger(error.code) ? error.code : null) : 0;
+      resolve({ status: Number(stdout.slice(split + 1)) || 0, body: content, headers: responseHeaders, exitCode,
+        ...(error ? { error: String(stderr ?? "").trim() || `curl ${error.code ?? error.signal ?? "请求失败"}` } : {}) });
     });
     if (body !== null) child.stdin.end(body);
   });
 }
 
-function responseError(source, response) {
-  const detail = String(response.body ?? "").replace(/\s+/gu, " ").trim().slice(0, 600);
-  const retryAfter = response.headers?.["retry-after"];
-  return `${source} ${response.status || "请求失败"}${response.error ? `：${response.error}` : ""}${detail ? `：${detail}` : ""}${retryAfter ? `（Retry-After: ${retryAfter}）` : ""}`;
+function retrySummary(response) {
+  const retry = response.retry;
+  if (!retry) return "";
+  const outcome = {
+    recovered: "请求已恢复", exhausted: "已达三次请求上限",
+    "wait-limit": "服务要求的等待超过一分钟，保留冷却且不提前重试",
+    "non-retryable": "错误不可重试，已停止"
+  }[retry.reason];
+  return `请求 ${retry.attempts} 次，等待 ${retry.delaysMs.map((ms) => `${ms / 1000}s`).join("、") || "0s"}；${retry.failures.join("；")}；${outcome}`;
 }
 
-// arXiv asks for one connection and at least three seconds between requests.
-// Share this fetcher across projects; stop after two retries or a wait over a minute.
+function responseError(source, response) {
+  const detail = String(response.body ?? "").replace(/\s+/gu, " ").trim().slice(0, 600);
+  const retryAfter = response.headers?.["retry-after"] ?? response.headers?.["Retry-After"];
+  const exitCode = response.exitCode ? `（curl exitCode: ${response.exitCode}）` : "";
+  const retry = retrySummary(response);
+  return `${source} ${response.status || "请求失败"}${exitCode}${response.error ? `：${response.error}` : ""}${detail ? `：${detail}` : ""}${retryAfter ? `（Retry-After: ${retryAfter}）` : ""}${retry ? `；${retry}` : ""}`.trim();
+}
+
+function watchRetryDelay(response, attempt, now) {
+  // Only retry known transient failures, never certificates or other client errors.
+  if (response.status >= 400 && response.status < 500 && response.status !== 429) return null;
+  const error = String(response.error ?? "");
+  if ([51, 58, 60, 77, 83, 90, 91].includes(response.exitCode) || /certificate|CERT_|self[- ]signed|issuer/iu.test(error)) return null;
+  const transport = response.error || response.exitCode;
+  const recoverable = transport
+    ? [18, 28, 52, 55, 56, 92].includes(response.exitCode)
+      || ((!response.exitCode || response.exitCode === 35) && /\bEOF\b|SSL_ERROR_SYSCALL|timed?\s*out|timeout|ETIMEDOUT|ECONNRESET|connection reset|reset by peer/iu.test(error))
+    : [429, 500, 502, 503, 504].includes(response.status);
+  if (!recoverable) return null;
+  const header = response.headers?.["retry-after"] ?? response.headers?.["Retry-After"];
+  const seconds = header === undefined ? NaN : Number(header);
+  const retryAfter = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(header ?? "") - now;
+  return Math.max(ARXIV_INTERVAL_MS * 2 ** attempt, Number.isFinite(retryAfter) ? retryAfter : 0);
+}
+
+// arXiv keeps its one-connection/three-second pacing. HF daily gets the same
+// bounded recovery, but its own queue: neither source holds up the other.
+// Semantic Scholar and other endpoints remain single-attempt requests.
 export function createWatchFetcher({ get = curlGet, wait = sleep, clock = Date.now } = {}) {
-  let queue = Promise.resolve();
-  let nextRequest = 0;
-  let limited = null;
+  const states = new Map();
   return (url, options = {}) => {
-    if (!url.startsWith("https://export.arxiv.org/api/")) return get(url, options);
-    const request = queue.then(async () => {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        const delay = Math.max(0, nextRequest - clock());
-        if (delay > ARXIV_MAX_BACKOFF_MS && limited) return limited;
-        if (delay) await wait(delay);
-        const response = await get(url, options);
-        nextRequest = clock() + ARXIV_INTERVAL_MS;
-        if (response.status !== 429) { limited = null; return response; }
-        limited = response;
-        const header = response.headers?.["retry-after"];
-        const seconds = header ? Number(header) : NaN;
-        const retryAfter = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(header ?? "") - clock();
-        nextRequest = clock() + Math.max(ARXIV_INTERVAL_MS * 2 ** attempt, Number.isFinite(retryAfter) ? retryAfter : 0);
+    const source = url.startsWith("https://export.arxiv.org/api/") ? "arxiv"
+      : /^https:\/\/huggingface\.co\/api\/daily_papers(?:\?|$)/u.test(url) ? "hf" : null;
+    if (!source) return get(url, options);
+    const state = states.get(source) ?? { queue: Promise.resolve(), nextRequest: 0, limited: null };
+    states.set(source, state);
+    const request = state.queue.then(async () => {
+      const retry = { attempts: 0, delaysMs: [], failures: [] };
+      const finish = (response, reason) => ({ ...response, retry: { ...retry, reason } });
+      for (let attempt = 0; attempt < WATCH_MAX_ATTEMPTS; attempt += 1) {
+        const delay = Math.max(0, state.nextRequest - clock());
+        if (delay > WATCH_MAX_BACKOFF_MS && state.limited) {
+          if (!retry.failures.length) retry.failures.push(responseError("", state.limited));
+          return finish(state.limited, "wait-limit");
+        }
+        if (delay) { await wait(delay); retry.delaysMs.push(delay); }
+        let response;
+        try {
+          response = await get(url, options);
+        } catch (error) {
+          response = { status: 0, body: "", error: `${error.code ?? ""} ${error.message ?? error}`.trim() };
+        }
+        retry.attempts += 1;
+        state.nextRequest = clock() + (source === "arxiv" ? ARXIV_INTERVAL_MS : 0);
+        const backoff = watchRetryDelay(response, attempt, clock());
+        if (backoff === null) {
+          state.limited = null;
+          if (!retry.failures.length) return response;
+          return finish(response, response.status === 200 && !response.error ? "recovered" : "non-retryable");
+        }
+        retry.failures.push(responseError("", response));
+        state.limited = response;
+        state.nextRequest = clock() + backoff;
+        if (attempt + 1 === WATCH_MAX_ATTEMPTS) return finish(response, "exhausted");
       }
-      return limited;
     });
-    queue = request.catch(() => {});
+    state.queue = request.catch(() => {});
     return request;
   };
 }
@@ -406,7 +457,9 @@ export async function fetchArxiv(config, { since, before, proxy, get = watchGet 
     const response = await get(url, { proxy });
     if (response.status !== 200 || response.error) return { items: [], error: responseError("arXiv", response) };
     if (!/<feed\b/u.test(response.body) || /arxiv\.org\/api\/errors/u.test(response.body)) return { items: [], error: responseError("arXiv 返回无效 feed", response) };
-    return { items: parseArxivFeed(response.body).filter((item) => (!since || Date.parse(item.published) >= since) && (!before || Date.parse(item.published) < before)) };
+    const note = retrySummary(response);
+    return { items: parseArxivFeed(response.body).filter((item) => (!since || Date.parse(item.published) >= since) && (!before || Date.parse(item.published) < before)),
+      ...(note ? { notes: [`arXiv：${note}`] } : {}) };
   } catch (error) {
     return { items: [], error: `arXiv：${error.message}` };
   }
@@ -498,15 +551,18 @@ export async function fetchOpenAlex(config, { since, before, proxy, get = curlGe
   return { items, errors, cache: nextCache };
 }
 
-export async function fetchHuggingFaceDaily(days, { proxy, get = curlGet, now = Date.now() }) {
+export async function fetchHuggingFaceDaily(days, { proxy, get = watchGet, now = Date.now() }) {
   const papers = new Map();
   const errors = [];
+  const notes = [];
   for (let offset = 0; offset < days; offset += 1) {
     const date = new Date(now - offset * 86400000).toISOString().slice(0, 10); // Hugging Face lists by UTC day
     let list;
     try {
       const response = await get(`https://huggingface.co/api/daily_papers?date=${date}&limit=100`, { proxy });
       if (response.status !== 200 || response.error) throw new Error(responseError(`Hugging Face ${date}`, response));
+      const recovery = retrySummary(response);
+      if (recovery) notes.push(`Hugging Face ${date}：${recovery}`);
       list = JSON.parse(response.body);
       if (!Array.isArray(list)) throw new Error("返回内容不是论文列表");
     } catch (error) {
@@ -529,7 +585,7 @@ export async function fetchHuggingFaceDaily(days, { proxy, get = curlGet, now = 
       });
     }
   }
-  return { papers, errors };
+  return { papers, errors, notes };
 }
 
 // Optional enrichment. The documented JSON batch accepts up to 500 ids;
@@ -646,6 +702,7 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
   if (!config.keywords.length && !config.authors.length && !config.seedPapers.length) return { root, status: "unconfigured", drafted, guidance, notes };
   const state = readWatchState(root);
   const errors = [...(hf.errors ?? [])];
+  notes.push(...(hf.notes ?? []));
   let completedSources = 0;
   const lastRun = Date.parse(state.lastRun ?? "");
   // First run backfills a month; later runs reach back past the last run to cover arXiv's search lag.
@@ -670,6 +727,7 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
   };
   if (config.keywords.length || config.authors.length) {
     const arxiv = await fetchArxiv(config, { since, proxy: settings.proxy, get });
+    notes.push(...(arxiv.notes ?? []));
     if (arxiv.error) errors.push(arxiv.error);
     else completedSources += 1;
     arxiv.items.forEach(merge);
@@ -696,6 +754,7 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
     const options = { since: olderSince, before, proxy: settings.proxy, get };
     if (config.keywords.length || config.authors.length) {
       const olderArxiv = await fetchArxiv(config, options);
+      notes.push(...(olderArxiv.notes ?? []));
       if (olderArxiv.error) errors.push(olderArxiv.error);
       olderArxiv.items.forEach(merge);
     }
@@ -747,7 +806,7 @@ export async function runWatch(roots, options = {}) {
   const previous = readGlobalWatchState(options);
   const complete = !hf.errors.length && results.every((result) => ["done", "disabled", "unconfigured"].includes(result.status));
   const attemptedAt = new Date(now).toISOString();
-  const state = { lastAttempt: attemptedAt, lastRun: complete ? attemptedAt : previous.lastRun ?? null, lastRunDate: complete ? localDate(now) : null, status: complete ? "done" : "partial", hfErrors: hf.errors, results };
+  const state = { lastAttempt: attemptedAt, lastRun: complete ? attemptedAt : previous.lastRun ?? null, lastRunDate: complete ? localDate(now) : null, status: complete ? "done" : "partial", hfErrors: hf.errors, hfNotes: hf.notes, results };
   if (options.recordGlobalState !== false) {
     writeGlobalWatchState(state, options);
     const hot = [...hf.papers.values()].sort((left, right) => right.upvotes - left.upvotes).slice(0, 60);

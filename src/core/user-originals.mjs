@@ -4,7 +4,7 @@ import path from "node:path";
 
 // The user's own words, gathered from every Claude Code session of a project so
 // a fresh mentor reads the long-term intent instead of relays, summaries or
-// tool output. Derived and rebuilt on demand; research records stay untouched.
+// tool output. Derived on mentor calls and daily prewarming; research records stay untouched.
 export const USER_ORIGINALS_PATH = ".dove/install/USER_ORIGINALS.md";
 export const USER_ORIGINALS_INDEX_PATH = ".dove/install/user-originals-index.json";
 
@@ -16,8 +16,8 @@ const LIMIT = 700;
 const CHUNK = 8 << 20;
 // Typed messages are small; larger lines are tool output or images and are skipped unread.
 const MAX_LINE = 256 << 10;
-// One mentor call spends at most this long gathering; the rest continues on the next call.
-const BUDGET_MS = 20000;
+// Each mentor call or daily prewarm gets this scan budget; the rest resumes next time.
+export const USER_ORIGINALS_BUDGET_MS = 20000;
 
 const encode = (value) => value.replace(/[^A-Za-z0-9]/gu, "-");
 
@@ -25,7 +25,7 @@ const encode = (value) => value.replace(/[^A-Za-z0-9]/gu, "-");
 // (for example a legacy- prefix) keeps the project name at the end.
 export function sessionDirectories(project, options = {}) {
   const fsOps = options.fsOps ?? fs;
-  const base = path.join(options.home ?? os.homedir(), ".claude/projects");
+  const base = path.join(options.home ?? options.env?.HOME ?? os.homedir(), ".claude/projects");
   let names = [];
   try {
     names = fsOps.readdirSync(base);
@@ -137,11 +137,11 @@ function render(directories, entries, short, pending) {
   const lines = [
     "# 用户本人原话汇总",
     "",
-    "Dove 在生成导师调用材料时自动整理，来源是本项目全部 Claude Code 会话。已排除子任务对话、工具返回、上下文压缩摘要、技能说明、后台通知和系统注入；由监督会话或文档代为输入的内容标为“转述”，不当作用户原话。只有几个字的消息（如“继续”）只计数。",
+    "Dove 在生成导师调用材料时整理，常驻面板每天预热；目前只整理本项目全部 Claude Code 会话，暂不包含 DSH 会话。已排除子任务对话、工具返回、上下文压缩摘要、技能说明、后台通知和系统注入；由监督会话或文档代为输入的内容标为“转述”，不当作用户原话。只有几个字的消息（如“继续”）只计数。",
     "",
     `会话目录：${directories.map((directory) => `\`${directory}\``).join("、") || "未找到"}`,
     `本人 ${own} 条，转述 ${entries.length - own} 条，短消息 ${short} 条。按时间排列。`,
-    ...(pending ? [`会话记录较大，还有约 ${Math.ceil(pending / (1 << 20))} MB 未整理，下次生成导师调用材料时继续；目前的汇总可能缺少部分时段。`] : []),
+    ...(pending ? [`会话记录较大，还有约 ${Math.ceil(pending / (1 << 20))} MB 未整理，下次生成导师调用材料或每日预热时继续；目前的汇总可能缺少部分时段。`] : []),
     ""
   ];
   for (const entry of entries) lines.push(`- ${entry.time.replace("T", " ")} · ${entry.kind === "own" ? "本人" : "转述"} · ${entry.text}`);
@@ -155,7 +155,7 @@ export function refreshUserOriginals(project, options = {}) {
   const indexFile = path.join(root, USER_ORIGINALS_INDEX_PATH);
   const previous = readIndex(indexFile, fsOps);
   const files = {};
-  const deadline = Date.now() + (options.budgetMs ?? BUDGET_MS);
+  const deadline = Date.now() + (options.budgetMs ?? USER_ORIGINALS_BUDGET_MS);
   let pending = 0;
   for (const directory of directories) {
     let names = [];
