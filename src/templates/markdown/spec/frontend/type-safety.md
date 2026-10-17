@@ -6,7 +6,7 @@ Dove uses Node.js ESM JavaScript (`.mjs`), Node.js `>=22`. Validate software-own
 
 - Resolve an unambiguous project root and use cross-platform Node path containment. Reject traversal, escaping paths, unsafe symlinks, and non-ordinary files wherever Dove owns the boundary. Do not depend on Linux `/proc` for project file safety.
 - Stage the complete file set using same-directory temporary writes, recheck expected file/configuration state before promotion, and roll back transactionally on failure. Changed preconditions or unowned conflicts block replacement; do not partially promote a plan. If restoring a backup fails, retain that transaction root and backups and report their absolute paths; preserve newly occupied targets. This covers caught failures, not crash recovery, filesystem-wide atomicity, or reversal of external actions.
-- Preserve unrelated shared-configuration fields and ordinary files. Explicit `update` may replace valid manifest-owned local edits, reporting paths in human output and `replacedLocalEdits` JSON; SessionStart remains entirely read-only as specified in [Hook Guidelines](./hook-guidelines.md).
+- Preserve unrelated shared-configuration fields and ordinary files. Explicit `update` may replace valid manifest-owned local edits, reporting paths in human output and `replacedLocalEdits` JSON; SessionStart inspects integration read-only, with only the derived compact/resume refresh permitted by [Hook Guidelines](./hook-guidelines.md).
 - Reinstall/uninstall previews the actual deletion/replacement scope and defaults to No. Complete Reinstall must reread the project after confirmation and execute the current plan, not a stale preview.
 
 ## CLI and installation contracts

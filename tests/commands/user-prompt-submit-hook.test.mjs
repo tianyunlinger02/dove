@@ -11,9 +11,10 @@ import { initializeProjectIntegration, updateProjectIntegration } from "../../sr
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../src/core/package-metadata.mjs";
 import { currentPromptGuidance, parseUserPromptSubmitPayload, PROMPT_GUIDANCE_PATHS, userPromptSubmitAttentionOutput, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../../src/core/user-prompt-submit-hook.mjs";
 import { userOriginalSourceContext } from "../../src/core/session-start-hook.mjs";
+import { HOST_MIGRATION_PENDING_PATH } from "../../src/core/host-migration.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
-const scratch = path.join(root, ".claude/tmp");
+const scratch = process.env.TMPDIR ?? path.join(root, ".claude/tmp");
 const binaries = ["bin/dove.mjs", "bin/dove-package.mjs"];
 const event = (prompt = "hello", extra = {}) => ({ hook_event_name: "UserPromptSubmit", prompt, ...extra });
 
@@ -21,6 +22,12 @@ function workspace(t, hosts = ["claude"]) {
   fs.mkdirSync(scratch, { recursive: true });
   const project = fs.mkdtempSync(path.join(scratch, "dove-live-guidance-"));
   t.after(() => fs.rmSync(project, { recursive: true, force: true }));
+  const previousConfig = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = path.join(project, ".test-config");
+  t.after(() => {
+    if (previousConfig === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = previousConfig;
+  });
   initializeProjectIntegration(project, { hosts, packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
   return project;
 }
@@ -65,6 +72,71 @@ test("pure prompt guidance hands off the original-user source without copying or
   }
   assert.deepEqual(userPromptSubmitOutput(event("other", { transcript_path: "" }), guidance), base);
   assert.equal(read.mock.callCount(), 0);
+});
+
+const automaticPrompts = [
+  "<task-notification>background result</task-notification>",
+  " \n<task-notification data-id=\"1\">background result</task-notification>\n ",
+  "<scheduled-wakeup>resume the loop</scheduled-wakeup>",
+  "<background-task>worker finished</background-task>",
+  "<system-reminder>\n[SYSTEM NOTIFICATION - NOT USER INPUT]\nbackground result",
+  "[Your previous response had no visible output. Please continue and produce a user-visible response.]"
+];
+
+test("known host continuations skip project reads and return a guidance-dependent single line", (t) => {
+  const guidance = { version: PACKAGE_VERSION, fingerprints: PROMPT_GUIDANCE_PATHS.map((resourcePath, index) => `${resourcePath} ${String(index + 1).repeat(12)}`) };
+  t.mock.method(fs, "readFileSync", () => assert.fail("automatic context must not read identity or migration files"));
+  t.mock.method(fs, "lstatSync", () => assert.fail("automatic context must not inspect the project"));
+  const outputs = automaticPrompts.map((prompt) => userPromptSubmitOutput(event(prompt), guidance, { project: "/unread-project" }));
+  for (const output of outputs) {
+    assert.equal(output.hookSpecificOutput.hookEventName, "UserPromptSubmit");
+    assert.equal(context(output).split("\n").length, 1);
+    assert.ok(Array.from(context(output)).length < 160);
+    assert.ok(context(output).includes(guidance.version));
+    assert.equal(context(output), context(outputs[0]), "host notification bodies do not become instructions");
+  }
+  const changed = { ...guidance, fingerprints: ["changed guidance", ...guidance.fingerprints.slice(1)] };
+  assert.notEqual(context(userPromptSubmitOutput(event(automaticPrompts[0]), changed)), context(outputs[0]));
+});
+
+test("automatic prompts omit existing identity and migration while user near-misses keep both", (t) => {
+  const project = workspace(t);
+  const config = path.join(process.env.XDG_CONFIG_HOME, "dove/settings.json");
+  fs.mkdirSync(path.dirname(config), { recursive: true });
+  fs.writeFileSync(config, JSON.stringify({ hostMigration: true }));
+  const cardPath = path.join(project, ".dove/research/IDENTITY.md");
+  const card = "Mainline: USER_CARD_UNIQUE_MARKER\n";
+  const pendingPath = path.join(project, HOST_MIGRATION_PENDING_PATH);
+  const pending = "PENDING_MIGRATION_UNIQUE_MARKER\n";
+  fs.writeFileSync(cardPath, card);
+  fs.writeFileSync(pendingPath, pending);
+  const before = [cardPath, pendingPath, config].map((file) => [fs.readFileSync(file), fs.statSync(file).mtimeMs]);
+  const guidance = currentPromptGuidance(JSON.parse(fs.readFileSync(path.join(project, ".dove/install/manifest.json"), "utf8")));
+  const normal = userPromptSubmitOutput(event("继续用户已确认的任务"), guidance, { project });
+  assert.ok(context(normal).includes(card.trim()));
+  assert.ok(context(normal).includes(pending.trim()));
+  const nearMisses = [
+    "用户说：上一轮没有可见输出，所以请解释原因。",
+    "请解释这条消息：<task-notification>result</task-notification>",
+    "<task-notification-example>user-provided example</task-notification-example>",
+    "<system-reminder>用户提供的普通正文</system-reminder>",
+    "[Your previous response had no visible output. Please continue and produce a user-visible response.] 请解释原因。"
+  ];
+  for (const binary of binaries) {
+    for (const prompt of automaticPrompts) {
+      const delivered = invoke(binary, project, event(prompt, { cwd: project, transcript_path: "/unread-transcript" }));
+      assert.deepEqual(delivered, userPromptSubmitOutput(event(prompt), guidance, { project }));
+      assert.equal(context(delivered).split("\n").length, 1);
+      assert.ok(Array.from(context(delivered)).length < 160);
+      assert.equal(context(delivered).includes(card.trim()), false);
+      assert.equal(context(delivered).includes(pending.trim()), false);
+    }
+    for (const prompt of nearMisses) assert.deepEqual(invoke(binary, project, event(prompt, { cwd: project })), normal);
+  }
+  for (const [index, file] of [cardPath, pendingPath, config].entries()) {
+    assert.deepEqual(fs.readFileSync(file), before[index][0]);
+    assert.equal(fs.statSync(file).mtimeMs, before[index][1]);
+  }
 });
 
 test("pure prompt payload validation and failures stay nonblocking", () => {

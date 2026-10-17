@@ -24,7 +24,7 @@ import { DOVE_RESEARCH_REFLECTION_CONTINUITY, renderDoveResearchQualityReference
 import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SCRATCH_ROOT = resolveTempWorkspaceBase();
+const SCRATCH_ROOT = process.env.TMPDIR ? path.resolve(process.env.TMPDIR) : resolveTempWorkspaceBase();
 const CLI_ENV = {
   ...process.env,
   HOME: path.join(SCRATCH_ROOT, "installation-home"),
@@ -85,14 +85,18 @@ function cliHook(root, name, payload) {
   return cliDove(["hook", name, "--project", root], { input: JSON.stringify(payload) });
 }
 
-function treeSnapshot(root) {
+function treeSnapshot(root, excluded = []) {
+  const excludedPaths = new Set(excluded.map((relativePath) => path.normalize(relativePath)));
+  const excludedParents = new Set(excluded.map((relativePath) => path.dirname(path.normalize(relativePath))));
   const entries = [];
   const visit = (relativePath) => {
+    const normalized = path.normalize(relativePath);
+    if (excludedPaths.has(normalized)) return;
     const target = path.join(root, relativePath);
     const stat = fs.lstatSync(target, { bigint: true });
     entries.push({
       path: relativePath,
-      mtime: stat.mtimeNs,
+      mtime: excludedParents.has(normalized) ? null : stat.mtimeNs,
       bytes: stat.isFile() ? fs.readFileSync(target) : null,
       link: stat.isSymbolicLink() ? fs.readlinkSync(target) : null
     });
@@ -269,7 +273,8 @@ function hookReadGuard(root, source) {
 function validateSessionFacts(root, executable) {
   const cardPath = path.join(root, ".dove/research/IDENTITY.md");
   const secret = "SYNTHETIC_PRIVATE_REPORT_MUST_NOT_APPEAR";
-  const readGuard = `
+  const cachePaths = [".dove/install/USER_ORIGINALS.md", ".dove/install/user-originals-index.json"];
+  const readGuard = (allowCacheWrites) => `
     import fs from "node:fs";
     import path from "node:path";
     import { fileURLToPath } from "node:url";
@@ -293,20 +298,44 @@ function validateSessionFacts(root, executable) {
       const original = fs.promises[name];
       fs.promises[name] = function(target, ...args) { guard(target); return original.call(this, target, ...args); };
     }
+    const allowCacheWrites = ${JSON.stringify(allowCacheWrites)};
+    const caches = ${JSON.stringify(cachePaths)}.map((relative) => path.join(root, relative));
+    const cacheWrite = (target) => allowCacheWrites && typeof target !== "number" && caches.some((file) =>
+      String(target) === file || String(target) === file + "." + process.pid + ".tmp");
+    const cacheDescriptors = new Set();
     function rejectWrite() { process.stderr.write("Forbidden SessionStart write\\n"); throw new Error("Forbidden SessionStart write"); }
-    for (const name of ["writeFileSync", "appendFileSync", "mkdirSync", "renameSync", "unlinkSync", "rmSync", "rmdirSync", "chmodSync", "utimesSync", "writeSync", "createWriteStream"]) fs[name] = rejectWrite;
+    for (const name of ["writeFileSync", "appendFileSync", "mkdirSync", "renameSync", "unlinkSync", "rmSync", "rmdirSync", "chmodSync", "utimesSync", "writeSync", "createWriteStream"]) {
+      const original = fs[name];
+      fs[name] = function(target, ...args) {
+        if (name === "mkdirSync") {
+          if (!allowCacheWrites || String(target) !== path.join(root, ".dove/install") || !fs.statSync(target).isDirectory()) rejectWrite();
+        } else if (name === "renameSync") {
+          if (!allowCacheWrites || !caches.includes(String(args[0])) || String(target) !== String(args[0]) + "." + process.pid + ".tmp") rejectWrite();
+        } else if (typeof target === "number") {
+          if (!cacheDescriptors.has(target)) rejectWrite();
+        } else if (!cacheWrite(target)) rejectWrite();
+        return original.call(this, target, ...args);
+      };
+    }
     for (const name of ["writeFile", "appendFile", "mkdir", "rename", "unlink", "rm", "rmdir", "chmod", "utimes"]) fs.promises[name] = rejectWrite;
     const openSync = fs.openSync;
     fs.openSync = function(target, flags, ...args) {
-      if (typeof flags === "string" ? /[wa+]/u.test(flags) : (flags & (fs.constants.O_WRONLY | fs.constants.O_RDWR | fs.constants.O_CREAT)) !== 0) rejectWrite();
-      return openSync.call(this, target, flags, ...args);
+      const writing = typeof flags === "string" ? /[wa+]/u.test(flags) : (flags & (fs.constants.O_WRONLY | fs.constants.O_RDWR | fs.constants.O_CREAT)) !== 0;
+      if (writing && !cacheWrite(target)) rejectWrite();
+      const fd = openSync.call(this, target, flags, ...args);
+      if (writing) cacheDescriptors.add(fd);
+      return fd;
     };
+    const closeSync = fs.closeSync;
+    fs.closeSync = function(fd) { cacheDescriptors.delete(fd); return closeSync.call(this, fd); };
     syncBuiltinESMExports();
   `;
   const invoke = (source, overrides = {}, rawInput = null) => {
-    const before = treeSnapshot(root);
+    const allowCacheWrites = source === "compact" || source === "resume";
+    const excluded = allowCacheWrites ? cachePaths : [];
+    const before = treeSnapshot(root, excluded);
     const result = spawnSync(process.execPath, [
-      "--import", `data:text/javascript,${encodeURIComponent(readGuard)}`,
+      "--import", `data:text/javascript,${encodeURIComponent(readGuard(allowCacheWrites))}`,
       executable, "hook", "session-start", "--project", root
     ], {
       cwd: ROOT,
@@ -315,7 +344,7 @@ function validateSessionFacts(root, executable) {
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.equal(result.stderr, "", "SessionStart must not attempt forbidden reads or writes, even when errors are caught.");
-    assert.deepEqual(treeSnapshot(root), before, "SessionStart preserves all fixture bytes, paths, and mtimes.");
+    assert.deepEqual(treeSnapshot(root, excluded), before, "SessionStart preserves all fixture files except the two derived original-user caches; only their existing parent directory mtime may change.");
     return result.stdout ? JSON.parse(result.stdout) : null;
   };
   const bootstrap = renderDoveAuthorPreferencesBootstrap(
@@ -344,7 +373,8 @@ function validateSessionFacts(root, executable) {
           }
         }
         assert.ok(context.includes(`${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n`));
-        assert.ok(context.endsWith(DOVE_RESEARCH_REFLECTION_CONTINUITY));
+        assert.ok(context.includes(DOVE_RESEARCH_REFLECTION_CONTINUITY));
+        assert.ok(context.slice(context.indexOf(DOVE_RESEARCH_REFLECTION_CONTINUITY) + DOVE_RESEARCH_REFLECTION_CONTINUITY.length).trim().length > 0, "compact/resume retain a nonempty re-anchoring notice even without user originals");
       }
       assert.equal(delivered.includes(REFERENCES[0].content.slice(0, 500)), false, "do not embed author-preference body");
       assert.doesNotMatch(delivered, /SYNTHETIC_PRIVATE_REPORT_MUST_NOT_APPEAR|Latest Review:|Latest Run:|RESEARCH\.md: exists=/u);
@@ -378,18 +408,18 @@ function validateSessionFacts(root, executable) {
   fs.appendFileSync(path.join(root, ".claude/commands/dove/research.md"), "local edit\n");
   for (const source of ["startup", "clear", "compact", "resume"]) {
     const output = invoke(source);
-    assert.match(output.systemMessage, /read-only.*dove update/u);
+    assert.ok(output.systemMessage?.includes("dove update"), "integration drift requests an explicit update instead of changing configuration");
     assert.equal(Object.hasOwn(output, "hookSpecificOutput"), true);
   }
   const agentPath = path.join(root, ".claude/agents/dove.md");
   const savedAgentPath = path.join(SCRATCH_ROOT, `${path.basename(root)}-saved-agent.md`);
   fs.renameSync(agentPath, savedAgentPath);
-  assert.match(invoke("compact").systemMessage, /read-only.*dove update/u);
+  assert.ok(invoke("compact").systemMessage?.includes("dove update"));
   fs.renameSync(savedAgentPath, agentPath);
   const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);
   const manifest = readJson(manifestPath);
   writeJson(manifestPath, { ...manifest, package: { ...manifest.package, version: "0.0.1" } });
-  assert.match(invoke("compact").systemMessage, /read-only.*dove update/u);
+  assert.ok(invoke("compact").systemMessage?.includes("dove update"));
   writeJson(manifestPath, { ...manifest, package: { ...manifest.package, version: "99.0.0" } });
   const blocked = invoke("compact");
   assert.match(blocked.systemMessage, /could not inspect.*(?:refuses|拒绝)/u);

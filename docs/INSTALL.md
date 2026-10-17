@@ -36,7 +36,7 @@ Claude integration includes:
 - `.claude/rules/dove.md` for ordinary main-session collaboration;
 - `.claude/agents/dove.md` for the optional author-side entrance, plus native read-only `.claude/agents/dove-mentor.md` and `.claude/agents/dove-review.md`;
 - nine optional commands under `.claude/commands/dove/`;
-- read-only `SessionStart` and `UserPromptSubmit` context hooks;
+- `SessionStart` and `UserPromptSubmit` context hooks, read-only except for derived user-original refresh on compact/resume;
 - a read-only Dove `statusLine` only if the project has no existing line;
 - hidden guidance Skills and project MCP declarations for pinned `dove-paper-search` and hosted Exa; and
 - a project `permissions.deny` entry for built-in `WebFetch`, leaving `WebSearch` available.
@@ -57,7 +57,7 @@ For older initialized projects, register exact roots once and optionally synchro
 dove projects import --project <root>... --sync
 ```
 
-Use `dove projects sync` to retry and read-only `dove projects status` to inspect the registered set and last report. `dove settings --host-migration on` enables versioned migration notices (default off; also in dashboard settings). Updates register tasks under `.dove/install/`; hooks deliver them for the host to finish after current work without interrupting jobs or altering conclusions/user originals. Completion removes the pending file; the same version is not registered again. No home scan or CLI research rewrite occurs.
+Use `dove projects sync` to retry and read-only `dove projects status` to inspect the registered set and last report. `dove settings --host-migration on` enables versioned migration notices (default off; also in dashboard settings). Updates register tasks under `.dove/install/`; SessionStart and ordinary UserPromptSubmit deliver them for the host to finish after current work without interrupting jobs or altering conclusions/user originals. Completion removes the pending file; the same version is not registered again. No home scan or CLI research rewrite occurs.
 
 Automatic/bulk sync preserves locally changed or removed manifest-owned files and configuration fragments—including MCP entries—and updates the remaining items. Each project is reported as `updated` or `unchanged`, with any `preservedLocalEdits` listed separately; preserving local edits alone is not a `partial` sync. Preserved items keep their previous ownership record, not a digest of local content. The manifest package version advances, but Doctor and prompt hooks can still report local integration drift; that is not a failed update of the remaining items. Integration that cannot be safely planned still blocks that project, while other registered projects continue. Explicit `dove update` is different: it may replace valid manifest-owned edits and reports them. Neither operation changes `.dove/research/**`, historical `.dove/reviews/**`, `.dove/runs/**`, or ordinary project artifacts.
 
@@ -86,9 +86,9 @@ dove hook session-start --project <project-root>
 dove hook user-prompt-submit --project <project-root>
 ```
 
-SessionStart inspects integration read-only. Non-current integration may produce a `systemMessage` suggesting explicit `dove update`; unsupported or ambiguous state requires diagnosis. It never synchronizes, writes research/configuration, or cleans up files. Startup/clear adds the two-essentials bootstrap; compact/resume presents the bounded identity card and round-continuity reminder. It does not reconstruct the mainline from old overview/review/run timestamps or transcripts.
+SessionStart inspects integration read-only. Non-current integration may produce a `systemMessage` suggesting explicit `dove update`; unsupported or ambiguous state requires diagnosis. It never synchronizes installation, writes research/configuration, or cleans up files. Startup/clear adds the two-essentials bootstrap without refreshing user originals; compact/resume presents the bounded identity card and round-continuity reminder, and best-effort refreshes only derived `.dove/install/USER_ORIGINALS.md` and `.dove/install/user-originals-index.json` for bounded dated own-only excerpts. It does not reconstruct the mainline from old overview/review/run timestamps or transcripts.
 
-UserPromptSubmit verifies the guidance files, then presents their version/fingerprints and the identity card. Preserved local status-line or MCP changes do not block it; mismatched or missing guidance gets a nonblocking diagnostic. It never writes research, classifies intent, grants permissions or blocks submission.
+UserPromptSubmit verifies the guidance files and, on ordinary user prompts, presents their version/fingerprints and the identity card. Known host-generated notifications and no-visible-output automatic prompts receive only one version/fingerprint line, without identity-card or migration-notice reads. Preserved local status-line or MCP changes do not block it; mismatched or missing guidance gets a nonblocking diagnostic. It never writes research, classifies intent, grants permissions or blocks submission.
 
 Keep `Current round` and `Round status` at the top of `IDENTITY.md`, within its first 4KB. If the card is longer, presentation retains the first 4KB and asks for shortening; it is not reported missing. The main session—not a hook—maintains the card and reads the linked brief and evaluation. Missing/unreadable identity is not inferred from history.
 

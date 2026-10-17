@@ -517,7 +517,7 @@ try {
         const output = sessionStartFailureOutput(error);
         process.stdout.write(JSON.stringify(output));
         // Claude processes hook JSON only on exit 0. The systemMessage reports
-        // the failed read-only inspection; no project writes run in this hook.
+        // the failed integration inspection; only the compact/resume derived cache refresh may write.
         process.exit(0);
       }
     }

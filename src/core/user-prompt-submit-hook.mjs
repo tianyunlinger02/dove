@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS, renderDoveResearchReanchor } from "./dove-research-contract.mjs";
 import { DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS } from "./dove-author-preferences.mjs";
 import { DOVE_CLAUDE_AMBIENT_RULE_PATH } from "./ambient-policy.mjs";
@@ -61,6 +63,19 @@ export function userPromptSubmitOutput(payload, guidance, options = {}) {
     throw new Error("Dove UserPromptSubmit hook requires a valid prompt event.");
   }
   if (!guidance) throw new Error("Dove UserPromptSubmit hook requires verified project guidance.");
+  const prompt = payload.prompt.trim();
+  const automatic = /^<(?:task-notification|scheduled-wakeup|background-task)(?:\s|>)/u.test(prompt)
+    || /^<system-reminder>\s*\[SYSTEM NOTIFICATION - NOT USER INPUT\]/u.test(prompt)
+    || prompt === "[Your previous response had no visible output. Please continue and produce a user-visible response.]";
+  if (automatic) {
+    const fingerprint = createHash("sha256").update(guidance.fingerprints.join("\n")).digest("hex").slice(0, 12);
+    return {
+      hookSpecificOutput: {
+        hookEventName: "UserPromptSubmit",
+        additionalContext: `Dove ${guidance.version} · guidance ${fingerprint} · 自动通知，不是用户的新要求。`
+      }
+    };
+  }
   const context = `Dove ${guidance.version} (disk guidance, not rule reload):\n${guidance.fingerprints.join("\n")}\n${identityCardContext(options.project, options)}\n${renderDoveResearchReanchor()}\nOn first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.${userOriginalSourceContext(payload)}${hostMigrationContext(options.project, options)}`;
   return {
     hookSpecificOutput: {

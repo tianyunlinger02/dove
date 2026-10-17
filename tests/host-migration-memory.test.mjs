@@ -15,6 +15,7 @@ import {
 } from "../src/core/project-installation.mjs";
 import { readLastProjectSync } from "../src/core/project-registry.mjs";
 import { sessionStartOutput } from "../src/core/session-start-hook.mjs";
+import { USER_ORIGINALS_PATH, USER_ORIGINALS_INDEX_PATH } from "../src/core/user-originals.mjs";
 import { inspectCurrentPromptGuidance, userPromptSubmitOutput } from "../src/core/user-prompt-submit-hook.mjs";
 
 const ROOT = "/memory/dove/project";
@@ -254,7 +255,19 @@ test("registered-project cascade uses the same settings and preserves statusLine
   assertResearchUntouched(store, originals);
 });
 
-test("both existing hook events deliver pending work read-only at a natural task boundary", (t) => {
+function isDerivedUserOriginalWrite(file) {
+  return [USER_ORIGINALS_PATH, USER_ORIGINALS_INDEX_PATH].some((relative) => {
+    const target = path.join(ROOT, relative);
+    return file === target || file === `${target}.${process.pid}.tmp`;
+  });
+}
+
+function assertOnlyDerivedUserOriginalWrites(store, before) {
+  assert.deepEqual(store.writes.filter((file) => !isDerivedUserOriginalWrite(file)), []);
+  assert.deepEqual(store.snapshot().filter(([file]) => !isDerivedUserOriginalWrite(file)), before.filter(([file]) => !isDerivedUserOriginalWrite(file)));
+}
+
+test("both existing hook events deliver pending work without changing migration or research", (t) => {
   const store = memory(t);
   writeHostSettings({ hostMigration: true }, store.options);
   initializeProjectIntegration(ROOT, store.options);
@@ -271,8 +284,7 @@ test("both existing hook events deliver pending work read-only at a natural task
     assert.ok(output.hookSpecificOutput.additionalContext.endsWith(pending), source);
   }
   assert.deepEqual(userPromptSubmitOutput(event, guidance, hookOptions), prompt, "pending is delivered until the host completes it");
-  assert.deepEqual(store.writes, []);
-  assert.deepEqual(store.snapshot(), before);
+  assertOnlyDerivedUserOriginalWrites(store, before);
 });
 
 test("switching off restores original hook output without deleting or recreating pending work", (t) => {
@@ -297,8 +309,7 @@ test("switching off restores original hook output without deleting or recreating
   assert.equal(store.reads.includes(PENDING), false);
   assert.equal(store.reads.includes(REGISTERED), false);
   assert.equal(store.text(PENDING), pending);
-  assert.deepEqual(store.writes, []);
-  assert.deepEqual(store.snapshot(), before);
+  assertOnlyDerivedUserOriginalWrites(store, before);
 });
 
 test("a new release with unchanged migration content registers nothing for a project that finished it", (t) => {
