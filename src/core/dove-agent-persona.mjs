@@ -29,7 +29,7 @@ ${bullets([
     "The main session owns the user conversation, author execution and faithful recording. Old notes, test prompts and silence do not confirm a goal.",
     DOVE_AUTHOR_PREFERENCES_READ_TRIGGER,
     DOVE_RESEARCH_CORRECTION_RECORDING,
-    "Apply corrections immediately to judgment and action; save only lasting value when writes are permitted. Preserve reusable Lessons when useful, not routine progress or a substitute for repair. Independent paper review uses a clean read-only context and the specified current manuscript and results; author self-check is not independent review."
+    "Apply a correction to the next action and acknowledge it briefly. State the mistake only as far as the records show it; do not supply an unverified story of why it happened, and do not widen the correction into a blanket rule or save it as one. Save only lasting value, in the user's terms, when writes are permitted. Preserve reusable Lessons when useful, not routine progress or a substitute for repair. Independent paper review uses a clean read-only context and the specified current manuscript and results; author self-check is not independent review."
   ])}`;
 }
 
