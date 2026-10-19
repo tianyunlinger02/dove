@@ -25,6 +25,8 @@ export const MIN_RELEVANCE = 2;
 const ARXIV_INTERVAL_MS = 3000;
 const WATCH_MAX_BACKOFF_MS = 60000;
 const WATCH_MAX_ATTEMPTS = 3;
+// A Semantic Scholar key carries its own quota of about one request per second.
+const S2_KEY_INTERVAL_MS = 1100;
 const OPENALEX = "https://api.openalex.org";
 const OPENALEX_FIELDS = "id,title,publication_date,authorships,abstract_inverted_index,locations,primary_location,referenced_works,cited_by_count";
 const HOT_FILE = "watch-hot.json";
@@ -350,12 +352,14 @@ function watchRetryDelay(response, attempt, now) {
 
 // arXiv keeps its one-connection/three-second pacing. HF daily gets the same
 // bounded recovery, but its own queue: neither source holds up the other.
-// Semantic Scholar and other endpoints remain single-attempt requests.
+// Semantic Scholar with a key is paced and retried within its own quota;
+// without a key the shared quota stays a single attempt, like other endpoints.
 export function createWatchFetcher({ get = curlGet, wait = sleep, clock = Date.now } = {}) {
   const states = new Map();
   return (url, options = {}) => {
     const source = url.startsWith("https://export.arxiv.org/api/") ? "arxiv"
-      : /^https:\/\/huggingface\.co\/api\/daily_papers(?:\?|$)/u.test(url) ? "hf" : null;
+      : /^https:\/\/huggingface\.co\/api\/daily_papers(?:\?|$)/u.test(url) ? "hf"
+      : url.startsWith("https://api.semanticscholar.org/") && options.headers?.["x-api-key"] ? "s2" : null;
     if (!source) return get(url, options);
     const state = states.get(source) ?? { queue: Promise.resolve(), nextRequest: 0, limited: null };
     states.set(source, state);
@@ -376,7 +380,7 @@ export function createWatchFetcher({ get = curlGet, wait = sleep, clock = Date.n
           response = { status: 0, body: "", error: `${error.code ?? ""} ${error.message ?? error}`.trim() };
         }
         retry.attempts += 1;
-        state.nextRequest = clock() + (source === "arxiv" ? ARXIV_INTERVAL_MS : 0);
+        state.nextRequest = clock() + (source === "arxiv" ? ARXIV_INTERVAL_MS : source === "s2" ? S2_KEY_INTERVAL_MS : 0);
         const backoff = watchRetryDelay(response, attempt, clock());
         if (backoff === null) {
           state.limited = null;

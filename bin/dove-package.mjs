@@ -14184,7 +14184,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.13" : null;
+var injectedVersion = true ? "3.4.14" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -17975,6 +17975,7 @@ var MIN_RELEVANCE = 2;
 var ARXIV_INTERVAL_MS = 3e3;
 var WATCH_MAX_BACKOFF_MS = 6e4;
 var WATCH_MAX_ATTEMPTS = 3;
+var S2_KEY_INTERVAL_MS = 1100;
 var OPENALEX = "https://api.openalex.org";
 var OPENALEX_FIELDS = "id,title,publication_date,authorships,abstract_inverted_index,locations,primary_location,referenced_works,cited_by_count";
 var HOT_FILE = "watch-hot.json";
@@ -18260,7 +18261,7 @@ function watchRetryDelay(response, attempt, now) {
 function createWatchFetcher({ get = curlGet, wait = sleep, clock = Date.now } = {}) {
   const states = /* @__PURE__ */ new Map();
   return (url, options2 = {}) => {
-    const source = url.startsWith("https://export.arxiv.org/api/") ? "arxiv" : /^https:\/\/huggingface\.co\/api\/daily_papers(?:\?|$)/u.test(url) ? "hf" : null;
+    const source = url.startsWith("https://export.arxiv.org/api/") ? "arxiv" : /^https:\/\/huggingface\.co\/api\/daily_papers(?:\?|$)/u.test(url) ? "hf" : url.startsWith("https://api.semanticscholar.org/") && options2.headers?.["x-api-key"] ? "s2" : null;
     if (!source) return get(url, options2);
     const state2 = states.get(source) ?? { queue: Promise.resolve(), nextRequest: 0, limited: null };
     states.set(source, state2);
@@ -18284,7 +18285,7 @@ function createWatchFetcher({ get = curlGet, wait = sleep, clock = Date.now } = 
           response = { status: 0, body: "", error: `${error.code ?? ""} ${error.message ?? error}`.trim() };
         }
         retry.attempts += 1;
-        state2.nextRequest = clock() + (source === "arxiv" ? ARXIV_INTERVAL_MS : 0);
+        state2.nextRequest = clock() + (source === "arxiv" ? ARXIV_INTERVAL_MS : source === "s2" ? S2_KEY_INTERVAL_MS : 0);
         const backoff = watchRetryDelay(response, attempt, clock());
         if (backoff === null) {
           state2.limited = null;

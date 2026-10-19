@@ -308,6 +308,27 @@ test("Semantic Scholar stays single-attempt through the watch fetcher and preser
   assert.match(result.error, /429.*shared quota.*Retry-After: 30.*未设置 key/u);
 });
 
+test("a Semantic Scholar key gets paced retries on 429 while the shared quota stays single-attempt", async () => {
+  let calls = 0;
+  const waits = [];
+  const time = clock();
+  const get = createWatchFetcher({ clock: time.clock, wait: async (ms) => { waits.push(ms); await time.wait(ms); }, get: async (_url, options) => {
+    calls += 1;
+    assert.equal(options.headers["x-api-key"], "test-key");
+    return calls < 3
+      ? { status: 429, body: '{"message":"busy"}', headers: {} }
+      : { status: 200, body: JSON.stringify([{ externalIds: { ArXiv: "1706.03762" }, venue: "NeurIPS", citationCount: 5 }]) };
+  } });
+  const keyed = await fetchSemanticScholar(["1706.03762"], { key: "test-key", get });
+  assert.equal(calls, 3);
+  assert.equal(waits.length, 2);
+  assert.deepEqual(keyed.papers.get("1706.03762"), { venue: "NeurIPS", citations: 5 });
+  assert.equal(keyed.error, undefined);
+  const before = calls;
+  await fetchSemanticScholar(["1706.03762"], { key: "test-key", get });
+  assert.ok(waits.at(-1) >= 1100 || calls === before + 1, "keyed requests keep about a second apart");
+});
+
 test("topic relevance rejects broad titles and substring accidents but keeps garment-specific positive examples", () => {
   const config = normalizeWatchConfig({ keywords: ["image editing", "single image", "vendor success", "sewing pattern", "garment", "cloth"], authors: ["Alice"], institutions: ["Example Lab"] });
   for (const title of ["ThinkDrag: Image Editing from a Single Image", "Vendor Success with Image Editing", "Clothing-free robot control"]) {
