@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workspaceId": "workspace-bf837722-e238-4fba-88d5-f4effbf72596",
+  "projectId": "project-workspace-bf837722-e238-4fba-88d5-f4effbf72596",
+  "goal": "让 Dove 以轻量、可信、可审计的方式，帮助宿主推进真实科研与工程工作。",
+  "trust": {
+    "schemaVersion": 1,
+    "entries": []
+  },
+  "createdAt": "2026-07-17T10:56:07.603Z",
+  "updatedAt": "2026-07-17T10:56:07.603Z"
+}
