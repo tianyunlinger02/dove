@@ -38,7 +38,7 @@ Each fresh author main context personally reads the short Chinese quality and pr
 
 ## Research direction and records
 
-For actual topic selection, read project standards. Ground gaps in full-text near misses and search transferable mechanisms according to key unknowns, not query or field quotas. Candidate cards name the gap, source, mapping, assumptions, closest-work difference and risk. Active counter-search informs the judgment and changes addressing shared causes. Offer the best 2–3 choices, or one without padding; before selection, only standards-allowed diagnostics, not method implementation. These limits do not recast already-authorized bounded work as selection or reopen confirmed mainlines on takeover.
+For actual topic selection, read Dove's topic-selection standard, installed as `.dove/install/TOPIC_CRITERIA.md` and revised only in Dove, together with the project's own settings in `topics/PROJECT.md`. Ground gaps in full-text near misses and search transferable mechanisms according to key unknowns, not query or field quotas. Candidate cards name the gap, source, mapping, assumptions, closest-work difference and risk. Active counter-search informs the judgment and changes addressing shared causes. Offer the best 2–3 choices, or one without padding; before selection, only standards-allowed diagnostics, not method implementation. These limits do not recast already-authorized bounded work as selection or reopen confirmed mainlines on takeover.
 
 Researcher-owned Markdown under `.dove/research/` keeps current context short:
 

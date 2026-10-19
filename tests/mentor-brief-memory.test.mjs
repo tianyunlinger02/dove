@@ -75,7 +75,7 @@ test("empty memory project renders a short fixed template without creating recor
   assert.ok(brief.endsWith(`${QUESTIONS}\n`));
   assert.equal((brief.match(/^\d+\. /gmu) ?? []).length, 5);
   assert.match(brief, /长期意图对照到期（导师笔记缺失）/u, "a first mentor reads the project's whole goal history");
-  for (const file of [".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`, `${RESEARCH}/topics/CRITERIA.md`, `${RESEARCH}/topics/PROJECT.md`, `${WATCH}/config.json`]) {
+  for (const file of [".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`, ".dove/install/TOPIC_CRITERIA.md", `${RESEARCH}/topics/PROJECT.md`, `${WATCH}/config.json`]) {
     assert.ok(brief.includes(`\`${file}\`（缺失）`), file);
   }
   assert.match(brief, /来源：未提供/u);
@@ -97,7 +97,7 @@ test("materials use actual paths, recent numbered rounds, and verbatim user fiel
     [`${RESEARCH}/IDENTITY.md`]: "Mainline: unchanged\n",
     [`${RESEARCH}/MENTOR_NOTES.md`]: "mentor memory\n".repeat(1000),
     [`${RESEARCH}/EVAL.md`]: Array.from({ length: 30 }, (_, index) => `| measure-${String(index + 1).padStart(2, "0")} | 0.5 |`).join("\n"),
-    [`${RESEARCH}/topics/CRITERIA.md`]: "project criteria",
+    [".dove/install/TOPIC_CRITERIA.md"]: "dove criteria",
     [`${RESEARCH}/topics/PROJECT.md`]: "project settings",
     [`${RESEARCH}/rounds/002-brief.md`]: "old brief",
     [`${RESEARCH}/rounds/002-result.md`]: "old result",

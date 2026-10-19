@@ -15,6 +15,10 @@
 - [最终期望](FINAL_EXPECTATIONS.md)：用户在真实使用中应观察到的结果。
 - [行为评估](../../evals/behavior/README.md)：合成案例、真实宿主调用、公开证据和人工判断；不随 npm 包发布。
 
+- [选题标准修订历史](../topic-criteria-history/README.md)：现行正本是 `docs/TOPIC_CRITERIA.md`，由 Dove 维护并安装到各项目。
+
+本目录引用的 `runs/` 是本机的运行与验收证据，不进 git；结论写在各交付说明里。
+
 ## 使用方式
 
 1. Vision 是人读的研究者立场总纲；运行时权威来源为 `src/core/dove-research-contract.mjs`，不把本文档变成第二份提示词或新增必读阶段。

@@ -1,15 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { DOVE_TOPIC_CRITERIA_CONTENT } from "./dove-topic-criteria-content.generated.mjs";
-import { doveConfigDirectory } from "./paper-watch.mjs";
+import { DOVE_TOPIC_CRITERIA_REFERENCE_PATHS, renderDoveTopicCriteriaReference } from "./dove-topic-criteria.mjs";
 
-// Topic selection follows a criteria document copied into a project when a
-// selection starts: the user's own version at user level when present,
-// otherwise the standard that ships with Dove (docs/TOPIC_CRITERIA.md).
+// Topic selection follows Dove's own standard (docs/TOPIC_CRITERIA.md),
+// installed in every project as .dove/install/TOPIC_CRITERIA.md and updated
+// with Dove. A project keeps only its own settings in topics/PROJECT.md.
 // Dove gives the rounds a place to live and reads the candidate cards'
 // header lines for the dashboard.
-const CRITERIA_NAME = "topic-criteria.md";
 const TOPICS_DIR = ".dove/research/topics";
 const CARD_FIELDS = Object.freeze({
   状态: "status",
@@ -29,66 +27,37 @@ const CARD_FIELDS = Object.freeze({
   评审依据: "reviewEvidence"
 });
 
-export function topicCriteriaPath(options = {}) {
-  return path.join(doveConfigDirectory(options), CRITERIA_NAME);
-}
-
-// A criteria document may carry one project's own settings (scope, resources,
-// that project's explicit requests). They are not general criteria, so they
-// stay out of the copy each project receives.
-export function splitProjectSettings(text = "") {
-  const lines = String(text).split(/\r?\n/u);
-  const start = lines.findIndex((line) => /^##\s+.*项目设置/u.test(line));
-  if (start < 0) return { general: String(text), removed: null };
-  let end = lines.findIndex((line, index) => index > start && /^##\s+/u.test(line));
-  if (end < 0) end = lines.length;
-  return { general: [...lines.slice(0, start), ...lines.slice(end)].join("\n"), removed: lines[start].replace(/^##\s+/u, "").trim() };
-}
-
 function describe(text, stat) {
   return {
     title: text.split(/\r?\n/u).find((line) => /^#\s+\S/u.test(line))?.replace(/^#\s+/u, "").trim() ?? null,
     version: [...text.matchAll(/第\s*(\d+)\s*版/gu)].map((match) => Number(match[1])).sort((left, right) => right - left).map(String)[0] ?? null,
     bytes: Buffer.byteLength(text),
-    projectSection: splitProjectSettings(text).removed,
     updatedAt: stat ? new Date(stat.mtimeMs).toISOString() : null
   };
 }
 
-// The user's own version wins; without one, the built-in standard applies.
-function currentCriteria(options = {}) {
-  const file = topicCriteriaPath(options);
+export function readTopicCriteriaInfo() {
+  return { present: true, source: "dove", ...describe(renderDoveTopicCriteriaReference()) };
+}
+
+// A project reads the copy Dove installed; before installation, the bundled one.
+function projectCriteria(root) {
+  const file = path.join(root, DOVE_TOPIC_CRITERIA_REFERENCE_PATHS.claude);
   try {
-    return { text: fs.readFileSync(file, "utf8"), stat: fs.statSync(file), source: "user" };
+    return { ...describe(fs.readFileSync(file, "utf8"), fs.statSync(file)), path: DOVE_TOPIC_CRITERIA_REFERENCE_PATHS.claude };
   } catch {
-    return { text: DOVE_TOPIC_CRITERIA_CONTENT, stat: null, source: "builtin" };
+    return readTopicCriteriaInfo();
   }
-}
-
-export function readTopicCriteriaInfo(options = {}) {
-  const { text, stat, source } = currentCriteria(options);
-  return { present: true, source, builtinVersion: describe(DOVE_TOPIC_CRITERIA_CONTENT).version, ...describe(text, stat) };
-}
-
-export function writeTopicCriteria(text, options = {}) {
-  const value = String(text ?? "");
-  if (value.trim().length < 200) throw new Error("选题标准内容太短，像是没粘贴完整");
-  const file = topicCriteriaPath(options);
-  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-  const temporary = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, value, { mode: 0o600 });
-  fs.renameSync(temporary, file);
-  return readTopicCriteriaInfo(options);
 }
 
 const README = `# 选题
 
-先读项目标准，正式产物门槛不扣推荐；CRITERIA.md 复制用户标准、去掉外项目设置；PROJECT.md 记范围、资源、材料、原话日期/出处，当前原话优先。
+先读 Dove 的选题标准 .dove/install/TOPIC_CRITERIA.md（随 Dove 更新，项目内不另存一份），正式产物门槛不扣推荐；PROJECT.md 记本项目的范围、资源、材料、原话日期/出处，当前原话优先。
 
 - 并列生成再比较，按质量摘要列问题价值、强基线失败及数字来源、正文缺口、有来源思路与未知；不等方法闭合才推荐。
 - 一轮交候选、实查近邻与最佳 2–3 个推荐，不足给 1 个。标准冲突或禁取证据时说明一次仍给方向，请用户选或调标准，不静态打磨。选择前不实现方法，只做标准允许诊断；确认后选题期限制结束，缺的独立资源授权合并问一次，再诊断、设计、实验、写开题。规模须能答问题，链路非机制证据。说明与结果写 ../rounds/ 并标作者。
 - 按关键未知选择检索，查询和跨领域数量只作扩大视野的参考，不是交付配额；证据够用时不凑数，查满数量也不证明创新。保留真实来源、正文依据、实查最近邻与最强反对，用户明定的检索要求仍按原意执行。
-- 每个候选一张 cards/NN-名称.md，按项目标准展开；缺口取证、跨领域检索和评审遵循 .dove/install/RESEARCH_QUALITY.md 的“选题与新意判断”。头部前 40 行逐行写以下栏目，面板读取摘要，详细依据放正文：
+- 每个候选一张 cards/NN-名称.md，按选题标准展开；缺口取证、跨领域检索和评审遵循 .dove/install/RESEARCH_QUALITY.md 的“选题与新意判断”。头部前 40 行逐行写以下栏目，面板读取摘要，详细依据放正文：
   - 状态：候选 / 维持 / 限定 / 暂缓 / 撤回 / 推荐 / 选定
   - 阶段：一 / 二 / 三 / 四
   - 定位：稳健 / 平衡 / 探索
@@ -128,11 +97,9 @@ const PROJECT_TEMPLATE = `# 本项目的选题设置
 待用户确认（已有只读/设计讨论、资源与宿主权限仍适用；不另设选题期实验审批）
 `;
 
-export function startTopicSelection(root, options = {}) {
-  const criteria = currentCriteria(options);
+export function startTopicSelection(root) {
   const directory = path.join(root, TOPICS_DIR);
   fs.mkdirSync(path.join(directory, "cards"), { recursive: true });
-  fs.writeFileSync(path.join(directory, "CRITERIA.md"), splitProjectSettings(criteria.text).general);
   fs.writeFileSync(path.join(directory, "README.md"), README);
   if (!fs.existsSync(path.join(directory, "PROJECT.md"))) fs.writeFileSync(path.join(directory, "PROJECT.md"), PROJECT_TEMPLATE);
   return readTopics(root);
@@ -153,11 +120,7 @@ export function parseCardHeader(text = "") {
 export function readTopics(root) {
   const directory = path.join(root, TOPICS_DIR);
   if (!fs.existsSync(directory)) return { started: false };
-  let criteria = null;
-  try {
-    const file = path.join(directory, "CRITERIA.md");
-    criteria = describe(fs.readFileSync(file, "utf8"), fs.statSync(file));
-  } catch { /* missing */ }
+  const criteria = projectCriteria(root);
   const cards = [];
   try {
     for (const name of fs.readdirSync(path.join(directory, "cards")).filter((item) => item.endsWith(".md")).sort()) {

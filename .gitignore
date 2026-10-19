@@ -5,6 +5,8 @@ reference_repos/
 
 # Dove durable workspace state remains normal project files; only local config is ignored.
 .dove/config.local.json
+# Test reports written by early Dove phases.
+.dove/*.tap
 
 # Legacy local workspace state; Dove treats .paper/ as stale, not authoritative.
 .paper/
@@ -27,3 +29,11 @@ reference_repos/
 
 # Local test and validation scratch space
 .tmp/
+
+# Local scratch from tests, agents and development runs; never part of Dove.
+.dove-dev/
+.claude-tmp/
+.claude/tmp/
+
+# Local run and validation evidence. Conclusions are recorded in docs/development.
+runs/

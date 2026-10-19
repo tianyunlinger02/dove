@@ -22,6 +22,7 @@ import {
   renderDoveAuthorPreferencesReference,
   renderDoveAuthorPreferencesFullReference
 } from "../src/core/dove-author-preferences.mjs";
+import { DOVE_TOPIC_CRITERIA_REFERENCE_PATHS, renderDoveTopicCriteriaReference } from "../src/core/dove-topic-criteria.mjs";
 import {
   PAPER_SEARCH_SUPPORT_SKILL_PATH,
   renderPaperSearchSupportSkill
@@ -175,7 +176,8 @@ export function generatedAdapterEntries() {
 export function generatedResearchQualityReferenceEntries() {
   return PROJECT_HOST_IDS.flatMap((hostId) => [
     [DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId], renderDoveResearchQualityReference()],
-    [DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS[hostId], renderDoveResearchQualityFullReference()]
+    [DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS[hostId], renderDoveResearchQualityFullReference()],
+    [DOVE_TOPIC_CRITERIA_REFERENCE_PATHS[hostId], renderDoveTopicCriteriaReference()]
   ].map(([destinationPath, content]) => ({
     hostId,
     destinationPath,
@@ -297,6 +299,7 @@ function existingGeneratedAdapterPaths(root) {
     ...PROJECT_HOST_IDS.flatMap((hostId) => [
       packageResourcePath(hostId, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId]),
       packageResourcePath(hostId, DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS[hostId]),
+      packageResourcePath(hostId, DOVE_TOPIC_CRITERIA_REFERENCE_PATHS[hostId]),
       packageResourcePath(hostId, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId]),
       packageResourcePath(hostId, DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS[hostId])
     ]).filter((relativePath) => fs.existsSync(path.join(root, relativePath))),

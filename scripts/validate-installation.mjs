@@ -35,7 +35,8 @@ const REFERENCES = [
   [".dove/install/AUTHOR_PREFERENCES.md", renderDoveAuthorPreferencesReference()],
   [".dove/install/AUTHOR_PREFERENCES_FULL.md", fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8")],
   [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()],
-  [".dove/install/RESEARCH_QUALITY_FULL.md", renderDoveResearchQualityFullReference()]
+  [".dove/install/RESEARCH_QUALITY_FULL.md", renderDoveResearchQualityFullReference()],
+  [".dove/install/TOPIC_CRITERIA.md", fs.readFileSync(path.join(ROOT, "docs/TOPIC_CRITERIA.md"), "utf8")]
 ].map(([relativePath, content]) => ({ path: relativePath, content: `${content.trimEnd()}\n` })).sort((left, right) => left.path.localeCompare(right.path));
 const PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
 fs.mkdirSync(SCRATCH_ROOT, { recursive: true });

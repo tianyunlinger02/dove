@@ -164,7 +164,7 @@ for (const state of ["changed", "missing"]) {
     assert.ok(guidance.some((entry) => entry.path.startsWith(".claude/rules/")));
     assert.ok(guidance.some((entry) => entry.path.startsWith(".claude/skills/")));
     assert.ok(guidance.some((entry) => entry.path.startsWith(".claude/agents/")));
-    assert.equal(guidance.filter((entry) => entry.path.startsWith(".dove/install/")).length, 4);
+    assert.equal(guidance.filter((entry) => entry.path.startsWith(".dove/install/")).length, 5);
     for (const resource of guidance) {
       const file = path.join(ROOT, resource.path);
       if (state === "changed") files.set(file, `${resource.content}\nLocal guidance edit\n`);

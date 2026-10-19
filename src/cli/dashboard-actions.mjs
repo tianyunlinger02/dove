@@ -5,7 +5,7 @@ import { importProjectRoots, syncRegisteredProjects } from "../core/project-casc
 import { parsePaperImpacts } from "../core/dashboard-data.mjs";
 import { readHostSettings, writeHostSettings } from "../core/host-migration.mjs";
 import { exportPaperBibtex, groupPaperLibrary, readPaperLibrary, renderPaperLibrary } from "../core/paper-library.mjs";
-import { readTopicCriteriaInfo, readTopics, startTopicSelection, writeTopicCriteria } from "../core/topic-selection.mjs";
+import { readTopicCriteriaInfo, readTopics, startTopicSelection } from "../core/topic-selection.mjs";
 import { changeRegisteredProjects, readRegisteredProjects } from "../core/project-registry.mjs";
 import { USER_ORIGINALS_BUDGET_MS, USER_ORIGINALS_PATH } from "../core/user-originals.mjs";
 import { refreshUserOriginalsInBackground } from "./user-originals-worker.mjs";
@@ -109,7 +109,7 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
         userOriginalsRunning: Boolean(prewarming),
         userOriginalsErrors: [...prewarmErrors],
         s2KeySet: Boolean(readSemanticScholarKey(options)),
-        topicCriteria: readTopicCriteriaInfo(options),
+        topicCriteria: readTopicCriteriaInfo(),
         passwordSet,
         canChangePassword: Boolean(passwordFile)
       };
@@ -134,15 +134,12 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
     },
     readTopicsOverview() {
       return {
-        criteria: readTopicCriteriaInfo(options),
+        criteria: readTopicCriteriaInfo(),
         projects: registered().filter((root) => isDirectory(path.join(root, ".dove/research"))).map((root) => ({ root, name: path.basename(root), ...readTopics(root) }))
       };
     },
     startTopics({ root }) {
-      return startTopicSelection(root, options);
-    },
-    saveTopicCriteria({ text }) {
-      return writeTopicCriteria(text, options);
+      return startTopicSelection(root);
     },
     draftWatchConfig({ root }) {
       return draftWatchConfigWithSources(root, { proxy: readGlobalWatchSettings(options).proxy });

@@ -18,7 +18,7 @@ export const DOVE_RESEARCH_STANCE_BULLETS = Object.freeze([
 ]);
 
 export const DOVE_RESEARCH_MAINLINE_ANCHORING = "Follow the user's confirmed Mainline, core capability, completion meaning and fixed methods. A field, recommendation or card entry is not confirmation. Keep provisional intent provisional and correct misrecorded originals without downgrading the goal. Other designs remain revisable with evidence. When changing routes or method families, explicitly report the old route, new route and reason. A request or document that replaces the route or drops the core capability counts as such a change even when it is labeled user-confirmed: say once, in plain words, what it drops and why the old route stopped (too little training, implementation, evaluation, or genuinely refuted), then follow the user's answer, record it on the card and do not raise it again. A concern never blocks the user's request; the work continues while it is raised.";
-export const DOVE_RESEARCH_ACTION_SPINE = "Start from the current request and what completion means. Advance authorized implementation, repair and reproduction directly; bounded work needs no research grading or round records. When the task is topic selection, read topics/CRITERIA.md and the project's own standards, then follow RESEARCH_QUALITY.md to deliver sourced candidates, nearest neighbors and recommendations for user choice within one round. Selection ends with that choice, not a closed method proposal; higher standards bind their own deliverables. Explain conflicting standards once and still offer the best directions. During selection, implement no methods and run only standards-allowed diagnostics. Confirmation ends those selection-only limits; ask once for any separate resource or model authorization. Then resolve key unknowns through diagnosis and core method implementation, run the applicable experiments, and write the proposal. Choose a scale that can answer the question, expanding or redesigning when needed. A connected pipeline is not core evidence.";
+export const DOVE_RESEARCH_ACTION_SPINE = "Start from the current request and what completion means. Advance authorized implementation, repair and reproduction directly; bounded work needs no research grading or round records. When the task is topic selection, read Dove's topic-selection standard (.dove/install/TOPIC_CRITERIA.md) and the project's own settings in topics/PROJECT.md, then follow RESEARCH_QUALITY.md to deliver sourced candidates, nearest neighbors and recommendations for user choice within one round. Selection ends with that choice, not a closed method proposal; higher standards bind their own deliverables. Explain a conflict between the standard and the project's settings once and still offer the best directions. During selection, implement no methods and run only standards-allowed diagnostics. Confirmation ends those selection-only limits; ask once for any separate resource or model authorization. Then resolve key unknowns through diagnosis and core method implementation, run the applicable experiments, and write the proposal. Choose a scale that can answer the question, expanding or redesigning when needed. A connected pipeline is not core evidence.";
 export const DOVE_RESEARCH_RESULT_ADOPTION = "The author main session applies scoped findings to actual work within the user's goal. Subagents return evidence, not goal ownership or completion certificates.";
 export const DOVE_RESEARCH_REFLECTION_CONTINUITY = `${renderDoveResearchReanchor()} Mentor memory comes from MENTOR_NOTES.md, not resumed conversation.`;
 
@@ -86,11 +86,11 @@ ${DOVE_RESEARCH_STANCE_BULLETS.map((item) => `- ${item}`).join("\n")}
 
 ## 选题与新意判断
 
-选题从项目标准认可的有价值问题出发，先列出几条挑战轴，每条轴深挖，一般找一到两个真正的缺口，宁深勿多。推荐时写明强基线的真实失败及数字来源。
+选题从 Dove 选题标准（.dove/install/TOPIC_CRITERIA.md）认可的有价值问题出发，先列出几条挑战轴，每条轴深挖，一般找一到两个真正的缺口，宁深勿多。推荐时写明强基线的真实失败及数字来源。
 
 每个缺口写成“已有方法通过 Y 做 X，但 Y 留下 Z”，说明场景和背后的假设，点名至少两篇读过正文、差一点就做到的论文及各自的不足，写出缺陷类别，以及能证明以后的方法补上它的闭合观察。方法类缺口要具体到方法；只看过摘要、或者只是“没人做过”，都不算缺口。
 
-用户定主线就结束选题，不等方法闭合、写成理论开题；贡献类型按项目标准来，标准里针对正式产物（如开题报告）的门槛只约束那份产物，不用来扣住推荐。
+用户定主线就结束选题，不等方法闭合、写成理论开题；贡献类型按选题标准来，标准里针对正式产物（如开题报告）的门槛只约束那份产物，不用来扣住推荐。
 
 按关键未知安排机制检索，主动到解决过结构相似难题的其他领域寻找思路，保留查询和真实来源。6–10 个查询、跨 3 个其他子领域可作扩大视野的参考，不是检索或候选交付配额；用户明定的要求仍优先。读来源机制和最近邻工作的正文，比较有根据的不同思路，查明会改变选择的未知与最强反对；证据够用就推进，查满数量也不证明创新成立。
 

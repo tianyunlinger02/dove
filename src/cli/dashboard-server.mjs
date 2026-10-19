@@ -54,7 +54,7 @@ function cookieAttributes(request, maxAge) {
 }
 
 const MAX_ACTION_BODY = 1024 * 1024;
-const SETTINGS_ACTIONS = new Set(["addProject", "removeProject", "syncProjects", "saveWatchConfig", "saveWatchGlobal", "saveS2Key", "runWatch", "draftWatchConfig", "startTopics", "saveTopicCriteria", "syncPaperLibrary", "saveHostSettings"]);
+const SETTINGS_ACTIONS = new Set(["addProject", "removeProject", "syncProjects", "saveWatchConfig", "saveWatchGlobal", "saveS2Key", "runWatch", "draftWatchConfig", "startTopics", "syncPaperLibrary", "saveHostSettings"]);
 
 function sendJson(response, status, value) {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -738,7 +738,7 @@ function renderTopics() {
   if (!topics) { view.innerHTML = '<div class="empty">加载中…</div>'; loadTopics(); return; }
   if (topics.error) { view.innerHTML = '<div class="empty">' + esc(topics.error) + "</div>"; return; }
   const c = topics.criteria;
-  let html = '<h1 class="title">选题</h1><div class="path">依据：' + (c.present ? esc(c.title || "选题标准") + (c.version ? "（第 " + esc(c.version) + " 版）" : "") : "还没有选题标准，先到「设置」里粘贴") + "</div>";
+  let html = '<h1 class="title">选题</h1><div class="path">依据：' + (c.present ? esc(c.title || "选题标准") + (c.version ? "（第 " + esc(c.version) + " 版）" : "") : "未找到 Dove 的选题标准") + "</div>";
   const started = topics.projects.filter((x) => x.started);
   if (!topicRoot || !started.some((x) => x.root === topicRoot)) topicRoot = started[0]?.root ?? null;
   html += '<section style="margin-top:18px"><h2>项目</h2><div class="card btns">' + topics.projects.map((x) => x.started
@@ -858,7 +858,7 @@ function renderSettings() {
     [...(st.hfErrors || []), ...(st.results || []).flatMap((r) => r.notes || (r.error ? [r.error] : []))].map((note) => '<div class="note">' + esc(note) + '</div>').join("") +
     '<div class="btns" style="margin-top:6px"><label style="flex:1 1 260px">Semantic Scholar API key（可选，' + (settings.s2KeySet ? "已设置" : "未设置") + '；没有也能运行）<input type="password" id="s2Key" placeholder="' + (settings.s2KeySet ? "输入新 key 可替换" : "粘贴 key") + '" autocomplete="off"></label><button class="btn" id="s2Save">保存 key</button>' + (settings.s2KeySet ? '<button class="btn danger" id="s2Clear">清除 key</button>' : "") + "</div></div></section>";
   const tc = settings.topicCriteria || {};
-  html += '<section><h2>选题标准 <span class="sub">选题功能以这份文档为准；开始选题时复制进项目</span></h2><div class="card form"><div class="note">' + (tc.present ? (tc.source === "builtin" ? "当前用 Dove 内置版：" : "当前用你自己的版本：") + esc(tc.title || "") + (tc.version ? "（第 " + esc(tc.version) + " 版）" : "") + " · " + Math.round(tc.bytes / 1024) + " KB" + (tc.updatedAt ? " · 更新于 " + new Date(tc.updatedAt).toLocaleString() : "") + (tc.source === "user" && tc.builtinVersion ? "；Dove 内置为第 " + esc(tc.builtinVersion) + " 版" : "") + (tc.projectSection ? "。其中「" + esc(tc.projectSection) + "」是某个项目自己的设置，开始选题时不会带进项目；每个项目的设置写在它自己的 topics/PROJECT.md" : "") : "还没有设置") + '</div><label>粘贴新版本的完整内容来替换<textarea id="tcText" style="min-height:120px" placeholder="# 论文选题要求、论证原则与交付规范 …"></textarea></label><div class="btns"><button class="btn primary" id="tcSave">保存选题标准</button></div></div></section>';
+  html += '<section><h2>选题标准 <span class="sub">由 Dove 维护，随 Dove 安装到各项目的 .dove/install/TOPIC_CRITERIA.md</span></h2><div class="card note">' + (tc.present ? "当前：" + esc(tc.title || "") + (tc.version ? "（第 " + esc(tc.version) + " 版）" : "") + " · " + Math.round(tc.bytes / 1024) + " KB。修订在 Dove 里完成（参考各项目的实验结果），不在这里编辑；各项目自己的范围、资源和特别要求写在它的 topics/PROJECT.md。" : "未找到 Dove 的选题标准。") + "</div></section>";
   html += '<section><h2>各项目追踪内容 <span class="sub">关键词一行一个，命中标题权重高；关注作者命中会加分</span></h2>';
   if (!settings.projects.length) html += '<div class="card note">还没有带研究记录的已登记项目。</div>';
   html += settings.projects.map((p, i) => '<div class="card form" style="margin-bottom:10px" data-i="' + i + '"><div class="btns"><strong style="flex:1">' + esc(p.name) + '</strong><span class="btns" style="color:var(--ink);font-size:13px"><input type="checkbox" class="wEnabled" id="wEn' + i + '"' + (p.watch.enabled ? " checked" : "") + '><label for="wEn' + i + '" style="display:inline;color:var(--ink)">启用追踪</label></span></div>' +
@@ -881,7 +881,6 @@ function renderSettings() {
   byId("wSave").addEventListener("click", run(async () => { await act("saveWatchGlobal", { settings: { dailyHour: Number(byId("wHour").value), lookbackDays: Number(byId("wDays").value), maxPerDigest: Number(byId("wMax").value), proxy: byId("wProxy").value, supplementOlder: byId("wSupplement").checked } }); toast("已保存"); await loadSettings(); }));
   byId("wRunAll").addEventListener("click", run(() => startWatchFromPanel()));
   byId("hostSave").addEventListener("click", run(async () => { await act("saveHostSettings", { settings: { hostMigration: byId("hostMigration").checked } }); toast("已保存迁移设置"); await loadSettings(); }));
-  byId("tcSave").addEventListener("click", run(async () => { const r = await act("saveTopicCriteria", { text: byId("tcText").value }); byId("tcText").value = ""; toast("已保存" + (r.version ? "第 " + r.version + " 版" : "")); await loadSettings(); }));
   byId("s2Save").addEventListener("click", run(async () => { if (!byId("s2Key").value.trim()) throw new Error("先粘贴 key"); await act("saveS2Key", { key: byId("s2Key").value }); toast("key 已保存"); await loadSettings(); }));
   if (byId("s2Clear")) byId("s2Clear").addEventListener("click", run(async () => { await act("saveS2Key", { key: "" }); toast("key 已清除"); await loadSettings(); }));
   view.querySelectorAll(".wSaveP").forEach((b) => b.addEventListener("click", run(async (btn) => {

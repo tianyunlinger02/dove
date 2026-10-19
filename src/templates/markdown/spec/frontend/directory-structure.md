@@ -56,7 +56,7 @@ Paths are repository-relative unless identified as consumer-project paths.
     DATE.md / DATE.json          # discoveries, Chinese lines and provenance
     impact-DATE.md               # impact, reason, direction and Chinese line
     scan-DATE.md                 # sourced field scan
-  research/topics/CRITERIA.md     # project selection standards
+  research/topics/PROJECT.md      # project topic-selection settings (the standard itself is .dove/install/TOPIC_CRITERIA.md)
   research/topics/cards/         # grounded candidate cards
   research/RESEARCH.md            # short history index
   research/missions/             # preserved history

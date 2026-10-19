@@ -42,7 +42,7 @@ import {
   renderCommandAdapter
 } from "../../scripts/generate-command-adapters.mjs";
 
-const REFERENCE_PATHS = [".dove/install/AUTHOR_PREFERENCES_FULL.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY_FULL.md", ".dove/install/RESEARCH_QUALITY.md"];
+const REFERENCE_PATHS = [".dove/install/AUTHOR_PREFERENCES_FULL.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY_FULL.md", ".dove/install/RESEARCH_QUALITY.md", ".dove/install/TOPIC_CRITERIA.md"];
 const normalized = (content) => `${content.trimEnd()}\n`;
 
 test("rendered host adapters and agents reach installation resources without extra Skills", () => {
@@ -107,6 +107,7 @@ test("quality and preference summaries and full references remain shared install
   const expected = new Map([
     [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()],
     [".dove/install/RESEARCH_QUALITY_FULL.md", renderDoveResearchQualityFullReference()],
+    [".dove/install/TOPIC_CRITERIA.md", fs.readFileSync(new URL("../../docs/TOPIC_CRITERIA.md", import.meta.url), "utf8")],
     [".dove/install/AUTHOR_PREFERENCES.md", renderDoveAuthorPreferencesReference()],
     [".dove/install/AUTHOR_PREFERENCES_FULL.md", renderDoveAuthorPreferencesFullReference()]
   ]);

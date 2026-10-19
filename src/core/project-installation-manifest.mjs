@@ -16,7 +16,8 @@ const MANAGED_REFERENCE_PATHS = new Set([
   ".dove/install/RESEARCH_QUALITY.md",
   ".dove/install/RESEARCH_QUALITY_FULL.md",
   ".dove/install/AUTHOR_PREFERENCES.md",
-  ".dove/install/AUTHOR_PREFERENCES_FULL.md"
+  ".dove/install/AUTHOR_PREFERENCES_FULL.md",
+  ".dove/install/TOPIC_CRITERIA.md"
 ]);
 const SHA256 = /^[a-f0-9]{64}$/u;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;

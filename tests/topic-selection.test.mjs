@@ -4,9 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { parseCardHeader, readTopicCriteriaInfo, readTopics, startTopicSelection, writeTopicCriteria } from "../src/core/topic-selection.mjs";
-
-const criteria = `# 论文选题要求、论证原则与交付规范\n\n本版为第23版。\n${"## 一、原则\n先发散，再审查。\n".repeat(20)}## 附录 E：当前项目设置（point1）\n\n找题期间尽量不做实验。\n\n## 修订记录\n第22版到第23版。\n`;
+import { parseCardHeader, readTopicCriteriaInfo, readTopics, startTopicSelection } from "../src/core/topic-selection.mjs";
 
 function setup() {
   const env = { HOME: fs.mkdtempSync(path.join(os.tmpdir(), "dove-topic-home-")) };
@@ -15,30 +13,24 @@ function setup() {
   return { env, root };
 }
 
-test("criteria are kept at user level and copied into a project when selection starts", () => {
-  const { env, root } = setup();
-  const builtin = readTopicCriteriaInfo({ env });
-  assert.deepEqual([builtin.present, builtin.source, builtin.version, builtin.builtinVersion], [true, "builtin", "27", "27"]);
-  const fallback = startTopicSelection(root, { env });
-  assert.equal(fallback.criteria.version, "27", "a project starts from the built-in standard when the user has none");
-  assert.doesNotMatch(fs.readFileSync(path.join(root, ".dove/research/topics/CRITERIA.md"), "utf8"), /point1/u);
-  assert.throws(() => writeTopicCriteria("太短", { env }), /太短/u);
-  const info = writeTopicCriteria(criteria, { env });
-  assert.equal(info.version, "23");
-  assert.equal(readTopicCriteriaInfo({ env }).title, "论文选题要求、论证原则与交付规范");
-  const topics = startTopicSelection(root, { env });
+test("topic selection follows Dove's installed standard and keeps only project settings in the project", () => {
+  const { root } = setup();
+  const info = readTopicCriteriaInfo();
+  assert.deepEqual([info.present, info.source, info.version], [true, "dove", "27"]);
+  const topics = startTopicSelection(root);
   assert.equal(topics.started, true);
-  assert.equal(topics.criteria.version, "23");
+  assert.equal(topics.criteria.version, "27", "before installation the bundled standard applies");
+  assert.equal(fs.existsSync(path.join(root, ".dove/research/topics/CRITERIA.md")), false, "the project keeps no copy of the standard");
+  fs.mkdirSync(path.join(root, ".dove/install"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".dove/install/TOPIC_CRITERIA.md"), "# 选题标准\n\n第28版。\n");
+  assert.equal(readTopics(root).criteria.version, "28", "the copy Dove installed in the project is the one in use");
   const readme = fs.readFileSync(path.join(root, ".dove/research/topics/README.md"), "utf8");
+  assert.ok(readme.includes(".dove/install/TOPIC_CRITERIA.md"));
   assert.ok(readme.includes("头部前 40 行"));
   for (const field of ["一句话", "缺口", "来源机制", "对应关系", "成立前提", "近邻差别", "最大风险", "改进自", "评审结论", "修改焦点", "最强反对", "评审依据"]) {
     assert.ok(readme.includes(`${field}：`));
   }
   assert.ok(readme.includes("RESEARCH_QUALITY.md"));
-  const copied = fs.readFileSync(path.join(root, ".dove/research/topics/CRITERIA.md"), "utf8");
-  assert.doesNotMatch(copied, /找题期间尽量不做实验/u, "another project's settings stay out of the copy");
-  assert.match(copied, /## 修订记录/u, "sections after the project settings are kept");
-  assert.equal(info.projectSection, "附录 E：当前项目设置（point1）");
   const project = fs.readFileSync(path.join(root, ".dove/research/topics/PROJECT.md"), "utf8");
   assert.match(project, /用户原话.*日期\/出处/u);
   assert.match(project, /明确.*不重复确认.*未知.*待用户确认.*暂定.*不把记录当批准/u);
@@ -99,8 +91,7 @@ test("dashboard lists topic cards and serves only topic documents", async () => 
   const { collectDashboard, readProjectDocument } = await import("../src/core/dashboard-data.mjs");
   const { changeRegisteredProjects } = await import("../src/core/project-registry.mjs");
   const { env, root } = setup();
-  writeTopicCriteria(criteria, { env });
-  startTopicSelection(root, { env });
+  startTopicSelection(root);
   fs.writeFileSync(path.join(root, ".dove/research/topics/cards/01-a.md"), "# 方向甲\n状态：候选\n阶段：一\n定位：探索\n一句话：甲\n缺口：待正文核实\n来源机制：待阅读\n对应关系：待说明\n成立前提：待核实\n近邻差别：待比较\n最大风险：前提不成立\n");
   fs.writeFileSync(path.join(root, ".dove/research/topics/stage1-问题池.md"), "# 问题池\n");
   assert.deepEqual(readTopics(root).documents, ["topics/PROJECT.md", "topics/README.md", "topics/stage1-问题池.md"]);
@@ -113,10 +104,10 @@ test("dashboard lists topic cards and serves only topic documents", async () => 
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
     const overview = await (await fetch(`${base}/api/topics`)).json();
-    assert.equal(overview.criteria.version, "23");
+    assert.equal(overview.criteria.version, "27");
     assert.equal(overview.projects[0].cards[0].title, "方向甲");
-    const saved = await fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json", "x-dove-request": "1" }, body: JSON.stringify({ type: "saveTopicCriteria", text: criteria.replace("第23版", "第24版") }) });
-    assert.equal((await saved.json()).result.version, "24");
+    const refused = await fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json", "x-dove-request": "1" }, body: JSON.stringify({ type: "saveTopicCriteria", text: "# 任意\n" }) });
+    assert.notEqual(refused.status, 200, "the standard is revised in Dove, not saved from the dashboard");
   } finally {
     server.close();
   }
