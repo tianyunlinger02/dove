@@ -2,15 +2,16 @@
 
 import process from "node:process";
 
-import { checkGeneratedAuthorPreferencesContent, writeGeneratedAuthorPreferencesContent } from "./generate-author-preferences.mjs";
+import { checkGeneratedAuthorPreferencesContent, checkGeneratedTopicCriteriaContent, writeGeneratedAuthorPreferencesContent, writeGeneratedTopicCriteriaContent } from "./generate-author-preferences.mjs";
 
 const check = process.argv.includes("--check");
-const contentDrift = check ? checkGeneratedAuthorPreferencesContent() : [];
+const contentDrift = check ? [...checkGeneratedAuthorPreferencesContent(), ...checkGeneratedTopicCriteriaContent()] : [];
 if (contentDrift.length > 0) {
   for (const item of contentDrift) console.error(`${item.relativePath}: ${item.reason}`);
   process.exit(1);
 }
 const contentTransaction = check ? null : writeGeneratedAuthorPreferencesContent();
+if (!check) writeGeneratedTopicCriteriaContent();
 // Load renderers only after generating or checking their imported content.
 const { checkGeneratedAdapters, checkGeneratedDoveAgentSurfaces, generatedWriteSummary, writeGeneratedAdapters, writeGeneratedDoveAgentSurfaces } = await import("./generate-command-adapters.mjs");
 

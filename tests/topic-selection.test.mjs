@@ -17,7 +17,11 @@ function setup() {
 
 test("criteria are kept at user level and copied into a project when selection starts", () => {
   const { env, root } = setup();
-  assert.throws(() => startTopicSelection(root, { env }), /还没有选题标准/u);
+  const builtin = readTopicCriteriaInfo({ env });
+  assert.deepEqual([builtin.present, builtin.source, builtin.version, builtin.builtinVersion], [true, "builtin", "27", "27"]);
+  const fallback = startTopicSelection(root, { env });
+  assert.equal(fallback.criteria.version, "27", "a project starts from the built-in standard when the user has none");
+  assert.doesNotMatch(fs.readFileSync(path.join(root, ".dove/research/topics/CRITERIA.md"), "utf8"), /point1/u);
   assert.throws(() => writeTopicCriteria("太短", { env }), /太短/u);
   const info = writeTopicCriteria(criteria, { env });
   assert.equal(info.version, "23");

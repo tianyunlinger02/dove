@@ -24,3 +24,22 @@ export function writeGeneratedAuthorPreferencesContent(root = PACKAGE_ROOT) {
   fs.writeFileSync(path.join(root, GENERATED_PATH), content, "utf8");
   return { writtenPaths: [GENERATED_PATH] };
 }
+
+const TOPIC_SOURCE_PATH = "docs/TOPIC_CRITERIA.md";
+const TOPIC_GENERATED_PATH = "src/core/dove-topic-criteria-content.generated.mjs";
+
+export function renderTopicCriteriaContentModule(content) {
+  return `// Generated from ${TOPIC_SOURCE_PATH} by npm run commands:generate. Do not edit.\nexport const DOVE_TOPIC_CRITERIA_CONTENT = ${JSON.stringify(content)};\n`;
+}
+
+export function checkGeneratedTopicCriteriaContent(root = PACKAGE_ROOT) {
+  const content = renderTopicCriteriaContentModule(fs.readFileSync(path.join(root, TOPIC_SOURCE_PATH), "utf8"));
+  const target = path.join(root, TOPIC_GENERATED_PATH);
+  if (!fs.existsSync(target)) return [{ relativePath: TOPIC_GENERATED_PATH, reason: "missing" }];
+  return fs.readFileSync(target, "utf8") === content ? [] : [{ relativePath: TOPIC_GENERATED_PATH, reason: "content differs" }];
+}
+
+export function writeGeneratedTopicCriteriaContent(root = PACKAGE_ROOT) {
+  fs.writeFileSync(path.join(root, TOPIC_GENERATED_PATH), renderTopicCriteriaContentModule(fs.readFileSync(path.join(root, TOPIC_SOURCE_PATH), "utf8")), "utf8");
+  return { writtenPaths: [TOPIC_GENERATED_PATH] };
+}

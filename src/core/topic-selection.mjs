@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { DOVE_TOPIC_CRITERIA_CONTENT } from "./dove-topic-criteria-content.generated.mjs";
 import { doveConfigDirectory } from "./paper-watch.mjs";
 
-// Topic selection follows the user's own criteria document, kept at user
-// level and copied into a project when a selection starts. Dove does not
-// restate the criteria; it gives the rounds a place to live and reads the
-// candidate cards' header lines for the dashboard.
+// Topic selection follows a criteria document copied into a project when a
+// selection starts: the user's own version at user level when present,
+// otherwise the standard that ships with Dove (docs/TOPIC_CRITERIA.md).
+// Dove gives the rounds a place to live and reads the candidate cards'
+// header lines for the dashboard.
 const CRITERIA_NAME = "topic-criteria.md";
 const TOPICS_DIR = ".dove/research/topics";
 const CARD_FIELDS = Object.freeze({
@@ -53,13 +55,19 @@ function describe(text, stat) {
   };
 }
 
-export function readTopicCriteriaInfo(options = {}) {
+// The user's own version wins; without one, the built-in standard applies.
+function currentCriteria(options = {}) {
   const file = topicCriteriaPath(options);
   try {
-    return { present: true, ...describe(fs.readFileSync(file, "utf8"), fs.statSync(file)) };
+    return { text: fs.readFileSync(file, "utf8"), stat: fs.statSync(file), source: "user" };
   } catch {
-    return { present: false };
+    return { text: DOVE_TOPIC_CRITERIA_CONTENT, stat: null, source: "builtin" };
   }
+}
+
+export function readTopicCriteriaInfo(options = {}) {
+  const { text, stat, source } = currentCriteria(options);
+  return { present: true, source, builtinVersion: describe(DOVE_TOPIC_CRITERIA_CONTENT).version, ...describe(text, stat) };
 }
 
 export function writeTopicCriteria(text, options = {}) {
@@ -121,11 +129,10 @@ const PROJECT_TEMPLATE = `# 本项目的选题设置
 `;
 
 export function startTopicSelection(root, options = {}) {
-  const source = topicCriteriaPath(options);
-  if (!fs.existsSync(source)) throw new Error("还没有选题标准：先在面板设置页粘贴，或放到 " + source);
+  const criteria = currentCriteria(options);
   const directory = path.join(root, TOPICS_DIR);
   fs.mkdirSync(path.join(directory, "cards"), { recursive: true });
-  fs.writeFileSync(path.join(directory, "CRITERIA.md"), splitProjectSettings(fs.readFileSync(source, "utf8")).general);
+  fs.writeFileSync(path.join(directory, "CRITERIA.md"), splitProjectSettings(criteria.text).general);
   fs.writeFileSync(path.join(directory, "README.md"), README);
   if (!fs.existsSync(path.join(directory, "PROJECT.md"))) fs.writeFileSync(path.join(directory, "PROJECT.md"), PROJECT_TEMPLATE);
   return readTopics(root);

@@ -12,7 +12,7 @@ import { EXA_WEB_SUPPORT_SKILL_PATH } from "./web-access-integration.mjs";
 import { DOVE_AGENT_SURFACES } from "./dove-agent-definition.mjs";
 import { DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS, DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS } from "./dove-author-preferences.mjs";
 
-export const PACKAGE_DOCUMENTATION_PATHS = ["README.md", "docs/README.md", "docs/AUTHOR_PREFERENCES.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"];
+export const PACKAGE_DOCUMENTATION_PATHS = ["README.md", "docs/README.md", "docs/AUTHOR_PREFERENCES.md", "docs/TOPIC_CRITERIA.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"];
 export const PACKAGE_LEGAL_PATHS = ["LICENSE", "THIRD_PARTY_NOTICES.md"];
 export const PACKAGE_BRAND_PATHS = ["dove.png"];
 export const PACKAGE_RUNTIME_PATHS = ["dist/index.mjs", "bin/dove-package.mjs"];
