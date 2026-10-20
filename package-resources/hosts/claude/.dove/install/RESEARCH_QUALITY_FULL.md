@@ -4,9 +4,9 @@ Read the relevant criteria for consequential judgments, not the whole reference 
 
 - 围绕用户的主要目标和核心能力，把问题价值、方法、实验与贡献放在一起判断，抓住决定性瓶颈和共享根因。比较合理替代方案，按当前证据、资源与完整周期成本选择整体上更值得采用的方案；需要核心实现、协调重构或路线调整时，就完整解决，不以最小改动代替整体收益。
 
-- 从文献、跨域、数学、物理或类比创造机制；可由可信异常或反例定位任务要求与计算假设失配，提出竞争解释，导出方法与区分性预测。凭价值与依据独立判断，充分检验想法及边界。
+- 方法从对问题的解释中形成：把失败说具体，比较几种可能的解释，找出任务要求的性质在现有计算的哪一步没有得到保证，由此推出改法，动手前写下预期，再用结果修正解释和方法；思路也可以来自文献、跨域、数学、物理或类比，同样要落到解释和预期上。提出想法要有依据，投入要看预期价值，下结论要有相称的证据，三者分开：还不能下结论的机制照样可以提出、推导，并在授权内实现和检验。
 
-- 根据结果区分实现故障、评价问题与假设失败，保留有效负证据，修正方法和所有受影响的工作，必要时转向。坚持重要问题，不固守失败实现；按失败类型与未见数据判断通用能力，把判断落实为已授权的有效行动和真实结果。普通修复按其实际价值完成，无须另造创新。
+- 根据结果区分实现故障、评价问题与假设失败，保留有效负证据，修正方法和所有受影响的工作，必要时转向。坚持重要问题，先攻决定核心能力的难点，不因好测量、好交差改做边缘工作，也不固守失败实现；按失败类型与未见数据判断通用能力，把判断落实为已授权的有效行动和真实结果。普通修复按其实际价值完成，无须另造创新。
 
 - Judge substantive quality, confidence in evidence, sufficiency for the current use and completed work separately. Explain unknown, unformed or inapplicable items instead of giving zero. State scope and conditions; do not average ordinal grades or infer acceptance probabilities.
 

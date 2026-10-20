@@ -116,11 +116,11 @@ function contract(slug) {
     })
   });
   if (slug === "experiment") return capabilityContract({
-    ambientParticipation: "Use actual outputs and fair comparisons to distinguish method effects from implementation or evaluation errors.",
+    ambientParticipation: "Turn actual outputs and failures into explanations and the next method change, and use fair comparisons to separate method effects from implementation or evaluation errors.",
     purpose: "Develop, reproduce and evaluate methods with evidence that answers the research question.",
     when: "Use for authorized development, diagnostics, confirmation, reproduction or analysis of existing results.",
     actions: [
-      "Inspect the relevant code, data, configuration, outputs and analysis before interpreting results. When a model cannot learn, test single-example overfitting to diagnose the learning mechanism rather than treating larger data or a larger evaluator as the first remedy. A diagnostic supports only the question it actually tests.",
+      "Inspect the relevant code, data, configuration, outputs and analysis before interpreting results. Read failures as evidence about where the current computation does not give the task what it requires, and derive the next method change and its expected effect from that explanation, following 从问题到方法 in RESEARCH_QUALITY.md. When a model cannot learn, test single-example overfitting to diagnose the learning mechanism rather than treating larger data or a larger evaluator as the first remedy. A diagnostic supports only the question it actually tests.",
       "During development, keep code changes and diagnostic results traceable and choose tests that answer the key unknown, rather than requiring complete evaluation after every edit. Before formal comparison, result adoption or paper claims, evaluate the current method version under the full applicable protocol and all confirmed user metrics. Unmeasured effects remain unknown; a new version does not inherit an earlier version's passing conclusion.",
       "Use complete-task comparisons against strong same-input alternatives to assess utility, and ablations or controlled comparisons to test attribution. Keep budgets, uncertainty and failure denominators visible, including missing or invalid outputs. Follow the shared experiment contract for method versions, fresh unused test draws for formal comparisons when methods change after test use, and final heldout confirmation.",
       "The main executor repairs evaluator errors and immediately marks all affected results. Restore comparability for the current claim, necessary historical comparisons and strong baselines under the corrected protocol, reusing retained raw outputs before rerunning needed versions. Results not used in the current judgment may remain clearly labeled old-protocol history until needed; restore their comparability before using them again. Do not require every historical method to rerun first, mix protocols or hide valid negative evidence. Protocol repair alone is not a method-version change; ask the user if the correction changes the goal's meaning."
@@ -212,7 +212,7 @@ const SURFACES = [
   ["research", "Explore a broad candidate pool for the user's choice, or advance a confirmed mainline with substantive research."],
   ["status", "Report the current results, core evidence, blockers and active round without running new work."],
   ["source", "Find and inspect sources, verify citation identities and claims, and use the findings to improve research decisions."],
-  ["experiment", "Develop and evaluate methods through fair comparisons, informative diagnostics and trustworthy result analysis."],
+  ["experiment", "Develop methods from explanations of actual results and evaluate them through fair comparisons, informative diagnostics and trustworthy analysis."],
   ["draft", "Write or revise evidence-grounded text and deliver the authoritative manuscript through its actual build or export."],
   ["figure", "Create and inspect figures from real materials, delivering captions and editable sources with the rendered visuals."],
   ["review", "Independently review the specified current paper or inspect local artifacts, delivery readiness and returned opinions."],
