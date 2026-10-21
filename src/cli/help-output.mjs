@@ -30,7 +30,7 @@ export function renderDoveHelp() {
 
 普通 Claude 会话是 Dove 的主要入口；--agent dove 与九个 /dove:* Skills 只是可选快捷入口。CLI 管理项目接入、诊断和运行收据，也可通过 dove figure 调用配置的图像模型，但不启动审稿模型。/dove:review 保留，导师 dove-mentor 与论文审稿 dove-review 使用宿主原生全新只读子 agent，不传执行对话、不续接历史。导师可检索网页和论文，靠自己的 MENTOR_NOTES.md 延续判断；审稿只读指定稿件与依据。
 
-dove figure 实际调用用户 settings.figure（baseURL、model、apiKeyEnv）配置的图像模型，会向该服务发送 prompt 和输入图，需已有相应授权；不提供 --image 时生成，提供时编辑，--image 可重复。相对输入/输出路径按 --project（默认当前目录）解析，--output 必须是新的 PNG 文件；CLI 不能调用宿主内置 image_gen。
+dove figure 调用 settings.figure（baseURL、model、apiKeyEnv）配置的图像模型，向服务发送 prompt 和输入图，需相应授权；无 --image 时生成，有图时编辑，--image 可重复。相对路径按 --project（默认当前目录）解析，--output 必须是新 PNG。此命令制作构图参考或示意素材；主会话另用可用 PPT 工具组合真实资产与文字、交付 PPTX 及导出，不是本 CLI 的功能；CLI 不能调用宿主内置 image_gen。
 
 dove dashboard 在本机起一个网页，只读查看已登记项目的主线、核心能力、长期研究意图、当前轮次、EVAL 评测表和每轮说明/结果（默认 127.0.0.1:7788，远程用 SSH 端口转发打开；挂到公网隧道时用 --password-file 开启密码登录，所有页面和数据接口都要先登录）。面板的「设置」页可管理项目登记、论文追踪（关键词、作者、arXiv 分类、每天运行时间、代理、可选的 Semantic Scholar key）和面板密码；论文追踪在面板运行期间每天自动执行，也可用 dove watch run 手动执行，结果写入各项目 .dove/research/watch/。导师每次检查关键词、未判断论文和扫描，返回中文一句话与方向；有用论文累积为可导 BibTeX 的项目文献库。无新论文时补旧文默认关闭。选题先读标准，从正文近未成工作找缺口，跨领域找机制；候选写对应关系、前提、近邻差别与风险，经留下／修改／否掉评审，推荐两三个交用户选，之前不实现方法。面板可查看候选卡与文献库。
 

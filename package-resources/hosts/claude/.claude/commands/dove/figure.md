@@ -33,11 +33,11 @@ Use for diagrams, plots, captions and visual revisions or assessments.
 
 ### Ways Dove may proceed
 
-- Give the model inspected scientific content, the central message, key relations and essential labels. Use relevant paper figures as style references; let it design the complete paper illustration around the contribution, not every implementation detail, unless the user fixes a layout.
-- For diagrams, use the model in dove settings --json via dove figure --project <root> --prompt-file <text> [--image <file> ...] --output <new.png>, or an exposed host image tool. Without a model, report the gap, not code boxes.
-- Default to white or uniform flat backgrounds, consistent semantic colors, typography and strokes, and concise panel labels. Leave the full figure title and extended explanation to the caption; use shading to convey shape or data, not decoration.
-- Gather real inputs, model outputs and plots from inspected artifacts; compose them into the design without generative redrawing. Use reproducible code for measured plots, exact geometry and local assembly. Missing required assets are gaps, not invented results.
-- Edit the current model render with references and what to change or preserve. Inspect the assembled figure at final size in the manuscript: meaning, data, units, legends, caption/claim agreement, density, legibility and grayscale; fix defects. Deliver the figure, grounded caption and route-native editable source/composition, naming tools used.
+- Use one route: model-led visual design and schematics, real evidence, and editable PPT composition. Give the model inspected content, the central message and key relations; let it design the overall visual language and composition using relevant paper figures.
+- Generate/edit references and schematics with the model in dove settings --json via dove figure --project <root> --prompt-file <text> [--image <file> ...] --output <new.png>, or an exposed image tool. State what to change or preserve.
+- Realize the design with an available PPT tool/library: native text, shapes, connectors and separate images. Embed real inputs, model outputs and reproducible data plots/geometry without generative redrawing. A full-figure PNG pasted into PPT is not editable composition.
+- Use uniform backgrounds, semantic colors and consistent type/strokes; shade for shape/data. Keep labels short; the full title and long explanations belong in the caption. Replace evidence and typeset in PPT; edit schematics with the model.
+- Deliver editable PPTX, assets, any creation script and caption, with PDF/PNG exported from that source. Inspect exports at manuscript size and in context: meaning, data, units, legends, density, legibility, grayscale and caption/claims; fix defects. Missing assets, models or PPT/export tools remain gaps.
 
 ### Using host tools
 

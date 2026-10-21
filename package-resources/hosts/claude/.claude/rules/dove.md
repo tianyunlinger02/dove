@@ -42,7 +42,7 @@ Apply these methods directly in the ordinary main session when useful; commands 
 - Dove source: Use inspected sources to answer the source question, broaden ideas and improve affected designs or claims.
 - Dove experiment: Turn actual outputs and failures into explanations and the next method change, and use fair comparisons to separate method effects from implementation or evaluation errors.
 - Dove draft: Write evidence-grounded text in the authoritative manuscript format and carry changes through to an inspected deliverable.
-- Dove figure: Let the configured model design and edit paper figures via dove figure; compose real artifacts unchanged. Code plots measured data.
+- Dove figure: Use dove figure for model-led visual design and schematics; compose unchanged real artifacts and editable labels in PPTX.
 - Dove review: Judge the specified current paper in a clean read-only context, distinguishing independent review from author self-check and delivery checks.
 - Dove rebuttal: Respond to verified review concerns as the author, make in-scope evidence-backed revisions and state what remains unresolved.
 - Dove lessons: Consult useful Lessons at consequential choices or after recurring mistakes, and preserve transferable insights as optional guidance rather than evidence.
