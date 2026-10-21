@@ -521,17 +521,17 @@ for (const hosts of [["claude"], ["dsh"], ["claude", "dsh"]]) {
 
 const userStatusLineRoot = scratch();
 writeFile(userStatusLineRoot, ".claude/settings.json", `${JSON.stringify({
-  statusLine: { type: "command", command: "trellis-statusline" },
+  statusLine: { type: "command", command: "custom-statusline" },
   enabledPlugins: { demo: true }
 }, null, 2)}\n`);
 const userStatusLineInit = initializeProjectIntegration(userStatusLineRoot, { ...PACKAGE_OPTIONS, hosts: ["claude"] });
 assert.equal(userStatusLineInit.manifest.managed.some((entry) => entry.selector === STATUS_LINE_SELECTOR), false);
-assert.deepEqual(readJson(path.join(userStatusLineRoot, ".claude/settings.json")).statusLine, { type: "command", command: "trellis-statusline" });
+assert.deepEqual(readJson(path.join(userStatusLineRoot, ".claude/settings.json")).statusLine, { type: "command", command: "custom-statusline" });
 assert.equal(readJson(path.join(userStatusLineRoot, ".claude/settings.json")).enabledPlugins.demo, true);
 assert.equal(updateProjectIntegration(userStatusLineRoot, PACKAGE_OPTIONS).status, "unchanged");
 const userStatusLinePreview = previewProjectCompleteReinstall(userStatusLineRoot, PACKAGE_OPTIONS);
 completeReinstallProjectIntegration(userStatusLineRoot, { ...PACKAGE_OPTIONS, preview: userStatusLinePreview, confirmed: true });
-assert.deepEqual(readJson(path.join(userStatusLineRoot, ".claude/settings.json")).statusLine, { type: "command", command: "trellis-statusline" });
+assert.deepEqual(readJson(path.join(userStatusLineRoot, ".claude/settings.json")).statusLine, { type: "command", command: "custom-statusline" });
 fs.rmSync(path.join(userStatusLineRoot, ".claude/settings.json"));
 const installFreedStatusLine = inspectProjectIntegration(userStatusLineRoot, PACKAGE_OPTIONS);
 assert.equal(installFreedStatusLine.status, "needs-update");

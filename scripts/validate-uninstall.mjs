@@ -127,14 +127,14 @@ assert.deepEqual(JSON.parse(fs.readFileSync(path.join(fixture, ".claude/settings
 reset();
 const preexistingStatusLineSettingsPath = path.join(fixture, ".claude", "settings.json");
 const preexistingStatusLineSettings = JSON.parse(fs.readFileSync(preexistingStatusLineSettingsPath, "utf8"));
-preexistingStatusLineSettings.statusLine = { type: "command", command: "trellis-statusline" };
+preexistingStatusLineSettings.statusLine = { type: "command", command: "custom-statusline" };
 fs.writeFileSync(preexistingStatusLineSettingsPath, `${JSON.stringify(preexistingStatusLineSettings, null, 2)}\n`);
 const preexistingStatusLineInit = initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
 assert.equal(preexistingStatusLineInit.manifest.managed.some((entry) => entry.selector === "/statusLine[dove-project-directory]"), false);
-assert.deepEqual(JSON.parse(fs.readFileSync(preexistingStatusLineSettingsPath, "utf8")).statusLine, { type: "command", command: "trellis-statusline" });
+assert.deepEqual(JSON.parse(fs.readFileSync(preexistingStatusLineSettingsPath, "utf8")).statusLine, { type: "command", command: "custom-statusline" });
 assert.equal(updateProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }).status, "unchanged");
 uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
-assert.deepEqual(JSON.parse(fs.readFileSync(preexistingStatusLineSettingsPath, "utf8")).statusLine, { type: "command", command: "trellis-statusline" });
+assert.deepEqual(JSON.parse(fs.readFileSync(preexistingStatusLineSettingsPath, "utf8")).statusLine, { type: "command", command: "custom-statusline" });
 
 reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });

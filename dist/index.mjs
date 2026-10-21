@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.23" : null;
+var injectedVersion = true ? "3.4.24" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -220,8 +220,6 @@ var DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS = "For the complete paper, ask four ques
 var DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC = "Author-side self-check critiques the current paper with concrete evidence and feasible action; it is not independent review.";
 var DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY = "Delivery review checks actual venue rules, build/export output and required materials; delivery readiness is separate from scientific acceptability.";
 var DOVE_RESEARCH_REVIEW_DUAL_COMPLETION = "A user-confirmed submission-completion goal needs author-side scientific sufficiency, an actual independent review recommending scientific acceptability of the same complete current version, and real delivery readiness. Unavailable independent review remains a gap; bounded tasks can finish within scope.";
-var DOVE_RESEARCH_FIGURE_EVIDENCE_BOUNDARY = "Judge a figure by whether it expresses the manuscript claim correctly, clearly, and attractively in context; inspect the rendered visual, source data or source visuals, rendering logic, caption, nearby text, final dimensions, and manuscript layout when they can change meaning.";
-var DOVE_RESEARCH_FIGURE_CAPABILITY_BOUNDARY = "When figure work is useful, plan, create, revise, render, open, inspect, caption, and deliver the actual visual with suitable host tools and editable sources; quantitative plots use real data and reproducible code, diagrams preserve route-native editable structure, generated or edited images use exposed host image tools when appropriate, and mixed raster plus SVG/vector work remains modifiable.";
 var DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY = "For manuscript work, preserve the user's current authoritative manuscript format, identify its source and build or export path, and follow actual venue requirements. Only for a new manuscript, default to LaTeX when the venue accepts it; otherwise use the required format. Inspect the actual submission output, including compiled output for LaTeX, keep scholarly evidence distinct from venue-facing materials, and propagate authorized changes through the authoritative source.";
 var DOVE_RESEARCH_SHARED_CONTRACT_BULLETS = Object.freeze([
   ...DOVE_RESEARCH_STANCE_BULLETS,
@@ -623,18 +621,18 @@ function contract(slug) {
     ]
   });
   if (slug === "figure") return capabilityContract({
-    ambientParticipation: "Use dove figure for model-led visual design and schematics; compose unchanged real artifacts and editable labels in PPTX.",
+    ambientParticipation: "Create publication-quality figures through model-led design, illustrations, real materials and editable PPT composition.",
     purpose: "Gather materials and create, revise, inspect and caption publication-quality figures.",
     when: "Use for diagrams, plots, captions and visual revisions or assessments.",
     actions: [
-      "Use one route: model-led visual design and schematics, real evidence, and editable PPT composition. Give the model inspected content, the central message and key relations; let it design the overall visual language and composition using relevant paper figures.",
-      "Generate/edit references and schematics with the model in dove settings --json via dove figure --project <root> --prompt-file <text> [--image <file> ...] --output <new.png>, or an exposed image tool. State what to change or preserve.",
-      "Realize the design with an available PPT tool/library: native text, shapes, connectors and separate images. Embed real inputs, model outputs and reproducible data plots/geometry without generative redrawing. A full-figure PNG pasted into PPT is not editable composition.",
-      "Use uniform backgrounds, semantic colors and consistent type/strokes; shade for shape/data. Keep labels short; the full title and long explanations belong in the caption. Replace evidence and typeset in PPT; edit schematics with the model.",
-      "Deliver editable PPTX, assets, any creation script and caption, with PDF/PNG exported from that source. Inspect exports at manuscript size and in context: meaning, data, units, legends, density, legibility, grayscale and caption/claims; fix defects. Missing assets, models or PPT/export tools remain gaps."
+      "Give the image model the scientific message, inspected content, key relations and actual paper figures as visual references. Let it design composition, density, hierarchy, color and depth before building PPT, choosing a visual language suited to the explanation.",
+      "Generate/edit designs and illustrations with the configured model through dove figure --project <root> --prompt-file <text> [--image <file> ...] --output <new.png>, or an exposed image tool. Inspect the design and refine its assets.",
+      "Preserve the design in PPT: native labels/connectors and independently replaceable illustrations and real assets. Keep detailed model-made schematics as images rather than tracing them into basic shapes. Real evidence stays faithful and distinct from explanatory imagery; a full-figure PNG alone is not editable composition.",
+      "Use concrete objects, close-ups, texture, shading and geometry for explanatory value, with deliberate fills and coherent type/color. Keep the full title and extended explanation in the caption; refine illustrations with the model and typeset in PPT.",
+      "Deliver PPTX, assets, any creation script and caption, plus PDF/PNG from that source. Open at manuscript size, compare with the design and paper references, and improve meaning, visual quality and readability. Report missing materials or tools plainly."
     ],
     boundaries: [
-      "Planning-only, assessment-only and no-write requests return plans or findings. Completion requires faithful meaning and a usable, visually sound figure, not just valid exports."
+      "Planning-only, assessment-only and no-write requests retain their scope. Completion means a scientifically faithful, usable and visually compelling figure, not merely valid exports."
     ]
   });
   if (slug === "review") return capabilityContract({
@@ -5186,8 +5184,6 @@ export {
   DOVE_RESEARCH_DECISION_CONSEQUENCE,
   DOVE_RESEARCH_EVALUATION,
   DOVE_RESEARCH_EXPERIMENT_ITERATION,
-  DOVE_RESEARCH_FIGURE_CAPABILITY_BOUNDARY,
-  DOVE_RESEARCH_FIGURE_EVIDENCE_BOUNDARY,
   DOVE_RESEARCH_FLAT_SKILL_SENTENCE,
   DOVE_RESEARCH_MAINLINE_ANCHORING,
   DOVE_RESEARCH_MAINTENANCE_TRIGGER,

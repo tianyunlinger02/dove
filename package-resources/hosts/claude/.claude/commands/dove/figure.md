@@ -29,15 +29,15 @@ Use for diagrams, plots, captions and visual revisions or assessments.
 
 ### Scope and changes
 
-- Planning-only, assessment-only and no-write requests return plans or findings. Completion requires faithful meaning and a usable, visually sound figure, not just valid exports.
+- Planning-only, assessment-only and no-write requests retain their scope. Completion means a scientifically faithful, usable and visually compelling figure, not merely valid exports.
 
 ### Ways Dove may proceed
 
-- Use one route: model-led visual design and schematics, real evidence, and editable PPT composition. Give the model inspected content, the central message and key relations; let it design the overall visual language and composition using relevant paper figures.
-- Generate/edit references and schematics with the model in dove settings --json via dove figure --project <root> --prompt-file <text> [--image <file> ...] --output <new.png>, or an exposed image tool. State what to change or preserve.
-- Realize the design with an available PPT tool/library: native text, shapes, connectors and separate images. Embed real inputs, model outputs and reproducible data plots/geometry without generative redrawing. A full-figure PNG pasted into PPT is not editable composition.
-- Use uniform backgrounds, semantic colors and consistent type/strokes; shade for shape/data. Keep labels short; the full title and long explanations belong in the caption. Replace evidence and typeset in PPT; edit schematics with the model.
-- Deliver editable PPTX, assets, any creation script and caption, with PDF/PNG exported from that source. Inspect exports at manuscript size and in context: meaning, data, units, legends, density, legibility, grayscale and caption/claims; fix defects. Missing assets, models or PPT/export tools remain gaps.
+- Give the image model the scientific message, inspected content, key relations and actual paper figures as visual references. Let it design composition, density, hierarchy, color and depth before building PPT, choosing a visual language suited to the explanation.
+- Generate/edit designs and illustrations with the configured model through dove figure --project <root> --prompt-file <text> [--image <file> ...] --output <new.png>, or an exposed image tool. Inspect the design and refine its assets.
+- Preserve the design in PPT: native labels/connectors and independently replaceable illustrations and real assets. Keep detailed model-made schematics as images rather than tracing them into basic shapes. Real evidence stays faithful and distinct from explanatory imagery; a full-figure PNG alone is not editable composition.
+- Use concrete objects, close-ups, texture, shading and geometry for explanatory value, with deliberate fills and coherent type/color. Keep the full title and extended explanation in the caption; refine illustrations with the model and typeset in PPT.
+- Deliver PPTX, assets, any creation script and caption, plus PDF/PNG from that source. Open at manuscript size, compare with the design and paper references, and improve meaning, visual quality and readability. Report missing materials or tools plainly.
 
 ### Using host tools
 
