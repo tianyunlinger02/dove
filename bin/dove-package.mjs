@@ -14185,7 +14185,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.21" : null;
+var injectedVersion = true ? "3.4.22" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -15015,18 +15015,18 @@ function contract(slug) {
     ]
   });
   if (slug === "figure") return capabilityContract({
-    ambientParticipation: "Give the configured image model scientific content and paper-illustration style via dove figure; edit its render. Code plots real data.",
+    ambientParticipation: "Let the configured model design and edit paper figures via dove figure; compose real artifacts unchanged. Code plots measured data.",
     purpose: "Gather materials and create, revise, inspect and caption publication-quality figures.",
-    when: "Use for a requested diagram, plot, caption, visual revision or assessment, or when a visual is needed to explain evidence or a mechanism.",
+    when: "Use for diagrams, plots, captions and visual revisions or assessments.",
     actions: [
-      "Give the image model the inspected scientific content: what the figure explains, key entities and relationships, and necessary labels. Ask it to draw the complete figure in a polished scientific-paper illustration style, using relevant paper figures as style references. Let it design the composition unless the user fixes a layout.",
-      "For diagrams, check dove settings --json; use the configured model via dove figure --project <root> --prompt-file <text> [--image <file> ...] --output <new.png>. Host image tools are optional only if exposed. Without a model, report the gap rather than substitute code boxes.",
-      "Use reproducible code for real-data plots, exact geometry and layout. Preserve measured evidence; generated imagery is not experimental output. Keep scratch renders in the authorized workspace.",
-      "Inspect the render at final size and in manuscript context: hierarchy, core relationship, appearance, data, labels, units, legends, caption and claim. Keep labels legible and encodings grayscale-safe. Valid exports do not prove good design.",
-      "Revise the model's generated figure through image editing, supplying that image, relevant references, and what to change or preserve. Deliver the inspected figure, grounded caption and route-native editable source/composition, naming the tools used."
+      "Give the model inspected scientific content, the central message, key relations and essential labels. Use relevant paper figures as style references; let it design the complete paper illustration around the contribution, not every implementation detail, unless the user fixes a layout.",
+      "For diagrams, use the model in dove settings --json via dove figure --project <root> --prompt-file <text> [--image <file> ...] --output <new.png>, or an exposed host image tool. Without a model, report the gap, not code boxes.",
+      "Default to white or uniform flat backgrounds, consistent semantic colors, typography and strokes, and concise panel labels. Leave the full figure title and extended explanation to the caption; use shading to convey shape or data, not decoration.",
+      "Gather real inputs, model outputs and plots from inspected artifacts; compose them into the design without generative redrawing. Use reproducible code for measured plots, exact geometry and local assembly. Missing required assets are gaps, not invented results.",
+      "Edit the current model render with references and what to change or preserve. Inspect the assembled figure at final size in the manuscript: meaning, data, units, legends, caption/claim agreement, density, legibility and grayscale; fix defects. Deliver the figure, grounded caption and route-native editable source/composition, naming tools used."
     ],
     boundaries: [
-      "Planning-only, assessment-only and no-write requests return plans or findings without creating files. Completion needs faithful meaning, visual quality and usability, not merely successful technical checks."
+      "Planning-only, assessment-only and no-write requests return plans or findings. Completion requires faithful meaning and a usable, visually sound figure, not just valid exports."
     ]
   });
   if (slug === "review") return capabilityContract({
