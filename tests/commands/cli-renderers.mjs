@@ -50,6 +50,37 @@ function assertRuntimeCli() {
     command: "mentor", subcommand: "brief", options: { trigger: "用户纠正", userSource: "/source", since: "2026-10-14", until: "2026-10-15", userOriginal: "原话", opinion: "opinion.md", artifact: ["a.csv", "b.png"] }, passthrough: []
   });
   assertParserError(["mentor", "brief", "--task", "请裁决工程"], /Dove 不支持这个参数：--task/u, false);
+  assert.equal(Object.hasOwn(CLI_COMMAND_SPECS.figure, "subcommands"), false, "figure generation and editing share one CLI entry point");
+  assert.deepEqual(CLI_COMMAND_SPECS.figure.options.map((option) => option.name), ["--project", "--prompt-file", "--image", "--output", "--size", "--json", "--format"]);
+  assert.deepEqual(assertParserShape(parseDoveCli(["figure", "--project", "/workspace", "--prompt-file", "prompt.txt", "--output", "figures/new.png", "--json"])), {
+    command: "figure", subcommand: null, options: { project: "/workspace", promptFile: "prompt.txt", output: "figures/new.png", json: true }, passthrough: []
+  });
+  assert.deepEqual(parseDoveCli(["figure", "--project=/workspace", "--prompt-file=prompts/figure prompt.txt", "--image", "inputs/reference,style.png", "--image=inputs/edit target.png", "--image", "inputs/reference,style.png", "--output=figures/new.png", "--size=1536x1024", "--format", "json"]), {
+    command: "figure", subcommand: null,
+    options: { project: "/workspace", promptFile: "prompts/figure prompt.txt", image: ["inputs/reference,style.png", "inputs/edit target.png", "inputs/reference,style.png"], output: "figures/new.png", size: "1536x1024", format: "json" },
+    passthrough: []
+  }, "figure input paths retain their order and spelling for the core module to resolve against the project root");
+  assert.deepEqual(parseDoveCli(["figure", "--prompt-file", "prompt.txt", "--image", "input.png", "--output", "new.png", "--size", "1024x1024", "--format=json"]), {
+    command: "figure", subcommand: null, options: { promptFile: "prompt.txt", image: ["input.png"], output: "new.png", size: "1024x1024", format: "json" }, passthrough: []
+  }, "a single image is still an array and an omitted project is left for the CLI's cwd default");
+  for (const option of ["--project", "--prompt-file", "--image", "--output", "--size"]) {
+    assertParserError(["figure", option], new RegExp(`${option} 需要一个值`, "u"), false);
+    assertParserError(["figure", `${option}=`], new RegExp(`${option} 需要一个值`, "u"), false);
+    assertParserError(["figure", option, "--json"], new RegExp(`${option} 需要一个值`, "u"), true);
+    if (option !== "--image") {
+      assertParserError(["figure", option, "first", option, "second", "--format=json"], new RegExp(`${option} 只能提供一次`, "u"), true);
+    }
+  }
+  for (const subcommand of ["generate", "edit", "configure"]) {
+    assertParserError(["figure", subcommand, "--json"], /figure 不接受位置参数/u, true);
+  }
+  for (const option of ["--provider", "--model", "--base-url", "--api-key", "--api-key-env", "--prompt", "--approve"]) {
+    assertParserError(["figure", option, "value", "--json"], /Dove 不支持这个参数/u, true);
+  }
+  assertParserError(["figure", "--json", "--format", "json"], /--format 不能和 --json 同时使用/u, true);
+  assertParserError(["figure", "--format=json", "--json"], /--json 不能和 --format 同时使用/u, true);
+  assertParserError(["figure", "--format", "text"], /--format 只接受 json/u, false);
+  assertParserError(["figure", "--", "--json"], /figure 不接受位置参数/u, false);
   assert.deepEqual(Object.keys(CLI_COMMAND_SPECS.watch.subcommands), ["run", "configure"]);
   assert.deepEqual(parseDoveCli(["watch", "configure", "--project", "/workspace", "--mentor", "advice file.json", "--json"]), {
     command: "watch", subcommand: "configure", options: { project: "/workspace", mentor: "advice file.json", json: true }, passthrough: []
@@ -116,7 +147,16 @@ function assertDoveCliHelpRenderer() {
   assert.match(output, /dove run start --project <dir>.*--seed <short-text>.* -- <command> \[args\.\.\.\]/u);
   assert.match(output, /dove hook session-start --project <dir>/u);
   assert.match(output, /dove hook user-prompt-submit --project <dir>/u);
-  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "dashboard", "watch", "topic", "settings", "mentor", "projects", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
+  assert.match(output, /dove figure --project <root> --prompt-file <file> \[--image <file> \.\.\.\] --output <new\.png> \[--size <size>\] \[--json\|--format json\]/u);
+  const figureHelp = output.split("\n").find((line) => line.startsWith("dove figure "));
+  assert.ok(figureHelp, "help explains the figure command's model and data boundary");
+  assert.match(figureHelp, /settings\.figure.*baseURL.*model.*apiKeyEnv.*配置.*图像模型/u);
+  assert.match(figureHelp, /发送.*prompt.*输入图.*授权/u);
+  assert.match(figureHelp, /--image.*生成.*编辑.*--image.*重复/u);
+  assert.match(figureHelp, /相对.*路径.*--project.*当前目录/u);
+  assert.match(figureHelp, /CLI.*不能调用.*宿主内置 image_gen/u);
+  assert.match(output, /导师 dove-mentor.*论文审稿 dove-review.*宿主原生.*全新只读/u);
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "dashboard", "watch", "topic", "figure", "settings", "mentor", "projects", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
   for (const command of Object.keys(CLI_COMMAND_SPECS)) {
     assert.ok(output.includes(`dove ${command}`), `${command}: help exposes the parser's public commands`);
   }

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
+import { createDashboardActions } from "../src/cli/dashboard-actions.mjs";
 import {
   HOST_MIGRATION_PENDING_PATH, HOST_MIGRATION_REGISTERED_PATH, HOST_MIGRATION_TASK,
   hostMigrationContext, prepareHostMigration, readHostSettings, writeHostSettings
@@ -25,6 +26,7 @@ const PENDING = path.join(ROOT, HOST_MIGRATION_PENDING_PATH);
 const REGISTERED = path.join(ROOT, HOST_MIGRATION_REGISTERED_PATH);
 const MANIFEST = `${ROOT}/.dove/install/manifest.json`;
 const USER_SETTINGS = `${HOME}/config/dove/settings.json`;
+const FIGURE = { baseURL: "https://figures.example.test/v1", model: "synthetic-figure", apiKeyEnv: "DOVE_TEST_FIGURE_API_KEY" };
 const event = { hook_event_name: "UserPromptSubmit", prompt: "Continue the current task." };
 
 // A transaction-capable Map, not a real project or a disk fixture. Production
@@ -134,6 +136,126 @@ test("host settings round-trip booleans through XDG and HOME without touching pr
   const before = store.snapshot();
   assert.throws(() => writeHostSettings({ hostMigration: "on" }, store.options), /boolean hostMigration/u);
   assert.deepEqual(store.snapshot(), before);
+});
+
+test("host settings reads preserve figure and unknown fields with migration defaulting off", (t) => {
+  const store = memory(t);
+  const saved = { figure: FIGURE, unrelated: { labels: ["keep"] }, optional: null };
+  store.put(USER_SETTINGS, `${JSON.stringify(saved)}\n`);
+  const before = store.snapshot();
+  store.writes.length = 0;
+  assert.deepEqual(readHostSettings(store.options), { ...saved, hostMigration: false });
+  assert.deepEqual(store.writes, []);
+  assert.deepEqual(store.snapshot(), before);
+});
+
+test("figure-only settings writes default migration off and retain private temporary-file writes", (t) => {
+  const store = memory(t);
+  const expected = { figure: FIGURE, hostMigration: false };
+  assert.deepEqual(writeHostSettings({ figure: FIGURE }, store.options), expected);
+  assert.deepEqual(readHostSettings(store.options), expected);
+  assert.deepEqual(JSON.parse(store.text(USER_SETTINGS)), expected);
+  assert.equal(store.nodes.get(path.dirname(USER_SETTINGS)).mode, 0o700);
+  assert.equal(store.nodes.get(USER_SETTINGS).mode, 0o600);
+  const temporary = `${USER_SETTINGS}.${process.pid}.tmp`;
+  assert.deepEqual(store.writes.slice(-3), [temporary, temporary, USER_SETTINGS]);
+  assert.equal(store.nodes.has(temporary), false);
+});
+
+test("CLI-shaped host migration writes preserve figure and unknown fields", (t) => {
+  const store = memory(t);
+  const saved = { figure: FIGURE, unrelated: { keep: true }, hostMigration: false };
+  store.put(USER_SETTINGS, `${JSON.stringify(saved)}\n`);
+  for (const hostMigration of [true, false]) {
+    store.reads.length = 0;
+    const expected = { ...saved, hostMigration };
+    assert.deepEqual(writeHostSettings({ hostMigration }, store.options), expected);
+    assert.deepEqual(store.reads, [USER_SETTINGS]);
+    assert.deepEqual(readHostSettings(store.options), expected);
+    assert.deepEqual(JSON.parse(store.text(USER_SETTINGS)), expected);
+  }
+});
+
+test("figure and unknown-field patches shallowly merge without resetting host migration", (t) => {
+  const store = memory(t);
+  const saved = { hostMigration: true, figure: { ...FIGURE, oldOption: "replace" }, unrelated: { keep: true } };
+  store.put(USER_SETTINGS, `${JSON.stringify(saved)}\n`);
+  const figure = { ...FIGURE, model: "synthetic-figure-updated" };
+  const patch = { figure };
+  const expected = { ...saved, figure };
+  assert.deepEqual(writeHostSettings(patch, store.options), expected);
+  assert.deepEqual(patch, { figure });
+  assert.deepEqual(readHostSettings(store.options), expected);
+  assert.deepEqual(JSON.parse(store.text(USER_SETTINGS)), expected);
+  assert.deepEqual(writeHostSettings({}, store.options), expected);
+  const replaced = { ...expected, unrelated: { replacement: true }, added: "new" };
+  assert.deepEqual(writeHostSettings({ unrelated: { replacement: true }, added: "new" }, store.options), replaced);
+  assert.deepEqual(readHostSettings(store.options), replaced);
+  assert.deepEqual(JSON.parse(store.text(USER_SETTINGS)), replaced);
+});
+
+test("dashboard host settings saves preserve figure, migration and unknown fields", (t) => {
+  const store = memory(t);
+  const saved = { figure: FIGURE, unrelated: { keep: true }, hostMigration: true };
+  store.put(USER_SETTINGS, `${JSON.stringify(saved)}\n`);
+  const actions = createDashboardActions({ packageOptions: store.options, env: store.options.env });
+  for (const hostMigration of [false, true]) {
+    const expected = { ...saved, hostMigration };
+    assert.deepEqual(actions.saveHostSettings({ settings: { hostMigration } }), expected);
+    assert.deepEqual(readHostSettings(store.options), expected);
+    assert.deepEqual(JSON.parse(store.text(USER_SETTINGS)), expected);
+  }
+  const figure = { ...FIGURE, baseURL: "https://updated-figures.example.test/v1" };
+  const expected = { ...saved, figure };
+  assert.deepEqual(actions.saveHostSettings({ settings: { figure } }), expected);
+  assert.deepEqual(actions.saveHostSettings({}), expected);
+  assert.deepEqual(readHostSettings(store.options), expected);
+  assert.deepEqual(JSON.parse(store.text(USER_SETTINGS)), expected);
+});
+
+test("invalid host settings patches retain validation errors without reading or writing", (t) => {
+  const store = memory(t);
+  store.put(USER_SETTINGS, JSON.stringify({ hostMigration: true, figure: FIGURE, unrelated: "keep" }));
+  const before = store.snapshot();
+  store.reads.length = 0;
+  store.writes.length = 0;
+  for (const value of [undefined, null, [], false, 42, "invalid", { hostMigration: null }, { hostMigration: "on" }, { hostMigration: 0 }]) {
+    assert.throws(() => writeHostSettings(value, store.options), /boolean hostMigration/u);
+  }
+  assert.deepEqual(store.reads, []);
+  assert.deepEqual(store.writes, []);
+  assert.deepEqual(store.snapshot(), before);
+});
+
+test("invalid existing host settings fail reads and partial writes without being overwritten", (t) => {
+  const store = memory(t);
+  const invalid = [null, [], false, 42, "invalid", { hostMigration: null }, { hostMigration: "on" }, { hostMigration: 0 }];
+  for (const content of ["{", ...invalid.map((value) => JSON.stringify(value))]) {
+    store.put(USER_SETTINGS, content);
+    const before = store.snapshot();
+    store.writes.length = 0;
+    const expected = content === "{" ? SyntaxError : /boolean hostMigration/u;
+    assert.throws(() => readHostSettings(store.options), expected);
+    for (const patch of [{ hostMigration: true }, { figure: FIGURE }]) {
+      assert.throws(() => writeHostSettings(patch, store.options), expected);
+    }
+    assert.deepEqual(store.writes, []);
+    assert.deepEqual(store.snapshot(), before);
+  }
+});
+
+test("host settings preserve absolute-root and filesystem read errors", (t) => {
+  const store = memory(t);
+  const relative = { ...store.options, env: { HOME, XDG_CONFIG_HOME: "relative/config" } };
+  assert.throws(() => readHostSettings(relative), /configuration root must be absolute/u);
+  assert.throws(() => writeHostSettings({ figure: FIGURE }, relative), /configuration root must be absolute/u);
+  assert.deepEqual(store.reads, []);
+  const error = Object.assign(new Error("Synthetic settings read denied"), { code: "EACCES" });
+  t.mock.method(store.fsOps, "readFileSync", () => { throw error; });
+  assert.throws(() => readHostSettings(store.options), (caught) => caught === error);
+  assert.throws(() => writeHostSettings({ hostMigration: true }, store.options), (caught) => caught === error);
+  assert.deepEqual(store.writes, []);
+  assert.equal(store.nodes.has(USER_SETTINGS), false);
 });
 
 test("disabled installation and updates neither register nor read research for migration", (t) => {

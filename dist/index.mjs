@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.19" : null;
+var injectedVersion = true ? "3.4.21" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -623,18 +623,18 @@ function contract(slug) {
     ]
   });
   if (slug === "figure") return capabilityContract({
-    ambientParticipation: "Turn inspected data or mechanism logic into a rendered, checked figure with a caption and editable sources.",
-    purpose: "Gather materials and plan, create, revise, inspect and caption publication figures.",
+    ambientParticipation: "Give the configured image model scientific content and paper-illustration style via dove figure; edit its render. Code plots real data.",
+    purpose: "Gather materials and create, revise, inspect and caption publication-quality figures.",
     when: "Use for a requested diagram, plot, caption, visual revision or assessment, or when a visual is needed to explain evidence or a mechanism.",
     actions: [
-      "Inspect the actual data, source visuals and mechanism logic. Plan the figure's claim, audience, panel structure, manuscript placement, final dimensions and editable-source route, distinguishing schematic explanation from measured evidence.",
-      "Choose the route that fits the material: plot real data with reproducible code, draw diagrams in editable SVG or vector form, use exposed host image generation or editing when an illustrative image is appropriate and permitted, or combine raster panels with editable vector labels and layout. Keep scratch renders in a repository-local workspace such as `.claude/tmp/` unless directed otherwise.",
-      "Render the actual figure and write its caption from the inspected materials, explaining panels, encodings and relevant limits without inventing data, results or method details.",
-      "Open or view the actual rendered figure at realistic final dimensions and in manuscript context when available. Check source data or logic against panels, labels, units, legends, caption, nearby text and the claim. Draw at the final column width, keep text at least about 70% of body text in the body font family, avoid label collisions and distinguish series in grayscale. A standalone preview does not establish final-context readiness.",
-      "For revision, change the editable source, plotting code, image, layout, caption or nearby text as needed, then rerender and inspect the result. Deliver the final figure file and caption with the route-native editable source, including plotting code and data references, vector structure or an editable raster/vector composition."
+      "Give the image model the inspected scientific content: what the figure explains, key entities and relationships, and necessary labels. Ask it to draw the complete figure in a polished scientific-paper illustration style, using relevant paper figures as style references. Let it design the composition unless the user fixes a layout.",
+      "For diagrams, check dove settings --json; use the configured model via dove figure --project <root> --prompt-file <text> [--image <file> ...] --output <new.png>. Host image tools are optional only if exposed. Without a model, report the gap rather than substitute code boxes.",
+      "Use reproducible code for real-data plots, exact geometry and layout. Preserve measured evidence; generated imagery is not experimental output. Keep scratch renders in the authorized workspace.",
+      "Inspect the render at final size and in manuscript context: hierarchy, core relationship, appearance, data, labels, units, legends, caption and claim. Keep labels legible and encodings grayscale-safe. Valid exports do not prove good design.",
+      "Revise the model's generated figure through image editing, supplying that image, relevant references, and what to change or preserve. Deliver the inspected figure, grounded caption and route-native editable source/composition, naming the tools used."
     ],
     boundaries: [
-      "Planning-only, assessment-only and no-write requests return plans or findings without creating files. Judge a finished visual by faithful meaning and usability, not image counts, resolution or beauty alone."
+      "Planning-only, assessment-only and no-write requests return plans or findings without creating files. Completion needs faithful meaning, visual quality and usability, not merely successful technical checks."
     ]
   });
   if (slug === "review") return capabilityContract({
@@ -1107,7 +1107,7 @@ function hostSettings(value) {
   if (!value || typeof value !== "object" || Array.isArray(value) || value.hostMigration !== void 0 && typeof value.hostMigration !== "boolean") {
     throw new Error("Dove host settings require a boolean hostMigration value.");
   }
-  return { hostMigration: value.hostMigration ?? false };
+  return { ...value, hostMigration: value.hostMigration ?? false };
 }
 function readHostSettings(options = {}) {
   const fsOps = options.fsOps ?? fs4;
@@ -1119,7 +1119,8 @@ function readHostSettings(options = {}) {
   }
 }
 function writeHostSettings(value, options = {}) {
-  const settings = hostSettings(value);
+  hostSettings(value);
+  const settings = hostSettings({ ...readHostSettings(options), ...value });
   const fsOps = options.fsOps ?? fs4;
   const file = settingsPath(options);
   fsOps.mkdirSync(path3.dirname(file), { recursive: true, mode: 448 });
@@ -2023,8 +2024,8 @@ function desiredManaged(resources) {
 }
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path17) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path17 === "$" ? key : `${path17}.${key}`}.`);
+function duplicateKeyError(label, key, path18) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path18 === "$" ? key : `${path18}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -2060,7 +2061,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path17) {
+  function parseArray(path18) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -2069,7 +2070,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path17}[${itemIndex}]`);
+      parseValue(`${path18}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -2081,7 +2082,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path17) {
+  function parseObject(path18) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -2091,12 +2092,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path17);
+      if (keys.has(key)) duplicateKeyError(label, key, path18);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path17 === "$" ? `$.${key}` : `${path17}.${key}`);
+      parseValue(path18 === "$" ? `$.${key}` : `${path18}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -2107,11 +2108,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path17) {
+  function parseValue(path18) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path17);
-    else if (character === "[") parseArray(path17);
+    if (character === "{") parseObject(path18);
+    else if (character === "[") parseArray(path18);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -3245,9 +3246,123 @@ ${Object.entries(fields).filter(([, value]) => value).map(([name, value]) => `  
   }).join("\n\n") + (papers.length ? "\n" : "");
 }
 
+// src/core/figure-generation.mjs
+import path12 from "node:path";
+var PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+function configuredFigure(options) {
+  const config = readHostSettings(options).figure;
+  if (config === void 0) {
+    throw new Error("No figure API configured. Set figure.baseURL, figure.model and figure.apiKeyEnv in Dove user settings.json, or use the host's image tools directly; this CLI cannot invoke host image_gen.");
+  }
+  if (!config || typeof config !== "object" || Array.isArray(config)) throw new Error("Dove figure configuration must be an object.");
+  for (const field of ["baseURL", "model", "apiKeyEnv"]) {
+    if (typeof config[field] !== "string" || !config[field].trim()) throw new Error(`Dove figure.${field} must be a non-empty string.`);
+  }
+  let baseURL;
+  try {
+    baseURL = new URL(config.baseURL);
+  } catch {
+    throw new Error("Dove figure.baseURL must be an HTTP(S) API root URL.");
+  }
+  if (!["http:", "https:"].includes(baseURL.protocol) || baseURL.username || baseURL.password || baseURL.search || baseURL.hash) {
+    throw new Error("Dove figure.baseURL must be an HTTP(S) API root URL without credentials, query or fragment.");
+  }
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(config.apiKeyEnv)) throw new Error("Dove figure.apiKeyEnv must name an environment variable, not contain a key.");
+  const apiKey = (options.env ?? process.env)[config.apiKeyEnv];
+  if (typeof apiKey !== "string" || !apiKey.trim()) throw new Error(`Missing figure API key environment variable: ${config.apiKeyEnv}.`);
+  return { baseURL: baseURL.href.replace(/\/+$/u, ""), model: config.model.trim(), apiKey };
+}
+function projectPath(root, projectRoot, supplied, label) {
+  if (typeof supplied !== "string" || !supplied.trim()) throw new Error(`${label} is required.`);
+  const relative = path12.relative(path12.resolve(projectRoot), path12.resolve(projectRoot, supplied)).split(path12.sep).join("/");
+  return root.normalize(relative, label);
+}
+function imageType(bytes) {
+  if (bytes.subarray(0, 8).equals(PNG_SIGNATURE)) return "image/png";
+  if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return "image/jpeg";
+  if (bytes.length >= 12 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  throw new Error("Figure inputs must be PNG, JPEG or WebP images.");
+}
+function decodePng(value) {
+  if (typeof value !== "string" || !value.length || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(value)) {
+    throw new Error("Figure API did not return valid data[0].b64_json; URL-only responses are not supported.");
+  }
+  const bytes = Buffer.from(value, "base64");
+  if (!bytes.subarray(0, 8).equals(PNG_SIGNATURE)) throw new Error("Figure API returned a non-PNG image or invalid image data; no output was written.");
+  let offset = 8;
+  let hasPixels = false;
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.toString("ascii", offset + 4, offset + 8);
+    if (offset + 12 + length > bytes.length) break;
+    if (offset === 8 && (type !== "IHDR" || length !== 13 || bytes.readUInt32BE(offset + 8) === 0 || bytes.readUInt32BE(offset + 12) === 0)) break;
+    if (type === "IDAT" && length > 0) hasPixels = true;
+    offset += length + 12;
+    if (type === "IEND") {
+      if (hasPixels && length === 0 && offset === bytes.length) return bytes;
+      break;
+    }
+  }
+  throw new Error("Figure API returned incomplete PNG image data; no output was written.");
+}
+async function generateFigure(projectRoot, options = {}) {
+  const { baseURL, model, apiKey } = configuredFigure(options);
+  const root = openRootedFilesystem(projectRoot, options);
+  const promptPath = projectPath(root, projectRoot, options.promptFile, "--prompt-file");
+  const output = projectPath(root, projectRoot, options.output, "--output");
+  if (path12.extname(output).toLowerCase() !== ".png") throw new Error("--output must name a new PNG file.");
+  if (root.exists(output)) throw new Error("Figure output already exists; choose a new --output path.");
+  const prompt = root.readFile(promptPath).toString("utf8").trim();
+  if (!prompt) throw new Error("Figure prompt file is empty.");
+  const images = options.image ?? [];
+  if (!Array.isArray(images)) throw new Error("Figure image inputs must be an array.");
+  const inputs = images.map((image) => {
+    const relative = projectPath(root, projectRoot, image, "--image");
+    const bytes = root.readFile(relative);
+    return { name: path12.posix.basename(relative), bytes, type: imageType(bytes) };
+  });
+  if (options.size !== void 0 && (typeof options.size !== "string" || !options.size.trim())) throw new Error("--size must be a non-empty model-supported size.");
+  const mode = inputs.length ? "edit" : "generate";
+  const headers = { Authorization: `Bearer ${apiKey}` };
+  let body;
+  if (inputs.length) {
+    body = new FormData();
+    body.append("model", model);
+    body.append("prompt", prompt);
+    for (const image of inputs) body.append("image[]", new Blob([image.bytes], { type: image.type }), image.name);
+    if (options.size !== void 0) body.append("size", options.size);
+  } else {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify({ model, prompt, ...options.size === void 0 ? {} : { size: options.size } });
+  }
+  const parent = path12.posix.dirname(output);
+  if (parent !== ".") root.mkdir(parent, { recursive: true });
+  let response;
+  try {
+    response = await (options.fetch ?? globalThis.fetch)(`${baseURL}/images/${inputs.length ? "edits" : "generations"}`, {
+      method: "POST",
+      headers,
+      body,
+      redirect: "error"
+    });
+  } catch {
+    throw new Error("Figure API request failed; check the configured service and connection. No automatic retry was made.");
+  }
+  if (!response.ok) throw new Error(`Figure API request failed (HTTP ${response.status}); check the service, model and credentials. No automatic retry was made.`);
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error("Figure API returned invalid JSON; no output was written.");
+  }
+  const png = decodePng(result?.data?.[0]?.b64_json);
+  root.writeNewFile(output, png);
+  return { status: "generated", mode, model, outputPath: root.displayPath(output), inputs: inputs.length };
+}
+
 // src/core/mentor-brief.mjs
 import fs14 from "node:fs";
-import path12 from "node:path";
+import path13 from "node:path";
 
 // src/core/mentor-intent.mjs
 var DAY_MS = 864e5;
@@ -3322,7 +3437,7 @@ function list(directory, fsOps) {
 }
 function describe(root, relative, fsOps) {
   try {
-    return `\`${relative}\`${fsOps.statSync(path12.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
+    return `\`${relative}\`${fsOps.statSync(path13.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
   } catch (error) {
     return `\`${relative}\`\uFF08${error.code === "ENOENT" ? "\u7F3A\u5931" : `\u65E0\u6CD5\u8BFB\u53D6\uFF1A${error.code ?? error.message}`}\uFF09`;
   }
@@ -3369,11 +3484,11 @@ function recentRounds(names) {
 }
 function watchMaterials(root, rounds, fsOps) {
   const relative = `${RESEARCH}/watch`;
-  const directory = path12.join(root, relative);
+  const directory = path13.join(root, relative);
   const names = list(directory, fsOps).sort().reverse();
   const config = `${relative}/config.json`;
   const lines = [`- \u914D\u7F6E\uFF1A${describe(root, config, fsOps)}`];
-  const configText = readWindow(path12.join(root, config), fsOps, 8192);
+  const configText = readWindow(path13.join(root, config), fsOps, 8192);
   if (!configText.error) lines.push(quote(clip(configText.text.trim(), 1600)), "\u914D\u7F6E\u4EC5\u6458\u5F55\uFF0C\u5168\u6587\u89C1\u8DEF\u5F84\u3002");
   let source = null;
   if (!configText.error && !configText.truncated) {
@@ -3387,8 +3502,8 @@ function watchMaterials(root, rounds, fsOps) {
   let incomplete = false;
   const impacts = names.filter((name) => IMPACT_FILE.test(name));
   const records = [
-    ...rounds.filter((name) => ROUND_FILE.test(name) && /brief\.md$/iu.test(name)).map((name) => path12.join(root, RESEARCH, "rounds", name)),
-    ...impacts.map((name) => path12.join(directory, name))
+    ...rounds.filter((name) => ROUND_FILE.test(name) && /brief\.md$/iu.test(name)).map((name) => path13.join(root, RESEARCH, "rounds", name)),
+    ...impacts.map((name) => path13.join(directory, name))
   ];
   for (const file of records) {
     const record = readWindow(file, fsOps, 65536, true);
@@ -3404,7 +3519,7 @@ function watchMaterials(root, rounds, fsOps) {
   const digests = names.filter((name) => DIGEST_FILE.test(name));
   const pending = /* @__PURE__ */ new Map();
   for (const name of digests.slice(0, 3)) {
-    const file = path12.join(directory, name);
+    const file = path13.join(directory, name);
     lines.push(`- \u8FD1\u671F\u6E05\u5355\uFF1A${describe(root, `${relative}/${name}`, fsOps)}`);
     const result = readWindow(file, fsOps, 262144);
     if (result.error || result.truncated) {
@@ -3446,7 +3561,7 @@ ${item.line ? "\u5DF2\u6709\u4E00\u53E5\u8BDD" : "\u539F\u6458\u8981"}\uFF08\u4E
 }
 function opinionAttachment(root, opinion, fsOps) {
   if (!opinion) return "\u672A\u9644\u610F\u89C1\u6587\u4EF6\u3002";
-  const file = path12.resolve(root, opinion);
+  const file = path13.resolve(root, opinion);
   const result = readWindow(file, fsOps, 4096);
   if (result.error) throw new Error(`\u610F\u89C1\u6587\u4EF6${result.error}\uFF1A${file}`);
   const length = Array.from(result.text).length;
@@ -3457,12 +3572,12 @@ ${quote(`\u4F5C\u8005\uFF1A${author ?? "\u672A\u7F72\u540D\uFF08\u6309\u6267\u88
 }
 function renderMentorBrief(root, options = {}) {
   const fsOps = options.fsOps ?? fs14;
-  const project = path12.resolve(root);
-  const research = path12.join(project, RESEARCH);
-  const rounds = list(path12.join(research, "rounds"), fsOps);
+  const project = path13.resolve(root);
+  const research = path13.join(project, RESEARCH);
+  const rounds = list(path13.join(research, "rounds"), fsOps);
   const selected = recentRounds(rounds);
-  const evaluation = path12.join(research, "EVAL.md");
-  const notes = readWindow(path12.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
+  const evaluation = path13.join(research, "EVAL.md");
+  const notes = readWindow(path13.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
   const intent = notes.error ? null : latestLongTermIntent(notes.text);
   const intentStatus = notes.error ? `\u5BFC\u5E08\u7B14\u8BB0${notes.error}` : !intent ? "\u7B14\u8BB0\u4E2D\u6CA1\u6709\u957F\u671F\u610F\u56FE\u4E00\u8282" : !intent.date ? "\u957F\u671F\u610F\u56FE\u6CA1\u6709\u6709\u6548\u65E5\u671F" : `\u6700\u8FD1\u4E00\u6B21\u4E3A ${intent.date}`;
   const lines = [
@@ -3513,7 +3628,7 @@ function renderMentorBrief(root, options = {}) {
     opinionAttachment(project, options.opinion, fsOps),
     "",
     "\u65B0\u589E\u539F\u59CB\u4EA7\u7269\uFF08\u53EA\u5217\u8DEF\u5F84\uFF09\uFF1A",
-    ...options.artifact?.length ? options.artifact.map((file) => `- \`${path12.resolve(project, file)}\``) : ["\u672A\u63D0\u4F9B\u3002"],
+    ...options.artifact?.length ? options.artifact.map((file) => `- \`${path13.resolve(project, file)}\``) : ["\u672A\u63D0\u4F9B\u3002"],
     "",
     "## \u56FA\u5B9A\u95EE\u9898",
     "",
@@ -3525,18 +3640,18 @@ function renderMentorBrief(root, options = {}) {
 
 // src/core/project-installation.mjs
 import fs16 from "node:fs";
-import path14 from "node:path";
+import path15 from "node:path";
 
 // src/core/project-root.mjs
 import fs15 from "node:fs";
-import path13 from "node:path";
-var INSTALLATION_DIRECTORY = path13.posix.dirname(INSTALLATION_MANIFEST_PATH);
+import path14 from "node:path";
+var INSTALLATION_DIRECTORY = path14.posix.dirname(INSTALLATION_MANIFEST_PATH);
 function realpathNative2(fsOps, targetPath) {
   return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
 }
 function canonicalExistingDirectory(value, label, fsOps) {
   if (typeof value !== "string" || !value.trim() || value.includes("\0")) throw new Error(`${label} must name an existing directory.`);
-  const resolved = path13.resolve(value);
+  const resolved = path14.resolve(value);
   let stat;
   try {
     stat = fsOps.statSync(resolved);
@@ -3552,7 +3667,7 @@ function parentDirectories2(start) {
   let current = start;
   while (true) {
     directories.push(current);
-    const parent = path13.dirname(current);
+    const parent = path14.dirname(current);
     if (parent === current) return directories;
     current = parent;
   }
@@ -3571,16 +3686,16 @@ function preservedInstallationDirectory(directoryPath, directoryStat, fsOps) {
   const children = fsOps.readdirSync(directoryPath).map(String).sort();
   if (children.length > 1 || children.length === 1 && children[0] !== "DOCTOR.md") return false;
   if (children.length === 0) return true;
-  const doctorStat = lstatOrNull3(fsOps, path13.join(directoryPath, "DOCTOR.md"));
+  const doctorStat = lstatOrNull3(fsOps, path14.join(directoryPath, "DOCTOR.md"));
   return doctorStat?.isFile() === true && !doctorStat.isSymbolicLink();
 }
 function installationStateAt(root, options) {
   const fsOps = options.fsOps ?? fs15;
-  const doveStat = lstatOrNull3(fsOps, path13.join(root, ".dove"));
+  const doveStat = lstatOrNull3(fsOps, path14.join(root, ".dove"));
   if (doveStat && (doveStat.isSymbolicLink() || !doveStat.isDirectory())) throw new Error(`Dove installation parent must be a real directory: ${root}/.dove.`);
-  if (lstatOrNull3(fsOps, path13.join(root, ".dove-install")) !== null) throw legacyInitError(root);
-  const directoryPath = path13.join(root, INSTALLATION_DIRECTORY);
-  const manifestPath = path13.join(root, INSTALLATION_MANIFEST_PATH);
+  if (lstatOrNull3(fsOps, path14.join(root, ".dove-install")) !== null) throw legacyInitError(root);
+  const directoryPath = path14.join(root, INSTALLATION_DIRECTORY);
+  const manifestPath = path14.join(root, INSTALLATION_MANIFEST_PATH);
   const manifestStat = lstatOrNull3(fsOps, manifestPath);
   if (manifestStat === null) {
     const directoryStat2 = lstatOrNull3(fsOps, directoryPath);
@@ -3606,7 +3721,7 @@ function setupEvidenceAt(root, fsOps) {
     LEGACY_INSTALLATION_MANIFEST_PATH
   ];
   for (const relativePath of paths) {
-    const target = path13.join(root, relativePath);
+    const target = path14.join(root, relativePath);
     const stat = lstatOrNull3(fsOps, target);
     if (stat === null) continue;
     if (stat.isSymbolicLink() || !stat.isFile()) {
@@ -3615,7 +3730,7 @@ function setupEvidenceAt(root, fsOps) {
     return { state: "marker", relativePath };
   }
   for (const relativePath of [INSTALLATION_DIRECTORY, ".dove-install"]) {
-    const target = path13.join(root, relativePath);
+    const target = path14.join(root, relativePath);
     const stat = lstatOrNull3(fsOps, target);
     if (stat === null) continue;
     if (stat.isSymbolicLink() || !stat.isDirectory()) {
@@ -3631,7 +3746,7 @@ function legacyInitError(root) {
 }
 function gitRootFrom(start, fsOps) {
   for (const directory of parentDirectories2(start)) {
-    const dotGit = path13.join(directory, ".git");
+    const dotGit = path14.join(directory, ".git");
     const stat = lstatOrNull3(fsOps, dotGit);
     if (stat === null) continue;
     if (stat.isSymbolicLink()) throw new Error(`Git project marker must not be a symbolic link: ${dotGit}.`);
@@ -3665,8 +3780,8 @@ function resolveProjectRootForInit(project, options = {}) {
   return !explicitProject && gitRoot !== null ? gitRoot : candidate;
 }
 function packageProjectBoundary(directory, fsOps) {
-  const packageJson = lstatOrNull3(fsOps, path13.join(directory, "package.json"));
-  const nodeModules = lstatOrNull3(fsOps, path13.join(directory, "node_modules"));
+  const packageJson = lstatOrNull3(fsOps, path14.join(directory, "package.json"));
+  const nodeModules = lstatOrNull3(fsOps, path14.join(directory, "node_modules"));
   return packageJson?.isFile() && !packageJson.isSymbolicLink() && nodeModules?.isDirectory() && !nodeModules.isSymbolicLink();
 }
 function resolveProjectRootForSetup(start, options = {}) {
@@ -3674,10 +3789,10 @@ function resolveProjectRootForSetup(start, options = {}) {
   const candidate = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project setup start", fsOps);
   for (const directory of parentDirectories2(candidate)) {
     if (setupEvidenceAt(directory, fsOps).state !== "absent") return directory;
-    const dotGit = lstatOrNull3(fsOps, path13.join(directory, ".git"));
+    const dotGit = lstatOrNull3(fsOps, path14.join(directory, ".git"));
     if (dotGit !== null) {
       if (dotGit.isSymbolicLink() || !dotGit.isDirectory() && !dotGit.isFile()) {
-        throw new Error(`Git project marker must be a file or directory: ${path13.join(directory, ".git")}.`);
+        throw new Error(`Git project marker must be a file or directory: ${path14.join(directory, ".git")}.`);
       }
       return directory;
     }
@@ -3692,7 +3807,7 @@ function resolveInstalledProjectRoot(start, options = {}) {
     const installation = installationStateAt(directory, options);
     if (installation.state === "initialized") return directory;
     if (installation.state === "residue") throw new Error(`Dove installation state is incomplete at ${directory}.`);
-    if (lstatOrNull3(fsOps, path13.join(directory, ".git")) !== null || packageProjectBoundary(directory, fsOps)) break;
+    if (lstatOrNull3(fsOps, path14.join(directory, ".git")) !== null || packageProjectBoundary(directory, fsOps)) break;
   }
   throw initRequiredError(startingDirectory);
 }
@@ -3807,7 +3922,7 @@ function inspectProjectIntegration(start, options = {}) {
   };
 }
 function canonicalLifecycleRoot(start, fsOps) {
-  const resolved = path14.resolve(start ?? process.cwd());
+  const resolved = path15.resolve(start ?? process.cwd());
   const stat = fsOps.lstatSync(resolved);
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove lifecycle project root must be a real directory: ${resolved}.`);
   return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
@@ -4014,7 +4129,7 @@ function uninstallDoveLifecycle(start, options = {}) {
 
 // src/core/project-doctor.mjs
 import fs18 from "node:fs";
-import path15 from "node:path";
+import path16 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/core/project-setup-classification.mjs
@@ -4031,8 +4146,8 @@ function classifyProjectSetup(result) {
 }
 
 // src/core/project-doctor.mjs
-var MODULE_DIRECTORY = path15.dirname(fileURLToPath3(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path15.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path15.basename(MODULE_DIRECTORY)) ? ".." : "../..");
+var MODULE_DIRECTORY = path16.dirname(fileURLToPath3(import.meta.url));
+var DEFAULT_PACKAGE_ROOT = path16.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path16.basename(MODULE_DIRECTORY)) ? ".." : "../..");
 function messageFor(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -4053,17 +4168,17 @@ function regularNonSymlink(fsOps, targetPath) {
 }
 function inspectUserCli(options) {
   const fsOps = options.fsOps ?? fs18;
-  const packageRoot = path15.resolve(options.packageRoot ?? DEFAULT_PACKAGE_ROOT);
+  const packageRoot = path16.resolve(options.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
-    const absolutePath = path15.resolve(packageRoot, relativePath);
-    const relative = path15.relative(packageRoot, absolutePath);
-    const contained = relative !== "" && !relative.startsWith("..") && !path15.isAbsolute(relative);
+    const absolutePath = path16.resolve(packageRoot, relativePath);
+    const relative = path16.relative(packageRoot, absolutePath);
+    const contained = relative !== "" && !relative.startsWith("..") && !path16.isAbsolute(relative);
     const healthy2 = contained && regularNonSymlink(fsOps, absolutePath);
     return { path: relativePath, healthy: healthy2, state: healthy2 ? "current" : contained ? "missing-or-invalid" : "outside-package-root" };
   });
-  const executablePath = path15.resolve(options.executablePath ?? path15.join(packageRoot, "bin/dove-package.mjs"));
-  const executableRelative = path15.relative(packageRoot, executablePath);
-  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path15.isAbsolute(executableRelative);
+  const executablePath = path16.resolve(options.executablePath ?? path16.join(packageRoot, "bin/dove-package.mjs"));
+  const executableRelative = path16.relative(packageRoot, executablePath);
+  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path16.isAbsolute(executableRelative);
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
   const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
@@ -4175,7 +4290,7 @@ function inspectProjectDoctor(start, options = {}) {
   try {
     setupRoot = resolveProjectRootForSetup(start, { fsOps: options.fsOps });
   } catch {
-    setupRoot = typeof start === "string" ? path15.resolve(start) : null;
+    setupRoot = typeof start === "string" ? path16.resolve(start) : null;
   }
   const projectIntegration = inspectIntegration(start, options);
   const safeRoot = projectIntegration.root ?? setupRoot;
@@ -4198,7 +4313,7 @@ function inspectProjectDoctor(start, options = {}) {
 // src/core/run-record.mjs
 import crypto3 from "node:crypto";
 import fs19 from "node:fs";
-import path16 from "node:path";
+import path17 from "node:path";
 import process3 from "node:process";
 
 // src/core/run-environment.mjs
@@ -4386,17 +4501,17 @@ function runAbsolutePaths(projectRoot, runId) {
   const relative = runRelativePaths(runId);
   return {
     ...relative,
-    absoluteRunDirectory: path16.join(projectRoot, relative.runDirectory),
-    absoluteJournalPath: path16.join(projectRoot, relative.journalPath),
-    absoluteStdoutPath: path16.join(projectRoot, relative.stdoutPath),
-    absoluteStderrPath: path16.join(projectRoot, relative.stderrPath)
+    absoluteRunDirectory: path17.join(projectRoot, relative.runDirectory),
+    absoluteJournalPath: path17.join(projectRoot, relative.journalPath),
+    absoluteStdoutPath: path17.join(projectRoot, relative.stdoutPath),
+    absoluteStderrPath: path17.join(projectRoot, relative.stderrPath)
   };
 }
 function ensureRunsRoot(projectRoot, options = {}) {
   const fsOps = options.fsOps ?? fs19;
-  const doveRoot = path16.join(projectRoot, ARTIFACT_PATHS.doveRoot);
+  const doveRoot = path17.join(projectRoot, ARTIFACT_PATHS.doveRoot);
   assertRealDirectory(fsOps, doveRoot, "Dove workspace root");
-  const runsRoot = path16.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const runsRoot = path17.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat !== null) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -4443,7 +4558,7 @@ function tryRunDirectory(projectRoot, runId, options = {}) {
 function acquireRunMutationLock(projectRoot, runId, options = {}) {
   const fsOps = options.fsOps ?? fs19;
   const paths = requireRunDirectory(projectRoot, runId, { fsOps });
-  const lockPath = path16.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
+  const lockPath = path17.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
   for (let attempt = 0; attempt <= RUN_LOCK_WAIT_MS / RUN_LOCK_RETRY_MS; attempt += 1) {
     try {
       fsOps.mkdirSync(lockPath, { mode: 448 });
@@ -4723,7 +4838,7 @@ function summarizeRun(projectRoot, runId, options = {}) {
 }
 function runsRootEntries(projectRoot, options = {}) {
   const fsOps = options.fsOps ?? fs19;
-  const runsRoot = path16.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const runsRoot = path17.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat === null) return [];
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -5127,6 +5242,7 @@ export {
   exportPaperBibtex,
   formatContextCapacity,
   formatSessionDuration,
+  generateFigure,
   generatedDoveAgentEntries,
   groupPaperLibrary,
   initializeProjectIntegration,

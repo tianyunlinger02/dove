@@ -33,7 +33,7 @@ function hostSettings(value) {
     || (value.hostMigration !== undefined && typeof value.hostMigration !== "boolean")) {
     throw new Error("Dove host settings require a boolean hostMigration value.");
   }
-  return { hostMigration: value.hostMigration ?? false };
+  return { ...value, hostMigration: value.hostMigration ?? false };
 }
 
 export function readHostSettings(options = {}) {
@@ -47,7 +47,8 @@ export function readHostSettings(options = {}) {
 }
 
 export function writeHostSettings(value, options = {}) {
-  const settings = hostSettings(value);
+  hostSettings(value);
+  const settings = hostSettings({ ...readHostSettings(options), ...value });
   const fsOps = options.fsOps ?? fs;
   const file = settingsPath(options);
   fsOps.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });

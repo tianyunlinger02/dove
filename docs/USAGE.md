@@ -161,7 +161,32 @@ For body-level details, read with 1–5 concrete questions. Keep one cumulative 
 
 Draft groups related work from `papers/library.json` and `papers/library.md` by direction and exports BibTeX from checked metadata. Missing authors or venues stay unknown; unknown publication kind uses `@misc`, not a conference type guessed from a venue label. Summary-only claims retain their source and unread-full-text status. Preserve manuscript format and claim strength; new manuscripts default to LaTeX only where accepted. Inspect the actual build/export after authorized edits.
 
-Figure gathers real data or mechanism materials, creates and renders the visual, inspects final-scale readability and manuscript context, and delivers captions and editable sources. Quantitative plots use reproducible code and real data; diagrams and image tools suit other materials. A standalone preview is not final-context validation.
+Figure uses an explicitly configured image model. A host drawing Skill or image-generation/editing tool is an optional route only when actually exposed; standard Claude Code is not assumed to include one. Give the model the scientific content, key relationships and necessary labels, and ask it to draw the complete figure in a scientific-paper illustration style. Relevant paper figures can provide visual references; the model designs the composition unless the user fixes a layout. Revise its generated image through image editing. Code serves real-data plots, exact geometry and necessary layout. Inspect visual quality and meaning in manuscript context; deliver the figure, caption and route-native editable source/composition, naming the tools actually used. A generated PNG is not automatically an editable vector figure or a publication-ready result.
+
+To use your own image API, merge this object into `$XDG_CONFIG_HOME/dove/settings.json` (default `$HOME/.config/dove/settings.json`), retaining existing fields:
+
+```json
+{
+  "figure": {
+    "baseURL": "https://your-image-service.example/v1",
+    "model": "your-image-model-id",
+    "apiKeyEnv": "OPENAI_API_KEY"
+  }
+}
+```
+
+Export the key in the named environment variable; do not put its value in the file or prompt. `baseURL` is the API root, including `/v1` if your service requires it, not an image endpoint. This route requires **OpenAI Images-compatible** generation/edit endpoints returning PNG in `data[0].b64_json`; chat-completions compatibility alone is insufficient. Dove does not select or replace the model. The retired `.dove/config*.json` provider settings are not loaded or migrated. `dove settings --json` reports the current settings; changing `hostMigration` in CLI or dashboard preserves `figure` and other fields.
+
+```bash
+# Generate from a local UTF-8 prompt file.
+dove figure --project <root> --prompt-file figures/prompt.txt --output figures/v1.png --json
+# Edit the current figure with an additional visual reference.
+dove figure --project <root> --prompt-file figures/revision.txt \
+  --image figures/v1.png --image figures/style.png \
+  --output figures/v2.png --size 1536x1024 --json
+```
+
+Input/output paths stay inside the project; relative paths resolve against `--project` (default current directory). The prompt identifies each image's role and what to change or preserve. Inputs may be PNG, JPEG or WebP; output must be a new `.png` path. Without `--image`, one JSON request goes to `{baseURL}/images/generations`; images use one multipart request to `{baseURL}/images/edits` with ordered `image[]` inputs. `--size` is sent only when supplied and must be supported by the selected model. These calls send the prompt and images to that service and may incur charges, so use only authorized materials and resources. Failures are explicit: no automatic paid retry, URL download, model switching or code-box substitution. The CLI cannot invoke host `image_gen`; without API configuration, the main session can use a host image tool only if it really exists. If neither route is available, report the missing capability.
 
 Independent `dove-review` uses a fresh Read/Grep/Glob context on the complete current manuscript, cited results and supplied grounding. Exclude execution conversation, identity/round records, preferences and old reviews; no retrieval, execution, edits or frozen workspace. It checks question-method fit, field correctness, contribution/evidence fit and the strongest objection, citing evidence and files read. Self-check and delivery checks are distinct; missing review remains a gap.
 

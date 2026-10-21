@@ -59,7 +59,7 @@ External full-task comparisons test utility; ablations and mechanism controls te
 | Source | Separate identity checks, reading and claim support. For body details, read with 1–5 questions and accumulate a summary and location-grounded answers in `papers/<id>.md`; reuse answered questions. Abstract/summary-only material names its source and remains marked full text unread, not gap evidence. Check-only requests need no notes or edits. |
 | Experiment | Develop with available truth and targeted reruns. Formal comparisons after test-informed changes need a fresh unused draw and same-set baselines; final heldout confirmation declares and freezes the comparison beforehand and uses heldout once. |
 | Draft | Group related work by direction from `papers/library.json` and `papers/library.md`; export BibTeX from checked metadata without invented authors or venues. Preserve reading provenance, claim strength and authoritative format; inspect the actual build/export. |
-| Figure | Gather, draw, render, inspect, caption and deliver editable visuals; quantitative figures use real data. |
+| Figure | Give the image model scientific content and paper-illustration style; edit its render. Code plots real data; deliver figures, captions and editable compositions. |
 | Review | Distinguish self-check, delivery inspection, independent paper review and faithful return preservation. |
 | Rebuttal | Verify concerns, group causes and respond or revise within scope; a reply is not resolution or acceptance. |
 | Lessons | Use grounded transferable guidance with conditions and counterexamples, not routine progress or proof. |

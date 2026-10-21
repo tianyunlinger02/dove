@@ -13,6 +13,7 @@ import { DEFAULT_DASHBOARD_BIND, DEFAULT_DASHBOARD_PORT, startDashboardServer } 
 import { runWatch } from "../src/core/paper-watch.mjs";
 import { configureWatchFromMentor } from "../src/core/watch-configure.mjs";
 import { startTopicSelection } from "../src/core/topic-selection.mjs";
+import { generateFigure } from "../src/core/figure-generation.mjs";
 import { readHostSettings, writeHostSettings } from "../src/core/host-migration.mjs";
 import { renderMentorBrief } from "../src/core/mentor-brief.mjs";
 import { refreshUserOriginals } from "../src/core/user-originals.mjs";
@@ -430,6 +431,13 @@ try {
     const result = startTopicSelection(root, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson(result);
     else console.log(`选题目录已就绪：${path.join(root, ".dove/research/topics")}（依据：${result.criteria?.title ?? "选题标准"}${result.criteria?.version ? `，第 ${result.criteria.version} 版` : ""}；已有候选 ${result.cards.length} 个）`);
+    process.exit(0);
+  }
+
+  if (command === "figure") {
+    const result = await generateFigure(path.resolve(options.project ?? process.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    if (wantsJson(options)) writeJson(result);
+    else console.log(`图像已${result.mode === "edit" ? "编辑" : "生成"}：${result.outputPath}（模型：${result.model}；输入图：${result.inputs} 张）`);
     process.exit(0);
   }
 

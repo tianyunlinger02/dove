@@ -1128,15 +1128,15 @@ var require_route = __commonJS({
       };
     }
     function wrapConversion(toModel, graph) {
-      const path27 = [graph[toModel].parent, toModel];
+      const path28 = [graph[toModel].parent, toModel];
       let fn = conversions[graph[toModel].parent][toModel];
       let cur = graph[toModel].parent;
       while (graph[cur].parent) {
-        path27.unshift(graph[cur].parent);
+        path28.unshift(graph[cur].parent);
         fn = link(conversions[graph[cur].parent][cur], fn);
         cur = graph[cur].parent;
       }
-      fn.conversion = path27;
+      fn.conversion = path28;
       return fn;
     }
     module.exports = function(fromModel) {
@@ -11478,7 +11478,7 @@ var require_lib3 = __commonJS({
 
 // bin/dove.mjs
 import fs27 from "node:fs";
-import path26 from "node:path";
+import path27 from "node:path";
 import process7 from "node:process";
 import { fileURLToPath as fileURLToPath5 } from "node:url";
 
@@ -13918,6 +13918,7 @@ var CLI_COMMAND_SPECS = Object.freeze({
     }
   }),
   topic: command([], { subcommands: { start: command([projectOption, ...outputOptions]) } }),
+  figure: command([projectOption, value("--prompt-file"), value("--image", { repeatable: true }), value("--output"), value("--size"), ...outputOptions]),
   settings: command([value("--host-migration", { choices: ["on", "off"] }), ...outputOptions]),
   mentor: command([], { subcommands: { brief: command([projectOption, value("--trigger"), value("--user-source"), value("--since"), value("--until"), value("--user-original"), value("--opinion"), value("--artifact", { repeatable: true }), ...outputOptions]) } }),
   projects: command([], {
@@ -14184,7 +14185,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.19" : null;
+var injectedVersion = true ? "3.4.21" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -15014,18 +15015,18 @@ function contract(slug) {
     ]
   });
   if (slug === "figure") return capabilityContract({
-    ambientParticipation: "Turn inspected data or mechanism logic into a rendered, checked figure with a caption and editable sources.",
-    purpose: "Gather materials and plan, create, revise, inspect and caption publication figures.",
+    ambientParticipation: "Give the configured image model scientific content and paper-illustration style via dove figure; edit its render. Code plots real data.",
+    purpose: "Gather materials and create, revise, inspect and caption publication-quality figures.",
     when: "Use for a requested diagram, plot, caption, visual revision or assessment, or when a visual is needed to explain evidence or a mechanism.",
     actions: [
-      "Inspect the actual data, source visuals and mechanism logic. Plan the figure's claim, audience, panel structure, manuscript placement, final dimensions and editable-source route, distinguishing schematic explanation from measured evidence.",
-      "Choose the route that fits the material: plot real data with reproducible code, draw diagrams in editable SVG or vector form, use exposed host image generation or editing when an illustrative image is appropriate and permitted, or combine raster panels with editable vector labels and layout. Keep scratch renders in a repository-local workspace such as `.claude/tmp/` unless directed otherwise.",
-      "Render the actual figure and write its caption from the inspected materials, explaining panels, encodings and relevant limits without inventing data, results or method details.",
-      "Open or view the actual rendered figure at realistic final dimensions and in manuscript context when available. Check source data or logic against panels, labels, units, legends, caption, nearby text and the claim. Draw at the final column width, keep text at least about 70% of body text in the body font family, avoid label collisions and distinguish series in grayscale. A standalone preview does not establish final-context readiness.",
-      "For revision, change the editable source, plotting code, image, layout, caption or nearby text as needed, then rerender and inspect the result. Deliver the final figure file and caption with the route-native editable source, including plotting code and data references, vector structure or an editable raster/vector composition."
+      "Give the image model the inspected scientific content: what the figure explains, key entities and relationships, and necessary labels. Ask it to draw the complete figure in a polished scientific-paper illustration style, using relevant paper figures as style references. Let it design the composition unless the user fixes a layout.",
+      "For diagrams, check dove settings --json; use the configured model via dove figure --project <root> --prompt-file <text> [--image <file> ...] --output <new.png>. Host image tools are optional only if exposed. Without a model, report the gap rather than substitute code boxes.",
+      "Use reproducible code for real-data plots, exact geometry and layout. Preserve measured evidence; generated imagery is not experimental output. Keep scratch renders in the authorized workspace.",
+      "Inspect the render at final size and in manuscript context: hierarchy, core relationship, appearance, data, labels, units, legends, caption and claim. Keep labels legible and encodings grayscale-safe. Valid exports do not prove good design.",
+      "Revise the model's generated figure through image editing, supplying that image, relevant references, and what to change or preserve. Deliver the inspected figure, grounded caption and route-native editable source/composition, naming the tools used."
     ],
     boundaries: [
-      "Planning-only, assessment-only and no-write requests return plans or findings without creating files. Judge a finished visual by faithful meaning and usability, not image counts, resolution or beauty alone."
+      "Planning-only, assessment-only and no-write requests return plans or findings without creating files. Completion needs faithful meaning, visual quality and usability, not merely successful technical checks."
     ]
   });
   if (slug === "review") return capabilityContract({
@@ -16009,8 +16010,8 @@ function desiredManaged(resources) {
 }
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path27) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path27 === "$" ? key : `${path27}.${key}`}.`);
+function duplicateKeyError(label, key, path28) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path28 === "$" ? key : `${path28}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -16046,7 +16047,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path27) {
+  function parseArray(path28) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -16055,7 +16056,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path27}[${itemIndex}]`);
+      parseValue(`${path28}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -16067,7 +16068,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path27) {
+  function parseObject(path28) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -16077,12 +16078,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path27);
+      if (keys.has(key)) duplicateKeyError(label, key, path28);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path27 === "$" ? `$.${key}` : `${path27}.${key}`);
+      parseValue(path28 === "$" ? `$.${key}` : `${path28}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -16093,11 +16094,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path27) {
+  function parseValue(path28) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path27);
-    else if (character === "[") parseArray(path27);
+    if (character === "{") parseObject(path28);
+    else if (character === "[") parseArray(path28);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -16662,7 +16663,7 @@ function hostSettings(value2) {
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2) || value2.hostMigration !== void 0 && typeof value2.hostMigration !== "boolean") {
     throw new Error("Dove host settings require a boolean hostMigration value.");
   }
-  return { hostMigration: value2.hostMigration ?? false };
+  return { ...value2, hostMigration: value2.hostMigration ?? false };
 }
 function readHostSettings(options2 = {}) {
   const fsOps = options2.fsOps ?? fs7;
@@ -16674,7 +16675,8 @@ function readHostSettings(options2 = {}) {
   }
 }
 function writeHostSettings(value2, options2 = {}) {
-  const settings = hostSettings(value2);
+  hostSettings(value2);
+  const settings = hostSettings({ ...readHostSettings(options2), ...value2 });
   const fsOps = options2.fsOps ?? fs7;
   const file = settingsPath(options2);
   fsOps.mkdirSync(path8.dirname(file), { recursive: true, mode: 448 });
@@ -20163,9 +20165,123 @@ function configureWatchFromMentor(project, mentorFile, options2 = {}) {
   }
 }
 
+// src/core/figure-generation.mjs
+import path19 from "node:path";
+var PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+function configuredFigure(options2) {
+  const config = readHostSettings(options2).figure;
+  if (config === void 0) {
+    throw new Error("No figure API configured. Set figure.baseURL, figure.model and figure.apiKeyEnv in Dove user settings.json, or use the host's image tools directly; this CLI cannot invoke host image_gen.");
+  }
+  if (!config || typeof config !== "object" || Array.isArray(config)) throw new Error("Dove figure configuration must be an object.");
+  for (const field of ["baseURL", "model", "apiKeyEnv"]) {
+    if (typeof config[field] !== "string" || !config[field].trim()) throw new Error(`Dove figure.${field} must be a non-empty string.`);
+  }
+  let baseURL;
+  try {
+    baseURL = new URL(config.baseURL);
+  } catch {
+    throw new Error("Dove figure.baseURL must be an HTTP(S) API root URL.");
+  }
+  if (!["http:", "https:"].includes(baseURL.protocol) || baseURL.username || baseURL.password || baseURL.search || baseURL.hash) {
+    throw new Error("Dove figure.baseURL must be an HTTP(S) API root URL without credentials, query or fragment.");
+  }
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(config.apiKeyEnv)) throw new Error("Dove figure.apiKeyEnv must name an environment variable, not contain a key.");
+  const apiKey = (options2.env ?? process.env)[config.apiKeyEnv];
+  if (typeof apiKey !== "string" || !apiKey.trim()) throw new Error(`Missing figure API key environment variable: ${config.apiKeyEnv}.`);
+  return { baseURL: baseURL.href.replace(/\/+$/u, ""), model: config.model.trim(), apiKey };
+}
+function projectPath(root, projectRoot, supplied, label) {
+  if (typeof supplied !== "string" || !supplied.trim()) throw new Error(`${label} is required.`);
+  const relative = path19.relative(path19.resolve(projectRoot), path19.resolve(projectRoot, supplied)).split(path19.sep).join("/");
+  return root.normalize(relative, label);
+}
+function imageType(bytes) {
+  if (bytes.subarray(0, 8).equals(PNG_SIGNATURE)) return "image/png";
+  if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return "image/jpeg";
+  if (bytes.length >= 12 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  throw new Error("Figure inputs must be PNG, JPEG or WebP images.");
+}
+function decodePng(value2) {
+  if (typeof value2 !== "string" || !value2.length || value2.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(value2)) {
+    throw new Error("Figure API did not return valid data[0].b64_json; URL-only responses are not supported.");
+  }
+  const bytes = Buffer.from(value2, "base64");
+  if (!bytes.subarray(0, 8).equals(PNG_SIGNATURE)) throw new Error("Figure API returned a non-PNG image or invalid image data; no output was written.");
+  let offset = 8;
+  let hasPixels = false;
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.toString("ascii", offset + 4, offset + 8);
+    if (offset + 12 + length > bytes.length) break;
+    if (offset === 8 && (type !== "IHDR" || length !== 13 || bytes.readUInt32BE(offset + 8) === 0 || bytes.readUInt32BE(offset + 12) === 0)) break;
+    if (type === "IDAT" && length > 0) hasPixels = true;
+    offset += length + 12;
+    if (type === "IEND") {
+      if (hasPixels && length === 0 && offset === bytes.length) return bytes;
+      break;
+    }
+  }
+  throw new Error("Figure API returned incomplete PNG image data; no output was written.");
+}
+async function generateFigure(projectRoot, options2 = {}) {
+  const { baseURL, model, apiKey } = configuredFigure(options2);
+  const root = openRootedFilesystem(projectRoot, options2);
+  const promptPath = projectPath(root, projectRoot, options2.promptFile, "--prompt-file");
+  const output = projectPath(root, projectRoot, options2.output, "--output");
+  if (path19.extname(output).toLowerCase() !== ".png") throw new Error("--output must name a new PNG file.");
+  if (root.exists(output)) throw new Error("Figure output already exists; choose a new --output path.");
+  const prompt = root.readFile(promptPath).toString("utf8").trim();
+  if (!prompt) throw new Error("Figure prompt file is empty.");
+  const images = options2.image ?? [];
+  if (!Array.isArray(images)) throw new Error("Figure image inputs must be an array.");
+  const inputs = images.map((image) => {
+    const relative = projectPath(root, projectRoot, image, "--image");
+    const bytes = root.readFile(relative);
+    return { name: path19.posix.basename(relative), bytes, type: imageType(bytes) };
+  });
+  if (options2.size !== void 0 && (typeof options2.size !== "string" || !options2.size.trim())) throw new Error("--size must be a non-empty model-supported size.");
+  const mode = inputs.length ? "edit" : "generate";
+  const headers = { Authorization: `Bearer ${apiKey}` };
+  let body;
+  if (inputs.length) {
+    body = new FormData();
+    body.append("model", model);
+    body.append("prompt", prompt);
+    for (const image of inputs) body.append("image[]", new Blob([image.bytes], { type: image.type }), image.name);
+    if (options2.size !== void 0) body.append("size", options2.size);
+  } else {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify({ model, prompt, ...options2.size === void 0 ? {} : { size: options2.size } });
+  }
+  const parent = path19.posix.dirname(output);
+  if (parent !== ".") root.mkdir(parent, { recursive: true });
+  let response;
+  try {
+    response = await (options2.fetch ?? globalThis.fetch)(`${baseURL}/images/${inputs.length ? "edits" : "generations"}`, {
+      method: "POST",
+      headers,
+      body,
+      redirect: "error"
+    });
+  } catch {
+    throw new Error("Figure API request failed; check the configured service and connection. No automatic retry was made.");
+  }
+  if (!response.ok) throw new Error(`Figure API request failed (HTTP ${response.status}); check the service, model and credentials. No automatic retry was made.`);
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error("Figure API returned invalid JSON; no output was written.");
+  }
+  const png = decodePng(result?.data?.[0]?.b64_json);
+  root.writeNewFile(output, png);
+  return { status: "generated", mode, model, outputPath: root.displayPath(output), inputs: inputs.length };
+}
+
 // src/core/mentor-brief.mjs
 import fs20 from "node:fs";
-import path19 from "node:path";
+import path20 from "node:path";
 var RESEARCH = ".dove/research";
 var ROUND_FILE2 = /^(\d+)[-_](brief|result)\.md$/iu;
 var IMPACT_FILE = /^impact-\d{4}-\d{2}-\d{2}\.md$/u;
@@ -20188,7 +20304,7 @@ function list(directory, fsOps) {
 }
 function describe2(root, relative, fsOps) {
   try {
-    return `\`${relative}\`${fsOps.statSync(path19.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
+    return `\`${relative}\`${fsOps.statSync(path20.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
   } catch (error) {
     return `\`${relative}\`\uFF08${error.code === "ENOENT" ? "\u7F3A\u5931" : `\u65E0\u6CD5\u8BFB\u53D6\uFF1A${error.code ?? error.message}`}\uFF09`;
   }
@@ -20235,11 +20351,11 @@ function recentRounds(names) {
 }
 function watchMaterials(root, rounds, fsOps) {
   const relative = `${RESEARCH}/watch`;
-  const directory = path19.join(root, relative);
+  const directory = path20.join(root, relative);
   const names = list(directory, fsOps).sort().reverse();
   const config = `${relative}/config.json`;
   const lines = [`- \u914D\u7F6E\uFF1A${describe2(root, config, fsOps)}`];
-  const configText = readWindow(path19.join(root, config), fsOps, 8192);
+  const configText = readWindow(path20.join(root, config), fsOps, 8192);
   if (!configText.error) lines.push(quote(clip(configText.text.trim(), 1600)), "\u914D\u7F6E\u4EC5\u6458\u5F55\uFF0C\u5168\u6587\u89C1\u8DEF\u5F84\u3002");
   let source = null;
   if (!configText.error && !configText.truncated) {
@@ -20253,8 +20369,8 @@ function watchMaterials(root, rounds, fsOps) {
   let incomplete = false;
   const impacts = names.filter((name) => IMPACT_FILE.test(name));
   const records = [
-    ...rounds.filter((name) => ROUND_FILE2.test(name) && /brief\.md$/iu.test(name)).map((name) => path19.join(root, RESEARCH, "rounds", name)),
-    ...impacts.map((name) => path19.join(directory, name))
+    ...rounds.filter((name) => ROUND_FILE2.test(name) && /brief\.md$/iu.test(name)).map((name) => path20.join(root, RESEARCH, "rounds", name)),
+    ...impacts.map((name) => path20.join(directory, name))
   ];
   for (const file of records) {
     const record = readWindow(file, fsOps, 65536, true);
@@ -20270,7 +20386,7 @@ function watchMaterials(root, rounds, fsOps) {
   const digests = names.filter((name) => DIGEST_FILE.test(name));
   const pending = /* @__PURE__ */ new Map();
   for (const name of digests.slice(0, 3)) {
-    const file = path19.join(directory, name);
+    const file = path20.join(directory, name);
     lines.push(`- \u8FD1\u671F\u6E05\u5355\uFF1A${describe2(root, `${relative}/${name}`, fsOps)}`);
     const result = readWindow(file, fsOps, 262144);
     if (result.error || result.truncated) {
@@ -20312,7 +20428,7 @@ ${item.line ? "\u5DF2\u6709\u4E00\u53E5\u8BDD" : "\u539F\u6458\u8981"}\uFF08\u4E
 }
 function opinionAttachment(root, opinion, fsOps) {
   if (!opinion) return "\u672A\u9644\u610F\u89C1\u6587\u4EF6\u3002";
-  const file = path19.resolve(root, opinion);
+  const file = path20.resolve(root, opinion);
   const result = readWindow(file, fsOps, 4096);
   if (result.error) throw new Error(`\u610F\u89C1\u6587\u4EF6${result.error}\uFF1A${file}`);
   const length = Array.from(result.text).length;
@@ -20323,12 +20439,12 @@ ${quote(`\u4F5C\u8005\uFF1A${author ?? "\u672A\u7F72\u540D\uFF08\u6309\u6267\u88
 }
 function renderMentorBrief(root, options2 = {}) {
   const fsOps = options2.fsOps ?? fs20;
-  const project = path19.resolve(root);
-  const research = path19.join(project, RESEARCH);
-  const rounds = list(path19.join(research, "rounds"), fsOps);
+  const project = path20.resolve(root);
+  const research = path20.join(project, RESEARCH);
+  const rounds = list(path20.join(research, "rounds"), fsOps);
   const selected = recentRounds(rounds);
-  const evaluation = path19.join(research, "EVAL.md");
-  const notes = readWindow(path19.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
+  const evaluation = path20.join(research, "EVAL.md");
+  const notes = readWindow(path20.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
   const intent = notes.error ? null : latestLongTermIntent(notes.text);
   const intentStatus = notes.error ? `\u5BFC\u5E08\u7B14\u8BB0${notes.error}` : !intent ? "\u7B14\u8BB0\u4E2D\u6CA1\u6709\u957F\u671F\u610F\u56FE\u4E00\u8282" : !intent.date ? "\u957F\u671F\u610F\u56FE\u6CA1\u6709\u6709\u6548\u65E5\u671F" : `\u6700\u8FD1\u4E00\u6B21\u4E3A ${intent.date}`;
   const lines = [
@@ -20379,7 +20495,7 @@ function renderMentorBrief(root, options2 = {}) {
     opinionAttachment(project, options2.opinion, fsOps),
     "",
     "\u65B0\u589E\u539F\u59CB\u4EA7\u7269\uFF08\u53EA\u5217\u8DEF\u5F84\uFF09\uFF1A",
-    ...options2.artifact?.length ? options2.artifact.map((file) => `- \`${path19.resolve(project, file)}\``) : ["\u672A\u63D0\u4F9B\u3002"],
+    ...options2.artifact?.length ? options2.artifact.map((file) => `- \`${path20.resolve(project, file)}\``) : ["\u672A\u63D0\u4F9B\u3002"],
     "",
     "## \u56FA\u5B9A\u95EE\u9898",
     "",
@@ -20673,6 +20789,7 @@ function renderDoveHelp() {
   dove watch run [--project <dir>] [--json|--format json]
   dove watch configure --project <root> --mentor <json-file> [--json|--format json]  # --mentor \u662F\u5EFA\u8BAE JSON \u6587\u4EF6\u8DEF\u5F84
   dove topic start [--project <dir>] [--json|--format json]
+  dove figure --project <root> --prompt-file <file> [--image <file> ...] --output <new.png> [--size <size>] [--json|--format json]
   dove settings [--host-migration on|off] [--json|--format json]
   dove mentor brief [--project <dir>] [--trigger <text>] [--user-source <path>] [--since <range>] [--until <range>] [--user-original <text>] [--opinion <path>] [--artifact <path>...] [--json|--format json]
   dove run start --project <dir> [--id <id>] [--group <name>] [--seed <short-text>] [--wall-time <duration>|--timeout-ms <ms>] [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--data <basis>] [--evaluator <basis>] [--resource-basis <basis>] [--kill-grace-ms <ms>] [--json|--format json] -- <command> [args...]
@@ -20684,7 +20801,9 @@ function renderDoveHelp() {
   dove hook user-prompt-submit --project <dir>
   dove hook statusline --project <dir>
 
-\u666E\u901A Claude \u4F1A\u8BDD\u662F Dove \u7684\u4E3B\u8981\u5165\u53E3\uFF1B--agent dove \u4E0E\u4E5D\u4E2A /dove:* Skills \u53EA\u662F\u53EF\u9009\u5FEB\u6377\u5165\u53E3\u3002CLI \u7BA1\u7406\u9879\u76EE\u63A5\u5165\u3001\u8BCA\u65AD\u548C\u8FD0\u884C\u6536\u636E\uFF0C\u4E0D\u542F\u52A8\u5BA1\u7A3F\u6A21\u578B\u3002/dove:review \u4FDD\u7559\uFF0C\u5BFC\u5E08 dove-mentor \u4E0E\u8BBA\u6587\u5BA1\u7A3F dove-review \u4F7F\u7528\u5BBF\u4E3B\u539F\u751F\u5168\u65B0\u53EA\u8BFB\u5B50 agent\uFF0C\u4E0D\u4F20\u6267\u884C\u5BF9\u8BDD\u3001\u4E0D\u7EED\u63A5\u5386\u53F2\u3002\u5BFC\u5E08\u53EF\u68C0\u7D22\u7F51\u9875\u548C\u8BBA\u6587\uFF0C\u9760\u81EA\u5DF1\u7684 MENTOR_NOTES.md \u5EF6\u7EED\u5224\u65AD\uFF1B\u5BA1\u7A3F\u53EA\u8BFB\u6307\u5B9A\u7A3F\u4EF6\u4E0E\u4F9D\u636E\u3002
+\u666E\u901A Claude \u4F1A\u8BDD\u662F Dove \u7684\u4E3B\u8981\u5165\u53E3\uFF1B--agent dove \u4E0E\u4E5D\u4E2A /dove:* Skills \u53EA\u662F\u53EF\u9009\u5FEB\u6377\u5165\u53E3\u3002CLI \u7BA1\u7406\u9879\u76EE\u63A5\u5165\u3001\u8BCA\u65AD\u548C\u8FD0\u884C\u6536\u636E\uFF0C\u4E5F\u53EF\u901A\u8FC7 dove figure \u8C03\u7528\u914D\u7F6E\u7684\u56FE\u50CF\u6A21\u578B\uFF0C\u4F46\u4E0D\u542F\u52A8\u5BA1\u7A3F\u6A21\u578B\u3002/dove:review \u4FDD\u7559\uFF0C\u5BFC\u5E08 dove-mentor \u4E0E\u8BBA\u6587\u5BA1\u7A3F dove-review \u4F7F\u7528\u5BBF\u4E3B\u539F\u751F\u5168\u65B0\u53EA\u8BFB\u5B50 agent\uFF0C\u4E0D\u4F20\u6267\u884C\u5BF9\u8BDD\u3001\u4E0D\u7EED\u63A5\u5386\u53F2\u3002\u5BFC\u5E08\u53EF\u68C0\u7D22\u7F51\u9875\u548C\u8BBA\u6587\uFF0C\u9760\u81EA\u5DF1\u7684 MENTOR_NOTES.md \u5EF6\u7EED\u5224\u65AD\uFF1B\u5BA1\u7A3F\u53EA\u8BFB\u6307\u5B9A\u7A3F\u4EF6\u4E0E\u4F9D\u636E\u3002
+
+dove figure \u5B9E\u9645\u8C03\u7528\u7528\u6237 settings.figure\uFF08baseURL\u3001model\u3001apiKeyEnv\uFF09\u914D\u7F6E\u7684\u56FE\u50CF\u6A21\u578B\uFF0C\u4F1A\u5411\u8BE5\u670D\u52A1\u53D1\u9001 prompt \u548C\u8F93\u5165\u56FE\uFF0C\u9700\u5DF2\u6709\u76F8\u5E94\u6388\u6743\uFF1B\u4E0D\u63D0\u4F9B --image \u65F6\u751F\u6210\uFF0C\u63D0\u4F9B\u65F6\u7F16\u8F91\uFF0C--image \u53EF\u91CD\u590D\u3002\u76F8\u5BF9\u8F93\u5165/\u8F93\u51FA\u8DEF\u5F84\u6309 --project\uFF08\u9ED8\u8BA4\u5F53\u524D\u76EE\u5F55\uFF09\u89E3\u6790\uFF0C--output \u5FC5\u987B\u662F\u65B0\u7684 PNG \u6587\u4EF6\uFF1BCLI \u4E0D\u80FD\u8C03\u7528\u5BBF\u4E3B\u5185\u7F6E image_gen\u3002
 
 dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u7F51\u9875\uFF0C\u53EA\u8BFB\u67E5\u770B\u5DF2\u767B\u8BB0\u9879\u76EE\u7684\u4E3B\u7EBF\u3001\u6838\u5FC3\u80FD\u529B\u3001\u957F\u671F\u7814\u7A76\u610F\u56FE\u3001\u5F53\u524D\u8F6E\u6B21\u3001EVAL \u8BC4\u6D4B\u8868\u548C\u6BCF\u8F6E\u8BF4\u660E/\u7ED3\u679C\uFF08\u9ED8\u8BA4 127.0.0.1:7788\uFF0C\u8FDC\u7A0B\u7528 SSH \u7AEF\u53E3\u8F6C\u53D1\u6253\u5F00\uFF1B\u6302\u5230\u516C\u7F51\u96A7\u9053\u65F6\u7528 --password-file \u5F00\u542F\u5BC6\u7801\u767B\u5F55\uFF0C\u6240\u6709\u9875\u9762\u548C\u6570\u636E\u63A5\u53E3\u90FD\u8981\u5148\u767B\u5F55\uFF09\u3002\u9762\u677F\u7684\u300C\u8BBE\u7F6E\u300D\u9875\u53EF\u7BA1\u7406\u9879\u76EE\u767B\u8BB0\u3001\u8BBA\u6587\u8FFD\u8E2A\uFF08\u5173\u952E\u8BCD\u3001\u4F5C\u8005\u3001arXiv \u5206\u7C7B\u3001\u6BCF\u5929\u8FD0\u884C\u65F6\u95F4\u3001\u4EE3\u7406\u3001\u53EF\u9009\u7684 Semantic Scholar key\uFF09\u548C\u9762\u677F\u5BC6\u7801\uFF1B\u8BBA\u6587\u8FFD\u8E2A\u5728\u9762\u677F\u8FD0\u884C\u671F\u95F4\u6BCF\u5929\u81EA\u52A8\u6267\u884C\uFF0C\u4E5F\u53EF\u7528 dove watch run \u624B\u52A8\u6267\u884C\uFF0C\u7ED3\u679C\u5199\u5165\u5404\u9879\u76EE .dove/research/watch/\u3002\u5BFC\u5E08\u6BCF\u6B21\u68C0\u67E5\u5173\u952E\u8BCD\u3001\u672A\u5224\u65AD\u8BBA\u6587\u548C\u626B\u63CF\uFF0C\u8FD4\u56DE\u4E2D\u6587\u4E00\u53E5\u8BDD\u4E0E\u65B9\u5411\uFF1B\u6709\u7528\u8BBA\u6587\u7D2F\u79EF\u4E3A\u53EF\u5BFC BibTeX \u7684\u9879\u76EE\u6587\u732E\u5E93\u3002\u65E0\u65B0\u8BBA\u6587\u65F6\u8865\u65E7\u6587\u9ED8\u8BA4\u5173\u95ED\u3002\u9009\u9898\u5148\u8BFB\u6807\u51C6\uFF0C\u4ECE\u6B63\u6587\u8FD1\u672A\u6210\u5DE5\u4F5C\u627E\u7F3A\u53E3\uFF0C\u8DE8\u9886\u57DF\u627E\u673A\u5236\uFF1B\u5019\u9009\u5199\u5BF9\u5E94\u5173\u7CFB\u3001\u524D\u63D0\u3001\u8FD1\u90BB\u5DEE\u522B\u4E0E\u98CE\u9669\uFF0C\u7ECF\u7559\u4E0B\uFF0F\u4FEE\u6539\uFF0F\u5426\u6389\u8BC4\u5BA1\uFF0C\u63A8\u8350\u4E24\u4E09\u4E2A\u4EA4\u7528\u6237\u9009\uFF0C\u4E4B\u524D\u4E0D\u5B9E\u73B0\u65B9\u6CD5\u3002\u9762\u677F\u53EF\u67E5\u770B\u5019\u9009\u5361\u4E0E\u6587\u732E\u5E93\u3002
 
@@ -20697,10 +20816,10 @@ dove watch configure \u663E\u5F0F\u4FDD\u5B58\u5BFC\u5E08\u8FFD\u8E2A\u5EFA\u8BA
 }
 
 // src/cli/interactive-setup.mjs
-import path21 from "node:path";
+import path22 from "node:path";
 
 // src/cli/project-integration-output.mjs
-import path20 from "node:path";
+import path21 from "node:path";
 var INTERNAL_FIELD_NAMES = /* @__PURE__ */ new Set([
   "writtenPaths",
   "removedPaths",
@@ -20807,7 +20926,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
   const showMascot = options2.showMascot !== false;
   const color = terminalColorEnabled(stream, env);
   const heading = headingFor(command3, result.status);
-  const projectName = terminalSafeText2(path20.basename(result.target) || result.target);
+  const projectName = terminalSafeText2(path21.basename(result.target) || result.target);
   const lines = [];
   if (showMascot && command3 === "init" && ["initialized", "already-initialized"].includes(result.status) && interactive) {
     lines.push(renderDovePixelArt({ color }), "");
@@ -20848,7 +20967,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
 
 // src/cli/interactive-setup.mjs
 function safeProjectName(target) {
-  return path21.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
+  return path22.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
 }
 function resultHosts(result) {
   return result.hosts ?? result.projectIntegration?.manifest?.hosts ?? [];
@@ -21172,7 +21291,7 @@ import { createHash } from "node:crypto";
 
 // src/core/session-start-hook.mjs
 import fs21 from "node:fs";
-import path22 from "node:path";
+import path23 from "node:path";
 function parseSessionStartPayload(input) {
   let payload;
   try {
@@ -21193,7 +21312,7 @@ function recentUserOriginalsContext(project, options2) {
   if (!project) return COMPACTION_REANCHOR_NOTICE;
   try {
     const result = refreshUserOriginals(project, { ...options2, budgetMs: 1500 });
-    const summary = (options2.fsOps ?? fs21).readFileSync(path22.join(project, USER_ORIGINALS_PATH), "utf8");
+    const summary = (options2.fsOps ?? fs21).readFileSync(path23.join(project, USER_ORIGINALS_PATH), "utf8");
     const entries = summary.split("\n").filter((line) => {
       const own = line.match(/^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 本人 · (.*)$/u);
       return own && classifyUserText(own[1]) === "own" && !/^(?:Claude\s+代用户转达[:：]|【用户(?:指出|已同意)[^】]*】|用户\s*\d{4}-\d{2}-\d{2}(?:\s|$)|用户授权)/u.test(own[1]);
@@ -21221,14 +21340,14 @@ function sessionStartOutput(payload, result = null, options2 = {}) {
     output.systemMessage = "Dove project integration needs attention. SessionStart does not update integration; run dove update explicitly to update supported manifest-owned integration. If blocked, inspect dove doctor --json before changing files.";
   }
   if (payload.source === "startup" || payload.source === "clear") {
-    if (typeof options2.project !== "string" || !path22.isAbsolute(options2.project)) {
+    if (typeof options2.project !== "string" || !path23.isAbsolute(options2.project)) {
       throw new Error("Dove SessionStart bootstrap requires an explicit absolute project root.");
     }
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
       additionalContext: renderDoveAuthorPreferencesBootstrap(
-        path22.join(options2.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude),
-        path22.join(options2.project, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude)
+        path23.join(options2.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude),
+        path23.join(options2.project, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude)
       )
     };
   } else if (payload.source === "compact" || payload.source === "resume") {
@@ -21337,7 +21456,7 @@ function userPromptSubmitFailureOutput(error) {
 
 // src/core/statusline.mjs
 import { spawnSync as spawnSync2 } from "node:child_process";
-import path23 from "node:path";
+import path24 from "node:path";
 import process4 from "node:process";
 var MAX_MAINLINE_CODE_POINTS = 80;
 var STATUS_SEPARATOR = " \xB7 ";
@@ -21393,7 +21512,7 @@ function inspectGitBranch(projectRoot, options2 = {}) {
       windowsHide: true,
       env: {
         ...process4.env,
-        GIT_CEILING_DIRECTORIES: path23.dirname(path23.resolve(projectRoot))
+        GIT_CEILING_DIRECTORIES: path24.dirname(path24.resolve(projectRoot))
       }
     });
     if (result?.status !== 0 || result.signal || result.error) return null;
@@ -21472,7 +21591,7 @@ function renderDoveStatusLine(input, options2 = {}) {
   const remainingValue = nonNegativeNumber(payload.context_window?.remaining_percentage);
   const remaining = remainingValue === null ? null : Math.min(100, Math.round(remainingValue));
   const duration = formatSessionDuration(payload.cost?.total_duration_ms);
-  const project = options2.projectRoot ? oneLine(path23.resolve(options2.projectRoot)) : null;
+  const project = options2.projectRoot ? oneLine(path24.resolve(options2.projectRoot)) : null;
   const card = readDoveIdentityCard(options2.projectRoot, options2) ?? "";
   const mainline = shortMainline(Object.hasOwn(options2, "mainline") ? options2.mainline : parseResearchMainline(card));
   const noColorValue = (options2.env ?? process4.env).NO_COLOR;
@@ -21514,7 +21633,7 @@ function uninstallDoveLifecycle(start, options2 = {}) {
 
 // src/core/project-doctor.mjs
 import fs24 from "node:fs";
-import path24 from "node:path";
+import path25 from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // src/core/research-documents.mjs
@@ -21564,8 +21683,8 @@ function classifyProjectSetup(result) {
 }
 
 // src/core/project-doctor.mjs
-var MODULE_DIRECTORY = path24.dirname(fileURLToPath4(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path24.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path24.basename(MODULE_DIRECTORY)) ? ".." : "../..");
+var MODULE_DIRECTORY = path25.dirname(fileURLToPath4(import.meta.url));
+var DEFAULT_PACKAGE_ROOT = path25.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path25.basename(MODULE_DIRECTORY)) ? ".." : "../..");
 function messageFor(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -21586,17 +21705,17 @@ function regularNonSymlink(fsOps, targetPath) {
 }
 function inspectUserCli(options2) {
   const fsOps = options2.fsOps ?? fs24;
-  const packageRoot = path24.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
+  const packageRoot = path25.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options2.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
-    const absolutePath = path24.resolve(packageRoot, relativePath);
-    const relative = path24.relative(packageRoot, absolutePath);
-    const contained = relative !== "" && !relative.startsWith("..") && !path24.isAbsolute(relative);
+    const absolutePath = path25.resolve(packageRoot, relativePath);
+    const relative = path25.relative(packageRoot, absolutePath);
+    const contained = relative !== "" && !relative.startsWith("..") && !path25.isAbsolute(relative);
     const healthy2 = contained && regularNonSymlink(fsOps, absolutePath);
     return { path: relativePath, healthy: healthy2, state: healthy2 ? "current" : contained ? "missing-or-invalid" : "outside-package-root" };
   });
-  const executablePath = path24.resolve(options2.executablePath ?? path24.join(packageRoot, "bin/dove-package.mjs"));
-  const executableRelative = path24.relative(packageRoot, executablePath);
-  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path24.isAbsolute(executableRelative);
+  const executablePath = path25.resolve(options2.executablePath ?? path25.join(packageRoot, "bin/dove-package.mjs"));
+  const executableRelative = path25.relative(packageRoot, executablePath);
+  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path25.isAbsolute(executableRelative);
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
   const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
@@ -21708,7 +21827,7 @@ function inspectProjectDoctor(start, options2 = {}) {
   try {
     setupRoot = resolveProjectRootForSetup(start, { fsOps: options2.fsOps });
   } catch {
-    setupRoot = typeof start === "string" ? path24.resolve(start) : null;
+    setupRoot = typeof start === "string" ? path25.resolve(start) : null;
   }
   const projectIntegration = inspectIntegration(start, options2);
   const safeRoot = projectIntegration.root ?? setupRoot;
@@ -21731,7 +21850,7 @@ function inspectProjectDoctor(start, options2 = {}) {
 // src/core/run-record.mjs
 import crypto5 from "node:crypto";
 import fs25 from "node:fs";
-import path25 from "node:path";
+import path26 from "node:path";
 import process5 from "node:process";
 
 // src/core/run-environment.mjs
@@ -21919,17 +22038,17 @@ function runAbsolutePaths(projectRoot, runId) {
   const relative = runRelativePaths(runId);
   return {
     ...relative,
-    absoluteRunDirectory: path25.join(projectRoot, relative.runDirectory),
-    absoluteJournalPath: path25.join(projectRoot, relative.journalPath),
-    absoluteStdoutPath: path25.join(projectRoot, relative.stdoutPath),
-    absoluteStderrPath: path25.join(projectRoot, relative.stderrPath)
+    absoluteRunDirectory: path26.join(projectRoot, relative.runDirectory),
+    absoluteJournalPath: path26.join(projectRoot, relative.journalPath),
+    absoluteStdoutPath: path26.join(projectRoot, relative.stdoutPath),
+    absoluteStderrPath: path26.join(projectRoot, relative.stderrPath)
   };
 }
 function ensureRunsRoot(projectRoot, options2 = {}) {
   const fsOps = options2.fsOps ?? fs25;
-  const doveRoot = path25.join(projectRoot, ARTIFACT_PATHS.doveRoot);
+  const doveRoot = path26.join(projectRoot, ARTIFACT_PATHS.doveRoot);
   assertRealDirectory(fsOps, doveRoot, "Dove workspace root");
-  const runsRoot = path25.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const runsRoot = path26.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat !== null) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -21976,7 +22095,7 @@ function tryRunDirectory(projectRoot, runId, options2 = {}) {
 function acquireRunMutationLock(projectRoot, runId, options2 = {}) {
   const fsOps = options2.fsOps ?? fs25;
   const paths = requireRunDirectory(projectRoot, runId, { fsOps });
-  const lockPath = path25.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
+  const lockPath = path26.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
   for (let attempt = 0; attempt <= RUN_LOCK_WAIT_MS / RUN_LOCK_RETRY_MS; attempt += 1) {
     try {
       fsOps.mkdirSync(lockPath, { mode: 448 });
@@ -22256,7 +22375,7 @@ function summarizeRun(projectRoot, runId, options2 = {}) {
 }
 function runsRootEntries(projectRoot, options2 = {}) {
   const fsOps = options2.fsOps ?? fs25;
-  const runsRoot = path25.join(projectRoot, RUNS_DIRECTORY_PATH);
+  const runsRoot = path26.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat === null) return [];
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
@@ -22900,8 +23019,8 @@ async function runSupervisorMain(argv = process6.argv.slice(2)) {
 
 // bin/dove.mjs
 var __filename2 = fileURLToPath5(import.meta.url);
-var __dirname2 = path26.dirname(__filename2);
-var PACKAGE_ROOT2 = path26.resolve(__dirname2, "..");
+var __dirname2 = path27.dirname(__filename2);
+var PACKAGE_ROOT2 = path27.resolve(__dirname2, "..");
 var PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
 if (isRunSupervisorInvocation(process7.argv.slice(2))) await runSupervisorMain(process7.argv.slice(2));
 function projectOption2(options2) {
@@ -23019,16 +23138,16 @@ function assertHookPayloadProject(payload, target) {
   if (typeof payload.cwd !== "string" || !payload.cwd.trim() || payload.cwd.includes("\0")) throw new Error("Dove hook cwd \u5FC5\u987B\u6307\u5411\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u4E2D\u7684\u76EE\u5F55\u3002");
   const cwd = fs27.realpathSync(payload.cwd);
   const stat = fs27.statSync(cwd);
-  const relative = path26.relative(target, cwd);
-  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path26.sep}`) || path26.isAbsolute(relative)) {
+  const relative = path27.relative(target, cwd);
+  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path27.sep}`) || path27.isAbsolute(relative)) {
     throw new Error("Dove hook cwd \u4E0D\u5C5E\u4E8E\u58F0\u660E\u7684\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u3002");
   }
   let directory = cwd;
   while (directory !== target) {
-    if (fs27.existsSync(path26.join(directory, ".dove/install/manifest.json")) || fs27.existsSync(path26.join(directory, ".dove-install"))) {
+    if (fs27.existsSync(path27.join(directory, ".dove/install/manifest.json")) || fs27.existsSync(path27.join(directory, ".dove-install"))) {
       throw new Error("Dove hook cwd \u5C5E\u4E8E\u53E6\u4E00\u4E2A\u9879\u76EE\u96C6\u6210\u3002");
     }
-    directory = path26.dirname(directory);
+    directory = path27.dirname(directory);
   }
 }
 async function readStdin() {
@@ -23134,7 +23253,7 @@ try {
     process7.exit(0);
   }
   if (command2 === "reinstall") {
-    const target = path26.resolve(projectOption2(options) ?? process7.cwd());
+    const target = path27.resolve(projectOption2(options) ?? process7.cwd());
     if (wantsJson(options)) {
       const preview2 = previewProjectCompleteReinstall(target, PACKAGE_OPTIONS);
       const { manifest, ...publicPreview } = preview2;
@@ -23159,7 +23278,7 @@ try {
     process7.exit(0);
   }
   if (command2 === "uninstall") {
-    const target = path26.resolve(projectOption2(options) ?? process7.cwd());
+    const target = path27.resolve(projectOption2(options) ?? process7.cwd());
     const preview = previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS);
     if (wantsJson(options)) {
       writeJson2(preview);
@@ -23215,7 +23334,7 @@ try {
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`--port \u9700\u8981 1 \u5230 65535 \u4E4B\u95F4\u7684\u6574\u6570\uFF1A${options.port}`);
     const bind = options.bind ?? DEFAULT_DASHBOARD_BIND;
     let password = null;
-    const passwordFile = options.passwordFile === void 0 ? null : path26.resolve(options.passwordFile);
+    const passwordFile = options.passwordFile === void 0 ? null : path27.resolve(options.passwordFile);
     if (passwordFile) {
       password = fs27.readFileSync(passwordFile, "utf8").trim();
       if (!password) throw new Error(`\u5BC6\u7801\u6587\u4EF6\u4E3A\u7A7A\uFF1A${options.passwordFile}`);
@@ -23236,7 +23355,7 @@ try {
     process7.exit(0);
   }
   if (command2 === "mentor") {
-    const root = path26.resolve(options.project ?? process7.cwd());
+    const root = path27.resolve(options.project ?? process7.cwd());
     let userOriginals = null;
     let userOriginalsError = null;
     try {
@@ -23250,10 +23369,16 @@ try {
     process7.exit(0);
   }
   if (command2 === "topic") {
-    const root = path26.resolve(options.project ?? process7.cwd());
+    const root = path27.resolve(options.project ?? process7.cwd());
     const result = startTopicSelection(root, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson2(result);
-    else console.log(`\u9009\u9898\u76EE\u5F55\u5DF2\u5C31\u7EEA\uFF1A${path26.join(root, ".dove/research/topics")}\uFF08\u4F9D\u636E\uFF1A${result.criteria?.title ?? "\u9009\u9898\u6807\u51C6"}${result.criteria?.version ? `\uFF0C\u7B2C ${result.criteria.version} \u7248` : ""}\uFF1B\u5DF2\u6709\u5019\u9009 ${result.cards.length} \u4E2A\uFF09`);
+    else console.log(`\u9009\u9898\u76EE\u5F55\u5DF2\u5C31\u7EEA\uFF1A${path27.join(root, ".dove/research/topics")}\uFF08\u4F9D\u636E\uFF1A${result.criteria?.title ?? "\u9009\u9898\u6807\u51C6"}${result.criteria?.version ? `\uFF0C\u7B2C ${result.criteria.version} \u7248` : ""}\uFF1B\u5DF2\u6709\u5019\u9009 ${result.cards.length} \u4E2A\uFF09`);
+    process7.exit(0);
+  }
+  if (command2 === "figure") {
+    const result = await generateFigure(path27.resolve(options.project ?? process7.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    if (wantsJson(options)) writeJson2(result);
+    else console.log(`\u56FE\u50CF\u5DF2${result.mode === "edit" ? "\u7F16\u8F91" : "\u751F\u6210"}\uFF1A${result.outputPath}\uFF08\u6A21\u578B\uFF1A${result.model}\uFF1B\u8F93\u5165\u56FE\uFF1A${result.inputs} \u5F20\uFF09`);
     process7.exit(0);
   }
   if (command2 === "watch" && subcommand === "configure") {
@@ -23264,10 +23389,10 @@ try {
     process7.exit(0);
   }
   if (command2 === "watch") {
-    const roots = options.project ? [path26.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs27.existsSync(root));
+    const roots = options.project ? [path27.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs27.existsSync(root));
     const result = await runWatch(roots, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson2(result);
-    else for (const item of result.results) console.log(`${path26.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);
+    else for (const item of result.results) console.log(`${path27.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);
     process7.exit(0);
   }
   if (command2 === "doctor") {
@@ -23339,7 +23464,7 @@ try {
       }
     }
     if (hookName === "statusline") {
-      process7.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path26.resolve(projectOption2(options)) })}
+      process7.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path27.resolve(projectOption2(options)) })}
 `);
       process7.exit(0);
     }

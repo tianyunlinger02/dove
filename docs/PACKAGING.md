@@ -13,7 +13,7 @@ The package contains:
 - one Dove research-agent identity, with an optional author-side agent and native fresh read-only `dove-mentor` / `dove-review` contexts;
 - nine optional flat Skills: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`;
 - generated adapters and declared support resources for Claude Code and DSH;
-- project lifecycle commands, local `dove run` receipts, and Claude integration hooks;
+- project lifecycle commands, local `dove run` receipts, a direct configured Images API client, and Claude integration hooks;
 - public documentation, root `dove.png`, `LICENSE`, and `THIRD_PARTY_NOTICES.md`; and
 - two standalone Node.js bundles.
 
@@ -83,13 +83,14 @@ Lifecycle operations preserve `.dove/research/**`, historical `.dove/reviews/**`
 
 ## CLI inventory and lifecycle
 
-The CLI exposes `init`, `update`, `reinstall`, `uninstall`, `doctor`, `dashboard`, `watch`, `topic`, `settings`, `mentor brief`, `projects`, `run` and `hook`. The old `review` CLI is removed; `/dove:review` remains one of the nine Skills. Native mentor and paper-review model calls belong to the host, not CLI lifecycle operations.
+The CLI exposes `init`, `update`, `reinstall`, `uninstall`, `doctor`, `dashboard`, `watch`, `topic`, `figure`, `settings`, `mentor brief`, `projects`, `run` and `hook`. The old `review` CLI is removed; `/dove:review` remains one of the nine Skills. Native mentor and paper-review model calls belong to the host, not CLI lifecycle operations.
 
 - Bare `dove` offers state-appropriate setup, host selection/changes, details, and default-No previews for Complete Reinstall/uninstall.
 - `init` writes declared integration and only the absent-tree `RESEARCH.md` bootstrap; initialized roots register for future upgrades.
 - `update` refreshes valid owned integration and reports replaced edits. `reinstall` rebuilds only known integration; neither adopts unknown state or changes research.
 - `uninstall` removes still-owned resources/fragments after confirmation, preserving user-modified/unowned settings and all researcher-owned history.
 - `doctor` is read-only software/readability inspection, not a scientific health score or live session probe.
+- `figure --project <root> --prompt-file <file> [--image <file> ...] --output <new.png>` sends authorized inputs to the image API/model in user `settings.figure`, using Node's built-in HTTP/multipart support and no bundled external runtime. It generates or edits into a new PNG without paid retries or model substitution; host-native image tools remain direct main-session calls, not a CLI bridge. See [image configuration and protocol](USAGE.md#writing-figures-and-review).
 - `projects import --project <root>... --sync`, `projects sync`, and read-only `projects status` use exact registered roots. Global npm lifecycle sync may cascade safe integration updates; `--ignore-scripts` disables it. Read per-project outcomes; partial success is not an all-project refresh.
 - `run start|status|resume|finalize|compare` records local command facts under `.dove/runs/<id>/`. Start directly spawns a target without a shell; status is read-only; resume never reruns; finalize adds one scalar after terminal completion; compare ranks only compatible finalized runs. Seed and minimum Git commit/dirty facts do not prove reproducibility or affect ranking eligibility.
 - `hook session-start|user-prompt-submit|statusline` provides read-only context and display surfaces.
