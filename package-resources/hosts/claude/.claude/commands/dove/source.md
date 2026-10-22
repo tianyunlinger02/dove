@@ -41,6 +41,6 @@ Use for literature discovery, source reading, citation identity checks, claim ve
 
 ### Using host tools
 
-- Use tools and materials exposed by the current host and permitted by the user and project. If something is unavailable, name the gap and continue with useful permitted alternatives.
+- Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way.
 - Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
 - Use exposed WebSearch for discovery, dove-paper-search for DOI metadata and academic papers, and hosted exa for ordinary webpages and known URLs.

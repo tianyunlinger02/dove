@@ -58,7 +58,7 @@ No MCP server bundle, prompt-hook bundle, third-party Python source, credentials
 
 ## Project integration
 
-`dove init --host claude` installs declared resources and owned settings fragments, a revision `2.0` manifest, project WebFetch denial, and `.mcp.json#/mcpServers/dove-paper-search` / `exa`. Existing status lines remain unowned; an empty setting receives the read-only `dove hook statusline --project "$CLAUDE_PROJECT_DIR"` renderer.
+`dove init --host claude` installs declared resources and owned settings fragments, a revision `2.0` manifest, and `.mcp.json#/mcpServers/dove-paper-search` / `exa`. Existing status lines remain unowned; an empty setting receives the read-only `dove hook statusline --project "$CLAUDE_PROJECT_DIR"` renderer.
 
 Paper search launches user-provided `uvx` with pinned `paper-search-mcp==0.1.4` and `mcp<2`. Hosted Exa uses `{ "url": "https://mcp.exa.ai/mcp", "type": "http" }`. These declarations provide scholarly and webpage-reading integration, not access approval or connectivity evidence. Built-in WebSearch stays available for discovery; WebFetch is denied. Dove does not install dependencies, approve project trust, write credentials, or substitute CLI/shell/`curl`/custom-fetch scripts.
 

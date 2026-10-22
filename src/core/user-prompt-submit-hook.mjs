@@ -6,10 +6,8 @@ import { DOVE_CLAUDE_AMBIENT_RULE_PATH } from "./ambient-policy.mjs";
 import { identityCardContext } from "./identity-card.mjs";
 import { hostMigrationContext } from "./host-migration.mjs";
 import { PROJECT_HOST_IDS } from "./host-registry.mjs";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "./package-metadata.mjs";
+import { PACKAGE_VERSION } from "./package-metadata.mjs";
 import { readProjectInstallationManifest } from "./project-installation-manifest.mjs";
-import { inspectRegularProjectFile } from "./project-installation-plan.mjs";
-import { resourcesForHosts, sameManaged, samePackage } from "./project-installation-resources.mjs";
 import { userOriginalSourceContext } from "./session-start-hook.mjs";
 
 export const PROMPT_GUIDANCE_PATHS = Object.freeze([
@@ -28,21 +26,14 @@ export function currentPromptGuidance(manifest) {
   return { version: manifest.package.version, fingerprints };
 }
 
+// Fingerprints come from the installed manifest. An older or locally edited
+// installation still gets the project context, with one line naming the version gap.
 export function inspectCurrentPromptGuidance(project, options = {}) {
   const manifest = readProjectInstallationManifest(project, { fsOps: options.fsOps, hostIds: PROJECT_HOST_IDS });
-  const expectedPackage = { name: options.packageName ?? PACKAGE_NAME, version: options.packageVersion ?? PACKAGE_VERSION };
-  if (!manifest.hosts.includes("claude") || !samePackage(manifest.package, expectedPackage)) {
-    throw new Error("Dove prompt guidance requires current Claude integration.");
-  }
-  // Shared host configuration is not guidance; doctor still reports its drift.
-  const resources = resourcesForHosts(manifest.hosts).filter((entry) => entry.kind === "exclusive-file");
-  const managed = manifest.managed.filter((entry) => entry.kind === "exclusive-file");
-  if (!sameManaged(managed, resources)) throw new Error("Dove prompt guidance inventory does not match the current package.");
-  for (const resource of resources) {
-    const observed = inspectRegularProjectFile(project, resource.path, options.fsOps);
-    if (observed.digest !== resource.digest) throw new Error(`Dove prompt guidance is changed or missing: ${resource.path}.`);
-  }
-  return currentPromptGuidance(manifest);
+  const guidance = currentPromptGuidance(manifest);
+  const cliVersion = options.packageVersion ?? PACKAGE_VERSION;
+  if (guidance.version !== cliVersion) guidance.note = `This project's Dove guidance is version ${guidance.version} and the CLI is ${cliVersion}; run dove update to sync when convenient.`;
+  return guidance;
 }
 
 export function parseUserPromptSubmitPayload(input) {
@@ -76,7 +67,7 @@ export function userPromptSubmitOutput(payload, guidance, options = {}) {
       }
     };
   }
-  const context = `Dove ${guidance.version} (disk guidance, not rule reload):\n${guidance.fingerprints.join("\n")}\n${identityCardContext(options.project, options)}\n${renderDoveResearchReanchor()}\nOn first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.${userOriginalSourceContext(payload)}${hostMigrationContext(options.project, options)}`;
+  const context = `Dove ${guidance.version} (disk guidance, not rule reload):\n${guidance.fingerprints.join("\n")}\n${guidance.note ? `${guidance.note}\n` : ""}${identityCardContext(options.project, options)}\n${renderDoveResearchReanchor()}\nOn first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.${userOriginalSourceContext(payload)}${hostMigrationContext(options.project, options)}`;
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
@@ -89,7 +80,7 @@ export function userPromptSubmitAttentionOutput() {
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
-      additionalContext: "Dove could not verify current project guidance. Do not treat the new CLI guidance as installed policy; inspect dove doctor --json and resolve project integration deliberately (dove update only if replacing owned edits is intended). This does not block or expand the user's request."
+      additionalContext: "Dove could not read this project's installation, so no identity card is attached this turn; dove doctor shows why. Continue with the user's request."
     }
   };
 }

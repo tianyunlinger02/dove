@@ -226,57 +226,29 @@ test("prompt output is current short guidance, independent of prompt text and no
   assert.equal(DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"');
 });
 
-test("stale, drifted or missing guidance and unsafe projects never yield verified guidance", (t) => {
+test("older, edited or partly missing installations keep their context; other directories get the short notice", (t) => {
   const project = workspace(t);
   const manifestPath = path.join(project, ".dove/install/manifest.json");
   const original = fs.readFileSync(manifestPath);
   const hook = (payload = event()) => invoke(binaries[0], project, payload);
   const attention = userPromptSubmitAttentionOutput();
-  const status = () => {
-    for (const binary of binaries) assert.deepEqual(invoke(binary, project, event()), attention);
-  };
 
   const manifest = JSON.parse(original);
   manifest.package.version = "0.0.1";
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
-  status();
-  manifest.package.version = "99.0.0";
-  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
-  status();
+  for (const binary of binaries) assert.match(context(invoke(binary, project, event())), /guidance is version 0\.0\.1 and the CLI is/u);
   fs.writeFileSync(manifestPath, original);
-  manifest.managed = manifest.managed.filter((entry) => entry.path !== ".claude/rules/dove.md");
-  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
-  status();
-  fs.writeFileSync(manifestPath, original);
-  fs.appendFileSync(path.join(project, ".dove/install/RESEARCH_QUALITY.md"), "\nchanged reference\n");
-  status();
-  fs.writeFileSync(path.join(project, ".dove/install/RESEARCH_QUALITY.md"), fs.readFileSync(path.join(root, "package-resources/hosts/claude/.dove/install/RESEARCH_QUALITY.md")));
-  fs.writeFileSync(manifestPath, `${JSON.stringify({ ...JSON.parse(original), package: { name: PACKAGE_NAME, version: "0.0.1" } })}\n`);
-  updateProjectIntegration(project, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+
+  fs.appendFileSync(path.join(project, ".claude/rules/dove.md"), "\nLocal edited rule\n");
+  assert.match(context(hook()), /disk guidance, not rule reload/u);
+  fs.rmSync(path.join(project, ".dove/install/AUTHOR_PREFERENCES.md"));
   assert.match(context(hook()), /disk guidance, not rule reload/u);
 
-  const settingsPath = path.join(project, ".claude/settings.json");
-  const settingsBytes = fs.readFileSync(settingsPath);
-  const settings = JSON.parse(settingsBytes);
-  settings.hooks.UserPromptSubmit[0].hooks[0].timeout = 9;
-  fs.writeFileSync(settingsPath, `${JSON.stringify(settings)}\n`);
-  for (const binary of binaries) assert.match(context(invoke(binary, project, event())), /disk guidance, not rule reload/u, "local hook configuration does not change guidance bytes");
-  fs.writeFileSync(settingsPath, settingsBytes);
-
-  const rule = path.join(project, ".claude/rules/dove.md");
-  fs.appendFileSync(rule, "\nLocal edited rule\n");
-  status();
-  assert.doesNotMatch(context(hook()), /Local edited rule|disk guidance, not rule reload/u);
-  fs.writeFileSync(rule, fs.readFileSync(path.join(root, "package-resources/hosts/claude/.claude/rules/dove.md")));
-  assert.match(context(hook()), /disk guidance, not rule reload/u);
-
-  const reference = path.join(project, ".dove/install/AUTHOR_PREFERENCES.md");
-  fs.rmSync(reference);
-  status();
-  fs.symlinkSync("/never-read-transcript", reference);
-  status();
-  fs.rmSync(reference);
-  fs.writeFileSync(reference, fs.readFileSync(path.join(root, "package-resources/hosts/claude/.dove/install/AUTHOR_PREFERENCES.md")));
+  const withoutRule = JSON.parse(original);
+  withoutRule.managed = withoutRule.managed.filter((entry) => entry.path !== ".claude/rules/dove.md");
+  fs.writeFileSync(manifestPath, `${JSON.stringify(withoutRule)}\n`);
+  assert.deepEqual(hook(), attention);
+  fs.writeFileSync(manifestPath, original);
 
   const outside = fs.mkdtempSync(path.join(scratch, "dove-wrong-cwd-"));
   t.after(() => fs.rmSync(outside, { recursive: true, force: true }));

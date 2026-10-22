@@ -7632,10 +7632,10 @@ var require_lib2 = __commonJS({
     exports.analyse = analyse;
     var detectFile = (filepath, opts = {}) => new Promise((resolve, reject) => {
       let fd;
-      const fs28 = (0, node_1.default)();
+      const fs29 = (0, node_1.default)();
       const handler = (err, buffer) => {
         if (fd) {
-          fs28.closeSync(fd);
+          fs29.closeSync(fd);
         }
         if (err) {
           reject(err);
@@ -7647,9 +7647,9 @@ var require_lib2 = __commonJS({
       };
       const sampleSize = (opts === null || opts === void 0 ? void 0 : opts.sampleSize) || 0;
       if (sampleSize > 0) {
-        fd = fs28.openSync(filepath, "r");
+        fd = fs29.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(sampleSize);
-        fs28.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
+        fs29.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
           if (err) {
             handler(err, null);
           } else {
@@ -7661,22 +7661,22 @@ var require_lib2 = __commonJS({
         });
         return;
       }
-      fs28.readFile(filepath, handler);
+      fs29.readFile(filepath, handler);
     });
     exports.detectFile = detectFile;
     var detectFileSync = (filepath, opts = {}) => {
-      const fs28 = (0, node_1.default)();
+      const fs29 = (0, node_1.default)();
       if (opts && opts.sampleSize) {
-        const fd = fs28.openSync(filepath, "r");
+        const fd = fs29.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(opts.sampleSize);
-        const bytesRead = fs28.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
+        const bytesRead = fs29.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
         if (bytesRead < opts.sampleSize) {
           sample = sample.subarray(0, bytesRead);
         }
-        fs28.closeSync(fd);
+        fs29.closeSync(fd);
         return (0, exports.detect)(sample);
       }
-      return (0, exports.detect)(fs28.readFileSync(filepath));
+      return (0, exports.detect)(fs29.readFileSync(filepath));
     };
     exports.detectFileSync = detectFileSync;
     exports.default = {
@@ -11477,7 +11477,7 @@ var require_lib3 = __commonJS({
 });
 
 // bin/dove.mjs
-import fs27 from "node:fs";
+import fs28 from "node:fs";
 import path27 from "node:path";
 import process7 from "node:process";
 import { fileURLToPath as fileURLToPath5 } from "node:url";
@@ -13918,7 +13918,7 @@ var CLI_COMMAND_SPECS = Object.freeze({
     }
   }),
   topic: command([], { subcommands: { start: command([projectOption, ...outputOptions]) } }),
-  figure: command([projectOption, value("--prompt-file"), value("--image", { repeatable: true }), value("--output"), value("--size"), ...outputOptions]),
+  figure: command([projectOption, value("--prompt"), value("--prompt-file"), value("--image", { repeatable: true }), value("--output"), value("--size"), value("--quality"), value("--background"), boolean("--tools"), ...outputOptions]),
   settings: command([value("--host-migration", { choices: ["on", "off"] }), ...outputOptions]),
   mentor: command([], { subcommands: { brief: command([projectOption, value("--trigger"), value("--user-source"), value("--since"), value("--until"), value("--user-original"), value("--opinion"), value("--artifact", { repeatable: true }), ...outputOptions]) } }),
   projects: command([], {
@@ -14185,7 +14185,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.24" : null;
+var injectedVersion = true ? "3.4.25" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -14502,7 +14502,7 @@ var DOVE_RESEARCH_CORRECTION_RECORDING = "Keep IDENTITY.md short enough to read 
 function renderDoveResearchReanchor() {
   return "Resume from the user's current goal, core capability and completion meaning. Use the identity card, latest EVAL rows and current brief as relevant continuity, then take the most valuable authorized action toward the overall result. Preserve confirmed commitments and dated user originals while revising methods with evidence; bounded replies and stop requests keep their scope.";
 }
-var DOVE_RESEARCH_CLARIFICATION = "Record clear user words without reconfirmation. Resolve ambiguities that materially change the next action, and ask for undecided direction or changes to the goal, fixed methods, deployment inputs/outputs or resource commitments. The executor decides engineering, parameters, acceleration and evaluator repairs; the mentor independently judges direction and time spent. Choose checks for their value to the actual decision and use their findings to guide action. While a user decision is pending, continue independent authorized work.";
+var DOVE_RESEARCH_CLARIFICATION = "Record clear user words without reconfirmation. Resolve ambiguities that materially change the next action, and ask for undecided direction or changes to the goal, fixed methods, deployment inputs/outputs or resource commitments. The executor decides engineering, parameters, acceleration, evaluator repairs and the use of available tools and services, including configured image models, paper search and web reading, without per-use approval; the mentor independently judges direction and time spent. Choose checks for their value to the actual decision and use their findings to guide action. While a user decision is pending, continue independent authorized work.";
 var DOVE_RESEARCH_ACTUAL_MATERIAL_FACT_BOUNDARY = "State project methods, experiment procedures, result numbers, citation content, and source facts only from material actually read, retrieved, executed, or inspected; use general knowledge only for hypotheses and search directions.";
 var DOVE_RESEARCH_CANDIDATE_COVERAGE = "Separate candidate generation or reachability, selection on the same candidates, and end-to-end effect. Fixed candidates cannot assess generation; successful intersections cannot represent the full task. State how failed, missing, invalid and excluded cases enter the denominator.";
 var DOVE_RESEARCH_QUALITY_CRITERIA = Object.freeze([
@@ -14770,19 +14770,17 @@ function removeWebFetchDenyPermission(settings) {
 function renderExaWebSupportSkill() {
   return `---
 name: dove-web-reader
-description: Read ordinary webpages and known URLs through the hosted Exa project MCP when webpage content is relevant and the current host exposes it and current user/project permissions permit it.
+description: Read webpages and known URLs whose content matters to the current work, through the hosted Exa MCP when it is available and otherwise through WebFetch or a direct download.
 user-invocable: false
 ---
 
 # Dove Web Reader
 
-Use the \`exa\` hosted project MCP only when ordinary webpage body retrieval, documentation page reading, venue page reading, crawling, or a known URL materially helps the current request and the current host exposes Exa and current user/project permissions permit it.
+Read the actual page when its content matters to the current work.
 
-- Keep built-in \`WebSearch\` available for web discovery and search-result triage; do not substitute webpage retrieval for search.
-- Use the pinned \`dove-paper-search\` project MCP for academic paper discovery, download, and full-text reading when that MCP is exposed and current user/project permissions permit it. Use \`exa\` for ordinary webpage bodies, documentation pages, venue pages, and known URLs outside academic paper acquisition when Exa is exposed and current user/project permissions permit it.
-- Do not use built-in \`WebFetch\`; Claude project permissions deny it so webpage body retrieval goes through \`exa\`.
-- Use only MCP tools that the current host actually exposes and current user/project permissions permit. If current user/project permissions do not permit it, Exa is unavailable, or the server fails, state that the ordinary webpage body, documentation page, venue page, or known URL was not obtained through Exa, then choose any exposed and permitted material or action that can still advance the question: \`WebSearch\` discovery snippets, \`dove-paper-search\` academic paper discovery/download/full text when exposed, local project material, user-provided material, theory, experiment, or analysis. Do not use CLI, shell, \`curl\`, Node/Python fetch scripts, or built-in \`WebFetch\` instead, and do not follow a fixed substitute sequence.
-- Do not turn URLs into Dove IDs, hashes, trust scores, ledgers, or database records.
+- Use \`WebSearch\` to find pages, then read the ones that matter. Use the \`exa\` MCP for page bodies when it is available; when it is missing, out of quota or failing, use \`WebFetch\`, and for PDFs or pages WebFetch cannot render, download them with \`curl\` or \`wget\` and read the file.
+- For academic papers, prefer the \`dove-paper-search\` MCP; the same fallbacks apply when it fails.
+- Say what you actually read: the full page, a downloaded PDF, or only a search snippet. A judgment that rests on a snippet or an abstract says so.
 `;
 }
 
@@ -14922,7 +14920,7 @@ var HOST_DEFINITIONS2 = {
 };
 var DEFAULT_HOST_GUIDANCE = Object.freeze({
   common: Object.freeze([
-    "Use tools and materials exposed by the current host and permitted by the user and project. If something is unavailable, name the gap and continue with useful permitted alternatives."
+    "Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way."
   ]),
   claude: Object.freeze([
     "Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session."
@@ -15020,10 +15018,10 @@ function contract(slug) {
     when: "Use for diagrams, plots, captions and visual revisions or assessments.",
     actions: [
       "Give the image model the scientific message, inspected content, key relations and actual paper figures as visual references. Let it design composition, density, hierarchy, color and depth before building PPT, choosing a visual language suited to the explanation.",
-      "Generate/edit designs and illustrations with the configured model through dove figure --project <root> --prompt-file <text> [--image <file> ...] --output <new.png>, or an exposed image tool. Inspect the design and refine its assets.",
+      "Generate or edit designs and illustrations with the configured image model through dove figure --project <root> --prompt <text> (or --prompt-file <file>) [--image <file> ...] --output <file.png> [--size, --quality, --background transparent for assets]. Inspect the design and refine its assets.",
       "Preserve the design in PPT: native labels/connectors and independently replaceable illustrations and real assets. Keep detailed model-made schematics as images rather than tracing them into basic shapes. Real evidence stays faithful and distinct from explanatory imagery; a full-figure PNG alone is not editable composition.",
       "Use concrete objects, close-ups, texture, shading and geometry for explanatory value, with deliberate fills and coherent type/color. Keep the full title and extended explanation in the caption; refine illustrations with the model and typeset in PPT.",
-      "Deliver PPTX, assets, any creation script and caption, plus PDF/PNG from that source. Open at manuscript size, compare with the design and paper references, and improve meaning, visual quality and readability. Report missing materials or tools plainly."
+      "Deliver PPTX, assets, any creation script and caption, plus PDF/PNG from that source; dove figure --tools shows this machine's python-pptx Python and its PPTX-to-PDF and PDF-to-PNG commands. Open at manuscript size, compare with the design and paper references, and improve meaning, visual quality and readability."
     ],
     boundaries: [
       "Planning-only, assessment-only and no-write requests retain their scope. Completion means a scientifically faithful, usable and visually compelling figure, not merely valid exports."
@@ -15251,7 +15249,7 @@ ${renderDoveAuthorStanceSection()}
 
 ${renderDoveAmbientParticipationSection()}
 
-For web work, use the current project's real paper and webpage reading tools when available and permitted; search snippets can guide discovery, but do not replace unretrieved paper or webpage content with shell, \`curl\`, or ad hoc fetch substitutes.
+For web work, read the actual paper or page: use the paper-search and webpage-reading tools when they work, and otherwise WebFetch, the arXiv or Crossref API, or a direct download with \`curl\`. Search snippets guide discovery; say when a judgment rests only on a snippet or an abstract.
 
 Record concise natural-language notes in \`.dove/install/DOCTOR.md\` only for explicit feedback about Dove itself or actual Dove integration, routing, Skill, document, or guidance failures. Preserve reusable ordinary research or collaboration experience as Lessons instead.
 `;
@@ -15273,23 +15271,19 @@ var PAPER_SEARCH_MCP_FRAGMENT = Object.freeze({
 function renderPaperSearchSupportSkill() {
   return `---
 name: dove-paper-search
-description: Search, verify metadata, retrieve, and read academic papers through the pinned dove-paper-search project MCP when scholarly material is relevant and the current host exposes it and current user/project permissions permit it.
+description: Search, verify, download and read academic papers through the pinned dove-paper-search MCP when scholarly material matters to the current work.
 user-invocable: false
 ---
 
 # Dove Paper Search
 
-Use the pinned \`dove-paper-search\` project MCP only when academic paper discovery, metadata verification, retrieval, or full-text reading materially helps the current request and the current host exposes that MCP and current user/project permissions permit it.
+Use the pinned \`dove-paper-search\` MCP for academic paper discovery, metadata, download and full-text reading.
 
-- Keep searches bounded and choose relevant scholarly sources instead of querying every available index or service by default.
-- When a DOI matters and the MCP exposes \`get_crossref_paper_by_doi\`, use that direct lookup before fuzzy title search. Compare DOI, title, authors, year, and venue or version, then report verified, conflict, not-found, or unknown.
-- An empty result is not-found; an MCP, permission, or network failure is unknown. Do not recreate the lookup through CLI, shell, \`curl\`, ad hoc fetch, or a substitute chain.
-- Metadata identity is not full-text inspection or claim support. Inspect actual paper content before saying it supports a scientific claim.
-- Download or read full text only when the task needs it. Distinguish material merely found, identity-verified, downloaded, actually read, and used, and report saved paths when useful.
-- Prefer source-native open download and read tools. If \`download_with_fallback\` is needed for full text, always pass \`use_scihub: false\` explicitly. Do not call Sci-Hub tools.
-- Use only MCP tools that the current host actually exposes and current user/project permissions permit. If current user/project permissions do not permit it, \`uvx\` is unavailable, or the server fails, state that the academic paper discovery, metadata lookup, download, or full text was not obtained through \`dove-paper-search\`, then choose any exposed and permitted material or action that can still advance the question: \`WebSearch\` discovery snippets, Exa ordinary webpage/documentation/venue/known-URL text when exposed, local project material, user-provided material, theory, experiment, or analysis. Do not install dependencies or substitute a CLI, shell, \`curl\`, or ad hoc fetch script for this MCP, and do not follow a fixed substitute sequence.
-- A bounded bibliography DOI identity check may cover the requested entries in the current manuscript; keep it within that scope. Keep DOI checks transient by default. Update an ordinary Source note or bibliography only when the result materially changes research judgment, manuscript citations, or continuation context. Do not build a database, cache, score, ledger, generated ID, or BibTeX parser around them.
-- Keep \`dove-paper-search\` for scholarly paper acquisition. Use built-in \`WebSearch\` for discovery when appropriate, and the project \`exa\` MCP for ordinary webpages and known URLs when exposed and permitted.
+- Choose the sources that fit the question rather than querying every index.
+- When a DOI matters, use \`get_crossref_paper_by_doi\` before a fuzzy title search, and compare DOI, title, authors, year and venue or version.
+- Metadata is not the paper. Read the actual text before saying a paper supports a claim, and say whether you read the full text, the abstract or only metadata.
+- For full text, prefer source-native open downloads; when \`download_with_fallback\` is needed, pass \`use_scihub: false\`.
+- When the MCP is missing or failing, get the paper another way: the arXiv or Crossref API, the publisher or OpenReview page, or a direct PDF download with \`curl\`, then read it.
 `;
 }
 
@@ -15959,14 +15953,6 @@ function claudeResources() {
     fragment: DOVE_CLAUDE_STATUS_LINE,
     digest: semanticDigest(DOVE_CLAUDE_STATUS_LINE)
   };
-  const webFetchDeny = {
-    hostId: CLAUDE_HOST,
-    path: DOVE_CLAUDE_SETTINGS_PATH,
-    kind: "json-fragment",
-    selector: WEB_FETCH_DENY_SELECTOR,
-    fragment: WEB_FETCH_DENY_PERMISSION,
-    digest: semanticDigest(WEB_FETCH_DENY_PERMISSION)
-  };
   const paperSearch = {
     hostId: CLAUDE_HOST,
     path: PAPER_SEARCH_MCP_PATH,
@@ -15983,7 +15969,7 @@ function claudeResources() {
     fragment: EXA_MCP_FRAGMENT,
     digest: semanticDigest(EXA_MCP_FRAGMENT)
   };
-  const resources = [...files, sessionStartHook, userPromptSubmitHook, statusLine, webFetchDeny, paperSearch, exa];
+  const resources = [...files, sessionStartHook, userPromptSubmitHook, statusLine, paperSearch, exa];
   if (new Set(resources.map(managedKey2)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }
@@ -20166,121 +20152,183 @@ function configureWatchFromMentor(project, mentorFile, options2 = {}) {
 }
 
 // src/core/figure-generation.mjs
+import fs20 from "node:fs";
+import os6 from "node:os";
 import path19 from "node:path";
 var PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-function configuredFigure(options2) {
-  const config = readHostSettings(options2).figure;
-  if (config === void 0) {
-    throw new Error("No figure API configured. Set figure.baseURL, figure.model and figure.apiKeyEnv in Dove user settings.json, or use the host's image tools directly; this CLI cannot invoke host image_gen.");
-  }
-  if (!config || typeof config !== "object" || Array.isArray(config)) throw new Error("Dove figure configuration must be an object.");
-  for (const field of ["baseURL", "model", "apiKeyEnv"]) {
-    if (typeof config[field] !== "string" || !config[field].trim()) throw new Error(`Dove figure.${field} must be a non-empty string.`);
-  }
-  let baseURL;
+var RETRY_DELAYS_MS = [2e3, 6e3];
+function doveConfigDirectory2(env) {
+  return path19.join(env.XDG_CONFIG_HOME || path19.join(env.HOME || os6.homedir(), ".config"), "dove");
+}
+function imageKind(bytes) {
+  if (bytes.subarray(0, 8).equals(PNG_SIGNATURE)) return { type: "image/png", extension: ".png" };
+  if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return { type: "image/jpeg", extension: ".jpg" };
+  if (bytes.length >= 12 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") return { type: "image/webp", extension: ".webp" };
+  return null;
+}
+function origin(value2) {
   try {
-    baseURL = new URL(config.baseURL);
+    return new URL(value2).origin;
   } catch {
-    throw new Error("Dove figure.baseURL must be an HTTP(S) API root URL.");
+    return null;
   }
-  if (!["http:", "https:"].includes(baseURL.protocol) || baseURL.username || baseURL.password || baseURL.search || baseURL.hash) {
-    throw new Error("Dove figure.baseURL must be an HTTP(S) API root URL without credentials, query or fragment.");
+}
+function figureKeys(config, baseURL, env) {
+  const file = config.apiKeyFile ?? path19.join(doveConfigDirectory2(env), "figure-api-key");
+  const keys = [];
+  try {
+    const key = fs20.readFileSync(file, "utf8").trim();
+    if (key) keys.push(key);
+  } catch {
   }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(config.apiKeyEnv)) throw new Error("Dove figure.apiKeyEnv must name an environment variable, not contain a key.");
-  const apiKey = (options2.env ?? process.env)[config.apiKeyEnv];
-  if (typeof apiKey !== "string" || !apiKey.trim()) throw new Error(`Missing figure API key environment variable: ${config.apiKeyEnv}.`);
-  return { baseURL: baseURL.href.replace(/\/+$/u, ""), model: config.model.trim(), apiKey };
-}
-function projectPath(root, projectRoot, supplied, label) {
-  if (typeof supplied !== "string" || !supplied.trim()) throw new Error(`${label} is required.`);
-  const relative = path19.relative(path19.resolve(projectRoot), path19.resolve(projectRoot, supplied)).split(path19.sep).join("/");
-  return root.normalize(relative, label);
-}
-function imageType(bytes) {
-  if (bytes.subarray(0, 8).equals(PNG_SIGNATURE)) return "image/png";
-  if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return "image/jpeg";
-  if (bytes.length >= 12 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") return "image/webp";
-  throw new Error("Figure inputs must be PNG, JPEG or WebP images.");
-}
-function decodePng(value2) {
-  if (typeof value2 !== "string" || !value2.length || value2.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(value2)) {
-    throw new Error("Figure API did not return valid data[0].b64_json; URL-only responses are not supported.");
+  if (config.apiKeyEnv && env[config.apiKeyEnv]?.trim()) keys.push(env[config.apiKeyEnv].trim());
+  if (origin(env.ANTHROPIC_BASE_URL) === origin(baseURL)) {
+    for (const name of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"]) if (env[name]?.trim()) keys.push(env[name].trim());
   }
-  const bytes = Buffer.from(value2, "base64");
-  if (!bytes.subarray(0, 8).equals(PNG_SIGNATURE)) throw new Error("Figure API returned a non-PNG image or invalid image data; no output was written.");
-  let offset = 8;
-  let hasPixels = false;
-  while (offset + 12 <= bytes.length) {
-    const length = bytes.readUInt32BE(offset);
-    const type = bytes.toString("ascii", offset + 4, offset + 8);
-    if (offset + 12 + length > bytes.length) break;
-    if (offset === 8 && (type !== "IHDR" || length !== 13 || bytes.readUInt32BE(offset + 8) === 0 || bytes.readUInt32BE(offset + 12) === 0)) break;
-    if (type === "IDAT" && length > 0) hasPixels = true;
-    offset += length + 12;
-    if (type === "IEND") {
-      if (hasPixels && length === 0 && offset === bytes.length) return bytes;
-      break;
+  return { keys: [...new Set(keys)], file };
+}
+function configuredFigure(options2) {
+  const env = options2.env ?? process.env;
+  const config = readHostSettings(options2).figure ?? {};
+  if (!config.baseURL || !config.model) {
+    throw new Error("No image model configured: set figure.baseURL (the image API root, for example the local model gateway's /v1) and figure.model in Dove's settings.json.");
+  }
+  const baseURL = String(config.baseURL).trim().replace(/\/+$/u, "");
+  if (!origin(baseURL)) throw new Error(`figure.baseURL is not a URL: ${config.baseURL}`);
+  const { keys, file } = figureKeys(config, baseURL, env);
+  if (!keys.length) throw new Error(`No key for the image API: write it to ${file}, or name an environment variable that holds it in figure.apiKeyEnv.`);
+  return { baseURL, model: String(config.model).trim(), keys };
+}
+function freeOutputPath(file) {
+  if (!fs20.existsSync(file)) return file;
+  const extension = path19.extname(file);
+  const stem = file.slice(0, file.length - extension.length);
+  for (let index = 2; ; index += 1) {
+    const candidate = `${stem}-${index}${extension}`;
+    if (!fs20.existsSync(candidate)) return candidate;
+  }
+}
+function outputPathFor(file, kind) {
+  const extension = path19.extname(file).toLowerCase();
+  const matches = extension === kind.extension || kind.extension === ".jpg" && extension === ".jpeg";
+  return freeOutputPath(matches ? file : `${file.slice(0, file.length - path19.extname(file).length)}${kind.extension}`);
+}
+function redact(text, keys) {
+  let result = String(text);
+  for (const key of keys) result = result.split(key).join("<key>");
+  return result.replace(/\s+/gu, " ").trim().slice(0, 300);
+}
+async function requestImage(url, body, json, keys, options2) {
+  const fetchImpl = options2.fetch ?? globalThis.fetch;
+  const sleep2 = options2.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  let last = "no response";
+  for (const key of keys) {
+    for (let attempt = 0; ; attempt += 1) {
+      let response;
+      try {
+        response = await fetchImpl(url, { method: "POST", headers: { Authorization: `Bearer ${key}`, ...json ? { "Content-Type": "application/json" } : {} }, body });
+      } catch (error) {
+        last = redact(`network error: ${error?.message ?? error}`, keys);
+        if (attempt < RETRY_DELAYS_MS.length) {
+          await sleep2(RETRY_DELAYS_MS[attempt]);
+          continue;
+        }
+        throw new Error(`Image API request failed (${last}).`);
+      }
+      if (response.ok) return response;
+      const detail = redact(await response.text().catch(() => ""), keys);
+      last = `HTTP ${response.status}${detail ? `: ${detail}` : ""}`;
+      if (response.status === 401 || response.status === 403) break;
+      if ((response.status === 429 || response.status >= 500) && attempt < RETRY_DELAYS_MS.length) {
+        await sleep2(RETRY_DELAYS_MS[attempt]);
+        continue;
+      }
+      throw new Error(`Image API request failed (${last}).`);
     }
   }
-  throw new Error("Figure API returned incomplete PNG image data; no output was written.");
+  throw new Error(`Image API rejected the available keys (${last}); check Dove's figure-api-key file or figure.apiKeyEnv.`);
+}
+async function imageBytes(result, fetchImpl) {
+  const item = result?.data?.[0];
+  if (typeof item?.b64_json === "string" && item.b64_json) return Buffer.from(item.b64_json, "base64");
+  if (typeof item?.url === "string" && item.url.startsWith("data:")) return Buffer.from(item.url.slice(item.url.indexOf(",") + 1), "base64");
+  if (typeof item?.url === "string" && /^https?:\/\//u.test(item.url)) {
+    const response = await fetchImpl(item.url);
+    if (!response.ok) throw new Error(`Downloading the generated image failed (HTTP ${response.status}).`);
+    return Buffer.from(await response.arrayBuffer());
+  }
+  throw new Error("Image API returned no image (expected data[0].b64_json or data[0].url).");
 }
 async function generateFigure(projectRoot, options2 = {}) {
-  const { baseURL, model, apiKey } = configuredFigure(options2);
-  const root = openRootedFilesystem(projectRoot, options2);
-  const promptPath = projectPath(root, projectRoot, options2.promptFile, "--prompt-file");
-  const output = projectPath(root, projectRoot, options2.output, "--output");
-  if (path19.extname(output).toLowerCase() !== ".png") throw new Error("--output must name a new PNG file.");
-  if (root.exists(output)) throw new Error("Figure output already exists; choose a new --output path.");
-  const prompt = root.readFile(promptPath).toString("utf8").trim();
-  if (!prompt) throw new Error("Figure prompt file is empty.");
-  const images = options2.image ?? [];
-  if (!Array.isArray(images)) throw new Error("Figure image inputs must be an array.");
-  const inputs = images.map((image) => {
-    const relative = projectPath(root, projectRoot, image, "--image");
-    const bytes = root.readFile(relative);
-    return { name: path19.posix.basename(relative), bytes, type: imageType(bytes) };
+  const { baseURL, model, keys } = configuredFigure(options2);
+  const root = path19.resolve(projectRoot);
+  const prompt = String(options2.prompt ?? (options2.promptFile ? fs20.readFileSync(path19.resolve(root, options2.promptFile), "utf8") : "")).trim();
+  if (!prompt) throw new Error("Give the image prompt with --prompt <text> or --prompt-file <file>.");
+  if (!options2.output) throw new Error("--output <file> is required.");
+  const inputs = [].concat(options2.image ?? []).map((image) => {
+    const file = path19.resolve(root, image);
+    const bytes2 = fs20.readFileSync(file);
+    const kind2 = imageKind(bytes2);
+    if (!kind2) throw new Error(`Input image is not PNG, JPEG or WebP: ${file}`);
+    return { name: path19.basename(file), bytes: bytes2, type: kind2.type };
   });
-  if (options2.size !== void 0 && (typeof options2.size !== "string" || !options2.size.trim())) throw new Error("--size must be a non-empty model-supported size.");
-  const mode = inputs.length ? "edit" : "generate";
-  const headers = { Authorization: `Bearer ${apiKey}` };
+  const extra = Object.fromEntries(["size", "quality", "background"].filter((name) => options2[name] !== void 0).map((name) => [name, String(options2[name])]));
   let body;
   if (inputs.length) {
     body = new FormData();
     body.append("model", model);
     body.append("prompt", prompt);
     for (const image of inputs) body.append("image[]", new Blob([image.bytes], { type: image.type }), image.name);
-    if (options2.size !== void 0) body.append("size", options2.size);
+    for (const [name, value2] of Object.entries(extra)) body.append(name, value2);
   } else {
-    headers["Content-Type"] = "application/json";
-    body = JSON.stringify({ model, prompt, ...options2.size === void 0 ? {} : { size: options2.size } });
+    body = JSON.stringify({ model, prompt, ...extra });
   }
-  const parent = path19.posix.dirname(output);
-  if (parent !== ".") root.mkdir(parent, { recursive: true });
-  let response;
-  try {
-    response = await (options2.fetch ?? globalThis.fetch)(`${baseURL}/images/${inputs.length ? "edits" : "generations"}`, {
-      method: "POST",
-      headers,
-      body,
-      redirect: "error"
-    });
-  } catch {
-    throw new Error("Figure API request failed; check the configured service and connection. No automatic retry was made.");
-  }
-  if (!response.ok) throw new Error(`Figure API request failed (HTTP ${response.status}); check the service, model and credentials. No automatic retry was made.`);
+  const response = await requestImage(`${baseURL}/images/${inputs.length ? "edits" : "generations"}`, body, !inputs.length, keys, options2);
   let result;
   try {
     result = await response.json();
   } catch {
-    throw new Error("Figure API returned invalid JSON; no output was written.");
+    throw new Error("Image API returned a response that is not JSON.");
   }
-  const png = decodePng(result?.data?.[0]?.b64_json);
-  root.writeNewFile(output, png);
-  return { status: "generated", mode, model, outputPath: root.displayPath(output), inputs: inputs.length };
+  const bytes = await imageBytes(result, options2.fetch ?? globalThis.fetch);
+  const kind = imageKind(bytes);
+  if (!kind) throw new Error("Image API returned data that is not a PNG, JPEG or WebP image.");
+  const output = outputPathFor(path19.resolve(root, options2.output), kind);
+  fs20.mkdirSync(path19.dirname(output), { recursive: true });
+  fs20.writeFileSync(output, bytes, { flag: "wx" });
+  return { status: "generated", mode: inputs.length ? "edit" : "generate", model, outputPath: output, inputs: inputs.length };
+}
+function onPath(name, env) {
+  for (const directory of String(env.PATH ?? "").split(path19.delimiter)) {
+    if (!directory) continue;
+    const candidate = path19.join(directory, name);
+    try {
+      fs20.accessSync(candidate, fs20.constants.X_OK);
+      return candidate;
+    } catch {
+    }
+  }
+  return null;
+}
+function figureTools(options2 = {}) {
+  const env = options2.env ?? process.env;
+  const config = readHostSettings(options2).figure ?? {};
+  const directory = config.pptTools ?? path19.join(env.HOME || os6.homedir(), ".local/share/dove/figure-tools");
+  const existing = (file) => fs20.existsSync(file) ? file : null;
+  const exportScript = existing(path19.join(directory, "scripts/export-pdf"));
+  const soffice = onPath("soffice", env) ?? onPath("libreoffice", env);
+  const pdftoppm = onPath("pdftoppm", env);
+  return {
+    imageModel: config.baseURL && config.model ? { baseURL: config.baseURL, model: config.model } : null,
+    pptPython: existing(path19.join(directory, "venv/bin/python")),
+    exportPdf: exportScript ? `${exportScript} INPUT.pptx OUTPUT.pdf` : soffice ? `${soffice} --headless --convert-to pdf --outdir DIR INPUT.pptx` : null,
+    pdfToPng: pdftoppm ? `${pdftoppm} -png -r 300 -singlefile INPUT.pdf OUTPUT` : null,
+    notes: existing(path19.join(directory, "README.md"))
+  };
 }
 
 // src/core/mentor-brief.mjs
-import fs20 from "node:fs";
+import fs21 from "node:fs";
 import path20 from "node:path";
 var RESEARCH = ".dove/research";
 var ROUND_FILE2 = /^(\d+)[-_](brief|result)\.md$/iu;
@@ -20438,7 +20486,7 @@ ${quote(`\u4F5C\u8005\uFF1A${author ?? "\u672A\u7F72\u540D\uFF08\u6309\u6267\u88
 \u7BC7\u5E45\uFF1A${result.truncated ? "\u8D85\u8FC7 4 KiB\uFF0C\u5BFC\u5E08\u6309\u8DEF\u5F84\u8BFB\u5168\u6587" : `\u7EA6 ${length} \u5B57\uFF08\u5EFA\u8BAE 1000 \u5B57\u5185\uFF09`}`)}`;
 }
 function renderMentorBrief(root, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs20;
+  const fsOps = options2.fsOps ?? fs21;
   const project = path20.resolve(root);
   const research = path20.join(project, RESEARCH);
   const rounds = list(path20.join(research, "rounds"), fsOps);
@@ -20789,7 +20837,8 @@ function renderDoveHelp() {
   dove watch run [--project <dir>] [--json|--format json]
   dove watch configure --project <root> --mentor <json-file> [--json|--format json]  # --mentor \u662F\u5EFA\u8BAE JSON \u6587\u4EF6\u8DEF\u5F84
   dove topic start [--project <dir>] [--json|--format json]
-  dove figure --project <root> --prompt-file <file> [--image <file> ...] --output <new.png> [--size <size>] [--json|--format json]
+  dove figure --project <root> (--prompt <text>|--prompt-file <file>) [--image <file> ...] --output <file.png> [--size <size>] [--quality <q>] [--background <b>] [--json|--format json]
+  dove figure --tools [--json|--format json]
   dove settings [--host-migration on|off] [--json|--format json]
   dove mentor brief [--project <dir>] [--trigger <text>] [--user-source <path>] [--since <range>] [--until <range>] [--user-original <text>] [--opinion <path>] [--artifact <path>...] [--json|--format json]
   dove run start --project <dir> [--id <id>] [--group <name>] [--seed <short-text>] [--wall-time <duration>|--timeout-ms <ms>] [--metric-name <name> --direction min|max] [--metric-unit <unit>] [--data <basis>] [--evaluator <basis>] [--resource-basis <basis>] [--kill-grace-ms <ms>] [--json|--format json] -- <command> [args...]
@@ -20803,7 +20852,7 @@ function renderDoveHelp() {
 
 \u666E\u901A Claude \u4F1A\u8BDD\u662F Dove \u7684\u4E3B\u8981\u5165\u53E3\uFF1B--agent dove \u4E0E\u4E5D\u4E2A /dove:* Skills \u53EA\u662F\u53EF\u9009\u5FEB\u6377\u5165\u53E3\u3002CLI \u7BA1\u7406\u9879\u76EE\u63A5\u5165\u3001\u8BCA\u65AD\u548C\u8FD0\u884C\u6536\u636E\uFF0C\u4E5F\u53EF\u901A\u8FC7 dove figure \u8C03\u7528\u914D\u7F6E\u7684\u56FE\u50CF\u6A21\u578B\uFF0C\u4F46\u4E0D\u542F\u52A8\u5BA1\u7A3F\u6A21\u578B\u3002/dove:review \u4FDD\u7559\uFF0C\u5BFC\u5E08 dove-mentor \u4E0E\u8BBA\u6587\u5BA1\u7A3F dove-review \u4F7F\u7528\u5BBF\u4E3B\u539F\u751F\u5168\u65B0\u53EA\u8BFB\u5B50 agent\uFF0C\u4E0D\u4F20\u6267\u884C\u5BF9\u8BDD\u3001\u4E0D\u7EED\u63A5\u5386\u53F2\u3002\u5BFC\u5E08\u53EF\u68C0\u7D22\u7F51\u9875\u548C\u8BBA\u6587\uFF0C\u9760\u81EA\u5DF1\u7684 MENTOR_NOTES.md \u5EF6\u7EED\u5224\u65AD\uFF1B\u5BA1\u7A3F\u53EA\u8BFB\u6307\u5B9A\u7A3F\u4EF6\u4E0E\u4F9D\u636E\u3002
 
-dove figure \u8C03\u7528 settings.figure\uFF08baseURL\u3001model\u3001apiKeyEnv\uFF09\u914D\u7F6E\u7684\u56FE\u50CF\u6A21\u578B\uFF0C\u5411\u670D\u52A1\u53D1\u9001 prompt \u548C\u8F93\u5165\u56FE\uFF0C\u9700\u76F8\u5E94\u6388\u6743\uFF1B\u65E0 --image \u65F6\u751F\u6210\uFF0C\u6709\u56FE\u65F6\u7F16\u8F91\uFF0C--image \u53EF\u91CD\u590D\u3002\u76F8\u5BF9\u8DEF\u5F84\u6309 --project\uFF08\u9ED8\u8BA4\u5F53\u524D\u76EE\u5F55\uFF09\u89E3\u6790\uFF0C--output \u5FC5\u987B\u662F\u65B0 PNG\u3002\u6B64\u547D\u4EE4\u5236\u4F5C\u6784\u56FE\u53C2\u8003\u6216\u793A\u610F\u7D20\u6750\uFF1B\u4E3B\u4F1A\u8BDD\u53E6\u7528\u53EF\u7528 PPT \u5DE5\u5177\u7EC4\u5408\u771F\u5B9E\u8D44\u4EA7\u4E0E\u6587\u5B57\u3001\u4EA4\u4ED8 PPTX \u53CA\u5BFC\u51FA\uFF0C\u4E0D\u662F\u672C CLI \u7684\u529F\u80FD\uFF1BCLI \u4E0D\u80FD\u8C03\u7528\u5BBF\u4E3B\u5185\u7F6E image_gen\u3002
+dove figure \u8C03\u7528 settings.figure\uFF08baseURL\u3001model\uFF0C\u53EF\u9009 apiKeyEnv\uFF09\u914D\u7F6E\u7684\u56FE\u50CF\u6A21\u578B\uFF0C\u5411\u670D\u52A1\u53D1\u9001 prompt \u548C\u8F93\u5165\u56FE\uFF1B\u7528\u6237\u914D\u7F6E\u4E86\u56FE\u50CF\u670D\u52A1\u5E76\u8981\u6C42\u753B\u56FE\uFF0C\u5C31\u662F\u5BF9\u8FD9\u4E9B\u8BF7\u6C42\u7684\u6388\u6743\uFF0C\u4E0D\u5FC5\u6BCF\u6B21\u53E6\u884C\u786E\u8BA4\u3002\u65E0 --image \u65F6\u751F\u6210\uFF0C\u6709\u56FE\u65F6\u7F16\u8F91\uFF0C--image \u53EF\u91CD\u590D\uFF1B\u56FE\u7247\u548C\u8F93\u51FA\u53EF\u5728\u4EFB\u610F\u4F4D\u7F6E\uFF0C\u76F8\u5BF9\u8DEF\u5F84\u6309 --project\uFF08\u9ED8\u8BA4\u5F53\u524D\u76EE\u5F55\uFF09\u89E3\u6790\uFF0C\u8F93\u51FA\u6587\u4EF6\u5DF2\u5B58\u5728\u65F6\u81EA\u52A8\u52A0\u5E8F\u53F7\uFF0C\u4E0D\u8986\u76D6\u3002\u5BC6\u94A5\u4F9D\u6B21\u53D6 Dove \u914D\u7F6E\u76EE\u5F55\u91CC\u7684 figure-api-key \u6587\u4EF6\u3001apiKeyEnv \u6307\u5B9A\u7684\u73AF\u5883\u53D8\u91CF\uFF1B\u56FE\u50CF\u63A5\u53E3\u5C31\u662F\u5BBF\u4E3B\u6240\u7528\u7684\u6A21\u578B\u7F51\u5173\u65F6\uFF0C\u4E5F\u7528\u5BBF\u4E3B\u5DF2\u6709\u7684\u5BC6\u94A5\u3002\u9047\u5230\u9650\u6D41\u6216\u7F51\u5173\u9519\u8BEF\u4F1A\u81EA\u52A8\u91CD\u8BD5\uFF0C\u5931\u8D25\u65F6\u663E\u793A\u670D\u52A1\u8FD4\u56DE\u7684\u539F\u56E0\u3002\u5B83\u7528\u6765\u505A\u6784\u56FE\u548C\u793A\u610F\u7D20\u6750\uFF0C\u771F\u5B9E\u7ED3\u679C\u4E0E\u6587\u5B57\u5728 PPT \u91CC\u7EC4\u5408\uFF1Bdove figure --tools \u5217\u51FA\u672C\u673A\u505A PPT \u7684 Python\u3001PPTX \u8F6C PDF \u4E0E PDF \u8F6C PNG \u7684\u547D\u4EE4\u3002CLI \u4E0D\u80FD\u8C03\u7528\u5BBF\u4E3B\u5185\u7F6E image_gen\uFF0CClaude Code \u5BBF\u4E3B\u4E5F\u6CA1\u6709\u8FD9\u79CD\u5DE5\u5177\u3002
 
 dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u7F51\u9875\uFF0C\u53EA\u8BFB\u67E5\u770B\u5DF2\u767B\u8BB0\u9879\u76EE\u7684\u4E3B\u7EBF\u3001\u6838\u5FC3\u80FD\u529B\u3001\u957F\u671F\u7814\u7A76\u610F\u56FE\u3001\u5F53\u524D\u8F6E\u6B21\u3001EVAL \u8BC4\u6D4B\u8868\u548C\u6BCF\u8F6E\u8BF4\u660E/\u7ED3\u679C\uFF08\u9ED8\u8BA4 127.0.0.1:7788\uFF0C\u8FDC\u7A0B\u7528 SSH \u7AEF\u53E3\u8F6C\u53D1\u6253\u5F00\uFF1B\u6302\u5230\u516C\u7F51\u96A7\u9053\u65F6\u7528 --password-file \u5F00\u542F\u5BC6\u7801\u767B\u5F55\uFF0C\u6240\u6709\u9875\u9762\u548C\u6570\u636E\u63A5\u53E3\u90FD\u8981\u5148\u767B\u5F55\uFF09\u3002\u9762\u677F\u7684\u300C\u8BBE\u7F6E\u300D\u9875\u53EF\u7BA1\u7406\u9879\u76EE\u767B\u8BB0\u3001\u8BBA\u6587\u8FFD\u8E2A\uFF08\u5173\u952E\u8BCD\u3001\u4F5C\u8005\u3001arXiv \u5206\u7C7B\u3001\u6BCF\u5929\u8FD0\u884C\u65F6\u95F4\u3001\u4EE3\u7406\u3001\u53EF\u9009\u7684 Semantic Scholar key\uFF09\u548C\u9762\u677F\u5BC6\u7801\uFF1B\u8BBA\u6587\u8FFD\u8E2A\u5728\u9762\u677F\u8FD0\u884C\u671F\u95F4\u6BCF\u5929\u81EA\u52A8\u6267\u884C\uFF0C\u4E5F\u53EF\u7528 dove watch run \u624B\u52A8\u6267\u884C\uFF0C\u7ED3\u679C\u5199\u5165\u5404\u9879\u76EE .dove/research/watch/\u3002\u5BFC\u5E08\u6BCF\u6B21\u68C0\u67E5\u5173\u952E\u8BCD\u3001\u672A\u5224\u65AD\u8BBA\u6587\u548C\u626B\u63CF\uFF0C\u8FD4\u56DE\u4E2D\u6587\u4E00\u53E5\u8BDD\u4E0E\u65B9\u5411\uFF1B\u6709\u7528\u8BBA\u6587\u7D2F\u79EF\u4E3A\u53EF\u5BFC BibTeX \u7684\u9879\u76EE\u6587\u732E\u5E93\u3002\u65E0\u65B0\u8BBA\u6587\u65F6\u8865\u65E7\u6587\u9ED8\u8BA4\u5173\u95ED\u3002\u9009\u9898\u5148\u8BFB\u6807\u51C6\uFF0C\u4ECE\u6B63\u6587\u8FD1\u672A\u6210\u5DE5\u4F5C\u627E\u7F3A\u53E3\uFF0C\u8DE8\u9886\u57DF\u627E\u673A\u5236\uFF1B\u5019\u9009\u5199\u5BF9\u5E94\u5173\u7CFB\u3001\u524D\u63D0\u3001\u8FD1\u90BB\u5DEE\u522B\u4E0E\u98CE\u9669\uFF0C\u7ECF\u7559\u4E0B\uFF0F\u4FEE\u6539\uFF0F\u5426\u6389\u8BC4\u5BA1\uFF0C\u63A8\u8350\u4E24\u4E09\u4E2A\u4EA4\u7528\u6237\u9009\uFF0C\u4E4B\u524D\u4E0D\u5B9E\u73B0\u65B9\u6CD5\u3002\u9762\u677F\u53EF\u67E5\u770B\u5019\u9009\u5361\u4E0E\u6587\u732E\u5E93\u3002
 
@@ -20903,7 +20952,7 @@ function setupLines(command3, { status, hosts, writtenPaths = [] }) {
   const lines = [];
   if (command3 === "init" && status === "already-initialized") return ["\u2713 \u73B0\u6709\u9879\u76EE\u96C6\u6210\u4FDD\u6301\u4E0D\u53D8\uFF0C\u6CA1\u6709\u5199\u5165\u4EFB\u4F55\u6587\u4EF6"];
   if (hasClaude) {
-    lines.push("\u2713 Dove \u4E0E 9 \u4E2A\u53EF\u9009\u4E13\u9879\u5165\u53E3\u5DF2\u5B89\u88C5\uFF1B\u5BFC\u5E08\u548C\u8BBA\u6587\u5BA1\u7A3F\u4F7F\u7528\u539F\u751F\u53EA\u8BFB\u5B50 agent", "\u2713 Claude SessionStart \u4E0E UserPromptSubmit \u5DF2\u914D\u7F6E\uFF1B\u72B6\u6001\u680F\u7A7A\u7F3A\u65F6\u5B89\u88C5\u53EA\u8BFB\u663E\u793A", "\u2713 \u8BBA\u6587\u68C0\u7D22 MCP\u3001\u7F51\u9875 Exa MCP \u4E0E\u9879\u76EE WebFetch \u7981\u7528\u5DF2\u914D\u7F6E");
+    lines.push("\u2713 Dove \u4E0E 9 \u4E2A\u53EF\u9009\u4E13\u9879\u5165\u53E3\u5DF2\u5B89\u88C5\uFF1B\u5BFC\u5E08\u548C\u8BBA\u6587\u5BA1\u7A3F\u4F7F\u7528\u539F\u751F\u53EA\u8BFB\u5B50 agent", "\u2713 Claude SessionStart \u4E0E UserPromptSubmit \u5DF2\u914D\u7F6E\uFF1B\u72B6\u6001\u680F\u7A7A\u7F3A\u65F6\u5B89\u88C5\u53EA\u8BFB\u663E\u793A", "\u2713 \u8BBA\u6587\u68C0\u7D22 MCP \u4E0E\u7F51\u9875 Exa MCP \u5DF2\u914D\u7F6E");
   }
   if (hasDsh) lines.push("\u2713 DSH \u9879\u76EE\u7EA7 filesystem Skills \u5DF2\u5B89\u88C5");
   if (command3 === "init") lines.push(
@@ -20954,7 +21003,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
     lines.push(...authorPreferenceActivationLines(result.hosts), "");
   }
   if (result.hosts.includes("claude")) {
-    lines.push("\u8BBA\u6587\u68C0\u7D22\u9700\u8981\u672C\u673A\u5DF2\u6709 uvx\uFF1B\u9996\u6B21\u4F7F\u7528 dove-paper-search \u6216 exa \u65F6\u7684\u5BBF\u4E3B\u6279\u51C6\u4ECD\u7531\u4F60\u51B3\u5B9A\u3002Dove \u4E0D\u5B89\u88C5\u4F9D\u8D56\u6216\u5199\u51ED\u636E\uFF1BWebSearch \u4FDD\u7559\uFF0CWebFetch \u5DF2\u7531\u9879\u76EE\u6743\u9650\u7981\u7528\u3002");
+    lines.push("\u8BBA\u6587\u68C0\u7D22\u9700\u8981\u672C\u673A\u5DF2\u6709 uvx\uFF1B\u9996\u6B21\u4F7F\u7528 dove-paper-search \u6216 exa \u65F6\u7684\u5BBF\u4E3B\u6279\u51C6\u4ECD\u7531\u4F60\u51B3\u5B9A\u3002Dove \u4E0D\u5B89\u88C5\u4F9D\u8D56\u6216\u5199\u51ED\u636E\uFF1BWebSearch \u4E0E WebFetch \u7167\u5E38\u53EF\u7528\u3002");
     lines.push("");
   }
   if (result.hosts.includes("claude")) {
@@ -21290,7 +21339,7 @@ function renderRunResult(result) {
 import { createHash } from "node:crypto";
 
 // src/core/session-start-hook.mjs
-import fs21 from "node:fs";
+import fs22 from "node:fs";
 import path23 from "node:path";
 function parseSessionStartPayload(input) {
   let payload;
@@ -21312,7 +21361,7 @@ function recentUserOriginalsContext(project, options2) {
   if (!project) return COMPACTION_REANCHOR_NOTICE;
   try {
     const result = refreshUserOriginals(project, { ...options2, budgetMs: 1500 });
-    const summary = (options2.fsOps ?? fs21).readFileSync(path23.join(project, USER_ORIGINALS_PATH), "utf8");
+    const summary = (options2.fsOps ?? fs22).readFileSync(path23.join(project, USER_ORIGINALS_PATH), "utf8");
     const entries = summary.split("\n").filter((line) => {
       const own = line.match(/^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 本人 · (.*)$/u);
       return own && classifyUserText(own[1]) === "own" && !/^(?:Claude\s+代用户转达[:：]|【用户(?:指出|已同意)[^】]*】|用户\s*\d{4}-\d{2}-\d{2}(?:\s|$)|用户授权)/u.test(own[1]);
@@ -21337,7 +21386,7 @@ User-original source: ${JSON.stringify(payload.transcript_path)}. Give the mento
 function sessionStartOutput(payload, result = null, options2 = {}) {
   const output = {};
   if (result && result.status !== "current") {
-    output.systemMessage = "Dove project integration needs attention. SessionStart does not update integration; run dove update explicitly to update supported manifest-owned integration. If blocked, inspect dove doctor --json before changing files.";
+    output.systemMessage = "Dove\uFF1A\u672C\u9879\u76EE\u7684\u5B89\u88C5\u4E0E\u5F53\u524D\u7248\u672C\u4E0D\u4E00\u81F4\uFF08\u9700\u8981\u66F4\u65B0\u6216\u6709\u672C\u5730\u6539\u52A8\uFF09\uFF0C\u53EF\u8FD0\u884C dove update \u540C\u6B65\uFF1Bdove doctor \u53EF\u770B\u8BE6\u60C5\u3002";
   }
   if (payload.source === "startup" || payload.source === "clear") {
     if (typeof options2.project !== "string" || !path23.isAbsolute(options2.project)) {
@@ -21385,18 +21434,10 @@ function currentPromptGuidance(manifest) {
 }
 function inspectCurrentPromptGuidance(project, options2 = {}) {
   const manifest = readProjectInstallationManifest(project, { fsOps: options2.fsOps, hostIds: PROJECT_HOST_IDS });
-  const expectedPackage = { name: options2.packageName ?? PACKAGE_NAME, version: options2.packageVersion ?? PACKAGE_VERSION };
-  if (!manifest.hosts.includes("claude") || !samePackage(manifest.package, expectedPackage)) {
-    throw new Error("Dove prompt guidance requires current Claude integration.");
-  }
-  const resources = resourcesForHosts(manifest.hosts).filter((entry) => entry.kind === "exclusive-file");
-  const managed = manifest.managed.filter((entry) => entry.kind === "exclusive-file");
-  if (!sameManaged(managed, resources)) throw new Error("Dove prompt guidance inventory does not match the current package.");
-  for (const resource of resources) {
-    const observed = inspectRegularProjectFile(project, resource.path, options2.fsOps);
-    if (observed.digest !== resource.digest) throw new Error(`Dove prompt guidance is changed or missing: ${resource.path}.`);
-  }
-  return currentPromptGuidance(manifest);
+  const guidance = currentPromptGuidance(manifest);
+  const cliVersion = options2.packageVersion ?? PACKAGE_VERSION;
+  if (guidance.version !== cliVersion) guidance.note = `This project's Dove guidance is version ${guidance.version} and the CLI is ${cliVersion}; run dove update to sync when convenient.`;
+  return guidance;
 }
 function parseUserPromptSubmitPayload(input) {
   let payload;
@@ -21428,7 +21469,8 @@ function userPromptSubmitOutput(payload, guidance, options2 = {}) {
   }
   const context = `Dove ${guidance.version} (disk guidance, not rule reload):
 ${guidance.fingerprints.join("\n")}
-${identityCardContext(options2.project, options2)}
+${guidance.note ? `${guidance.note}
+` : ""}${identityCardContext(options2.project, options2)}
 ${renderDoveResearchReanchor()}
 On first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.${userOriginalSourceContext(payload)}${hostMigrationContext(options2.project, options2)}`;
   return {
@@ -21442,7 +21484,7 @@ function userPromptSubmitAttentionOutput() {
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
-      additionalContext: "Dove could not verify current project guidance. Do not treat the new CLI guidance as installed policy; inspect dove doctor --json and resolve project integration deliberately (dove update only if replacing owned edits is intended). This does not block or expand the user's request."
+      additionalContext: "Dove could not read this project's installation, so no identity card is attached this turn; dove doctor shows why. Continue with the user's request."
     }
   };
 }
@@ -21613,9 +21655,9 @@ ${project}` : session;
 }
 
 // src/core/dove-lifecycle.mjs
-import fs22 from "node:fs";
+import fs23 from "node:fs";
 function updateDoveLifecycle(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs22;
+  const fsOps = options2.fsOps ?? fs23;
   const root = resolveProjectRootForSetup(start, { fsOps });
   return updateProjectIntegration(root, options2);
 }
@@ -21632,12 +21674,12 @@ function uninstallDoveLifecycle(start, options2 = {}) {
 }
 
 // src/core/project-doctor.mjs
-import fs24 from "node:fs";
+import fs25 from "node:fs";
 import path25 from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // src/core/research-documents.mjs
-import fs23 from "node:fs";
+import fs24 from "node:fs";
 var RESEARCH_DOCUMENT_PATHS = Object.freeze({ ...RESEARCH_DEFAULT_PATHS });
 function readableMarkdown(root, relativePath) {
   const stat = root.tryLstat(relativePath);
@@ -21649,7 +21691,7 @@ function readableMarkdown(root, relativePath) {
 function inspectResearchDocuments(project, options2 = {}) {
   const base = { root: RESEARCH_DOCUMENT_PATHS.root, identity: null, evaluation: null, rounds: null, overview: null };
   try {
-    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs23 });
+    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs24 });
     const directory = root.tryLstat(RESEARCH_DOCUMENT_PATHS.root);
     if (!directory) return { ...base, healthy: true, state: "absent" };
     if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error(`${base.root} must be a real directory.`);
@@ -21704,7 +21746,7 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 function inspectUserCli(options2) {
-  const fsOps = options2.fsOps ?? fs24;
+  const fsOps = options2.fsOps ?? fs25;
   const packageRoot = path25.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options2.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
     const absolutePath = path25.resolve(packageRoot, relativePath);
@@ -21849,7 +21891,7 @@ function inspectProjectDoctor(start, options2 = {}) {
 
 // src/core/run-record.mjs
 import crypto5 from "node:crypto";
-import fs25 from "node:fs";
+import fs26 from "node:fs";
 import path26 from "node:path";
 import process5 from "node:process";
 
@@ -22021,7 +22063,7 @@ function normalizeRunId(value2) {
   return value2;
 }
 function normalizeRunProject(project, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   return resolveInstalledProjectRoot(project ?? options2.cwd ?? process5.cwd(), { fsOps });
 }
 function runRelativePaths(runId) {
@@ -22045,7 +22087,7 @@ function runAbsolutePaths(projectRoot, runId) {
   };
 }
 function ensureRunsRoot(projectRoot, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const doveRoot = path26.join(projectRoot, ARTIFACT_PATHS.doveRoot);
   assertRealDirectory(fsOps, doveRoot, "Dove workspace root");
   const runsRoot = path26.join(projectRoot, RUNS_DIRECTORY_PATH);
@@ -22064,7 +22106,7 @@ function ensureRunsRoot(projectRoot, options2 = {}) {
   return runsRoot;
 }
 function reserveRunDirectory(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const runId = normalizeRunId(options2.id ?? createRunId({ now: options2.now }));
   ensureRunsRoot(projectRoot, { fsOps });
@@ -22079,13 +22121,13 @@ function reserveRunDirectory(options2 = {}) {
   return { projectRoot, runId, paths };
 }
 function requireRunDirectory(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const paths = runAbsolutePaths(projectRoot, runId);
   assertRealDirectory(fsOps, paths.absoluteRunDirectory, "Dove run directory");
   return paths;
 }
 function tryRunDirectory(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const paths = runAbsolutePaths(projectRoot, runId);
   const stat = lstatOrNull5(fsOps, paths.absoluteRunDirectory);
   if (stat === null) return null;
@@ -22093,7 +22135,7 @@ function tryRunDirectory(projectRoot, runId, options2 = {}) {
   return paths;
 }
 function acquireRunMutationLock(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const paths = requireRunDirectory(projectRoot, runId, { fsOps });
   const lockPath = path26.join(paths.absoluteRunDirectory, RUN_LOCK_DIRECTORY);
   for (let attempt = 0; attempt <= RUN_LOCK_WAIT_MS / RUN_LOCK_RETRY_MS; attempt += 1) {
@@ -22117,7 +22159,7 @@ function validateRunEvent(value2, expectedRunId, expectedSeq, label) {
   return value2;
 }
 function readRunEvents(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const id = normalizeRunId(runId);
   const paths = requireRunDirectory(projectRoot, id, { fsOps });
   assertRegularFile(fsOps, paths.absoluteJournalPath, "Dove run journal");
@@ -22132,7 +22174,7 @@ function readRunEvents(projectRoot, runId, options2 = {}) {
   });
 }
 function tryReadRunEvents(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const id = normalizeRunId(runId);
   const paths = tryRunDirectory(projectRoot, id, { fsOps });
   if (paths === null) return null;
@@ -22142,7 +22184,7 @@ function tryReadRunEvents(projectRoot, runId, options2 = {}) {
 }
 function appendRunEvents(projectRoot, runId, items, options2 = {}) {
   if (!Array.isArray(items) || items.length === 0) throw new Error("Dove run event append requires at least one event item.");
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const id = normalizeRunId(runId);
   const lock = acquireRunMutationLock(projectRoot, id, { fsOps });
   try {
@@ -22374,7 +22416,7 @@ function summarizeRun(projectRoot, runId, options2 = {}) {
   return summarizeStatus(projectRoot, normalizeRunId(runId), events);
 }
 function runsRootEntries(projectRoot, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const runsRoot = path26.join(projectRoot, RUNS_DIRECTORY_PATH);
   const stat = lstatOrNull5(fsOps, runsRoot);
   if (stat === null) return [];
@@ -22385,7 +22427,7 @@ function runsRootEntries(projectRoot, options2 = {}) {
   }).sort();
 }
 function listRunSummaries(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const group = normalizeRunGroup(options2.group);
   const runs = [];
@@ -22399,7 +22441,7 @@ function listRunSummaries(options2 = {}) {
   return { command: "status", status: "ok", project: projectRoot, group, runs };
 }
 function inspectRunStatus(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const projectRoot = normalizeRunProject(options2.project, options2);
   if (options2.id !== void 0 && options2.id !== null) {
     if (options2.group !== void 0 && options2.group !== null) throw new Error("Use only one of --id or --group for dove run status.");
@@ -22409,7 +22451,7 @@ function inspectRunStatus(options2 = {}) {
   return listRunSummaries({ ...options2, fsOps, project: projectRoot });
 }
 function appendReconciledInterrupted(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const id = normalizeRunId(runId);
   const event = appendRunEvent(projectRoot, id, "run.reconciled", {
     outcome: "interrupted",
@@ -22436,7 +22478,7 @@ function appendReconciledInterrupted(projectRoot, runId, options2 = {}) {
   return { event, summary: summarizeRun(projectRoot, id, { fsOps }) };
 }
 function appendFinalizedRun(projectRoot, runId, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const root = normalizeRunProject(projectRoot, { fsOps, cwd: options2.cwd });
   const id = normalizeRunId(runId);
   const event = appendRunEvent(root, id, "run.finalized", (events) => {
@@ -22477,7 +22519,7 @@ function selectedRunIds(projectRoot, options2 = {}) {
   return [.../* @__PURE__ */ new Set([...explicitIds, ...byGroup])].sort();
 }
 function compareRuns(options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
+  const fsOps = options2.fsOps ?? fs26;
   const projectRoot = normalizeRunProject(options2.project, options2);
   const runIds2 = selectedRunIds(projectRoot, { ...options2, fsOps });
   if (runIds2.length === 0) {
@@ -22536,7 +22578,7 @@ function compareRuns(options2 = {}) {
 
 // src/core/run-supervisor.mjs
 import { spawn as spawn2 } from "node:child_process";
-import fs26 from "node:fs";
+import fs27 from "node:fs";
 import process6 from "node:process";
 var SUPERVISOR_ENTRY = "__dove-run-supervisor";
 var SUPERVISOR_READY_TIMEOUT_MS = 1e4;
@@ -22571,7 +22613,7 @@ function sendSupervisorMessageAsync(message) {
 function closeFd(fd) {
   if (!Number.isInteger(fd)) return;
   try {
-    fs26.closeSync(fd);
+    fs27.closeSync(fd);
   } catch {
   }
 }
@@ -22615,8 +22657,8 @@ function appendTerminalEvent(projectRoot, runId, payload, options2 = {}) {
 }
 function openRunLogFiles(paths) {
   return {
-    stdoutFd: fs26.openSync(paths.absoluteStdoutPath, "wx", 384),
-    stderrFd: fs26.openSync(paths.absoluteStderrPath, "wx", 384)
+    stdoutFd: fs27.openSync(paths.absoluteStdoutPath, "wx", 384),
+    stderrFd: fs27.openSync(paths.absoluteStderrPath, "wx", 384)
   };
 }
 function normalizeStartPayload(raw) {
@@ -22883,7 +22925,7 @@ async function configureSupervisorAndWait(child, payload, acceptedTypes) {
   }
   return await result;
 }
-function removeEmptyReservedRunDirectory(paths, fsOps = fs26) {
+function removeEmptyReservedRunDirectory(paths, fsOps = fs27) {
   try {
     const entries = fsOps.readdirSync(paths.absoluteRunDirectory);
     if (entries.length === 0) fsOps.rmdirSync(paths.absoluteRunDirectory);
@@ -23136,15 +23178,15 @@ function prepareHookProject(project) {
 function assertHookPayloadProject(payload, target) {
   if (payload?.cwd === void 0) return;
   if (typeof payload.cwd !== "string" || !payload.cwd.trim() || payload.cwd.includes("\0")) throw new Error("Dove hook cwd \u5FC5\u987B\u6307\u5411\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u4E2D\u7684\u76EE\u5F55\u3002");
-  const cwd = fs27.realpathSync(payload.cwd);
-  const stat = fs27.statSync(cwd);
+  const cwd = fs28.realpathSync(payload.cwd);
+  const stat = fs28.statSync(cwd);
   const relative = path27.relative(target, cwd);
   if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path27.sep}`) || path27.isAbsolute(relative)) {
     throw new Error("Dove hook cwd \u4E0D\u5C5E\u4E8E\u58F0\u660E\u7684\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u3002");
   }
   let directory = cwd;
   while (directory !== target) {
-    if (fs27.existsSync(path27.join(directory, ".dove/install/manifest.json")) || fs27.existsSync(path27.join(directory, ".dove-install"))) {
+    if (fs28.existsSync(path27.join(directory, ".dove/install/manifest.json")) || fs28.existsSync(path27.join(directory, ".dove-install"))) {
       throw new Error("Dove hook cwd \u5C5E\u4E8E\u53E6\u4E00\u4E2A\u9879\u76EE\u96C6\u6210\u3002");
     }
     directory = path27.dirname(directory);
@@ -23336,7 +23378,7 @@ try {
     let password = null;
     const passwordFile = options.passwordFile === void 0 ? null : path27.resolve(options.passwordFile);
     if (passwordFile) {
-      password = fs27.readFileSync(passwordFile, "utf8").trim();
+      password = fs28.readFileSync(passwordFile, "utf8").trim();
       if (!password) throw new Error(`\u5BC6\u7801\u6587\u4EF6\u4E3A\u7A7A\uFF1A${options.passwordFile}`);
     }
     const actions = createDashboardActions({ packageOptions: PACKAGE_OPTIONS, passwordFile });
@@ -23375,6 +23417,21 @@ try {
     else console.log(`\u9009\u9898\u76EE\u5F55\u5DF2\u5C31\u7EEA\uFF1A${path27.join(root, ".dove/research/topics")}\uFF08\u4F9D\u636E\uFF1A${result.criteria?.title ?? "\u9009\u9898\u6807\u51C6"}${result.criteria?.version ? `\uFF0C\u7B2C ${result.criteria.version} \u7248` : ""}\uFF1B\u5DF2\u6709\u5019\u9009 ${result.cards.length} \u4E2A\uFF09`);
     process7.exit(0);
   }
+  if (command2 === "figure" && options.tools) {
+    const tools = figureTools();
+    if (wantsJson(options)) writeJson2(tools);
+    else {
+      const show = (value2) => value2 ?? "\u672A\u627E\u5230";
+      console.log([
+        `\u56FE\u50CF\u6A21\u578B\uFF1A${tools.imageModel ? `${tools.imageModel.model} @ ${tools.imageModel.baseURL}` : "\u672A\u914D\u7F6E\uFF08settings.json \u7684 figure.baseURL \u4E0E figure.model\uFF09"}`,
+        `\u505A PPT \u7528\u7684 Python\uFF08\u5E26 python-pptx\uFF09\uFF1A${show(tools.pptPython)}`,
+        `PPTX \u8F6C PDF\uFF1A${show(tools.exportPdf)}`,
+        `PDF \u8F6C PNG\uFF1A${show(tools.pdfToPng)}`,
+        ...tools.notes ? [`\u5DE5\u5177\u8BF4\u660E\uFF1A${tools.notes}`] : []
+      ].join("\n"));
+    }
+    process7.exit(0);
+  }
   if (command2 === "figure") {
     const result = await generateFigure(path27.resolve(options.project ?? process7.cwd()), { ...PACKAGE_OPTIONS, ...options });
     if (wantsJson(options)) writeJson2(result);
@@ -23389,7 +23446,7 @@ try {
     process7.exit(0);
   }
   if (command2 === "watch") {
-    const roots = options.project ? [path27.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs27.existsSync(root));
+    const roots = options.project ? [path27.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs28.existsSync(root));
     const result = await runWatch(roots, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson2(result);
     else for (const item of result.results) console.log(`${path27.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);

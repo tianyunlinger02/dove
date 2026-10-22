@@ -48,7 +48,7 @@ initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersio
 const initializedSettings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.deepEqual(initializedSettings.statusLine, DOVE_CLAUDE_STATUS_LINE);
 assert.deepEqual(initializedSettings.hooks.UserPromptSubmit, [userPromptHook, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY]);
-assert.equal(initializedSettings.permissions.deny.includes(WEB_FETCH_DENY_PERMISSION), true);
+assert.equal(initializedSettings.permissions?.deny?.includes(WEB_FETCH_DENY_PERMISSION) ?? false, false, "Dove leaves WebFetch available");
 const initializedMcp = JSON.parse(fs.readFileSync(path.join(fixture, ".mcp.json"), "utf8"));
 assert.deepEqual(initializedMcp.mcpServers[EXA_MCP_SERVER_NAME], EXA_MCP_FRAGMENT);
 const doctor = path.join(fixture, ".dove", "install", "DOCTOR.md");

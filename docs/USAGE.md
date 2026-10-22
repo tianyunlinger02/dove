@@ -161,33 +161,32 @@ For body-level details, read with 1–5 concrete questions. Keep one cumulative 
 
 Draft groups related work from `papers/library.json` and `papers/library.md` by direction and exports BibTeX from checked metadata. Missing authors or venues stay unknown; unknown publication kind uses `@misc`, not a conference type guessed from a venue label. Summary-only claims retain their source and unread-full-text status. Preserve manuscript format and claim strength; new manuscripts default to LaTeX only where accepted. Inspect the actual build/export after authorized edits.
 
-Figure uses one route: model-led visual design and illustrations, real materials, and editable PPT composition. Give the image model inspected scientific content, the central message, key relations and actual published figures as visual references before building PPT. Let the explanation determine composition, density, hierarchy, color and depth. Concrete objects, close-ups, textures, shading and geometry can carry meaning; publication style does not mean a minimalist flowchart. Preserve detailed model-made illustrations as separate replaceable images, with native PPT labels, connectors and useful vector shapes, rather than tracing everything into basic geometry. Real inputs, model outputs and reproducible plots supply faithful evidence, distinct from explanatory imagery. Keep typography and color coherent, with the full title and extended explanation in the caption. Refine illustrations through the image model and compose evidence in PPT. Deliver PPTX, assets, any creation script and caption, plus PDF/PNG from that same source. Open the result at manuscript size and compare it with the model design and paper references; improve scientific clarity, visual quality and readability, not just export validity. The main session uses available PPT authoring/export tools; `dove figure` generates/edits PNG designs and assets, not PPTX/PDF. Report missing materials or tools plainly.
+Figure uses one route: model-led visual design and illustrations, real materials, and editable PPT composition. Give the image model inspected scientific content, the central message, key relations and actual published figures as visual references before building PPT. Let the explanation determine composition, density, hierarchy, color and depth. Concrete objects, close-ups, textures, shading and geometry can carry meaning; publication style does not mean a minimalist flowchart. Preserve detailed model-made illustrations as separate replaceable images, with native PPT labels, connectors and useful vector shapes, rather than tracing everything into basic geometry. Real inputs, model outputs and reproducible plots supply faithful evidence, distinct from explanatory imagery. Keep typography and color coherent, with the full title and extended explanation in the caption. Refine illustrations through the image model and compose evidence in PPT. Deliver PPTX, assets, any creation script and caption, plus PDF/PNG from that same source. Open the result at manuscript size and compare it with the model design and paper references; improve scientific clarity, visual quality and readability, not just export validity. `dove figure` generates and edits the designs and image assets; `dove figure --tools` shows the machine's python-pptx Python and its PPTX-to-PDF and PDF-to-PNG commands.
 
-To use your own image API, merge this object into `$XDG_CONFIG_HOME/dove/settings.json` (default `$HOME/.config/dove/settings.json`), retaining existing fields:
+Configure the image model in `$XDG_CONFIG_HOME/dove/settings.json` (default `$HOME/.config/dove/settings.json`), keeping the existing fields:
 
 ```json
 {
   "figure": {
-    "baseURL": "https://your-image-service.example/v1",
-    "model": "your-image-model-id",
-    "apiKeyEnv": "OPENAI_API_KEY"
+    "baseURL": "http://127.0.0.1:8317/v1",
+    "model": "gpt-image-2.5"
   }
 }
 ```
 
-Export the key in the named environment variable; do not put its value in the file or prompt. `baseURL` is the API root, including `/v1` if your service requires it, not an image endpoint. This route requires **OpenAI Images-compatible** generation/edit endpoints returning PNG in `data[0].b64_json`; chat-completions compatibility alone is insufficient. Dove does not select or replace the model. The retired `.dove/config*.json` provider settings are not loaded or migrated. `dove settings --json` reports the current settings; changing `hostMigration` in CLI or dashboard preserves `figure` and other fields.
+`baseURL` is the API root of an OpenAI Images-compatible service. The key is read from `figure-api-key` in the same Dove configuration directory, or from the environment variable named in `figure.apiKeyEnv`; when `baseURL` is the host's own model gateway, the key the host already uses for that gateway works too. `dove settings --json` reports the current settings; changing `hostMigration` in CLI or dashboard preserves `figure` and other fields.
 
 ```bash
 # Design from paper figures; the prompt explains each reference's role.
 dove figure --project <root> --prompt-file figures/prompt.txt \
-  --image figures/paper-reference.png --output figures/design-v1.png --json
+  --image ~/papers/reference-fig2.png --output figures/design-v1.png --json
 # Edit that design/asset, not the real evidence embedded in the final PPTX.
 dove figure --project <root> --prompt-file figures/revision.txt \
   --image figures/design-v1.png --image figures/style.png \
   --output figures/design-v2.png --size 1536x1024 --json
 ```
 
-Input/output paths stay inside the project; relative paths resolve against `--project` (default current directory). The prompt identifies each image's role and what to change or preserve. Inputs may be PNG, JPEG or WebP; output must be a new `.png` path. Without `--image`, one JSON request goes to `{baseURL}/images/generations`; images use one multipart request to `{baseURL}/images/edits` with ordered `image[]` inputs. `--size` is sent only when supplied and must be supported by the selected model. These calls send the prompt and images to that service and may incur charges, so use only authorized materials and resources. Failures are explicit: no automatic paid retry, URL download, model switching or code-box substitution. The CLI cannot invoke host `image_gen`; without API configuration, the main session can use a host image tool only if it really exists. If neither route is available, report the missing capability.
+Paths may be anywhere; relative paths resolve against `--project` (default current directory). The prompt identifies each image's role and what to change or preserve. Inputs may be PNG, JPEG or WebP. Without `--image` the request goes to `{baseURL}/images/generations`; with images it goes to `{baseURL}/images/edits` with ordered `image[]` inputs. `--size`, `--quality` and `--background` are passed through when given. Rate limits and gateway errors are retried a few times; a rejected key falls through to the next available key; other failures show the service's own message. The image is saved with the extension of what the service returned, and an existing output name gets a numbered suffix instead of being overwritten.
 
 Independent `dove-review` uses a fresh Read/Grep/Glob context on the complete current manuscript, cited results and supplied grounding. Exclude execution conversation, identity/round records, preferences and old reviews; no retrieval, execution, edits or frozen workspace. It checks question-method fit, field correctness, contribution/evidence fit and the strongest objection, citing evidence and files read. Self-check and delivery checks are distinct; missing review remains a gap.
 
