@@ -130,25 +130,22 @@ Status may end the reply without completing or pausing the round. Progress comes
 
 ## Bounded identity and compact/resume
 
-Keep the card within 1200 characters, using this fixed field order:
+Keep the card short; its research state is about 300 plain-language characters. Point to the current method's existing brief:
 
 ```text
 Current round: rounds/004-brief.md
 Round status: ongoing
 Mainline: <用户确认的原话>
+Research state: <约300字，讲清当前结果、含义与缺口>
+Method design: rounds/003-brief.md
 Target tier: <用户要求的会议或期刊档次>
 Deployment inputs/outputs: <实际输入输出>
 Completion: <用户确认的完成含义>
 User restrictions: <原话或转述、日期与来源、长期或本任务范围>
 Recent corrections: <近期纠正>
-Research state: <当前证据与缺口>
 ```
 
-Compact/resume presents this same short card and continuity guidance, not a timestamp summary of old Mission/Review/Run records. If overlong, the beginning remains visible:
-
-```text
-Identity card exceeds 4KB; the beginning is shown, not a missing card. Read the full card when needed and shorten it without changing Mainline; keep round details in rounds/ and measurements in EVAL.md.
-```
+Compact/resume places the recorded research state first, then the bounded card and continuity guidance, not a generated summary of old Mission/Review/Run records. If the state is too long, it asks the host to rewrite it plainly; it does not invent a shorter scientific judgment.
 
 Startup/clear instead supplies the two-essentials read bootstrap. Hooks present context; they do not prove reading, write research, or perform mentor judgment.
 

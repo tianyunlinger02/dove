@@ -4,15 +4,16 @@ import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 
 export const DOVE_IDENTITY_CARD_PATH = ".dove/research/IDENTITY.md";
 const MAX_CARD_BYTES = 4096;
+const CARD_FIELD = /^[ \t]*(?:[-*][ \t]*)?\**[ \t]*(Current round|Round status|Mainline|Core capability|Target tier|Deployment inputs\/outputs|Completion|User restrictions|Recent corrections|Research state|研究状态|Method design)[^:：\r\n*]{0,20}\**[ \t]*[:：][ \t]*(.*)$/iu;
 
-function readCard(project, options) {
+function readCard(project, options, full = false) {
   if (!project) return null;
   try {
     const root = openRootedFilesystem(project, { fsOps: options.fsOps ?? fs });
     const bytes = root.readFile(DOVE_IDENTITY_CARD_PATH);
     const truncated = bytes.length > MAX_CARD_BYTES;
     const text = new TextDecoder("utf-8", { fatal: true })
-      .decode(bytes.subarray(0, MAX_CARD_BYTES), { stream: truncated }).trim();
+      .decode(full ? bytes : bytes.subarray(0, MAX_CARD_BYTES), { stream: !full && truncated }).trim();
     return text ? { text, truncated } : null;
   } catch {
     return null;
@@ -25,8 +26,8 @@ export function readDoveIdentityCard(project, options = {}) {
 
 // Card fields may be written as "Field: value", "- Field: value" or "- **Field（说明）**：value".
 export function cardField(card, name) {
-  const pattern = new RegExp(`^\\s*(?:[-*]\\s*)?\\**\\s*${name}[^:：\\n*]{0,20}\\**\\s*[:：]\\s*(.+)$`, "imu");
-  return card.match(pattern)?.[1]?.trim() ?? null;
+  const pattern = new RegExp(`^[ \\t]*(?:[-*][ \\t]*)?\\**[ \\t]*${name}[^:：\\r\\n*]{0,20}\\**[ \\t]*[:：][ \\t]*([^\\r\\n]*)\\r?$`, "imu");
+  return card.match(pattern)?.[1]?.trim() || null;
 }
 
 export function parseDoveCurrentRound(card = "") {
@@ -37,9 +38,32 @@ export function parseDoveCurrentRound(card = "") {
   return { brief, ongoing: /^\**\s*(ongoing|进行中)/iu.test(status ?? "") };
 }
 
+function separateResearchState(card) {
+  const lines = card.split(/\r?\n/u);
+  const start = lines.findIndex((line) => /^(Research state|研究状态)$/iu.test(line.match(CARD_FIELD)?.[1] ?? ""));
+  if (start === -1) return { state: "", rest: card };
+  let end = start + 1;
+  while (end < lines.length && !CARD_FIELD.test(lines[end])) end += 1;
+  return {
+    state: [lines[start].match(CARD_FIELD)[2], ...lines.slice(start + 1, end)].join("\n").trim(),
+    rest: [...lines.slice(0, start), ...lines.slice(end)].join("\n").trim()
+  };
+}
+
 export function identityCardContext(project, options = {}) {
-  const card = readCard(project, options);
-  if (!card) return `No readable short identity card at ${DOVE_IDENTITY_CARD_PATH}. Do not infer a mainline from old notes. Create one for a confirmed goal when writing is permitted.`;
-  const reminder = card.truncated ? "\nIdentity card exceeds 4KB; the beginning is shown, not a missing card. Read the full card when needed and shorten it without changing Mainline; keep round details in rounds/ and measurements in EVAL.md." : "";
-  return `Project identity card (researcher-owned; corrections affect only relevant fields, not an unchanged Mainline):\n${card.text}${reminder}`;
+  // The public reader keeps its 4 KiB prefix contract; hooks locate state in the
+  // complete card before bounding the other fields. Neither path writes a card.
+  const card = readCard(project, options, true);
+  if (!card) return `未读到身份卡 ${DOVE_IDENTITY_CARD_PATH}。不要从旧笔记推定主线；确认目标且允许写入后再补。`;
+  const { state, rest } = separateResearchState(card.text);
+  const otherBytes = Buffer.from(rest);
+  const otherFields = new TextDecoder().decode(otherBytes.subarray(0, MAX_CARD_BYTES), { stream: otherBytes.length > MAX_CARD_BYTES }).trim();
+  const lines = [
+    "项目身份卡（研究者维护；只更正相关字段，不改写未变的 Mainline）：",
+    state ? `研究状态（原卡原文）：\n${state}` : "研究状态：原卡未填写；请宿主根据真实结果补约 300 字白话，不从其他字段臆造。"
+  ];
+  if (Array.from(state).length > 300) lines.push("研究状态超过约 300 字目标；请宿主按原始证据重写为白话。这里保留原文，不裁字冒充语义摘要，也不自动改研究内容。");
+  if (otherFields) lines.push("其余身份卡字段：", otherFields);
+  if (card.truncated) lines.push(`身份卡超过 4KB；研究状态已从完整原卡提取，其余字段最多展示前 4KB，全文见 ${DOVE_IDENTITY_CARD_PATH}。请宿主重写为约 1200 字的短卡、约 300 字的白话研究状态；方法设计留在 Method design 指向的 brief，不自动改研究内容。`);
+  return lines.join("\n");
 }

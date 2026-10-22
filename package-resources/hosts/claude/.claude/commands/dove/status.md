@@ -1,41 +1,41 @@
 ---
-description: "Report the current results, core evidence, blockers and active round without running new work."
-argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
+description: "只汇报真实结果、核心证据、卡点和当前轮次，不启动新工作。"
+argument-hint: "可选：请求、产物路径、投稿目标、约束或后续背景"
 ---
 
 # dove.status
 
-Report the current results, core evidence, blockers and active round without running new work.
+只汇报真实结果、核心证据、卡点和当前轮次，不启动新工作。
 
-## Request
+## 当前请求
 
 $ARGUMENTS
 
-## Examples
+## 示例
 
 - `/dove:status`
 
-## How Dove approaches this work
+## 怎么做
 
-These are flexible research considerations, not a required order or report template.
+按当前问题使用这些做法，不机械套步骤或报告模板；明确需要用户决定的地方仍先交给用户。
 
-### What this is for
+### 用途
 
-Give a concise, evidence-grounded account of the current research state.
+简洁、据实说明当前研究状态。
 
-### When to use
+### 适用情况
 
-Use when the user asks about progress or what remains unresolved.
+用户问进展或未解决问题时使用。
 
-### Scope and changes
+### 工作范围
 
-- Status is read-only and does not run research or update documents.
+- 状态查询只读，不跑研究或更新文档。
 
-### Ways Dove may proceed
+### 具体做法
 
-- Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Give a concise account of what we have made, whether the core is demonstrated, what blocks it and which round is underway, with the evidence needed for the user's judgment. Include actual values when useful and leave missing evidence unknown.
+- 读 IDENTITY.md、EVAL.md 最近几行和本轮说明，先直接回答用户，再说做了什么、真实数据结果、意味着什么和下一步。说明核心能力是否证实、卡点和当前轮次，数字解释含义，缺证据留未知。
 
-### Using host tools
+### 使用宿主工具
 
-- Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way.
-- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
+- 直接用本机和 Dove 已配置的工具服务完成任务，不逐次申请。工具缺失或失败时说明并找可用替代；真实评测缺口立刻问用户，不拿替代数据充数。
+- 真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。

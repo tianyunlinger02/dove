@@ -166,3 +166,111 @@ test("round summaries give the trajectory its goal, expected result and actual o
   const result = "# 结果\nAuthor: mentor\n\n漏报从 30% 降到 18%。\n\n## 预期与实际\n| 项目 | 预测 | 实际 |\n|---|---|---|\n| 漏报 | 15% | 18% |\n\n## 改了什么\n解码器";
   assert.deepEqual(summarizeRoundText(result, "result"), { summary: "漏报从 30% 降到 18%。", actual: "漏报：15% → 18%；" });
 });
+
+const methodArguments = {
+  problem: `${"官方真实开发集仍有漏报，原始结果见 results/dev.json。".repeat(20)}\n\n具体失败：稀疏输入下漏掉完整结构。`,
+  externalMethods: "论文 A 的逐片段解码不能约束整体覆盖。\n真实开发集对照仍漏掉 18%，见 [原始结果](results/baseline.json)。",
+  change: "联合生成完整结构，直接约束覆盖。\n\n#### 预期与成立、失败条件\n预期：真实开发集漏报下降。\n成立：漏报下降且完整结构准确率不退步。\n失败：漏报不降或准确率退步。"
+};
+
+function methodBrief(userReply = "") {
+  return `# 联合生成\n\n## 方法设计\n### 要解决什么问题\n${methodArguments.problem}\n\n### 外部方法为什么不行\n${methodArguments.externalMethods}\n\n### 我们的改法为什么能修\n${methodArguments.change}\n${userReply ? `\n### 用户答复\n${userReply}\n` : ""}\n## 本轮安排\n只修评测。\n### 用户答复\n这不是方法设计中的用户答复。\n`;
+}
+
+test("method design reads the current brief reference without shortening arguments or inventing consent", () => {
+  const userReply = "2026-10-22 · 出处：当前会话\n用户原话：我看过了，先别开工，我还有问题。";
+  const identity = `${researchFiles[".dove/research/IDENTITY.md"]}Method design: rounds/002-brief.md\n`;
+  const brief = methodBrief(userReply);
+  const root = fixtureProject({ ...researchFiles, ".dove/research/IDENTITY.md": identity, ".dove/research/rounds/002-brief.md": brief });
+  assert.deepEqual(summarizeProject(root).methodDesign, { source: "rounds/002-brief.md", ...methodArguments, userReply, missing: [] });
+  assert.equal(fs.readFileSync(path.join(root, ".dove/research/IDENTITY.md"), "utf8"), identity);
+  assert.equal(fs.readFileSync(path.join(root, ".dove/research/rounds/002-brief.md"), "utf8"), brief);
+});
+
+test("later repair and evaluation rounds keep the explicitly referenced method design", () => {
+  const root = fixtureProject({
+    ...researchFiles,
+    ".dove/research/IDENTITY.md": "Current round: rounds/003-brief.md\nRound status: ongoing\nMethod design: rounds/002-brief.md\n",
+    ".dove/research/rounds/002-brief.md": methodBrief(),
+    ".dove/research/rounds/003-brief.md": "# 修复官方评测\n\n一句话：修复评分接口，不改方法。\n"
+  });
+  const project = summarizeProject(root);
+  assert.equal(project.currentRound, "rounds/003-brief.md");
+  assert.deepEqual(project.methodDesign, { source: "rounds/002-brief.md", ...methodArguments, userReply: null, missing: [] });
+});
+
+test("without a method reference only the current brief supplies a design, never an older card", () => {
+  const root = fixtureProject({ ...researchFiles, ".dove/research/rounds/001-brief.md": methodBrief("旧方法的用户答复。") });
+  assert.equal(summarizeProject(root).methodDesign, null);
+  fs.writeFileSync(path.join(root, ".dove/research/rounds/002-brief.md"), methodBrief());
+  assert.deepEqual(summarizeProject(root).methodDesign, { source: "rounds/002-brief.md", ...methodArguments, userReply: null, missing: [] });
+});
+
+test("method design reports a missing argument even when a user reply was recorded", () => {
+  const root = fixtureProject({
+    ...researchFiles,
+    ".dove/research/rounds/002-brief.md": "## 方法设计\n### 要解决什么问题\n真实数据上的漏报。\n### 我们的改法为什么能修\n覆盖约束；预期漏报下降，否则失败。\n### 用户答复\n2026-10-22 · 当前会话：我还没看完。\n"
+  });
+  const design = summarizeProject(root).methodDesign;
+  assert.equal(design.problem, "真实数据上的漏报。");
+  assert.equal(design.externalMethods, null);
+  assert.deepEqual(design.missing, ["外部方法为什么不行"]);
+  assert.equal(design.userReply, "2026-10-22 · 当前会话：我还没看完。");
+});
+
+test("an explicit method reference must name a local round brief and never falls back to the current design", () => {
+  const root = fixtureProject({ ...researchFiles, ".dove/research/rounds/002-brief.md": methodBrief() });
+  for (const reference of ["rounds/002-result.md", "rounds/099-brief.md"]) {
+    fs.writeFileSync(path.join(root, ".dove/research/IDENTITY.md"), `Current round: rounds/002-brief.md\nMethod design: ${reference}\n`);
+    const design = summarizeProject(root).methodDesign;
+    assert.equal(design.source, reference);
+    assert.ok(design.error);
+    assert.equal(design.problem, undefined);
+  }
+});
+
+test("fenced examples do not create a method design or a user reply", () => {
+  for (const fence of ["```", "~~~"]) {
+    const example = `${fence}markdown\n## 方法设计\n### 要解决什么问题\n示例问题。\n### 外部方法为什么不行\n示例外部方法。\n### 我们的改法为什么能修\n示例改法。\n### 用户答复\n示例：已同意开工。\n${fence}`;
+    const root = fixtureProject({ ...researchFiles, ".dove/research/rounds/002-brief.md": example });
+    assert.equal(summarizeProject(root).methodDesign, null, "a fenced design is not a real design");
+    const problem = `${methodArguments.problem}\n\n${example}\n围栏之后的问题依据。`;
+    fs.writeFileSync(path.join(root, ".dove/research/rounds/002-brief.md"), methodBrief().replace(methodArguments.problem, problem));
+    assert.deepEqual(summarizeProject(root).methodDesign, { source: "rounds/002-brief.md", ...methodArguments, problem, userReply: null, missing: [] }, "example headings remain original text, not user consent");
+  }
+});
+
+test("method design is visible below the mainline, preserves lines, escapes text and shows gaps", () => {
+  const root = "/memory/project";
+  const project = {
+    root, name: "Project", mainline: "主线目标", rounds: [],
+    methodDesign: {
+      source: 'rounds/002-brief.md"><img src=x onerror=alert(1)>',
+      problem: "真实失败 <script>alert(1)</script>\n第二行问题。",
+      externalMethods: "外部方法 <机制>\n第二行依据。",
+      change: "我们的改法 & 预期\n成立条件与失败条件。",
+      userReply: '2026-10-22 · 当前会话\n用户原话：“我没同意 <开工>。”',
+      missing: []
+    }
+  };
+  const view = { innerHTML: "", querySelectorAll: () => [] };
+  const script = renderDashboardHtml().split("<script>")[1].split("</script>")[0];
+  const section = script.slice(script.indexOf("function esc("), script.indexOf("const texts ="));
+  const context = { document: { getElementById: () => view }, data: { projects: [project] }, selected: root, open: new Map(), CAN_EDIT: false, STATUS: {}, AUTHOR: {} };
+  vm.runInNewContext(`${section}\nrenderView();`, context);
+  assert.ok(view.innerHTML.indexOf('class="hero"') < view.innerHTML.indexOf("方法设计"));
+  assert.ok(view.innerHTML.indexOf("方法设计") < view.innerHTML.indexOf("现在在做什么"));
+  assert.ok(view.innerHTML.includes("真实失败 &lt;script&gt;alert(1)&lt;/script&gt;\n第二行问题。"));
+  assert.ok(view.innerHTML.includes("外部方法 &lt;机制&gt;\n第二行依据。"));
+  assert.ok(view.innerHTML.includes("我们的改法 &amp; 预期\n成立条件与失败条件。"));
+  assert.ok(view.innerHTML.includes('原文来源：rounds/002-brief.md&quot;&gt;&lt;img src=x onerror=alert(1)&gt;'));
+  assert.ok(view.innerHTML.includes("用户原话：“我没同意 &lt;开工&gt;。”"));
+  assert.match(view.innerHTML, /只展示记录，不自动认定用户已同意/u);
+  assert.doesNotMatch(view.innerHTML, /<script>|<img /u);
+  project.methodDesign.externalMethods = null;
+  project.methodDesign.userReply = null;
+  project.methodDesign.missing = ["外部方法为什么不行"];
+  vm.runInNewContext("renderView();", context);
+  assert.match(view.innerHTML, /外部方法为什么不行<\/h3><div class="note">缺口：这一段还没写，论证不完整。/u);
+  assert.match(view.innerHTML, /尚未记录用户看过后的答复/u);
+});

@@ -357,20 +357,20 @@ function validateSessionFacts(root, executable) {
       const output = invoke(source);
       assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
       const delivered = output.hookSpecificOutput.additionalContext;
-      const sourceMarker = `\nUser-original source: ${JSON.stringify(path.join(root, "synthetic-transcript.jsonl"))}.`;
+      const sourceMarker = `\n用户原话来源：${JSON.stringify(path.join(root, "synthetic-transcript.jsonl"))}。`;
       assert.ok(delivered.includes(sourceMarker), "SessionStart appends the user-original source pointer without reading its contents");
       const context = delivered.slice(0, delivered.indexOf(sourceMarker));
       if (source === "startup" || source === "clear") {
         assert.equal(context, bootstrap, "startup and clear bootstrap the main agent's two short summaries before the source pointer");
       } else {
         if (card === null) {
-          assert.match(context, /No readable short identity card at \.dove\/research\/IDENTITY\.md/u);
+          assert.match(context, /未读到身份卡 \.dove\/research\/IDENTITY\.md/u);
         } else {
           assert.ok(context.includes(card), "compact/resume inject the current synthetic identity card");
-          assert.match(context, /Project identity card \(researcher-owned/iu);
+          assert.match(context, /项目身份卡（研究者维护/u);
           if (truncated) {
-            assert.doesNotMatch(context, /No readable short identity card/iu);
-            assert.match(context, /exceeds 4KB/iu);
+            assert.doesNotMatch(context, /未读到身份卡/u);
+            assert.match(context, /身份卡超过 4KB/u);
           }
         }
         assert.ok(context.includes(`${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n`));

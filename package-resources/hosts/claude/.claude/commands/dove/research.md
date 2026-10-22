@@ -1,43 +1,43 @@
 ---
-description: "Explore a broad candidate pool for the user's choice, or advance a confirmed mainline with substantive research."
-argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
+description: "选出有依据的候选供用户决定，或推进已确认主线的实质研究。"
+argument-hint: "可选：请求、产物路径、投稿目标、约束或后续背景"
 ---
 
 # dove.research
 
-Explore a broad candidate pool for the user's choice, or advance a confirmed mainline with substantive research.
+选出有依据的候选供用户决定，或推进已确认主线的实质研究。
 
-## Request
+## 当前请求
 
 $ARGUMENTS
 
-## Examples
+## 示例
 
 - `/dove:research`
 
-## How Dove approaches this work
+## 怎么做
 
-These are flexible research considerations, not a required order or report template.
+按当前问题使用这些做法，不机械套步骤或报告模板；明确需要用户决定的地方仍先交给用户。
 
-### What this is for
+### 用途
 
-Help the user choose a research direction or advance the confirmed mainline through substantive method work.
+帮用户选研究方向，或在确认的主线上取得实质进展。
 
-### When to use
+### 适用情况
 
-Use for topic exploration, method development or continuation of existing research.
+选题、形成方法或接续已有研究时使用。
 
-### Scope and changes
+### 工作范围
 
-- During topic selection before the user's mainline choice, do not implement candidate methods; undertake only diagnostics allowed by the topic criteria. These selection-only limits do not reopen selection for authorized implementation, repair or reproduction. Bounded questions stay bounded, and read-only or design-only requests do not authorize execution.
+- 用户选主线前不实现候选方法，只做选题标准允许的诊断；已授权实现、修复和复现不因此重开选题。普通问题保持范围，只读或只设计请求不执行。
 
-### Ways Dove may proceed
+### 具体做法
 
-- When selecting a direction, apply the shared topic-selection process and RESEARCH_QUALITY.md's sourced gaps, cross-domain mechanism search and adversarial candidate review. Use Source for question-led full-text notes and link candidate cards to that evidence.
-- After confirmation, diagnose key unknowns, design the core method, write the proposal when it closes, and run formal attempts once the user agrees. Scale must answer the question. Use Experiment to distinguish development diagnostics from formal comparisons and restore required comparability after evaluator repair.
-- Follow the shared research contract for mainline continuity, round records and dove-mentor's direction-only judgment, including its triggers, fixed questions and note flow.
+- 选题按共同流程和 RESEARCH_QUALITY.md 找有来源的缺口、跨域机制，检查候选的最强反对；用 Source 带问题读正文，候选卡链接证据。
+- 主线确认后先搭官方指标、真实开发集和最强可得外部比较，缺口立刻问用户。诊断关键未知，新方法或新核心模块先交三段方法设计让用户本人看过，按真实答复开工；修 bug、修评价不受此关口。方法闭合后写开题，用户同意后做正式尝试。规模要能回答问题，用 Experiment 区分开发诊断和正式比较，修评价后恢复必要可比性。
+- 主线接续、轮次记录和 dove-mentor 的方向判断，遵循共同研究规则中的触发时机、固定问题和笔记流；连续两轮无新科研结果就停下问用户。
 
-### Using host tools
+### 使用宿主工具
 
-- Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way.
-- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
+- 直接用本机和 Dove 已配置的工具服务完成任务，不逐次申请。工具缺失或失败时说明并找可用替代；真实评测缺口立刻问用户，不拿替代数据充数。
+- 真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。

@@ -64,8 +64,8 @@ test("pure prompt guidance hands off the original-user source without copying or
   });
   const output = userPromptSubmitOutput(payload, guidance);
   assert.equal(context(output), context(base) + userOriginalSourceContext(payload));
-  assert.match(context(output), /mentor.*last-read date\/range.*dated user originals.*not execution records/iu);
-  assert.match(context(output), /current user's exact words.*not yet in the file/iu);
+  assert.match(context(output), /导师要读上次已读范围之后的本人原话和日期.*不用执行记录替代/u);
+  assert.match(context(output), /当前原话尚未入文件时直接附上/u);
   assert.doesNotMatch(context(output), /CURRENT_USER_BODY_NOT_TO_COPY|PARENT_HISTORY_NOT_TO_COPY/u);
   for (const prompt of ["", "不要写文件，只讨论", "x".repeat(100_000)]) {
     assert.deepEqual(userPromptSubmitOutput({ ...payload, prompt }, guidance), output);
@@ -162,8 +162,8 @@ test("prompt output is current short guidance, independent of prompt text and no
   assert.equal(guidance.fingerprints.length, 3);
   const expected = userPromptSubmitOutput(event(""), guidance, { project });
   assert.ok(context(expected).length < 2_500);
-  assert.match(context(expected), /disk guidance, not rule reload/iu);
-  assert.match(context(expected), /No readable short identity card at \.dove\/research\/IDENTITY\.md/iu);
+  assert.match(context(expected), /磁盘指导，不代表已重新加载/u);
+  assert.match(context(expected), /未读到身份卡 \.dove\/research\/IDENTITY\.md/u);
   assert.ok(context(expected).includes(renderDoveResearchReanchor()));
   assert.doesNotMatch(context(expected), /^Mainline:/mu, "missing card does not synthesize a goal");
   assert.doesNotMatch(context(expected), /offsets|EOF|read the full rule and author preferences/iu);
@@ -212,8 +212,8 @@ test("prompt output is current short guidance, independent of prompt text and no
   const oversizedBefore = fs.statSync(cardPath).mtimeMs;
   for (const binary of binaries) {
     const delivered = invoke(binary, project, event());
-    assert.doesNotMatch(context(delivered), /No readable short identity card/iu);
-    assert.match(context(delivered), /exceeds 4KB/iu);
+    assert.doesNotMatch(context(delivered), /未读到身份卡/u);
+    assert.match(context(delivered), /身份卡超过 4KB/u);
     assert.equal(context(delivered).includes(mainline), true, "oversized card retains the exact mainline");
     assert.equal(fs.readFileSync(cardPath, "utf8"), oversized, "hook does not shorten an oversized card itself");
     assert.equal(fs.statSync(cardPath).mtimeMs, oversizedBefore);
@@ -236,13 +236,13 @@ test("older, edited or partly missing installations keep their context; other di
   const manifest = JSON.parse(original);
   manifest.package.version = "0.0.1";
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
-  for (const binary of binaries) assert.match(context(invoke(binary, project, event())), /guidance is version 0\.0\.1 and the CLI is/u);
+  for (const binary of binaries) assert.match(context(invoke(binary, project, event())), /项目指导为 0\.0\.1，命令行为/u);
   fs.writeFileSync(manifestPath, original);
 
   fs.appendFileSync(path.join(project, ".claude/rules/dove.md"), "\nLocal edited rule\n");
-  assert.match(context(hook()), /disk guidance, not rule reload/u);
+  assert.match(context(hook()), /磁盘指导，不代表已重新加载/u);
   fs.rmSync(path.join(project, ".dove/install/AUTHOR_PREFERENCES.md"));
-  assert.match(context(hook()), /disk guidance, not rule reload/u);
+  assert.match(context(hook()), /磁盘指导，不代表已重新加载/u);
 
   const withoutRule = JSON.parse(original);
   withoutRule.managed = withoutRule.managed.filter((entry) => entry.path !== ".claude/rules/dove.md");
@@ -254,7 +254,7 @@ test("older, edited or partly missing installations keep their context; other di
   t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
   assert.deepEqual(hook(event("hello", { cwd: outside })), attention);
   assert.deepEqual(invoke(binaries[0], outside, event()), attention);
-  assert.match(context(hook()), /disk guidance, not rule reload/u);
+  assert.match(context(hook()), /磁盘指导，不代表已重新加载/u);
 });
 
 test("non-Claude project and malformed input remain nonblocking", (t) => {

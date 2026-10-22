@@ -11,6 +11,11 @@ const RESEARCH_ROOT = ".dove/research";
 const MAX_TEXT_BYTES = 64 * 1024;
 const MAX_ROUNDS = 40;
 const ROUND_FILE = /^(\d+)[-_](brief|result)\.md$/iu;
+const METHOD_ARGUMENTS = [
+  ["problem", "要解决什么问题"],
+  ["externalMethods", "外部方法为什么不行"],
+  ["change", "我们的改法为什么能修"]
+];
 const AUTHOR_LABELS = [
   [/导师|mentor/iu, "mentor"],
   [/用户|user/iu, "user"],
@@ -117,6 +122,41 @@ export function summarizeRoundText(text = "", kind = "brief") {
   };
 }
 
+// Keep the full argument and the user's recorded words, not a one-line round summary.
+function parseMethodDesign(text = "") {
+  const paragraphs = { problem: [], externalMethods: [], change: [], userReply: [] };
+  let inDesign = false;
+  let active = null;
+  let fence = null;
+  for (const line of text.split(/\r?\n/u)) {
+    const marker = line.match(/^\s*(`{3,}|~{3,})(.*)$/u);
+    if (fence) {
+      if (active) paragraphs[active].push(line);
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = null;
+      continue;
+    }
+    if (marker) {
+      fence = marker[1];
+      if (active) paragraphs[active].push(line);
+      continue;
+    }
+    const heading = line.match(/^\s*(#{1,3})\s+(.+?)\s*#*\s*$/u);
+    if (!inDesign) {
+      if (heading?.[1] === "##" && heading[2] === "方法设计") inDesign = true;
+      continue;
+    }
+    if (heading) {
+      if (heading[1].length <= 2) break;
+      active = METHOD_ARGUMENTS.find(([, label]) => label === heading[2])?.[0] ?? (heading[2] === "用户答复" ? "userReply" : null);
+      continue;
+    }
+    if (active) paragraphs[active].push(line);
+  }
+  if (!inDesign) return null;
+  const fields = Object.fromEntries(Object.entries(paragraphs).map(([key, lines]) => [key, lines.join("\n").trim() || null]));
+  return { ...fields, missing: METHOD_ARGUMENTS.filter(([key]) => !fields[key]).map(([, label]) => label) };
+}
+
 function firstHeading(text = "") {
   const heading = text.split(/\r?\n/u).find((line) => /^#{1,3}\s+\S/u.test(line));
   return heading ? heading.replace(/^#{1,3}\s+/u, "").trim() : null;
@@ -167,6 +207,22 @@ function evaluationSummary(evaluation) {
   return { mtime: evaluation.mtime, truncated: evaluation.truncated, tables, text: tables.length ? null : evaluation.text };
 }
 
+function methodDesignSummary(research, reference, fsOps, explicit) {
+  if (!reference) return null;
+  const name = reference.startsWith("rounds/") ? reference.slice(7) : "";
+  const match = name.match(ROUND_FILE);
+  if (!match || match[2].toLowerCase() !== "brief") {
+    return explicit ? { source: reference, error: "方法设计引用应指向 rounds/NNN-brief.md。" } : null;
+  }
+  const brief = readText(path.join(research, "rounds", name), fsOps, Infinity);
+  const design = brief ? parseMethodDesign(brief.text) : null;
+  if (!explicit && !design) return null;
+  return {
+    source: reference,
+    ...(design ?? { missing: METHOD_ARGUMENTS.map(([, label]) => label), error: brief ? "引用的轮次说明中没有“方法设计”。" : "未能读取方法设计引用的轮次说明。" })
+  };
+}
+
 export function summarizeProject(root, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const research = path.join(root, RESEARCH_ROOT);
@@ -185,6 +241,8 @@ export function summarizeProject(root, options = {}) {
   const fields = identity ? parseCardFields(identity.text) : {};
   const current = identity ? parseDoveCurrentRound(identity.text) : null;
   const statusMatch = identity ? cardField(identity.text, "Round status") : null;
+  const methodReference = identity ? cardField(identity.text, "Method design") : null;
+  const methodDesign = methodDesignSummary(research, methodReference ?? current?.brief, fsOps, Boolean(methodReference));
   const times = [identity?.mtime, evaluation?.mtime, ...rounds.flatMap((round) => [round.brief?.mtime, round.result?.mtime])].filter((value) => typeof value === "number");
   return {
     root,
@@ -195,6 +253,7 @@ export function summarizeProject(root, options = {}) {
     longTermIntent: intent ? { ...intent, due: longTermIntentDue(intent, options.now) } : null,
     currentRound: current?.brief ?? null,
     currentSummary: rounds.find((round) => current?.brief?.includes(round.label))?.brief?.summary ?? null,
+    methodDesign,
     targetTier: fields["Target tier"] ?? fields["Target tier (conference/journal level)"] ?? fields["目标档次"] ?? null,
     researchState: plainLine(fields["Research state"] ?? fields["研究现状"] ?? null, 600),
     roundStatus: statusMatch,

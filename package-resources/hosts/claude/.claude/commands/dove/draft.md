@@ -1,46 +1,46 @@
 ---
-description: "Write or revise evidence-grounded text and deliver the authoritative manuscript through its actual build or export."
-argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
+description: "据证据写改权威稿件，沿实际构建或导出路径交付。"
+argument-hint: "可选：请求、产物路径、投稿目标、约束或后续背景"
 ---
 
 # dove.draft
 
-Write or revise evidence-grounded text and deliver the authoritative manuscript through its actual build or export.
+据证据写改权威稿件，沿实际构建或导出路径交付。
 
-## Request
+## 当前请求
 
 $ARGUMENTS
 
-## Examples
+## 示例
 
 - `/dove:draft`
 
-## How Dove approaches this work
+## 怎么做
 
-These are flexible research considerations, not a required order or report template.
+按当前问题使用这些做法，不机械套步骤或报告模板；明确需要用户决定的地方仍先交给用户。
 
-### What this is for
+### 用途
 
-Draft, assess or revise the specified manuscript, section or claim-bearing artifact.
+写作、评估或修改指定稿件、章节或承载主张的产物。
 
-### When to use
+### 适用情况
 
-Use for requested writing or revision, or when the argument, expression or delivery artifact needs work.
+用户要求写改，或论证、表达、交付产物需要处理时使用。
 
-### Scope and changes
+### 工作范围
 
-- Assessment-only requests return findings without edits. Local writing stays local and does not require a mentor, new round or subagent merely to read the materials. Artifact preparation does not authorize submission.
+- 只评估就只返回发现，不编辑。局部写作不因读材料就强加导师、新轮次或子代理；准备产物不等于获准投稿。
 
-### Ways Dove may proceed
+### 具体做法
 
-- Read the target and claim evidence. Connect problem, gap, insight, method, evidence and limits; preserve certainty, causality, scope, quantitative qualifiers and novelty. Explain evidence-driven claim changes before revising. Address in-scope source, method, evidence or figure gaps rather than merely weakening prose; polished text does not establish a sound contribution.
-- Use `.dove/research/papers/library.json` and `library.md` to group related work by direction, checking claim support against `papers/<id>.md`. Verify citation metadata with Source before citing or exporting BibTeX; never invent authors, venue, date or identifiers. Export only verified fields. Explicit library accumulation or a later watch run maintains the library; merely reading it does not write it.
-- Write publishable findings, setup and limits plainly. Ask the author about missing material rather than putting 'not provided' into the manuscript. Follow reliable author style samples within accuracy and venue norms, and check effects on the whole argument without expanding local writing into a new research task.
-- For manuscript work, preserve the user's current authoritative manuscript format, identify its source and build or export path, and follow actual venue requirements. Only for a new manuscript, default to LaTeX when the venue accepts it; otherwise use the required format. Inspect the actual submission output, including compiled output for LaTeX, keep scholarly evidence distinct from venue-facing materials, and propagate authorized changes through the authoritative source.
-- Carry edits through the real build or export path and inspect the actual output before calling it current. Check compiled pages for overfull boxes, undefined references, float numbering and placement, and wide tables that need full width in two-column layouts. Measure body word count on the source without tables, captions or references against the target. Fix in-scope issues and report remaining material limits.
-- If a venue template needs missing fonts or packages, obtain them with permitted tools in a project-local texmf and point the build there, rather than silently substituting fonts or changing system installations.
+- 读目标文本与主张证据，连清问题、缺口、洞见、方法、证据和边界，保留确定性、因果、范围、数量限定和新意。证据要求改主张时先说明；处理范围内的来源、方法、证据或图缺口，不只弱化文字，文笔好不等于贡献成立。
+- 用 `.dove/research/papers/library.json` 和 `library.md` 按方向组织相关工作，据 `papers/<id>.md` 核主张支持。引用或导出 BibTeX 前用 Source 核元数据，只导已核字段，不编作者、场合、日期或标识。显式积累或后续 watch 才更新库，只读不写。
+- 用清楚可发表的语言写发现、设置和限制；缺材料问作者，不把‘未提供’塞进稿件。在准确和投稿规范内参考可靠作者样稿，检查整篇论证影响，不把局部写作扩成新研究。
+- 写作沿用用户当前权威稿件格式，找到源文件和构建／导出路径，遵守实际投稿要求。只有新稿且投稿方接受时默认 LaTeX，否则用要求格式。检查实际提交产物（LaTeX 要看编译结果），科研证据与投稿材料分开，已授权修改都落实到权威源文件。
+- 修改走实际构建／导出路径，看过输出才称当前稿。编译页检查溢出框、未定义引用、图表编号和位置、双栏宽表是否通栏；正文字数从源码算，排除表格、图注和参考文献，与目标核对。修范围内问题，说明剩余材料限制。
+- 模板缺字体或包时，用允许工具放在项目本地 texmf 并让构建使用，不静默换字体或改系统安装。
 
-### Using host tools
+### 使用宿主工具
 
-- Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way.
-- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
+- 直接用本机和 Dove 已配置的工具服务完成任务，不逐次申请。工具缺失或失败时说明并找可用替代；真实评测缺口立刻问用户，不拿替代数据充数。
+- 真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。

@@ -98,7 +98,7 @@ test("unchanged current guidance delivers its package version and fingerprints r
   assert.deepEqual(new Set(reads), new Set([MANIFEST]), "fingerprints come from the manifest; guidance files are not re-read on each prompt");
   const expected = userPromptSubmitOutput(event, guidance, { ...options, project: ROOT });
   assert.deepEqual(promptOutput(options), expected);
-  assert.ok(expected.hookSpecificOutput.additionalContext.startsWith(`Dove ${PACKAGE_VERSION} (disk guidance, not rule reload):`));
+  assert.ok(expected.hookSpecificOutput.additionalContext.startsWith(`Dove ${PACKAGE_VERSION}（磁盘指导，不代表已重新加载）：`));
   for (const fingerprint of guidance.fingerprints) assert.ok(expected.hookSpecificOutput.additionalContext.includes(fingerprint));
   assert.equal(inspectProjectIntegration(ROOT, options).status, "current");
   assert.equal(doctor(options).projectIntegration.healthy, true);
@@ -158,7 +158,7 @@ for (const state of ["changed", "missing"]) {
   test(`${state} guidance files still get the identity card context`, (t) => {
     const { files, resources, options } = memoryInstallation(t);
     const expected = promptOutput(options);
-    assert.match(expected.hookSpecificOutput.additionalContext, /disk guidance, not rule reload/u);
+    assert.match(expected.hookSpecificOutput.additionalContext, /磁盘指导，不代表已重新加载/u);
     for (const resource of resources.filter((entry) => entry.kind === "exclusive-file")) {
       const file = path.join(ROOT, resource.path);
       if (state === "changed") files.set(file, `${resource.content}\nLocal guidance edit\n`);
@@ -182,8 +182,8 @@ test("an older or newer installation still gets its context with one line naming
   for (const version of ["0.0.1", `${Number(PACKAGE_VERSION.split(".")[0]) + 1}.0.0`]) {
     files.set(MANIFEST, serializeProjectInstallationManifest({ ...manifest, package: { name: PACKAGE_NAME, version } }, { hostIds: PROJECT_HOST_IDS }));
     const context = promptOutput(options).hookSpecificOutput.additionalContext;
-    assert.ok(context.includes(`guidance is version ${version} and the CLI is ${PACKAGE_VERSION}`), version);
-    assert.match(context, /disk guidance, not rule reload/u);
+    assert.ok(context.includes(`项目指导为 ${version}，命令行为 ${PACKAGE_VERSION}`), version);
+    assert.match(context, /磁盘指导，不代表已重新加载/u);
   }
   files.set(MANIFEST, serializeProjectInstallationManifest({ ...manifest, hosts: ["dsh"] }, { hostIds: PROJECT_HOST_IDS }));
   assert.deepEqual(promptOutput(options), userPromptSubmitAttentionOutput(), "without Claude guidance there is no Claude context");

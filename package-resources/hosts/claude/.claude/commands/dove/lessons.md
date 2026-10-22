@@ -1,43 +1,43 @@
 ---
-description: "Read or preserve reusable guidance that improves judgment without turning routine progress into a second log."
-argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
+description: "读写可复用经验，改善判断，不另记一份进度日志。"
+argument-hint: "可选：请求、产物路径、投稿目标、约束或后续背景"
 ---
 
 # dove.lessons
 
-Read or preserve reusable guidance that improves judgment without turning routine progress into a second log.
+读写可复用经验，改善判断，不另记一份进度日志。
 
-## Request
+## 当前请求
 
 $ARGUMENTS
 
-## Examples
+## 示例
 
 - `/dove:lessons`
 
-## How Dove approaches this work
+## 怎么做
 
-These are flexible research considerations, not a required order or report template.
+按当前问题使用这些做法，不机械套步骤或报告模板；明确需要用户决定的地方仍先交给用户。
 
-### What this is for
+### 用途
 
-Read and preserve researcher-owned Lessons that improve future choices or prevent repeated mistakes.
+阅读和保存研究者自己的经验，改善未来选择、避免重犯。
 
-### When to use
+### 适用情况
 
-Use when experience can inform a current decision, broaden ideas or improve later work, including explicit requests to remember or reflect.
+经验可帮助当前判断、拓宽想法或改进后续工作，包括要求记住或反思时使用。
 
-### Scope and changes
+### 工作范围
 
-- Lessons are optional, fallible guidance, not package defaults, research evidence or completion certificates. Recording advice does not fix the current problem or replace action, and needs no IDs, frontmatter schema or application ledger.
+- 经验是可选、可错的指引，不是包默认、科研证据或完成证明。记录不能修当前问题或代替行动，不需 ID、前置字段或应用台账。
 
-### Ways Dove may proceed
+### 具体做法
 
-- Before the first consequential choice for the current question, or after a correction or recurring failure exposes a shared mistaken premise, check `.dove/research/lessons/LESSONS.md` once if it exists. Follow only relevant or plausibly useful links and reuse Lessons already read in the active context. Missing Lessons and ordinary deterministic local work have no Lessons prerequisite; reading creates no files.
-- Preserve a grounded reusable insight when it can improve research, collaboration or delivery, stating its basis, conditions, counterexamples and limits. For a transferable failure, explain the mistaken premise, still-valid earlier grounds and the better approach it informs. Reuse can refute a Lesson rather than strengthen it, so assess transfer value instead of counting applications.
-- Write in the narrowest suitable researcher-owned Lessons document within author write scope. Create a content-bearing `.dove/research/lessons/LESSONS.md` only for the first qualifying insight, not an empty index during reading. Separate a theme into a naturally named Markdown file only when useful, and update its ordinary summary link. Omit routine progress, transient status, one-off tool failures and non-transferable bugs.
+- 当前问题首次重要选择前，或纠正／反复失败暴露共同错误前提时，若有 `.dove/research/lessons/LESSONS.md` 就查一次，只读相关或可能有用链接，复用本上下文已读内容。缺经验文件和普通确定性局部任务不设前提，阅读不建文件。
+- 有依据且可改善研究、协作或交付的认识才保留，写依据、条件、反例和边界。可迁移失败说明错的前提、仍有效的旧依据和更好做法；复用也可能推翻经验，判断迁移价值，不计使用次数。
+- 写在作者可写范围内最具体合适的经验文档。首条合格认识才建有内容的 `.dove/research/lessons/LESSONS.md`，阅读时不建空索引；有用时才按自然主题拆 Markdown 并更新摘要链接。不记例行进展、临时状态、一次工具失败或不可迁移的 bug。
 
-### Using host tools
+### 使用宿主工具
 
-- Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way.
-- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
+- 直接用本机和 Dove 已配置的工具服务完成任务，不逐次申请。工具缺失或失败时说明并找可用替代；真实评测缺口立刻问用户，不拿替代数据充数。
+- 真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。

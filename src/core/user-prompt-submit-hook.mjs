@@ -32,7 +32,7 @@ export function inspectCurrentPromptGuidance(project, options = {}) {
   const manifest = readProjectInstallationManifest(project, { fsOps: options.fsOps, hostIds: PROJECT_HOST_IDS });
   const guidance = currentPromptGuidance(manifest);
   const cliVersion = options.packageVersion ?? PACKAGE_VERSION;
-  if (guidance.version !== cliVersion) guidance.note = `This project's Dove guidance is version ${guidance.version} and the CLI is ${cliVersion}; run dove update to sync when convenient.`;
+  if (guidance.version !== cliVersion) guidance.note = `项目指导为 ${guidance.version}，命令行为 ${cliVersion}；方便时用 dove update 同步，不影响当前请求。`;
   return guidance;
 }
 
@@ -67,7 +67,7 @@ export function userPromptSubmitOutput(payload, guidance, options = {}) {
       }
     };
   }
-  const context = `Dove ${guidance.version} (disk guidance, not rule reload):\n${guidance.fingerprints.join("\n")}\n${guidance.note ? `${guidance.note}\n` : ""}${identityCardContext(options.project, options)}\n${renderDoveResearchReanchor()}\nOn first use at these fingerprints, the current main agent must personally read the current rule and the two short summaries (author preferences and research quality); otherwise reuse them. Consult full references only for decision-relevant details. The card is context, not a substitute for the user's latest words.${userOriginalSourceContext(payload)}${hostMigrationContext(options.project, options)}`;
+  const context = `Dove ${guidance.version}（磁盘指导，不代表已重新加载）：\n${guidance.fingerprints.join("\n")}\n${guidance.note ? `${guidance.note}\n` : ""}${identityCardContext(options.project, options)}\n${renderDoveResearchReanchor()}\n本组指导摘要首次出现时，主会话亲自读当前规则、作者偏好和研究质量两份短摘要，此后复用；全文按需查。身份卡不能替代用户最新原话。${userOriginalSourceContext(payload)}${hostMigrationContext(options.project, options)}`;
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
@@ -80,7 +80,7 @@ export function userPromptSubmitAttentionOutput() {
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
-      additionalContext: "Dove could not read this project's installation, so no identity card is attached this turn; dove doctor shows why. Continue with the user's request."
+      additionalContext: "Dove 未读到本项目安装信息，本轮未附身份卡；dove doctor 可查看原因。仍按用户请求做事。"
     }
   };
 }

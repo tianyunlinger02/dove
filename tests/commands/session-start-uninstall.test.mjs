@@ -315,8 +315,8 @@ test("user-original source helper returns only a source hint without reading or 
   const before = { ...payload };
   const hint = userOriginalSourceContext(payload);
   assert.ok(hint.includes(JSON.stringify(transcript_path)));
-  assert.match(hint, /mentor.*last-read date\/range.*dated user originals.*not execution records/iu);
-  assert.match(hint, /current user's exact words.*not yet in the file/iu);
+  assert.match(hint, /导师要读上次已读范围之后的本人原话和日期.*不用执行记录替代/u);
+  assert.match(hint, /当前原话尚未入文件时直接附上/u);
   assert.doesNotMatch(hint, /CURRENT_USER_BODY_NOT_TO_COPY|PARENT_HISTORY_NOT_TO_COPY|\d{4}-\d{2}-\d{2}/u);
   assert.deepEqual(payload, before);
   assert.equal(read.mock.callCount(), 0);

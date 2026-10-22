@@ -1,45 +1,45 @@
 ---
-description: "Verify review concerns, write author responses and make evidence-backed revisions within the requested scope."
-argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
+description: "核审稿担忧，在要求范围内写回应、做有证据的修改。"
+argument-hint: "可选：请求、产物路径、投稿目标、约束或后续背景"
 ---
 
 # dove.rebuttal
 
-Verify review concerns, write author responses and make evidence-backed revisions within the requested scope.
+核审稿担忧，在要求范围内写回应、做有证据的修改。
 
-## Request
+## 当前请求
 
 $ARGUMENTS
 
-## Examples
+## 示例
 
 - `/dove:rebuttal`
 
-## How Dove approaches this work
+## 怎么做
 
-These are flexible research considerations, not a required order or report template.
+按当前问题使用这些做法，不机械套步骤或报告模板；明确需要用户决定的地方仍先交给用户。
 
-### What this is for
+### 用途
 
-Analyze review findings, draft author responses and implement requested revisions.
+分析审稿意见，写作者回应并完成要求的修改。
 
-### When to use
+### 适用情况
 
-Use when the user asks for a rebuttal, response or follow-through on review findings.
+用户要求反驳、答复或落实审稿意见时使用。
 
-### Scope and changes
+### 工作范围
 
-- Author-side responses and revisions remain within the requested scope and do not authorize submission or destructive actions.
+- 作者回应与修改限于请求范围，不授权投稿或破坏性操作。
 
-### Ways Dove may proceed
+### 具体做法
 
-- Read the review, its reviewed-material list and the current artifacts. Group findings with the same root cause and verify their grounds rather than accepting every objection. Prioritize material consequences, decide whether to accept, rebut, qualify or investigate, and preserve coverage of every material finding.
-- Use Source to verify new citations and claim support, and Experiment to obtain or interpret new results. Compare the original claim, reviewer interpretation, response and revised claim so certainty, causality, scope, quantitative qualifiers and novelty do not change silently. Shared mainline rules govern any proposed change of research direction.
-- Draft the response and make requested revisions to evidence, analysis, text, figures, tables, supplements or venue-facing files, not just response tone. Address shared causes when a local reply would leave the concern intact. Preserve accurate claims and counterevidence instead of seeking apparent acceptance through cosmetic changes or unjustified narrowing.
-- Use Draft's authoritative-source and build/export workflow to deliver inspected revisions. Apply Review's current-version rule before relying on an old recommendation, but do not rerun review merely for cosmetic or response-only edits. State whether each underlying concern is resolved, reduced or still limiting; a written reply is not resolution or reviewer acceptance.
-- Keep useful responses, revisions and unresolved issues with links to the originating review and changed artifacts. Preserve original reviewer returns separately from author commentary and do not overwrite them with summaries.
+- 读审稿、其已读材料清单和当前产物，共因问题合并处理，核实依据，不全盘接受。按实质影响排序，决定接受、反驳、限定或调查，每个重要问题都覆盖。
+- 用 Source 核新引文与主张，用 Experiment 取得或解释结果。比较原主张、审稿理解、回应和改后主张，不暗改确定性、因果、范围、数量限定与新意；拟改研究方向遵循共同主线规则。
+- 写回应并按要求改证据、分析、文字、图表、补充材料或投稿文件，不只改语气；局部答复解决不了就修共因。保留准确主张和反证，不靠表面改写或无依据收缩求接受。
+- 按 Draft 的权威源和构建／导出流程交检查过的修改。依赖旧审稿建议前按 Review 查当前版本，纯样式或只改回应不重审。逐项说明担忧已解决、减轻或仍有限制，写了答复不等于解决或审稿人接受。
+- 有用回应、修改和未解问题链接原审稿及改动产物；审稿原文与作者评论分开保留，不用摘要覆盖。
 
-### Using host tools
+### 使用宿主工具
 
-- Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way.
-- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
+- 直接用本机和 Dove 已配置的工具服务完成任务，不逐次申请。工具缺失或失败时说明并找可用替代；真实评测缺口立刻问用户，不拿替代数据充数。
+- 真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。

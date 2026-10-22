@@ -1,44 +1,44 @@
 ---
-description: "Develop methods from explanations of actual results and evaluate them through fair comparisons, informative diagnostics and trustworthy analysis."
-argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
+description: "解释真实结果以形成方法，用公平比较、有效诊断和可靠分析检验。"
+argument-hint: "可选：请求、产物路径、投稿目标、约束或后续背景"
 ---
 
 # dove.experiment
 
-Develop methods from explanations of actual results and evaluate them through fair comparisons, informative diagnostics and trustworthy analysis.
+解释真实结果以形成方法，用公平比较、有效诊断和可靠分析检验。
 
-## Request
+## 当前请求
 
 $ARGUMENTS
 
-## Examples
+## 示例
 
 - `/dove:experiment`
 
-## How Dove approaches this work
+## 怎么做
 
-These are flexible research considerations, not a required order or report template.
+按当前问题使用这些做法，不机械套步骤或报告模板；明确需要用户决定的地方仍先交给用户。
 
-### What this is for
+### 用途
 
-Develop, reproduce and evaluate methods with evidence that answers the research question.
+开发、复现和评价方法，让证据回答研究问题。
 
-### When to use
+### 适用情况
 
-Use for authorized development, diagnostics, confirmation, reproduction or analysis of existing results.
+已授权的开发、诊断、确认、复现或结果分析时使用。
 
-### Scope and changes
+### 工作范围
 
-- Read-only or design-only requests do not execute. Heldout data used for tuning is no longer independent final evidence.
+- 只读或只设计不执行；用于调参的保留集不再是独立最终证据。
 
-### Ways Dove may proceed
+### 具体做法
 
-- Inspect the relevant code, data, configuration, outputs and analysis before interpreting results. Read failures as evidence about where the current computation does not give the task what it requires, and derive the next method change and its expected effect from that explanation, following 从问题到方法 in RESEARCH_QUALITY.md. When a model cannot learn, test single-example overfitting to diagnose the learning mechanism rather than treating larger data or a larger evaluator as the first remedy. A diagnostic supports only the question it actually tests.
-- During development, keep code changes and diagnostic results traceable and choose tests that answer the key unknown, rather than requiring complete evaluation after every edit. Before formal comparison, result adoption or paper claims, evaluate the current method version under the full applicable protocol and all confirmed user metrics. Unmeasured effects remain unknown; a new version does not inherit an earlier version's passing conclusion.
-- Use complete-task comparisons against strong same-input alternatives to assess utility, and ablations or controlled comparisons to test attribution. Keep budgets, uncertainty and failure denominators visible, including missing or invalid outputs. Follow the shared experiment contract for method versions, fresh unused test draws for formal comparisons when methods change after test use, and final heldout confirmation.
-- The main executor repairs evaluator errors and immediately marks all affected results. Restore comparability for the current claim, necessary historical comparisons and strong baselines under the corrected protocol, reusing retained raw outputs before rerunning needed versions. Results not used in the current judgment may remain clearly labeled old-protocol history until needed; restore their comparability before using them again. Do not require every historical method to rerun first, mix protocols or hide valid negative evidence. Protocol repair alone is not a method-version change; ask the user if the correction changes the goal's meaning.
+- 解释结果前查相关代码、数据、配置、输出与分析。按 RESEARCH_QUALITY.md 的‘从问题到方法’，找出计算在哪一步没满足任务要求，由解释推出改法和预期；新方法／新核心模块先交三段方法设计让用户看过。模型学不会时，可用单例过拟合诊断学习机制，不先靠更多数据或更大评价器补救；诊断只回答它实际检验的问题。
+- 主线确认后先有官方指标、真实开发集和最强可得外部比较，缺口立刻问用户。开发保留代码与诊断记录，按关键未知选测试，不要求每次修改全评；每轮汇报方法结果仍须有真实评测数字，训练或合成分布不能替代。正式比较、采纳结果和论文主张对实际版本完成全部适用协议与用户指标，未测效果留未知，新版不继承旧版通过结论。
+- 完整任务对强同输入外部方法判断效用，消融和受控比较判断归因。预算、不确定性及失败、缺失、无效输出怎么算都写清；版本、测试后改方法要用新测试数据及最终独立保留集，按共同实验规则执行。
+- 主执行者修评价并立即标受影响结果；先复用原始输出，恢复当前主张、必要历史比较和强基线的可比性，再重跑必要版本。不用于当前判断的旧结果可标旧协议历史，用前再恢复，不要求先重跑全部历史，不混协议、不藏负证据。只修协议不等于换方法版本；若改变目标含义就问用户。
 
-### Using host tools
+### 使用宿主工具
 
-- Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way.
-- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
+- 直接用本机和 Dove 已配置的工具服务完成任务，不逐次申请。工具缺失或失败时说明并找可用替代；真实评测缺口立刻问用户，不拿替代数据充数。
+- 真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。

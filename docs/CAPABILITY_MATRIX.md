@@ -36,7 +36,7 @@ Fresh author contexts personally read the two short essentials; full companions 
 
 Researcher-owned records preserve goals, version-level evidence, briefs/results and mentor memory. Q&A is reused; summary-only material names its source and remains 未读全文. Notes/library are not managed software. Default-off `hostMigration` lets updates register software tasks for the host to apply at a quiet point, never stopping jobs or altering conclusions/user wording. See [records](USAGE.md#research-markdown) and [migration](USAGE.md#submission-readiness-and-maintenance).
 
-Call the mentor at round end, after two no-science rounds, on direction/story corrections, before route changes or when requested. Engineering failures count toward stagnation diagnosis, not automatic reauthorization: continue a credible next step within scope; ask the user when commitments or resources must change or no credible path remains. Use `dove mentor brief --project <root>` plus the trigger, with attributed opinions and relevant raw-artifact paths as materials. Engineering remains the executor's responsibility.
+主线确认后先搭真实评测；新方法实现前三段论证交用户看，并从既有 brief 投影到面板。每轮结束、方向纠正和换路线前调用导师；连续两轮没有新科研结果就停下问用户，工程、验证和修评价都计入。`dove mentor brief` 先送原话摘录和明确提供的原始文本产物，再列宿主简报；导师先答实质进展和工作性质，再核对方法依据及过去纠正。主会话保留科研判断。
 
 Cross-round judgment uses a fresh context. The mentor may retrieve sources; the paper reviewer only reads supplied current manuscript materials through Read/Grep/Glob. Neither executes nor edits. Every mentor checks tracking configuration, unjudged impacts and overdue weekly scans, independently of rounds.
 

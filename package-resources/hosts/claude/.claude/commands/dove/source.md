@@ -1,46 +1,46 @@
 ---
-description: "Find and inspect sources, verify citation identities and claims, and use the findings to improve research decisions."
-argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
+description: "查读来源、核引文与主张，把发现用到研究决定中。"
+argument-hint: "可选：请求、产物路径、投稿目标、约束或后续背景"
 ---
 
 # dove.source
 
-Find and inspect sources, verify citation identities and claims, and use the findings to improve research decisions.
+查读来源、核引文与主张，把发现用到研究决定中。
 
-## Request
+## 当前请求
 
 $ARGUMENTS
 
-## Examples
+## 示例
 
 - `/dove:source`
 
-## How Dove approaches this work
+## 怎么做
 
-These are flexible research considerations, not a required order or report template.
+按当前问题使用这些做法，不机械套步骤或报告模板；明确需要用户决定的地方仍先交给用户。
 
-### What this is for
+### 用途
 
-Discover, retrieve, inspect and verify sources that can change a research decision or answer a specified question.
+发现、获取、阅读和核实能改变研究决定或回答具体问题的来源。
 
-### When to use
+### 适用情况
 
-Use for literature discovery, source reading, citation identity checks, claim verification, related-work comparison or systematic synthesis.
+查文献、读来源、核引文身份和主张、比较相关工作或系统综述时使用。
 
-### Scope and changes
+### 工作范围
 
-- Search snippets, abstracts, metadata and absent search results do not establish full-text inspection or absence of overlap. When a retrieval tool is missing or failing, get the source another way (WebFetch, the arXiv or Crossref API, or a direct download with curl) and say what you actually read.
+- 片段、摘要、元数据或没搜到结果，都不能证明读过全文或不存在重合。工具缺失或失败就用 WebFetch、arXiv／Crossref API、curl 下载等方式取来源，说清实际读到什么。
 
-### Ways Dove may proceed
+### 具体做法
 
-- Start from the user's question and relevant existing notes. Distinguish discovery, verified citation identity, full-text inspection and claim support; none substitutes for the next. For citation identity, use direct DOI lookup before fuzzy title search, checking title, authors, year and venue/version. Report conflicts, missing entries and unknowns.
-- For body-level details, read the full text with 1–5 concrete questions, using `.dove/research/papers/<id>.md` and the cumulative note format in RESEARCH_QUALITY.md. Reuse answered questions rather than rereading; append only new answers with section, page or equation locations, preserving earlier ones. Check-only work returns answers without creating notes or editing manuscripts.
-- Split compound claims and mark each supported, contradicted, or uncovered, with the relevant passage, formula, algorithm or code and its limits. Use the cumulative notes for novelty and overlap judgments, link affected artifacts and recommend wording matching actual support, not support for only part of a sentence.
-- Search real neighbors across fields at equal contribution granularity, following the shared topic guidance when selecting ideas. Inspect decisive overlap and use findings to develop mechanisms, candidates and controls, not just deduct novelty. Apply findings to designs or claims; stop when retrieval would not change the decision.
-- For explicit systematic reviews or meta-analysis, define the question, search scope and eligibility. Use applicable PRISMA tracking, bias and certainty assessment; pool only comparable effects. Ordinary searches need no such machinery. Update `sources/SOURCES.md` only when useful links or synthesis change.
+- 从用户问题和已有笔记出发，分清发现来源、核实引文身份、读正文、证明主张，互不替代。引文先查 DOI 再模糊搜标题，核对标题、作者、年份、场合／版本，报告冲突、缺失与未知。
+- 正文细节带 1–5 个具体问题读全文，按 RESEARCH_QUALITY.md 在 `.dove/research/papers/<id>.md` 累积问答。复用旧答案，只补新答并标章节、页码或公式，保留旧答；只核查的任务返回答案，不建笔记或改稿。
+- 拆开复合主张，逐项标支持、反驳或未覆盖，附相关段落、公式、算法或代码及限制。新意和重合判断用累积笔记，链接受影响产物，建议与实际支持一致的表述，不拿半句支持整句。
+- 跨领域按相同贡献粒度找真实近邻，选题时遵循共同指引；查决定性重合，也用发现形成机制、候选和对照，不只扣创新。落实到设计或主张，继续检索已不会改变决定就停。
+- 明确做系统综述或元分析时才定义问题、检索范围、纳排标准，按适用 PRISMA 记录、偏倚与证据把握评估，只合并可比效应。普通检索不加这套流程；有用链接或综合认识改变时才更新 `sources/SOURCES.md`。
 
-### Using host tools
+### 使用宿主工具
 
-- Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way.
-- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
-- Use WebSearch for discovery, dove-paper-search for DOI metadata and academic papers, and hosted exa or WebFetch for ordinary webpages and known URLs.
+- 直接用本机和 Dove 已配置的工具服务完成任务，不逐次申请。工具缺失或失败时说明并找可用替代；真实评测缺口立刻问用户，不拿替代数据充数。
+- 真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。
+- WebSearch 用于发现来源，dove-paper-search 查 DOI 元数据和论文，普通网页与已知链接用托管 exa 或 WebFetch。

@@ -15,18 +15,18 @@ export const PAPER_SEARCH_MCP_FRAGMENT = Object.freeze({
 export function renderPaperSearchSupportSkill() {
   return `---
 name: dove-paper-search
-description: Search, verify, download and read academic papers through the pinned dove-paper-search MCP when scholarly material matters to the current work.
+description: 当前工作需要论文时，用 dove-paper-search 检索、核对、下载并读正文。
 user-invocable: false
 ---
 
-# Dove Paper Search
+# Dove 论文检索
 
-Use the pinned \`dove-paper-search\` MCP for academic paper discovery, metadata, download and full-text reading.
+用 \`dove-paper-search\` MCP 找论文、核对信息和读正文。
 
-- Choose the sources that fit the question rather than querying every index.
-- When a DOI matters, use \`get_crossref_paper_by_doi\` before a fuzzy title search, and compare DOI, title, authors, year and venue or version.
-- Metadata is not the paper. Read the actual text before saying a paper supports a claim, and say whether you read the full text, the abstract or only metadata.
-- For full text, prefer source-native open downloads; when \`download_with_fallback\` is needed, pass \`use_scihub: false\`.
-- When the MCP is missing or failing, get the paper another way: the arXiv or Crossref API, the publisher or OpenReview page, or a direct PDF download with \`curl\`, then read it.
+- 按问题选来源，不遍历所有索引。
+- 需要 DOI 时先用 \`get_crossref_paper_by_doi\`，再模糊搜标题；核对标题、作者、年份和版本。
+- 元数据不等于论文。判断某篇支持主张前读实际正文，说清读了全文、摘要还是元数据。
+- 优先用来源自身的开放下载；需要 \`download_with_fallback\` 时传 \`use_scihub: false\`。
+- 工具不可用就用 arXiv／Crossref API、出版方、OpenReview 或 \`curl\` 下载 PDF 后读，不把检索故障当作没有论文。
 `;
 }

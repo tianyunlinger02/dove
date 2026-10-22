@@ -15,6 +15,7 @@ test("research bootstrap indexes researcher-owned records without prepopulating 
   assert.equal(RESEARCH_DEFAULT_PATHS.roundsDirectory, ".dove/research/rounds");
   const overview = RESEARCH_DEFAULT_DOCUMENTS[0].content;
   for (const name of ["IDENTITY.md", "EVAL.md", "rounds/", "MENTOR_NOTES.md"]) assert.ok(overview.includes(name));
-  assert.match(overview, /user confirms Mainline.*standards.*parallel candidates.*user to choose before method implementation/iu);
-  assert.match(overview, /short history index.*leave existing.*in place/iu);
+  assert.match(overview, /选题先读标准.*候选交用户选主线.*不先实现方法/u);
+  assert.match(overview, /主线确认后先搭真实评测.*三段论证交用户看.*连续两轮无科研结果就停下问用户/u);
+  assert.match(overview, /短历史索引.*旧 missions、experiments 和 claims 留在原处/u);
 });

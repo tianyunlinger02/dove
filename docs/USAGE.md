@@ -77,27 +77,29 @@ The mentor reads genuine user wording from the supplied host source and date/ran
 
 ### Identity card
 
-Keep `IDENTITY.md` within **1200 characters**, in this order:
+Keep `IDENTITY.md` short enough to read at a glance, roughly 1200 characters. Its research state is about 300 characters of plain Chinese, not internal codes:
 
 ```text
 Current round: rounds/NNN-brief.md
 Round status: ongoing / paused / completed
 Mainline:
+Research state:
+Method design: rounds/NNN-brief.md
+Core capability:
 Target tier:
 Deployment inputs/outputs:
 Completion:
 User restrictions:
 Recent corrections:
-Research state:
 ```
 
 Mainline follows the round labels for the existing reader. Ask once for a missing conference/journal target tier. Restrictions include quotation, date/source, original-versus-relayed provenance and long-term-versus-task scope; a relay or task limit is not a standing restriction. Update research state after important results and apply corrections to action. Method details and rejected families belong in briefs or mentor notes.
 
-Hooks show the UTF-8-safe first 4096 bytes of an overlong card and request shortening, not report it missing. Repeated cross-project corrections may prompt one question about global author guidance, never an automatic preference edit.
+Hooks place the recorded research state first, even when it occurs after a long card prefix, then show the bounded card without repeating that state. They do not summarize or rewrite research. Overlong content requests plain-language shortening; repeated cross-project corrections may prompt a Dove guidance change, never an automatic preference edit.
 
 ### Evaluation table
 
-Begin `EVAL.md` with a short Completion reference to the script, protocol and all user metrics. Use one row per method version:
+After mainline confirmation, first make official metrics run on a real development set, not a synthetic training-distribution slice, and reproduce the strongest available external method or at least match its reported figures. Report missing resources or blocked evaluation immediately. Each round's method results carry numbers from that evaluation; synthetic/training results are development signals. Begin `EVAL.md` with its script, protocol and user metrics. Use one row per method version:
 
 ```markdown
 | Date | Version/round | Protocol/split | Measurements | Unseen data/train-test gap | Conclusion | Artifacts |
@@ -116,6 +118,20 @@ Each round has one `rounds/NNN-brief.md` of **at most 2000 characters** and one 
 
 A brief names author (mentor/user/external), version and dated user-source range. User instructions take priority; save mentor text verbatim and identify replacement authors/reasons. Explain benefit, grounds, unknowns, action and decision impact, with relevant controls, inputs, budgets and predictions—not invented thresholds or exhaustive prerequisites.
 
+Before implementing a new method or core module, show the user the three-part rationale below. Save it in the existing brief and point `IDENTITY.md`'s `Method design` at that brief; the dashboard reads the same text under the mainline. Later repairs keep the reference rather than copying a design into every round. User replies are actual quoted words with date/source, never inferred from a card or an ongoing round. Ordinary fixes and evaluation repairs do not repeat this step.
+
+```markdown
+## 方法设计
+### 要解决什么问题
+Specific real-data failure and evidence.
+### 外部方法为什么不行
+Named paper, mechanism and evidence of the gap.
+### 我们的改法为什么能修
+Proposed fix, predicted outcome, and success/failure criteria.
+### 用户答复
+Actual user words after seeing the rationale, with date/source; absent means unknown.
+```
+
 Results use four fixed headings:
 
 1. `Changes and version`
@@ -123,7 +139,7 @@ Results use four fixed headings:
 3. `Prediction versus actual`
 4. `Objections to this brief / factual corrections`
 
-State values, missing measurements and blockers; the next mentor answers objections first. A valid negative result can add knowledge; a plan, launch, smoke test or engineering check cannot. Engineering and verification failures count toward the no-science limit.
+State values, missing measurements and blockers; the mentor addresses objections after its opening research-progress judgment. A valid negative result can add knowledge; a plan, launch, smoke test or engineering check cannot. Engineering and verification failures count toward the no-science limit.
 
 Keep method changes and measurements version-traceable, including coordinated changes and useful old versions for ablation. Development first uses diagnostics that answer the key unknown; formal comparison, result adoption and paper claims require the applicable protocol, all user metrics, fair strong baselines and unseen-data evidence. Unmeasured effects of a new version remain unknown, not inherited passes. After test use, formal comparison of a changed method needs a fresh draw unused in development or previous tests and same-set baselines, not reshuffled old data. Only final heldout confirmation declares claim, controls, data and metrics beforehand and uses heldout once.
 
@@ -131,17 +147,15 @@ Keep method changes and measurements version-traceable, including coordinated ch
 
 ### Mentor judgment and memory
 
-Call `dove-mentor` at round end, after two consecutive rounds without scientific results, on user direction/story corrections, before route changes or when requested. Two no-science rounds call for an independent diagnosis; the count itself does not revoke authorization. Continue a credible next step within scope, and ask the user when commitments, fixed methods, completion meaning or resources must change, or no credible path remains. Report route changes with old route, new route and reason.
+Call `dove-mentor` at round end, on user direction/story corrections, before route changes or when requested. After two consecutive rounds without new scientific results, stop and ask in one plain sentence whether to continue the current method (with reasons), change methods or change direction. Engineering, verification and evaluator repairs count as no-science rounds; an informative negative finding may be scientific progress. Do not autonomously launch another round while that choice is pending.
 
-Each cross-round judgment uses a fresh native context; 2–3 clarifications may stay within one judgment. Use `dove mentor brief --project <root>` for the call body: it lists current materials and five questions. Add only relevant, author-labeled opinions and new raw-artifact paths as materials, not executor task instructions; long or unsigned opinions are noted rather than rejected. Supply current user requests verbatim with sources. For another call within a round, identify its trigger in the template. The questions are:
+Use a fresh native context and the body from `dove mentor brief --project <root>` plus its trigger. It now places user-original excerpts and bounded raw text from explicitly supplied `--artifact` files before executor summaries; full paths remain available to read. USER_ORIGINALS is an excerpt index, not a complete conversation. Current `--user-original` text is preserved; `--user-source` is a source path, not an automatically read private session. EVAL, briefs and attributed opinions provide navigation, not the mentor's conclusion frame.
 
-1. Is the direction faithful to the user's original goal and the identity card's core capability?
-2. Are recent rounds building general capability or repeated patches?
-3. What remains to the goal and target tier?
-4. What should the next round do, and why?
-5. What is new relative to the closest prior work, and is the contribution sufficient for the target tier?
+The mentor first answers:
+1. If asked what substantive research progress occurred, what is the honest one-sentence answer?
+2. Did recent work test the core method, or repair engineering/evaluation and build systems?
 
-The executor owns engineering, equivalence, acceleration, parameters and evaluator repairs. The mentor judges direction, scientific adequacy and time spent. It may retrieve papers/web sources but does not compute, edit or read private author preferences.
+Then it checks the current three-part rationale against raw results, past USER_ORIGINALS corrections, mainline capability and nearest prior work. Main-session research judgment remains with the main session; subagents receive specific bounded jobs. Validation matches the decision, not routine hashes, fingerprints, bitwise equivalence or release-style research checks.
 
 The mentor returns its own note of **at most 1000 characters**: judgments, predictions versus outcomes, rejected families and reasons, concerns and user-source range read. The main session appends it verbatim to `MENTOR_NOTES.md`. Above **6000 characters**, the mentor merges it to replacement text of **at most 3000**; the executor does not author this memory.
 

@@ -351,6 +351,9 @@ td.num { font-variant-numeric: tabular-nums; }
 .hero .goal { font-size: 17px; font-weight: 600; margin: 2px 0 8px; }
 .hero .facts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 12.5px; }
 .hero .state { margin-top: 10px; font-size: 13.5px; }
+.method-design .argument { margin-top: 14px; }
+.method-design h3 { font-size: 13.5px; margin: 0 0 4px; }
+.method-design .text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .now { border: 1px solid var(--accent); border-radius: 12px; background: var(--panel); padding: 14px 16px; box-shadow: var(--shadow); }
 .now .what { font-size: 15.5px; font-weight: 600; margin: 4px 0 10px; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
@@ -616,6 +619,19 @@ function intentSection(p) {
   if (!intent) return '<div class="note">尚未读到长期意图对照；下次导师调用时核对笔记并补充。</div>';
   return '<details class="card" data-intent="' + esc(p.root) + '"' + (open.get(p.root + "#intent") === "open" ? " open" : "") + '><summary>长期意图 · ' + esc(intent.date || "未注明日期") + (intent.due ? " · 对照到期" : "") + '</summary><div class="md">' + md(intent.text) + '</div></details>';
 }
+function methodDesignSection(p) {
+  const design = p.methodDesign;
+  if (!design) return '<section><h2>方法设计</h2><div class="card note">尚未记录当前方法设计。未写 Method design 引用时，只查看当前轮次说明，不沿历史查找。<div>尚未记录用户看过后的答复。</div></div></section>';
+  const labels = [["problem", "要解决什么问题"], ["externalMethods", "外部方法为什么不行"], ["change", "我们的改法为什么能修"]];
+  let html = '<section class="method-design"><h2>方法设计 <span class="sub">只展示记录，不自动认定用户已同意</span></h2><div class="card"><div class="note text">原文来源：' + esc(design.source) + '</div>';
+  if (design.error) html += '<div class="note">' + esc(design.error) + '</div>';
+  for (const [key, label] of labels) {
+    html += '<div class="argument"><h3>' + label + '</h3>' + (design[key] ? '<div class="text">' + esc(design[key]) + '</div>' : '<div class="note">缺口：这一段还没写，论证不完整。</div>');
+    html += '</div>';
+  }
+  html += '<div class="argument"><h3>用户答复</h3>' + (design.userReply ? '<div class="text">' + esc(design.userReply) + '</div>' : '<div class="note">尚未记录用户看过后的答复。</div>') + '</div>';
+  return html + '</div></section>';
+}
 function renderView() {
   const view = document.getElementById("view");
   const p = data.projects.find((item) => item.root === selected);
@@ -627,6 +643,7 @@ function renderView() {
     (p.coreCapability ? '<div class="state"><span class="note" style="margin-right:6px">核心能力</span>' + esc(p.coreCapability) + "</div>" : '<div class="state"><span class="note" style="margin-right:6px">核心能力</span>身份卡里还没有写。</div>') +
     '<div class="facts">' + statusChip(p.roundStatus) + (p.targetTier ? "<span>目标档次：" + esc(p.targetTier) + "</span>" : "") + "<span>共 " + p.rounds.length + " 轮</span><span>最近更新 " + ago(p.lastActivity) + "</span></div>" +
     (p.researchState ? '<div class="state"><span class="note" style="margin-right:6px">研究现状</span>' + esc(p.researchState) + "</div>" : "") + "</div>";
+  html += methodDesignSection(p);
   html += '<section><h2>长期意图 <span class="sub">导师最近一次对照</span></h2>' + intentSection(p) + "</section>";
   html += nowSection(p, running, p.rounds[0]);
   html += trajectorySection(p, newestDone);

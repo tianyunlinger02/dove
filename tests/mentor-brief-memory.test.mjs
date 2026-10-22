@@ -9,11 +9,11 @@ const ROOT = "/memory/dove/project";
 const RESEARCH = ".dove/research";
 const WATCH = `${RESEARCH}/watch`;
 const QUESTIONS = [
-  "1. 相对用户原话和身份卡的核心能力，方向对不对？当前在做的问题和原问题之间的连接检验过吗，做成它原问题能改善多少？",
-  "2. 这几轮是在建立通用能力，还是反复打补丁？",
-  "3. 离用户目标和目标档次还差什么？",
-  "4. 下一轮该做什么？从真实结果和失败能形成什么解释，由此推出怎样的方法改动，预期看到什么？",
-  "5. 相对最接近的已有工作，新在哪里？按目标档次的审稿人看，贡献够不够？"
+  "1. 如果用户现在问‘这段时间取得了什么实质科研进展’，诚实的一句话回答是什么？",
+  "2. 最近的工作是在检验核心方法，还是在修工程、修评价、搭系统？",
+  "3. 对照 brief 的“方法设计”：问题及真实数据证据、外部方法的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？",
+  "4. 对照 USER_ORIGINALS.md 中用户过去的纠正，当前做法有没有重犯？",
+  "5. 方向还服务用户的核心目标吗？相对最接近的工作新在哪里、离目标档次差什么，下一步最值得检验什么？"
 ].join("\n");
 
 // Every project byte lives in this Map. No disk fixtures or real project reads.
@@ -106,7 +106,7 @@ test("materials use actual paths, recent numbered rounds, and verbatim user fiel
     [`${RESEARCH}/rounds/010-brief.md`]: "latest brief",
     [`${RESEARCH}/rounds/011-result.md`]: "latest result",
     [`${RESEARCH}/rounds/execution-dialogue.md`]: "do not read execution dialogue",
-    [artifact]: "raw data stays at path",
+    [artifact]: "method,real_dev_score\nbaseline,0.62\nours,0.58\n",
     [source]: "private execution conversation"
   });
   const before = [...memory.files];
@@ -124,35 +124,98 @@ test("materials use actual paths, recent numbered rounds, and verbatim user fiel
   assert.ok(!brief.includes("002-brief.md"));
   assert.ok(!brief.includes("002-result.md"));
   assert.ok(!brief.includes("measure-18"));
-  assert.ok(brief.includes("measure-19"));
-  assert.ok(brief.includes("measure-30"));
+  assert.ok(!brief.includes("measure-19"));
+  assert.ok(!brief.includes("measure-30"), "executor EVAL remains a pointer, not the conclusion frame");
+  assert.ok(brief.includes("> baseline,0.62\n> ours,0.58"));
+  assert.ok(brief.indexOf("原始结果文件与数字") < brief.indexOf("宿主记录与目录"));
   assert.ok(brief.includes(path.join(ROOT, artifact)));
   assert.ok(brief.includes("/external/new-output.json"));
   assert.ok(!brief.includes("arbitrary executor task"));
   assert.ok(!brief.includes("custom template"));
   assert.ok(brief.endsWith(`${QUESTIONS}\n`));
   const opened = memory.reads.map(({ file }) => path.relative(ROOT, file));
-  assert.ok(opened.every((file) => file === `${RESEARCH}/EVAL.md` || file === `${RESEARCH}/MENTOR_NOTES.md` || /^\.dove\/research\/rounds\/\d+-brief\.md$/u.test(file)));
+  assert.ok(opened.includes(artifact), "explicit artifacts are bounded source attachments");
+  assert.ok(opened.every((file) => file === artifact || file === `${RESEARCH}/MENTOR_NOTES.md` || /^\.dove\/research\/rounds\/\d+-brief\.md$/u.test(file)));
   assert.ok(!memory.inspected.includes(source), "source pointer is not even stat-ed");
-  assert.ok(!memory.inspected.includes(path.join(ROOT, artifact)), "raw artifacts are path-only attachments");
+  assert.ok(memory.inspected.includes(path.join(ROOT, artifact)), "only explicit artifact paths are inspected");
   assert.deepEqual([...memory.files], before);
 });
 
-test("large EVAL reads only a bounded tail with recent lines and intact UTF-8", (t) => {
-  const evaluation = `${RESEARCH}/EVAL.md`;
+test("large original results get a bounded sourced tail instead of an EVAL conclusion", (t) => {
+  const artifact = "outputs/results.csv";
   const memory = memoryFiles(t, {
-    [evaluation]: `${"旧测量行，不应读完整历史。\n".repeat(30000)}${Array.from({ length: 20 }, (_, index) => `最新-${index} | ${"观测".repeat(300)}\n`).join("")}`
+    [`${RESEARCH}/EVAL.md`]: "宿主结论：方法取得重大突破。",
+    [artifact]: `${"旧测量行，不应读完整历史。\n".repeat(30000)}${Array.from({ length: 20 }, (_, index) => `最新-${index} | ${"观测".repeat(300)}\n`).join("")}`
   });
-  const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps });
-  const reads = memory.reads.filter(({ file }) => file.endsWith("/EVAL.md"));
+  const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps, artifact: [artifact] });
+  const reads = memory.reads.filter(({ file }) => file.endsWith("/results.csv"));
   assert.equal(reads.length, 1);
-  assert.equal(reads[0].length, 16384);
+  assert.equal(reads[0].length, 8192);
   assert.ok(reads[0].position > 0);
+  assert.match(brief, /末尾片段，读取字节 \d+–\d+ \/ \d+；起首可能是残行，不代表全文/u);
   assert.ok(brief.includes("最新-19"));
   assert.ok(!brief.includes("最新-0 |"));
   assert.ok(!brief.includes("旧测量行"));
+  assert.ok(!brief.includes("重大突破"));
+  assert.ok(!memory.reads.some(({ file }) => file.endsWith("/EVAL.md")));
   assert.ok(!brief.includes("�"));
-  assert.ok(Buffer.byteLength(brief) < 10000);
+  assert.ok(Buffer.byteLength(brief) < 15000);
+});
+
+test("user wording, correction excerpts and raw numbers precede host framing without opening sessions", (t) => {
+  const originals = ".dove/install/USER_ORIGINALS.md";
+  const source = "/private/host/session.jsonl";
+  const index = "# 用户本人原话汇总\n- 2026-10-19 10:00 · 本人 · 你这感觉变成工程，不是科研了啊\n- 2026-10-20 11:00 · 转述 · 这里只是代传，不是用户确认\n";
+  const original = "先回答我。\n\n保留  原来的空格。";
+  const raw = "outputs/results.json";
+  const memory = memoryFiles(t, {
+    [originals]: index,
+    [raw]: `{\"real_dev_baseline\":0.72,\"real_dev_ours\":0.61,\"next_file\":\"${source}\"}`,
+    [`${RESEARCH}/EVAL.md`]: "宿主称结果完全成功",
+    [source]: "PRIVATE_CONVERSATION_NOT_TO_READ"
+  });
+  const brief = renderMentorBrief(ROOT, {
+    fsOps: memory.fsOps, userOriginal: original, userSource: source, since: "2026-10-20", until: "2026-10-22",
+    userOriginals: { path: originals, own: 1, relay: 1, directories: ["/private/session-directory"], pendingBytes: 1 },
+    artifact: [raw], trigger: "执行者建议直接继续"
+  });
+  assert.ok(brief.includes(original.split("\n").map((line) => `> ${line}`).join("\n")), "direct supplied wording stays verbatim");
+  assert.ok(brief.includes(index.split("\n").map((line) => `> ${line}`).join("\n")));
+  assert.match(brief, /索引性摘录.*每条最多 700 字.*不是完整原话/u);
+  assert.match(brief, /尚未整理完/u);
+  assert.match(brief, /日期范围仅按输入展示/u);
+  assert.ok(brief.indexOf(original.split("\n")[0]) < brief.indexOf("你这感觉变成工程"));
+  assert.ok(brief.indexOf("你这感觉变成工程") < brief.indexOf("real_dev_baseline"));
+  assert.ok(brief.indexOf("real_dev_baseline") < brief.indexOf("执行者建议直接继续"));
+  assert.ok(!brief.includes("完全成功"));
+  assert.ok(!brief.includes("PRIVATE_CONVERSATION_NOT_TO_READ"));
+  assert.ok(!memory.inspected.includes(source));
+  assert.ok(!memory.inspected.includes("/private/session-directory"));
+});
+
+test("raw attachments are bounded explicit files, not recursive data or claimed reads", (t) => {
+  const artifacts = ["outputs/a.csv", "outputs", "outputs/binary.bin", "/external/missing.csv", "outputs/extra.csv"];
+  const memory = memoryFiles(t, {
+    [artifacts[0]]: "baseline,0.55\nours,0.48\n",
+    "outputs/not-requested.csv": "NOT_REQUESTED_SECRET",
+    [artifacts[2]]: "binary\0payload",
+    [artifacts[4]]: "EXTRA_NOT_READ",
+    ".dove/install/USER_ORIGINALS.md": `${"old excerpt\n".repeat(1000)}- 2026-10-22 · 本人 · 先回答有没有实质科研进展\n`
+  });
+  const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps, artifact: artifacts });
+  assert.match(brief, /baseline,0.55/u);
+  assert.ok(brief.includes(`来源：\`${path.join(ROOT, artifacts[0])}\`（全文，`));
+  assert.match(brief, /不是文件；未附正文/u);
+  assert.match(brief, /二进制内容，未展开/u);
+  assert.match(brief, /缺失；未附正文/u);
+  assert.match(brief, /超出本次展开数量，仅列路径/u);
+  assert.match(brief, /先回答有没有实质科研进展/u);
+  assert.match(brief, /末尾片段，读取字节/u);
+  assert.ok(!brief.includes("NOT_REQUESTED_SECRET"));
+  assert.ok(!brief.includes("EXTRA_NOT_READ"));
+  assert.ok(!memory.inspected.includes(path.join(ROOT, artifacts[4])));
+  assert.ok(!memory.inspected.includes(path.join(ROOT, "outputs/not-requested.csv")));
+  assert.ok(memory.reads.every(({ length }) => length <= 8192));
 });
 
 test("watch summaries exclude explicit historical judgments and show latest config and scan", (t) => {

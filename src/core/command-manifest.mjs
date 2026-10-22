@@ -50,13 +50,13 @@ export const HOST_DEFINITIONS = {
 
 const DEFAULT_HOST_GUIDANCE = Object.freeze({
   common: Object.freeze([
-    "Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way."
+    "直接用本机和 Dove 已配置的工具服务完成任务，不逐次申请。工具缺失或失败时说明并找可用替代；真实评测缺口立刻问用户，不拿替代数据充数。"
   ]),
   claude: Object.freeze([
-    "Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session."
+    "真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。"
   ]),
   dsh: Object.freeze([
-    "Use project-local files and the tools exposed by the current DSH run."
+    "使用项目文件和本次 DSH 提供的工具。"
   ])
 });
 
@@ -76,85 +76,85 @@ function capabilityContract(options) {
 
 function contract(slug) {
   if (slug === "research") return capabilityContract({
-    ambientParticipation: "For topic exploration, follow the shared selection process; for a confirmed mainline or authorized bounded task, advance the current goal through substantive work within scope.",
-    purpose: "Help the user choose a research direction or advance the confirmed mainline through substantive method work.",
-    when: "Use for topic exploration, method development or continuation of existing research.",
+    ambientParticipation: "选题按共同流程找候选；已确认主线或已授权的具体任务，直接做范围内的实质工作。",
+    purpose: "帮用户选研究方向，或在确认的主线上取得实质进展。",
+    when: "选题、形成方法或接续已有研究时使用。",
     actions: [
-      "When selecting a direction, apply the shared topic-selection process and RESEARCH_QUALITY.md's sourced gaps, cross-domain mechanism search and adversarial candidate review. Use Source for question-led full-text notes and link candidate cards to that evidence.",
-      "After confirmation, diagnose key unknowns, design the core method, write the proposal when it closes, and run formal attempts once the user agrees. Scale must answer the question. Use Experiment to distinguish development diagnostics from formal comparisons and restore required comparability after evaluator repair.",
-      `Follow the shared research contract for mainline continuity, round records and ${DOVE_RESEARCH_MENTOR_NAME}'s direction-only judgment, including its triggers, fixed questions and note flow.`
+      "选题按共同流程和 RESEARCH_QUALITY.md 找有来源的缺口、跨域机制，检查候选的最强反对；用 Source 带问题读正文，候选卡链接证据。",
+      "主线确认后先搭官方指标、真实开发集和最强可得外部比较，缺口立刻问用户。诊断关键未知，新方法或新核心模块先交三段方法设计让用户本人看过，按真实答复开工；修 bug、修评价不受此关口。方法闭合后写开题，用户同意后做正式尝试。规模要能回答问题，用 Experiment 区分开发诊断和正式比较，修评价后恢复必要可比性。",
+      `主线接续、轮次记录和 ${DOVE_RESEARCH_MENTOR_NAME} 的方向判断，遵循共同研究规则中的触发时机、固定问题和笔记流；连续两轮无新科研结果就停下问用户。`
     ],
     boundaries: [
-      "During topic selection before the user's mainline choice, do not implement candidate methods; undertake only diagnostics allowed by the topic criteria. These selection-only limits do not reopen selection for authorized implementation, repair or reproduction. Bounded questions stay bounded, and read-only or design-only requests do not authorize execution."
+      "用户选主线前不实现候选方法，只做选题标准允许的诊断；已授权实现、修复和复现不因此重开选题。普通问题保持范围，只读或只设计请求不执行。"
     ]
   });
   if (slug === "status") return capabilityContract({
-    ambientParticipation: "Explain what has been made, whether the core is demonstrated, what blocks progress and which round is underway without starting new work.",
-    purpose: "Give a concise, evidence-grounded account of the current research state.",
-    when: "Use when the user asks about progress or what remains unresolved.",
+    ambientParticipation: "只说明做成什么、核心是否证实、卡在哪里和当前轮次，不启动新工作。",
+    purpose: "简洁、据实说明当前研究状态。",
+    when: "用户问进展或未解决问题时使用。",
     actions: [
-      "Read IDENTITY.md, the last few EVAL.md rows and the current round brief. Give a concise account of what we have made, whether the core is demonstrated, what blocks it and which round is underway, with the evidence needed for the user's judgment. Include actual values when useful and leave missing evidence unknown."
+      "读 IDENTITY.md、EVAL.md 最近几行和本轮说明，先直接回答用户，再说做了什么、真实数据结果、意味着什么和下一步。说明核心能力是否证实、卡点和当前轮次，数字解释含义，缺证据留未知。"
     ],
-    boundaries: ["Status is read-only and does not run research or update documents."]
+    boundaries: ["状态查询只读，不跑研究或更新文档。"]
   });
   if (slug === "source") return capabilityContract({
-    ambientParticipation: "Use inspected sources to answer the source question, broaden ideas and improve affected designs or claims.",
-    purpose: "Discover, retrieve, inspect and verify sources that can change a research decision or answer a specified question.",
-    when: "Use for literature discovery, source reading, citation identity checks, claim verification, related-work comparison or systematic synthesis.",
+    ambientParticipation: "用实读来源回答问题、拓宽想法，并改进受影响的设计或主张。",
+    purpose: "发现、获取、阅读和核实能改变研究决定或回答具体问题的来源。",
+    when: "查文献、读来源、核引文身份和主张、比较相关工作或系统综述时使用。",
     actions: [
-      "Start from the user's question and relevant existing notes. Distinguish discovery, verified citation identity, full-text inspection and claim support; none substitutes for the next. For citation identity, use direct DOI lookup before fuzzy title search, checking title, authors, year and venue/version. Report conflicts, missing entries and unknowns.",
-      "For body-level details, read the full text with 1–5 concrete questions, using `.dove/research/papers/<id>.md` and the cumulative note format in RESEARCH_QUALITY.md. Reuse answered questions rather than rereading; append only new answers with section, page or equation locations, preserving earlier ones. Check-only work returns answers without creating notes or editing manuscripts.",
-      "Split compound claims and mark each supported, contradicted, or uncovered, with the relevant passage, formula, algorithm or code and its limits. Use the cumulative notes for novelty and overlap judgments, link affected artifacts and recommend wording matching actual support, not support for only part of a sentence.",
-      "Search real neighbors across fields at equal contribution granularity, following the shared topic guidance when selecting ideas. Inspect decisive overlap and use findings to develop mechanisms, candidates and controls, not just deduct novelty. Apply findings to designs or claims; stop when retrieval would not change the decision.",
-      "For explicit systematic reviews or meta-analysis, define the question, search scope and eligibility. Use applicable PRISMA tracking, bias and certainty assessment; pool only comparable effects. Ordinary searches need no such machinery. Update `sources/SOURCES.md` only when useful links or synthesis change."
+      "从用户问题和已有笔记出发，分清发现来源、核实引文身份、读正文、证明主张，互不替代。引文先查 DOI 再模糊搜标题，核对标题、作者、年份、场合／版本，报告冲突、缺失与未知。",
+      "正文细节带 1–5 个具体问题读全文，按 RESEARCH_QUALITY.md 在 `.dove/research/papers/<id>.md` 累积问答。复用旧答案，只补新答并标章节、页码或公式，保留旧答；只核查的任务返回答案，不建笔记或改稿。",
+      "拆开复合主张，逐项标支持、反驳或未覆盖，附相关段落、公式、算法或代码及限制。新意和重合判断用累积笔记，链接受影响产物，建议与实际支持一致的表述，不拿半句支持整句。",
+      "跨领域按相同贡献粒度找真实近邻，选题时遵循共同指引；查决定性重合，也用发现形成机制、候选和对照，不只扣创新。落实到设计或主张，继续检索已不会改变决定就停。",
+      "明确做系统综述或元分析时才定义问题、检索范围、纳排标准，按适用 PRISMA 记录、偏倚与证据把握评估，只合并可比效应。普通检索不加这套流程；有用链接或综合认识改变时才更新 `sources/SOURCES.md`。"
     ],
     boundaries: [
-      "Search snippets, abstracts, metadata and absent search results do not establish full-text inspection or absence of overlap. When a retrieval tool is missing or failing, get the source another way (WebFetch, the arXiv or Crossref API, or a direct download with curl) and say what you actually read."
+      "片段、摘要、元数据或没搜到结果，都不能证明读过全文或不存在重合。工具缺失或失败就用 WebFetch、arXiv／Crossref API、curl 下载等方式取来源，说清实际读到什么。"
     ],
     hostGuidance: hostGuidance({
-      claude: ["Use WebSearch for discovery, dove-paper-search for DOI metadata and academic papers, and hosted exa or WebFetch for ordinary webpages and known URLs."]
+      claude: ["WebSearch 用于发现来源，dove-paper-search 查 DOI 元数据和论文，普通网页与已知链接用托管 exa 或 WebFetch。"]
     })
   });
   if (slug === "experiment") return capabilityContract({
-    ambientParticipation: "Turn actual outputs and failures into explanations and the next method change, and use fair comparisons to separate method effects from implementation or evaluation errors.",
-    purpose: "Develop, reproduce and evaluate methods with evidence that answers the research question.",
-    when: "Use for authorized development, diagnostics, confirmation, reproduction or analysis of existing results.",
+    ambientParticipation: "从真实输出和失败形成解释与改法，用公平比较区分方法效果、实现错误和评价问题。",
+    purpose: "开发、复现和评价方法，让证据回答研究问题。",
+    when: "已授权的开发、诊断、确认、复现或结果分析时使用。",
     actions: [
-      "Inspect the relevant code, data, configuration, outputs and analysis before interpreting results. Read failures as evidence about where the current computation does not give the task what it requires, and derive the next method change and its expected effect from that explanation, following 从问题到方法 in RESEARCH_QUALITY.md. When a model cannot learn, test single-example overfitting to diagnose the learning mechanism rather than treating larger data or a larger evaluator as the first remedy. A diagnostic supports only the question it actually tests.",
-      "During development, keep code changes and diagnostic results traceable and choose tests that answer the key unknown, rather than requiring complete evaluation after every edit. Before formal comparison, result adoption or paper claims, evaluate the current method version under the full applicable protocol and all confirmed user metrics. Unmeasured effects remain unknown; a new version does not inherit an earlier version's passing conclusion.",
-      "Use complete-task comparisons against strong same-input alternatives to assess utility, and ablations or controlled comparisons to test attribution. Keep budgets, uncertainty and failure denominators visible, including missing or invalid outputs. Follow the shared experiment contract for method versions, fresh unused test draws for formal comparisons when methods change after test use, and final heldout confirmation.",
-      "The main executor repairs evaluator errors and immediately marks all affected results. Restore comparability for the current claim, necessary historical comparisons and strong baselines under the corrected protocol, reusing retained raw outputs before rerunning needed versions. Results not used in the current judgment may remain clearly labeled old-protocol history until needed; restore their comparability before using them again. Do not require every historical method to rerun first, mix protocols or hide valid negative evidence. Protocol repair alone is not a method-version change; ask the user if the correction changes the goal's meaning."
+      "解释结果前查相关代码、数据、配置、输出与分析。按 RESEARCH_QUALITY.md 的‘从问题到方法’，找出计算在哪一步没满足任务要求，由解释推出改法和预期；新方法／新核心模块先交三段方法设计让用户看过。模型学不会时，可用单例过拟合诊断学习机制，不先靠更多数据或更大评价器补救；诊断只回答它实际检验的问题。",
+      "主线确认后先有官方指标、真实开发集和最强可得外部比较，缺口立刻问用户。开发保留代码与诊断记录，按关键未知选测试，不要求每次修改全评；每轮汇报方法结果仍须有真实评测数字，训练或合成分布不能替代。正式比较、采纳结果和论文主张对实际版本完成全部适用协议与用户指标，未测效果留未知，新版不继承旧版通过结论。",
+      "完整任务对强同输入外部方法判断效用，消融和受控比较判断归因。预算、不确定性及失败、缺失、无效输出怎么算都写清；版本、测试后改方法要用新测试数据及最终独立保留集，按共同实验规则执行。",
+      "主执行者修评价并立即标受影响结果；先复用原始输出，恢复当前主张、必要历史比较和强基线的可比性，再重跑必要版本。不用于当前判断的旧结果可标旧协议历史，用前再恢复，不要求先重跑全部历史，不混协议、不藏负证据。只修协议不等于换方法版本；若改变目标含义就问用户。"
     ],
     boundaries: [
-      "Read-only or design-only requests do not execute. Heldout data used for tuning is no longer independent final evidence."
+      "只读或只设计不执行；用于调参的保留集不再是独立最终证据。"
     ]
   });
   if (slug === "draft") return capabilityContract({
-    ambientParticipation: "Write evidence-grounded text in the authoritative manuscript format and carry changes through to an inspected deliverable.",
-    purpose: "Draft, assess or revise the specified manuscript, section or claim-bearing artifact.",
-    when: "Use for requested writing or revision, or when the argument, expression or delivery artifact needs work.",
+    ambientParticipation: "在权威稿件中据证据写作，并落实到检查过的实际产物。",
+    purpose: "写作、评估或修改指定稿件、章节或承载主张的产物。",
+    when: "用户要求写改，或论证、表达、交付产物需要处理时使用。",
     actions: [
-      "Read the target and claim evidence. Connect problem, gap, insight, method, evidence and limits; preserve certainty, causality, scope, quantitative qualifiers and novelty. Explain evidence-driven claim changes before revising. Address in-scope source, method, evidence or figure gaps rather than merely weakening prose; polished text does not establish a sound contribution.",
-      "Use `.dove/research/papers/library.json` and `library.md` to group related work by direction, checking claim support against `papers/<id>.md`. Verify citation metadata with Source before citing or exporting BibTeX; never invent authors, venue, date or identifiers. Export only verified fields. Explicit library accumulation or a later watch run maintains the library; merely reading it does not write it.",
-      "Write publishable findings, setup and limits plainly. Ask the author about missing material rather than putting 'not provided' into the manuscript. Follow reliable author style samples within accuracy and venue norms, and check effects on the whole argument without expanding local writing into a new research task.",
+      "读目标文本与主张证据，连清问题、缺口、洞见、方法、证据和边界，保留确定性、因果、范围、数量限定和新意。证据要求改主张时先说明；处理范围内的来源、方法、证据或图缺口，不只弱化文字，文笔好不等于贡献成立。",
+      "用 `.dove/research/papers/library.json` 和 `library.md` 按方向组织相关工作，据 `papers/<id>.md` 核主张支持。引用或导出 BibTeX 前用 Source 核元数据，只导已核字段，不编作者、场合、日期或标识。显式积累或后续 watch 才更新库，只读不写。",
+      "用清楚可发表的语言写发现、设置和限制；缺材料问作者，不把‘未提供’塞进稿件。在准确和投稿规范内参考可靠作者样稿，检查整篇论证影响，不把局部写作扩成新研究。",
       DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY,
-      "Carry edits through the real build or export path and inspect the actual output before calling it current. Check compiled pages for overfull boxes, undefined references, float numbering and placement, and wide tables that need full width in two-column layouts. Measure body word count on the source without tables, captions or references against the target. Fix in-scope issues and report remaining material limits.",
-      "If a venue template needs missing fonts or packages, obtain them with permitted tools in a project-local texmf and point the build there, rather than silently substituting fonts or changing system installations."
+      "修改走实际构建／导出路径，看过输出才称当前稿。编译页检查溢出框、未定义引用、图表编号和位置、双栏宽表是否通栏；正文字数从源码算，排除表格、图注和参考文献，与目标核对。修范围内问题，说明剩余材料限制。",
+      "模板缺字体或包时，用允许工具放在项目本地 texmf 并让构建使用，不静默换字体或改系统安装。"
     ],
     boundaries: [
-      "Assessment-only requests return findings without edits. Local writing stays local and does not require a mentor, new round or subagent merely to read the materials. Artifact preparation does not authorize submission."
+      "只评估就只返回发现，不编辑。局部写作不因读材料就强加导师、新轮次或子代理；准备产物不等于获准投稿。"
     ]
   });
   if (slug === "figure") return capabilityContract({
-    ambientParticipation: "Design across fields around the scientific explanation, carrying reference-grounded decisions through model/code, editable composition and the inspected export. Reuse suitable paper-wide visual choices and investigate gaps for new compositions; use model-led design for illustrations and real data/code for plots. Fit the canvas to manuscript width and content, not slide proportions. Read and adapt the brief in `.claude/commands/dove/figure.md` directly for a new composition; no slash invocation is needed.",
-    purpose: "Create, revise, inspect and caption publication-quality scientific figures across research fields.",
-    when: "Use for method and mechanism diagrams, architectures, quantitative plots, comparisons, evidence assemblies and visual assessments.",
+    ambientParticipation: "围绕科学解释跨领域设计图，把参考决策落实到模型／代码、可编辑排版和实看过的导出。复用同篇视觉语言，新构图补查所缺参考；插图先用模型设计，定量图用真实数据与代码。画布随稿件宽度和内容，不套幻灯片比例；新构图直接读改 `.claude/commands/dove/figure.md` 的设计简报，不必调用命令入口。",
+    purpose: "跨研究领域制作、修改、检查和配注达到发表质量的科学图。",
+    when: "方法机制图、架构、定量图、比较、证据组合或视觉评估时使用。",
     actions: [
-      "Establish the figure's question, takeaway, audience, evidence and relationship to the paper's other figures. Choose representations that expose the science: states and interventions for mechanisms, information flow for architectures, aligned views for comparisons, or measured positions and uncertainty for quantitative results. These are choices, not fixed layouts. Use the venue/template's actual column width and applicable artwork requirements when available; otherwise state a provisional width. Design type and line weights at that physical size, then fit canvas height and margins to the content and any venue limit. PPT is an editing surface, not a slide template; neither default slide ratios nor arbitrary preset proportions determine the figure.",
-      "For a new composition, investigate actual published figures suited to the explanatory task, including transferable examples from other fields, using existing inspected references where they remain relevant and filling material gaps. Extract what is largest and why, the reading path, cross-view identity or quantity encoding, alignment and shared scales, close-up connections, density, spacing, typography and color. Synthesize those choices with the scientific content and material roles into the current design brief, not just a reference list or generic style adjectives. Reuse established notation and visual language across the same paper; local revisions need only revisit affected choices. Keep useful decisions with existing figure materials or code, without requiring a separate research report, fixed reference count or fresh survey for every edit.",
-      "For composed illustrations, adapt the model brief below with that design synthesis and use the configured model via dove figure --project <root> --prompt <text> (or --prompt-file <file>) [--image <file> ...] --output <file.png>, or an exposed image tool, to design the whole composition and explanatory imagery before building PPT. Pass --size, --quality or --background when useful and supported. The model's pixel dimensions are a working surface, not the final figure ratio. Let the central relation determine focal scale and supporting detail; neither minimalist geometry nor elaborate rendering is the default. Generate quantitative plots reproducibly from real data with deliberate axes, units, scales and uncertainty; a model may suggest layout, not measurements. Plot-only work needs neither an image-model call nor a PPT wrapper.",
-      "Carry the selected design through implementation: preserve its hierarchy, reading path, correspondence and visual language, while correcting scientific errors and replacing placeholders with real materials. Compose illustrations in PPT with separate replaceable imagery/evidence and native labels, connectors and useful vectors; editability does not require tracing rich imagery into simple shapes. Give headings, ordinary labels, mathematical notation and program tokens intentional, consistent roles, with variables and subscripts matching the manuscript's conventions. Choose typography and spacing for legibility rather than shrinking each string to fit an inherited box. No font family, size ladder, palette or layout is universal. Put the full title and extended explanation in the caption. Use dove figure --tools to find this machine's python-pptx Python and export commands.",
-      "Open the actual export at manuscript size and compare it with the scientific explanation, synthesized reference decisions and any model design used, not merely file validity. Refine focal hierarchy, disconnected panels, ambiguous correspondence, density and unreadable labels; inspect actual glyphs, mathematical placement and font embedding. If local tweaks cannot repair a weak explanation, revisit the representation or composition rather than polishing the same layout indefinitely. Deliver the editable source, assets/creation code, caption and same-source PDF/PNG appropriate to the request; composed figures include the PPTX. Preserve the same content-fitted canvas and proportions through export, without stretching evidence or a slide-shaped image. State unavailable calls, reused designs and remaining material gaps plainly."
+      "先定科学问题、读者、核心结论、证据与同篇其他图的关系。选择能揭示科学的表示：机制可用状态与干预，架构可用信息流，比较可对齐视图，定量结果用测量位置和不确定性；不是固定布局。有实际模板就用栏宽与制图要求，否则说明暂定宽度。按最终物理尺寸定字与线宽，再由内容和高度限制定画布及边距。PPT 是编辑面，不是幻灯片模板，不以默认比例或任意预设定图。",
+      "新构图查真正发表、适合解释任务的图，也看可迁移的跨域例子；已有实读参考可复用，补材料缺口。提取焦点为何最大、阅读路径、跨视图身份或数量编码、对齐与共用尺度、局部连接、密度、间距、字和色。把参考选择、科学内容和材料角色综合成当前设计简报，不只列论文或泛泛风格词。同篇复用符号与视觉语言，局部修改只重看受影响选择；有用决策放现有图材料或代码，不强加独立报告、固定参考数或每次重查。",
+      "组合插图先把这些设计选择填入下方模型简报，通过 dove figure --project <root> --prompt <text>（或 --prompt-file <file>）[--image <file> ...] --output <file.png>，或现有图像工具，设计整幅构图和解释性图像，再做 PPT。支持时按需加 --size、--quality、--background；模型像素大小只是工作面，不是最终比例。由中心关系决定焦点大小和细节，不默认极简几何或繁复渲染。定量图用真实数据可复现生成，认真定坐标、单位、尺度与不确定性；模型可建议布局，不能造测量。纯数据图不需图像模型或 PPT 包装。",
+      "实现选定设计，保留层级、阅读路径、对应关系和视觉语言，修科学错误，用真实材料换占位。组合插图在 PPT 中分开放可替换图像／证据及原生标签、连线和有用矢量；可编辑不等于把丰富图像描成简单形状。标题、标签、数学符号、程序词各有一致角色，变量和下标沿用稿件约定。为可读性选字与间距，不逐条缩小去塞旧框；字体、字号阶梯、配色、布局无通用模板。完整标题和长解释放图注，用 dove figure --tools 找本机 python-pptx Python 与导出命令。",
+      "按稿件尺寸打开实际导出，对照科学解释、参考综合决策及实际用过的模型设计，不只查文件有效。改焦点、割裂分面、模糊对应、拥挤和小字，实看字形、数学位置与字体嵌入；局部修不好解释就重选表示或构图，不无限抛光。按请求交可编辑源、素材／创建代码、图注和同源 PDF／PNG，组合图含 PPTX。导出保留随内容定的画布与比例，不拉伸证据或套幻灯片形状；直说不可用调用、复用设计和材料缺口。"
     ],
     modelPrompt: `Design a publication-quality [figure kind] for [field and audience], at [target manuscript column width; maximum height if applicable]. This is a visual design reference for editable composition, not a presentation slide.
 CANVAS: [actual venue/template width and relevant artwork requirements, or a stated provisional width]. Arrange the scientific relation and supporting content at readable final-size typography, then choose height and margins from that composition. The image model's supported pixel size is only a working surface, not the final figure format; do not fit content to a slide ratio or stretch imagery to fill one.
@@ -167,67 +167,67 @@ Choose representations that expose the central [mechanism/state change, informat
 Use consistent visual identities and meaningful color. Give headings, ordinary labels, mathematical symbols/subscripts and program tokens intentional roles consistent with the manuscript. Select type, line weights, spacing and contrast for final-size legibility, not to fill inherited boxes. Use depth, texture, shading, simple geometry or boxes where they help this explanation; no fixed font, palette, layout or minimal/rich style applies to every field.
 Preserve supplied evidence and its identity for separate placement. Quantitative marks come from supplied data and plotting code, not invented model-rendered values; indicate where separately rendered plots belong. Make schematics recognizable as explanatory, not measured results. Keep labels concise and close to their referents, with the full title and extended explanation in the caption. Plan separately editable labels/connectors and replaceable illustrations/evidence so the selected hierarchy, correspondence and visual language can survive implementation and be checked in the actual export.`,
     boundaries: [
-      "Planning-only, assessment-only and no-write requests retain their scope. Completion requires scientific fidelity and a visually effective figure, not merely valid exports."
+      "只规划、只评估、不写入的请求保持范围；完成要科学忠实、视觉解释有效，不只是导出文件有效。"
     ]
   });
   if (slug === "review") return capabilityContract({
-    ambientParticipation: "Judge the specified current paper in a clean read-only context, distinguishing independent review from author self-check and delivery checks.",
-    purpose: "Assess the scientific quality of a paper, a local artifact, delivery readiness or an existing reviewer return.",
-    when: "Use for paper judgment and review inspection rather than mentor direction decisions.",
+    ambientParticipation: "在干净只读上下文判断指定当前论文，区分独立审稿、作者自查和交付检查。",
+    purpose: "评估论文科学质量、局部产物、交付就绪或已有审稿意见。",
+    when: "判断论文或检查审稿时使用，不代替导师定方向。",
     responsibilities: [
       DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
       DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY
     ],
     actions: [
       DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS,
-      `For independent review, call ${DOVE_RESEARCH_REVIEW_AGENT_NAME} in a fresh read-only context with the current manuscript, cited results and relevant inspected venue or literature material. It uses Read/Grep/Glob on specified files, not the author's execution conversation. Use an equivalent clean context on other hosts and report the limitation if none is available; no frozen snapshot, review CLI or persistent reviewer session is needed.`,
-      "Request a concise judgment with blocking issues, cited evidence, author-side actions and the files actually read. Missing grounding limits the judgment. Whole-paper review reads the complete current version, while local review stays local; after substantive changes, obtain a fresh full-version review before treating a previous recommendation as current.",
-      "Preserve actual reviewer returns faithfully and distinguish user-pasted opinions from independent work performed. Store useful returns as ordinary project material, not a runtime exchange store. Reading or preserving a return does not itself authorize revisions or another review."
+      `独立审稿在全新只读上下文调用 ${DOVE_RESEARCH_REVIEW_AGENT_NAME}，给当前稿、所引结果与相关实读投稿／文献材料。它用 Read/Grep/Glob 读指定文件，不接收作者执行对话；其他宿主用等价干净上下文，没有就说明限制，不需冻结快照、审稿 CLI 或持久会话。`,
+      "返回简洁判断、阻挡问题、证据、作者可做的修改和实际读过的文件；材料不足就限定判断。整篇审稿读完整当前版，局部审查保持局部；实质修改后需重审完整新版，旧建议才可视为当前。",
+      "忠实保留真实审稿返回，区分用户贴来的意见与实际完成的独立审稿。有用返回放普通项目材料，不建运行时交换库；阅读或保存本身不授权修改或重审。"
     ],
     boundaries: [
-      "Review findings are reasoned objections, not empirical evidence or automatic acceptance. The author assesses their grounds and addresses material concerns; author self-check cannot certify independent review."
+      "审稿是有理由的反对，不是实验证据或自动接受。作者判断依据并处理重要担忧；作者自查不能证明独立审稿。"
     ]
   });
   if (slug === "rebuttal") return capabilityContract({
-    ambientParticipation: "Respond to verified review concerns as the author, make in-scope evidence-backed revisions and state what remains unresolved.",
-    purpose: "Analyze review findings, draft author responses and implement requested revisions.",
-    when: "Use when the user asks for a rebuttal, response or follow-through on review findings.",
+    ambientParticipation: "作者核实审稿担忧，做范围内有证据的回应与修改，说明仍未解决什么。",
+    purpose: "分析审稿意见，写作者回应并完成要求的修改。",
+    when: "用户要求反驳、答复或落实审稿意见时使用。",
     actions: [
-      "Read the review, its reviewed-material list and the current artifacts. Group findings with the same root cause and verify their grounds rather than accepting every objection. Prioritize material consequences, decide whether to accept, rebut, qualify or investigate, and preserve coverage of every material finding.",
-      "Use Source to verify new citations and claim support, and Experiment to obtain or interpret new results. Compare the original claim, reviewer interpretation, response and revised claim so certainty, causality, scope, quantitative qualifiers and novelty do not change silently. Shared mainline rules govern any proposed change of research direction.",
-      "Draft the response and make requested revisions to evidence, analysis, text, figures, tables, supplements or venue-facing files, not just response tone. Address shared causes when a local reply would leave the concern intact. Preserve accurate claims and counterevidence instead of seeking apparent acceptance through cosmetic changes or unjustified narrowing.",
-      "Use Draft's authoritative-source and build/export workflow to deliver inspected revisions. Apply Review's current-version rule before relying on an old recommendation, but do not rerun review merely for cosmetic or response-only edits. State whether each underlying concern is resolved, reduced or still limiting; a written reply is not resolution or reviewer acceptance.",
-      "Keep useful responses, revisions and unresolved issues with links to the originating review and changed artifacts. Preserve original reviewer returns separately from author commentary and do not overwrite them with summaries."
+      "读审稿、其已读材料清单和当前产物，共因问题合并处理，核实依据，不全盘接受。按实质影响排序，决定接受、反驳、限定或调查，每个重要问题都覆盖。",
+      "用 Source 核新引文与主张，用 Experiment 取得或解释结果。比较原主张、审稿理解、回应和改后主张，不暗改确定性、因果、范围、数量限定与新意；拟改研究方向遵循共同主线规则。",
+      "写回应并按要求改证据、分析、文字、图表、补充材料或投稿文件，不只改语气；局部答复解决不了就修共因。保留准确主张和反证，不靠表面改写或无依据收缩求接受。",
+      "按 Draft 的权威源和构建／导出流程交检查过的修改。依赖旧审稿建议前按 Review 查当前版本，纯样式或只改回应不重审。逐项说明担忧已解决、减轻或仍有限制，写了答复不等于解决或审稿人接受。",
+      "有用回应、修改和未解问题链接原审稿及改动产物；审稿原文与作者评论分开保留，不用摘要覆盖。"
     ],
     boundaries: [
-      "Author-side responses and revisions remain within the requested scope and do not authorize submission or destructive actions."
+      "作者回应与修改限于请求范围，不授权投稿或破坏性操作。"
     ]
   });
   return capabilityContract({
-    ambientParticipation: "Consult useful Lessons at consequential choices or after recurring mistakes, and preserve transferable insights as optional guidance rather than evidence.",
-    purpose: "Read and preserve researcher-owned Lessons that improve future choices or prevent repeated mistakes.",
-    when: "Use when experience can inform a current decision, broaden ideas or improve later work, including explicit requests to remember or reflect.",
+    ambientParticipation: "重要选择或反复犯错时参考有用经验，保留可迁移认识作为可选指引，不当证据。",
+    purpose: "阅读和保存研究者自己的经验，改善未来选择、避免重犯。",
+    when: "经验可帮助当前判断、拓宽想法或改进后续工作，包括要求记住或反思时使用。",
     actions: [
-      "Before the first consequential choice for the current question, or after a correction or recurring failure exposes a shared mistaken premise, check `.dove/research/lessons/LESSONS.md` once if it exists. Follow only relevant or plausibly useful links and reuse Lessons already read in the active context. Missing Lessons and ordinary deterministic local work have no Lessons prerequisite; reading creates no files.",
-      "Preserve a grounded reusable insight when it can improve research, collaboration or delivery, stating its basis, conditions, counterexamples and limits. For a transferable failure, explain the mistaken premise, still-valid earlier grounds and the better approach it informs. Reuse can refute a Lesson rather than strengthen it, so assess transfer value instead of counting applications.",
-      "Write in the narrowest suitable researcher-owned Lessons document within author write scope. Create a content-bearing `.dove/research/lessons/LESSONS.md` only for the first qualifying insight, not an empty index during reading. Separate a theme into a naturally named Markdown file only when useful, and update its ordinary summary link. Omit routine progress, transient status, one-off tool failures and non-transferable bugs."
+      "当前问题首次重要选择前，或纠正／反复失败暴露共同错误前提时，若有 `.dove/research/lessons/LESSONS.md` 就查一次，只读相关或可能有用链接，复用本上下文已读内容。缺经验文件和普通确定性局部任务不设前提，阅读不建文件。",
+      "有依据且可改善研究、协作或交付的认识才保留，写依据、条件、反例和边界。可迁移失败说明错的前提、仍有效的旧依据和更好做法；复用也可能推翻经验，判断迁移价值，不计使用次数。",
+      "写在作者可写范围内最具体合适的经验文档。首条合格认识才建有内容的 `.dove/research/lessons/LESSONS.md`，阅读时不建空索引；有用时才按自然主题拆 Markdown 并更新摘要链接。不记例行进展、临时状态、一次工具失败或不可迁移的 bug。"
     ],
     boundaries: [
-      "Lessons are optional, fallible guidance, not package defaults, research evidence or completion certificates. Recording advice does not fix the current problem or replace action, and needs no IDs, frontmatter schema or application ledger."
+      "经验是可选、可错的指引，不是包默认、科研证据或完成证明。记录不能修当前问题或代替行动，不需 ID、前置字段或应用台账。"
     ]
   });
 }
 
 const SURFACES = [
-  ["research", "Explore a broad candidate pool for the user's choice, or advance a confirmed mainline with substantive research."],
-  ["status", "Report the current results, core evidence, blockers and active round without running new work."],
-  ["source", "Find and inspect sources, verify citation identities and claims, and use the findings to improve research decisions."],
-  ["experiment", "Develop methods from explanations of actual results and evaluate them through fair comparisons, informative diagnostics and trustworthy analysis."],
-  ["draft", "Write or revise evidence-grounded text and deliver the authoritative manuscript through its actual build or export."],
-  ["figure", "Create and inspect figures from real materials, delivering captions and editable sources with the rendered visuals."],
-  ["review", "Independently review the specified current paper or inspect local artifacts, delivery readiness and returned opinions."],
-  ["rebuttal", "Verify review concerns, write author responses and make evidence-backed revisions within the requested scope."],
-  ["lessons", "Read or preserve reusable guidance that improves judgment without turning routine progress into a second log."],
+  ["research", "选出有依据的候选供用户决定，或推进已确认主线的实质研究。"],
+  ["status", "只汇报真实结果、核心证据、卡点和当前轮次，不启动新工作。"],
+  ["source", "查读来源、核引文与主张，把发现用到研究决定中。"],
+  ["experiment", "解释真实结果以形成方法，用公平比较、有效诊断和可靠分析检验。"],
+  ["draft", "据证据写改权威稿件，沿实际构建或导出路径交付。"],
+  ["figure", "从真实材料制图并检查，交图注、可编辑源和渲染结果。"],
+  ["review", "独立审指定当前论文，或检查局部产物、交付就绪和已有意见。"],
+  ["rebuttal", "核审稿担忧，在要求范围内写回应、做有证据的修改。"],
+  ["lessons", "读写可复用经验，改善判断，不另记一份进度日志。"],
 ];
 
 export const COMMAND_SURFACES = SURFACES.map(([slug, summary]) => ({
@@ -240,9 +240,9 @@ export const COMMAND_SURFACES = SURFACES.map(([slug, summary]) => ({
 export const COMMAND_SURFACE_BY_ID = Object.fromEntries(COMMAND_SURFACES.map((item) => [item.id, item]));
 
 export function renderDoveAmbientParticipationSection() {
-  return `## Capability participation
+  return `## 能力参与
 
-Apply these methods directly in the ordinary main session when useful; commands are shortcuts, not prerequisites. The main session retains judgment before and after delegation.
+这些方法可直接用于普通主会话，命令只是快捷入口，不是前提。主会话始终保留科研判断，子代理只做明确的具体活。
 
 ${COMMAND_SURFACES.map((command) => `- ${command.title}: ${command.contract.ambientParticipation}`).join("\n")}`;
 }

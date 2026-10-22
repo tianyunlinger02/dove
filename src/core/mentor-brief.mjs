@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
+import { USER_ORIGINALS_PATH } from "./user-originals.mjs";
 
 const RESEARCH = ".dove/research";
 const ROUND_FILE = /^(\d+)[-_](brief|result)\.md$/iu;
@@ -11,11 +12,11 @@ const SCAN_FILE = /^scan-\d{4}-\d{2}-\d{2}\.md$/u;
 
 // Shared questions for the mentor's independent research judgment.
 const QUESTIONS = [
-  "相对用户原话和身份卡的核心能力，方向对不对？当前在做的问题和原问题之间的连接检验过吗，做成它原问题能改善多少？",
-  "这几轮是在建立通用能力，还是反复打补丁？",
-  "离用户目标和目标档次还差什么？",
-  "下一轮该做什么？从真实结果和失败能形成什么解释，由此推出怎样的方法改动，预期看到什么？",
-  "相对最接近的已有工作，新在哪里？按目标档次的审稿人看，贡献够不够？"
+  "如果用户现在问‘这段时间取得了什么实质科研进展’，诚实的一句话回答是什么？",
+  "最近的工作是在检验核心方法，还是在修工程、修评价、搭系统？",
+  "对照 brief 的“方法设计”：问题及真实数据证据、外部方法的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？",
+  "对照 USER_ORIGINALS.md 中用户过去的纠正，当前做法有没有重犯？",
+  "方向还服务用户的核心目标吗？相对最接近的工作新在哪里、离目标档次差什么，下一步最值得检验什么？"
 ];
 
 function list(directory, fsOps) {
@@ -35,7 +36,7 @@ function describe(root, relative, fsOps) {
   }
 }
 
-// Read a bounded window, not a complete old EVAL or execution transcript.
+// Read an explicit file window, without following links in the record.
 function readWindow(file, fsOps, maxBytes = 16384, tail = false) {
   let fd;
   try {
@@ -48,8 +49,8 @@ function readWindow(file, fsOps, maxBytes = 16384, tail = false) {
     let start = 0;
     while (start < count && (bytes[start] & 0xc0) === 0x80) start += 1;
     const truncated = stat.size > count;
-    const text = new TextDecoder().decode(bytes.subarray(start, count), { stream: truncated && !tail });
-    return { text, truncated, partialFirstLine: position > 0 };
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(start, count), { stream: truncated && !tail });
+    return { text, truncated, startByte: position + start, endByte: position + count, fileBytes: stat.size };
   } catch (error) {
     return { error: error.code === "ENOENT" ? "缺失" : `无法读取：${error.code ?? error.message}` };
   } finally {
@@ -57,24 +58,25 @@ function readWindow(file, fsOps, maxBytes = 16384, tail = false) {
   }
 }
 
-function clip(text, limit, tail = false) {
+function clip(text, limit) {
   const characters = Array.from(String(text));
-  return characters.length <= limit ? characters.join("") : tail
-    ? `…${characters.slice(-limit).join("")}`
-    : `${characters.slice(0, limit).join("")}…`;
+  return characters.length <= limit ? characters.join("") : `${characters.slice(0, limit).join("")}…`;
 }
 
 function quote(text) {
   return String(text).split("\n").map((line) => `> ${line}`).join("\n");
 }
 
-function evaluationExcerpt(file, fsOps) {
-  const result = readWindow(file, fsOps, 16384, true);
-  if (result.error) return result.error;
-  const lines = result.text.split(/\r?\n/u);
-  if (result.partialFirstLine) lines.shift();
-  while (lines.length && !lines.at(-1).trim()) lines.pop();
-  return clip(lines.slice(-12).join("\n"), 2400, true) || "没有可摘录的近期完整行；按路径读取。";
+function sourceAttachment(root, suppliedPath, fsOps) {
+  const file = path.resolve(root, suppliedPath);
+  const result = readWindow(file, fsOps, 8192, true);
+  const source = `- 来源：\`${file}\``;
+  if (result.error) return `${source}（${result.error}；未附正文）`;
+  if (result.text.includes("\0")) return `${source}（二进制内容，未展开）`;
+  const range = result.truncated
+    ? `末尾片段，读取字节 ${result.startByte + 1}–${result.endByte} / ${result.fileBytes}；起首可能是残行，不代表全文`
+    : `全文，${result.fileBytes} 字节`;
+  return `${source}（${range}）\n${result.text ? quote(result.text) : "文件为空。"}`;
 }
 
 function recentRounds(names) {
@@ -173,9 +175,10 @@ function opinionAttachment(root, opinion, fsOps) {
 
 /**
  * Render a read-only mentor handoff; no model invocation or research writes.
- * Options: trigger, userSource, since, until, userOriginal, opinion (one path),
- * artifact (path array), fsOps (synchronous filesystem injection for tests).
- * User-source paths and artifact contents are never opened by this renderer.
+ * Options: trigger, userSource, since, until, userOriginal, userOriginals,
+ * opinion (one path), artifact (path array), fsOps (synchronous filesystem injection).
+ * Only the saved originals index and explicit artifacts get bounded excerpts;
+ * private sessions and paths mentioned inside records are never opened here.
  */
 export function renderMentorBrief(root, options = {}) {
   const fsOps = options.fsOps ?? fs;
@@ -183,40 +186,45 @@ export function renderMentorBrief(root, options = {}) {
   const research = path.join(project, RESEARCH);
   const rounds = list(path.join(research, "rounds"), fsOps);
   const selected = recentRounds(rounds);
-  const evaluation = path.join(research, "EVAL.md");
   const notes = readWindow(path.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
   const intent = notes.error ? null : latestLongTermIntent(notes.text);
   const intentStatus = notes.error ? `导师笔记${notes.error}` : !intent ? "笔记中没有长期意图一节" : !intent.date ? "长期意图没有有效日期" : `最近一次为 ${intent.date}`;
+  const originals = options.userOriginals?.path ?? USER_ORIGINALS_PATH;
   const lines = [
     "# Dove 导师调用材料", "", `项目：\`${project}\`（材料路径相对此目录）`,
-    "本材料原样作为导师调用的全部正文，只在“本次触发”写一句；执行者看法放意见文件，不另列禁令。", "",
-    "## 本次触发", "", quote(options.trigger || "未填写"),
-    "同轮再调用时，在此注明对应触发（用户纠正、换路线等）。", "",
+    "本材料原样作为调用正文。先看用户原话和原始结果，再独立判断；宿主简报只是目录和观点。", "",
     "## 用户原话与来源", "",
     quote(`来源：${options.userSource || "未提供"}\n日期范围：${options.since || "未提供起点"} — ${options.until || "未提供终点"}`), "",
-    options.userOriginal ? quote(options.userOriginal) : "未直接附原话。",
-    "由导师读取指定来源；生成器不读取私有 session。",
+    options.userOriginal ? `当前直接提供的原话（原样附入）：\n${quote(options.userOriginal)}` : "未直接附原话。",
+    "日期范围仅按输入展示；生成器不读取私有 session，导师需按来源核对本人正文。", "",
+    "### 过去的纠正与长期意图", "",
+    "USER_ORIGINALS.md 是索引性摘录：压缩空白、每条最多 700 字，转述单列，不是完整原话；判断过去的纠正需回原始来源核对上下文。",
     ...(options.userOriginals
-      ? [`- 本人原话汇总（自动整理，转述已单独标出）：\`${options.userOriginals.path}\`，本人 ${options.userOriginals.own} 条、转述 ${options.userOriginals.relay} 条，覆盖 ${options.userOriginals.directories.length} 个会话目录${options.userOriginals.pendingBytes ? "（较大，尚未整理完，下次继续）" : ""}。先读它把握长期意图，需要上下文再按会话路径查原文。`]
+      ? [`- 整理范围：本人 ${options.userOriginals.own} 条、转述 ${options.userOriginals.relay} 条，${options.userOriginals.directories.length} 个会话目录${options.userOriginals.pendingBytes ? "（尚未整理完，当前可能缺时段）" : ""}。`, `- 原会话目录（仅供导师按来源定位）：${options.userOriginals.directories.map((directory) => `\`${directory}\``).join("、") || "未找到"}。`]
       : []),
-    ...(options.userOriginalsError ? [`- 本人原话汇总整理失败：${options.userOriginalsError}。已有汇总可能不完整，需要时按来源读原会话，调用继续。`] : []),
-    longTermIntentDue(intent, options.now) ? `- 长期意图对照到期（${intentStatus}）：先读 USER_ORIGINALS.md，核对长期目标与记录归因，按质量摘要返回带日期的“长期意图”。` : `- 长期意图对照：${intentStatus}，尚未到期。`, "",
-    "## 项目材料", "",
+    sourceAttachment(project, originals, fsOps),
+    ...(options.userOriginalsError ? [`- 汇总整理失败：${options.userOriginalsError}。已有摘录可能不完整，缺失不等于用户没说过。`] : []),
+    longTermIntentDue(intent, options.now) ? `- 长期意图对照到期（${intentStatus}）：读 USER_ORIGINALS.md 并核对本人来源，返回带日期的“长期意图”。` : `- 长期意图对照：${intentStatus}，尚未到期。`, "",
+    "## 原始结果文件与数字", "",
+    "只展开显式提供的前 4 个文件，每个最多末尾 8 KiB；不递归找数据，不追读文件中的路径。未附原始结果就直说证据不足，宿主声称已读或已测不算证据。",
+    ...(options.artifact?.length
+      ? options.artifact.map((file, index) => index < 4 ? sourceAttachment(project, file, fsOps) : `- \`${path.resolve(project, file)}\`（超出本次展开数量，仅列路径）`)
+      : ["未提供原始结果文件或数字。"]), "",
+    "## 宿主记录与目录（不是结论框架）", "",
+    "### 本次触发", "", quote(options.trigger || "未填写"),
+    "只写一句；同轮再调用注明用户纠正、换路线等触发。", "",
     ...[".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`]
       .map((file) => `- ${describe(project, file, fsOps)}`), "",
-    "EVAL 近期摘录（末尾 16 KiB 内至多 12 行、2400 字）：", "",
-    quote(evaluationExcerpt(evaluation, fsOps)), "",
+    "EVAL、brief/result 和执行者意见用于定位材料、提出观点，不能代替原始结果；仅列路径不代表导师已读。",
+    "方法三段见身份卡 Method design 指向的 brief 的“## 方法设计”（三个 ### 小节），不从身份卡研究状态推定论证成立。", "",
     "### 最近 brief/result", "",
     ...(selected.length ? selected.map((name) => `- ${describe(project, `${RESEARCH}/rounds/${name}`, fsOps)}`) : ["未找到轮次文件。"]), "",
+    opinionAttachment(project, options.opinion, fsOps), "",
     "### 选题阶段适用的标准", "",
     `- ${describe(project, ".dove/install/TOPIC_CRITERIA.md", fsOps)}（Dove 的选题标准）`,
     `- ${describe(project, `${RESEARCH}/topics/PROJECT.md`, fsOps)}（本项目的选题设置）`, "",
     "## 论文追踪", "", watchMaterials(project, rounds, fsOps), "",
-    "## 执行者附属材料", "",
-    opinionAttachment(project, options.opinion, fsOps), "",
-    "新增原始产物（只列路径）：",
-    ...(options.artifact?.length ? options.artifact.map((file) => `- \`${path.resolve(project, file)}\``) : ["未提供。"]), "",
-    "## 固定问题", "",
+    "## 固定问题（先答前两问）", "",
     ...QUESTIONS.map((question, index) => `${index + 1}. ${question}`)
   ];
   return `${lines.join("\n")}\n`;

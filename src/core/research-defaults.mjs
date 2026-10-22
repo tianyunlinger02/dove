@@ -19,7 +19,7 @@ export const RESEARCH_DEFAULT_PATHS = Object.freeze({
 export const RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
   Object.freeze({
     path: RESEARCH_DEFAULT_PATHS.overview,
-    content: "# Research\n\nUse `IDENTITY.md`, `EVAL.md` and `rounds/` for current research. Until the user confirms Mainline, read the project topic-selection standards, explore parallel candidates and offer recommendations for the user to choose before method implementation. Follow a confirmed mainline and choose work at a scale that can answer the question. The mentor keeps its own `MENTOR_NOTES.md`. This file is a short history index; leave existing missions, experiments and claims in place.\n"
+    content: "# 研究\n\n当前研究用 `IDENTITY.md`、`EVAL.md` 和 `rounds/` 接续。选题先读标准，给有依据的候选交用户选主线，不先实现方法。主线确认后先搭真实评测；新方法前三段论证交用户看，连续两轮无科研结果就停下问用户。导师自写 `MENTOR_NOTES.md`。本文件只作短历史索引，旧 missions、experiments 和 claims 留在原处。\n"
   })
 ]);
 

@@ -1,49 +1,49 @@
 ---
-description: "Independently review the specified current paper or inspect local artifacts, delivery readiness and returned opinions."
-argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
+description: "独立审指定当前论文，或检查局部产物、交付就绪和已有意见。"
+argument-hint: "可选：请求、产物路径、投稿目标、约束或后续背景"
 ---
 
 # dove.review
 
-Independently review the specified current paper or inspect local artifacts, delivery readiness and returned opinions.
+独立审指定当前论文，或检查局部产物、交付就绪和已有意见。
 
-## Request
+## 当前请求
 
 $ARGUMENTS
 
-## Examples
+## 示例
 
 - `/dove:review`
 
-## How Dove approaches this work
+## 怎么做
 
-These are flexible research considerations, not a required order or report template.
+按当前问题使用这些做法，不机械套步骤或报告模板；明确需要用户决定的地方仍先交给用户。
 
-### What this is for
+### 用途
 
-Assess the scientific quality of a paper, a local artifact, delivery readiness or an existing reviewer return.
+评估论文科学质量、局部产物、交付就绪或已有审稿意见。
 
-### When to use
+### 适用情况
 
-Use for paper judgment and review inspection rather than mentor direction decisions.
+判断论文或检查审稿时使用，不代替导师定方向。
 
-### What Dove will examine
+### 要判断什么
 
-- Author-side self-check critiques the current paper with concrete evidence and feasible action; it is not independent review.
-- Delivery review checks actual venue rules, build/export output and required materials; delivery readiness is separate from scientific acceptability.
+- 作者自查用具体证据和可行动修改批评当前论文，不冒充独立审稿。
+- 交付检查核对实际投稿要求、构建／导出结果和材料，交付就绪与科学上可接受分开判断。
 
-### Scope and changes
+### 工作范围
 
-- Review findings are reasoned objections, not empirical evidence or automatic acceptance. The author assesses their grounds and addresses material concerns; author self-check cannot certify independent review.
+- 审稿是有理由的反对，不是实验证据或自动接受。作者判断依据并处理重要担忧；作者自查不能证明独立审稿。
 
-### Ways Dove may proceed
+### 具体做法
 
-- For the complete paper, ask four questions: does the method answer the research question; are the mechanisms, terms, comparisons, literature, counterexamples, and limits correct for the field; do the contribution, evidence, scope, and expression fit the target venue and its readers; and what is the strongest reasonable objection, with the evidence or revision needed to answer it.
-- For independent review, call dove-review in a fresh read-only context with the current manuscript, cited results and relevant inspected venue or literature material. It uses Read/Grep/Glob on specified files, not the author's execution conversation. Use an equivalent clean context on other hosts and report the limitation if none is available; no frozen snapshot, review CLI or persistent reviewer session is needed.
-- Request a concise judgment with blocking issues, cited evidence, author-side actions and the files actually read. Missing grounding limits the judgment. Whole-paper review reads the complete current version, while local review stays local; after substantive changes, obtain a fresh full-version review before treating a previous recommendation as current.
-- Preserve actual reviewer returns faithfully and distinguish user-pasted opinions from independent work performed. Store useful returns as ordinary project material, not a runtime exchange store. Reading or preserving a return does not itself authorize revisions or another review.
+- 完整论文问四件事：方法回答研究问题了吗；机制、术语、比较、文献、反例与边界在该领域是否正确；贡献、证据、范围和表达是否适合目标场合与读者；最强合理反对是什么，需要什么证据或修改来回应。
+- 独立审稿在全新只读上下文调用 dove-review，给当前稿、所引结果与相关实读投稿／文献材料。它用 Read/Grep/Glob 读指定文件，不接收作者执行对话；其他宿主用等价干净上下文，没有就说明限制，不需冻结快照、审稿 CLI 或持久会话。
+- 返回简洁判断、阻挡问题、证据、作者可做的修改和实际读过的文件；材料不足就限定判断。整篇审稿读完整当前版，局部审查保持局部；实质修改后需重审完整新版，旧建议才可视为当前。
+- 忠实保留真实审稿返回，区分用户贴来的意见与实际完成的独立审稿。有用返回放普通项目材料，不建运行时交换库；阅读或保存本身不授权修改或重审。
 
-### Using host tools
+### 使用宿主工具
 
-- Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way.
-- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
+- 直接用本机和 Dove 已配置的工具服务完成任务，不逐次申请。工具缺失或失败时说明并找可用替代；真实评测缺口立刻问用户，不拿替代数据充数。
+- 真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。

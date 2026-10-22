@@ -1,47 +1,47 @@
 ---
-description: "Create and inspect figures from real materials, delivering captions and editable sources with the rendered visuals."
-argument-hint: "optional request, artifact path, venue, constraint, or follow-up context"
+description: "从真实材料制图并检查，交图注、可编辑源和渲染结果。"
+argument-hint: "可选：请求、产物路径、投稿目标、约束或后续背景"
 ---
 
 # dove.figure
 
-Create and inspect figures from real materials, delivering captions and editable sources with the rendered visuals.
+从真实材料制图并检查，交图注、可编辑源和渲染结果。
 
-## Request
+## 当前请求
 
 $ARGUMENTS
 
-## Examples
+## 示例
 
 - `/dove:figure`
 
-## How Dove approaches this work
+## 怎么做
 
-These are flexible research considerations, not a required order or report template.
+按当前问题使用这些做法，不机械套步骤或报告模板；明确需要用户决定的地方仍先交给用户。
 
-### What this is for
+### 用途
 
-Create, revise, inspect and caption publication-quality scientific figures across research fields.
+跨研究领域制作、修改、检查和配注达到发表质量的科学图。
 
-### When to use
+### 适用情况
 
-Use for method and mechanism diagrams, architectures, quantitative plots, comparisons, evidence assemblies and visual assessments.
+方法机制图、架构、定量图、比较、证据组合或视觉评估时使用。
 
-### Scope and changes
+### 工作范围
 
-- Planning-only, assessment-only and no-write requests retain their scope. Completion requires scientific fidelity and a visually effective figure, not merely valid exports.
+- 只规划、只评估、不写入的请求保持范围；完成要科学忠实、视觉解释有效，不只是导出文件有效。
 
-### Ways Dove may proceed
+### 具体做法
 
-- Establish the figure's question, takeaway, audience, evidence and relationship to the paper's other figures. Choose representations that expose the science: states and interventions for mechanisms, information flow for architectures, aligned views for comparisons, or measured positions and uncertainty for quantitative results. These are choices, not fixed layouts. Use the venue/template's actual column width and applicable artwork requirements when available; otherwise state a provisional width. Design type and line weights at that physical size, then fit canvas height and margins to the content and any venue limit. PPT is an editing surface, not a slide template; neither default slide ratios nor arbitrary preset proportions determine the figure.
-- For a new composition, investigate actual published figures suited to the explanatory task, including transferable examples from other fields, using existing inspected references where they remain relevant and filling material gaps. Extract what is largest and why, the reading path, cross-view identity or quantity encoding, alignment and shared scales, close-up connections, density, spacing, typography and color. Synthesize those choices with the scientific content and material roles into the current design brief, not just a reference list or generic style adjectives. Reuse established notation and visual language across the same paper; local revisions need only revisit affected choices. Keep useful decisions with existing figure materials or code, without requiring a separate research report, fixed reference count or fresh survey for every edit.
-- For composed illustrations, adapt the model brief below with that design synthesis and use the configured model via dove figure --project <root> --prompt <text> (or --prompt-file <file>) [--image <file> ...] --output <file.png>, or an exposed image tool, to design the whole composition and explanatory imagery before building PPT. Pass --size, --quality or --background when useful and supported. The model's pixel dimensions are a working surface, not the final figure ratio. Let the central relation determine focal scale and supporting detail; neither minimalist geometry nor elaborate rendering is the default. Generate quantitative plots reproducibly from real data with deliberate axes, units, scales and uncertainty; a model may suggest layout, not measurements. Plot-only work needs neither an image-model call nor a PPT wrapper.
-- Carry the selected design through implementation: preserve its hierarchy, reading path, correspondence and visual language, while correcting scientific errors and replacing placeholders with real materials. Compose illustrations in PPT with separate replaceable imagery/evidence and native labels, connectors and useful vectors; editability does not require tracing rich imagery into simple shapes. Give headings, ordinary labels, mathematical notation and program tokens intentional, consistent roles, with variables and subscripts matching the manuscript's conventions. Choose typography and spacing for legibility rather than shrinking each string to fit an inherited box. No font family, size ladder, palette or layout is universal. Put the full title and extended explanation in the caption. Use dove figure --tools to find this machine's python-pptx Python and export commands.
-- Open the actual export at manuscript size and compare it with the scientific explanation, synthesized reference decisions and any model design used, not merely file validity. Refine focal hierarchy, disconnected panels, ambiguous correspondence, density and unreadable labels; inspect actual glyphs, mathematical placement and font embedding. If local tweaks cannot repair a weak explanation, revisit the representation or composition rather than polishing the same layout indefinitely. Deliver the editable source, assets/creation code, caption and same-source PDF/PNG appropriate to the request; composed figures include the PPTX. Preserve the same content-fitted canvas and proportions through export, without stretching evidence or a slide-shaped image. State unavailable calls, reused designs and remaining material gaps plainly.
+- 先定科学问题、读者、核心结论、证据与同篇其他图的关系。选择能揭示科学的表示：机制可用状态与干预，架构可用信息流，比较可对齐视图，定量结果用测量位置和不确定性；不是固定布局。有实际模板就用栏宽与制图要求，否则说明暂定宽度。按最终物理尺寸定字与线宽，再由内容和高度限制定画布及边距。PPT 是编辑面，不是幻灯片模板，不以默认比例或任意预设定图。
+- 新构图查真正发表、适合解释任务的图，也看可迁移的跨域例子；已有实读参考可复用，补材料缺口。提取焦点为何最大、阅读路径、跨视图身份或数量编码、对齐与共用尺度、局部连接、密度、间距、字和色。把参考选择、科学内容和材料角色综合成当前设计简报，不只列论文或泛泛风格词。同篇复用符号与视觉语言，局部修改只重看受影响选择；有用决策放现有图材料或代码，不强加独立报告、固定参考数或每次重查。
+- 组合插图先把这些设计选择填入下方模型简报，通过 dove figure --project <root> --prompt <text>（或 --prompt-file <file>）[--image <file> ...] --output <file.png>，或现有图像工具，设计整幅构图和解释性图像，再做 PPT。支持时按需加 --size、--quality、--background；模型像素大小只是工作面，不是最终比例。由中心关系决定焦点大小和细节，不默认极简几何或繁复渲染。定量图用真实数据可复现生成，认真定坐标、单位、尺度与不确定性；模型可建议布局，不能造测量。纯数据图不需图像模型或 PPT 包装。
+- 实现选定设计，保留层级、阅读路径、对应关系和视觉语言，修科学错误，用真实材料换占位。组合插图在 PPT 中分开放可替换图像／证据及原生标签、连线和有用矢量；可编辑不等于把丰富图像描成简单形状。标题、标签、数学符号、程序词各有一致角色，变量和下标沿用稿件约定。为可读性选字与间距，不逐条缩小去塞旧框；字体、字号阶梯、配色、布局无通用模板。完整标题和长解释放图注，用 dove figure --tools 找本机 python-pptx Python 与导出命令。
+- 按稿件尺寸打开实际导出，对照科学解释、参考综合决策及实际用过的模型设计，不只查文件有效。改焦点、割裂分面、模糊对应、拥挤和小字，实看字形、数学位置与字体嵌入；局部修不好解释就重选表示或构图，不无限抛光。按请求交可编辑源、素材／创建代码、图注和同源 PDF／PNG，组合图含 PPTX。导出保留随内容定的画布与比例，不拉伸证据或套幻灯片形状；直说不可用调用、复用设计和材料缺口。
 
-### Adaptable model brief
+### 可调整的模型提示
 
-Fill the relevant placeholders from the actual task and references; this is a starting point, not a fixed layout or style.
+按本次科学内容和参考填入相关项，不把它当固定布局或画风。
 
 ```text
 Design a publication-quality [figure kind] for [field and audience], at [target manuscript column width; maximum height if applicable]. This is a visual design reference for editable composition, not a presentation slide.
@@ -56,7 +56,7 @@ Use consistent visual identities and meaningful color. Give headings, ordinary l
 Preserve supplied evidence and its identity for separate placement. Quantitative marks come from supplied data and plotting code, not invented model-rendered values; indicate where separately rendered plots belong. Make schematics recognizable as explanatory, not measured results. Keep labels concise and close to their referents, with the full title and extended explanation in the caption. Plan separately editable labels/connectors and replaceable illustrations/evidence so the selected hierarchy, correspondence and visual language can survive implementation and be checked in the actual export.
 ```
 
-### Using host tools
+### 使用宿主工具
 
-- Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way.
-- Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
+- 直接用本机和 Dove 已配置的工具服务完成任务，不逐次申请。工具缺失或失败时说明并找可用替代；真实评测缺口立刻问用户，不拿替代数据充数。
+- 真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。

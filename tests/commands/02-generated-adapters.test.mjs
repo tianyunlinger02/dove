@@ -83,7 +83,7 @@ test("ordinary Claude and standalone DSH carry one applicable shared and author 
   const participation = renderDoveAmbientParticipationSection();
   assert.ok(rule.includes(participation));
   assert.ok(author.includes(DOVE_RESEARCH_CORRECTION_RECORDING));
-  assert.match(author, /main session owns.*user conversation.*author execution/iu);
+  assert.match(author, /主会话负责用户沟通、科研判断、实际工作和记录/u);
   for (const contract of [DOVE_RESEARCH_MAINLINE_ANCHORING, DOVE_RESEARCH_ACTION_SPINE, DOVE_RESEARCH_DECISION_CONSEQUENCE, DOVE_RESEARCH_CROSS_DOMAIN_INTUITION, DOVE_RESEARCH_ROUND_CYCLE, DOVE_RESEARCH_ROUND_RECORDS, DOVE_RESEARCH_EVALUATION, DOVE_RESEARCH_CLARIFICATION, DOVE_RESEARCH_EXPERIMENT_ITERATION, DOVE_RESEARCH_REVIEW_DUAL_COMPLETION]) {
     assert.equal(shared.split(contract).length - 1, 1, "Each shared owner reaches the host contract once");
   }
@@ -122,14 +122,14 @@ test("quality and preference summaries and full references remain shared install
   assert.ok(quality.includes("RESEARCH_QUALITY_FULL.md"), "The short reference points to its full criteria");
   assert.ok(renderDoveAuthorPreferencesReference().includes("AUTHOR_PREFERENCES_FULL.md"));
   assert.deepEqual(DOVE_RESEARCH_QUALITY_CRITERIA.map((criterion) => criterion.split(" — ")[0]), [
-    "Problem value (1–4)", "Novelty (1–4)", "Mechanism and theory (1–4)",
-    "Method quality and feasibility (1–4)", "Data and evaluation (1–4)",
-    "Implementation (1–3)", "Experiment and evidence value (1–4)", "Expression and delivery (1–4)"
+    "问题价值（1–4）", "创新（1–4）", "机制与理论（1–4）",
+    "方法质量与可行性（1–4）", "数据与评价（1–4）",
+    "实现（1–3）", "实验与证据价值（1–4）", "表达与交付（1–4）"
   ]);
   for (const criterion of DOVE_RESEARCH_QUALITY_CRITERIA) assert.ok(fullQuality.includes(criterion));
-  assert.match(fullQuality, /equal granularity across fields/iu);
-  assert.match(fullQuality, /Shared functions.*need not mean equal contributions/iu);
-  assert.match(fullQuality, /unknown.*instead of giving zero/iu);
+  assert.match(fullQuality, /跨领域按相同贡献粒度/u);
+  assert.match(fullQuality, /功能相同未必贡献相同/u);
+  assert.match(fullQuality, /未知、未形成或不适用写原因，不填零/u);
   for (const entry of [...generatedResearchQualityReferenceEntries(), ...generatedAuthorPreferencesReferenceEntries()]) {
     assert.equal(entry.content, expected.get(entry.destinationPath));
     assert.ok(PACKAGE_GENERATED_SUPPORT_PATHS.includes(entry.relativePath));

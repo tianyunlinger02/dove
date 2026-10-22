@@ -78,26 +78,26 @@ function renderHostGuidance(contract, hostId) {
     ...(hostGuidance.common ?? []),
     ...(hostId ? hostGuidance[hostId] ?? [] : [])
   ]);
-  return renderListSection("Using host tools", values);
+  return renderListSection("使用宿主工具", values);
 }
 
 function renderReturnWith(contract) {
-  return renderListSection("Return with", contract.returnWith);
+  return renderListSection("交付内容", contract.returnWith);
 }
 
 function renderCapabilityContract(command, hostId = null) {
   const contract = command.contract;
   if (!contract) return "";
   const sections = [
-    "## How Dove approaches this work\n\nThese are flexible research considerations, not a required order or report template.",
-    `### What this is for\n\n${contract.purpose}`,
-    `### When to use\n\n${contract.when}`,
-    renderListSection("What Dove will examine", contract.responsibilities),
-    renderListSection("Scope and changes", contract.boundaries),
-    Array.isArray(contract.actions) && contract.actions.length > 0 ? `### Ways Dove may proceed\n\n${renderBullets(contract.actions)}` : "",
-    contract.modelPrompt ? `### Adaptable model brief\n\nFill the relevant placeholders from the actual task and references; this is a starting point, not a fixed layout or style.\n\n\`\`\`text\n${contract.modelPrompt}\n\`\`\`` : "",
-    renderListSection("What this should not replace", contract.nonGoals),
-    renderListSection("When Dove needs input", contract.clarification),
+    "## 怎么做\n\n按当前问题使用这些做法，不机械套步骤或报告模板；明确需要用户决定的地方仍先交给用户。",
+    `### 用途\n\n${contract.purpose}`,
+    `### 适用情况\n\n${contract.when}`,
+    renderListSection("要判断什么", contract.responsibilities),
+    renderListSection("工作范围", contract.boundaries),
+    Array.isArray(contract.actions) && contract.actions.length > 0 ? `### 具体做法\n\n${renderBullets(contract.actions)}` : "",
+    contract.modelPrompt ? `### 可调整的模型提示\n\n按本次科学内容和参考填入相关项，不把它当固定布局或画风。\n\n\`\`\`text\n${contract.modelPrompt}\n\`\`\`` : "",
+    renderListSection("不替代什么", contract.nonGoals),
+    renderListSection("什么时候找用户", contract.clarification),
     renderHostGuidance(contract, hostId),
     renderReturnWith(contract)
   ].filter(Boolean);
@@ -106,12 +106,12 @@ function renderCapabilityContract(command, hostId = null) {
 
 function renderExamples(command, hostId = null) {
   const examples = exampleBullets(command, hostId);
-  return examples.length > 0 ? `\n\n## Examples\n\n${examples.map((example) => `- \`${example}\``).join("\n")}` : "";
+  return examples.length > 0 ? `\n\n## 示例\n\n${examples.map((example) => `- \`${example}\``).join("\n")}` : "";
 }
 
 function renderArgumentBlock(hostId) {
   if (hostId !== "claude") return "";
-  return "## Request\n\n$ARGUMENTS";
+  return "## 当前请求\n\n$ARGUMENTS";
 }
 
 function renderBody(command, heading, hostId = null) {
@@ -126,9 +126,9 @@ function renderBody(command, heading, hostId = null) {
     responsePolicy,
     renderDoveSharedResearchContractSection(),
     command.id === "dove.status"
-      ? `Quality summary (project-relative): \`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`; consult relevant details in \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\` only when the status judgment needs them. Guidance is not research evidence.`
-      : `Full quality details (project-relative): \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\`. Consult relevant criteria only when an actual decision needs them; author stance below requires both short summaries in each fresh author main context. Reuse the briefs after compact or resume, not both full references as a startup ritual. Guidance is not research evidence.`,
-    command.id === "dove.status" ? "For Status, apply these principles and user corrections to a read-only answer, not research execution or document updates."
+      ? `质量摘要：\`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`；具体判断需要时再查 \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\` 的相关部分，规则不是研究证据。`
+      : `质量细则：\`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\`。新作者主上下文亲自读两份短摘要，压缩或恢复后沿用；全文按需查，不反复通读。规则不是研究证据。`,
+    command.id === "dove.status" ? "状态查询只读回答，应用用户纠正，但不启动研究或更新记录。"
       : renderDoveAuthorStanceSection()
   ].join("\n\n") : "";
   return [`# ${heading}`, purpose, args, examples.trim(), shared, contract].filter(Boolean).join("\n\n") + "\n";
@@ -148,7 +148,7 @@ function renderFrontmatter(command, fields = {}) {
 }
 
 function renderMarkdownCommand(command, heading, hostId = null) {
-  return `${renderFrontmatter(command, { argumentHint: "optional request, artifact path, venue, constraint, or follow-up context" })}\n${renderBody(command, heading, hostId)}`;
+  return `${renderFrontmatter(command, { argumentHint: "可选：请求、产物路径、投稿目标、约束或后续背景" })}\n${renderBody(command, heading, hostId)}`;
 }
 
 function renderSkill(command, hostId = null) {

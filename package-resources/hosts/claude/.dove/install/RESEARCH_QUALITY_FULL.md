@@ -1,49 +1,49 @@
-# Dove research quality reference
+# Dove 研究质量全文
 
-Read the relevant criteria for consequential judgments, not the whole reference each round. Grades describe scoped merit, not stages, permissions or automatic gates. Mentors and reviewers use only their specified materials; guidance is not evidence.
+重要判断按需读相关标准，不必每轮通读。评分描述范围内的质量，不是阶段、权限或自动关口。导师和审稿者只用各自指定材料；规则不是证据。
 
-- 围绕用户的主要目标和核心能力，把问题价值、方法、实验与贡献放在一起判断，抓住决定性瓶颈和共享根因。把主线改写成别的问题、拆成子问题或换用代理数据和指标时，写明“做成这一步，原问题为什么会改善、改善多少”，并先用最便宜的办法检验这条连接：让这一步取真值或理想结果，看原问题能到多少；或在少量真实目标上看代理上的提升是否同样出现。进展按原问题的端到端指标算；连接不成立就回到原问题，不再把子问题越做越好。比较合理替代方案，按当前证据、资源与完整周期成本选择整体上更值得采用的方案；需要核心实现、协调重构或路线调整时，就完整解决，不以最小改动代替整体收益。
+- 围绕用户目标和核心能力，一起判断问题价值、方法、实验与贡献，抓决定性瓶颈和共享根因。拆子问题或换代理数据、指标时，说明这一步为什么能改善原问题、能改善多少；先用理想结果代入，或在少量真实目标上检验这条连接。进展按原问题的端到端指标算，连接不成立就回到原问题。比较合理替代方案，按证据、资源与完整周期成本选整体更值得做的方案；需要核心实现、协调重构或换路线就完整解决，不以改动小代替整体收益。
 
-- 方法从对问题的解释中形成：把失败说具体，比较几种可能的解释，找出任务要求的性质在现有计算的哪一步没有得到保证，由此推出改法，动手前写下预期，再用结果修正解释和方法；思路也可以来自文献、跨域、数学、物理或类比，同样要落到解释和预期上。提出想法要有依据，投入要看预期价值，下结论要有相称的证据，三者分开：还不能下结论的机制照样可以提出、推导，并在授权内实现和检验。
+- 方法从解释问题中形成：说清失败，比较几种解释，找出任务要求在哪一步计算中没有得到保证，由此推出改法，先写预期，再用结果修正。思路可以来自文献、跨域、数学、物理或类比，都要落到解释和可检验的预期上。想法依据、投入价值与结论证据分开判断；尚不能下结论的机制也可以提出和推导，实现新方法仍先让用户看过方法设计。
 
-- 根据结果区分实现故障、评价问题与假设失败，保留有效负证据，修正方法和所有受影响的工作，必要时转向。坚持重要问题，先攻决定核心能力的难点，不因好测量、好交差改做边缘工作，也不固守失败实现；按失败类型与未见数据判断通用能力，把判断落实为已授权的有效行动和真实结果。普通修复按其实际价值完成，无须另造创新。
+- 按结果区分实现故障、评价问题与假设失败，保留有效负证据，修正方法及受影响工作，必要时转向。先攻决定核心能力的难点，不因好测、好交差改做边缘工作，也不固守失败实现。按失败类型和未见数据判断通用能力，把判断变成实际行动与结果。普通修复按实际价值完成，不必另造创新。
 
-- Judge substantive quality, confidence in evidence, sufficiency for the current use and completed work separately. Explain unknown, unformed or inapplicable items instead of giving zero. State scope and conditions; do not average ordinal grades or infer acceptance probabilities.
+- 实质质量、判断把握、当前是否够用和工作是否完成分开说明。未知、未形成或不适用写原因，不填零；写明范围与条件，序数不平均、不换算录用概率。
 
-- Problem value (1–4) — insufficient: success adds no consequential knowledge or benefit beyond alternatives; limited but clear: a real need with limited consequences; important: removes a consequential bottleneck, severe failure or key dispute; major: substantially changes solvability, practice or understanding. Ground benefits and alternatives; breadth alone is not value.
+- 问题价值（1–4） — 不足：成功也没比替代方案增加重要认识或收益；有限但明确：真实需求、影响有限；重要：解除关键瓶颈、严重失败或争议；重大：显著改变可解性、实践或理解。说明收益和替代方案，覆盖面大本身不等于有价值。
 
-- Novelty (1–4) — none: covered/restated; limited: local extension of the solution principle; substantive: consequential new methods, relationships, resources, results or understanding; major: a new solution principle or generative, unifying framework. Subtract prior contributions at equal granularity across fields. Shared functions need not mean equal contributions; exclusivity is unnecessary. Search depth affects confidence, not magnitude.
+- 创新（1–4） — 无：已被覆盖或只是重述；有限：局部扩展已有原理；实质：重要的新方法、关系、资源、结果或认识；重大：新解题原理或可生成、可统一的框架。跨领域按相同贡献粒度扣除先例；功能相同未必贡献相同，不要求独占。检索深度影响把握，不改变创新幅度。
 
-- Mechanism and theory (1–4) — unsound: contradiction, circularity or a decisive invalid step; limited but sound: a valid local relationship under stated conditions; strong: discriminating predictions or boundaries addressing serious alternatives; deep: decisive constraints, tight bounds or unifying relationships. Unformed or unchecked mechanisms remain unknown, not unsound. Match proof or empirical grounds to the claim; complexity cannot offset invalidity.
+- 机制与理论（1–4） — 不成立：矛盾、循环或决定性无效步骤；有限但成立：明确条件下的有效局部关系；强：能区分重要替代解释的预期或边界；深：决定性约束、紧界或统一关系。未形成、未核查是未知，不是不成立；证明或实证要配得上主张，复杂不能抵消错误。
 
-- Method quality and feasibility (1–4) — critically unsuitable: necessary capability or conditions are unavailable, or valid grounds rule out worthwhile benefit; partly suitable: important capability, cost or boundary gaps; fit for purpose: capabilities, benefit, constraints and cost fit the use; substantial advantage: a clear overall benefit/cost/capability advantage over serious alternatives. Design fit is provisional until effects are observed. One failed model or Oracle is not a whole-space impossibility bound.
+- 方法质量与可行性（1–4） — 严重不适用：必需能力或条件不可得，或有效依据已排除值得做的收益；部分适用：能力、成本或边界仍有重要缺口；适用：能力、收益、约束和成本匹配；明显优势：比合理替代方案有整体收益／成本／能力优势。设计合适只是暂定，效果要实测；一个模型或理想对照失败不是整个方法空间不可能。
 
-- Data and evaluation (1–4) — invalid: target mismatch, leakage, wrong accounting, incomparable conditions or decisive confounding; limited: reliable partial judgment with consequential coverage or identification gaps; valid: measurement, comparison, confounds and uncertainty support the scoped claim; strongly discriminating: also resolves important alternatives, heterogeneity or boundaries. Small diagnostics may be strong for a bounded question. More data and frozen protocols cannot repair invalid evaluation.
+- 数据与评价（1–4） — 无效：目标不符、泄漏、统计错误、条件不可比或严重混淆；有限：能可靠判断局部，但覆盖或归因有重要缺口；有效：测量、比较、混淆与不确定性支持范围内主张；区分力强：还解决重要替代解释、差异或边界。小诊断可有力回答小问题，数据更多、协议固定都救不了无效评价。
 
-- Implementation (1–3) — unfit: necessary behavior is wrong, absent, inaccessible or hides failures; restricted: a correct local chain with consequential reliability, efficiency or downstream gaps; reliable within scope: actual producer/consumer behavior and use boundaries work, failures are visible and costs proportionate. Reliability needs execution grounds; no execution is unknown, not failure. Evolvability is a tradeoff, not a universally higher grade.
+- 实现（1–3） — 不适用：必要行为错误、缺失、不可用或隐藏失败；受限：局部链路正确，但可靠性、效率或下游仍有重要缺口；范围内可靠：实际产出和使用行为成立，失败可见、成本相称。可靠性需运行依据，没运行是未知而非失败；可演进性是取舍，不天然更高级。
 
-- Experiment and evidence value (1–4) — none: no valid judgment contribution; limited update: a real lead or constraint with major judgment gaps; proportionate conclusion: supports, refutes or bounds an important claim; resolves key uncertainty: settles a decisive dispute and important alternatives. Judge knowledge added separately from method quality. Reliable negative evidence can be strongest; run counts, nonsignificance alone and positive scores are not conclusions.
+- 实验与证据价值（1–4） — 无：没增加有效判断；有限更新：有真实线索或约束，但判断缺口大；结论相称：支持、反驳或限定重要主张；解决关键未知：澄清决定性争议和重要替代解释。新增认识与方法好坏分开评；可靠负证据可以最有价值，运行次数、不显著或正分数本身都不是结论。
 
-- Expression and delivery (1–4) — misleading/unusable: claims conflict with evidence or the artifact fails its use; understandable but weak: consequential reasoning or usability gaps; accurate/clear/usable: claims, evidence, limits and output align; substantially more efficient: faithful expression reveals the insight and reduces understanding or use costs. Scope follows the artifact and audience. Beauty, draft count and build success cannot replace scientific accuracy.
+- 表达与交付（1–4） — 误导／不可用：主张不符证据或产物不能用；能懂但弱：推理或使用有重要缺口；准确清楚可用：主张、证据、限制与输出一致；显著高效：忠实表达揭示洞见，降低理解或使用成本。范围取决于产物和读者，美观、稿数与构建成功不能代替科学准确。
 
-- Choose a scale that can answer the question. Inspected sources, derivation, code or observations can justify implementing a selected method before effects are measured or theory and baseline libraries are complete.
+- 规模要能回答问题。已读来源、推导、代码或观察可以支持选择方法；效果未测、理论或基线库未齐不妨碍形成设计，新方法实现前仍交用户看过。
 
-- For topic selection, apply the sourced gaps, mechanism search, candidate cards and adversarial review in RESEARCH_QUALITY.md. For other novelty claims, inspect decisive neighbors across fields at equal contribution granularity. Known parts do not rule out novelty; paradigm labels and absence of precedent do not prove it. Separate operation equivalence, expressive coverage, public availability and empirical parity. Use criteria relevant to the deliverable.
+- 选题按 RESEARCH_QUALITY.md 做有来源的缺口、机制检索、候选卡和反证检查。其他新意判断也要跨领域、按相同贡献粒度核查决定性近邻；已知部件不排除创新，范式名或没人做过不证明创新。分清运算等价、表达覆盖、公开可得和实测相当，按产物使用适用标准。
 
-- Interfaces, inherited code, available datasets and teacher outputs do not define value, reference truth or the user's goal. If the problem, population, allowed information, output, reference, proxy, contribution or completion meaning changes, explain it. A new route cannot erase an old proposition's failure or inherit its success.
+- 接口、旧代码、现有数据和教师输出不定义价值、真值或用户目标。问题、人群、可用信息、输出、参照、代理、贡献或完成标准变了就说明；新路线不能抹掉旧命题的失败，也不能继承它的成功。
 
-- State project methods, experiment procedures, result numbers, citation content, and source facts only from material actually read, retrieved, executed, or inspected; use general knowledge only for hypotheses and search directions.
+- 项目方法、实验过程、数字、引文和来源事实，只据实际读过、检索到、执行过或检查过的材料陈述；常识只用于假设和检索方向。
 
-- Separate candidate generation or reachability, selection on the same candidates, and end-to-end effect. Fixed candidates cannot assess generation; successful intersections cannot represent the full task. State how failed, missing, invalid and excluded cases enter the denominator.
+- 分开判断候选生成／可达性、同批候选上的选择和端到端效果。固定候选测不了生成能力，成功交集代表不了完整任务；说清失败、缺失、无效和排除样本怎么算。
 
-- Full-task comparisons against reasonable external alternatives test utility; internal ablations and causal controls test attribution. Neither replaces the other. Before interpreting anomalies, inspect the relevant code, data, configuration, randomness, metrics and analysis. Preserve units, input conditions, budgets, uncertainty, failed cases and exclusions. Execution alone proves neither valid evaluation nor the proposed mechanism.
+- 完整任务对合理外部方法测效用，内部消融和因果对照测归因，互不替代。解释异常前查相关代码、数据、配置、随机性、指标和分析，保留单位、输入条件、预算、不确定性、失败及排除情况。能运行不等于评价有效或机制成立。
 
-- Develop with available ground truth and reruns, keeping enough code and configuration history to interpret results. Choose each next experiment by the key unknown it resolves and how its answer would change the method; repeated runs, extra baselines and ablations follow from that rather than from a paper checklist, and none of them replaces fixing a known method defect. Size each experiment so its answer can change the decision: estimate the expected difference and the noise (run-to-run spread; sampling error, about √(p(1−p)/n) for an accuracy over n items), then choose data, training length and representative test cases so the expected difference clearly exceeds the noise, using the available GPU memory fully. If that size is out of reach, redesign (a paired comparison, the affected subset, more data) instead of running a smaller version; a result that cannot separate the outcomes is not evidence of no effect. A development edit does not itself require the full evaluation suite. Tie a round's reported method results to the code version actually evaluated, which may include coordinated changes; distinguish later versions and retain useful earlier ones for ablation. Formal comparisons, result adoption and paper claims require the applicable protocol, all confirmed user metrics and fair strong baselines for the version used. Effects not reevaluated after a relevant change remain unknown rather than inheriting an old pass. After test use, a changed method's next formal comparison needs a fresh draw unused in development or previous tests and same-set baselines. Use fair budgets and causal controls for attribution. For final confirmation, put the claim, controls, data and metrics in the brief and use heldout once.
+- 开发可看真值、重跑，保留解释结果所需的代码与配置。每次实验针对能改变方法选择的关键未知；补种子、加训练、消融或补基线不能代替修已知缺陷。先估预期差别和噪声（运行波动；n 个样本的准确率误差约 √(p(1−p)/n)），再定真实代表性数据量、训练长度和测试样本，让差别明显大于噪声，用足可用显存。做不到就改用配对比较、受影响子集或更多数据，不跑注定分不出结果的小版本，也不把它当没效果。每次开发修改不必跑全套，但每轮汇报方法结果必须有真实任务评测。结果绑定实际测过的代码版本，可含协调修改；后续版本分开，保留有价值的旧版作消融。正式比较、采纳结果和论文主张要有适用协议、全部已确认用户指标及公平强基线；相关改动后没重测的效果仍未知。测试数据用过再改方法，下次正式比较用开发和历次测试未用过的新数据，同批测基线。预算公平，以因果对照判断归因；最终确认先在说明中写主张、对照、数据和指标，独立保留集只用一次。
 
-- EVAL.md starts with a completion reference to the script, protocol and all user metrics, then one row per evaluated method version with the columns 日期、版本/轮次、协议与数据、测量结果、未见数据与泛化差距、结论、产物 (existing English headers may stay). Cells hold numbers and one short sentence (about 200 characters); link detailed values. Keep engineering logs and process status out. When the executor repairs an evaluator, immediately mark affected results and restore comparability for current claims, necessary historical comparisons and strong baselines, reusing retained outputs before rerunning. Other old results stay clearly labeled as old-protocol history until needed for a comparison or citation. Keep protocols distinct and retain unfavorable evidence. Save the mentor's current assessment as specified in RESEARCH_QUALITY.md.
+- 主线确认后的第一件工程是真实任务评测：打通官方指标，准备真实开发集（不是从训练数据切出的合成集），复现最强可得外部方法，或至少对齐其报告数字。缺数据、模型、网络或资源就立刻告诉用户缺什么并询问，不带缺口继续方法迭代。每轮方法结果都报该真实评测的数字；训练分布或合成集只作开发信号，不能替代。EVAL.md 开头链接完成标准所需的脚本、协议和全部用户指标；每个实测方法版本一行，列为日期、版本/轮次、协议与数据、测量结果、未见数据与泛化差距、结论、产物，旧英文列头可留。单元格放数字和短句（约 200 字），详情用链接，不放工程日志。修评价时立即标明受影响结果，先恢复当前主张、必要历史比较与强基线的可比性，先复用原始输出再决定重跑；其他旧结果标作旧协议历史，需要比较或引用时再恢复。协议分开，保留不利证据；导师当前判断按 RESEARCH_QUALITY.md 保存。
 
-- Match evidence to the intended conclusion and investment. Informative exploration needs plausible value, a concrete hypothesis and accessible resources; major development also needs a meaningful remaining contribution and feasible validation. Confirmation needs reliable execution and fair evaluation; conclusions need sufficient evidence and serious counterevidence addressed. No score compensates for leakage, contradiction or a covered core contribution. Reproduction, repair and delivery do not automatically reopen topic selection.
+- 证据匹配结论与投入：探索需合理价值、具体假设和可得资源；大投入还需有意义的剩余贡献和可行验证；确认需可靠执行与公平评价；结论需足够证据并回应重要反证。评分不能抵消泄漏、矛盾或核心贡献已被覆盖。复现、修复、交付不自动重开选题。
 
-- Choose engineering by capability, resources and total time to trustworthy evidence or delivery, including preparation, evaluation and rework. Reuse valid measurements; profile representative work only when useful. Use suitable available accelerators within the user's resource rules (for example one idle GPU on a shared server), without inventing further limits, redundant fallbacks or infrastructure without benefit. Kernel speed and hardware utilization do not establish end-to-end speed.
+- 工程按能力、资源和取得可信证据或交付的总时间选择，含准备、评价和返工。复用有效测量，只在有用时测代表性性能；按用户原话使用可用加速器，不自加限制，不加无收益的兜底或基础设施。内核速度和硬件利用率不等于端到端快。
 
-- At important-result mentor calls, save its current eight-dimensional quality assessment in EVAL.md with grounds and unknowns. Use the dimensions to identify bottlenecks, shared causes and decisive unknowns, then compare overall solutions for the next brief, including coordinated changes or route replacement when warranted. The main session does not duplicate that self-assessment. Measurements and predictions remain separate. Paper-review objections are reasoned judgments, not new empirical evidence, permission or acceptance. Submission still needs scientific sufficiency, independent current-version review and actual delivery readiness.
+- 重要结果由导师按 RESEARCH_QUALITY.md 给出当前八维判断，保存 EVAL.md，写依据与未知。用维度找瓶颈、共因和关键未知，再比较整体方案，必要时协调修改或换路线；主会话不重复自评。预测与测量分开，审稿意见不是新实证、权限或录用；投稿还需科学上够用、当前版独立审稿与实际交付就绪。

@@ -55,7 +55,7 @@ function recentUserOriginalsContext(project, options) {
 
 export function userOriginalSourceContext(payload) {
   if (typeof payload.transcript_path !== "string" || !payload.transcript_path) return "";
-  return `\nUser-original source: ${JSON.stringify(payload.transcript_path)}. Give the mentor its last-read date/range and dated user originals, not execution records. Include the current user's exact words if not yet in the file; retain sources in the brief, not a new ledger.`;
+  return `\n用户原话来源：${JSON.stringify(payload.transcript_path)}。导师要读上次已读范围之后的本人原话和日期，不用执行记录替代；当前原话尚未入文件时直接附上。来源写在本轮说明里，不新建台账。`;
 }
 
 export function sessionStartOutput(payload, result = null, options = {}) {

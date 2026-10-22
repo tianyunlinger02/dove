@@ -328,6 +328,6 @@ test("mentor brief CLI exposes originals gathering failure without blocking or r
   assert.equal(result.stderr, "");
   const { brief } = JSON.parse(result.stdout);
   assert.ok(brief.includes(index), "the original failure reason is passed through to the brief renderer");
-  assert.match(brief, /本人原话汇总整理失败/u);
-  assert.match(brief, /调用继续/u);
+  assert.match(brief, /汇总整理失败/u);
+  assert.match(brief, /已有摘录可能不完整，缺失不等于用户没说过/u);
 });
