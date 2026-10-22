@@ -14185,7 +14185,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.26" : null;
+var injectedVersion = true ? "3.4.27" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -15013,18 +15013,26 @@ function contract(slug) {
     ]
   });
   if (slug === "figure") return capabilityContract({
-    ambientParticipation: "Create publication-quality figures through model-led design, illustrations, real materials and editable PPT composition.",
-    purpose: "Gather materials and create, revise, inspect and caption publication-quality figures.",
-    when: "Use for diagrams, plots, captions and visual revisions or assessments.",
+    ambientParticipation: "Design across fields around the scientific relation; use inspected references for composition, scale, encoding and typography, model-led design with editable composition for illustrations, and real data/code for plots. For a new composition, read and adapt the brief in `.claude/commands/dove/figure.md` directly; no slash invocation is needed.",
+    purpose: "Create, revise, inspect and caption publication-quality scientific figures across research fields.",
+    when: "Use for method and mechanism diagrams, architectures, quantitative plots, comparisons, evidence assemblies and visual assessments.",
     actions: [
-      "Give the image model the scientific message, inspected content, key relations and actual paper figures as visual references. Let it design composition, density, hierarchy, color and depth before building PPT, choosing a visual language suited to the explanation.",
-      "Generate or edit designs and illustrations with the configured image model through dove figure --project <root> --prompt <text> (or --prompt-file <file>) [--image <file> ...] --output <file.png> [--size, --quality, --background transparent for assets]. Inspect the design and refine its assets.",
-      "Preserve the design in PPT: native labels/connectors and independently replaceable illustrations and real assets. Keep detailed model-made schematics as images rather than tracing them into basic shapes. Real evidence stays faithful and distinct from explanatory imagery; a full-figure PNG alone is not editable composition.",
-      "Use concrete objects, close-ups, texture, shading and geometry for explanatory value, with deliberate fills and coherent type/color. Keep the full title and extended explanation in the caption; refine illustrations with the model and typeset in PPT.",
-      "Deliver PPTX, assets, any creation script and caption, plus PDF/PNG from that source; dove figure --tools shows this machine's python-pptx Python and its PPTX-to-PDF and PDF-to-PNG commands. Open at manuscript size, compare with the design and paper references, and improve meaning, visual quality and readability."
+      "Establish the figure's question, takeaway, audience, final dimensions and available evidence. Choose a representation that reveals the relevant relation: states and interventions for mechanisms, information flow for architectures, aligned views for comparisons, or measured positions and uncertainty for quantitative results. These are choices, not fixed layouts; concrete objects, boxes, coordinates and illustrations are useful when they explain the science.",
+      "Inspect actual published figures suited to that explanatory task, including transferable examples from other fields. Extract usable design decisions: what is largest and why, where reading starts and proceeds, how identities or quantities are encoded across views, which panels share alignment or scales, where close-ups connect, and how density, spacing, type and color support the explanation. Adapt those decisions to the whole new composition, rather than copying a reference's subject or adding decorative illustrations to an unchanged diagram.",
+      "Adapt the model brief below with inspected scientific content, material roles and the reference decisions. Use the configured model via dove figure --project <root> --prompt <text> (or --prompt-file <file>) [--image <file> ...] --output <file.png>, or an exposed image tool, to design the composition and explanatory imagery before building PPT. Pass --size, --quality or --background when useful and supported by the selected model. Let the central relation determine focal scale, reading order and supporting detail; neither minimalist geometry nor elaborate rendering is the default style.",
+      "Implement composed figures in PPT while preserving the design's hierarchy, proportions and visual language. Keep detailed illustrations and real evidence as separate replaceable media, with native labels, connectors and useful vector elements; editability does not require tracing rich imagery into simple shapes. Generate quantitative plots reproducibly from real data with deliberate axes, units, scales and uncertainty; the image model may suggest their layout, not invent their measurements. Place the full title and extended explanation in the caption. Use dove figure --tools to find this machine's python-pptx Python and PPTX-to-PDF / PDF-to-PNG commands.",
+      "Open the actual export at manuscript size and compare it with the intended explanation, model design and paper references. Refine weak focal hierarchy, crowded or disconnected panels, ambiguous correspondence and unreadable labels, not just file validity. Deliver the editable source, assets/creation code, caption and same-source PDF/PNG as appropriate to the request; composed figures include the PPTX. State unavailable calls, reused designs and remaining material gaps plainly."
     ],
+    modelPrompt: `Design a publication-quality [figure kind] for [field, audience and final manuscript dimensions]. This is a visual design reference for editable composition, not a presentation slide.
+SCIENTIFIC MESSAGE: [one takeaway and the question this figure answers].
+CONTENT: [inspected facts, entities, relationships and scientific distinctions the image must preserve].
+MATERIALS: [each input's role: real evidence, explanatory illustration, prior design to revise, or visual reference; identify what is supplied separately].
+REFERENCE DECISIONS: [figures actually inspected and what to transfer: focal scale, reading order, cross-view encoding, panel alignment/density, close-up connections, typography and color; not their subject matter].
+Choose visual representations that expose the central [mechanism/state change, information flow, quantitative relation, comparison or evidence structure]. Make that relation the visual focus, allocating area and detail by explanatory importance rather than giving every module equal weight. Connect overview and detail through aligned views, repeated identities, shared coordinates or explicit links where useful. Design the whole composition around this explanation, not a stock arrangement with illustrations added afterward.
+Use consistent visual identities and meaningful color; distinguish quantities, categories and annotations. Select type sizes, line weights, spacing and contrast for the final manuscript size. Use depth, texture, shading, simple geometry or boxes where they help this particular explanation; there is no fixed minimal or richly illustrated style.
+Preserve supplied evidence and its identity for separate placement. Quantitative marks must come from the supplied data and plotting code, not invented model-rendered values; indicate where separately rendered plots belong when needed. Make schematics recognizable as explanatory, not measured results. Keep labels concise and close to their referents, with the full title and extended explanation outside the artwork in the caption. Plan for separately editable labels/connectors and replaceable illustrations/evidence in the final composition.`,
     boundaries: [
-      "Planning-only, assessment-only and no-write requests retain their scope. Completion means a scientifically faithful, usable and visually compelling figure, not merely valid exports."
+      "Planning-only, assessment-only and no-write requests retain their scope. Completion requires scientific fidelity and a visually effective figure, not merely valid exports."
     ]
   });
   if (slug === "review") return capabilityContract({
@@ -15760,6 +15768,13 @@ ${contract2.when}`,
     Array.isArray(contract2.actions) && contract2.actions.length > 0 ? `### Ways Dove may proceed
 
 ${renderBullets(contract2.actions)}` : "",
+    contract2.modelPrompt ? `### Adaptable model brief
+
+Fill the relevant placeholders from the actual task and references; this is a starting point, not a fixed layout or style.
+
+\`\`\`text
+${contract2.modelPrompt}
+\`\`\`` : "",
     renderListSection("What this should not replace", contract2.nonGoals),
     renderListSection("When Dove needs input", contract2.clarification),
     renderHostGuidance(contract2, hostId),

@@ -95,6 +95,7 @@ function renderCapabilityContract(command, hostId = null) {
     renderListSection("What Dove will examine", contract.responsibilities),
     renderListSection("Scope and changes", contract.boundaries),
     Array.isArray(contract.actions) && contract.actions.length > 0 ? `### Ways Dove may proceed\n\n${renderBullets(contract.actions)}` : "",
+    contract.modelPrompt ? `### Adaptable model brief\n\nFill the relevant placeholders from the actual task and references; this is a starting point, not a fixed layout or style.\n\n\`\`\`text\n${contract.modelPrompt}\n\`\`\`` : "",
     renderListSection("What this should not replace", contract.nonGoals),
     renderListSection("When Dove needs input", contract.clarification),
     renderHostGuidance(contract, hostId),
