@@ -6,10 +6,11 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { generateFigure } from "../src/core/figure-generation.mjs";
+import { figureTools, generateFigure } from "../src/core/figure-generation.mjs";
 import { writeHostSettings } from "../src/core/host-migration.mjs";
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8n8AAAAASUVORK5CYII=", "base64");
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1]);
 const CONFIG = { baseURL: "https://images.example.test/v1/", model: "configured-image-model", apiKeyEnv: "DOVE_FIXTURE_IMAGE_KEY" };
 const KEY = "synthetic-key-not-a-credential";
 const PROMPT = "Draw the mechanism. Image 1 is the edit target; image 2 is a style reference. Preserve the scientific relationships.";
@@ -25,7 +26,7 @@ function fixture(t, config = CONFIG) {
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const root = path.join(base, "project");
   const home = path.join(base, "home");
-  const env = { HOME: home, XDG_CONFIG_HOME: path.join(home, ".config"), DOVE_FIXTURE_IMAGE_KEY: KEY };
+  const env = { HOME: home, XDG_CONFIG_HOME: path.join(home, ".config"), DOVE_FIXTURE_IMAGE_KEY: KEY, PATH: "" };
   fs.mkdirSync(root);
   fs.mkdirSync(home);
   fs.writeFileSync(path.join(root, "prompt.txt"), PROMPT);
@@ -34,9 +35,9 @@ function fixture(t, config = CONFIG) {
   if (config !== null) writeHostSettings({ figure: config }, { env });
   const requests = [];
   return {
-    base, root, env, requests,
+    base, root, home, env, requests,
     options: {
-      env, promptFile: "prompt.txt", output: "figures/result.png",
+      env, promptFile: "prompt.txt", output: "figures/result.png", sleep: async () => {},
       fetch: async (url, init) => {
         requests.push({ url, ...init });
         return Response.json({ data: [{ b64_json: PNG.toString("base64") }] });
@@ -71,149 +72,124 @@ async function fakeApi(t) {
   return { requests, baseURL: `http://127.0.0.1:${server.address().port}/v1` };
 }
 
-test("figure generation consumes the configured API and model and writes the returned PNG once", async (t) => {
+test("generation sends the prompt and requested options to the configured model and writes the image", async (t) => {
   const f = fixture(t);
-  const result = await generateFigure(f.root, f.options);
+  const result = await generateFigure(f.root, { ...f.options, size: "1536x1024", quality: "high", background: "transparent" });
   assert.deepEqual(result, { status: "generated", mode: "generate", model: CONFIG.model, outputPath: path.join(f.root, "figures/result.png"), inputs: 0 });
   assert.deepEqual(fs.readFileSync(result.outputPath), PNG);
   assert.equal(f.requests.length, 1);
   const request = f.requests[0];
   assert.equal(request.url, "https://images.example.test/v1/images/generations");
-  assert.equal(request.method, "POST");
   assert.equal(request.headers.Authorization, `Bearer ${KEY}`);
-  assert.equal(request.headers["Content-Type"], "application/json");
-  assert.deepEqual(JSON.parse(request.body), { model: CONFIG.model, prompt: PROMPT });
-  assert.equal(request.redirect, "error");
-  assert.equal(JSON.stringify(result).includes(KEY), false);
-  assert.deepEqual(fs.readFileSync(path.join(f.root, "target.png")), PNG);
+  assert.deepEqual(JSON.parse(request.body), { model: CONFIG.model, prompt: PROMPT, size: "1536x1024", quality: "high", background: "transparent" });
+  const inline = await generateFigure(f.root, { ...f.options, promptFile: undefined, prompt: "Inline prompt", output: "inline.png" });
+  assert.equal(JSON.parse(f.requests[1].body).prompt, "Inline prompt");
+  assert.equal(inline.outputPath, path.join(f.root, "inline.png"));
 });
 
-test("figure editing sends ordered images, prompt roles and an explicit size as multipart", async (t) => {
+test("editing sends ordered images from anywhere on disk as multipart", async (t) => {
   const f = fixture(t);
-  const result = await generateFigure(f.root, { ...f.options, image: ["target.png", path.join(f.root, "style.png")], size: "1536x1024" });
+  const elsewhere = path.join(f.base, "references");
+  fs.mkdirSync(elsewhere);
+  fs.writeFileSync(path.join(elsewhere, "paper-figure.jpg"), JPEG);
+  const result = await generateFigure(f.root, { ...f.options, image: ["target.png", path.join(elsewhere, "paper-figure.jpg")], output: path.join(f.base, "out/edited.png") });
   assert.equal(result.mode, "edit");
-  assert.equal(result.inputs, 2);
+  assert.equal(result.outputPath, path.join(f.base, "out/edited.png"));
   const request = f.requests[0];
   assert.equal(request.url, "https://images.example.test/v1/images/edits");
   assert.ok(request.body instanceof FormData);
   assert.equal(Object.hasOwn(request.headers, "Content-Type"), false, "fetch owns the multipart boundary");
   assert.equal(request.body.get("model"), CONFIG.model);
   assert.equal(request.body.get("prompt"), PROMPT);
-  assert.equal(request.body.get("size"), "1536x1024");
-  assert.equal(request.body.has("response_format"), false);
-  const images = request.body.getAll("image[]");
-  assert.deepEqual(images.map((image) => [image.name, image.type]), [["target.png", "image/png"], ["style.png", "image/png"]]);
-  for (const image of images) assert.deepEqual(Buffer.from(await image.arrayBuffer()), PNG);
-  assert.deepEqual(fs.readFileSync(result.outputPath), PNG);
+  assert.deepEqual(request.body.getAll("image[]").map((image) => [image.name, image.type]), [["target.png", "image/png"], ["paper-figure.jpg", "image/jpeg"]]);
 });
 
-test("figure passes only explicitly requested size and accepts absolute project-contained paths", async (t) => {
-  const f = fixture(t);
-  await generateFigure(f.root, { ...f.options, promptFile: path.join(f.root, "prompt.txt"), output: path.join(f.root, "absolute.png"), size: "1024x1536" });
-  assert.equal(JSON.parse(f.requests[0].body).size, "1024x1536");
-  await generateFigure(f.root, { ...f.options, promptFile: "./prompt.txt", output: "./figures/result.png", image: ["./target.png"] });
-  assert.equal(f.requests[1].body.has("size"), false);
-});
-
-test("figure rejects missing or invalid API configuration before requesting or writing", async (t) => {
-  const cases = [
-    [null, /No figure API configured.*host.*image_gen/u],
-    [[], /configuration must be an object/u],
-    [{ ...CONFIG, baseURL: "" }, /figure.baseURL/u],
-    [{ ...CONFIG, baseURL: "not a URL" }, /HTTP\(S\)/u],
-    [{ ...CONFIG, baseURL: "file:///images" }, /HTTP\(S\)/u],
-    [{ ...CONFIG, baseURL: "https://user:secret@example.test/v1" }, /without credentials/u],
-    [{ ...CONFIG, baseURL: "https://example.test/v1?query=yes" }, /without credentials/u],
-    [{ ...CONFIG, model: " " }, /figure.model/u],
-    [{ ...CONFIG, apiKeyEnv: "literal-key-value" }, /environment variable/u]
-  ];
-  for (const [config, pattern] of cases) {
-    const f = fixture(t, config);
-    await assert.rejects(generateFigure(f.root, f.options), pattern);
-    assert.equal(f.requests.length, 0);
-    assert.equal(fs.existsSync(path.join(f.root, "figures")), false);
-  }
-  const f = fixture(t);
-  delete f.env.DOVE_FIXTURE_IMAGE_KEY;
-  await assert.rejects(generateFigure(f.root, f.options), /Missing figure API key environment variable: DOVE_FIXTURE_IMAGE_KEY/u);
+test("the key comes from Dove's key file, the named variable, or the host gateway it already uses", async (t) => {
+  const f = fixture(t, { baseURL: "http://127.0.0.1:8317/v1", model: CONFIG.model });
+  await assert.rejects(generateFigure(f.root, f.options), /No key for the image API: write it to .*figure-api-key/u);
   assert.equal(f.requests.length, 0);
+  const gatewayEnv = { ...f.env, ANTHROPIC_BASE_URL: "http://127.0.0.1:8317", ANTHROPIC_AUTH_TOKEN: "host-token" };
+  await generateFigure(f.root, { ...f.options, env: gatewayEnv });
+  assert.equal(f.requests[0].headers.Authorization, "Bearer host-token");
+  fs.writeFileSync(path.join(f.env.XDG_CONFIG_HOME, "dove/figure-api-key"), "file-key\n");
+  await generateFigure(f.root, { ...f.options, env: gatewayEnv });
+  assert.equal(f.requests[1].headers.Authorization, "Bearer file-key");
+  const otherGateway = { ...gatewayEnv, ANTHROPIC_BASE_URL: "https://elsewhere.example.test" };
+  fs.rmSync(path.join(f.env.XDG_CONFIG_HOME, "dove/figure-api-key"));
+  await assert.rejects(generateFigure(f.root, { ...f.options, env: otherGateway }), /No key for the image API/u, "a key for another gateway is never sent here");
 });
 
-test("figure checks prompt, inputs and output conflicts before the paid request", async (t) => {
-  const cases = [
-    [{ promptFile: undefined }, /--prompt-file is required/u],
-    [{ output: undefined }, /--output is required/u],
-    [{ promptFile: "missing.txt" }, /ENOENT/u],
-    [{ output: "result.svg" }, /new PNG/u],
-    [{ output: "target.png" }, /already exists/u],
-    [{ output: "prompt.txt" }, /new PNG/u],
-    [{ output: "../outside.png" }, /inside the rooted workspace/u],
-    [{ image: ["../outside.png"] }, /inside the rooted workspace/u],
-    [{ image: ["missing.png"] }, /ENOENT/u],
-    [{ image: ["prompt.txt"] }, /PNG, JPEG or WebP/u],
-    [{ image: "target.png" }, /must be an array/u],
-    [{ output: "target.png/new.png" }, /real directory/u],
-    [{ size: " " }, /--size/u]
-  ];
-  for (const [options, pattern] of cases) {
-    const f = fixture(t);
+test("a rejected key falls through to the next one, and transient failures retry", async (t) => {
+  const f = fixture(t, { baseURL: "http://127.0.0.1:8317/v1", model: CONFIG.model, apiKeyEnv: "DOVE_FIXTURE_IMAGE_KEY" });
+  const env = { ...f.env, ANTHROPIC_BASE_URL: "http://127.0.0.1:8317", ANTHROPIC_API_KEY: "host-api-key" };
+  const replies = [new Response(`invalid key ${KEY}`, { status: 401 }), new Response("upstream busy", { status: 503 }), new Response("slow down", { status: 429 })];
+  const seen = [];
+  const result = await generateFigure(f.root, {
+    ...f.options, env,
+    fetch: async (url, init) => {
+      seen.push(init.headers.Authorization);
+      return replies.shift() ?? Response.json({ data: [{ b64_json: PNG.toString("base64") }] });
+    }
+  });
+  assert.equal(result.status, "generated");
+  assert.deepEqual(seen, [`Bearer ${KEY}`, "Bearer host-api-key", "Bearer host-api-key", "Bearer host-api-key"]);
+  await assert.rejects(generateFigure(f.root, {
+    ...f.options, env, output: "never.png",
+    fetch: async () => new Response(`model not found for ${KEY}`, { status: 404 })
+  }), (error) => {
+    assert.match(error.message, /HTTP 404: model not found for <key>/u);
+    return true;
+  });
+  assert.equal(fs.existsSync(path.join(f.root, "never.png")), false);
+});
+
+test("URL and JPEG results are saved under a free name with the matching extension", async (t) => {
+  const f = fixture(t);
+  fs.mkdirSync(path.join(f.root, "figures"));
+  fs.writeFileSync(path.join(f.root, "figures/result.jpg"), "earlier iteration");
+  const result = await generateFigure(f.root, {
+    ...f.options,
+    fetch: async (url) => (url === "https://cdn.example.test/out.jpg" ? new Response(JPEG) : Response.json({ data: [{ url: "https://cdn.example.test/out.jpg" }] }))
+  });
+  assert.equal(result.outputPath, path.join(f.root, "figures/result-2.jpg"));
+  assert.deepEqual(fs.readFileSync(result.outputPath), JPEG);
+  assert.equal(fs.readFileSync(path.join(f.root, "figures/result.jpg"), "utf8"), "earlier iteration");
+});
+
+test("missing configuration, prompt or output is reported before any request", async (t) => {
+  for (const [config, options, pattern] of [
+    [null, {}, /No image model configured/u],
+    [{ ...CONFIG, model: "" }, {}, /No image model configured/u],
+    [{ ...CONFIG, baseURL: "not a URL" }, {}, /not a URL/u],
+    [CONFIG, { promptFile: undefined }, /--prompt <text> or --prompt-file/u],
+    [CONFIG, { output: undefined }, /--output/u],
+    [CONFIG, { image: ["prompt.txt"] }, /not PNG, JPEG or WebP/u]
+  ]) {
+    const f = fixture(t, config);
     await assert.rejects(generateFigure(f.root, { ...f.options, ...options }), pattern);
     assert.equal(f.requests.length, 0);
-    assert.deepEqual(fs.readFileSync(path.join(f.root, "target.png")), PNG);
   }
-  const f = fixture(t);
-  fs.writeFileSync(path.join(f.root, "prompt.txt"), " \n");
-  await assert.rejects(generateFigure(f.root, f.options), /prompt file is empty/u);
-  assert.equal(f.requests.length, 0);
 });
 
-test("figure reuses rooted file boundaries and never overwrites an input or raced output", async (t) => {
+test("figure tools reports this machine's PPT authoring and export commands", (t) => {
   const f = fixture(t);
-  fs.symlinkSync(f.base, path.join(f.root, "escape"), "dir");
-  await assert.rejects(generateFigure(f.root, { ...f.options, output: "escape/out.png" }), /real directory/u);
-  fs.symlinkSync(path.join(f.root, "target.png"), path.join(f.root, "link.png"));
-  await assert.rejects(generateFigure(f.root, { ...f.options, image: ["link.png"] }), /regular file/u);
-  await assert.rejects(generateFigure(f.root, { ...f.options, output: path.join(f.base, "outside.png") }), /inside the rooted workspace/u);
-  assert.equal(f.requests.length, 0);
-  const outputPath = path.join(f.root, "figures/result.png");
-  await assert.rejects(generateFigure(f.root, {
-    ...f.options,
-    fetch: async (...args) => {
-      fs.writeFileSync(outputPath, "occupied while requesting");
-      return f.options.fetch(...args);
-    }
-  }), /EEXIST/u);
-  assert.equal(fs.readFileSync(outputPath, "utf8"), "occupied while requesting");
-  assert.equal(f.requests.length, 1);
-});
-
-test("figure failures do not retry, leak provider echoes or write invalid output", async (t) => {
-  const cases = [
-    [async () => { throw new Error(KEY); }, /request failed.*No automatic retry/u],
-    [async () => new Response(KEY, { status: 401 }), /HTTP 401/u],
-    [async () => new Response(KEY, { status: 429 }), /HTTP 429/u],
-    [async () => new Response(KEY, { status: 500 }), /HTTP 500/u],
-    [async () => new Response("not JSON"), /invalid JSON/u],
-    [async () => Response.json({ data: [{ url: "https://example.test/image.png" }] }), /b64_json.*URL-only/u],
-    [async () => Response.json({ data: [] }), /b64_json/u],
-    [async () => Response.json({ data: [{ b64_json: "" }] }), /b64_json/u],
-    [async () => Response.json({ data: [{ b64_json: "not base64!" }] }), /b64_json/u],
-    [async () => Response.json({ data: [{ b64_json: Buffer.from("not an image").toString("base64") }] }), /non-PNG/u],
-    [async () => Response.json({ data: [{ b64_json: PNG.subarray(0, 20).toString("base64") }] }), /incomplete PNG/u]
-  ];
-  for (const [fetch, pattern] of cases) {
-    const f = fixture(t);
-    let calls = 0;
-    await assert.rejects(generateFigure(f.root, {
-      ...f.options, fetch: (...args) => { calls += 1; return fetch(...args); }
-    }), (error) => {
-      assert.match(error.message, pattern);
-      assert.equal(error.message.includes(KEY), false);
-      return true;
-    });
-    assert.equal(calls, 1);
-    assert.equal(fs.existsSync(path.join(f.root, "figures/result.png")), false);
-  }
+  const tools = path.join(f.home, ".local/share/dove/figure-tools");
+  fs.mkdirSync(path.join(tools, "venv/bin"), { recursive: true });
+  fs.mkdirSync(path.join(tools, "scripts"), { recursive: true });
+  fs.writeFileSync(path.join(tools, "venv/bin/python"), "");
+  fs.writeFileSync(path.join(tools, "scripts/export-pdf"), "");
+  fs.writeFileSync(path.join(tools, "README.md"), "notes");
+  const bin = path.join(f.base, "bin");
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "pdftoppm"), "#!/bin/sh\n", { mode: 0o755 });
+  const found = figureTools({ env: { ...f.env, PATH: bin } });
+  assert.deepEqual(found.imageModel, { baseURL: CONFIG.baseURL, model: CONFIG.model });
+  assert.equal(found.pptPython, path.join(tools, "venv/bin/python"));
+  assert.equal(found.exportPdf, `${path.join(tools, "scripts/export-pdf")} INPUT.pptx OUTPUT.pdf`);
+  assert.equal(found.pdfToPng, `${path.join(bin, "pdftoppm")} -png -r 300 -singlefile INPUT.pdf OUTPUT`);
+  assert.equal(found.notes, path.join(tools, "README.md"));
+  const none = figureTools({ env: { ...f.env, HOME: f.base } });
+  assert.deepEqual([none.pptPython, none.exportPdf, none.pdfToPng], [null, null, null]);
 });
 
 for (const [kind, CLI] of CLI_ENTRIES) test(`${kind} CLI generates and edits against an isolated local fake Images API`, { timeout: 30_000 }, async (t) => {
@@ -224,30 +200,23 @@ for (const [kind, CLI] of CLI_ENTRIES) test(`${kind} CLI generates and edits aga
   const generated = await cli(CLI, [...args, "--output", "generated.png", "--json"], f.env, f.base);
   assert.equal(generated.code, 0, generated.stderr);
   assert.deepEqual(JSON.parse(generated.stdout), { status: "generated", mode: "generate", model: CONFIG.model, outputPath: path.join(f.root, "generated.png"), inputs: 0 });
-  const edited = await cli(CLI, [...args, "--image", "generated.png", "--image", "style.png", "--output", "edited.png", "--size", "1536x1024", "--format", "json"], f.env, f.base);
+  const edited = await cli(CLI, [...args, "--image", "generated.png", "--image", "style.png", "--output", "generated.png", "--size", "1536x1024", "--quality", "high", "--format", "json"], f.env, f.base);
   assert.equal(edited.code, 0, edited.stderr);
-  assert.equal(JSON.parse(edited.stdout).mode, "edit");
-  assert.deepEqual(fs.readFileSync(path.join(f.root, "generated.png")), PNG);
-  assert.deepEqual(fs.readFileSync(path.join(f.root, "edited.png")), PNG);
+  assert.equal(JSON.parse(edited.stdout).outputPath, path.join(f.root, "generated-2.png"), "an existing output is never overwritten");
   assert.equal(api.requests.length, 2);
-  assert.equal(api.requests[0].url, "/v1/images/generations");
-  assert.deepEqual(JSON.parse(api.requests[0].body), { model: CONFIG.model, prompt: PROMPT });
   const edit = api.requests[1];
   assert.equal(edit.url, "/v1/images/edits");
-  assert.match(edit.headers["content-type"], /^multipart\/form-data; boundary=/u);
   assert.equal(edit.headers.authorization, `Bearer ${KEY}`);
-  const multipart = new Response(edit.body, { headers: { "Content-Type": edit.headers["content-type"] } });
-  const form = await multipart.formData();
-  assert.equal(form.get("model"), CONFIG.model);
-  assert.equal(form.get("prompt"), PROMPT);
-  assert.equal(form.get("size"), "1536x1024");
+  const form = await new Response(edit.body, { headers: { "Content-Type": edit.headers["content-type"] } }).formData();
+  assert.equal(form.get("quality"), "high");
   assert.deepEqual(form.getAll("image[]").map((image) => image.name), ["generated.png", "style.png"]);
-  const conflict = await cli(CLI, [...args, "--output", "generated.png", "--json"], f.env, f.base);
-  assert.equal(conflict.code, 1);
-  assert.match(JSON.parse(conflict.stderr).message, /already exists/u);
-  const missing = await cli(CLI, ["figure", "--project", f.root, "--json"], f.env, f.base);
+  const inline = await cli(CLI, ["figure", "--project", f.root, "--prompt", "Inline", "--output", "inline.png", "--json"], f.env, f.base);
+  assert.equal(inline.code, 0, inline.stderr);
+  const tools = await cli(CLI, ["figure", "--tools", "--json"], f.env, f.base);
+  assert.equal(tools.code, 0, tools.stderr);
+  assert.equal(JSON.parse(tools.stdout).imageModel.model, CONFIG.model);
+  const missing = await cli(CLI, ["figure", "--project", f.root, "--output", "x.png", "--json"], f.env, f.base);
   assert.equal(missing.code, 1);
-  assert.match(JSON.parse(missing.stderr).message, /--prompt-file/u);
-  assert.equal(api.requests.length, 2, "invalid CLI requests never call even the local fake API");
-  assert.equal((generated.stdout + generated.stderr + edited.stdout + edited.stderr + conflict.stdout + conflict.stderr).includes(KEY), false);
+  assert.match(JSON.parse(missing.stderr).message, /--prompt/u);
+  assert.equal((generated.stdout + generated.stderr + edited.stdout + edited.stderr).includes(KEY), false);
 });

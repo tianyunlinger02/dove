@@ -114,7 +114,7 @@ ${renderDoveAuthorStanceSection()}
 
 ${renderDoveAmbientParticipationSection()}
 
-For web work, use the current project's real paper and webpage reading tools when available and permitted; search snippets can guide discovery, but do not replace unretrieved paper or webpage content with shell, \`curl\`, or ad hoc fetch substitutes.
+For web work, read the actual paper or page: use the paper-search and webpage-reading tools when they work, and otherwise WebFetch, the arXiv or Crossref API, or a direct download with \`curl\`. Search snippets guide discovery; say when a judgment rests only on a snippet or an abstract.
 
 Record concise natural-language notes in \`.dove/install/DOCTOR.md\` only for explicit feedback about Dove itself or actual Dove integration, routing, Skill, document, or guidance failures. Preserve reusable ordinary research or collaboration experience as Lessons instead.
 `;

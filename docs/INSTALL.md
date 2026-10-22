@@ -39,7 +39,6 @@ Claude integration includes:
 - `SessionStart` and `UserPromptSubmit` context hooks, read-only except for derived user-original refresh on compact/resume;
 - a read-only Dove `statusLine` only if the project has no existing line;
 - hidden guidance Skills and project MCP declarations for pinned `dove-paper-search` and hosted Exa; and
-- a project `permissions.deny` entry for built-in `WebFetch`, leaving `WebSearch` available.
 
 Both hosts share `.dove/install/manifest.json` and four exact references: short `RESEARCH_QUALITY.md` and `AUTHOR_PREFERENCES.md`, with preserved `RESEARCH_QUALITY_FULL.md` and `AUTHOR_PREFERENCES_FULL.md` companions. No folder-wide ownership follows.
 
@@ -102,7 +101,7 @@ Existing custom status lines remain unowned and unchanged. Explicit update/reins
 
 `dove-paper-search` launches `paper-search-mcp==0.1.4` through user-provided `uvx` with `mcp<2`. It supports scholarly discovery, DOI lookup, download, and full-text reading. Prefer `get_crossref_paper_by_doi` when DOI identity matters and the tool is exposed/permitted.
 
-Exa uses hosted `https://mcp.exa.ai/mcp` with `{ "url": "https://mcp.exa.ai/mcp", "type": "http" }` for ordinary webpages, documentation, venue pages, and known URLs. `WebSearch` remains discovery-only; project permissions deny built-in `WebFetch`. Declaration does not approve trust or prove connectivity. When access is unavailable, name the gap and use relevant permitted local/user materials or other available tools. Do not substitute shell, `curl`, or custom-fetch scripts, install dependencies, or approve access on the user's behalf.
+Exa uses hosted `https://mcp.exa.ai/mcp` with `{ "url": "https://mcp.exa.ai/mcp", "type": "http" }` for ordinary webpages, documentation, venue pages, and known URLs. `WebSearch` finds pages; when Exa is missing or out of quota, the host reads pages with `WebFetch` or downloads them with `curl`.
 
 ## Integration manifest
 

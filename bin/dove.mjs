@@ -13,7 +13,7 @@ import { DEFAULT_DASHBOARD_BIND, DEFAULT_DASHBOARD_PORT, startDashboardServer } 
 import { runWatch } from "../src/core/paper-watch.mjs";
 import { configureWatchFromMentor } from "../src/core/watch-configure.mjs";
 import { startTopicSelection } from "../src/core/topic-selection.mjs";
-import { generateFigure } from "../src/core/figure-generation.mjs";
+import { figureTools, generateFigure } from "../src/core/figure-generation.mjs";
 import { readHostSettings, writeHostSettings } from "../src/core/host-migration.mjs";
 import { renderMentorBrief } from "../src/core/mentor-brief.mjs";
 import { refreshUserOriginals } from "../src/core/user-originals.mjs";
@@ -434,6 +434,22 @@ try {
     process.exit(0);
   }
 
+  if (command === "figure" && options.tools) {
+    const tools = figureTools();
+    if (wantsJson(options)) writeJson(tools);
+    else {
+      const show = (value) => value ?? "未找到";
+      console.log([
+        `图像模型：${tools.imageModel ? `${tools.imageModel.model} @ ${tools.imageModel.baseURL}` : "未配置（settings.json 的 figure.baseURL 与 figure.model）"}`,
+        `做 PPT 用的 Python（带 python-pptx）：${show(tools.pptPython)}`,
+        `PPTX 转 PDF：${show(tools.exportPdf)}`,
+        `PDF 转 PNG：${show(tools.pdfToPng)}`,
+        ...(tools.notes ? [`工具说明：${tools.notes}`] : [])
+      ].join("\n"));
+    }
+    process.exit(0);
+  }
+
   if (command === "figure") {
     const result = await generateFigure(path.resolve(options.project ?? process.cwd()), { ...PACKAGE_OPTIONS, ...options });
     if (wantsJson(options)) writeJson(result);
@@ -507,7 +523,7 @@ try {
         const guidance = inspectCurrentPromptGuidance(target, PACKAGE_OPTIONS);
         process.stdout.write(JSON.stringify(userPromptSubmitOutput(payload, guidance, { project: target })));
       } catch {
-        // An invalid or unsafe installation does not authorize new project guidance.
+        // Without a readable installation there is no project context to attach.
         process.stdout.write(JSON.stringify(userPromptSubmitAttentionOutput()));
       }
       process.exit(0);

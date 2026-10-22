@@ -122,14 +122,6 @@ export function claudeResources() {
     fragment: DOVE_CLAUDE_STATUS_LINE,
     digest: semanticDigest(DOVE_CLAUDE_STATUS_LINE)
   };
-  const webFetchDeny = {
-    hostId: CLAUDE_HOST,
-    path: DOVE_CLAUDE_SETTINGS_PATH,
-    kind: "json-fragment",
-    selector: WEB_FETCH_DENY_SELECTOR,
-    fragment: WEB_FETCH_DENY_PERMISSION,
-    digest: semanticDigest(WEB_FETCH_DENY_PERMISSION)
-  };
   const paperSearch = {
     hostId: CLAUDE_HOST,
     path: PAPER_SEARCH_MCP_PATH,
@@ -146,7 +138,7 @@ export function claudeResources() {
     fragment: EXA_MCP_FRAGMENT,
     digest: semanticDigest(EXA_MCP_FRAGMENT)
   };
-  const resources = [...files, sessionStartHook, userPromptSubmitHook, statusLine, webFetchDeny, paperSearch, exa];
+  const resources = [...files, sessionStartHook, userPromptSubmitHook, statusLine, paperSearch, exa];
   if (new Set(resources.map(managedKey)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }

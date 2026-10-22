@@ -151,7 +151,7 @@ Status, side questions, corrections and blocker reports can end a reply without 
 
 ## Tools and sources
 
-Use exposed, permitted host tools. Claude setup declares paper search and Exa; declaration is not connectivity or approval. Search snippets aid discovery, not full-text inspection. If retrieval is unavailable, report the gap and use permitted material, not shell or custom-fetch substitutes.
+Use the host's available tools and configured services for the requested work. Claude setup declares paper search and Exa; declaration alone does not establish connectivity. Read the actual paper or page through these integrations, WebFetch, scholarly APIs or direct downloads as available. Search snippets aid discovery, not full-text inspection; say when only snippets or abstracts support a judgment and report material that could not be retrieved.
 
 Source separates discovery, identity, reading and support. Prefer DOI lookup; compare title, authors, year and venue/version, retaining conflicts and unknowns. Check compound claims part by part. Bibliography-only checks need no ledger or manuscript edits; systematic-review methods apply when requested.
 
@@ -167,33 +167,37 @@ Inspect actual published figures suited to the explanatory task, including usefu
 
 For composed figures, use model-led visual design and explanatory imagery, real evidence, and editable PPT composition. Figure's generated host guidance includes an adaptable model brief for the message, facts, material roles and reference decisions; it is not tied to a field or a fixed visual style. Give the model that filled brief and actual reference images when available before building PPT. Preserve the resulting hierarchy, proportions and visual language: detailed illustrations and real evidence remain separate replaceable media, with native PPT labels, connectors and useful vector elements. Editability does not mean tracing rich imagery into simple geometry. Quantitative plots come from real data and reproducible plotting code, with deliberate axes, units, scales and uncertainty; an image model can propose placement, not invent measurements. Plot-only work can deliver its code and vector/raster exports without an unnecessary PPT wrapper.
 
-Keep labels concise and close to their referents, with the full title and extended explanation in the caption. Open the actual export at manuscript size and compare it with the intended explanation, model design and references; refine focal hierarchy, panel relationships, correspondence and legibility, not just export validity. Deliver the appropriate editable source, assets/creation code, caption and same-source PDF/PNG; composed figures include the PPTX. The main session uses available authoring/export tools; `dove figure` generates/edits PNG designs and assets, not PPTX/PDF. Report missing materials or tools, failed model calls and reused designs plainly.
+Keep labels concise and close to their referents, with the full title and extended explanation in the caption. Open the actual export at manuscript size and compare it with the intended explanation, model design and references; refine focal hierarchy, panel relationships, correspondence and legibility, not just export validity. Deliver the appropriate editable source, assets/creation code, caption and same-source PDF/PNG; composed figures include the PPTX. The main session uses available authoring/export tools; `dove figure` generates/edits image designs and assets, not PPTX/PDF. `dove figure --tools` shows the machine's python-pptx Python and its PPTX-to-PDF and PDF-to-PNG commands. Report missing materials or tools, failed model calls and reused designs plainly.
 
-To use your own image API, merge this object into `$XDG_CONFIG_HOME/dove/settings.json` (default `$HOME/.config/dove/settings.json`), retaining existing fields:
+Configure the image model in `$XDG_CONFIG_HOME/dove/settings.json` (default `$HOME/.config/dove/settings.json`), keeping the existing fields:
 
 ```json
 {
   "figure": {
-    "baseURL": "https://your-image-service.example/v1",
-    "model": "your-image-model-id",
-    "apiKeyEnv": "OPENAI_API_KEY"
+    "baseURL": "http://127.0.0.1:8317/v1",
+    "model": "gpt-image-2.5"
   }
 }
 ```
 
-Export the key in the named environment variable; do not put its value in the file or prompt. `baseURL` is the API root, including `/v1` if your service requires it, not an image endpoint. This route requires **OpenAI Images-compatible** generation/edit endpoints returning PNG in `data[0].b64_json`; chat-completions compatibility alone is insufficient. Dove does not select or replace the model. The retired `.dove/config*.json` provider settings are not loaded or migrated. `dove settings --json` reports the current settings; changing `hostMigration` in CLI or dashboard preserves `figure` and other fields.
+`baseURL` is the API root of an OpenAI Images-compatible service. The key is read from `figure-api-key` in the same Dove configuration directory, or from the environment variable named in `figure.apiKeyEnv`; when `baseURL` is the host's own model gateway, the key the host already uses for that gateway works too. `dove settings --json` reports the current settings; changing `hostMigration` in CLI or dashboard preserves `figure` and other fields.
 
 ```bash
+# Inspect available composition/export tools without calling the image model.
+dove figure --tools
+# A brief may be supplied directly or read from a file.
+dove figure --project <root> --prompt "<filled scientific design brief>" \
+  --output figures/design.png --quality high --json
 # Design from paper figures; the prompt explains each reference's role.
 dove figure --project <root> --prompt-file figures/prompt.txt \
-  --image figures/paper-reference.png --output figures/design-v1.png --json
+  --image ~/papers/reference-fig2.png --output figures/design-v1.png --json
 # Edit that design/asset, not the real evidence embedded in the final PPTX.
 dove figure --project <root> --prompt-file figures/revision.txt \
   --image figures/design-v1.png --image figures/style.png \
   --output figures/design-v2.png --size 1536x1024 --json
 ```
 
-Input/output paths stay inside the project; relative paths resolve against `--project` (default current directory). The prompt identifies each image's role and what to change or preserve. Inputs may be PNG, JPEG or WebP; output must be a new `.png` path. Without `--image`, one JSON request goes to `{baseURL}/images/generations`; images use one multipart request to `{baseURL}/images/edits` with ordered `image[]` inputs. `--size` is sent only when supplied and must be supported by the selected model. These calls send the prompt and images to that service and may incur charges, so use only authorized materials and resources. Failures are explicit: no automatic paid retry, URL download, model switching or code-box substitution. The CLI cannot invoke host `image_gen`; without API configuration, the main session can use a host image tool only if it really exists. If neither route is available, report the missing capability.
+Paths may be anywhere; relative paths resolve against `--project` (default current directory). The prompt identifies each image's role and what to change or preserve. Inputs may be PNG, JPEG or WebP. Without `--image` the request goes to `{baseURL}/images/generations`; with images it goes to `{baseURL}/images/edits` with ordered `image[]` inputs. `--size`, `--quality` and `--background` are passed through when given. Rate limits and gateway errors are retried a few times; a rejected key falls through to the next available key; other failures show the service's own message. The image is saved with the extension of what the service returned, and an existing output name gets a numbered suffix instead of being overwritten.
 
 Independent `dove-review` uses a fresh Read/Grep/Glob context on the complete current manuscript, cited results and supplied grounding. Exclude execution conversation, identity/round records, preferences and old reviews; no retrieval, execution, edits or frozen workspace. It checks question-method fit, field correctness, contribution/evidence fit and the strongest objection, citing evidence and files read. Self-check and delivery checks are distinct; missing review remains a gap.
 
@@ -239,4 +243,4 @@ Submission completion requires scientific sufficiency, current independent revie
 
 SessionStart/UserPromptSubmit delivers the task; the host acts at a quiet point without interrupting jobs, recomputing results or changing conclusions or user wording. Tasks normalize existing records, defer notes/tracking to the next mentor, and apply new selection guidance on the next normal reply without rewriting standards or ongoing materials. Close each version once, with completion or non-applicability and a one-sentence report. With the switch off, records stay unchanged.
 
-Context hooks are read-only; verified guidance files enable guidance even with preserved statusLine/MCP differences. Statusline uses session facts and card Mainline/round, not inferred progress. Disk updates do not hot-reload hosts. Report source, build, installation, loading, behavior and scientific outcomes separately. Observe normal authorized use, not test projects or test content in research.
+Context hooks are read-only; they continue to present the short identity card even when guidance verification fails or host configuration differs. Guidance verification reports software state rather than blocking the user's work. Statusline uses session facts and card Mainline/round, not inferred progress. Disk updates do not hot-reload hosts. Report source, build, installation, loading, behavior and scientific outcomes separately. Observe normal authorized use, not test projects or test content in research.

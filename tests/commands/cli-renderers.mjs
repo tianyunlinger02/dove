@@ -51,7 +51,7 @@ function assertRuntimeCli() {
   });
   assertParserError(["mentor", "brief", "--task", "请裁决工程"], /Dove 不支持这个参数：--task/u, false);
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS.figure, "subcommands"), false, "figure generation and editing share one CLI entry point");
-  assert.deepEqual(CLI_COMMAND_SPECS.figure.options.map((option) => option.name), ["--project", "--prompt-file", "--image", "--output", "--size", "--json", "--format"]);
+  assert.deepEqual(CLI_COMMAND_SPECS.figure.options.map((option) => option.name), ["--project", "--prompt", "--prompt-file", "--image", "--output", "--size", "--quality", "--background", "--tools", "--json", "--format"]);
   assert.deepEqual(assertParserShape(parseDoveCli(["figure", "--project", "/workspace", "--prompt-file", "prompt.txt", "--output", "figures/new.png", "--json"])), {
     command: "figure", subcommand: null, options: { project: "/workspace", promptFile: "prompt.txt", output: "figures/new.png", json: true }, passthrough: []
   });
@@ -74,7 +74,7 @@ function assertRuntimeCli() {
   for (const subcommand of ["generate", "edit", "configure"]) {
     assertParserError(["figure", subcommand, "--json"], /figure 不接受位置参数/u, true);
   }
-  for (const option of ["--provider", "--model", "--base-url", "--api-key", "--api-key-env", "--prompt", "--approve"]) {
+  for (const option of ["--provider", "--model", "--base-url", "--api-key", "--api-key-env", "--approve"]) {
     assertParserError(["figure", option, "value", "--json"], /Dove 不支持这个参数/u, true);
   }
   assertParserError(["figure", "--json", "--format", "json"], /--format 不能和 --json 同时使用/u, true);
@@ -147,7 +147,8 @@ function assertDoveCliHelpRenderer() {
   assert.match(output, /dove run start --project <dir>.*--seed <short-text>.* -- <command> \[args\.\.\.\]/u);
   assert.match(output, /dove hook session-start --project <dir>/u);
   assert.match(output, /dove hook user-prompt-submit --project <dir>/u);
-  assert.match(output, /dove figure --project <root> --prompt-file <file> \[--image <file> \.\.\.\] --output <new\.png> \[--size <size>\] \[--json\|--format json\]/u);
+  assert.match(output, /dove figure --project <root> \(--prompt <text>\|--prompt-file <file>\) \[--image <file> \.\.\.\] --output <file\.png> \[--size <size>\]/u);
+  assert.match(output, /dove figure --tools \[--json\|--format json\]/u);
   const figureHelp = output.split("\n").find((line) => line.startsWith("dove figure "));
   assert.ok(figureHelp, "help explains the figure command's model and data boundary");
   assert.match(figureHelp, /settings\.figure.*baseURL.*model.*apiKeyEnv.*配置.*图像模型/u);

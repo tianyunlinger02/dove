@@ -95,7 +95,7 @@ test("unchanged current guidance delivers its package version and fingerprints r
     const resource = resources.find((entry) => entry.path === resourcePath);
     return `${resourcePath} ${resource.digest.slice(0, 12)}`;
   }));
-  assert.deepEqual(new Set(reads), new Set([MANIFEST, ...resources.filter((entry) => entry.kind === "exclusive-file").map((entry) => path.join(ROOT, entry.path))]));
+  assert.deepEqual(new Set(reads), new Set([MANIFEST]), "fingerprints come from the manifest; guidance files are not re-read on each prompt");
   const expected = userPromptSubmitOutput(event, guidance, { ...options, project: ROOT });
   assert.deepEqual(promptOutput(options), expected);
   assert.ok(expected.hookSpecificOutput.additionalContext.startsWith(`Dove ${PACKAGE_VERSION} (disk guidance, not rule reload):`));
@@ -155,71 +155,44 @@ test("missing non-guidance settings and MCP do not masquerade as changed guidanc
 });
 
 for (const state of ["changed", "missing"]) {
-  test(`${state} rule, Skills, agent instructions and all quality/author references still warn`, (t) => {
+  test(`${state} guidance files still get the identity card context`, (t) => {
     const { files, resources, options } = memoryInstallation(t);
-    editJson(files, SETTINGS, configurationChanges[0].change);
-    editJson(files, MCP, configurationChanges[1].change);
-    const before = [...files];
-    const guidance = resources.filter((entry) => entry.kind === "exclusive-file");
-    assert.ok(guidance.some((entry) => entry.path.startsWith(".claude/rules/")));
-    assert.ok(guidance.some((entry) => entry.path.startsWith(".claude/skills/")));
-    assert.ok(guidance.some((entry) => entry.path.startsWith(".claude/agents/")));
-    assert.equal(guidance.filter((entry) => entry.path.startsWith(".dove/install/")).length, 5);
-    for (const resource of guidance) {
+    const expected = promptOutput(options);
+    assert.match(expected.hookSpecificOutput.additionalContext, /disk guidance, not rule reload/u);
+    for (const resource of resources.filter((entry) => entry.kind === "exclusive-file")) {
       const file = path.join(ROOT, resource.path);
       if (state === "changed") files.set(file, `${resource.content}\nLocal guidance edit\n`);
       else files.delete(file);
-      assert.throws(() => inspectCurrentPromptGuidance(ROOT, options), /guidance is changed or missing/u, resource.path);
-      assert.deepEqual(promptOutput(options), userPromptSubmitAttentionOutput(), resource.path);
+      assert.deepEqual(promptOutput(options), expected, resource.path);
       files.set(file, resource.content);
     }
-    assert.deepEqual(new Map(files), new Map(before));
-    assert.equal(inspectCurrentPromptGuidance(ROOT, options).version, PACKAGE_VERSION);
   });
 }
 
-for (const state of ["missing ownership", "stale digest", "locally adopted bytes"]) {
-  test(`guidance ${state} cannot pass just because the recorded package version matches`, (t) => {
-    const { files, manifest, options } = memoryInstallation(t);
-    const resourcePath = PROMPT_GUIDANCE_PATHS[0];
-    if (state === "missing ownership") manifest.managed = manifest.managed.filter((entry) => entry.path !== resourcePath);
-    else {
-      const localBytes = "Locally changed rule\n";
-      manifest.managed.find((entry) => entry.path === resourcePath).digest = sha256(localBytes);
-      if (state === "locally adopted bytes") files.set(path.join(ROOT, resourcePath), localBytes);
-    }
-    files.set(MANIFEST, serializeProjectInstallationManifest(manifest, { hostIds: PROJECT_HOST_IDS }));
-    const before = [...files];
-    assert.throws(() => inspectCurrentPromptGuidance(ROOT, options), /guidance inventory does not match/u);
-    assert.deepEqual(promptOutput(options), userPromptSubmitAttentionOutput());
-    assert.deepEqual([...files], before);
-  });
-}
-
-test("stale or incompatible package metadata and non-Claude integration still warn", (t) => {
+test("a manifest without the managed rule gives the short notice instead of a context", (t) => {
   const { files, manifest, options } = memoryInstallation(t);
-  for (const packageInfo of [
-    { name: PACKAGE_NAME, version: "0.0.0" },
-    { name: PACKAGE_NAME, version: `${Number(PACKAGE_VERSION.split(".")[0]) + 1}.0.0` },
-    { name: `${PACKAGE_NAME}-different`, version: PACKAGE_VERSION }
-  ]) {
-    files.set(MANIFEST, serializeProjectInstallationManifest({ ...manifest, package: packageInfo }, { hostIds: PROJECT_HOST_IDS }));
-    assert.throws(() => inspectCurrentPromptGuidance(ROOT, options), /requires current Claude integration/u);
-    assert.deepEqual(promptOutput(options), userPromptSubmitAttentionOutput());
-  }
-  files.set(MANIFEST, serializeProjectInstallationManifest({ ...manifest, hosts: ["dsh"] }, { hostIds: PROJECT_HOST_IDS }));
-  assert.throws(() => inspectCurrentPromptGuidance(ROOT, options), /requires current Claude integration/u);
+  manifest.managed = manifest.managed.filter((entry) => entry.path !== PROMPT_GUIDANCE_PATHS[0]);
+  files.set(MANIFEST, serializeProjectInstallationManifest(manifest, { hostIds: PROJECT_HOST_IDS }));
+  assert.throws(() => inspectCurrentPromptGuidance(ROOT, options), /missing a managed reference/u);
   assert.deepEqual(promptOutput(options), userPromptSubmitAttentionOutput());
 });
 
-test("guidance symlinks still warn without reading their targets", (t) => {
-  const { reads, fsOps, options } = memoryInstallation(t);
-  const rule = path.join(ROOT, PROMPT_GUIDANCE_PATHS[0]);
-  const lstat = fsOps.lstatSync;
-  fsOps.lstatSync = (file) => file === rule ? { ...lstat(file), isSymbolicLink: () => true } : lstat(file);
-  assert.throws(() => inspectCurrentPromptGuidance(ROOT, options), /must not be a symbolic link/u);
-  assert.deepEqual(promptOutput(options), userPromptSubmitAttentionOutput());
-  assert.equal(reads.includes(rule), false);
+test("an older or newer installation still gets its context with one line naming the version gap", (t) => {
+  const { files, manifest, options } = memoryInstallation(t);
+  for (const version of ["0.0.1", `${Number(PACKAGE_VERSION.split(".")[0]) + 1}.0.0`]) {
+    files.set(MANIFEST, serializeProjectInstallationManifest({ ...manifest, package: { name: PACKAGE_NAME, version } }, { hostIds: PROJECT_HOST_IDS }));
+    const context = promptOutput(options).hookSpecificOutput.additionalContext;
+    assert.ok(context.includes(`guidance is version ${version} and the CLI is ${PACKAGE_VERSION}`), version);
+    assert.match(context, /disk guidance, not rule reload/u);
+  }
+  files.set(MANIFEST, serializeProjectInstallationManifest({ ...manifest, hosts: ["dsh"] }, { hostIds: PROJECT_HOST_IDS }));
+  assert.deepEqual(promptOutput(options), userPromptSubmitAttentionOutput(), "without Claude guidance there is no Claude context");
+});
+
+test("prompt context comes from the manifest without re-reading guidance files", (t) => {
+  const { reads, options } = memoryInstallation(t);
+  promptOutput(options);
+  for (const resourcePath of PROMPT_GUIDANCE_PATHS) assert.equal(reads.includes(path.join(ROOT, resourcePath)), false, resourcePath);
 });
 
 test("preserved configuration still delivers the identity card and source pointer without reading conversation", (t) => {

@@ -61,7 +61,7 @@ export function userOriginalSourceContext(payload) {
 export function sessionStartOutput(payload, result = null, options = {}) {
   const output = {};
   if (result && result.status !== "current") {
-    output.systemMessage = "Dove project integration needs attention. SessionStart does not update integration; run dove update explicitly to update supported manifest-owned integration. If blocked, inspect dove doctor --json before changing files.";
+    output.systemMessage = "Dove：本项目的安装与当前版本不一致（需要更新或有本地改动），可运行 dove update 同步；dove doctor 可看详情。";
   }
   if (payload.source === "startup" || payload.source === "clear") {
     if (typeof options.project !== "string" || !path.isAbsolute(options.project)) {
