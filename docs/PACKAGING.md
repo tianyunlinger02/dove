@@ -43,7 +43,7 @@ Both hosts share four exact exclusive files:
 
 These are shared files, not ownership of `.dove/install/`. Fresh main contexts personally read the essentials; full companions are on demand. Installation and hook delivery do not prove reading. References are guidance, not evidence, permissions, or Lessons; reviewer/mentor read scope does not include author preferences. See [reference roles](USAGE.md#short-core-and-two-reference-read-contracts).
 
-Release projections live under `package-resources/hosts/...`, outside host-recognized repository roots. Consumer installation uses bundled renderers, not disk copies of those release projections. Edit canonical sources, not generated adapters. OpenCode, Codex, Cursor, and shared Agents projections are not packaged.
+Release projections live under `package-resources/hosts/...`, outside host-recognized repository roots. Consumer installation uses bundled renderers, not disk copies of those release projections. Figure's cross-domain guidance and adaptable model brief are owned by `src/core/command-manifest.mjs` and rendered together into both hosts' Figure resources by `scripts/generate-command-adapters.mjs`. Edit canonical sources, not generated adapters. OpenCode, Codex, Cursor, and shared Agents projections are not packaged.
 
 ## Runtime bundles
 

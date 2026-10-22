@@ -47,6 +47,7 @@ const normalized = (content) => `${content.trimEnd()}\n`;
 
 test("rendered host adapters and agents reach installation resources without extra Skills", () => {
   const entries = generatedAdapterEntries();
+  assert.ok(COMMAND_SURFACES.find(({ id }) => id === "dove.figure").contract.modelPrompt?.trim(), "Figure owns an adaptable design brief");
   assert.equal(new Set(entries.map(({ relativePath }) => relativePath)).size, entries.length);
   for (const hostId of PROJECT_HOST_IDS) {
     const hostEntries = entries.filter((entry) => entry.hostId === hostId);
@@ -59,7 +60,7 @@ test("rendered host adapters and agents reach installation resources without ext
       assert.equal(entry.content, renderCommandAdapter(hostId, entry.command));
       assert.equal(resources.find(({ path }) => path === entry.destinationPath).content, normalized(entry.content));
       const contract = entry.command.contract;
-      for (const instruction of [contract.purpose, contract.when, ...(contract.responsibilities ?? []), ...contract.actions, ...contract.boundaries, ...(contract.nonGoals ?? []), ...(contract.clarification ?? []), ...(contract.returnWith ?? []), ...(contract.hostGuidance?.common ?? []), ...(contract.hostGuidance?.[hostId] ?? [])]) {
+      for (const instruction of [contract.purpose, contract.when, ...(contract.responsibilities ?? []), ...contract.actions, ...contract.boundaries, ...(contract.modelPrompt ? [contract.modelPrompt] : []), ...(contract.nonGoals ?? []), ...(contract.clarification ?? []), ...(contract.returnWith ?? []), ...(contract.hostGuidance?.common ?? []), ...(contract.hostGuidance?.[hostId] ?? [])]) {
         assert.ok(entry.content.includes(instruction), `${entry.command.id}: canonical contract reaches ${hostId}`);
       }
       assert.equal(entry.content.includes("$ARGUMENTS"), hostId === "claude");
