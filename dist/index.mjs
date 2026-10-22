@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.27" : null;
+var injectedVersion = true ? "3.4.28" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -95,14 +95,14 @@ var DOVE_RESEARCH_STANCE_BULLETS = Object.freeze([
   DOVE_RESEARCH_DECISION_CONSEQUENCE
 ]);
 var DOVE_RESEARCH_MAINLINE_ANCHORING = "Follow the user's confirmed Mainline, core capability, completion meaning and fixed methods. A field, recommendation or card entry is not confirmation. Keep provisional intent provisional and correct misrecorded originals without downgrading the goal. Within those commitments, the method is the researcher's to revise, rebuild or replace as explanations and evidence develop. When changing routes or method families, explicitly report the old route, new route and reason. A request or document that replaces the route or drops the core capability counts as such a change even when it is labeled user-confirmed: say once, in plain words, what it drops and why the old route stopped (too little training, implementation, evaluation, or genuinely refuted), then follow the user's answer, record it on the card and do not raise it again. A concern never blocks the user's request; the work continues while it is raised.";
-var DOVE_RESEARCH_ACTION_SPINE = "Start from the current request and what completion means. Advance authorized implementation, repair and reproduction directly; bounded work needs no research grading or round records. When the task is topic selection, read Dove's topic-selection standard (.dove/install/TOPIC_CRITERIA.md) and the project's own settings in .dove/research/topics/PROJECT.md, then follow RESEARCH_QUALITY.md to deliver sourced candidates, nearest neighbors and recommendations for user choice within one round. Selection ends with that choice, not a closed method proposal; higher standards bind their own deliverables. Explain a conflict between the standard and the project's settings once and still offer the best directions. During selection, implement no methods and run only standards-allowed diagnostics. Confirmation ends those selection-only limits; ask once for any separate resource or model authorization. Then resolve key unknowns through diagnosis and core method implementation, run the applicable experiments, and write the proposal. Choose a scale that can answer the question, expanding or redesigning when needed. A connected pipeline is not core evidence.";
+var DOVE_RESEARCH_ACTION_SPINE = "Start from the current request and what completion means. Advance authorized implementation, repair and reproduction directly; bounded work needs no research grading or round records. When the task is topic selection, read Dove's topic-selection standard (.dove/install/TOPIC_CRITERIA.md) and the project's own settings in .dove/research/topics/PROJECT.md, then follow RESEARCH_QUALITY.md to deliver sourced candidates, nearest neighbors and recommendations for user choice within one round. Selection ends with that choice, not a closed method proposal; higher standards bind their own deliverables. Explain a conflict between the standard and the project's settings once and still offer the best directions. During selection, implement no methods and run only standards-allowed diagnostics. Confirmation ends those selection-only limits and covers diagnosis within the mainline; ask once for any separate resource or model authorization. Then resolve key unknowns through diagnosis, design and implement the core method, write the theory proposal when the method closes, and run formal attempts once the user agrees, under a written protocol. Run dove topic start for the selection materials; each candidate is a card at .dove/research/topics/cards/NN-name.md whose header fields the dashboard reads. Choose a scale that can answer the question, expanding or redesigning when needed. A connected pipeline is not core evidence.";
 var DOVE_RESEARCH_RESULT_ADOPTION = "The author main session applies scoped findings to actual work within the user's goal. Subagents return evidence, not goal ownership or completion certificates.";
 var DOVE_RESEARCH_REFLECTION_CONTINUITY = `${renderDoveResearchReanchor()} Mentor memory comes from MENTOR_NOTES.md, not resumed conversation.`;
 var DOVE_RESEARCH_ROUND_CYCLE = "After mainline confirmation, call dove-mentor at each round end, after two consecutive rounds without new scientific results, when the user corrects direction or questions the paper claim/story, before changing routes, or when requested. Engineering and verification failures count as rounds without results. After two, seek independent diagnosis of the stagnation and pursue a credible next step within existing authorization; the count triggers diagnosis, not renewed permission. Bring changes to the user's goal, fixed methods, deployment conditions or resource commitments, or the absence of any credible path, to the user for a decision. Use a new mentor context for each round, without the execution conversation; two or three clarifications within one judgment are fine. Mentors on either host read .dove/install/RESEARCH_QUALITY.md for returns and tracking. Send Dove's generated mentor call template (dove mentor brief --project <root>) as the whole prompt plus the trigger. Status questions and bounded replies need no round or handoff; honor discussion-only and stop requests.";
-var DOVE_RESEARCH_ROUND_RECORDS = "Research records are read by the user on the Dove dashboard, so write the identity card, EVAL conclusions, briefs and results in natural Chinese full sentences. Explain internal codes, version names and abbreviations in plain words on first use or leave them out, and keep process detail in linked files. Each round has one rounds/NNN-brief.md (about 2000 characters) and one NNN-result.md (about 3000); put details in ordinary project files and link them, not extra round attachments. A brief starts with Author: mentor / user / external (\u5BFC\u5E08 / \u7528\u6237 / \u5916\u90E8), method version and dated user sources, then a line \u4E00\u53E5\u8BDD\uFF1Asaying in plain words what this round does, and has a section ## \u9884\u671F\u7ED3\u679C stating the expected result and which outcomes would change the decision; priority is user > external > mentor. Save mentor briefs verbatim; name replacement authors and reasons. A result starts with \u4E00\u53E5\u8BDD\uFF1Asaying what happened and has four sections: ## \u6539\u4E86\u4EC0\u4E48, ## \u6D4B\u5230\u4E86\u4EC0\u4E48, ## \u9884\u671F\u4E0E\u5B9E\u9645, ## \u5BF9\u672C\u8F6E\u8BF4\u660E\u7684\u53CD\u9A73\u4E0E\u4E8B\u5B9E\u66F4\u6B63. The mentor answers the objections first. RESEARCH.md is a short history index; preserve historical missions/, experiments/ and claims/ without adding entries.";
+var DOVE_RESEARCH_ROUND_RECORDS = "Research records are read by the user on the Dove dashboard, so write the identity card, EVAL conclusions, briefs and results in natural Chinese full sentences. Explain internal codes, version names and abbreviations in plain words on first use or leave them out, and keep process detail in linked files. Each round has one rounds/NNN-brief.md (about 2000 characters) and one NNN-result.md (about 3000); put details in ordinary project files and link them, not extra round attachments. A brief starts with Author: mentor / user / external (\u5BFC\u5E08 / \u7528\u6237 / \u5916\u90E8), method version and dated user sources, then a line \u4E00\u53E5\u8BDD\uFF1Asaying in plain words what this round does, and has a section ## \u9884\u671F\u7ED3\u679C stating the expected effect on the mainline's end-to-end metric and the link it relies on, why the planned scale can tell the outcomes apart, and which outcomes would change the decision; priority is user > external > mentor. Save mentor briefs verbatim; name replacement authors and reasons. A result starts with \u4E00\u53E5\u8BDD\uFF1Asaying what happened and has four sections: ## \u6539\u4E86\u4EC0\u4E48, ## \u6D4B\u5230\u4E86\u4EC0\u4E48, ## \u9884\u671F\u4E0E\u5B9E\u9645, ## \u5BF9\u672C\u8F6E\u8BF4\u660E\u7684\u53CD\u9A73\u4E0E\u4E8B\u5B9E\u66F4\u6B63. The mentor answers the objections first. RESEARCH.md is a short history index; preserve historical missions/, experiments/ and claims/ without adding entries.";
 var DOVE_RESEARCH_EVALUATION = "EVAL.md starts with a completion reference to the script, protocol and all user metrics, then one row per evaluated method version with the columns \u65E5\u671F\u3001\u7248\u672C/\u8F6E\u6B21\u3001\u534F\u8BAE\u4E0E\u6570\u636E\u3001\u6D4B\u91CF\u7ED3\u679C\u3001\u672A\u89C1\u6570\u636E\u4E0E\u6CDB\u5316\u5DEE\u8DDD\u3001\u7ED3\u8BBA\u3001\u4EA7\u7269 (existing English headers may stay). Cells hold numbers and one short sentence (about 200 characters); link detailed values. Keep engineering logs and process status out. When the executor repairs an evaluator, immediately mark affected results and restore comparability for current claims, necessary historical comparisons and strong baselines, reusing retained outputs before rerunning. Other old results stay clearly labeled as old-protocol history until needed for a comparison or citation. Keep protocols distinct and retain unfavorable evidence. Save the mentor's current assessment as specified in RESEARCH_QUALITY.md.";
-var DOVE_RESEARCH_EXPERIMENT_ITERATION = "Develop with available ground truth and reruns, keeping enough code and configuration history to interpret results. Choose each next experiment by the key unknown it resolves and how its answer would change the method; repeated runs, extra baselines and ablations follow from that rather than from a paper checklist, and none of them replaces fixing a known method defect. A development edit does not itself require the full evaluation suite. Tie a round's reported method results to the code version actually evaluated, which may include coordinated changes; distinguish later versions and retain useful earlier ones for ablation. Formal comparisons, result adoption and paper claims require the applicable protocol, all confirmed user metrics and fair strong baselines for the version used. Effects not reevaluated after a relevant change remain unknown rather than inheriting an old pass. After test use, a changed method's next formal comparison needs a fresh draw unused in development or previous tests and same-set baselines. Use fair budgets and causal controls for attribution. For final confirmation, put the claim, controls, data and metrics in the brief and use heldout once.";
-var DOVE_RESEARCH_CORRECTION_RECORDING = "Keep IDENTITY.md short enough to read at a glance (about 1200 characters), in fixed fields: Current round: rounds/NNN-brief.md; Round status: ongoing / paused / completed; Mainline; Core capability (what the research must show, such as a model that learns from data, with the user's quotes); Target tier (conference/journal level); Deployment inputs/outputs; Completion; User restrictions; Recent corrections; Research state. Ask once if the target tier is missing; do not assume one. Check records labeled user wording or user-confirmed against the user's own entries in USER_ORIGINALS.md; label relay-only sources as relays and recheck attribution during each long-term intent comparison. Missing or unfinished coverage is not evidence the user never said it; consult the original session or their current direct words. Each restriction names its quotation, date/source and long-term or task-specific scope. Relays and task-specific limits are not standing restrictions. Update research state after important results and apply corrections to action, not just quotations. Keep method rejections in briefs or mentor notes. Preserve unchanged Mainline wording. For recurring corrections, dove projects status --json locates relevant cards; ask once before changing AUTHOR_PREFERENCES and never edit it automatically.";
+var DOVE_RESEARCH_EXPERIMENT_ITERATION = "Develop with available ground truth and reruns, keeping enough code and configuration history to interpret results. Choose each next experiment by the key unknown it resolves and how its answer would change the method; repeated runs, extra baselines and ablations follow from that rather than from a paper checklist, and none of them replaces fixing a known method defect. Size each experiment so its answer can change the decision: estimate the expected difference and the noise (run-to-run spread; sampling error, about \u221A(p(1\u2212p)/n) for an accuracy over n items), then choose data, training length and representative test cases so the expected difference clearly exceeds the noise, using the available GPU memory fully. If that size is out of reach, redesign (a paired comparison, the affected subset, more data) instead of running a smaller version; a result that cannot separate the outcomes is not evidence of no effect. A development edit does not itself require the full evaluation suite. Tie a round's reported method results to the code version actually evaluated, which may include coordinated changes; distinguish later versions and retain useful earlier ones for ablation. Formal comparisons, result adoption and paper claims require the applicable protocol, all confirmed user metrics and fair strong baselines for the version used. Effects not reevaluated after a relevant change remain unknown rather than inheriting an old pass. After test use, a changed method's next formal comparison needs a fresh draw unused in development or previous tests and same-set baselines. Use fair budgets and causal controls for attribution. For final confirmation, put the claim, controls, data and metrics in the brief and use heldout once.";
+var DOVE_RESEARCH_CORRECTION_RECORDING = "Keep IDENTITY.md short enough to read at a glance (about 1200 characters), in fixed fields: Current round: rounds/NNN-brief.md; Round status: ongoing / paused / completed; Mainline; Core capability (what the research must show, such as a model that learns from data, with the user's quotes); Target tier (conference/journal level); Deployment inputs/outputs; Completion; User restrictions; Recent corrections; Research state. Ask once if the target tier is missing; do not assume one. Check records labeled user wording or user-confirmed against the user's own entries in USER_ORIGINALS.md; label relay-only sources as relays and recheck attribution during each long-term intent comparison. Missing or unfinished coverage is not evidence the user never said it; consult the original session or their current direct words. Each restriction names its quotation, date/source and long-term or task-specific scope. Relays and task-specific limits are not standing restrictions. Update research state after important results and apply corrections to action, not just quotations. Keep method rejections in briefs or mentor notes. Preserve unchanged Mainline wording. For recurring corrections, dove projects status --json locates relevant cards; author preferences belong to Dove itself, so installed copies are replaced on update: when a correction should change them, tell the user once so the change is made in Dove, and keep project-specific ones under User restrictions.";
 function renderDoveResearchReanchor() {
   return "Resume from the user's current goal, core capability and completion meaning. Use the identity card, latest EVAL rows and current brief as relevant continuity, then take the most valuable authorized action toward the overall result. Preserve confirmed commitments and dated user originals while revising methods with evidence; bounded replies and stop requests keep their scope.";
 }
@@ -133,7 +133,7 @@ var DOVE_RESEARCH_REFERENCE_BULLETS = Object.freeze([
   DOVE_RESEARCH_EXPERIMENT_ITERATION,
   DOVE_RESEARCH_EVALUATION,
   "Match evidence to the intended conclusion and investment. Informative exploration needs plausible value, a concrete hypothesis and accessible resources; major development also needs a meaningful remaining contribution and feasible validation. Confirmation needs reliable execution and fair evaluation; conclusions need sufficient evidence and serious counterevidence addressed. No score compensates for leakage, contradiction or a covered core contribution. Reproduction, repair and delivery do not automatically reopen topic selection.",
-  "Choose engineering by capability, resources and total time to trustworthy evidence or delivery, including preparation, evaluation and rework. Reuse valid measurements; profile representative work only when useful. Use suitable available accelerators without inventing single-card or CPU-only limits, redundant fallbacks or infrastructure without benefit. Kernel speed and hardware utilization do not establish end-to-end speed.",
+  "Choose engineering by capability, resources and total time to trustworthy evidence or delivery, including preparation, evaluation and rework. Reuse valid measurements; profile representative work only when useful. Use suitable available accelerators within the user's resource rules (for example one idle GPU on a shared server), without inventing further limits, redundant fallbacks or infrastructure without benefit. Kernel speed and hardware utilization do not establish end-to-end speed.",
   "At important-result mentor calls, save its current eight-dimensional quality assessment in EVAL.md with grounds and unknowns. Use the dimensions to identify bottlenecks, shared causes and decisive unknowns, then compare overall solutions for the next brief, including coordinated changes or route replacement when warranted. The main session does not duplicate that self-assessment. Measurements and predictions remain separate. Paper-review objections are reasoned judgments, not new empirical evidence, permission or acceptance. Submission still needs scientific sufficiency, independent current-version review and actual delivery readiness."
 ]);
 var DOVE_RESEARCH_METHOD_FORMATION = `\u8FD9\u662F\u4E00\u6761\u5E38\u7528\u7684\u5F62\u6210\u8DEF\u7EBF\uFF0C\u4E0D\u662F\u552F\u4E00\u6765\u6E90\uFF0C\u4E5F\u4E0D\u662F\u5F00\u5DE5\u524D\u7684\u5173\u53E3\u3002
@@ -161,7 +161,7 @@ ${DOVE_RESEARCH_METHOD_FORMATION}
 ## \u5224\u65AD\u4E0E\u884C\u52A8
 
 - \u516B\u7EF4\u6307\u95EE\u9898\u4EF7\u503C\u3001\u521B\u65B0\u3001\u673A\u5236\u7406\u8BBA\u3001\u65B9\u6CD5\u53EF\u884C\u6027\u3001\u6570\u636E\u8BC4\u4EF7\u3001\u5B9E\u73B0\u3001\u5B9E\u9A8C\u8BC1\u636E\u3001\u8868\u8FBE\u4EA4\u4ED8\u3002\u5B9E\u8D28\u8D28\u91CF\u3001\u5224\u65AD\u628A\u63E1\u3001\u662F\u5426\u591F\u7528\u3001\u5DE5\u4F5C\u662F\u5426\u5B8C\u6210\u5206\u5F00\u8BF4\u660E\uFF1B\u672A\u77E5\u3001\u5C1A\u672A\u5F62\u6210\u6216\u4E0D\u9002\u7528\u7684\u7EF4\u5EA6\u5199\u660E\u539F\u56E0\u800C\u4E0D\u586B\u96F6\uFF0C\u5E8F\u6570\u4E0D\u6C42\u5E73\u5747\uFF0C\u4E5F\u4E0D\u6362\u7B97\u6210\u5F55\u7528\u6982\u7387\u3002\u7528\u7EF4\u5EA6\u8BC6\u522B\u74F6\u9888\u3001\u5171\u56E0\u4E0E\u5173\u952E\u672A\u77E5\uFF0C\u518D\u6BD4\u8F83\u6574\u4F53\u65B9\u6848\uFF0C\u5305\u62EC\u6709\u4F9D\u636E\u7684\u534F\u8C03\u4FEE\u6539\u3001\u6838\u5FC3\u91CD\u6784\u6216\u8DEF\u7EBF\u66FF\u6362\u3002
-- \u521B\u65B0\u6309\u5177\u4F53\u65B9\u6CD5\u3001\u5173\u7CFB\u3001\u7ED3\u679C\u6216\u8BA4\u8BC6\u6838\u5BF9\u9886\u57DF\u5185\u5916\u7684\u5148\u4F8B\u3002\u529F\u80FD\u76F8\u540C\u672A\u5FC5\u8D21\u732E\u76F8\u540C\uFF1B\u6362\u8303\u5F0F\u3001\u6362\u9886\u57DF\u6216\u7EC4\u5408\u672C\u8EAB\u4E5F\u4E0D\u8BC1\u660E\u521B\u65B0\u3002\u89C4\u6A21\u548C\u6539\u52A8\u8981\u80FD\u56DE\u7B54\u95EE\u9898\uFF0C\u56DE\u7B54\u4E0D\u4E86\u5C31\u6269\u5927\u6216\u91CD\u65B0\u8BBE\u8BA1\uFF1B\u94FE\u8DEF\u63A5\u901A\u53EA\u8BF4\u660E\u80FD\u8DD1\uFF0C\u6838\u5FC3\u673A\u5236\u8FD8\u8981\u8BBE\u8BA1\u548C\u68C0\u9A8C\u3002
+- \u521B\u65B0\u6309\u5177\u4F53\u65B9\u6CD5\u3001\u5173\u7CFB\u3001\u7ED3\u679C\u6216\u8BA4\u8BC6\u6838\u5BF9\u9886\u57DF\u5185\u5916\u7684\u5148\u4F8B\u3002\u529F\u80FD\u76F8\u540C\u672A\u5FC5\u8D21\u732E\u76F8\u540C\uFF1B\u6362\u8303\u5F0F\u3001\u6362\u9886\u57DF\u6216\u7EC4\u5408\u672C\u8EAB\u4E5F\u4E0D\u8BC1\u660E\u521B\u65B0\u3002\u5B9A\u5B9E\u9A8C\u89C4\u6A21\u5148\u7B97\u8D26\uFF1A\u9884\u671F\u5DEE\u522B\u591A\u5927\uFF0C\u566A\u58F0\u591A\u5927\uFF08\u91CD\u590D\u8FD0\u884C\u7684\u6CE2\u52A8\u3001\u6837\u672C\u6570\u5E26\u6765\u7684\u8BEF\u5DEE\uFF0C\u5982 n \u9053\u9898\u4E0A\u51C6\u786E\u7387\u7684\u8BEF\u5DEE\u7EA6\u4E3A \u221A(p(1\u2212p)/n)\uFF09\uFF0C\u8BA9\u6570\u636E\u91CF\u3001\u8BAD\u7EC3\u957F\u5EA6\u548C\u6D4B\u8BD5\u6837\u672C\u8DB3\u4EE5\u4F7F\u9884\u671F\u5DEE\u522B\u660E\u663E\u5927\u4E8E\u566A\u58F0\uFF0C\u6D4B\u8BD5\u6570\u636E\u8981\u4EE3\u8868\u771F\u6B63\u7684\u76EE\u6807\uFF0C\u663E\u5B58\u6309\u53EF\u7528\u7684\u7528\u6EE1\uFF1B\u7B97\u4E0B\u6765\u505A\u4E0D\u5230\uFF0C\u5C31\u6362\u66F4\u6709\u9488\u5BF9\u6027\u7684\u8BBE\u8BA1\uFF08\u914D\u5BF9\u6BD4\u8F83\u3001\u53EA\u6D4B\u53D7\u5F71\u54CD\u7684\u90E8\u5206\u3001\u52A0\u6570\u636E\uFF09\uFF0C\u4E0D\u5148\u8DD1\u4E00\u4E2A\u6CE8\u5B9A\u5206\u4E0D\u51FA\u7ED3\u679C\u7684\u5C0F\u7248\u672C\uFF0C\u5206\u4E0D\u51FA\u5DEE\u522B\u7684\u7ED3\u679C\u4E5F\u4E0D\u80FD\u5F53\u6210\u201C\u6CA1\u6548\u679C\u201D\u7684\u8BC1\u636E\u3002\u94FE\u8DEF\u63A5\u901A\u53EA\u8BF4\u660E\u80FD\u8DD1\uFF0C\u6838\u5FC3\u673A\u5236\u8FD8\u8981\u8BBE\u8BA1\u548C\u68C0\u9A8C\u3002
 - \u5148\u4F8B\u6BD4\u8F83\u5224\u65AD\u8D21\u732E\u662F\u5426\u88AB\u8986\u76D6\uFF0C\u5B8C\u6574\u4EFB\u52A1\u548C\u5916\u90E8\u6BD4\u8F83\u5224\u65AD\u6548\u7528\uFF0C\u5185\u90E8\u5BF9\u7167\u5224\u65AD\u5F52\u56E0\uFF0C\u4E09\u8005\u5404\u7BA1\u4E00\u4EF6\u4E8B\u3002\u4E8B\u5B9E\u6765\u81EA\u5B9E\u8BFB\u3001\u63A8\u5BFC\u3001\u4EE3\u7801\u6216\u89C2\u5BDF\uFF0C\u6548\u679C\u6765\u81EA\u5B9E\u6D4B\uFF1B\u8BB0\u5F55\u4FE1\u606F\u6761\u4EF6\u3001\u9884\u7B97\u3001\u5931\u8D25\u5206\u6BCD\u3001\u672A\u77E5\u4E0E\u53CD\u8BC1\u3002
 - \u5F00\u53D1\u9636\u6BB5\u53EF\u4EE5\u770B\u771F\u503C\u3001\u53CD\u590D\u91CD\u8DD1\uFF0C\u4FDD\u7559\u89E3\u91CA\u7ED3\u679C\u6240\u9700\u7684\u4EE3\u7801\u4E0E\u914D\u7F6E\u8BB0\u5F55\uFF0C\u6309\u5173\u952E\u672A\u77E5\u9009\u62E9\u8BCA\u65AD\u3002\u6B63\u5F0F\u6BD4\u8F83\u3001\u91C7\u7EB3\u7ED3\u679C\u6216\u5F62\u6210\u8BBA\u6587\u4E3B\u5F20\u65F6\uFF0C\u518D\u5BF9\u5B9E\u9645\u4F7F\u7528\u7684\u7248\u672C\u5B8C\u6210\u9002\u7528\u534F\u8BAE\u3001\u5168\u90E8\u7528\u6237\u6307\u6807\u53CA\u516C\u5E73\u5F3A\u57FA\u7EBF\uFF1B\u53D7\u6539\u52A8\u5F71\u54CD\u800C\u672A\u91CD\u6D4B\u7684\u6548\u679C\u4ECD\u672A\u77E5\u3002\u6D4B\u8BD5\u96C6\u7528\u8FC7\u4E4B\u540E\u518D\u6539\u65B9\u6CD5\uFF0C\u4E0B\u4E00\u6B21\u6B63\u5F0F\u6BD4\u8F83\u7528\u771F\u6B63\u6CA1\u7528\u8FC7\u7684\u6D4B\u8BD5\u6570\u636E\uFF0C\u5E76\u5728\u540C\u4E00\u6279\u6570\u636E\u4E0A\u5BF9\u7167\u57FA\u7EBF\u3002
 - \u6267\u884C\u8005\u4FEE\u8BC4\u6D4B\u65F6\u7ACB\u5373\u6807\u660E\u53D7\u5F71\u54CD\u7ED3\u679C\uFF0C\u5148\u6062\u590D\u5F53\u524D\u4E3B\u5F20\u3001\u5FC5\u8981\u5386\u53F2\u6BD4\u8F83\u4E0E\u5F3A\u57FA\u7EBF\u7684\u53EF\u6BD4\u6027\uFF0C\u4F18\u5148\u590D\u7528\u539F\u59CB\u8F93\u51FA\u3002\u5176\u4ED6\u65E7\u7ED3\u679C\u4FDD\u7559\u4E3A\u660E\u786E\u6807\u6CE8\u7684\u65E7\u534F\u8BAE\u5386\u53F2\uFF0C\u9700\u8981\u6BD4\u8F83\u6216\u5F15\u7528\u65F6\u518D\u6062\u590D\uFF1B\u534F\u8BAE\u5206\u5F00\u3001\u4E0D\u9690\u85CF\u4E0D\u5229\u8BC1\u636E\uFF0C\u76EE\u6807\u4FDD\u6301\u4E0D\u53D8\u3002
@@ -182,7 +182,7 @@ ${DOVE_RESEARCH_METHOD_FORMATION}
 
 \u5BFC\u5E08\u6216\u9694\u79BB\u7684 Dove \u4E0A\u4E0B\u6587\u6838\u5BF9\u673A\u5236\u548C\u8FC1\u79FB\u524D\u63D0\uFF0C\u5E76\u6309\u201C\u501F\u7528\u673A\u5236\uFF0B\u76EE\u6807\u95EE\u9898\u201D\u4E3B\u52A8\u68C0\u7D22\u53CD\u8BC1\uFF1B\u8FD9\u4E0D\u66FF\u4EE3 dove-review \u7684\u8BBA\u6587\u5BA1\u7A3F\u3002\u6BCF\u4E2A\u5019\u9009\u7ED9\u201C\u7559\u4E0B / \u4FEE\u6539 / \u5426\u6389\uFF08\u539F\u56E0\uFF09\u201D\uFF1A\u4FEE\u6539\u56F4\u7ED5\u65B0\u610F\u3001\u8FDE\u8D2F\u3001\u53EF\u884C\u3001\u6E05\u6670\u3001\u5BF9\u5E94\u548C\u4F9D\u636E\u4E2D\u7684\u51B3\u5B9A\u6027\u74F6\u9888\u3001\u5171\u56E0\u6216\u5173\u952E\u672A\u77E5\u63D0\u51FA\u6574\u4F53\u65B9\u6848\uFF0C\u53EF\u534F\u8C03\u6539\u8FDB\u591A\u4E2A\u65B9\u9762\uFF1B\u9644\u6765\u6E90\u7F16\u53F7\u3001\u5224\u65AD\u6240\u9700\u8BC1\u636E\u548C\u6700\u5F3A\u53CD\u5BF9\u3002\u5361\u5934\u7559\u72B6\u6001\u3001\u9636\u6BB5\u3001\u5B9A\u4F4D\u3001\u4E03\u680F\u3001\u8BC4\u5BA1\u3001\u7126\u70B9\u3001\u53CD\u5BF9\u3001\u4F9D\u636E\uFF0C\u4EE5\u53CA\u53EF\u9009\u7684\u201C\u6539\u8FDB\u81EA\u201D\u3002
 
-\u4E00\u8F6E\u5185\u4EA4\u51FA\u5019\u9009\u3001\u8FD1\u90BB\u548C\u6700\u4F73 2\u20133 \u4E2A\u63A8\u8350\uFF1B\u624E\u5B9E\u7684\u4E0D\u8DB3\u5C31\u7ED9 1 \u4E2A\uFF0C\u4E0D\u51D1\u6570\u3002\u5982\u679C\u6807\u51C6\u4E92\u76F8\u77DB\u76FE\u3001\u7981\u6B62\u53D6\u5F97\u9700\u8981\u7684\u8BC1\u636E\u6216\u95E8\u69DB\u5361\u4F4F\uFF0C\u5411\u7528\u6237\u8BF4\u660E\u51B2\u7A81\u4E00\u6B21\uFF0C\u540C\u65F6\u4ECD\u7ED9\u51FA\u6700\u4F73\u65B9\u5411\uFF0C\u8BF7\u7528\u6237\u9009\u6216\u8C03\u6807\u51C6\uFF0C\u4E0D\u518D\u9759\u6001\u6253\u78E8\u3002\u9009\u5B9A\u524D\u4E0D\u5B9E\u73B0\u65B9\u6CD5\uFF0C\u53EA\u505A\u6807\u51C6\u5141\u8BB8\u7684\u8BCA\u65AD\uFF1B\u786E\u8BA4\u540E\u7ED3\u675F\u9009\u9898\u671F\u9650\u5236\uFF0C\u7F3A\u7684\u72EC\u7ACB\u8D44\u6E90\uFF0F\u8DD1\u6A21\u578B\u6388\u6743\u5408\u5E76\u95EE\u4E00\u6B21\uFF0C\u7136\u540E\u8BCA\u65AD\u5173\u952E\u672A\u77E5\u3001\u8BBE\u8BA1\u6838\u5FC3\u65B9\u6CD5\u3001\u505A\u6B63\u5F0F\u5B9E\u9A8C\u3001\u5199\u5F00\u9898\u62A5\u544A\u3002
+\u4E00\u8F6E\u5185\u4EA4\u51FA\u5019\u9009\u3001\u8FD1\u90BB\u548C\u6700\u4F73 2\u20133 \u4E2A\u63A8\u8350\uFF1B\u624E\u5B9E\u7684\u4E0D\u8DB3\u5C31\u7ED9 1 \u4E2A\uFF0C\u4E0D\u51D1\u6570\u3002\u5982\u679C\u6807\u51C6\u4E92\u76F8\u77DB\u76FE\u3001\u7981\u6B62\u53D6\u5F97\u9700\u8981\u7684\u8BC1\u636E\u6216\u95E8\u69DB\u5361\u4F4F\uFF0C\u5411\u7528\u6237\u8BF4\u660E\u51B2\u7A81\u4E00\u6B21\uFF0C\u540C\u65F6\u4ECD\u7ED9\u51FA\u6700\u4F73\u65B9\u5411\uFF0C\u8BF7\u7528\u6237\u9009\u6216\u8C03\u6807\u51C6\uFF0C\u4E0D\u518D\u9759\u6001\u6253\u78E8\u3002\u9009\u5B9A\u524D\u4E0D\u5B9E\u73B0\u65B9\u6CD5\uFF0C\u53EA\u505A\u6807\u51C6\u5141\u8BB8\u7684\u8BCA\u65AD\uFF1B\u786E\u8BA4\u540E\u7ED3\u675F\u9009\u9898\u671F\u9650\u5236\uFF0C\u4E3B\u7EBF\u5185\u8BCA\u65AD\u968F\u4E4B\u83B7\u51C6\uFF0C\u7F3A\u7684\u72EC\u7ACB\u8D44\u6E90\uFF0F\u8DD1\u6A21\u578B\u6388\u6743\u5408\u5E76\u95EE\u4E00\u6B21\uFF1B\u7136\u540E\u8BCA\u65AD\u5173\u952E\u672A\u77E5\u3001\u8BBE\u8BA1\u6838\u5FC3\u65B9\u6CD5\uFF0C\u65B9\u6CD5\u95ED\u5408\u65F6\u5199\u7406\u8BBA\u5F00\u9898\u62A5\u544A\uFF0C\u7528\u6237\u540C\u610F\u540E\u6309\u4E66\u9762\u534F\u8BAE\u505A\u6B63\u5F0F\u5C1D\u8BD5\u3002
 
 \u9700\u8981\u6B63\u6587\u7EC6\u8282\u65F6\uFF0C\u5E26 1\u20135 \u4E2A\u5177\u4F53\u95EE\u9898\u8BFB\u5168\u6587\uFF0C\u5728 .dove/research/papers/<id>.md \u8BB0\u6807\u9898\u3001\u6765\u6E90\u3001\u4E00\u6BB5\u201C\u8FD9\u7BC7\u505A\u4E86\u4EC0\u4E48\u201D\u548C\u7D2F\u79EF\u9010\u95EE\u56DE\u7B54\uFF0C\u6CE8\u660E\u7AE0\u8282\u3001\u9875\u7801\u6216\u516C\u5F0F\u7B49\u6B63\u6587\u4F4D\u7F6E\u3002\u590D\u7528\u5DF2\u56DE\u7B54\u7684\u95EE\u9898\uFF0C\u4FDD\u7559\u65E7\u7B54\u6848\uFF0C\u53EA\u8865\u65B0\u95EE\u9898\uFF1B\u6B63\u6587\u4E0D\u80FD\u56DE\u7B54\u7684\u660E\u786E\u8BB0\u672A\u77E5\u3002\u65B0\u610F\u4E0E\u649E\u9898\u5224\u65AD\u5F15\u7528\u8FD9\u4E9B\u7B14\u8BB0\u3002\u53EA\u8BFB\u4E0A\u4E0B\u6587\u8FD4\u56DE\u65B0\u589E\u95EE\u7B54\u7531\u4E3B\u4F1A\u8BDD\u4FDD\u5B58\uFF0C\u4E0D\u81EA\u884C\u5199\u5165\u3002
 
@@ -441,13 +441,13 @@ tools: Read, Grep, Glob, mcp__exa, mcp__dove-paper-search
 
 ## \u9009\u9898\u4E0E\u8BBA\u6587\u8FFD\u8E2A
 
-\u9009\u9898\u4EFB\u52A1\u5C1A\u672A\u5B9A\u4E3B\u7EBF\u65F6\uFF0C\u6309\u8D28\u91CF\u6458\u8981\u53D6\u8BC1\u3001\u627E\u7F3A\u53E3\u3001\u751F\u6210\u5019\u9009\u5E76\u8BC4\u5BA1\uFF0C\u4E00\u8F6E\u5185\u4EA4\u51FA\u6700\u4F73\u63A8\u8350\u8BA9\u7528\u6237\u5B9A\u4E3B\u7EBF\uFF0C\u4E0D\u4EE5\u65B9\u6CD5\u95ED\u5408\u7684\u7406\u8BBA\u5F00\u9898\u5361\u4F4F\u63A8\u8350\uFF1B\u6807\u51C6\u51B2\u7A81\u65F6\u8BF4\u660E\u4E00\u6B21\uFF0C\u4ECD\u7ED9\u65B9\u5411\uFF0C\u4E0D\u9759\u6001\u6253\u78E8\u3002\u786E\u8BA4\u540E\u9009\u9898\u671F\u9650\u5236\u7ED3\u675F\uFF0C\u7F3A\u7684\u72EC\u7ACB\u8D44\u6E90\u6388\u6743\u5408\u5E76\u95EE\u4E00\u6B21\uFF0C\u7136\u540E\u8BCA\u65AD\u3001\u8BBE\u8BA1\u3001\u5B9E\u9A8C\u3001\u5199\u5F00\u9898\u3002\u5DF2\u6709\u4E3B\u7EBF\u6309\u7528\u6237\u786E\u8BA4\u7684\u76EE\u6807\u3001\u6838\u5FC3\u80FD\u529B\u4E0E\u56FA\u5B9A\u65B9\u6CD5\u63A8\u8FDB\uFF0C\u975E\u56FA\u5B9A\u8BBE\u8BA1\u53EF\u636E\u8BC1\u636E\u8C03\u6574\uFF0C\u4E0D\u64C5\u81EA\u91CD\u9009\u3001\u964D\u6863\u3002
+\u9009\u9898\u4EFB\u52A1\u5C1A\u672A\u5B9A\u4E3B\u7EBF\u65F6\uFF0C\u6309\u8D28\u91CF\u6458\u8981\u53D6\u8BC1\u3001\u627E\u7F3A\u53E3\u3001\u751F\u6210\u5019\u9009\u5E76\u8BC4\u5BA1\uFF0C\u4E00\u8F6E\u5185\u4EA4\u51FA\u6700\u4F73\u63A8\u8350\u8BA9\u7528\u6237\u5B9A\u4E3B\u7EBF\uFF0C\u4E0D\u4EE5\u65B9\u6CD5\u95ED\u5408\u7684\u7406\u8BBA\u5F00\u9898\u5361\u4F4F\u63A8\u8350\uFF1B\u6807\u51C6\u51B2\u7A81\u65F6\u8BF4\u660E\u4E00\u6B21\uFF0C\u4ECD\u7ED9\u65B9\u5411\uFF0C\u4E0D\u9759\u6001\u6253\u78E8\u3002\u786E\u8BA4\u540E\u9009\u9898\u671F\u9650\u5236\u7ED3\u675F\uFF0C\u4E3B\u7EBF\u5185\u8BCA\u65AD\u968F\u4E4B\u83B7\u51C6\uFF0C\u7F3A\u7684\u72EC\u7ACB\u8D44\u6E90\u6388\u6743\u5408\u5E76\u95EE\u4E00\u6B21\uFF1B\u7136\u540E\u8BCA\u65AD\u3001\u8BBE\u8BA1\uFF0C\u65B9\u6CD5\u95ED\u5408\u65F6\u5199\u5F00\u9898\uFF0C\u7528\u6237\u540C\u610F\u540E\u6309\u534F\u8BAE\u505A\u6B63\u5F0F\u5C1D\u8BD5\u3002\u5DF2\u6709\u4E3B\u7EBF\u6309\u7528\u6237\u786E\u8BA4\u7684\u76EE\u6807\u3001\u6838\u5FC3\u80FD\u529B\u4E0E\u56FA\u5B9A\u65B9\u6CD5\u63A8\u8FDB\uFF0C\u975E\u56FA\u5B9A\u8BBE\u8BA1\u53EF\u636E\u8BC1\u636E\u8C03\u6574\uFF0C\u4E0D\u64C5\u81EA\u91CD\u9009\u3001\u964D\u6863\u3002
 
 \u6BCF\u6B21\u8C03\u7528\u90FD\u6309\u6458\u8981\u7684\u201C\u4E24\u79CD\u5BBF\u4E3B\u5171\u540C\u7684\u5BFC\u5E08\u8FD4\u56DE\u201D\u68C0\u67E5\u8FFD\u8E2A\u914D\u7F6E\u3001\u672A\u5224\u65AD\u8BBA\u6587\u548C\u626B\u63CF\u65E5\u671F\uFF0C\u8FD4\u56DE\u53EF\u76F4\u63A5\u4FDD\u5B58\u7684\u5EFA\u8BAE JSON\u3001\u4E94\u5217\u8BBA\u6587\u5F71\u54CD\u53CA\u5230\u671F\u626B\u63CF\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u5F53\u6B21\u5408\u5E76\u4FDD\u5B58\u914D\u7F6E\u5E76\u6838\u5BF9\u56DE\u6267\uFF0C\u4E0D\u7B49\u5F85\u65B0\u8F6E\u6B21\u3002\u6B63\u6587\u9605\u8BFB\u95EE\u7B54\u548C\u65B0\u610F\u5224\u65AD\u590D\u7528 papers/<id>.md\uFF0C\u7F3A\u7684\u95EE\u9898\u8FD4\u56DE\u7ED9\u4E3B\u4F1A\u8BDD\u8865\u5B58\u3002
 
 ## \u8FD4\u56DE\u4EC0\u4E48
 
-\u8FD4\u56DE\u4E00\u4EFD\u7EA6 2000 \u5B57\u7B26\u7684\u4E0B\u4E00\u8F6E\u8BF4\u660E\uFF0C\u5F00\u5934\u201C\u4F5C\u8005\uFF1A\u5BFC\u5E08\u201D\uFF0C\u6CE8\u660E\u65B9\u6CD5\u7248\u672C\u548C\u7528\u6237\u539F\u8BDD\u6765\u6E90\u8303\u56F4\uFF0C\u63A5\u7740\u4E00\u884C\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u7528\u5927\u767D\u8BDD\u8BF4\u8FD9\u8F6E\u505A\u4EC0\u4E48\uFF0C\u5E76\u5199\u201C## \u9884\u671F\u7ED3\u679C\u201D\u3002\u8BF4\u660E\u662F\u7ED9\u7528\u6237\u5728\u9762\u677F\u4E0A\u8BFB\u7684\uFF0C\u7528\u81EA\u7136\u4E2D\u6587\uFF0C\u5185\u90E8\u4EE3\u53F7\u7B2C\u4E00\u6B21\u51FA\u73B0\u65F6\u89E3\u91CA\u6E05\u695A\u3002\u7528\u5B8C\u6574\u53E5\u5B50\u5199\u8981\u505A\u4EC0\u4E48\u3001\u4E3A\u4EC0\u4E48\u3001\u5173\u952E\u672A\u77E5\uFF0C\u4EE5\u53CA\u4E0D\u540C\u7ED3\u679C\u600E\u6837\u6539\u53D8\u51B3\u5B9A\uFF1B\u98CE\u9669\u548C\u672A\u77E5\u96C6\u4E2D\u5199\u4E00\u5904\uFF0C\u4E0D\u5728\u6BCF\u53E5\u540E\u52A0\u9650\u5B9A\u3002\u6309\u95EE\u9898\u7ED9\u51FA\u516C\u5E73\u5BF9\u7167\u3001\u53EF\u7528\u8F93\u5165\u3001\u9884\u7B97\u3001\u9884\u6D4B\u4F9D\u636E\u548C\u5931\u8D25\u6750\u6599\uFF1B\u5DF2\u9009\u65B9\u6CD5\u7684\u6838\u5FC3\u5DE5\u4F5C\u53EF\u4EE5\u5728\u7406\u8BBA\u548C\u57FA\u7EBF\u5E93\u5B8C\u6574\u4E4B\u524D\u5F00\u59CB\u3002\u6309\u8D28\u91CF\u6458\u8981\u533A\u5206\u5F00\u53D1\u8BCA\u65AD\u4E0E\u6B63\u5F0F\u6BD4\u8F83\uFF1B\u6B63\u5F0F\u56E0\u679C\u6BD4\u8F83\u63A7\u5236\u5176\u4ED6\u56E0\u7D20\uFF0C\u7528\u8FC7\u6D4B\u8BD5\u540E\u6539\u53D8\u7684\u65B9\u6CD5\u5728\u6B63\u5F0F\u6BD4\u8F83\u65F6\u8981\u53E6\u62BD\u771F\u6B63\u672A\u7528\u8FC7\u7684\u6570\u636E\u5E76\u540C\u96C6\u6BD4\u8F83\u5F3A\u57FA\u7EBF\u3002\u672A\u91CD\u6D4B\u7684\u65B0\u7248\u672C\u6548\u679C\u4FDD\u6301\u672A\u77E5\uFF0C\u4E0D\u7EE7\u627F\u65E7\u7248\u901A\u8FC7\u7ED3\u8BBA\u3002\u8BA1\u5212\u3001\u5192\u70DF\u548C\u5DE5\u7A0B\u6838\u9A8C\u5355\u72EC\u5217\u51FA\uFF0C\u4E0D\u7B97\u79D1\u7814\u7ED3\u679C\u3002
+\u8FD4\u56DE\u4E00\u4EFD\u7EA6 2000 \u5B57\u7B26\u7684\u4E0B\u4E00\u8F6E\u8BF4\u660E\uFF0C\u5F00\u5934\u201C\u4F5C\u8005\uFF1A\u5BFC\u5E08\u201D\uFF0C\u6CE8\u660E\u65B9\u6CD5\u7248\u672C\u548C\u7528\u6237\u539F\u8BDD\u6765\u6E90\u8303\u56F4\uFF0C\u63A5\u7740\u4E00\u884C\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u7528\u5927\u767D\u8BDD\u8BF4\u8FD9\u8F6E\u505A\u4EC0\u4E48\uFF0C\u5E76\u5199\u201C## \u9884\u671F\u7ED3\u679C\u201D\u3002\u8BF4\u660E\u662F\u7ED9\u7528\u6237\u5728\u9762\u677F\u4E0A\u8BFB\u7684\uFF0C\u7528\u81EA\u7136\u4E2D\u6587\uFF0C\u5185\u90E8\u4EE3\u53F7\u7B2C\u4E00\u6B21\u51FA\u73B0\u65F6\u89E3\u91CA\u6E05\u695A\u3002\u7528\u5B8C\u6574\u53E5\u5B50\u5199\u8981\u505A\u4EC0\u4E48\u3001\u4E3A\u4EC0\u4E48\u3001\u5173\u952E\u672A\u77E5\uFF0C\u4EE5\u53CA\u4E0D\u540C\u7ED3\u679C\u600E\u6837\u6539\u53D8\u51B3\u5B9A\uFF1B\u98CE\u9669\u548C\u672A\u77E5\u96C6\u4E2D\u5199\u4E00\u5904\uFF0C\u4E0D\u5728\u6BCF\u53E5\u540E\u52A0\u9650\u5B9A\u3002\u6309\u95EE\u9898\u7ED9\u51FA\u516C\u5E73\u5BF9\u7167\u3001\u53EF\u7528\u8F93\u5165\u3001\u9884\u7B97\u3001\u9884\u6D4B\u4F9D\u636E\u548C\u5931\u8D25\u6750\u6599\uFF0C\u5E76\u8BF4\u660E\u8FD9\u4E2A\u89C4\u6A21\u4E3A\u4EC0\u4E48\u8DB3\u4EE5\u5206\u51FA\u7ED3\u679C\uFF1B\u5DF2\u9009\u65B9\u6CD5\u7684\u6838\u5FC3\u5DE5\u4F5C\u53EF\u4EE5\u5728\u7406\u8BBA\u548C\u57FA\u7EBF\u5E93\u5B8C\u6574\u4E4B\u524D\u5F00\u59CB\u3002\u6309\u8D28\u91CF\u6458\u8981\u533A\u5206\u5F00\u53D1\u8BCA\u65AD\u4E0E\u6B63\u5F0F\u6BD4\u8F83\uFF1B\u6B63\u5F0F\u56E0\u679C\u6BD4\u8F83\u63A7\u5236\u5176\u4ED6\u56E0\u7D20\uFF0C\u7528\u8FC7\u6D4B\u8BD5\u540E\u6539\u53D8\u7684\u65B9\u6CD5\u5728\u6B63\u5F0F\u6BD4\u8F83\u65F6\u8981\u53E6\u62BD\u771F\u6B63\u672A\u7528\u8FC7\u7684\u6570\u636E\u5E76\u540C\u96C6\u6BD4\u8F83\u5F3A\u57FA\u7EBF\u3002\u672A\u91CD\u6D4B\u7684\u65B0\u7248\u672C\u6548\u679C\u4FDD\u6301\u672A\u77E5\uFF0C\u4E0D\u7EE7\u627F\u65E7\u7248\u901A\u8FC7\u7ED3\u8BBA\u3002\u8BA1\u5212\u3001\u5192\u70DF\u548C\u5DE5\u7A0B\u6838\u9A8C\u5355\u72EC\u5217\u51FA\uFF0C\u4E0D\u7B97\u79D1\u7814\u7ED3\u679C\u3002
 
 \u91CD\u8981\u7ED3\u679C\u540E\u53E6\u8FD4\u7EA6 1000 \u5B57\u7B26\u7684\u516B\u7EF4\u8D28\u91CF\u5224\u65AD\uFF0C\u7ED9\u7B49\u7EA7\u3001\u4F9D\u636E\u4E0E\u672A\u77E5\u9879\uFF1B\u5B9E\u73B0 1\u20133\uFF0C\u5176\u4F59 1\u20134\uFF0C\u7EC6\u5219\u6309\u9700\u770B RESEARCH_QUALITY_FULL.md\u3002\u4E3B\u4F1A\u8BDD\u66FF\u6362 EVAL \u8868\u540E\u5F53\u524D\u8BC4\u5206\uFF0C\u4E0D\u91CD\u590D\u81EA\u8BC4\uFF1B\u5404\u7EF4\u5EA6\u5171\u540C\u63ED\u793A\u51B3\u5B9A\u6027\u74F6\u9888\u3001\u5171\u56E0\u4E0E\u5173\u952E\u672A\u77E5\uFF0C\u4E0D\u628A\u6700\u4F4E\u7B49\u7EA7\u76F4\u63A5\u5F53\u6210\u4E0B\u4E00\u8F6E\u65B9\u6848\u3002
 
@@ -554,7 +554,7 @@ function contract(slug) {
     when: "Use for topic exploration, method development or continuation of existing research.",
     actions: [
       "When selecting a direction, apply the shared topic-selection process and RESEARCH_QUALITY.md's sourced gaps, cross-domain mechanism search and adversarial candidate review. Use Source for question-led full-text notes and link candidate cards to that evidence.",
-      "After confirmation, diagnose key unknowns, design the core method, experiment, then write the proposal. Scale must answer the question. Use Experiment to distinguish development diagnostics from formal comparisons and restore required comparability after evaluator repair.",
+      "After confirmation, diagnose key unknowns, design the core method, write the proposal when it closes, and run formal attempts once the user agrees. Scale must answer the question. Use Experiment to distinguish development diagnostics from formal comparisons and restore required comparability after evaluator repair.",
       `Follow the shared research contract for mainline continuity, round records and ${DOVE_RESEARCH_MENTOR_NAME}'s direction-only judgment, including its triggers, fixed questions and note flow.`
     ],
     boundaries: [
@@ -582,10 +582,10 @@ function contract(slug) {
       "For explicit systematic reviews or meta-analysis, define the question, search scope and eligibility. Use applicable PRISMA tracking, bias and certainty assessment; pool only comparable effects. Ordinary searches need no such machinery. Update `sources/SOURCES.md` only when useful links or synthesis change."
     ],
     boundaries: [
-      "Search snippets, abstracts, metadata and absent search results do not establish full-text inspection or absence of overlap. If retrieval is unavailable, state the gap and use other permitted material rather than shell fetching or substitute retrieval chains."
+      "Search snippets, abstracts, metadata and absent search results do not establish full-text inspection or absence of overlap. When a retrieval tool is missing or failing, get the source another way (WebFetch, the arXiv or Crossref API, or a direct download with curl) and say what you actually read."
     ],
     hostGuidance: hostGuidance({
-      claude: ["Use exposed WebSearch for discovery, dove-paper-search for DOI metadata and academic papers, and hosted exa for ordinary webpages and known URLs."]
+      claude: ["Use WebSearch for discovery, dove-paper-search for DOI metadata and academic papers, and hosted exa or WebFetch for ordinary webpages and known URLs."]
     })
   });
   if (slug === "experiment") return capabilityContract({
@@ -1072,10 +1072,16 @@ function readCard(project, options) {
 function readDoveIdentityCard(project, options = {}) {
   return readCard(project, options)?.text ?? null;
 }
+function cardField(card, name) {
+  const pattern = new RegExp(`^\\s*(?:[-*]\\s*)?\\**\\s*${name}[^:\uFF1A\\n*]{0,20}\\**\\s*[:\uFF1A]\\s*(.+)$`, "imu");
+  return card.match(pattern)?.[1]?.trim() ?? null;
+}
 function parseDoveCurrentRound(card = "") {
-  const brief = card.match(/^Current round:[ \t]*(.+)$/mu)?.[1]?.trim();
-  const status = card.match(/^Round status:[ \t]*(.+)$/mu)?.[1]?.trim();
-  return brief ? { brief, ongoing: /^(ongoing|进行中)$/iu.test(status ?? "") } : null;
+  const value = cardField(card, "Current round");
+  const status = cardField(card, "Round status");
+  if (!value) return null;
+  const brief = value.match(/rounds\/[^\s)\]，。；;]+\.md/u)?.[0] ?? value.replace(/^\[([^\]]+)\]\([^)]*\).*$/u, "$1");
+  return { brief, ongoing: /^\**\s*(ongoing|进行中)/iu.test(status ?? "") };
 }
 function identityCardContext(project, options = {}) {
   const card = readCard(project, options);
@@ -1152,7 +1158,7 @@ ${HOST_MIGRATION_TASK}
 }
 function prepareHostMigration(project, options = {}) {
   const version = options.packageVersion ?? PACKAGE_VERSION;
-  if (!HOST_MIGRATION_TASK || version !== PACKAGE_VERSION || !readHostSettings(options).hostMigration) return [];
+  if (!HOST_MIGRATION_TASK || version !== PACKAGE_VERSION || !migrationEnabled(options)) return [];
   const registered = migrationFile(project, HOST_MIGRATION_REGISTERED_PATH, options);
   const prior = registered ? JSON.parse(registered) : null;
   if (prior && (prior.task === void 0 ? prior.version === version : prior.task === HOST_MIGRATION_TASK)) return [];
@@ -1162,8 +1168,15 @@ function prepareHostMigration(project, options = {}) {
 `, force: true }
   ];
 }
+function migrationEnabled(options) {
+  try {
+    return readHostSettings(options).hostMigration === true;
+  } catch {
+    return false;
+  }
+}
 function hostMigrationContext(project, options = {}) {
-  if (!project || !readHostSettings(options).hostMigration) return "";
+  if (!project || !migrationEnabled(options)) return "";
   const pending = migrationFile(project, HOST_MIGRATION_PENDING_PATH, options);
   return pending?.trim() ? `
 
@@ -1548,7 +1561,9 @@ function collect(line, session, found) {
   } catch {
     return;
   }
-  for (const text of messageTexts(record)) {
+  for (const raw of messageTexts(record)) {
+    const args = /^\s*<command-(?:message|name)>/u.test(raw) ? raw.match(/<command-args>([\s\S]*?)<\/command-args>/u)?.[1] : void 0;
+    const text = args ?? raw;
     const kind = classifyUserText(text);
     if (!kind) continue;
     const characters = Array.from(text.replace(/\s+/gu, " ").trim());
@@ -1598,6 +1613,7 @@ function refreshUserOriginals(project, options = {}) {
   const files = {};
   const deadline = Date.now() + (options.budgetMs ?? USER_ORIGINALS_BUDGET_MS);
   let pending = 0;
+  const transcripts = [];
   for (const directory of directories) {
     let names = [];
     try {
@@ -1607,12 +1623,16 @@ function refreshUserOriginals(project, options = {}) {
     }
     for (const name of names) {
       const file = path5.join(directory, name);
-      let size;
       try {
-        size = fsOps.statSync(file).size;
+        const stat = fsOps.statSync(file);
+        transcripts.push({ file, name, size: stat.size, mtime: stat.mtimeMs ?? 0 });
       } catch {
-        continue;
       }
+    }
+  }
+  transcripts.sort((left, right) => right.mtime - left.mtime);
+  {
+    for (const { file, name, size } of transcripts) {
       const known = previous.files[file];
       const resume = known && known.offset <= size ? known : { offset: 0, entries: [], short: 0 };
       if (resume.offset === size) {
@@ -1625,6 +1645,7 @@ function refreshUserOriginals(project, options = {}) {
       if (offset < size) pending += size - offset;
     }
   }
+  for (const [file, item] of Object.entries(previous.files)) if (!(file in files)) files[file] = item;
   const entries = Object.values(files).flatMap((item) => item.entries).sort((left, right) => left.time.localeCompare(right.time));
   const short = Object.values(files).reduce((sum, item) => sum + item.short, 0);
   writeAtomic(indexFile, `${JSON.stringify({ files })}
@@ -1679,7 +1700,7 @@ User-original source: ${JSON.stringify(payload.transcript_path)}. Give the mento
 function sessionStartOutput(payload, result = null, options = {}) {
   const output = {};
   if (result && result.status !== "current") {
-    output.systemMessage = "Dove\uFF1A\u672C\u9879\u76EE\u7684\u5B89\u88C5\u4E0E\u5F53\u524D\u7248\u672C\u4E0D\u4E00\u81F4\uFF08\u9700\u8981\u66F4\u65B0\u6216\u6709\u672C\u5730\u6539\u52A8\uFF09\uFF0C\u53EF\u8FD0\u884C dove update \u540C\u6B65\uFF1Bdove doctor \u53EF\u770B\u8BE6\u60C5\u3002";
+    output.systemMessage = "Dove\uFF1A\u672C\u9879\u76EE\u7684\u5B89\u88C5\u548C\u5F53\u524D\u7248\u672C\u6709\u5DEE\u5F02\uFF0C\u6216\u8005\u6709\u672C\u5730\u6539\u52A8\uFF1Bdove doctor \u53EF\u770B\u662F\u54EA\u51E0\u5904\u3002\u662F\u4F60\u81EA\u5DF1\u7684\u6539\u52A8\u5C31\u4E0D\u7528\u7BA1\uFF0Cdove update \u4F1A\u628A\u5B83\u4EEC\u6362\u56DE Dove \u7684\u7248\u672C\u3002";
   }
   if (payload.source === "startup" || payload.source === "clear") {
     if (typeof options.project !== "string" || !path6.isAbsolute(options.project)) {
@@ -2085,6 +2106,7 @@ ${Object.entries(fields).filter(([, value]) => value).map(([name, value]) => `  
 }
 
 // src/core/figure-generation.mjs
+import { spawnSync as spawnSync2 } from "node:child_process";
 import fs11 from "node:fs";
 import os3 from "node:os";
 import path9 from "node:path";
@@ -2161,7 +2183,8 @@ async function requestImage(url, body, json, keys, options) {
       try {
         response = await fetchImpl(url, { method: "POST", headers: { Authorization: `Bearer ${key}`, ...json ? { "Content-Type": "application/json" } : {} }, body });
       } catch (error) {
-        last = redact(`network error: ${error?.message ?? error}`, keys);
+        const cause = error?.cause ? ` (${[error.cause.code, error.cause.message].filter(Boolean).join(" ")})` : "";
+        last = redact(`network error: ${error?.message ?? error}${cause}`, keys);
         if (attempt < RETRY_DELAYS_MS.length) {
           await sleep(RETRY_DELAYS_MS[attempt]);
           continue;
@@ -2251,9 +2274,12 @@ function figureTools(options = {}) {
   const exportScript = existing(path9.join(directory, "scripts/export-pdf"));
   const soffice = onPath("soffice", env) ?? onPath("libreoffice", env);
   const pdftoppm = onPath("pdftoppm", env);
+  const python3 = onPath("python3", env);
+  const systemPptx = python3 && spawnSync2(python3, ["-c", "import pptx"], { stdio: "ignore", timeout: 1e4 }).status === 0 ? python3 : null;
   return {
+    settings: path9.join(env.XDG_CONFIG_HOME || path9.join(env.HOME || os3.homedir(), ".config"), "dove/settings.json"),
     imageModel: config.baseURL && config.model ? { baseURL: config.baseURL, model: config.model } : null,
-    pptPython: existing(path9.join(directory, "venv/bin/python")),
+    pptPython: config.pptPython ?? existing(path9.join(directory, "venv/bin/python")) ?? systemPptx,
     exportPdf: exportScript ? `${exportScript} INPUT.pptx OUTPUT.pdf` : soffice ? `${soffice} --headless --convert-to pdf --outdir DIR INPUT.pptx` : null,
     pdfToPng: pdftoppm ? `${pdftoppm} -png -r 300 -singlefile INPUT.pdf OUTPUT` : null,
     notes: existing(path9.join(directory, "README.md"))
@@ -4377,13 +4403,13 @@ import path17 from "node:path";
 import process3 from "node:process";
 
 // src/core/run-environment.mjs
-import { spawnSync as spawnSync2 } from "node:child_process";
+import { spawnSync as spawnSync3 } from "node:child_process";
 var GIT_CAPTURE_TIMEOUT_MS = 5e3;
 var GIT_CAPTURE_MAX_BUFFER = 1024 * 1024;
 function runGit(projectRoot, gitArgs, options = {}) {
   const gitCommand = options.gitCommand ?? "git";
   try {
-    const result = spawnSync2(gitCommand, ["-C", projectRoot, ...gitArgs], {
+    const result = spawnSync3(gitCommand, ["-C", projectRoot, ...gitArgs], {
       cwd: projectRoot,
       shell: false,
       encoding: null,

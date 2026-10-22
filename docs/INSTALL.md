@@ -38,9 +38,9 @@ Claude integration includes:
 - nine optional commands under `.claude/commands/dove/`;
 - `SessionStart` and `UserPromptSubmit` context hooks, read-only except for derived user-original refresh on compact/resume;
 - a read-only Dove `statusLine` only if the project has no existing line;
-- hidden guidance Skills and project MCP declarations for pinned `dove-paper-search` and hosted Exa; and
+- hidden guidance Skills and project MCP declarations for pinned `dove-paper-search` and hosted Exa.
 
-Both hosts share `.dove/install/manifest.json` and four exact references: short `RESEARCH_QUALITY.md` and `AUTHOR_PREFERENCES.md`, with preserved `RESEARCH_QUALITY_FULL.md` and `AUTHOR_PREFERENCES_FULL.md` companions. No folder-wide ownership follows.
+Both hosts share `.dove/install/manifest.json` and five exact references: short `RESEARCH_QUALITY.md` and `AUTHOR_PREFERENCES.md`, their `RESEARCH_QUALITY_FULL.md` and `AUTHOR_PREFERENCES_FULL.md` companions, and Dove's topic-selection standard `TOPIC_CRITERIA.md`. No folder-wide ownership follows.
 
 If no research tree exists, init creates only the minimal researcher-owned `.dove/research/RESEARCH.md` entry. It does not create an identity card, evaluation, or round on the user's behalf. Existing research directories remain untouched even without an overview. Research work maintains `IDENTITY.md`, `EVAL.md`, and `rounds/`; existing `missions/`, `experiments/`, and `claims/` stay in place without migration or deletion. See [Usage](USAGE.md#research-markdown).
 
@@ -141,7 +141,7 @@ Loaded session state remains unknown to the CLI. Doctor does not certify native 
 
 ## Managed versus user-owned files
 
-- **Managed** — manifest, four exact references, and declared host resources/fragments.
+- **Managed** — manifest, five exact references, and declared host resources/fragments.
 - **Researcher-owned** — `IDENTITY.md`, `EVAL.md`, rounds, short history index, historical missions/experiments/claims, Sources, Reviews, Lessons, and ordinary project artifacts.
 - **Preserved runtime history** — `.dove/reviews/**` and `.dove/runs/**`; preservation does not reactivate the old review runtime.
 - **Unowned** — `DOCTOR.md`, consumer `README.md`/`docs/*`, unrelated host settings/hooks, and unknown files.

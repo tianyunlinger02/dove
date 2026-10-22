@@ -29,7 +29,7 @@ Use for literature discovery, source reading, citation identity checks, claim ve
 
 ### Scope and changes
 
-- Search snippets, abstracts, metadata and absent search results do not establish full-text inspection or absence of overlap. If retrieval is unavailable, state the gap and use other permitted material rather than shell fetching or substitute retrieval chains.
+- Search snippets, abstracts, metadata and absent search results do not establish full-text inspection or absence of overlap. When a retrieval tool is missing or failing, get the source another way (WebFetch, the arXiv or Crossref API, or a direct download with curl) and say what you actually read.
 
 ### Ways Dove may proceed
 
@@ -43,4 +43,4 @@ Use for literature discovery, source reading, citation identity checks, claim ve
 
 - Use the tools and services available on this machine, including the ones configured for Dove, for the requested work without separate approval. If one is missing or failing, say which and continue another way.
 - Use Claude Code waiting or background tools for actual long-running actions, then assess the returned results in the main session.
-- Use exposed WebSearch for discovery, dove-paper-search for DOI metadata and academic papers, and hosted exa for ordinary webpages and known URLs.
+- Use WebSearch for discovery, dove-paper-search for DOI metadata and academic papers, and hosted exa or WebFetch for ordinary webpages and known URLs.

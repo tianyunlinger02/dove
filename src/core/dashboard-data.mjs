@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { parseDoveCurrentRound } from "./identity-card.mjs";
+import { parseDoveCurrentRound, cardField } from "./identity-card.mjs";
 import { latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
 import { readRegisteredProjects } from "./project-registry.mjs";
 
@@ -184,7 +184,7 @@ export function summarizeProject(root, options = {}) {
   const rounds = exists ? collectRounds(path.join(research, "rounds"), fsOps) : [];
   const fields = identity ? parseCardFields(identity.text) : {};
   const current = identity ? parseDoveCurrentRound(identity.text) : null;
-  const statusMatch = identity?.text.match(/^Round status:[ \t]*(.+)$/mu)?.[1]?.trim() ?? null;
+  const statusMatch = identity ? cardField(identity.text, "Round status") : null;
   const times = [identity?.mtime, evaluation?.mtime, ...rounds.flatMap((round) => [round.brief?.mtime, round.result?.mtime])].filter((value) => typeof value === "number");
   return {
     root,
@@ -212,7 +212,7 @@ const NAMED_DOCUMENTS = { "EVAL.md": `${RESEARCH_ROOT}/EVAL.md`, "DOCTOR.md": ".
 export function readProjectDocument(root, name, options = {}) {
   if (typeof name !== "string") return null;
   const topic = /^topics\/(?:cards\/)?[^/\\]+\.md$/u.test(name) && !name.includes("..") ? `${RESEARCH_ROOT}/${name}` : null;
-  const relative = ROUND_FILE.test(name) ? `${RESEARCH_ROOT}/rounds/${name}` : topic ?? NAMED_DOCUMENTS[name];
+  const relative = ROUND_FILE.test(name) ? `${RESEARCH_ROOT}/rounds/${name}` : topic ?? (Object.hasOwn(NAMED_DOCUMENTS, name) ? NAMED_DOCUMENTS[name] : null);
   return relative ? readText(path.join(root, relative), options.fsOps ?? fs) : null;
 }
 
@@ -231,7 +231,7 @@ export function parsePaperImpacts(root, options = {}) {
     const file = readText(path.join(research, name), fsOps, Infinity);
     if (!file) continue;
     for (const line of file.text.split(/\r?\n/u)) {
-      const match = line.match(/^\s*(?:[-*]\s*)?\|?\s*`?(\d{4}\.\d{4,5}|[a-z][a-z.-]*\/\d{7}|W\d+)(?:v\d+)?`?\s*\|\s*(撞题|新基线|可借用|无关)\s*\|\s*(.*)$/u);
+      const match = line.replace(/｜/gu, "|").replace(/\*\*/gu, "").match(/^\s*(?:[-*]\s*|\d+[.)]\s*)?\|?\s*\[?`?(?:arXiv:\s*)?(\d{4}\.\d{4,5}|[a-z][a-z.-]*\/\d{7}|W\d+)(?:v\d+)?`?\]?(?:\([^)]*\))?\s*\|\s*(撞题|新基线|可借用|无关)[^|]*\|\s*(.*)$/iu);
       if (!match) continue;
       const hit = IMPACTS.find(([label]) => label === match[2]);
       const [note = "", direction = "", summary = ""] = match[3].replace(/(?<!\\)\|\s*$/u, "")

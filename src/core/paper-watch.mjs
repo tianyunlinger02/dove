@@ -522,6 +522,7 @@ async function resolveInstitution(name, { proxy, get }) {
 // Papers citing known neighbours and keyword papers from watched institutions.
 export async function fetchOpenAlex(config, { since, before, proxy, get = curlGet, cache = {} }) {
   const errors = [];
+  const notes = [];
   const items = [];
   const nextCache = { seeds: { ...(cache.seeds ?? {}) }, institutions: { ...(cache.institutions ?? {}) } };
   const dates = `from_publication_date:${localDate(since)}${before ? `,to_publication_date:${localDate(before - 1)}` : ""}`;
@@ -548,11 +549,11 @@ export async function fetchOpenAlex(config, { since, before, proxy, get = curlGe
       for (const work of data.results ?? []) items.push(openAlexWorkToItem(work));
     }
     const unresolved = [...config.seedPapers.filter((seed) => !nextCache.seeds[seed]), ...config.institutions.filter((name) => !nextCache.institutions[name])];
-    if (unresolved.length) errors.push(`OpenAlex 未找到：${unresolved.slice(0, 5).join("、")}${unresolved.length > 5 ? " 等" : ""}，相关追踪尚未完成`);
+    if (unresolved.length) notes.push(`OpenAlex 未找到：${unresolved.slice(0, 5).join("、")}${unresolved.length > 5 ? " 等" : ""}，相关追踪尚未完成`);
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
   }
-  return { items, errors, cache: nextCache };
+  return { items, errors, notes, cache: nextCache };
 }
 
 export async function fetchHuggingFaceDaily(days, { proxy, get = watchGet, now = Date.now() }) {
@@ -705,8 +706,9 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
   if (!config.enabled) return { root, status: "disabled", guidance, notes };
   if (!config.keywords.length && !config.authors.length && !config.seedPapers.length) return { root, status: "unconfigured", drafted, guidance, notes };
   const state = readWatchState(root);
-  const errors = [...(hf.errors ?? [])];
-  notes.push(...(hf.notes ?? []));
+  // Hugging Face is a supporting source; its failures are notes, not an incomplete run.
+  const errors = [];
+  notes.push(...(hf.errors ?? []), ...(hf.notes ?? []));
   let completedSources = 0;
   const lastRun = Date.parse(state.lastRun ?? "");
   // First run backfills a month; later runs reach back past the last run to cover arXiv's search lag.
@@ -738,6 +740,7 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
   }
   const openAlex = await fetchOpenAlex(config, { since, proxy: settings.proxy, get, cache: state.openalex });
   errors.push(...openAlex.errors);
+  notes.push(...(openAlex.notes ?? []));
   if (!openAlex.errors.length && (config.seedPapers.length || (config.institutions.length && config.keywords.length))) completedSources += 1;
   openAlex.items.forEach(merge);
   for (const [id, paper] of hf.papers) {
@@ -764,6 +767,7 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
     }
     const olderOpenAlex = await fetchOpenAlex(config, { ...options, cache: openAlex.cache });
     errors.push(...olderOpenAlex.errors);
+    notes.push(...(olderOpenAlex.notes ?? []));
     olderOpenAlex.items.forEach(merge);
     for (const paper of hf.papers.values()) if (Date.parse(paper.published) < before) merge(paper);
     ranked = rank([...candidates.values()].filter((item) => Date.parse(item.published) >= olderSince && Date.parse(item.published) < before)).slice(0, 30);

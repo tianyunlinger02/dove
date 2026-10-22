@@ -225,9 +225,16 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
           if (watchRoots.length) startWatch(watchRoots, current.getTime());
         }
       };
-      const timer = setInterval(tick, intervalMs);
+      const safeTick = () => {
+        try {
+          tick();
+        } catch {
+          // A bad registry or settings file is retried at the next tick, not fatal.
+        }
+      };
+      const timer = setInterval(safeTick, intervalMs);
       timer.unref?.();
-      tick();
+      safeTick();
       return timer;
     }
   };

@@ -34,7 +34,7 @@ Use for topic exploration, method development or continuation of existing resear
 ### Ways Dove may proceed
 
 - When selecting a direction, apply the shared topic-selection process and RESEARCH_QUALITY.md's sourced gaps, cross-domain mechanism search and adversarial candidate review. Use Source for question-led full-text notes and link candidate cards to that evidence.
-- After confirmation, diagnose key unknowns, design the core method, experiment, then write the proposal. Scale must answer the question. Use Experiment to distinguish development diagnostics from formal comparisons and restore required comparability after evaluator repair.
+- After confirmation, diagnose key unknowns, design the core method, write the proposal when it closes, and run formal attempts once the user agrees. Scale must answer the question. Use Experiment to distinguish development diagnostics from formal comparisons and restore required comparability after evaluator repair.
 - Follow the shared research contract for mainline continuity, round records and dove-mentor's direction-only judgment, including its triggers, fixed questions and note flow.
 
 ### Using host tools

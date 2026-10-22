@@ -23,10 +23,18 @@ export function readDoveIdentityCard(project, options = {}) {
   return readCard(project, options)?.text ?? null;
 }
 
+// Card fields may be written as "Field: value", "- Field: value" or "- **Field（说明）**：value".
+export function cardField(card, name) {
+  const pattern = new RegExp(`^\\s*(?:[-*]\\s*)?\\**\\s*${name}[^:：\\n*]{0,20}\\**\\s*[:：]\\s*(.+)$`, "imu");
+  return card.match(pattern)?.[1]?.trim() ?? null;
+}
+
 export function parseDoveCurrentRound(card = "") {
-  const brief = card.match(/^Current round:[ \t]*(.+)$/mu)?.[1]?.trim();
-  const status = card.match(/^Round status:[ \t]*(.+)$/mu)?.[1]?.trim();
-  return brief ? { brief, ongoing: /^(ongoing|进行中)$/iu.test(status ?? "") } : null;
+  const value = cardField(card, "Current round");
+  const status = cardField(card, "Round status");
+  if (!value) return null;
+  const brief = value.match(/rounds\/[^\s)\]，。；;]+\.md/u)?.[0] ?? value.replace(/^\[([^\]]+)\]\([^)]*\).*$/u, "$1");
+  return { brief, ongoing: /^\**\s*(ongoing|进行中)/iu.test(status ?? "") };
 }
 
 export function identityCardContext(project, options = {}) {

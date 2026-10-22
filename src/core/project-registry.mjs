@@ -20,7 +20,7 @@ function inspectFile(file, fsOps = fs) {
     const stat = fsOps.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Dove user registry requires a regular file: ${file}.`);
     if (typeof process.getuid === "function" && stat.uid !== process.getuid()) throw new Error(`Dove user registry is not owned by the current user: ${file}.`);
-    if (process.platform !== "win32" && (stat.mode & 0o077) !== 0) throw new Error(`Dove user registry permissions are too broad: ${file}.`);
+    if (process.platform !== "win32" && (stat.mode & 0o022) !== 0) throw new Error(`Dove user registry is writable by other users: ${file}.`);
     return true;
   } catch (error) {
     if (error?.code === "ENOENT") return false;
@@ -33,7 +33,7 @@ function inspectDirectory(directory, fsOps = fs, privateDirectory = false) {
     const stat = fsOps.lstatSync(directory);
     if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`Dove user registry directory must be real: ${directory}.`);
     if (privateDirectory && typeof process.getuid === "function" && stat.uid !== process.getuid()) throw new Error(`Dove user registry directory is not owned by the current user: ${directory}.`);
-    if (privateDirectory && process.platform !== "win32" && (stat.mode & 0o077) !== 0) throw new Error(`Dove user registry directory permissions are too broad: ${directory}.`);
+    if (privateDirectory && process.platform !== "win32" && (stat.mode & 0o022) !== 0) throw new Error(`Dove user registry directory is writable by other users: ${directory}.`);
     return true;
   } catch (error) {
     if (error?.code === "ENOENT") return false;

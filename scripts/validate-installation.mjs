@@ -429,7 +429,9 @@ function validateSessionFacts(root, executable) {
   const settingsPath = path.join(root, ".claude/settings.json");
   const settings = fs.readFileSync(settingsPath);
   fs.writeFileSync(settingsPath, "{broken");
-  assert.match(invoke("compact").systemMessage, /could not inspect/u);
+  const brokenSettings = invoke("compact");
+  assert.ok(brokenSettings.systemMessage?.includes("dove doctor"), "a failed integration check is noted");
+  assert.equal(Object.hasOwn(brokenSettings, "hookSpecificOutput"), true, "the re-anchor still arrives when the integration check fails");
   fs.writeFileSync(settingsPath, settings);
   const malformedEvent = invoke("compact", { hook_event_name: "OtherEvent" });
   assert.match(malformedEvent.systemMessage, /unsupported or missing hook event/u);
@@ -642,9 +644,12 @@ for (const modify of [
   for (const source of ["startup", "clear", "compact", "resume"]) {
     const hook = cliHook(preservedRoot, "session-start", { hook_event_name: "SessionStart", source, cwd: preservedRoot });
     assert.equal(hook.status, 0, hook.stderr);
-    assert.match(JSON.parse(hook.stdout).systemMessage, /read-only/u);
+    // An unreadable manifest is reported read-only; a readable one with unknown entries keeps the context and adds a note.
+    assert.match(JSON.parse(hook.stdout).systemMessage, /read-only|dove doctor/u);
   }
-  assert.deepEqual(treeSnapshot(preservedRoot), before);
+  // Compact and resume may refresh the derived user-originals summary; nothing else changes.
+  const derived = /^\.dove\/install(?:$|\/USER_ORIGINALS\.md$|\/user-originals-index\.json$)/u;
+  assert.deepEqual(treeSnapshot(preservedRoot).filter((entry) => !derived.test(entry.path)), before.filter((entry) => !derived.test(entry.path)));
 }
 writeJson(manifestPath, manifest);
 const unknownOwnership = structuredClone(manifest);

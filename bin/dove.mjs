@@ -357,9 +357,14 @@ try {
   if (command === "projects") {
     if (subcommand === "postinstall") {
       if (process.env.npm_config_global !== "true") process.exit(0);
-      const result = syncRegisteredProjects(PACKAGE_OPTIONS);
-      console.log(JSON.stringify(result));
-      warnSyncResult(result);
+      // A registry problem must never fail the npm install of a fixed version.
+      try {
+        const result = syncRegisteredProjects(PACKAGE_OPTIONS);
+        console.log(JSON.stringify(result));
+        warnSyncResult(result);
+      } catch (error) {
+        console.error(`Dove 已安装，但没能同步登记的项目：${error instanceof Error ? error.message : String(error)}。可稍后运行 dove projects sync。`);
+      }
       process.exit(0);
     }
     if (subcommand === "import") {
@@ -440,7 +445,7 @@ try {
     else {
       const show = (value) => value ?? "未找到";
       console.log([
-        `图像模型：${tools.imageModel ? `${tools.imageModel.model} @ ${tools.imageModel.baseURL}` : "未配置（settings.json 的 figure.baseURL 与 figure.model）"}`,
+        `图像模型：${tools.imageModel ? `${tools.imageModel.model} @ ${tools.imageModel.baseURL}` : `未配置（在 ${tools.settings} 的 figure 里写 baseURL 和 model）`}`,
         `做 PPT 用的 Python（带 python-pptx）：${show(tools.pptPython)}`,
         `PPTX 转 PDF：${show(tools.exportPdf)}`,
         `PDF 转 PNG：${show(tools.pdfToPng)}`,
@@ -533,7 +538,13 @@ try {
         const target = prepareHookProject(projectOption(options));
         const payload = parseSessionStartPayload(input);
         assertHookPayloadProject(payload, target);
-        const result = inspectProjectIntegration(target, PACKAGE_OPTIONS);
+        let result;
+        try {
+          result = inspectProjectIntegration(target, PACKAGE_OPTIONS);
+        } catch {
+          // An integration check that cannot run must not cost the session its bootstrap or re-anchor.
+          result = { status: "unknown" };
+        }
         const output = sessionStartOutput(payload, result, { project: target });
         if (output !== null) process.stdout.write(JSON.stringify(output));
         process.exit(0);

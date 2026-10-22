@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -90,7 +91,8 @@ async function requestImage(url, body, json, keys, options) {
       try {
         response = await fetchImpl(url, { method: "POST", headers: { Authorization: `Bearer ${key}`, ...(json ? { "Content-Type": "application/json" } : {}) }, body });
       } catch (error) {
-        last = redact(`network error: ${error?.message ?? error}`, keys);
+        const cause = error?.cause ? ` (${[error.cause.code, error.cause.message].filter(Boolean).join(" ")})` : "";
+        last = redact(`network error: ${error?.message ?? error}${cause}`, keys);
         if (attempt < RETRY_DELAYS_MS.length) {
           await sleep(RETRY_DELAYS_MS[attempt]);
           continue;
@@ -186,9 +188,12 @@ export function figureTools(options = {}) {
   const exportScript = existing(path.join(directory, "scripts/export-pdf"));
   const soffice = onPath("soffice", env) ?? onPath("libreoffice", env);
   const pdftoppm = onPath("pdftoppm", env);
+  const python3 = onPath("python3", env);
+  const systemPptx = python3 && spawnSync(python3, ["-c", "import pptx"], { stdio: "ignore", timeout: 10000 }).status === 0 ? python3 : null;
   return {
+    settings: path.join(env.XDG_CONFIG_HOME || path.join(env.HOME || os.homedir(), ".config"), "dove/settings.json"),
     imageModel: config.baseURL && config.model ? { baseURL: config.baseURL, model: config.model } : null,
-    pptPython: existing(path.join(directory, "venv/bin/python")),
+    pptPython: config.pptPython ?? existing(path.join(directory, "venv/bin/python")) ?? systemPptx,
     exportPdf: exportScript ? `${exportScript} INPUT.pptx OUTPUT.pdf` : soffice ? `${soffice} --headless --convert-to pdf --outdir DIR INPUT.pptx` : null,
     pdfToPng: pdftoppm ? `${pdftoppm} -png -r 300 -singlefile INPUT.pdf OUTPUT` : null,
     notes: existing(path.join(directory, "README.md"))

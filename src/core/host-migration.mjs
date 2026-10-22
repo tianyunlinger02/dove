@@ -71,7 +71,7 @@ export function renderHostMigrationPending(version = PACKAGE_VERSION, now = new 
 
 export function prepareHostMigration(project, options = {}) {
   const version = options.packageVersion ?? PACKAGE_VERSION;
-  if (!HOST_MIGRATION_TASK || version !== PACKAGE_VERSION || !readHostSettings(options).hostMigration) return [];
+  if (!HOST_MIGRATION_TASK || version !== PACKAGE_VERSION || !migrationEnabled(options)) return [];
   const registered = migrationFile(project, HOST_MIGRATION_REGISTERED_PATH, options);
   const prior = registered ? JSON.parse(registered) : null;
   // Register only when the migration content itself changed; a release that
@@ -86,8 +86,18 @@ export function prepareHostMigration(project, options = {}) {
   ];
 }
 
+// A settings file that does not parse (for example after a hand edit) turns
+// migration off instead of taking install or the hooks down.
+function migrationEnabled(options) {
+  try {
+    return readHostSettings(options).hostMigration === true;
+  } catch {
+    return false;
+  }
+}
+
 export function hostMigrationContext(project, options = {}) {
-  if (!project || !readHostSettings(options).hostMigration) return "";
+  if (!project || !migrationEnabled(options)) return "";
   const pending = migrationFile(project, HOST_MIGRATION_PENDING_PATH, options);
   return pending?.trim() ? `\n\n${pending.trim()}` : "";
 }

@@ -69,7 +69,7 @@ export function createDashboardServer({ collect, listRoots, readDocument, passwo
   const session = () => (currentPassword ? sessionValue(currentPassword) : null);
   const signedIn = (request) => !currentPassword || sameSecret(readCookie(request, SESSION_COOKIE) ?? "", session());
   const knownRoot = (root) => typeof root === "string" && (listRoots?.() ?? []).includes(root);
-  return http.createServer(async (request, response) => {
+  const handle = async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (currentPassword && request.method === "POST" && url.pathname === "/login") {
       let supplied = "";
@@ -198,6 +198,13 @@ export function createDashboardServer({ collect, listRoots, readDocument, passwo
       return;
     }
     response.writeHead(404).end();
+  };
+  // One malformed request answers 400 instead of taking the dashboard and its scheduler down.
+  return http.createServer((request, response) => {
+    handle(request, response).catch(() => {
+      if (!response.headersSent) response.writeHead(400, { "cache-control": "no-store" });
+      response.end();
+    });
   });
 }
 

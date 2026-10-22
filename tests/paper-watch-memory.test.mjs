@@ -258,12 +258,10 @@ test("HF daily exhaustion retains partial days and marks the watch incomplete ra
     return retrieval()(url);
   } });
   assert.equal(calls, 3);
-  assert.equal(failed.status, "partial");
-  assert.equal(failed.results[0].status, "partial");
-  assert.equal(failed.lastRun, null);
+  // Hugging Face supplements arXiv; its failure is kept as a note and the run still completes.
+  assert.equal(failed.results[0].status, "done");
   assert.match(failed.hfErrors.join(" "), /exitCode: 35.*unexpected eof.*请求 3 次.*三次请求上限/u);
-  assert.match(files.get(`${WATCH}/2026-10-15.md`), /检索未完成/u);
-  assert.doesNotMatch(files.get(`${WATCH}/2026-10-15.md`), /没有发现新的相关论文/u);
+  assert.match(JSON.parse(files.get(`${WATCH}/2026-10-15.json`)).notes.join(" "), /exitCode: 35/u);
   calls = 0;
   const partial = await fetchHuggingFaceDaily(2, { now: NOW, get: createWatchFetcher({ ...clock(), get: async (url) => {
     calls += 1;

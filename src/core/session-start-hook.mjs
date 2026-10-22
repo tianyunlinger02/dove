@@ -61,7 +61,7 @@ export function userOriginalSourceContext(payload) {
 export function sessionStartOutput(payload, result = null, options = {}) {
   const output = {};
   if (result && result.status !== "current") {
-    output.systemMessage = "Dove：本项目的安装与当前版本不一致（需要更新或有本地改动），可运行 dove update 同步；dove doctor 可看详情。";
+    output.systemMessage = "Dove：本项目的安装和当前版本有差异，或者有本地改动；dove doctor 可看是哪几处。是你自己的改动就不用管，dove update 会把它们换回 Dove 的版本。";
   }
   if (payload.source === "startup" || payload.source === "clear") {
     if (typeof options.project !== "string" || !path.isAbsolute(options.project)) {

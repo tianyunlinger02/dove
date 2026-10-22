@@ -104,7 +104,10 @@ function collect(line, session, found) {
   } catch {
     return;
   }
-  for (const text of messageTexts(record)) {
+  for (const raw of messageTexts(record)) {
+    // Words typed after a slash command arrive wrapped in command tags.
+    const args = /^\s*<command-(?:message|name)>/u.test(raw) ? raw.match(/<command-args>([\s\S]*?)<\/command-args>/u)?.[1] : undefined;
+    const text = args ?? raw;
     const kind = classifyUserText(text);
     if (!kind) continue;
     const characters = Array.from(text.replace(/\s+/gu, " ").trim());
@@ -157,6 +160,7 @@ export function refreshUserOriginals(project, options = {}) {
   const files = {};
   const deadline = Date.now() + (options.budgetMs ?? USER_ORIGINALS_BUDGET_MS);
   let pending = 0;
+  const transcripts = [];
   for (const directory of directories) {
     let names = [];
     try {
@@ -166,12 +170,18 @@ export function refreshUserOriginals(project, options = {}) {
     }
     for (const name of names) {
       const file = path.join(directory, name);
-      let size;
       try {
-        size = fsOps.statSync(file).size;
+        const stat = fsOps.statSync(file);
+        transcripts.push({ file, name, size: stat.size, mtime: stat.mtimeMs ?? 0 });
       } catch {
-        continue;
+        // Unreadable now; anything gathered from it earlier is kept below.
       }
+    }
+  }
+  // The newest sessions go first so recent words are current within the time budget.
+  transcripts.sort((left, right) => right.mtime - left.mtime);
+  {
+    for (const { file, name, size } of transcripts) {
       const known = previous.files[file];
       const resume = known && known.offset <= size ? known : { offset: 0, entries: [], short: 0 };
       if (resume.offset === size) {
@@ -184,6 +194,8 @@ export function refreshUserOriginals(project, options = {}) {
       if (offset < size) pending += size - offset;
     }
   }
+  // Claude Code deletes old sessions; the words already gathered from them stay.
+  for (const [file, item] of Object.entries(previous.files)) if (!(file in files)) files[file] = item;
   const entries = Object.values(files).flatMap((item) => item.entries).sort((left, right) => left.time.localeCompare(right.time));
   const short = Object.values(files).reduce((sum, item) => sum + item.short, 0);
   writeAtomic(indexFile, `${JSON.stringify({ files })}\n`, fsOps);

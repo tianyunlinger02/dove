@@ -81,7 +81,7 @@ function contract(slug) {
     when: "Use for topic exploration, method development or continuation of existing research.",
     actions: [
       "When selecting a direction, apply the shared topic-selection process and RESEARCH_QUALITY.md's sourced gaps, cross-domain mechanism search and adversarial candidate review. Use Source for question-led full-text notes and link candidate cards to that evidence.",
-      "After confirmation, diagnose key unknowns, design the core method, experiment, then write the proposal. Scale must answer the question. Use Experiment to distinguish development diagnostics from formal comparisons and restore required comparability after evaluator repair.",
+      "After confirmation, diagnose key unknowns, design the core method, write the proposal when it closes, and run formal attempts once the user agrees. Scale must answer the question. Use Experiment to distinguish development diagnostics from formal comparisons and restore required comparability after evaluator repair.",
       `Follow the shared research contract for mainline continuity, round records and ${DOVE_RESEARCH_MENTOR_NAME}'s direction-only judgment, including its triggers, fixed questions and note flow.`
     ],
     boundaries: [
@@ -109,10 +109,10 @@ function contract(slug) {
       "For explicit systematic reviews or meta-analysis, define the question, search scope and eligibility. Use applicable PRISMA tracking, bias and certainty assessment; pool only comparable effects. Ordinary searches need no such machinery. Update `sources/SOURCES.md` only when useful links or synthesis change."
     ],
     boundaries: [
-      "Search snippets, abstracts, metadata and absent search results do not establish full-text inspection or absence of overlap. If retrieval is unavailable, state the gap and use other permitted material rather than shell fetching or substitute retrieval chains."
+      "Search snippets, abstracts, metadata and absent search results do not establish full-text inspection or absence of overlap. When a retrieval tool is missing or failing, get the source another way (WebFetch, the arXiv or Crossref API, or a direct download with curl) and say what you actually read."
     ],
     hostGuidance: hostGuidance({
-      claude: ["Use exposed WebSearch for discovery, dove-paper-search for DOI metadata and academic papers, and hosted exa for ordinary webpages and known URLs."]
+      claude: ["Use WebSearch for discovery, dove-paper-search for DOI metadata and academic papers, and hosted exa or WebFetch for ordinary webpages and known URLs."]
     })
   });
   if (slug === "experiment") return capabilityContract({
