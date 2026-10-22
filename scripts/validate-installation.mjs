@@ -422,9 +422,9 @@ function validateSessionFacts(root, executable) {
   writeJson(manifestPath, { ...manifest, package: { ...manifest.package, version: "0.0.1" } });
   assert.ok(invoke("compact").systemMessage?.includes("dove update"));
   writeJson(manifestPath, { ...manifest, package: { ...manifest.package, version: "99.0.0" } });
-  const blocked = invoke("compact");
-  assert.match(blocked.systemMessage, /could not inspect.*(?:refuses|拒绝)/u);
-  assert.equal(Object.hasOwn(blocked, "hookSpecificOutput"), false);
+  const newer = invoke("compact");
+  assert.ok(newer.systemMessage?.includes("dove doctor"), "a newer installation is noted");
+  assert.equal(Object.hasOwn(newer, "hookSpecificOutput"), true, "a newer installation keeps the re-anchor");
   writeJson(manifestPath, manifest);
   const settingsPath = path.join(root, ".claude/settings.json");
   const settings = fs.readFileSync(settingsPath);

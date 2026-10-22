@@ -164,8 +164,8 @@ function assertRecognizedHookManifest(manifest) {
   if (compatibility === "identity-mismatch") {
     throw new Error("Dove hook 执行需要匹配的 package identity。请先运行 dove doctor --json，再决定是否修改。");
   }
-  if (["newer", "invalid-version"].includes(compatibility)) {
-    throw new Error("Dove hook 拒绝来自更新或无效 package version 的项目集成。请先运行 dove doctor --json，再决定是否修改。");
+  if (compatibility === "invalid-version") {
+    throw new Error("Dove hook 读不懂这个项目集成的版本号。请先运行 dove doctor --json 查看。");
   }
   if (!manifest.hosts.includes("claude")) {
     throw new Error("Dove project hooks 需要 Claude host integration。请在这个项目中运行 dove update --host claude。");
