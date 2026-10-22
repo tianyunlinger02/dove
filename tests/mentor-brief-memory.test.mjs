@@ -11,9 +11,10 @@ const WATCH = `${RESEARCH}/watch`;
 const QUESTIONS = [
   "1. 如果用户现在问‘这段时间取得了什么实质科研进展’，诚实的一句话回答是什么？",
   "2. 最近的工作是在检验核心方法，还是在修工程、修评价、搭系统？",
-  "3. 对照 brief 的“方法设计”：问题及真实数据证据、外部方法的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？",
-  "4. 对照 USER_ORIGINALS.md 中用户过去的纠正，当前做法有没有重犯？",
-  "5. 方向还服务用户的核心目标吗？相对最接近的工作新在哪里、离目标档次差什么，下一步最值得检验什么？"
+  "3. 按现在的做法，离用户要的最终结果还差什么、大概多久能到？有没有更直接、更快的路？",
+  "4. 对照 brief 的“方法设计”：问题及真实数据证据和要达到的程度、外部方法（含本领域高手的默认做法）的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？",
+  "5. 对照 USER_ORIGINALS.md 中用户过去的纠正，当前做法有没有重犯？",
+  "6. 方向还服务用户的核心目标吗？相对最接近的工作新在哪里、离目标档次差什么，下一步最值得检验什么（至少考虑一个不是从当前做法改出来的方案）？"
 ].join("\n");
 
 // Every project byte lives in this Map. No disk fixtures or real project reads.
@@ -73,7 +74,7 @@ test("empty memory project renders a short fixed template without creating recor
   const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps });
   assert.equal(typeof brief, "string");
   assert.ok(brief.endsWith(`${QUESTIONS}\n`));
-  assert.equal((brief.match(/^\d+\. /gmu) ?? []).length, 5);
+  assert.equal((brief.match(/^\d+\. /gmu) ?? []).length, 6);
   assert.match(brief, /长期意图对照到期（导师笔记缺失）/u, "a first mentor reads the project's whole goal history");
   for (const file of [".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`, ".dove/install/TOPIC_CRITERIA.md", `${RESEARCH}/topics/PROJECT.md`, `${WATCH}/config.json`]) {
     assert.ok(brief.includes(`\`${file}\`（缺失）`), file);

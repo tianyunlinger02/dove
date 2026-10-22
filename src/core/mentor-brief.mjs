@@ -14,9 +14,10 @@ const SCAN_FILE = /^scan-\d{4}-\d{2}-\d{2}\.md$/u;
 const QUESTIONS = [
   "如果用户现在问‘这段时间取得了什么实质科研进展’，诚实的一句话回答是什么？",
   "最近的工作是在检验核心方法，还是在修工程、修评价、搭系统？",
-  "对照 brief 的“方法设计”：问题及真实数据证据、外部方法的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？",
+  "按现在的做法，离用户要的最终结果还差什么、大概多久能到？有没有更直接、更快的路？",
+  "对照 brief 的“方法设计”：问题及真实数据证据和要达到的程度、外部方法（含本领域高手的默认做法）的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？",
   "对照 USER_ORIGINALS.md 中用户过去的纠正，当前做法有没有重犯？",
-  "方向还服务用户的核心目标吗？相对最接近的工作新在哪里、离目标档次差什么，下一步最值得检验什么？"
+  "方向还服务用户的核心目标吗？相对最接近的工作新在哪里、离目标档次差什么，下一步最值得检验什么（至少考虑一个不是从当前做法改出来的方案）？"
 ];
 
 function list(directory, fsOps) {
@@ -224,7 +225,7 @@ export function renderMentorBrief(root, options = {}) {
     `- ${describe(project, ".dove/install/TOPIC_CRITERIA.md", fsOps)}（Dove 的选题标准）`,
     `- ${describe(project, `${RESEARCH}/topics/PROJECT.md`, fsOps)}（本项目的选题设置）`, "",
     "## 论文追踪", "", watchMaterials(project, rounds, fsOps), "",
-    "## 固定问题（先答前两问）", "",
+    "## 固定问题（先答前三问）", "",
     ...QUESTIONS.map((question, index) => `${index + 1}. ${question}`)
   ];
   return `${lines.join("\n")}\n`;
