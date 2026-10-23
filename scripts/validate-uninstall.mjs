@@ -19,6 +19,7 @@ import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 import { inspectProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
 import {
   EXA_MCP_FRAGMENT,
+  EXA_MCP_SELECTOR,
   EXA_MCP_SERVER_NAME,
   WEB_FETCH_DENY_PERMISSION,
   WEB_FETCH_DENY_SELECTOR
@@ -43,8 +44,18 @@ function digest(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
+function treeSnapshot(directory = fixture) {
+  return fs.readdirSync(directory).sort().flatMap((name) => {
+    const file = path.join(directory, name);
+    const stat = fs.lstatSync(file);
+    const entry = [path.relative(fixture, file), stat.mode, stat.isFile() ? digest(file) : null];
+    return stat.isDirectory() ? [entry, ...treeSnapshot(file)] : [entry];
+  });
+}
+
 reset();
-initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude", "dsh"] });
+const initialized = initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude", "dsh"] });
+assert.equal(initialized.manifest.managed.some((entry) => entry.selector === EXA_MCP_SELECTOR), true, "missing Exa is installed and owned");
 const initializedSettings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.deepEqual(initializedSettings.statusLine, DOVE_CLAUDE_STATUS_LINE);
 assert.deepEqual(initializedSettings.hooks.UserPromptSubmit, [userPromptHook, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY]);
@@ -135,6 +146,84 @@ assert.deepEqual(JSON.parse(fs.readFileSync(preexistingStatusLineSettingsPath, "
 assert.equal(updateProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }).status, "unchanged");
 uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
 assert.deepEqual(JSON.parse(fs.readFileSync(preexistingStatusLineSettingsPath, "utf8")).statusLine, { type: "command", command: "custom-statusline" });
+
+reset();
+const preexistingExaPath = path.join(fixture, ".mcp.json");
+const preexistingExaConfig = JSON.parse(fs.readFileSync(preexistingExaPath, "utf8"));
+// Reverse the canonical key order so equality is semantic, not serialized bytes.
+preexistingExaConfig.mcpServers[EXA_MCP_SERVER_NAME] = { type: EXA_MCP_FRAGMENT.type, url: EXA_MCP_FRAGMENT.url };
+fs.writeFileSync(preexistingExaPath, `${JSON.stringify(preexistingExaConfig, null, 2)}\n`);
+const assertUnownedExa = () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(fixture, ".dove/install/manifest.json"), "utf8"));
+  assert.equal(manifest.managed.some((entry) => entry.selector === EXA_MCP_SELECTOR), false);
+  assert.equal(JSON.stringify(JSON.parse(fs.readFileSync(preexistingExaPath, "utf8")).mcpServers[EXA_MCP_SERVER_NAME]), JSON.stringify(preexistingExaConfig.mcpServers[EXA_MCP_SERVER_NAME]), "same-value Exa is not overwritten");
+};
+initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
+assertUnownedExa();
+const preexistingExaBytes = fs.readFileSync(preexistingExaPath);
+const preexistingExaUpdate = updateProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+assert.equal(preexistingExaUpdate.status, "unchanged");
+assert.equal(preexistingExaUpdate.changedPaths.includes(".mcp.json"), false);
+assertUnownedExa();
+const preexistingExaPreview = previewProjectCompleteReinstall(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+assert.equal(preexistingExaPreview.changedPaths.includes(".mcp.json"), false);
+const preexistingExaReinstall = completeReinstallProjectIntegration(fixture, {
+  packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, confirmed: true, preview: preexistingExaPreview
+});
+assert.equal(preexistingExaReinstall.changedPaths.includes(".mcp.json"), false);
+assert.deepEqual(fs.readFileSync(preexistingExaPath), preexistingExaBytes);
+assertUnownedExa();
+uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
+assert.deepEqual(JSON.parse(fs.readFileSync(preexistingExaPath, "utf8")), preexistingExaConfig, "uninstall keeps the preexisting Exa and other user MCP configuration");
+
+for (const alreadyInitialized of [false, true]) {
+  reset();
+  if (alreadyInitialized) {
+    initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
+    const manifestPath = path.join(fixture, ".dove/install/manifest.json");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    manifest.managed = manifest.managed.filter((entry) => entry.selector !== EXA_MCP_SELECTOR);
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
+  const mcpPath = path.join(fixture, ".mcp.json");
+  const config = JSON.parse(fs.readFileSync(mcpPath, "utf8"));
+  config.mcpServers[EXA_MCP_SERVER_NAME] = { ...EXA_MCP_FRAGMENT, url: "https://example.invalid/local-exa" };
+  fs.writeFileSync(mcpPath, `${JSON.stringify(config, null, 2)}\n`);
+  const before = treeSnapshot();
+  const conflict = /cannot claim conflicting content at \.mcp\.json#\/mcpServers\/exa/u;
+  if (alreadyInitialized) {
+    assert.throws(() => updateProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }), conflict);
+    assert.throws(() => previewProjectCompleteReinstall(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION }), conflict);
+    assert.throws(() => completeReinstallProjectIntegration(fixture, {
+      packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, confirmed: true, preview: { action: "reinstall" }
+    }), conflict);
+  } else {
+    assert.throws(() => initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] }), conflict);
+  }
+  assert.deepEqual(treeSnapshot(), before, "unowned conflicting Exa never authorizes partial writes");
+}
+
+reset();
+initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
+const ownedExaPath = path.join(fixture, ".mcp.json");
+const driftOwnedExa = () => {
+  const config = JSON.parse(fs.readFileSync(ownedExaPath, "utf8"));
+  config.mcpServers[EXA_MCP_SERVER_NAME].url = "https://example.invalid/edited-owned-exa";
+  fs.writeFileSync(ownedExaPath, `${JSON.stringify(config, null, 2)}\n`);
+};
+driftOwnedExa();
+const ownedExaUpdate = updateProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+assert.deepEqual(ownedExaUpdate.replacedLocalEdits, [{ path: ".mcp.json", selector: EXA_MCP_SELECTOR }]);
+assert.equal(ownedExaUpdate.manifest.managed.some((entry) => entry.selector === EXA_MCP_SELECTOR), true);
+assert.deepEqual(JSON.parse(fs.readFileSync(ownedExaPath, "utf8")).mcpServers[EXA_MCP_SERVER_NAME], EXA_MCP_FRAGMENT);
+driftOwnedExa();
+completeReinstallProjectIntegration(fixture, {
+  packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, confirmed: true,
+  preview: previewProjectCompleteReinstall(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION })
+});
+assert.deepEqual(JSON.parse(fs.readFileSync(ownedExaPath, "utf8")).mcpServers[EXA_MCP_SERVER_NAME], EXA_MCP_FRAGMENT);
+uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
+assert.equal(JSON.parse(fs.readFileSync(ownedExaPath, "utf8")).mcpServers[EXA_MCP_SERVER_NAME], undefined);
 
 reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
@@ -290,4 +379,4 @@ for (const relativePath of referencePaths) {
   assert.throws(() => resolveProjectRootForInit(fixture), /installation directory is incomplete/u);
 }
 
-console.log(JSON.stringify({ status: "passed", checks: ["exact reference removal", "reference drift and stale reinstall", "missing reference uninstall", "research and unknown installation preservation"] }));
+console.log(JSON.stringify({ status: "passed", checks: ["exact reference removal", "unowned same-value Exa lifecycle preservation", "unowned conflicting Exa refusal without writes", "owned Exa management", "reference drift and stale reinstall", "missing reference uninstall", "research and unknown installation preservation"] }));

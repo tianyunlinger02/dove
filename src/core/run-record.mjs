@@ -201,15 +201,6 @@ function requireRunDirectory(projectRoot, runId, options = {}) {
   return paths;
 }
 
-function tryRunDirectory(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  const paths = runAbsolutePaths(projectRoot, runId);
-  const stat = lstatOrNull(fsOps, paths.absoluteRunDirectory);
-  if (stat === null) return null;
-  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove run directory must be a real directory: ${paths.runDirectory}`);
-  return paths;
-}
-
 function acquireRunMutationLock(projectRoot, runId, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const paths = requireRunDirectory(projectRoot, runId, { fsOps });
@@ -250,16 +241,6 @@ export function readRunEvents(projectRoot, runId, options = {}) {
     const parsed = JSON.parse(line);
     return validateRunEvent(parsed, id, index + 1, `${paths.journalPath}:${index + 1}`);
   });
-}
-
-function tryReadRunEvents(projectRoot, runId, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  const id = normalizeRunId(runId);
-  const paths = tryRunDirectory(projectRoot, id, { fsOps });
-  if (paths === null) return null;
-  const stat = lstatOrNull(fsOps, paths.absoluteJournalPath);
-  if (stat === null) return null;
-  return readRunEvents(projectRoot, id, { fsOps });
 }
 
 export function appendRunEvents(projectRoot, runId, items, options = {}) {
@@ -527,10 +508,7 @@ function runsRootEntries(projectRoot, options = {}) {
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove runs directory must be a real directory: ${RUNS_DIRECTORY_PATH}`);
   return fsOps.readdirSync(runsRoot, { withFileTypes: true })
     .filter((entry) => !entry.name.startsWith("."))
-    .map((entry) => {
-      if (!entry.isDirectory() || entry.isSymbolicLink()) throw new Error(`Dove run entry must be a real directory: ${RUNS_DIRECTORY_PATH}/${entry.name}`);
-      return normalizeRunId(entry.name);
-    })
+    .map((entry) => entry.name)
     .sort();
 }
 
@@ -539,14 +517,20 @@ export function listRunSummaries(options = {}) {
   const projectRoot = normalizeRunProject(options.project, options);
   const group = normalizeRunGroup(options.group);
   const runs = [];
+  const errors = [];
   for (const runId of runsRootEntries(projectRoot, { fsOps })) {
-    const events = tryReadRunEvents(projectRoot, runId, { fsOps });
-    if (events === null) continue;
-    const summary = summarizeStatus(projectRoot, runId, events);
-    if (group !== null && summary.group !== group) continue;
-    runs.push(summary);
+    try {
+      const paths = requireRunDirectory(projectRoot, runId, { fsOps });
+      if (lstatOrNull(fsOps, paths.absoluteJournalPath) === null) continue;
+      // A validated start can exclude another group without reading its tail.
+      // An unreadable start leaves membership unknown and must remain an error.
+      if (group !== null && readRunStartMetadata(projectRoot, runId, { fsOps }).group !== group) continue;
+      runs.push(summarizeRun(projectRoot, runId, { fsOps }));
+    } catch (error) {
+      errors.push({ runId, message: error instanceof Error ? error.message : String(error) });
+    }
   }
-  return { command: "status", status: "ok", project: projectRoot, group, runs };
+  return { command: "status", status: errors.length ? "partial" : "ok", complete: errors.length === 0, project: projectRoot, group, runs, errors };
 }
 
 function readRunStartMetadata(projectRoot, runId, options = {}) {
@@ -568,7 +552,7 @@ function readRunStartMetadata(projectRoot, runId, options = {}) {
       const label = `${paths.journalPath}:1`;
       const started = validateRunEvent(JSON.parse(Buffer.concat(chunks).toString("utf8")), runId, 1, label);
       if (started.type !== "run.started" || typeof started.at !== "string") throw new Error("Dove run journal must start with a timestamped run.started event.");
-      return { runId, startedAt: started.at };
+      return { runId, startedAt: started.at, group: normalizeRunGroup(started.group) };
     }
   } finally {
     fsOps.closeSync(fd);
@@ -668,21 +652,36 @@ function mismatchFields(summaries) {
   return Object.keys(baseline).filter((field) => summaries.some((summary) => stableJson(compareBasis(summary)[field]) !== stableJson(baseline[field])));
 }
 
-function selectedRunIds(projectRoot, options = {}) {
+function selectRunSummaries(projectRoot, options = {}) {
   const explicitIds = Array.isArray(options.ids) ? options.ids.map(normalizeRunId) : [];
   if (explicitIds.length > 0 && options.group !== undefined && options.group !== null) throw new Error("Use only one of --id or --group for dove run compare.");
-  const byGroup = options.group === undefined || options.group === null ? [] : listRunSummaries({ ...options, project: projectRoot }).runs.map((run) => run.runId);
-  return [...new Set([...explicitIds, ...byGroup])].sort();
+  if (options.group !== undefined && options.group !== null) {
+    const { runs, errors } = listRunSummaries({ ...options, project: projectRoot });
+    return { runIds: [...runs, ...errors].map((run) => run.runId).sort(), runs, errors };
+  }
+  const runIds = [...new Set(explicitIds)].sort();
+  const runs = [];
+  const errors = [];
+  for (const runId of runIds) {
+    try {
+      runs.push(summarizeRun(projectRoot, runId, options));
+    } catch (error) {
+      errors.push({ runId, message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return { runIds, runs, errors };
 }
 
 export function compareRuns(options = {}) {
   const fsOps = options.fsOps ?? fs;
   const projectRoot = normalizeRunProject(options.project, options);
-  const runIds = selectedRunIds(projectRoot, { ...options, fsOps });
+  const { runIds, runs: summaries, errors } = selectRunSummaries(projectRoot, { ...options, fsOps });
+  if (errors.length > 0) {
+    return { command: "compare", status: "partial", comparable: false, fields: ["selection"], complete: false, project: projectRoot, group: options.group ?? null, runIds, runs: summaries, errors };
+  }
   if (runIds.length === 0) {
     return { command: "compare", status: "ok", comparable: false, fields: ["selection"], project: projectRoot, group: options.group ?? null, runIds, runs: [], message: "No Dove runs were selected for comparison." };
   }
-  const summaries = runIds.map((runId) => summarizeRun(projectRoot, runId, { fsOps }));
   const notReady = summaries.filter((summary) => !summary.terminal || !summary.finalized || typeof summary.metric?.value !== "number" || !Number.isFinite(summary.metric.value));
   if (notReady.length > 0) {
     return {

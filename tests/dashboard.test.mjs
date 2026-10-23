@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import test from "node:test";
 import vm from "node:vm";
 
 import { collectDashboard, parseAuthor, parseMarkdownTables, readProjectDocument, summarizeProject } from "../src/core/dashboard-data.mjs";
-import { renderDashboardHtml, startDashboardServer } from "../src/cli/dashboard-server.mjs";
+import { createDashboardServer, renderDashboardHtml, startDashboardServer } from "../src/cli/dashboard-server.mjs";
 
 function fixtureProject(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-dashboard-"));
@@ -108,6 +109,44 @@ test("with a password every page and API request needs the session cookie", asyn
   } finally {
     server.close();
   }
+});
+
+test("password changes trim before validation and keep the same session after restart", async () => {
+  const request = (server, method, url, body = "", headers = {}) => new Promise((resolve) => {
+    const input = Readable.from([Buffer.from(body)]);
+    Object.assign(input, { method, url, headers, socket: {} });
+    const response = {
+      headers: {},
+      writeHead(status, values = {}) { this.status = status; Object.assign(this.headers, values); return this; },
+      end(text = "") { resolve({ status: this.status, headers: this.headers, text: String(text) }); }
+    };
+    server.emit("request", input, response);
+  });
+  let saved = null;
+  const serverOptions = {
+    collect: () => ({}), listRoots: () => [], readDocument: () => null,
+    password: "synthetic-original",
+    actions: { changePassword: (value) => { saved = value; } }
+  };
+  const server = createDashboardServer(serverOptions);
+  const login = await request(server, "POST", "/login", new URLSearchParams({ password: serverOptions.password }).toString());
+  const cookie = login.headers["set-cookie"].split(";")[0];
+  const headers = { cookie, "x-dove-request": "1" };
+  for (const password of ["        ", "  short  "]) {
+    assert.equal((await request(server, "POST", "/api/action", JSON.stringify({ type: "changePassword", password }), headers)).status, 400);
+    assert.equal(saved, null);
+  }
+  const changed = await request(server, "POST", "/api/action", JSON.stringify({ type: "changePassword", password: "  synthetic-new  \n" }), headers);
+  assert.equal(changed.status, 200);
+  assert.equal(saved, "synthetic-new");
+  const nextCookie = changed.headers["set-cookie"].split(";")[0];
+  assert.equal((await request(server, "GET", "/api/dashboard", "", { cookie })).status, 401);
+  assert.equal((await request(server, "GET", "/api/dashboard", "", { cookie: nextCookie })).status, 200);
+  const restarted = createDashboardServer({ ...serverOptions, password: saved.trim() });
+  assert.equal((await request(restarted, "GET", "/api/dashboard", "", { cookie: nextCookie })).status, 200);
+  const denied = createDashboardServer({ ...serverOptions, actions: { changePassword() { throw new Error("Synthetic write denied"); } } });
+  assert.equal((await request(denied, "POST", "/api/action", JSON.stringify({ type: "changePassword", password: "synthetic-failed" }), headers)).status, 400);
+  assert.equal((await request(denied, "GET", "/api/dashboard", "", { cookie })).status, 200);
 });
 
 test("page scripts parse in every mode", () => {

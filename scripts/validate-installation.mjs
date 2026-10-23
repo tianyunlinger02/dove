@@ -464,6 +464,43 @@ function researchReadGuard(root) {
 }
 
 // Run the source CLI only. Retain uniquely named scratch for inspection.
+const homeInitRoot = scratch();
+const homeInitChild = path.join(homeInitRoot, "child");
+fs.mkdirSync(homeInitChild);
+const homeInitEnv = { HOME: homeInitRoot, XDG_CONFIG_HOME: path.join(homeInitRoot, ".config") };
+for (const cwd of [homeInitRoot, homeInitChild]) {
+  for (const flags of [[], ["--json"], ["--format", "json"]]) {
+    const before = treeSnapshot(homeInitRoot);
+    const result = cliDove(["init", ...flags], { cwd, env: homeInitEnv });
+    assert.equal(result.status, 1, result.stdout);
+    assert.match(result.stderr, /不会隐式在 HOME 初始化/u);
+    assert.deepEqual(treeSnapshot(homeInitRoot), before);
+  }
+}
+const explicitHome = cliDove(["init", "--project", homeInitRoot, "--host", "dsh", "--json"], { cwd: homeInitRoot, env: homeInitEnv });
+assert.equal(explicitHome.status, 0, explicitHome.stderr);
+assert.equal(JSON.parse(explicitHome.stdout).target, homeInitRoot);
+
+const dshPendingRoot = scratch();
+writeJson(path.join(homeInitEnv.XDG_CONFIG_HOME, "dove/settings.json"), { hostMigration: true });
+const dshPendingInit = cliDove(["init", "--project", dshPendingRoot, "--host", "dsh", "--json"], { env: homeInitEnv });
+assert.equal(dshPendingInit.status, 0, dshPendingInit.stderr);
+assert.equal(JSON.parse(dshPendingInit.stdout).hostMigrationPending, ".dove/install/MIGRATION_PENDING.md");
+for (const command of ["init", "update"]) {
+  const result = cliDove([command, "--project", dshPendingRoot, "--json"], { env: homeInitEnv });
+  assert.equal(result.status, 0, result.stderr);
+  const data = JSON.parse(result.stdout);
+  assert.equal(data.status, command === "init" ? "already-initialized" : "unchanged");
+  assert.equal(data.hostMigrationPending, ".dove/install/MIGRATION_PENDING.md");
+  const human = cliDove([command, "--project", dshPendingRoot], { env: homeInitEnv });
+  assert.equal(human.status, 0, human.stderr);
+  assert.match(human.stdout, /宿主迁移待办：\.dove\/install\/MIGRATION_PENDING\.md/u);
+}
+writeJson(path.join(homeInitEnv.XDG_CONFIG_HOME, "dove/settings.json"), { hostMigration: false });
+const dshPendingOff = cliDove(["update", "--project", dshPendingRoot, "--json"], { env: homeInitEnv });
+assert.equal(dshPendingOff.status, 0, dshPendingOff.stderr);
+assert.equal(JSON.parse(dshPendingOff.stdout).hostMigrationPending, null);
+
 const factsRoot = makeProject();
 roots.push(factsRoot);
 validateSessionFacts(factsRoot, path.join(ROOT, "bin/dove.mjs"));

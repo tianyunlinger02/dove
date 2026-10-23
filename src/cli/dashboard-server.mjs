@@ -117,7 +117,7 @@ export function createDashboardServer({ collect, listRoots, readDocument, passwo
       }
       try {
         if (action?.type === "changePassword") {
-          const next = String(action.password ?? "");
+          const next = String(action.password ?? "").trim();
           if (next.length < 8) throw new Error("新密码至少 8 位");
           await actions.changePassword(next);
           currentPassword = next;

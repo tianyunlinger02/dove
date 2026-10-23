@@ -154,10 +154,11 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
       const scans = [];
       for (const root of roots) {
         const config = readWatchConfig(root);
-        if (config.enabled) configs.push(config);
         const impacts = parsePaperImpacts(root);
+        if (config.enabled) configs.push({ config, impacts });
         for (const digest of readWatchDigests(root, 7).filter((item) => item.date >= weekAgo)) {
           for (const item of digest.items) {
+            if (impacts[item.id]?.impact === "irrelevant") continue;
             const entry = byId.get(item.id) ?? { ...item, projects: [], impacts: [] };
             if (!entry.projects.includes(path.basename(root))) entry.projects.push(path.basename(root));
             if (impacts[item.id]) entry.impacts.push({ project: path.basename(root), ...impacts[item.id] });
@@ -168,7 +169,7 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
         const scan = readLatestScan(root);
         scans.push({ project: path.basename(root), ...(scan ?? {}), due: watchScanDue(scan, now) });
       }
-      const hot = (readWatchHot(options).papers ?? []).filter((paper) => configs.some((config) => scorePaper(paper, config).relevance >= MIN_RELEVANCE)).slice(0, 15);
+      const hot = (readWatchHot(options).papers ?? []).filter((paper) => configs.some(({ config, impacts }) => impacts[paper.id]?.impact !== "irrelevant" && scorePaper(paper, config).relevance >= MIN_RELEVANCE)).slice(0, 15);
       const top = [...byId.values()].sort((left, right) => (right.impacts.length - left.impacts.length) || (right.score - left.score)).slice(0, 30);
       return { since: weekAgo, top, hot, scans };
     },

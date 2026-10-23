@@ -1,6 +1,5 @@
 import {
   DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY,
-  DOVE_RESEARCH_MENTOR_NAME,
   DOVE_RESEARCH_REVIEW_AGENT_NAME,
   DOVE_RESEARCH_REVIEW_CONDITIONAL_DELIVERY,
   DOVE_RESEARCH_REVIEW_DIRECT_SCIENTIFIC,
@@ -56,7 +55,7 @@ const DEFAULT_HOST_GUIDANCE = Object.freeze({
     "真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。"
   ]),
   dsh: Object.freeze([
-    "使用项目文件和本次 DSH 提供的工具。"
+    "使用项目文件和本次 DSH 提供的工具。首次使用作者侧 Skill 时，用 dove settings --json 查看 hostMigration；开启且有 .dove/install/MIGRATION_PENDING.md 时先读待办，在当前工作告一段落且用户允许的范围内处理；状态查询仍只读。"
   ])
 });
 
@@ -82,7 +81,7 @@ function contract(slug) {
     actions: [
       "选题按共同流程和 RESEARCH_QUALITY.md 找有来源的缺口、跨域机制，检查候选的最强反对；用 Source 带问题读正文，候选卡链接证据。",
       "主线确认后先搭官方指标、真实开发集和最强可得外部比较，缺口立刻问用户。方法第一版就做成能在真实评测上跑通的完整版，核心之外用成熟工具，先拿真实数字再攻瓶颈；新方法或新核心模块先交三段方法设计让用户本人看过，按真实答复开工；修 bug、修评价不受此关口。方法闭合后写开题，用户同意后做正式尝试。规模要能回答问题，用 Experiment 区分开发诊断和正式比较，修评价后恢复必要可比性。",
-      `主线接续、轮次记录和 ${DOVE_RESEARCH_MENTOR_NAME} 的方向判断，遵循共同研究规则中的触发时机、固定问题和笔记流；连续两轮无新科研结果（真实任务指标变化或核心方法取舍）就停下问用户。`
+      "主线接续、轮次记录和独立导师的方向判断，遵循共同研究规则中的触发时机、固定问题和笔记流；连续两轮无新科研结果（真实任务指标变化或核心方法取舍）就停下问用户。"
     ],
     boundaries: [
       "用户选主线前不实现候选方法，只做选题标准允许的诊断；已授权实现、修复和复现不因此重开选题。普通问题保持范围，只读或只设计请求不执行。"

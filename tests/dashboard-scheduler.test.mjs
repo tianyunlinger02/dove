@@ -64,7 +64,7 @@ async function idle(actions) {
 
 function session(env, root, text = "用户希望模型真正学会完整结构生成") {
   const directory = path.join(".claude/projects", root.replace(/[^A-Za-z0-9]/gu, "-"));
-  return put(env.HOME, path.join(directory, "aaaaaaaa-session.jsonl"), `${JSON.stringify({ type: "user", timestamp: "2026-10-16T07:00:00Z", message: { role: "user", content: text } })}\n`);
+  return put(env.HOME, path.join(directory, "aaaaaaaa-session.jsonl"), `${JSON.stringify({ type: "user", cwd: root, timestamp: "2026-10-16T07:00:00Z", message: { role: "user", content: text } })}\n`);
 }
 
 function snapshot(root) {
@@ -311,7 +311,7 @@ test("isolated scanning preserves the per-project budget and resumes the existin
   assert.equal(deferred.pendingBytes, fs.statSync(file).size);
   const refreshed = await refreshUserOriginalsInBackground(study, { env, budgetMs: 20000 });
   assert.deepEqual([refreshed.own, refreshed.pendingBytes], [1, 0]);
-  fs.appendFileSync(file, `${JSON.stringify({ type: "user", timestamp: "2026-10-16T08:00:00Z", message: { content: "新增的长期要求应当保留并逐次增量整理" } })}\n`);
+  fs.appendFileSync(file, `${JSON.stringify({ type: "user", cwd: study, timestamp: "2026-10-16T08:00:00Z", message: { content: "新增的长期要求应当保留并逐次增量整理" } })}\n`);
   const again = await refreshUserOriginalsInBackground(study, { env });
   assert.deepEqual([again.own, again.pendingBytes], [2, 0]);
   assert.equal(refreshUserOriginals(study, { env }).own, 2, "direct callers also honor the injected HOME");

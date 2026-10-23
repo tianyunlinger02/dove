@@ -101,6 +101,11 @@ test("ordinary Claude and standalone DSH carry one applicable shared and author 
     }
     assert.equal(entry.content.includes(participation), false);
   }
+  assert.match(shared, /Claude 使用 dove-mentor.*DSH 使用宿主可用的全新只读隔离上下文/u);
+  assert.match(shared, /没有等价能力就说明缺口/u);
+  const dshResearch = renderCommandAdapter("dsh", COMMAND_SURFACES.find(({ id }) => id === "dove.research"));
+  assert.match(dshResearch, /dove settings --json.*hostMigration/u);
+  assert.match(dshResearch, /开启且有 \.dove\/install\/MIGRATION_PENDING\.md/u);
   assert.equal(rule.split(shared).length - 1, 1, "ordinary conversation needs no optional agent or Skill");
 });
 

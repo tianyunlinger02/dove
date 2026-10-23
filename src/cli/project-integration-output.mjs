@@ -151,6 +151,9 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
   }
   lines.push(...replacedLocalEditNotice(result));
   lines.push(...cleanupWarningNotice(result));
+  if (result.hostMigrationPending) {
+    lines.push(`宿主迁移待办：${terminalSafeText(result.hostMigrationPending)}。在当前工作告一段落且用户允许的范围内处理；不开新研究、不打断运行。`);
+  }
   lines.push("");
   if (command === "init" && result.status === "already-initialized") {
     lines.push("本次 init 未刷新短要点或宿主引导，不能据此确认它们已就绪；需要时运行 dove update。安装本身不代表模型已经读过。", "");

@@ -13,7 +13,7 @@ import { resumeRun } from "../src/core/run-supervisor.mjs";
 import * as publicCore from "../src/core/index.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SCRATCH_ROOT = path.join(ROOT, ".claude", "tmp");
+const SCRATCH_ROOT = path.resolve(process.env.TMPDIR ?? path.join(ROOT, ".claude", "tmp"));
 fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
 
 function cli(args, options = {}) {
@@ -444,6 +444,114 @@ function validateRunComparisonDeltas(project) {
   }
 }
 
+function validateRunSelection() {
+  const project = fs.mkdtempSync(path.join(SCRATCH_ROOT, "dove-run-selection-"));
+  try {
+    // Manual receipts only: no supervisor, target command, Git, or model runs.
+    const at = "2026-10-23T00:00:00.000Z";
+    fs.mkdirSync(path.join(project, ".dove", "install"), { recursive: true });
+    fs.writeFileSync(path.join(project, ".dove", "install", "manifest.json"), JSON.stringify({
+      revision: "2.0", package: { name: "dove", version: "3.0.0" }, runtime: { mode: "user-cli" },
+      hosts: ["claude"], managed: [], createdAt: at, updatedAt: at
+    }));
+    const receiptFiles = [];
+    const fixture = (id, options = {}) => {
+      const metric = { name: "score", direction: "max", unit: null };
+      const events = [{
+        schemaVersion: "dove.run.event.v1", seq: 1, at, type: "run.started", runId: id,
+        group: Object.hasOwn(options, "group") ? options.group : "selected", argv: ["never-execute-this-fixture"], cwd: project,
+        supervisorPid: null, budget: { timeoutMs: null, killGraceMs: 5000 }, metric,
+        data: options.data ?? "fixture-v1", evaluator: "validator", resourceBasis: "local"
+      }, { schemaVersion: "dove.run.event.v1", seq: 2, at, type: "run.terminal", runId: id, outcome: "succeeded", exitCode: 0 }];
+      if (options.finalized !== false) events.push({ schemaVersion: "dove.run.event.v1", seq: 3, at, type: "run.finalized", runId: id, metric: { ...metric, value: options.value ?? 1 } });
+      writeManualRunJournal(project, id, events);
+      if (options.badTail) fs.appendFileSync(runPath(project, id, "run.jsonl"), "not-json");
+      receiptFiles.push(...["run.jsonl", "stdout.log", "stderr.log"].map((file) => runPath(project, id, file)));
+    };
+    const snapshot = () => ({
+      entries: fs.readdirSync(path.join(project, ".dove", "runs")).sort(),
+      files: receiptFiles.map((file) => [file, fs.readFileSync(file, "utf8"), fileState(file)])
+    });
+    const query = (args, expectedExit = 0, json = true) => {
+      const before = snapshot();
+      const result = cli(["run", ...args, "--project", project, ...(json ? ["--json"] : [])]);
+      assert.equal(result.status, expectedExit, result.stderr || result.stdout);
+      assert.equal(result.stderr, "");
+      assert.deepEqual(snapshot(), before, "selection queries must not change receipts or run entries");
+      if (!json) return result.stdout;
+      const value = JSON.parse(result.stdout);
+      assertNoPublicDeprecatedRunFields(value);
+      return value;
+    };
+    const selectionFailure = (args, errorId) => {
+      const result = query(["compare", ...args], 1);
+      assert.equal(result.status, "partial");
+      assert.equal(result.comparable, false);
+      assert.equal(result.complete, false);
+      assert.deepEqual(result.fields, ["selection"]);
+      assert.ok(result.errors.some((error) => error.runId === errorId && error.message));
+      assert.equal(Object.hasOwn(result, "ranking"), false);
+      return result;
+    };
+
+    fixture("good");
+    fixture("better", { value: 2 });
+    fixture("other", { group: "another", badTail: true });
+    fixture("ungrouped", { group: null, badTail: true });
+    fs.mkdirSync(path.join(project, ".dove", "runs", "reserved"));
+    const groupStatus = query(["status", "--group", "selected"]);
+    assert.equal(groupStatus.complete, true);
+    assert.deepEqual(groupStatus.errors, []);
+    assert.deepEqual(groupStatus.runs.map((run) => run.runId), ["better", "good"]);
+    assert.deepEqual(query(["compare", "--group", "selected"]).ranking.map((run) => run.runId), ["better", "good"]);
+
+    fixture("bad-target", { badTail: true });
+    const badTargetStatus = query(["status", "--group", "selected"], 1);
+    assert.equal(badTargetStatus.complete, false);
+    assert.deepEqual(badTargetStatus.errors.map((error) => error.runId), ["bad-target"]);
+    selectionFailure(["--group", "selected"], "bad-target");
+    selectionFailure(["--id", "good", "--id", "bad-target"], "bad-target");
+    selectionFailure(["--id", "missing"], "missing");
+
+    fixture("unknown", { group: "another" });
+    fs.writeFileSync(runPath(project, "unknown", "run.jsonl"), "not-json\n");
+    selectionFailure(["--group", "selected"], "unknown");
+    const notes = path.join(project, ".dove", "runs", "notes.txt");
+    fs.writeFileSync(notes, "Not a run.\n");
+    receiptFiles.push(notes);
+    fixture("bad\x1b[31m-name");
+    const listed = query(["status"], 1);
+    assert.equal(listed.status, "partial");
+    assert.equal(listed.complete, false);
+    assert.ok(listed.runs.some((run) => run.runId === "good"));
+    assert.ok(listed.errors.some((error) => error.runId === "notes.txt" && /real directory/u.test(error.message)));
+    const humanList = query(["status"], 1, false);
+    assert.match(humanList, /列表不完整/u);
+    assert.match(humanList, /notes\.txt/u);
+    assert.ok(humanList.includes("bad?[31m-name"));
+    assert.doesNotMatch(humanList, /[\x00-\x09\x0b-\x1f\x7f-\x9f]/u);
+    const humanComparison = query(["compare", "--group", "selected"], 1, false);
+    assert.match(humanComparison, /选择不完整.*未生成排名/u);
+    assert.match(humanComparison, /notes\.txt/u);
+    assert.doesNotMatch(humanComparison, /[\x00-\x09\x0b-\x1f\x7f-\x9f]/u);
+    assert.equal(query(["status", "--id", "good"]).status, "succeeded");
+    assert.equal(query(["compare", "--id", "good"]).comparable, true);
+
+    fixture("pending", { finalized: false });
+    fixture("mismatch", { data: "fixture-v2" });
+    for (const [id, fields] of [["pending", ["state"]], ["mismatch", ["data"]]]) {
+      const result = query(["compare", "--id", "good", "--id", id]);
+      assert.equal(result.status, "ok", "normal state/basis refusals remain successful queries");
+      assert.equal(result.comparable, false);
+      assert.notEqual(result.complete, false);
+      assert.deepEqual(result.fields, fields);
+      assert.equal(Object.hasOwn(result, "ranking"), false);
+    }
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+}
+
 async function validateRunReceipts(project) {
   assert.equal(publicCore.appendFinalizedRun, appendFinalizedRun);
   assert.equal(Object.hasOwn(publicCore, "finalizeRunWithSupervisor"), false);
@@ -554,6 +662,12 @@ async function validateRunReceipts(project) {
 // Focused source-CLI checks need neither installation nor Git fixture commits.
 const comparisonsOnly = process.argv.includes("--comparisons-only");
 const receiptsOnly = process.argv.includes("--receipts-only");
+const selectionOnly = process.argv.includes("--selection-only");
+if (selectionOnly) {
+  validateRunSelection();
+  console.log(JSON.stringify({ status: "passed", scope: "run selection resilience (source CLI)" }, null, 2));
+  process.exit(0);
+}
 if (process.argv.includes("--timeouts-only") || comparisonsOnly || receiptsOnly) {
   const project = fs.mkdtempSync(path.join(SCRATCH_ROOT, comparisonsOnly ? "dove-run-comparisons-" : "dove-run-timeouts-"));
   try {
@@ -833,6 +947,8 @@ try {
   assert.equal(reconciledAgain.status, "terminal");
   assert.equal(reconciledAgain.write, false);
   assertFileStateEqual(fileState(path.join(manualDir, "run.jsonl")), beforeManualTerminalResume, "reconciled terminal resume must be zero-write");
+
+  validateRunSelection();
 
   const hidden = cli(["__dove-run-supervisor", "not-a-public-command"]);
   assert.notEqual(hidden.status, 0);

@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { writeFileSetTransaction } from "./file-set-transaction.mjs";
 import { PROJECT_HOST_IDS, normalizeHostSelection } from "./host-registry.mjs";
-import { HOST_MIGRATION_PENDING_PATH, HOST_MIGRATION_REGISTERED_PATH, prepareHostMigration } from "./host-migration.mjs";
+import { HOST_MIGRATION_PENDING_PATH, HOST_MIGRATION_REGISTERED_PATH, hostMigrationContext, prepareHostMigration } from "./host-migration.mjs";
 import { USER_ORIGINALS_INDEX_PATH, USER_ORIGINALS_PATH } from "./user-originals.mjs";
 import {
   INSTALLATION_MANIFEST_PATH,
@@ -53,6 +53,7 @@ function resultFromTransaction(status, target, hosts, manifest, transaction, det
     omittedCleanupWarningCount: transaction.omittedCleanupWarningCount,
     skippedLocalEdits: [...(details.skippedLocalEdits ?? [])],
     replacedLocalEdits: [...(details.replacedLocalEdits ?? [])],
+    hostMigrationPending: details.hostMigrationPending ?? null,
     manifest
   };
 }
@@ -61,21 +62,29 @@ function transactionOptions(fsOps, options = {}) {
   return { ...options, fsOps };
 }
 
+function appendHostMigration(plan, root, options) {
+  const entries = prepareHostMigration(root, options);
+  plan.entries.push(...entries);
+  const pending = entries.some((entry) => entry.relativePath === HOST_MIGRATION_PENDING_PATH) || hostMigrationContext(root, options);
+  plan.hostMigrationPending = pending ? HOST_MIGRATION_PENDING_PATH : null;
+}
+
 export function initializeProjectIntegration(rootOrProject, options = {}) {
   const fsOps = options.fsOps ?? fs;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
   const now = exactTimestamp(options.now);
-  const root = resolveProjectRootForInit(rootOrProject, { fsOps, hostIds: PROJECT_HOST_IDS });
+  const root = resolveProjectRootForInit(rootOrProject, { ...options, fsOps, hostIds: PROJECT_HOST_IDS });
   const plan = preparePlan({ root, hosts, packageName: options.packageName, packageVersion: options.packageVersion, now, fsOps });
   plan.entries.push(...prepareResearchDefaults(root, { fsOps }).entries);
-  plan.entries.push(...prepareHostMigration(root, { ...options, fsOps, now }));
+  appendHostMigration(plan, root, { ...options, fsOps, now });
   return resultFromTransaction(
     "initialized",
     root,
     hosts,
     plan.manifest,
-    writeFileSetTransaction(plan.entries, transactionOptions(fsOps))
+    writeFileSetTransaction(plan.entries, transactionOptions(fsOps)),
+    plan
   );
 }
 
@@ -93,7 +102,7 @@ function prepareInstalledPlan(start, options = {}) {
 
 export function updateProjectIntegration(start, options = {}) {
   const prepared = prepareInstalledPlan(start, { ...options, replacementPolicy: "explicit-update" });
-  prepared.entries.push(...prepareHostMigration(prepared.root, { ...options, fsOps: prepared.fsOps, packageVersion: prepared.manifest.package.version }));
+  appendHostMigration(prepared, prepared.root, { ...options, fsOps: prepared.fsOps, packageVersion: prepared.manifest.package.version });
   const transaction = writeFileSetTransaction(
     prepared.entries,
     transactionOptions(prepared.fsOps)
@@ -108,7 +117,7 @@ export function syncProjectIntegration(start, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const root = resolveExactInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS });
   const prepared = prepareInstalledPlan(root, { ...options, fsOps, replacementPolicy: "auto-inspect" });
-  prepared.entries.push(...prepareHostMigration(root, { ...options, fsOps, packageVersion: prepared.manifest.package.version }));
+  appendHostMigration(prepared, root, { ...options, fsOps, packageVersion: prepared.manifest.package.version });
   const transaction = writeFileSetTransaction(prepared.entries, transactionOptions(fsOps));
   return resultFromTransaction(transaction.changedPaths.length === 0 ? "unchanged" : "updated", root, prepared.hosts, prepared.manifest, transaction, prepared);
 }
@@ -150,7 +159,7 @@ function prepareLifecycleIntegration(root, options, { hosts, source }) {
     manifest: source,
     replacementPolicy: "confirmed-reinstall"
   });
-  planned.entries.push(...prepareHostMigration(root, options));
+  appendHostMigration(planned, root, options);
   return { ...planned, scope: [] };
 }
 

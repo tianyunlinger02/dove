@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { parsePaperImpactLine } from "./dashboard-data.mjs";
 import { latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
 import { USER_ORIGINALS_PATH } from "./user-originals.mjs";
 
@@ -110,15 +111,22 @@ function watchMaterials(root, rounds, fsOps) {
   let incomplete = false;
   const impacts = names.filter((name) => IMPACT_FILE.test(name));
   const records = [
-    ...rounds.filter((name) => ROUND_FILE.test(name) && /brief\.md$/iu.test(name)).map((name) => path.join(root, RESEARCH, "rounds", name)),
-    ...impacts.map((name) => path.join(directory, name))
+    ...rounds.filter((name) => ROUND_FILE.test(name) && /brief\.md$/iu.test(name)).sort((left, right) => parseInt(left) - parseInt(right)).map((name) => path.join(root, RESEARCH, "rounds", name)),
+    ...[...impacts].reverse().map((name) => path.join(directory, name))
   ];
   for (const file of records) {
     const record = readWindow(file, fsOps, 65536, true);
     incomplete ||= Boolean(record.error || record.truncated);
     if (record.error) continue;
-    for (const match of record.text.matchAll(/^\s*(?:[-*]\s*)?\|?\s*`?(\d{4}\.\d{4,5}|[a-z][a-z.-]*\/\d{7}|W\d+)(?:v\d+)?`?\s*\|\s*(撞题|新基线|可借用|无关)\s*\|/gmu)) {
-      judged.add(match[1]);
+    // A bounded tail can start inside a row; do not consume that fragment as a
+    // complete newer judgment. Keep the existing incomplete-history notice.
+    const lines = record.text.split(/\r?\n/u);
+    if (record.startByte) lines.shift();
+    for (const line of lines) {
+      const parsed = parsePaperImpactLine(line);
+      if (!parsed) continue;
+      if (parsed.impact) judged.add(parsed.id);
+      else judged.delete(parsed.id);
     }
   }
   if (impacts.length) lines.push(`- 影响记录：\`${relative}/\`（含历史 brief 判断）`);

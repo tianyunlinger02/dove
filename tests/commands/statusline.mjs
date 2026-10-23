@@ -25,8 +25,8 @@ export function assertDoveStatusLineRenderer() {
     cost: { total_duration_ms: ((54 * 60) + 34) * 60_000 }
   };
   const options = { projectRoot: "/workspace/project with spaces", branch: "work-branch", mainline: "检验观测误差对机制识别的影响", env: {} };
-  const expected = "gpt-5.6-sol(high) (272K) · ctx 24% · " +
-    "\x1b[36m检验观测误差对机制识别的影响\x1b[0m · work-branch · 54h34m\n/workspace/project with spaces";
+  const expected = "gpt-5.6-sol(high) (272K) · ctx 24% · work-branch · 54h34m · " +
+    "\x1b[36m检验观测误差对机制识别的影响\x1b[0m\n/workspace/project with spaces";
   assert.equal(renderDoveStatusLine(payload, options), expected);
   assert.equal(renderDoveStatusLine(payload, { ...options, env: { NO_COLOR: "" } }), expected);
   for (const NO_COLOR of ["1", "0", " "]) {
@@ -36,9 +36,9 @@ export function assertDoveStatusLineRenderer() {
     "gpt-5.6-sol(high) (272K) · ctx 24% · work-branch · 54h34m\n/workspace/project with spaces");
   assert.equal(renderDoveStatusLine({}, { ...options, mainline: null, branch: null }), "Dove\n/workspace/project with spaces");
   assert.equal(renderDoveStatusLine({}, { ...options, mainline: "Text\x1b[31m\nInjected", env: { NO_COLOR: "1" } }),
-    "Text?[31m?Injected · work-branch\n/workspace/project with spaces");
-  assert.equal(renderDoveStatusLine({}, { ...options, mainline: "甲".repeat(81), env: { NO_COLOR: "1" } }),
-    `${"甲".repeat(79)}… · work-branch\n/workspace/project with spaces`);
+    "work-branch · Text?[31m?Injected\n/workspace/project with spaces");
+  assert.equal(renderDoveStatusLine(payload, { ...options, mainline: "甲".repeat(81), env: { NO_COLOR: "1" } }),
+    `gpt-5.6-sol(high) (272K) · ctx 24% · work-branch · 54h34m · ${"甲".repeat(79)}…\n/workspace/project with spaces`);
   assert.equal(renderDoveStatusLine({ model: { display_name: "Opus 4.8 (1M context)" }, context_window: { context_window_size: 1_000_000, used_percentage: 85 }, cost: {} }, { branch: null }),
     "Opus 4.8 (1M context)", "used percentage must not masquerade as remaining context");
   assert.equal(renderDoveStatusLine({ model: { display_name: "Model\nInjected" }, context_window: { remaining_percentage: 0 }, cost: { total_duration_ms: 0 } }, { branch: "main\rbranch" }),
@@ -141,7 +141,7 @@ export function assertDoveStatusLineCli() {
       cost: { total_duration_ms: 120_000 },
       workspace: { project_dir: "/not-the-explicit-project" }
     });
-    const expected = `Synthetic model (272K) · ctx 24% · \x1b[36m合成确认主线\x1b[0m · 2m\n${project}\n`;
+    const expected = `Synthetic model (272K) · ctx 24% · 2m · \x1b[36m合成确认主线\x1b[0m\n${project}\n`;
     for (const entry of ["bin/dove.mjs", "bin/dove-package.mjs"]) {
       const result = spawnSync(process.execPath, [path.join(ROOT, entry), "hook", "statusline", "--project", project], {
         cwd: project, input: payload, encoding: "utf8", env, timeout: 10_000

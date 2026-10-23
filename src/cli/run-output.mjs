@@ -19,6 +19,10 @@ function renderGitFacts(result) {
   return `commit ${terminalSafeText(commit)}；dirty ${terminalSafeText(dirty)}`;
 }
 
+function renderRunErrors(errors) {
+  return errors.map((error) => `- ${terminalSafeText(error.runId)}：${terminalSafeText(error.message)}`);
+}
+
 export function renderRunResult(result) {
   if (result.command === "start") {
     return [
@@ -42,8 +46,10 @@ export function renderRunResult(result) {
   if (result.command === "status" && Array.isArray(result.runs)) {
     const lines = ["Dove run 状态", "", `项目：${terminalSafeText(result.project)}`];
     if (result.group) lines.push(`分组：${terminalSafeText(result.group)}`);
-    if (result.runs.length === 0) lines.push("", "尚无匹配的 .dove/runs/** 记录。");
+    if (result.complete === false) lines.push("", "列表不完整：部分运行记录无法读取，以下仅保留可读取的匹配记录。");
+    if (result.runs.length === 0) lines.push("", result.complete === false ? "暂无可展示的匹配记录，不能据此判断没有运行记录。" : "尚无匹配的 .dove/runs/** 记录。");
     else lines.push("", ...result.runs.map((run) => `- ${terminalSafeText(run.runId)}：${terminalSafeText(run.status)}${run.group ? `，分组 ${terminalSafeText(run.group)}` : ""}${run.finalized ? `，指标 ${renderRunMetric(run.metric)}` : ""}`));
+    if (result.complete === false) lines.push("", "逐项读取错误：", ...renderRunErrors(result.errors));
     return lines.join("\n");
   }
   if (result.command === "status") {
@@ -96,6 +102,7 @@ export function renderRunResult(result) {
         "",
         "可比较：false",
         `字段：${terminalSafeText((result.fields ?? []).join(", ") || "无")}`,
+        ...(result.complete === false ? ["选择不完整：目标记录无法读取或分组归属未知，未生成排名。", "逐项读取错误：", ...renderRunErrors(result.errors)] : []),
         "只比较 terminal 且 finalized，并且 metric、budget、data、evaluator、resource basis 完全一致的 runs；Git commit/dirty 只是运行事实，不参与可比性或排名。"
       ].join("\n");
     }

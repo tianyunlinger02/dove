@@ -275,6 +275,12 @@ function assertProjectIntegrationRenderer() {
   assert.match(dshOnly, /DSH 没有 SessionStart/u);
   assert.match(dshOnly, /主 agent.*读取两个短要点/u);
   assert.doesNotMatch(dshOnly, /Claude startup/u);
+  const dshPending = renderProjectIntegrationResult("update", {
+    ...initializedResult, status: "unchanged", hosts: ["dsh"], hostMigrationPending: ".dove/install/MIGRATION_PENDING.md"
+  }, { stream: { isTTY: false }, env: {} });
+  assert.match(dshPending, /宿主迁移待办：\.dove\/install\/MIGRATION_PENDING\.md/u);
+  assert.match(dshPending, /当前工作告一段落且用户允许/u);
+  assert.doesNotMatch(dshOnly, /宿主迁移待办：/u);
 
   for (const hosts of [["claude"], ["dsh"], ["claude", "dsh"]]) {
     const alreadyInitialized = renderProjectIntegrationResult("init", {

@@ -557,6 +557,12 @@ export function preparePlan({ root, hosts, packageName, packageVersion, now, fsO
       const observed = inspectRegularProjectFile(root, entry.path, fsOps);
       return !observed.exists || !inspectWebFetchDenyFragmentState(parseSharedJson(observed, entry.path)).exists;
     }
+    if (entry.selector === EXA_MCP_SELECTOR) {
+      const observed = inspectRegularProjectFile(root, entry.path, fsOps);
+      const current = exaMcpFragmentState(parseSharedJson(observed, entry.path));
+      if (current.exists && current.digest !== entry.digest) throw conflictError(entry);
+      return !current.exists;
+    }
     return true;
   });
   const desiredByKey = new Map(desiredResources.map((entry) => [managedKey(entry), entry]));

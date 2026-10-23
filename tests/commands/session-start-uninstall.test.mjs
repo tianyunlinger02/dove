@@ -109,21 +109,21 @@ function seedOriginals(store) {
     entries.push({ timestamp, text: marker + "\u{20000}".repeat(length - Array.from(ownLine(timestamp, marker)).length) });
   }
   const noise = [
-    userRecord("2026-10-16T12:00:00Z", "主会话 Claude，RELAY_NOT_AN_OWN_QUOTE"),
-    userRecord("2026-10-16T12:00:30Z", "Claude 代用户转达：RELAY_FORMAT_NOT_AN_OWN_QUOTE"),
-    userRecord("2026-10-16T12:00:45Z", "用户 2026-10-16 决定：RELAY_DECISION_NOT_AN_OWN_QUOTE"),
-    userRecord("2026-10-16T12:01:00Z", "META_NOT_AN_OWN_QUOTE", { isMeta: true }),
-    userRecord("2026-10-16T12:02:00Z", "COMPACT_SUMMARY_NOT_AN_OWN_QUOTE", { isCompactSummary: true }),
-    userRecord("2026-10-16T12:03:00Z", "SIDECHAIN_NOT_AN_OWN_QUOTE", { isSidechain: true }),
-    userRecord("2026-10-16T12:04:00Z", "<task-notification>TASK_NOT_AN_OWN_QUOTE</task-notification>"),
-    userRecord("2026-10-16T12:04:10Z", "【用户指出资源浪费，需要改】BRACKET_RELAY_NOT_AN_OWN_QUOTE"),
-    userRecord("2026-10-16T12:04:20Z", "用户 2026-10-16 诊断结论与新指令：DATED_RELAY_NOT_AN_OWN_QUOTE"),
-    userRecord("2026-10-16T12:04:30Z", "用户授权 013 重试：AUTHORIZATION_RELAY_NOT_AN_OWN_QUOTE"),
-    userRecord("2026-10-16T12:05:00Z", [{ type: "tool_result", tool_use_id: "synthetic", content: "TOOL_NOT_AN_OWN_QUOTE" }]),
+    userRecord("2026-10-16T12:00:00Z", "主会话 Claude，RELAY_NOT_AN_OWN_QUOTE", { cwd: store.project }),
+    userRecord("2026-10-16T12:00:30Z", "Claude 代用户转达：RELAY_FORMAT_NOT_AN_OWN_QUOTE", { cwd: store.project }),
+    userRecord("2026-10-16T12:00:45Z", "用户 2026-10-16 决定：RELAY_DECISION_NOT_AN_OWN_QUOTE", { cwd: store.project }),
+    userRecord("2026-10-16T12:01:00Z", "META_NOT_AN_OWN_QUOTE", { isMeta: true, cwd: store.project }),
+    userRecord("2026-10-16T12:02:00Z", "COMPACT_SUMMARY_NOT_AN_OWN_QUOTE", { isCompactSummary: true, cwd: store.project }),
+    userRecord("2026-10-16T12:03:00Z", "SIDECHAIN_NOT_AN_OWN_QUOTE", { isSidechain: true, cwd: store.project }),
+    userRecord("2026-10-16T12:04:00Z", "<task-notification>TASK_NOT_AN_OWN_QUOTE</task-notification>", { cwd: store.project }),
+    userRecord("2026-10-16T12:04:10Z", "【用户指出资源浪费，需要改】BRACKET_RELAY_NOT_AN_OWN_QUOTE", { cwd: store.project }),
+    userRecord("2026-10-16T12:04:20Z", "用户 2026-10-16 诊断结论与新指令：DATED_RELAY_NOT_AN_OWN_QUOTE", { cwd: store.project }),
+    userRecord("2026-10-16T12:04:30Z", "用户授权 013 重试：AUTHORIZATION_RELAY_NOT_AN_OWN_QUOTE", { cwd: store.project }),
+    userRecord("2026-10-16T12:05:00Z", [{ type: "tool_result", tool_use_id: "synthetic", content: "TOOL_NOT_AN_OWN_QUOTE" }], { cwd: store.project }),
     JSON.stringify({ type: "assistant", timestamp: "2026-10-16T12:06:00Z", message: { role: "assistant", content: "ASSISTANT_NOT_AN_OWN_QUOTE" } }),
-    userRecord(undefined, "UNDATED_NOT_AN_OWN_QUOTE")
+    userRecord(undefined, "UNDATED_NOT_AN_OWN_QUOTE", { cwd: store.project })
   ];
-  fs.writeFileSync(store.session, [...entries.map(({ timestamp, text }) => userRecord(timestamp, [{ type: "text", text }])), ...noise, ""].join("\n"));
+  fs.writeFileSync(store.session, [...entries.map(({ timestamp, text }) => userRecord(timestamp, [{ type: "text", text }], { cwd: store.project })), ...noise, ""].join("\n"));
   const unrelated = path.join(store.home, ".claude/projects/unrelated-project/session.jsonl");
   const task = path.join(path.dirname(store.session), "session/subagents/agent-task.jsonl");
   for (const file of [unrelated, task]) {
@@ -247,7 +247,7 @@ test("SessionStart compact and resume refresh isolated user originals with sourc
     const priorIndex = JSON.parse(priorCaches[1]).files[store.session];
     assert.equal(priorIndex.offset, fs.statSync(store.session).size);
     const appended = { timestamp: `2026-10-16T14:0${source === "compact" ? 0 : 1}:00Z`, text: `${source === "compact" ? "Claude Code 的钩子请继续修正。" : "我授权继续这次修复。"}APPENDED_OWN_${source}_NEW_REQUEST` };
-    fs.appendFileSync(store.session, `${userRecord(appended.timestamp, appended.text)}\n`);
+    fs.appendFileSync(store.session, `${userRecord(appended.timestamp, appended.text, { cwd: store.project })}\n`);
     entries.push(appended);
     const expected = sourceInvoke(source);
     const nextIndex = JSON.parse(fs.readFileSync(store.cachePaths[1], "utf8")).files[store.session];
@@ -267,7 +267,7 @@ test("SessionStart compact and resume refresh isolated user originals with sourc
     assert.deepEqual(snapshot(store.project, store.cachePaths), protectedBefore, `${source} changes no project-owned research or configuration`);
   }
 
-  fs.appendFileSync(store.session, `${userRecord("2026-10-16T15:02:00Z", "FAILURE_TRIGGER_NOT_EMITTED")}\n`);
+  fs.appendFileSync(store.session, `${userRecord("2026-10-16T15:02:00Z", "FAILURE_TRIGGER_NOT_EMITTED", { cwd: store.project })}\n`);
   const stale = "# stale cache\n- 2026-10-16 15:00 · 本人 · STALE_QUOTE_MUST_NOT_BE_EMITTED\n";
   fs.writeFileSync(store.cachePaths[0], stale);
   const failingFsOps = Object.create(fs);
@@ -283,7 +283,7 @@ test("SessionStart compact and resume refresh isolated user originals with sourc
 
 test("SessionStart marks an unfinished original-user scan as incomplete without reading the source pointer", (t) => {
   const store = fixture(t);
-  const records = [0, 1, 2].map((index) => `${userRecord(`2026-10-16T16:0${index}:00Z`, `PENDING_OWN_ENTRY_${index}`)}\n`);
+  const records = [0, 1, 2].map((index) => `${userRecord(`2026-10-16T16:0${index}:00Z`, `PENDING_OWN_ENTRY_${index}`, { cwd: store.project })}\n`);
   fs.writeFileSync(store.session, records.join(""));
   const fsOps = Object.create(fs);
   let now = 10_000;

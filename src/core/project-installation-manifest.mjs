@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ARTIFACT_PATHS } from "./schema.mjs";
+import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 
 export const INSTALLATION_MANIFEST_PATH = ARTIFACT_PATHS.installationManifest;
 export const LEGACY_INSTALLATION_MANIFEST_PATH = ".dove-install/manifest.json";
@@ -227,7 +228,7 @@ export function readProjectInstallationManifest(root, options = {}) {
   if (lstatOrNull(fsOps, path.join(root, ".dove-install")) !== null) throw new Error("Dove found unsupported legacy installation state; resolve it explicitly without automatic migration or cleanup.");
   const manifestPath = inspectManifestFile(root, fsOps, INSTALLATION_MANIFEST_PATH);
   try {
-    const parsed = JSON.parse(fsOps.readFileSync(manifestPath, "utf8"));
+    const parsed = parseJsonWithoutDuplicateKeys(fsOps.readFileSync(manifestPath, "utf8"), manifestPath);
     validateProjectInstallationManifest(parsed, options);
     return parsed;
   } catch (error) {

@@ -5,7 +5,7 @@ import test from "node:test";
 
 import { createDashboardActions } from "../src/cli/dashboard-actions.mjs";
 import { renderDashboardHtml } from "../src/cli/dashboard-server.mjs";
-import { parsePaperImpacts } from "../src/core/dashboard-data.mjs";
+import { parsePaperImpactLine, parsePaperImpacts } from "../src/core/dashboard-data.mjs";
 import { exportPaperBibtex, groupPaperLibrary, readPaperLibrary, renderPaperLibrary } from "../src/core/paper-library.mjs";
 import {
   arxivIdFromUrl, createWatchFetcher, curlGet, fetchArxiv, fetchHuggingFaceDaily, fetchSemanticScholar,
@@ -19,7 +19,9 @@ const WATCH = `${ROOT}/.dove/research/watch`;
 const GLOBAL = `${HOME}/.config/dove`;
 const NOW = Date.parse("2026-10-15T12:00:00Z");
 const env = { HOME };
-const feed = (title = "GarmageNet: Sewing Pattern Generation", id = "2610.00001", published = "2026-10-14T00:00:00Z") => `<feed><entry><id>https://arxiv.org/abs/${id}v2</id><title>${title}</title><summary>Garment reconstruction and sewing pattern generation.</summary><published>${published}</published><author><name>Alice</name></author></entry></feed>`;
+const entry = (title = "GarmageNet: Sewing Pattern Generation", id = "2610.00001", published = "2026-10-14T00:00:00Z") => `<entry><id>https://arxiv.org/abs/${id}v2</id><title>${title}</title><summary>Garment reconstruction and sewing pattern generation.</summary><published>${published}</published><author><name>Alice</name></author></entry>`;
+const pageFeed = (entries = [], { total = entries.length, start = 0 } = {}) => `<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/"><opensearch:totalResults>${total}</opensearch:totalResults><opensearch:startIndex>${start}</opensearch:startIndex><opensearch:itemsPerPage>${entries.length}</opensearch:itemsPerPage>${entries.join("")}</feed>`;
+const feed = (...args) => pageFeed([entry(...args)]);
 
 // All paths below exist only in this Map. Never create a project or fixture directory.
 function memoryFiles(t, entries = {}) {
@@ -122,6 +124,127 @@ test("arXiv serializes and paces requests, respects numeric/date Retry-After, an
   const results = await Promise.all([fetchArxiv(config, { get }), fetchArxiv(config, { get })]);
   assert.deepEqual(calledAt.map((time) => time - NOW), [0, 5000, 12000, 15000]);
   assert.ok(results.every((result) => result.items.length === 1));
+});
+
+test("recent arXiv freezes a GMT window and retrieves paper 201 through the same paced fetcher", async () => {
+  const since = Date.parse("2026-10-01T08:15:30.500Z");
+  const until = Date.parse("2026-10-15T12:00:20.500Z");
+  const entries = Array.from({ length: 201 }, (_, index) => entry(undefined, `2610.${String(index + 1).padStart(5, "0")}`));
+  const time = clock();
+  const calls = [];
+  const get = createWatchFetcher({ ...time, get: async (url) => {
+    const params = new URL(url).searchParams;
+    const start = Number(params.get("start"));
+    calls.push({ start, at: time.clock(), query: params.get("search_query") });
+    assert.equal(params.get("max_results"), "200");
+    assert.equal(params.get("sortBy"), "submittedDate");
+    return { status: 200, body: pageFeed(entries.slice(start, start + 200), { total: 201, start }) };
+  } });
+  const result = await fetchArxiv(normalizeWatchConfig({ keywords: ["sewing pattern"] }), { since, until, get });
+  assert.equal(result.error, undefined);
+  assert.equal(result.items.length, 201);
+  assert.equal(result.items.at(-1).id, "2610.00201");
+  assert.deepEqual(calls.map(({ start }) => start), [0, 200]);
+  assert.deepEqual(calls.map(({ at }) => at - NOW), [0, 3000]);
+  assert.equal(new Set(calls.map(({ query }) => query)).size, 1);
+  assert.match(calls[0].query, /submittedDate:\[202610010815 TO 202610151201\]/u);
+});
+
+test("arXiv offsets count raw entries, deduplicate canonical versions, and filter exact window boundaries", async () => {
+  const since = Date.parse("2026-10-01T00:00:30Z");
+  const until = NOW;
+  const first = Array.from({ length: 198 }, (_, index) => entry(undefined, `2610.${String(index + 1).padStart(5, "0")}`));
+  first.push(entry(undefined, "invalid-id"), entry(undefined, "2610.00999", "2026-10-01T00:00:29.999Z"));
+  const pages = new Map([
+    [0, first],
+    [200, [entry(undefined, "2610.00001").replace("v2</id>", "v7</id>"), entry(undefined, "2610.00201", "2026-10-01T00:00:30Z"), entry(undefined, "2610.00998", new Date(until).toISOString())]],
+    [203, [entry(undefined, "2610.00204", "2026-10-15T11:59:59.999Z")]]
+  ]);
+  const starts = [];
+  const result = await fetchArxiv(normalizeWatchConfig({ keywords: ["sewing pattern"] }), { since, until, get: async (url) => {
+    const start = Number(new URL(url).searchParams.get("start"));
+    starts.push(start);
+    return { status: 200, body: pageFeed(pages.get(start), { total: 204, start }) };
+  } });
+  assert.equal(result.error, undefined);
+  assert.deepEqual(starts, [0, 200, 203]);
+  assert.equal(result.items.length, 200);
+  assert.equal(new Set(result.items.map(({ id }) => id)).size, 200);
+  assert.ok(result.items.some(({ id }) => id === "2610.00204"));
+  assert.ok(result.items.every(({ id }) => !["2610.00998", "2610.00999"].includes(id)));
+});
+
+test("arXiv retains prior pages on later failures, empty pages, stalled IDs, invalid metadata and page budget", async () => {
+  const first = Array.from({ length: 200 }, (_, index) => entry(undefined, `2610.${String(index + 1).padStart(5, "0")}`));
+  const config = normalizeWatchConfig({ keywords: ["sewing pattern"] });
+  for (const [later, message] of [
+    [{ status: 503, body: "later unavailable" }, /503.*later unavailable/u],
+    [{ status: 200, body: pageFeed([], { total: 201, start: 200 }) }, /空页/u],
+    [{ status: 200, body: pageFeed([first[0]], { total: 201, start: 200 }) }, /无进展/u],
+    [{ status: 200, body: "<feed></feed>" }, /分页元数据/u],
+    [{ status: 200, body: pageFeed([entry(undefined, "2610.00201")], { total: 201, start: 0 }) }, /分页元数据/u]
+  ]) {
+    let calls = 0;
+    const result = await fetchArxiv(config, { until: NOW, get: async () => ++calls === 1 ? { status: 200, body: pageFeed(first, { total: 201 }) } : later });
+    assert.equal(calls, 2);
+    assert.equal(result.items.length, 200);
+    assert.match(result.error, message);
+  }
+  let calls = 0;
+  const bounded = await fetchArxiv(config, { until: NOW, get: async (url) => {
+    const start = Number(new URL(url).searchParams.get("start"));
+    assert.equal(start, calls++);
+    return { status: 200, body: pageFeed([entry(undefined, `2610.${String(start + 1).padStart(5, "0")}`)], { total: 100, start }) };
+  } });
+  assert.equal(calls, 50);
+  assert.equal(bounded.items.length, 50);
+  assert.match(bounded.error, /50 页预算.*50 \/ 100/u);
+});
+
+test("before remains a bounded relevance supplement independent of recent until", async () => {
+  let calls = 0;
+  const result = await fetchArxiv(normalizeWatchConfig({ keywords: ["sewing pattern"] }), {
+    since: Date.parse("2021-10-01T00:00:00Z"), before: Date.parse("2025-10-01T00:00:00Z"), until: NOW,
+    get: async (url) => {
+      calls += 1;
+      const params = new URL(url).searchParams;
+      assert.equal(params.get("sortBy"), "relevance");
+      assert.equal(params.get("start"), "0");
+      assert.match(params.get("search_query"), /TO 202510010000\]/u);
+      return { status: 200, body: pageFeed([entry(undefined, "2401.00001", "2024-01-02T00:00:00Z")], { total: 9999 }) };
+    }
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.items.map(({ id }) => id), ["2401.00001"]);
+});
+
+test("later-page failure stays partial when every fetched paper is seen or below relevance, preserving watermarks", async (t) => {
+  for (const mode of ["seen", "irrelevant", "relevant"]) await t.test(mode, async (t) => {
+    const lastRun = "2026-10-01T12:00:00Z";
+    const entries = Array.from({ length: 200 }, (_, index) => entry(mode === "irrelevant" ? "Robotics control" : undefined, `2610.${String(index + 1).padStart(5, "0")}`));
+    const seen = mode === "seen" ? Array.from({ length: 200 }, (_, index) => `2610.${String(index + 1).padStart(5, "0")}`) : [];
+    const files = memoryFiles(t, configFiles({}, {
+      [`${WATCH}/state.json`]: JSON.stringify({ lastRun, seen }),
+      [`${GLOBAL}/watch-state.json`]: JSON.stringify({ lastRun })
+    }));
+    const get = async (url) => url.includes("arxiv.org")
+      ? Number(new URL(url).searchParams.get("start")) === 0 ? { status: 200, body: pageFeed(entries, { total: 201 }) } : { status: 503, body: "later unavailable" }
+      : retrieval()(url);
+    const result = await runWatch([ROOT], { env, now: NOW, ...clock(), get });
+    assert.equal(result.results[0].status, "partial");
+    assert.equal(result.results[0].found, mode === "relevant" ? 30 : 0);
+    assert.equal(result.lastRun, lastRun);
+    assert.equal(readWatchState(ROOT).lastRun, lastRun);
+    assert.match(result.results[0].notes.join(" "), /第 2 页.*503.*later unavailable.*三次请求上限/u);
+    assert.match(files.get(`${WATCH}/2026-10-15.md`), /检索未完成/u);
+    assert.doesNotMatch(files.get(`${WATCH}/2026-10-15.md`), /没有发现新的相关论文/u);
+    if (mode === "seen") {
+      const recovered = await runWatch([ROOT], { env, now: NOW + 3600000, ...clock(), get: retrieval({ arxiv: { status: 200, body: pageFeed(entries) } }) });
+      assert.equal(recovered.results[0].status, "done");
+      assert.equal(readWatchState(ROOT).lastRun, new Date(NOW + 3600000).toISOString());
+    }
+  });
 });
 
 test("arXiv retry count and excessive Retry-After stay bounded without violating server delay", async () => {
@@ -412,6 +535,67 @@ test("impact parsing reads standalone and long historical briefs, with explicit 
   assert.equal(impacts.W123.impact, "baseline");
 });
 
+test("shared impact line parser accepts only exact labels and preserves links, fullwidth cells and escaped pipes", () => {
+  for (const [label, impact] of [["撞题", "overlap"], ["新基线", "baseline"], ["可借用", "borrow"], ["无关", "irrelevant"]]) {
+    const parsed = parsePaperImpactLine(`1. | [\`arXiv:2610.00001v3\`](https://arxiv.org/abs/2610.00001) ｜ **${label}** ｜ [理由](https://example.invalid/a) A \\| B ｜ 方向 ｜ 中文一句话 |`);
+    assert.equal(parsed.id, "2610.00001");
+    assert.equal(parsed.impact, impact);
+    assert.equal(parsed.note, "[理由](https://example.invalid/a) A | B");
+    assert.equal(parsed.direction, "方向");
+    assert.equal(parsed.line, "中文一句话");
+    assert.equal(parsePaperImpactLine(`- 2610.00001 | ${label} |`).impact, impact);
+    assert.equal(parsePaperImpactLine(`2610.00001 | ${label} | 裸编号正式判断`).impact, impact);
+    assert.equal(parsePaperImpactLine(`2610.00001 | ${label}？待核实 | 裸编号待定判断`).impact, null);
+    for (const uncertain of [`${label}？待核实`, `${label}?`, `${label}（暂定）`, `${label}/未知`, "未知"]) {
+      assert.equal(parsePaperImpactLine(`- 2610.00001 | ${uncertain} | 不应消费为正式判断`).impact, null);
+    }
+  }
+  assert.equal(parsePaperImpactLine("| 编号 | 判断 | 理由 |"), null);
+  assert.equal(parsePaperImpactLine("- 2610.00001 | 无关 | 理由\n下一行"), null);
+  assert.equal(parsePaperImpactLine(String.raw`- W123 | 可借用 | A \\| 方向 | 一句话`).note, "A \\");
+});
+
+test("new uncertain and unknown impact rows reopen older formal judgments as pending", (t) => {
+  const entries = configFiles({}, {
+    [`${ROOT}/.dove/research/rounds/001-brief.md`]: "- 2610.00001 | 无关 | 旧判断\n- 2610.00002 | 新基线 | 旧判断\n- 2610.00003 | 可借用 | 旧判断\n",
+    [`${WATCH}/impact-2026-10-14.md`]: "- 2610.00001 | 撞题 | 中间判断\n",
+    [`${WATCH}/impact-2026-10-15.md`]: "2610.00001 | 无关？待核实 | 重新核对\n- 2610.00002 | 未知 | 暂无结论\n- 2610.00003 | 无关 | 已核实\n"
+  });
+  for (let day = 10; day <= 13; day += 1) entries[`${WATCH}/2026-10-${day}.json`] = JSON.stringify({ date: `2026-10-${day}`, items: [{ id: "2610.00001" }, { id: "2610.00002" }, { id: "2610.00003" }] });
+  memoryFiles(t, entries);
+  const impacts = parsePaperImpacts(ROOT);
+  assert.deepEqual(Object.keys(impacts), ["2610.00003"]);
+  assert.equal(impacts["2610.00003"].impact, "irrelevant");
+  assert.deepEqual(createDashboardActions({ env }).readWatch({ root: ROOT }).pending.map(({ id }) => id), ["2610.00001", "2610.00002"]);
+});
+
+test("Trends excludes irrelevant per project without mixing another project's non-exclusion with relevance", (t) => {
+  const other = "/memory/dove/robotics";
+  const otherWatch = `${other}/.dove/research/watch`;
+  const papers = [
+    { id: "2610.00001", title: "Sewing pattern generation", score: 100 },
+    { id: "2610.00002", title: "Sewing pattern and robotics", score: 99 },
+    { id: "2610.00003", title: "Sewing pattern reconstruction", score: 98 },
+    { id: "2610.00004", title: "Sewing pattern and robotics control", score: 97 }
+  ];
+  memoryFiles(t, configFiles({}, {
+    [`${GLOBAL}/projects.json`]: JSON.stringify({ revision: 1, projects: [ROOT, other] }),
+    [`${GLOBAL}/watch-hot.json`]: JSON.stringify({ papers }),
+    [`${WATCH}/2026-10-15.json`]: JSON.stringify({ date: "2026-10-15", items: papers }),
+    [`${WATCH}/impact-2026-10-14.md`]: "- 2610.00003 | 无关 | 旧判断\n",
+    [`${WATCH}/impact-2026-10-15.md`]: "- 2610.00001 | 无关 | 本项目无关\n- 2610.00002 | 无关 | 本项目无关\n- 2610.00003 | 无关？待核实 | 重开判断\n- 2610.00004 | 无关 | 双项目无关\n",
+    [`${otherWatch}/config.json`]: JSON.stringify(normalizeWatchConfig({ keywords: ["robotics"] })),
+    [`${otherWatch}/2026-10-15.json`]: JSON.stringify({ date: "2026-10-15", items: [{ ...papers[1], score: 7 }, papers[3]] }),
+    [`${otherWatch}/impact-2026-10-15.md`]: "- 2610.00001 | 可借用 | 不能替代本项目的相关性\n- 2610.00002 | 新基线 | 另一项目可用\n- 2610.00004 | 无关 | 双项目无关\n"
+  }));
+  const trends = createDashboardActions({ env }).readTrends({ now: NOW });
+  assert.deepEqual(trends.hot.map(({ id }) => id), ["2610.00002", "2610.00003"]);
+  assert.deepEqual(trends.top.map(({ id }) => id), ["2610.00002", "2610.00003"]);
+  assert.deepEqual(trends.top[0].projects, ["robotics"]);
+  assert.equal(trends.top[0].score, 7, "the excluded project's higher score must not leak into the retained project");
+  assert.deepEqual(trends.top[0].impacts.map(({ project, impact }) => [project, impact]), [["robotics", "baseline"]]);
+});
+
 test("panel exposes old unjudged papers, independent scans and persistent draft guidance without rounds", async (t) => {
   const entries = configFiles({ source: "draft" });
   for (let day = 1; day <= 5; day += 1) entries[`${WATCH}/2026-10-0${day}.json`] = JSON.stringify({ date: `2026-10-0${day}`, items: [{ id: `2610.0000${day}` }], notes: [] });
@@ -604,19 +788,20 @@ test("community discovery does not turn a push date into an unknown publication 
   assert.equal(result.papers.get("2610.00001").published, "");
 });
 
-function olderRetrieval({ count = 8, recent = "<feed></feed>", olderStatus = 200, openalexStatus = 200, cited = true } = {}) {
+function olderRetrieval({ count = 8, recent = pageFeed(), olderStatus = 200, openalexStatus = 200, cited = true } = {}) {
   const calls = [];
-  const older = Array.from({ length: count }, (_, index) => feed("Sewing pattern reconstruction", `2401.${String(index + 1).padStart(5, "0")}`, "2024-01-02T00:00:00Z").replace(/^<feed>|<\/feed>$/gu, ""));
-  older.push(feed("Unrelated but very famous robotics", "2401.99999", "2024-01-02T00:00:00Z").replace(/^<feed>|<\/feed>$/gu, "").replace("Garment reconstruction and sewing pattern generation.", "Robots walk."));
+  const older = Array.from({ length: count }, (_, index) => entry("Sewing pattern reconstruction", `2401.${String(index + 1).padStart(5, "0")}`, "2024-01-02T00:00:00Z"));
+  older.push(entry("Unrelated but very famous robotics", "2401.99999", "2024-01-02T00:00:00Z").replace("Garment reconstruction and sewing pattern generation.", "Robots walk."));
   return { calls, get: async (url, options = {}) => {
     calls.push(url);
     if (url.includes("arxiv.org")) {
       const search = new URL(url).searchParams;
-      if (search.get("search_query").includes("submittedDate:[")) {
-        assert.equal(search.get("sortBy"), "relevance");
-        assert.match(search.get("search_query"), /submittedDate:\[\d{12} TO \d{12}\]/u);
-        return { status: olderStatus, body: `<feed>${older.join("")}</feed>` };
+      assert.match(search.get("search_query"), /submittedDate:\[\d{12} TO \d{12}\]/u);
+      if (search.get("sortBy") === "relevance") {
+        assert.equal(search.get("start"), "0");
+        return { status: olderStatus, body: pageFeed(older) };
       }
+      assert.equal(search.get("sortBy"), "submittedDate");
       return typeof recent === "string" ? { status: 200, body: recent } : recent;
     }
     if (url.includes("openalex.org")) {

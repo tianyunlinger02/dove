@@ -277,6 +277,31 @@ export function readProjectDocument(root, name, options = {}) {
 
 const IMPACTS = [["撞题", "overlap"], ["新基线", "baseline"], ["可借用", "borrow"], ["无关", "irrelevant"]];
 
+// A recognizable paper row can revoke an older judgment: only an exact label
+// is final; question marks, suffixes and unknown labels leave the paper pending.
+// Pure so full dashboard records and the mentor's bounded windows agree.
+export function parsePaperImpactLine(line = "") {
+  if (/[\r\n]/u.test(line)) return null;
+  const text = String(line).replace(/｜/gu, "|").trim().replace(/^(?:[-*]\s*|\d+[.)]\s+)/u, "");
+  const cells = [""];
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === "\\" && /[\\|]/u.test(text[index + 1] ?? "")) cells[cells.length - 1] += text[++index];
+    else if (character === "|") cells.push("");
+    else cells[cells.length - 1] += character;
+  }
+  if (!cells[0].trim()) cells.shift();
+  if (cells.length > 3 && !cells.at(-1).trim()) cells.pop();
+  if (cells.length < 3) return null;
+  const [paper, judgment, note = "", direction = "", summary = ""] = cells.map((cell) => cell.trim());
+  const idText = paper.replace(/\*\*/gu, "").replace(/^\[([^\]]+)\]\([^)]*\)$/u, "$1").replace(/^`(.*)`$/u, "$1").replace(/^arXiv:\s*/iu, "");
+  const id = idText.match(/^(\d{4}\.\d{4,5}|[a-z][a-z.-]*\/\d{7}|W\d+)(?:v\d+)?$/iu)?.[1];
+  if (!id) return null;
+  const label = judgment.replace(/\*\*/gu, "").replace(/^`(.*)`$/u, "$1").trim();
+  const hit = IMPACTS.find(([known]) => known === label);
+  return { id, impact: hit?.[1] ?? null, label: hit?.[0] ?? null, note: note.slice(0, 300), direction, line: summary };
+}
+
 // Main saves mentor returns in watch/impact-YYYY-MM-DD.md. Historical brief
 // judgements remain readable; standalone records take precedence, latest wins.
 export function parsePaperImpacts(root, options = {}) {
@@ -290,12 +315,15 @@ export function parsePaperImpacts(root, options = {}) {
     const file = readText(path.join(research, name), fsOps, Infinity);
     if (!file) continue;
     for (const line of file.text.split(/\r?\n/u)) {
-      const match = line.replace(/｜/gu, "|").replace(/\*\*/gu, "").match(/^\s*(?:[-*]\s*|\d+[.)]\s*)?\|?\s*\[?`?(?:arXiv:\s*)?(\d{4}\.\d{4,5}|[a-z][a-z.-]*\/\d{7}|W\d+)(?:v\d+)?`?\]?(?:\([^)]*\))?\s*\|\s*(撞题|新基线|可借用|无关)[^|]*\|\s*(.*)$/iu);
-      if (!match) continue;
-      const hit = IMPACTS.find(([label]) => label === match[2]);
-      const [note = "", direction = "", summary = ""] = match[3].replace(/(?<!\\)\|\s*$/u, "")
-        .split(/(?<!\\)\|/u).map((field) => field.trim().replace(/\\\|/gu, "|"));
-      impacts[match[1]] = { impact: hit[1], label: hit[0], file: name, ...(name.startsWith("rounds/") ? { round: name.slice(7) } : {}), note: note.slice(0, 300), direction, line: summary };
+      const parsed = parsePaperImpactLine(line);
+      if (!parsed) continue;
+      // A newer uncertain/unknown row explicitly reopens the paper; do not let
+      // an older formal label continue to hide it from pending review.
+      if (!parsed.impact) {
+        delete impacts[parsed.id];
+        continue;
+      }
+      impacts[parsed.id] = { impact: parsed.impact, label: parsed.label, file: name, ...(name.startsWith("rounds/") ? { round: name.slice(7) } : {}), note: parsed.note, direction: parsed.direction, line: parsed.line };
     }
   }
   return impacts;

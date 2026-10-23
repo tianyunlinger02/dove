@@ -12,7 +12,7 @@ import * as publicCore from "../src/core/index.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // The mentor may search the web and papers for background; the paper reviewer reads only listed material.
-for (const [name, render, tools] of [["dove-mentor", renderClaudeDoveMentorAgent, ["Read", "Grep", "Glob", "mcp__exa", "mcp__dove-paper-search"]], ["dove-review", renderClaudeDoveReviewAgent, ["Read", "Grep", "Glob"]]]) {
+for (const [name, render, tools] of [["dove-mentor", renderClaudeDoveMentorAgent, ["Read", "Grep", "Glob", "WebSearch", "WebFetch", "mcp__exa", "mcp__dove-paper-search"]], ["dove-review", renderClaudeDoveReviewAgent, ["Read", "Grep", "Glob"]]]) {
   const content = render();
   assert.equal(content.match(/^name: (.+)$/mu)?.[1], name);
   assert.deepEqual(content.match(/^tools: (.+)$/mu)?.[1].split(", "), tools);

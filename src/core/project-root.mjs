@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { PROJECT_HOST_IDS } from "./host-registry.mjs";
@@ -140,6 +141,12 @@ export function resolveProjectRootForInit(project, options = {}) {
   const candidate = canonicalExistingDirectory(candidateInput, explicitProject ? "Dove project" : "Current working directory", fsOps);
 
   const gitRoot = gitRootFrom(candidate, fsOps);
+  const root = !explicitProject && gitRoot !== null ? gitRoot : candidate;
+  if (!explicitProject) {
+    let home = path.resolve((options.env ?? process.env).HOME || os.homedir());
+    try { home = realpathNative(fsOps, home); } catch (error) { if (error?.code !== "ENOENT") throw error; }
+    if (root === home) throw new Error('Dove 不会隐式在 HOME 初始化。请进入项目目录；确需以 HOME 为项目时，显式使用 dove init --project "$HOME"。');
+  }
   const allDirectories = parentDirectories(candidate);
   const directories = gitRoot === null
     ? allDirectories
@@ -156,7 +163,7 @@ export function resolveProjectRootForInit(project, options = {}) {
     if (evidence.state !== "absent") throw legacyInitError(directory);
   }
 
-  return !explicitProject && gitRoot !== null ? gitRoot : candidate;
+  return root;
 }
 
 function packageProjectBoundary(directory, fsOps) {

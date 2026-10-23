@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { PACKAGE_VERSION } from "./package-metadata.mjs";
 import { openRootedFilesystem } from "./rooted-filesystem.mjs";
+import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 
 export const HOST_MIGRATION_PENDING_PATH = ".dove/install/MIGRATION_PENDING.md";
 export const HOST_MIGRATION_REGISTERED_PATH = ".dove/install/migration-registered.json";
@@ -39,7 +40,7 @@ function hostSettings(value) {
 export function readHostSettings(options = {}) {
   const fsOps = options.fsOps ?? fs;
   try {
-    return hostSettings(JSON.parse(fsOps.readFileSync(settingsPath(options), "utf8")));
+    return hostSettings(parseJsonWithoutDuplicateKeys(fsOps.readFileSync(settingsPath(options), "utf8"), "Dove host settings"));
   } catch (error) {
     if (error?.code === "ENOENT") return { hostMigration: false };
     throw error;
@@ -73,7 +74,7 @@ export function prepareHostMigration(project, options = {}) {
   const version = options.packageVersion ?? PACKAGE_VERSION;
   if (!HOST_MIGRATION_TASK || version !== PACKAGE_VERSION || !migrationEnabled(options)) return [];
   const registered = migrationFile(project, HOST_MIGRATION_REGISTERED_PATH, options);
-  const prior = registered ? JSON.parse(registered) : null;
+  const prior = registered ? parseJsonWithoutDuplicateKeys(registered, HOST_MIGRATION_REGISTERED_PATH) : null;
   // Register only when the migration content itself changed; a release that
   // keeps the same task leaves completed projects alone. Records written
   // before the task was stored compare by version, as they did then.

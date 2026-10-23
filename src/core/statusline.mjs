@@ -171,12 +171,12 @@ export function renderDoveStatusLine(input, options = {}) {
   if (model) parts.push(capacity && !CAPACITY_IN_MODEL_NAME.test(model) ? `${model} (${capacity})` : model);
   else if (capacity) parts.push(`ctx ${capacity}`);
   if (remaining !== null) parts.push(`ctx ${remaining}%`);
-  if (mainline) parts.push(noColor ? mainline : `\x1b[36m${mainline}\x1b[0m`);
   const round = parseDoveCurrentRound(card);
   const roundNumber = round?.brief.match(/(?:^|\/)0*(\d+)-brief\.md(?:\)|$)/u)?.[1];
   if (roundNumber) parts.push(`第${Number(roundNumber)}轮`);
   if (branch) parts.push(branch);
   if (duration) parts.push(duration);
+  if (mainline) parts.push(noColor ? mainline : `\x1b[36m${mainline}\x1b[0m`);
   const session = parts.length > 0 ? parts.join(STATUS_SEPARATOR) : "Dove";
   return project ? `${session}\n${project}` : session;
 }

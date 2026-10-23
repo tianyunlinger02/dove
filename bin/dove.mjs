@@ -14,7 +14,7 @@ import { runWatch } from "../src/core/paper-watch.mjs";
 import { configureWatchFromMentor } from "../src/core/watch-configure.mjs";
 import { startTopicSelection } from "../src/core/topic-selection.mjs";
 import { figureTools, generateFigure } from "../src/core/figure-generation.mjs";
-import { readHostSettings, writeHostSettings } from "../src/core/host-migration.mjs";
+import { HOST_MIGRATION_PENDING_PATH, hostMigrationContext, readHostSettings, writeHostSettings } from "../src/core/host-migration.mjs";
 import { renderMentorBrief } from "../src/core/mentor-brief.mjs";
 import { refreshUserOriginals } from "../src/core/user-originals.mjs";
 import { renderDoveDoctor } from "../src/cli/doctor-output.mjs";
@@ -233,7 +233,7 @@ if (!command) {
       await runInteractiveDoveSetup({
         target: process.cwd(),
         inspect: inspectHome,
-        initialize: (target, lifecycleOptions) => recordLifecycle(initializeProjectIntegration(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }), "init"),
+        initialize: (target, lifecycleOptions) => recordLifecycle(initializeProjectIntegration(undefined, { ...PACKAGE_OPTIONS, ...lifecycleOptions, cwd: target }), "init"),
         update: (target, lifecycleOptions) => recordLifecycle(updateDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions, inspect }), "update"),
         previewCompleteReinstall: (target, lifecycleOptions) => previewProjectCompleteReinstall(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }),
         completeReinstall: (target, lifecycleOptions) => recordLifecycle(completeReinstallDoveLifecycle(target, { ...PACKAGE_OPTIONS, ...lifecycleOptions }), "reinstall"),
@@ -285,6 +285,7 @@ try {
         status: "already-initialized",
         target,
         hosts: [...manifest.hosts],
+        hostMigrationPending: hostMigrationContext(target) ? HOST_MIGRATION_PENDING_PATH : null,
         writtenPaths: [],
         removedPaths: [],
         changedPaths: []
@@ -507,7 +508,7 @@ try {
       throw new Error("dove run 只接受 start、status、resume、finalize 或 compare。");
     }
     writeRunResult(result, options);
-    process.exit(0);
+    process.exit(result.complete === false ? 1 : 0);
   }
 
   if (command === "hook") {

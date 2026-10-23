@@ -31,6 +31,8 @@ dove init --host dsh
 dove init --host claude --host dsh
 ```
 
+Implicit setup from HOME is refused, including when Git-root discovery would select HOME. Enter the intended project directory; intentionally using HOME requires `dove init --project "$HOME"`.
+
 Claude integration includes:
 
 - `.claude/rules/dove.md` for ordinary main-session collaboration;
@@ -93,7 +95,7 @@ Keep `Current round` and `Round status` at the top of `IDENTITY.md`, within its 
 
 ### Status line
 
-When `.claude/settings.json` has no existing `statusLine`, Dove installs read-only `dove hook statusline --project "$CLAUDE_PROJECT_DIR"`. The first line shows host model/context facts, optional unlabeled cyan Mainline and current round number, Git branch, and current-session duration; the second contains only the absolute project path. A nonempty `NO_COLOR` disables color. Mainline comes from the bounded card's single Mainline field, read the way the hooks and dashboard read it (`Mainline: <text>`, a list item or a bold annotated field, below any other field), never a branch or latest record. Branch and duration are not research conclusions.
+When `.claude/settings.json` has no existing `statusLine`, Dove installs read-only `dove hook statusline --project "$CLAUDE_PROJECT_DIR"`. The first line shows host model/context facts, current round number, Git branch, current-session duration, and optional unlabeled cyan Mainline last so a long goal does not displace the preceding facts; the second contains only the absolute project path. A nonempty `NO_COLOR` disables color. Mainline comes from the bounded card's single Mainline field, read the way the hooks and dashboard read it (`Mainline: <text>`, a list item or a bold annotated field, below any other field), never a branch or latest record. Branch and duration are not research conclusions.
 
 Existing custom status lines remain unowned and unchanged. Explicit update/reinstall may restore a modified Dove-owned line and report it; uninstall removes it only when still owned. Project lifecycle commands do not repair a user-level `~/.claude/settings.json` line; inspect its command and the host's `dove` on `PATH` if it invokes an unsupported command.
 

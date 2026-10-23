@@ -24,7 +24,8 @@ function project() {
   return root;
 }
 
-const arxivXml = `<?xml version="1.0"?><feed>
+const arxivXml = `<?xml version="1.0"?><feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+<opensearch:totalResults>3</opensearch:totalResults><opensearch:startIndex>0</opensearch:startIndex><opensearch:itemsPerPage>3</opensearch:itemsPerPage>
 <entry><id>http://arxiv.org/abs/2610.00001v1</id><published>2026-10-07T10:00:00Z</published>
 <title>Sewing Pattern Generation with Diffusion</title><summary>We generate sewing patterns &amp; garments.</summary>
 <author><name>Alice Zhang</name></author><author><name>Bob Li</name></author><category term="cs.CV"/></entry>

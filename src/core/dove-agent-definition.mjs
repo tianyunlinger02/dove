@@ -27,7 +27,7 @@ export function renderClaudeDoveMentorAgent() {
   return `---
 name: ${DOVE_RESEARCH_MENTOR_NAME}
 description: 每轮结束、两轮无科研结果、用户纠正方向或追问论文故事、换路线前，独立判断方向并留下自己的笔记。
-tools: Read, Grep, Glob, mcp__exa, mcp__dove-paper-search
+tools: Read, Grep, Glob, WebSearch, WebFetch, mcp__exa, mcp__dove-paper-search
 ---
 
 # Dove 导师

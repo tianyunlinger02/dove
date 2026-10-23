@@ -23,6 +23,8 @@ const SUPPLEMENT_LIMIT = 5;
 const ARXIV_INDEX_LAG_DAYS = 3;
 export const MIN_RELEVANCE = 2;
 const ARXIV_INTERVAL_MS = 3000;
+const ARXIV_PAGE_SIZE = 200;
+const ARXIV_MAX_PAGES = 50;
 const WATCH_MAX_BACKOFF_MS = 60000;
 const WATCH_MAX_ATTEMPTS = 3;
 // A Semantic Scholar key carries its own quota of about one request per second.
@@ -421,7 +423,7 @@ export function codeLink(text = "") {
 
 export function parseArxivFeed(xml = "") {
   const entries = [];
-  for (const block of xml.split(/<entry>/u).slice(1)) {
+  for (const [, block] of xml.matchAll(/<entry\b[^>]*>([\s\S]*?)<\/entry\s*>/gu)) {
     const field = (name) => decodeXml(block.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "u"))?.[1] ?? "");
     const id = arxivIdFromUrl(field("id"));
     if (!id) continue;
@@ -440,6 +442,17 @@ export function parseArxivFeed(xml = "") {
   return entries;
 }
 
+function parseArxivPage(xml = "") {
+  const value = (name) => Number(xml.match(new RegExp(`<(?:[\\w.-]+:)?${name}\\b[^>]*>\\s*(\\d+)\\s*</`, "iu"))?.[1]);
+  return {
+    items: parseArxivFeed(xml),
+    rawEntries: (xml.match(/<entry(?:\s[^>]*)?>/giu) ?? []).length,
+    totalResults: value("totalResults"),
+    startIndex: value("startIndex"),
+    itemsPerPage: value("itemsPerPage")
+  };
+}
+
 function arxivQuery(config) {
   const categories = config.categories.map((category) => `cat:${category}`).join(" OR ");
   const terms = [...new Set(config.keywords)].map((keyword) => keyword.replace(/"/gu, "").trim()).filter(Boolean)
@@ -448,25 +461,56 @@ function arxivQuery(config) {
   return [terms && `((${categories}) AND (${terms}))`, authors && `(${authors})`].filter(Boolean).join(" OR ");
 }
 
-// One query covers both keywords and authors instead of two requests per project.
-export async function fetchArxiv(config, { since, before, proxy, get = watchGet } = {}) {
+// One query covers keywords and authors. Freeze the submitted-date window for
+// every page; arXiv's changing index is not a snapshot, so later runs still overlap.
+// The older supplement remains one relevance-ranked candidate page, not a crawl.
+export async function fetchArxiv(config, { since, until = Date.now(), before, proxy, get = watchGet } = {}) {
   let query = arxivQuery(config);
   if (!query) return { items: [], error: "arXiv 没有可用的关键词或作者查询，检索未执行" };
-  if (before) {
-    const stamp = (time) => new Date(time).toISOString().replace(/\D/gu, "").slice(0, 12);
-    query = `(${query}) AND submittedDate:[${stamp(since)} TO ${stamp(before - 1)}]`;
+  const supplement = before !== undefined;
+  const end = supplement ? before : until;
+  since ??= end - FIRST_RUN_DAYS * 86400000;
+  if (!Number.isFinite(since) || !Number.isFinite(end) || since >= end) return { items: [], error: "arXiv 检索日期窗口无效" };
+  // The API accepts inclusive GMT minutes. Round outward, then apply the exact
+  // [since, end) timestamps locally rather than losing sub-minute submissions.
+  const stamp = (time) => new Date(time).toISOString().replace(/\D/gu, "").slice(0, 12);
+  query = `(${query}) AND submittedDate:[${stamp(since)} TO ${stamp(Math.ceil(end / 60000) * 60000)}]`;
+  const base = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(query)}&sortBy=${supplement ? "relevance" : "submittedDate"}&sortOrder=descending&max_results=${ARXIV_PAGE_SIZE}`;
+  const items = new Map();
+  const observed = new Set();
+  const notes = [];
+  const finish = (error) => ({ items: [...items.values()], ...(error ? { error } : {}), ...(notes.length ? { notes } : {}) });
+  let start = 0;
+  let total = 0;
+  for (let pageNumber = 0; pageNumber < ARXIV_MAX_PAGES; pageNumber += 1) {
+    const source = `arXiv 第 ${pageNumber + 1} 页（start=${start}）`;
+    try {
+      const response = await get(`${base}&start=${start}`, { proxy });
+      if (response.status !== 200 || response.error) return finish(responseError(source, response));
+      if (!/<feed\b/u.test(response.body) || !/<\/feed\s*>/u.test(response.body) || /arxiv\.org\/api\/errors/u.test(response.body)) return finish(responseError(`${source} 返回无效 feed`, response));
+      const note = retrySummary(response);
+      if (note) notes.push(`${source}：${note}`);
+      const page = parseArxivPage(response.body);
+      if (![page.totalResults, page.startIndex, page.itemsPerPage].every((value) => Number.isSafeInteger(value) && value >= 0)
+        || page.startIndex !== start || page.rawEntries > page.itemsPerPage || page.rawEntries > ARXIV_PAGE_SIZE) {
+        return finish(`${source} 返回无效分页元数据，检索未完成`);
+      }
+      total = Math.max(total, page.totalResults);
+      const priorCount = observed.size;
+      for (const item of page.items) {
+        observed.add(item.id);
+        const published = Date.parse(item.published);
+        if (published >= since && published < end && !items.has(item.id)) items.set(item.id, item);
+      }
+      if (!page.rawEntries) return start >= total ? finish() : finish(`${source} 在 totalResults=${total} 取尽前返回空页，检索未完成`);
+      if (observed.size === priorCount) return finish(`${source} 没有新的 canonical ID，分页无进展，检索未完成`);
+      start += page.rawEntries;
+      if (supplement || start >= total) return finish();
+    } catch (error) {
+      return finish(`${source}：${error.message}`);
+    }
   }
-  const url = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(query)}&sortBy=${before ? "relevance" : "submittedDate"}&sortOrder=descending&max_results=200`;
-  try {
-    const response = await get(url, { proxy });
-    if (response.status !== 200 || response.error) return { items: [], error: responseError("arXiv", response) };
-    if (!/<feed\b/u.test(response.body) || /arxiv\.org\/api\/errors/u.test(response.body)) return { items: [], error: responseError("arXiv 返回无效 feed", response) };
-    const note = retrySummary(response);
-    return { items: parseArxivFeed(response.body).filter((item) => (!since || Date.parse(item.published) >= since) && (!before || Date.parse(item.published) < before)),
-      ...(note ? { notes: [`arXiv：${note}`] } : {}) };
-  } catch (error) {
-    return { items: [], error: `arXiv：${error.message}` };
-  }
+  return finish(`arXiv 达到 ${ARXIV_MAX_PAGES} 页预算，已读取 ${start} / ${total} 条原始 entry，窗口尚未取尽`);
 }
 
 async function openAlexJson(query, { proxy, get }) {
@@ -732,7 +776,7 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
     } : item);
   };
   if (config.keywords.length || config.authors.length) {
-    const arxiv = await fetchArxiv(config, { since, proxy: settings.proxy, get });
+    const arxiv = await fetchArxiv(config, { since, until: now, proxy: settings.proxy, get });
     notes.push(...(arxiv.notes ?? []));
     if (arxiv.error) errors.push(arxiv.error);
     else completedSources += 1;
@@ -787,7 +831,7 @@ export async function runProjectWatch(root, { settings, key, hf, now = Date.now(
   const merged = [...ranked, ...(earlier?.items ?? []).filter((item) => !ranked.some((fresh) => fresh.id === item.id))]
     .map((item) => ({ ...item, line: impacts[item.id]?.line || item.line || "", direction: impacts[item.id]?.direction || item.direction || "" }))
     .sort((left, right) => right.score - left.score);
-  const status = errors.length ? (completedSources || ranked.length ? "partial" : "failed") : "done";
+  const status = errors.length ? (completedSources || candidates.size ? "partial" : "failed") : "done";
   const digest = { date, generatedAt: new Date(now).toISOString(), status, notes, items: merged };
   writeProjectFile(root, `${WATCH_DIR}/${date}.json`, `${JSON.stringify(digest, null, 2)}\n`);
   writeProjectFile(root, `${WATCH_DIR}/${date}.md`, renderDigest(path.basename(root), date, merged, notes, status));

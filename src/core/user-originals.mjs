@@ -14,6 +14,8 @@ const RELAY = /^(?:主会话 ?Claude|Claude[:：，,]|用户已同意|【用户�
 const SHORT = 6;
 const LIMIT = 700;
 const CHUNK = 8 << 20;
+// Earlier indexes did not verify each record's cwd; none of their contents are trusted.
+const INDEX_SCHEMA = 1;
 // Typed messages are small; larger lines are tool output or images and are skipped unread.
 const MAX_LINE = 256 << 10;
 // Each mentor call or daily prewarm gets this scan budget; the rest resumes next time.
@@ -21,21 +23,20 @@ export const USER_ORIGINALS_BUDGET_MS = 20000;
 
 const encode = (value) => value.replace(/[^A-Za-z0-9]/gu, "-");
 
-// Claude Code keeps one directory per working path; a moved or renamed project
-// (for example a legacy- prefix) keeps the project name at the end.
+function sessionDirectory(root, options) {
+  return path.join(options.home ?? options.env?.HOME ?? os.homedir(), ".claude/projects", encode(root));
+}
+
+// Only the complete encoded working path is a source; matching basenames are unrelated.
 export function sessionDirectories(project, options = {}) {
   const fsOps = options.fsOps ?? fs;
-  const base = path.join(options.home ?? options.env?.HOME ?? os.homedir(), ".claude/projects");
-  let names = [];
+  const root = path.resolve(project);
+  const directory = sessionDirectory(root, options);
   try {
-    names = fsOps.readdirSync(base);
+    return fsOps.readdirSync(path.dirname(directory)).includes(encode(root)) ? [directory] : [];
   } catch {
     return [];
   }
-  const root = path.resolve(project);
-  const own = encode(root);
-  const tail = `-${encode(path.basename(root))}`;
-  return names.filter((name) => name === own || name.endsWith(tail)).sort().map((name) => path.join(base, name));
 }
 
 function messageTexts(record) {
@@ -95,7 +96,7 @@ function scanNewLines(file, start, fsOps, onLine, deadline) {
   return consumed;
 }
 
-function collect(line, session, found) {
+function collect(line, session, root, found) {
   // Tool results are user-typed records too; they never hold the user's words.
   if (!line.includes('"user"') || line.includes('"tool_use_id"')) return;
   let record;
@@ -104,6 +105,10 @@ function collect(line, session, found) {
   } catch {
     return;
   }
+  // Encoded paths can collide, and a session can change cwd between messages.
+  if (typeof record?.cwd !== "string" || !path.isAbsolute(record.cwd)) return;
+  const relative = path.relative(root, record.cwd);
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return;
   for (const raw of messageTexts(record)) {
     // Words typed after a slash command arrive wrapped in command tags.
     const args = /^\s*<command-(?:message|name)>/u.test(raw) ? raw.match(/<command-args>([\s\S]*?)<\/command-args>/u)?.[1] : undefined;
@@ -119,10 +124,10 @@ function collect(line, session, found) {
   }
 }
 
-function readIndex(file, fsOps) {
+function readIndex(file, root, fsOps) {
   try {
     const index = JSON.parse(fsOps.readFileSync(file, "utf8"));
-    return index && typeof index.files === "object" ? index : { files: {} };
+    return index?.schema === INDEX_SCHEMA && index.root === root && index.files && typeof index.files === "object" ? index : { files: {} };
   } catch {
     return { files: {} };
   }
@@ -155,8 +160,9 @@ export function refreshUserOriginals(project, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const root = path.resolve(project);
   const directories = sessionDirectories(root, options);
+  const sourceDirectory = sessionDirectory(root, options);
   const indexFile = path.join(root, USER_ORIGINALS_INDEX_PATH);
-  const previous = readIndex(indexFile, fsOps);
+  const previous = readIndex(indexFile, root, fsOps);
   const files = {};
   const deadline = Date.now() + (options.budgetMs ?? USER_ORIGINALS_BUDGET_MS);
   let pending = 0;
@@ -189,16 +195,16 @@ export function refreshUserOriginals(project, options = {}) {
         continue;
       }
       const found = { entries: [], short: 0 };
-      const offset = Date.now() < deadline ? scanNewLines(file, resume.offset, fsOps, (line) => collect(line, name.slice(0, 8), found), deadline) : resume.offset;
+      const offset = Date.now() < deadline ? scanNewLines(file, resume.offset, fsOps, (line) => collect(line, name.slice(0, 8), root, found), deadline) : resume.offset;
       files[file] = { offset, entries: [...resume.entries, ...found.entries], short: resume.short + found.short };
       if (offset < size) pending += size - offset;
     }
   }
-  // Claude Code deletes old sessions; the words already gathered from them stay.
-  for (const [file, item] of Object.entries(previous.files)) if (!(file in files)) files[file] = item;
+  // Deleted sessions keep only words verified under this schema, root and source directory.
+  for (const [file, item] of Object.entries(previous.files)) if (path.dirname(file) === sourceDirectory && !(file in files)) files[file] = item;
   const entries = Object.values(files).flatMap((item) => item.entries).sort((left, right) => left.time.localeCompare(right.time));
   const short = Object.values(files).reduce((sum, item) => sum + item.short, 0);
-  writeAtomic(indexFile, `${JSON.stringify({ files })}\n`, fsOps);
+  writeAtomic(indexFile, `${JSON.stringify({ schema: INDEX_SCHEMA, root, files })}\n`, fsOps);
   writeAtomic(path.join(root, USER_ORIGINALS_PATH), render(directories, entries, short, pending), fsOps);
   return { path: USER_ORIGINALS_PATH, directories, own: entries.filter((entry) => entry.kind === "own").length, relay: entries.filter((entry) => entry.kind === "relay").length, pendingBytes: pending };
 }

@@ -9,12 +9,13 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs"
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { inspectProjectIntegration } from "../src/core/project-installation.mjs";
 import { createProjectInstallationManifest, INSTALLATION_MANIFEST_PATH, serializeProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
-import { planJsonFragments } from "../src/core/project-installation-plan.mjs";
+import { planJsonFragments, preparePlan } from "../src/core/project-installation-plan.mjs";
 import { desiredManaged, resourcesForHosts, semanticDigest, sha256, STATUS_LINE_SELECTOR } from "../src/core/project-installation-resources.mjs";
 import {
   currentPromptGuidance, inspectCurrentPromptGuidance, PROMPT_GUIDANCE_PATHS,
   userPromptSubmitAttentionOutput, userPromptSubmitOutput
 } from "../src/core/user-prompt-submit-hook.mjs";
+import { EXA_MCP_FRAGMENT, EXA_MCP_SELECTOR, EXA_MCP_SERVER_NAME } from "../src/core/web-access-integration.mjs";
 
 const ROOT = "/memory/dove/guidance";
 const PACKAGE_ROOT = "/memory/dove/package";
@@ -104,6 +105,41 @@ test("unchanged current guidance delivers its package version and fingerprints r
   assert.equal(doctor(options).projectIntegration.healthy, true);
   assert.deepEqual([...files], before);
 });
+
+for (const state of ["same", "conflicting", "missing"]) {
+  test(`unowned ${state} Exa follows the same ownership protocol for init and every update policy`, (t) => {
+    const { files, manifest, fsOps, options } = memoryInstallation(t);
+    manifest.managed = manifest.managed.filter((entry) => entry.selector !== EXA_MCP_SELECTOR);
+    files.set(MANIFEST, serializeProjectInstallationManifest(manifest, { hostIds: PROJECT_HOST_IDS }));
+    editJson(files, MCP, (value) => {
+      if (state === "missing") delete value.mcpServers[EXA_MCP_SERVER_NAME];
+      else value.mcpServers[EXA_MCP_SERVER_NAME] = state === "same"
+        ? { type: EXA_MCP_FRAGMENT.type, url: EXA_MCP_FRAGMENT.url }
+        : { ...EXA_MCP_FRAGMENT, url: "https://example.invalid/local-exa" };
+    });
+    const before = [...files];
+    for (const source of [null, manifest]) {
+      for (const replacementPolicy of ["safe", "explicit-update", "confirmed-reinstall", "inspect", "auto-inspect"]) {
+        const plan = () => preparePlan({ root: ROOT, hosts: ["claude"], ...options, fsOps, manifest: source, replacementPolicy, now: manifest.updatedAt });
+        if (state === "conflicting") {
+          assert.throws(plan, /cannot claim conflicting content at \.mcp\.json#\/mcpServers\/exa/u);
+          continue;
+        }
+        const planned = plan();
+        assert.equal(planned.manifest.managed.some((entry) => entry.selector === EXA_MCP_SELECTOR), state === "missing");
+        const mcpWrite = planned.entries.find((entry) => entry.relativePath === MCP);
+        if (state === "same") assert.equal(mcpWrite, undefined, "unowned same-value Exa is not rewritten or claimed");
+        else assert.deepEqual(JSON.parse(mcpWrite.content).mcpServers[EXA_MCP_SERVER_NAME], EXA_MCP_FRAGMENT);
+      }
+    }
+    if (state === "same") {
+      assert.equal(inspectProjectIntegration(ROOT, options).status, "current");
+      assert.equal(doctor(options).projectIntegration.healthy, true);
+      assert.deepEqual(promptOutput(options), userPromptSubmitOutput(event, currentPromptGuidance(manifest), { ...options, project: ROOT }));
+    }
+    assert.deepEqual([...files], before, "planning and guidance remain read-only");
+  });
+}
 
 const configurationChanges = [
   { name: "statusLine", path: SETTINGS, selector: STATUS_LINE_SELECTOR, change: (value) => { value.statusLine.command = "node /memory/local-statusline.mjs"; } },

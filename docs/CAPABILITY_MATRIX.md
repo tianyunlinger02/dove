@@ -30,7 +30,7 @@ There is no Auto Skill. Project standards govern contribution types. Actual topi
 | Quality/preference essentials and full companions | Four exact resources | Same resources |
 | `dove run` receipts | User-installed Node CLI | Same CLI |
 
-Fresh author contexts personally read the two short essentials; full companions are on demand. DSH Status has no author bootstrap. Mentors read quality guidance, not private preferences. Installation does not prove reading or behavior; see [Usage](USAGE.md#short-core-and-two-reference-read-contracts).
+Fresh author contexts personally read the two short essentials; full companions are on demand. DSH Status has no author bootstrap. Mentors read quality guidance, not private preferences. The Claude mentor can use WebSearch/WebFetch as well as configured paper/Exa MCP tools; the independent paper reviewer stays limited to the supplied local materials. Installation does not prove reading or behavior; see [Usage](USAGE.md#short-core-and-two-reference-read-contracts).
 
 ## Records and independent judgment
 

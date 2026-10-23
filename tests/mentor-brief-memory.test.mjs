@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
+import { parsePaperImpacts } from "../src/core/dashboard-data.mjs";
 import { renderMentorBrief } from "../src/core/mentor-brief.mjs";
 
 const ROOT = "/memory/dove/project";
@@ -247,6 +248,44 @@ test("watch summaries exclude explicit historical judgments and show latest conf
   assert.ok(!brief.includes("latest scan body"));
   assert.ok(!memory.reads.some(({ file }) => file.endsWith("2026-10-12.json") || file.includes("scan-")));
   assert.deepEqual([...memory.files], before);
+});
+
+test("bounded mentor and dashboard agree on linked/fullwidth exact labels and newer uncertain rows", (t) => {
+  const ids = Array.from({ length: 7 }, (_, index) => `2610.${String(index + 1).padStart(5, "0")}`);
+  const memory = memoryFiles(t, {
+    [`${RESEARCH}/rounds/001-brief.md`]: ids.map((id) => `- ${id} | 无关 | 旧的正式判断`).join("\n"),
+    [`${WATCH}/impact-2026-10-15.md`]: [
+      "2610.00001 | 无关？待核实 | 需要复核",
+      "1. | [\`arXiv:2610.00002v2\`](https://arxiv.org/abs/2610.00002) | **可借用** | A \\| B | 方向 | 一句话 |",
+      "- 2610.00003 ｜ 新基线 ｜ 已确定",
+      "- 2610.00004 | 未知 | 暂无结论",
+      "- 2610.00005 | 无关 | 已核实",
+      "- 2610.00006 | 撞题（暂定） | 还需核实",
+      "- 2610.00007 | 无关? | 同文件较早的不确定判断",
+      "- 2610.00007 | 撞题 | 新判断覆盖"
+    ].join("\n"),
+    [`${WATCH}/impact-2026-10-14.md`]: "- 2610.00001 | 无关 | 中间正式判断\n",
+    [`${WATCH}/2026-10-15.json`]: digest(ids.map((id) => paper(id)))
+  });
+  const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps });
+  const fsOps = {
+    statSync: memory.fsOps.statSync,
+    lstatSync(file) { return { ...memory.fsOps.statSync(file), isSymbolicLink: () => false }; },
+    readFileSync(file, encoding) { assert.ok(memory.files.has(file)); return encoding ? memory.files.get(file).toString(encoding) : memory.files.get(file); },
+    readdirSync(directory) {
+      const prefix = `${directory}/`;
+      return [...new Set([...memory.files.keys()].filter((file) => file.startsWith(prefix)).map((file) => file.slice(prefix.length).split("/")[0]))];
+    }
+  };
+  const impacts = parsePaperImpacts(ROOT, { fsOps });
+  const pending = [ids[0], ids[3], ids[5]];
+  assert.match(brief, /找到 3 项/u);
+  for (const id of ids) {
+    assert.equal(!impacts[id], pending.includes(id), id);
+    assert.equal(brief.includes(`> ${id} ·`), pending.includes(id), id);
+  }
+  assert.equal(impacts[ids[1]].note, "A | B");
+  assert.ok(memory.reads.every(({ file, length }) => length <= (file.endsWith(".json") ? 262144 : 65536)));
 });
 
 test("watch bounds summaries and marks incomplete history, oversized or malformed digests", (t) => {

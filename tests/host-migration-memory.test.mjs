@@ -234,7 +234,7 @@ test("invalid existing host settings fail reads and partial writes without being
     store.put(USER_SETTINGS, content);
     const before = store.snapshot();
     store.writes.length = 0;
-    const expected = content === "{" ? SyntaxError : /boolean hostMigration/u;
+    const expected = content === "{" ? /valid JSON/u : /boolean hostMigration/u;
     assert.throws(() => readHostSettings(store.options), expected);
     for (const patch of [{ hostMigration: true }, { figure: FIGURE }]) {
       assert.throws(() => writeHostSettings(patch, store.options), expected);
@@ -286,6 +286,47 @@ test("enabled installation only registers version, time and existing-record task
   assert.equal(inspectProjectIntegration(ROOT, store.options).status, "current", "migration metadata is not guidance drift");
   assert.equal(inspectCurrentPromptGuidance(ROOT, store.options).version, PACKAGE_VERSION);
   assertResearchUntouched(store, originals);
+});
+
+test("DSH install and unchanged update deliver enabled pending work without touching research", (t) => {
+  const store = memory(t);
+  const originals = seedResearch(store);
+  const options = { ...store.options, hosts: ["dsh"] };
+  assert.equal(initializeProjectIntegration(ROOT, options).hostMigrationPending, null);
+  writeHostSettings({ hostMigration: true }, options);
+  const registered = updateProjectIntegration(ROOT, options);
+  assert.equal(registered.hostMigrationPending, HOST_MIGRATION_PENDING_PATH);
+  const unchanged = updateProjectIntegration(ROOT, options);
+  assert.equal(unchanged.status, "unchanged");
+  assert.equal(unchanged.hostMigrationPending, HOST_MIGRATION_PENDING_PATH);
+  assert.equal(unchanged.manifest.managed.some((entry) => entry.path.startsWith(".claude/")), false);
+  const pending = store.text(PENDING);
+  writeHostSettings({ hostMigration: false }, options);
+  assert.equal(updateProjectIntegration(ROOT, options).hostMigrationPending, null);
+  assert.equal(store.text(PENDING), pending);
+  writeHostSettings({ hostMigration: true }, options);
+  store.fsOps.unlinkSync(PENDING);
+  assert.equal(updateProjectIntegration(ROOT, options).hostMigrationPending, null);
+  assertResearchUntouched(store, originals);
+});
+
+test("duplicate host setting keys reject reads and writes without modifying bytes", (t) => {
+  const store = memory(t);
+  for (const content of ['{"hostMigration":true,"hostMigration":false}', '{"hostMigration":true,"host\\u004digration":false}']) {
+    store.put(USER_SETTINGS, content);
+    store.writes.length = 0;
+    assert.throws(() => readHostSettings(store.options), /duplicate JSON object keys/u);
+    assert.throws(() => writeHostSettings({ hostMigration: true }, store.options), /duplicate JSON object keys/u);
+    assert.equal(store.text(USER_SETTINGS), content);
+    assert.deepEqual(store.writes, []);
+  }
+});
+
+test("implicit HOME initialization is rejected while explicit HOME and ordinary project roots remain available", (t) => {
+  const store = memory(t);
+  assert.throws(() => initializeProjectIntegration(undefined, { ...store.options, cwd: HOME }), /不会隐式在 HOME 初始化/u);
+  assert.deepEqual(store.writes, []);
+  assert.equal(initializeProjectIntegration(HOME, store.options).target, HOME);
 });
 
 test("explicit upgrade carries the 3.4.0 backlog while preserving all existing research", (t) => {

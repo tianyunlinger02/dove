@@ -74,7 +74,7 @@ test("doctor reads core documents without requiring or inspecting historical sum
 test("statusline shows the round number from the card without scanning round contents", () => {
   const fixture = virtualFiles({ ".dove/research/IDENTITY.md": "Current round: rounds/007-brief.md\nRound status: ongoing\nMainline: stable goal\n" });
   const output = renderDoveStatusLine({}, { projectRoot: fixture.root, fsOps: fixture.fsOps, branch: null, env: { NO_COLOR: "1" } });
-  assert.equal(output, "stable goal · 第7轮\n/virtual-project");
+  assert.equal(output, "第7轮 · stable goal\n/virtual-project");
   assert.equal(fixture.reads.length, 1);
   assert.ok(fixture.reads.every((target) => target.endsWith("/IDENTITY.md")));
 });
