@@ -122,7 +122,7 @@ function contract(slug) {
       "用 `.dove/research/papers/library.json` 和 `library.md` 按方向组织相关工作，据 `papers/<id>.md` 核主张支持。引用或导出 BibTeX 前用 Source 核元数据，只导已核字段，不编作者、场合、日期或标识。显式积累或后续 watch 才更新库，只读不写。",
       "用清楚可发表的语言写发现、设置和限制；缺材料问作者，不把‘未提供’塞进稿件。在准确和投稿规范内参考可靠作者样稿，检查整篇论证影响，不把局部写作扩成新研究。",
       DOVE_RESEARCH_AUTHORITATIVE_MANUSCRIPT_BOUNDARY,
-      "修改走实际构建／导出路径，看过输出才称当前稿。编译页检查溢出框、未定义引用、图表编号和位置、双栏宽表是否通栏；正文字数从源码算，排除表格、图注和参考文献，与目标核对。修范围内问题，说明剩余材料限制。",
+      "修改走实际构建／导出路径，看过输出才称当前稿。编译页检查溢出框、未定义引用、图表编号和位置、双栏宽表是否通栏；正文字数从源码算，排除表格、图注和参考文献，与目标核对；按投稿要求核对正文页数（含图表），超出时先在正文与补充材料之间重新分配图表和内容，保持最终字号和关键证据。修范围内问题，说明剩余材料限制。",
       "模板缺字体或包时，用允许工具放在项目本地 texmf 并让构建使用，不静默换字体或改系统安装。",
       "回应审稿意见时，读审稿、它读过的材料清单和当前产物，共因问题合并处理，核实依据，不全盘接受；按实质影响排序，决定接受、反驳、限定或调查，每个重要问题都覆盖。用 Source 核新引文与主张，用 Experiment 取得或解释结果；比较原主张、审稿理解、回应和改后主张，不暗改确定性、因果、范围、数量限定与新意。",
       "按要求改证据、分析、文字、图表、补充材料或投稿文件，不只改语气；局部答复解决不了就修共因。逐项说明担忧已解决、减轻还是仍有限制，写了答复不等于解决或审稿人接受。审稿原文与作者回应分开保留，并链接到改动产物；依赖旧审稿建议前，按 Review 查当前版本。"
@@ -132,26 +132,28 @@ function contract(slug) {
     ]
   });
   if (slug === "figure") return capabilityContract({
-    ambientParticipation: "围绕科学解释跨领域设计图，把参考决策落实到模型／代码、可编辑排版和实看过的导出。复用同篇视觉语言，新构图补查所缺参考；插图先用模型设计，定量图用真实数据与代码。画布随稿件宽度和内容，不套幻灯片比例；新构图直接读改 `.claude/commands/dove/figure.md` 的设计简报，不必调用命令入口。",
+    ambientParticipation: "围绕科学解释跨领域设计图，一组图先按主张分工，结果主张配读者能亲眼判断的真实输出；把参考决策落实到模型／代码、可编辑排版和实看过的导出。复用同篇视觉语言，新构图补查所缺参考；插图先用模型设计，定量图用真实数据与代码。画布随稿件宽度和内容，不套幻灯片比例；新构图直接读改 `.claude/commands/dove/figure.md` 的设计简报，不必调用命令入口。",
     purpose: "跨研究领域制作、修改、检查和配注达到发表质量的科学图。",
     when: "方法机制图、架构、定量图、比较、证据组合或视觉评估时使用。",
     actions: [
-      "先定科学问题、读者、核心结论、证据与同篇其他图的关系。选择能揭示科学的表示：机制可用状态与干预，架构可用信息流，比较可对齐视图，定量结果用测量位置和不确定性；不是固定布局。有实际模板就用栏宽与制图要求，否则说明暂定宽度。按最终物理尺寸定字与线宽，再由内容和高度限制定画布及边距。PPT 是编辑面，不是幻灯片模板，不以默认比例或任意预设定图。",
+      "为一篇论文画一组图时，先给整套图分工：每张图支撑哪个主张，哪些证据只有它能给，哪些已由表格或正文承担；按投稿页数决定放正文还是补充，用“删掉它读者会失去什么”判断它值不值得占正文。主张涉及方法产出什么（生成、重建、编辑、预测的可见结果）时，正文要有读者能亲眼判断的真实输出：固定顺序或随机选取、不挑最好、类型多样、含失败；完成率、误差等数字留在表里，不用统计图顶替结果图。机制图讲为什么有效，结果图展示是否有效，两者各司其职、不互相替代。",
+      "每张图再定科学问题、读者、核心结论和证据。选择能揭示科学的表示：机制可用状态与干预，架构可用信息流，比较可对齐视图，定量结果用测量位置和不确定性；不是固定布局。有实际模板就用栏宽与制图要求，否则说明暂定宽度。按最终物理尺寸定字与线宽，再由内容和高度限制定画布及边距。PPT 是编辑面，不是幻灯片模板，不以默认比例或任意预设定图。",
       "新构图查真正发表、适合解释任务的图，也看可迁移的跨域例子；已有实读参考可复用，补材料缺口。提取焦点为何最大、阅读路径、跨视图身份或数量编码、对齐与共用尺度、局部连接、密度、间距、字和色。把参考选择、科学内容和材料角色综合成当前设计简报，不只列论文或泛泛风格词。同篇复用符号与视觉语言，局部修改只重看受影响选择；有用决策放现有图材料或代码，不强加独立报告、固定参考数或每次重查。",
       "组合插图先把这些设计选择填入下方模型简报，通过 dove figure --project <root> --prompt <text>（或 --prompt-file <file>）[--image <file> ...] --output <file.png>，或现有图像工具，设计整幅构图和解释性图像，再做 PPT。支持时按需加 --size、--quality、--background；模型像素大小只是工作面，不是最终比例。由中心关系决定焦点大小和细节，不默认极简几何或繁复渲染。定量图用真实数据可复现生成，认真定坐标、单位、尺度与不确定性；模型可建议布局，不能造测量。纯数据图不需图像模型或 PPT 包装。",
-      "实现选定设计，保留层级、阅读路径、对应关系和视觉语言，修科学错误，用真实材料换占位。组合插图在 PPT 中分开放可替换图像／证据及原生标签、连线和有用矢量；可编辑不等于把丰富图像描成简单形状。标题、标签、数学符号、程序词各有一致角色，变量和下标沿用稿件约定。为可读性选字与间距，不逐条缩小去塞旧框；字体、字号阶梯、配色、布局无通用模板。完整标题和长解释放图注，用 dove figure --tools 找本机 python-pptx Python 与导出命令。",
-      "按稿件尺寸打开实际导出，对照科学解释、参考综合决策及实际用过的模型设计，不只查文件有效。改焦点、割裂分面、模糊对应、拥挤和小字，实看字形、数学位置与字体嵌入；局部修不好解释就重选表示或构图，不无限抛光。按请求交可编辑源、素材／创建代码、图注和同源 PDF／PNG，组合图含 PPTX。导出保留随内容定的画布与比例，不拉伸证据或套幻灯片形状；直说不可用调用、复用设计和材料缺口。"
+      "实现选定设计，保留层级、阅读路径、对应关系和视觉语言，修科学错误，用真实材料换占位。组合插图在 PPT 中分开放可替换图像／证据及原生标签、连线和有用矢量；可编辑不等于把丰富图像描成简单形状。标题、标签、数学符号、程序词各有一致角色，变量和下标沿用稿件约定。为可读性选字与间距，不逐条缩小去塞旧框；字体、字号阶梯、配色、布局无通用模板。图内标签简短；正文图注写这张图回答什么、怎么看，以及读懂它必需的条件，协议细节、样本编号和渲染记录放补充材料或图的来源说明。用 dove figure --tools 找本机 python-pptx Python 与导出命令。",
+      "按稿件尺寸打开实际导出，对照科学解释、参考综合决策及实际用过的模型设计，不只查文件有效。先看第一眼能否看出这张图的核心结论，整套图是否各尽其职，有没有重画表格里已有的数字、却丢掉只有图能给的证据。改焦点、割裂分面、模糊对应、拥挤和小字，实看字形、数学位置与字体嵌入；局部修不好解释就重选表示或构图，不无限抛光。按请求交可编辑源、素材／创建代码、图注和同源 PDF／PNG，组合图含 PPTX。导出保留随内容定的画布与比例，不拉伸证据或套幻灯片形状；直说不可用调用、复用设计和材料缺口。"
     ],
     modelPrompt: `Design a publication-quality [figure kind] for [field and audience], at [target manuscript column width; maximum height if applicable]. This is a visual design reference for editable composition, not a presentation slide.
 CANVAS: [actual venue/template width and relevant artwork requirements, or a stated provisional width]. Arrange the scientific relation and supporting content at readable final-size typography, then choose height and margins from that composition. The image model's supported pixel size is only a working surface, not the final figure format; do not fit content to a slide ratio or stretch imagery to fill one.
 SCIENTIFIC MESSAGE: [one takeaway and the question this figure answers].
+ROLE IN THE PAPER: [the claim this figure carries, the evidence only it shows (for example real outputs readers must judge for themselves), and what tables or other figures already cover].
 CONTENT: [inspected facts, entities, relationships and scientific distinctions the image must preserve].
 MATERIALS: [each input's role: real evidence, explanatory illustration, prior design to revise, or visual reference; identify what is supplied separately].
 REFERENCE SYNTHESIS: [actual figures inspected or relevant prior reference decisions reused; explain what to adopt or change for this scientific task: focal scale, reading order, cross-view encoding, alignment/scales, density, close-up connections, typography and color. Turn them into a coherent design, not a list of paper names or a copy of their subject matter].
 VISUAL CONTINUITY: [notation and visual choices already established for this paper; what this figure retains, changes or needs to design anew].
 Choose representations that expose the central [mechanism/state change, information flow, quantitative relation, comparison or evidence structure]. Make that relation the visual focus, allocating area and detail by explanatory importance rather than equal modules. Connect overview and detail through aligned views, repeated identities, shared coordinates or explicit links where useful. Integrate the reference decisions into the whole composition, not a stock arrangement with illustrations added afterward.
 Use consistent visual identities and meaningful color. Give headings, ordinary labels, mathematical symbols/subscripts and program tokens intentional roles consistent with the manuscript. Select type, line weights, spacing and contrast for final-size legibility, not to fill inherited boxes. Use depth, texture, shading, simple geometry or boxes where they help this explanation; no fixed font, palette, layout or minimal/rich style applies to every field.
-Preserve supplied evidence and its identity for separate placement. Quantitative marks come from supplied data and plotting code, not invented model-rendered values; indicate where separately rendered plots belong. Make schematics recognizable as explanatory, not measured results. Keep labels concise and close to their referents, with the full title and extended explanation in the caption. Plan separately editable labels/connectors and replaceable illustrations/evidence so the selected hierarchy, correspondence and visual language can survive implementation and be checked in the actual export.`,
+Preserve supplied evidence and its identity for separate placement. Quantitative marks come from supplied data and plotting code, not invented model-rendered values; indicate where separately rendered plots belong. Make schematics recognizable as explanatory, not measured results. Keep labels concise and close to their referents; the caption says what the figure shows and how to read it, while protocol details and sample identities belong in supplementary material. Plan separately editable labels/connectors and replaceable illustrations/evidence so the selected hierarchy, correspondence and visual language can survive implementation and be checked in the actual export.`,
     boundaries: [
       "只规划、只评估、不写入的请求保持范围；完成要科学忠实、视觉解释有效，不只是导出文件有效。"
     ]
