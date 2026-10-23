@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import {
   DOVE_CLAUDE_SESSION_START_HOOK_ENTRY,
+  DOVE_CLAUDE_STOP_HOOK_ENTRY,
   DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY,
   DOVE_CLAUDE_SETTINGS_PATH,
   DOVE_CLAUDE_STATUS_LINE
@@ -72,7 +73,7 @@ export function sameManaged(left, right) {
 }
 
 function assertManagedResourcePath(relativePath) {
-  if ([".dove/install/RESEARCH_QUALITY.md", ".dove/install/RESEARCH_QUALITY_FULL.md", ".dove/install/TOPIC_CRITERIA.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/AUTHOR_PREFERENCES_FULL.md"].includes(relativePath)) return;
+  if ([".dove/install/RESEARCH_QUALITY.md", ".dove/install/TOPIC_CRITERIA.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/AUTHOR_PREFERENCES_FULL.md"].includes(relativePath)) return;
   if (relativePath === ".dove" || relativePath.startsWith(".dove/")) throw new Error(`Project integration resources must not manage Dove workspace state: ${relativePath}.`);
   if (FORBIDDEN_RESOURCE_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) throw new Error(`Project integration resources must not install runtime bundles: ${relativePath}.`);
 }
@@ -80,10 +81,10 @@ function assertManagedResourcePath(relativePath) {
 export function claudeResources() {
   const agentEntries = generatedDoveAgentEntries().filter((entry) => entry.relativePath.startsWith(".claude/agents/"));
   const files = [
-    ...generatedAdapterEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
+    ...generatedAdapterEntries(),
     ...generatedClaudeAmbientProjectEntries(),
-    ...generatedResearchQualityReferenceEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
-    ...generatedAuthorPreferencesReferenceEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
+    ...generatedResearchQualityReferenceEntries(),
+    ...generatedAuthorPreferencesReferenceEntries(),
     ...agentEntries
   ].map((entry) => {
     const destinationPath = entry.destinationPath ?? entry.relativePath;
@@ -114,6 +115,14 @@ export function claudeResources() {
     fragment: DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY,
     digest: semanticDigest(DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY)
   };
+  const stopHook = {
+    hostId: CLAUDE_HOST,
+    path: DOVE_CLAUDE_SETTINGS_PATH,
+    kind: "json-fragment",
+    selector: STOP_SELECTOR,
+    fragment: DOVE_CLAUDE_STOP_HOOK_ENTRY,
+    digest: semanticDigest(DOVE_CLAUDE_STOP_HOOK_ENTRY)
+  };
   const statusLine = {
     hostId: CLAUDE_HOST,
     path: DOVE_CLAUDE_SETTINGS_PATH,
@@ -138,28 +147,13 @@ export function claudeResources() {
     fragment: EXA_MCP_FRAGMENT,
     digest: semanticDigest(EXA_MCP_FRAGMENT)
   };
-  const resources = [...files, sessionStartHook, userPromptSubmitHook, statusLine, paperSearch, exa];
+  const resources = [...files, sessionStartHook, userPromptSubmitHook, stopHook, statusLine, paperSearch, exa];
   if (new Set(resources.map(managedKey)).size !== resources.length) throw new Error("Generated project integration resources contain duplicate manifest entries.");
   return resources;
 }
 
-export function dshResources() {
-  return [...generatedAdapterEntries(), ...generatedResearchQualityReferenceEntries(), ...generatedAuthorPreferencesReferenceEntries()].filter((entry) => entry.hostId === "dsh").map((entry) => {
-    assertManagedResourcePath(entry.destinationPath);
-    const content = normalizedGeneratedContent(entry.content);
-    return {
-      hostId: "dsh",
-      path: entry.destinationPath,
-      kind: "exclusive-file",
-      selector: null,
-      content,
-      digest: sha256(content)
-    };
-  });
-}
-
 export function resourcesForHosts(hosts) {
-  const selected = [...claudeResources(), ...dshResources()].filter((entry) => hosts.includes(entry.hostId));
+  const selected = claudeResources().filter((entry) => hosts.includes(entry.hostId));
   return [...new Map(selected.map((entry) => [managedKey(entry), entry])).values()].sort(compareManaged);
 }
 

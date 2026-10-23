@@ -40,7 +40,7 @@ test("hook context finds research state after the old 4KB prefix without duplica
   assert.equal(context.split(state).length - 1, 1);
   assert.ok(context.indexOf(state) < context.indexOf("Mainline:"));
   assert.match(context, /从完整原卡提取/u);
-  assert.match(context, /请宿主重写/u);
+  assert.match(context, /方法设计留在 Method design 指向的说明里/u);
   assert.ok(!context.includes("�"));
 });
 
@@ -50,10 +50,9 @@ test("multiline and decorated research state is shown once, not clipped into a f
   const options = memoryCard(card);
   assert.equal(readDoveIdentityCard("/virtual", options), card.trim());
   const context = identityCardContext("/virtual", options);
-  assert.ok(context.includes(state), "overlong state remains verbatim until the host rewrites it semantically");
+  assert.ok(context.includes(state), "the state is shown verbatim; the mentor writes it, the hook never clips it");
   assert.equal(context.split("最后一句仍是未知，不是成功。").length - 1, 1);
-  assert.match(context, /超过约 300 字目标/u);
-  assert.match(context, /不裁字冒充语义摘要/u);
+  assert.doesNotMatch(context, /超过约 300 字|请宿主.*重写/u, "no length nag: the research state is the mentor's to write");
   assert.match(context, /Method design: rounds\/005-brief.md/u);
   assert.match(context, /Core capability: 学到可泛化机制/u);
   assert.ok(!context.includes("- **Research state"), "the original field block is not copied again");

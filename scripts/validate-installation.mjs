@@ -20,7 +20,7 @@ import { resourcesForHosts, STATUS_LINE_SELECTOR } from "../src/core/project-ins
 import { prepareResearchDefaults } from "../src/core/research-defaults.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { updateDoveLifecycle } from "../src/core/dove-lifecycle.mjs";
-import { DOVE_RESEARCH_REFLECTION_CONTINUITY, renderDoveResearchQualityReference, renderDoveResearchQualityFullReference } from "../src/core/dove-research-contract.mjs";
+import { DOVE_RESEARCH_REFLECTION_CONTINUITY, renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
 import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -35,7 +35,6 @@ const REFERENCES = [
   [".dove/install/AUTHOR_PREFERENCES.md", renderDoveAuthorPreferencesReference()],
   [".dove/install/AUTHOR_PREFERENCES_FULL.md", fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8")],
   [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()],
-  [".dove/install/RESEARCH_QUALITY_FULL.md", renderDoveResearchQualityFullReference()],
   [".dove/install/TOPIC_CRITERIA.md", fs.readFileSync(path.join(ROOT, "docs/TOPIC_CRITERIA.md"), "utf8")]
 ].map(([relativePath, content]) => ({ path: relativePath, content: `${content.trimEnd()}\n` })).sort((left, right) => left.path.localeCompare(right.path));
 const PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
@@ -274,7 +273,7 @@ function hookReadGuard(root, source) {
 function validateSessionFacts(root, executable) {
   const cardPath = path.join(root, ".dove/research/IDENTITY.md");
   const secret = "SYNTHETIC_PRIVATE_REPORT_MUST_NOT_APPEAR";
-  const cachePaths = [".dove/install/USER_ORIGINALS.md", ".dove/install/user-originals-index.json"];
+  const cachePaths = [".dove/install/USER_ORIGINALS.md", ".dove/install/user-originals-index.json", ".dove/install/activity-index.json"];
   const readGuard = (allowCacheWrites) => `
     import fs from "node:fs";
     import path from "node:path";
@@ -284,7 +283,9 @@ function validateSessionFacts(root, executable) {
     function guard(target) {
       const file = target instanceof URL ? fileURLToPath(target) : String(target);
       const relative = path.relative(root, path.resolve(file)).split(path.sep).join("/");
-      if ((relative.startsWith(".dove/research/") && relative !== ".dove/research/IDENTITY.md")
+      // The card and this round's records (EVAL, rounds, mentor notes) are read; other research is not.
+      const record = /^\\.dove\\/research\\/(?:IDENTITY\\.md|EVAL\\.md|MENTOR_NOTES\\.md|rounds\\/\\d+[-_](?:brief|result)\\.md)$/u.test(relative);
+      if ((relative.startsWith(".dove/research/") && !record)
         || relative.startsWith(".dove/reviews/") || relative.startsWith(".dove/runs/")
         || relative === "synthetic-transcript.jsonl" || relative === "unlisted-report.md") {
         process.stderr.write("Forbidden SessionStart read: " + relative + "\\n");
@@ -345,13 +346,10 @@ function validateSessionFacts(root, executable) {
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.equal(result.stderr, "", "SessionStart must not attempt forbidden reads or writes, even when errors are caught.");
-    assert.deepEqual(treeSnapshot(root, excluded), before, "SessionStart preserves all fixture files except the two derived original-user caches; only their existing parent directory mtime may change.");
+    assert.deepEqual(treeSnapshot(root, excluded), before, "SessionStart preserves all fixture files except the derived originals and activity caches; only their existing parent directory mtime may change.");
     return result.stdout ? JSON.parse(result.stdout) : null;
   };
-  const bootstrap = renderDoveAuthorPreferencesBootstrap(
-    path.join(root, ".dove/install/AUTHOR_PREFERENCES.md"),
-    path.join(root, ".dove/install/RESEARCH_QUALITY.md")
-  );
+  const bootstrap = renderDoveAuthorPreferencesBootstrap(path.join(root, ".dove/install/AUTHOR_PREFERENCES.md"));
   const check = (card = null, truncated = false) => {
     for (const source of ["startup", "clear", "compact", "resume"]) {
       const output = invoke(source);
@@ -361,7 +359,7 @@ function validateSessionFacts(root, executable) {
       assert.ok(delivered.includes(sourceMarker), "SessionStart appends the user-original source pointer without reading its contents");
       const context = delivered.slice(0, delivered.indexOf(sourceMarker));
       if (source === "startup" || source === "clear") {
-        assert.equal(context, bootstrap, "startup and clear bootstrap the main agent's two short summaries before the source pointer");
+        assert.equal(context, bootstrap, "startup and clear ask the main agent to read the user's sayings before the source pointer");
       } else {
         if (card === null) {
           assert.match(context, /未读到身份卡 \.dove\/research\/IDENTITY\.md/u);
@@ -477,29 +475,29 @@ for (const cwd of [homeInitRoot, homeInitChild]) {
     assert.deepEqual(treeSnapshot(homeInitRoot), before);
   }
 }
-const explicitHome = cliDove(["init", "--project", homeInitRoot, "--host", "dsh", "--json"], { cwd: homeInitRoot, env: homeInitEnv });
+const explicitHome = cliDove(["init", "--project", homeInitRoot, "--host", "claude", "--json"], { cwd: homeInitRoot, env: homeInitEnv });
 assert.equal(explicitHome.status, 0, explicitHome.stderr);
 assert.equal(JSON.parse(explicitHome.stdout).target, homeInitRoot);
 
-const dshPendingRoot = scratch();
+const pendingRoot = scratch();
 writeJson(path.join(homeInitEnv.XDG_CONFIG_HOME, "dove/settings.json"), { hostMigration: true });
-const dshPendingInit = cliDove(["init", "--project", dshPendingRoot, "--host", "dsh", "--json"], { env: homeInitEnv });
-assert.equal(dshPendingInit.status, 0, dshPendingInit.stderr);
-assert.equal(JSON.parse(dshPendingInit.stdout).hostMigrationPending, ".dove/install/MIGRATION_PENDING.md");
+const pendingInit = cliDove(["init", "--project", pendingRoot, "--host", "claude", "--json"], { env: homeInitEnv });
+assert.equal(pendingInit.status, 0, pendingInit.stderr);
+assert.equal(JSON.parse(pendingInit.stdout).hostMigrationPending, ".dove/install/MIGRATION_PENDING.md");
 for (const command of ["init", "update"]) {
-  const result = cliDove([command, "--project", dshPendingRoot, "--json"], { env: homeInitEnv });
+  const result = cliDove([command, "--project", pendingRoot, "--json"], { env: homeInitEnv });
   assert.equal(result.status, 0, result.stderr);
   const data = JSON.parse(result.stdout);
   assert.equal(data.status, command === "init" ? "already-initialized" : "unchanged");
   assert.equal(data.hostMigrationPending, ".dove/install/MIGRATION_PENDING.md");
-  const human = cliDove([command, "--project", dshPendingRoot], { env: homeInitEnv });
+  const human = cliDove([command, "--project", pendingRoot], { env: homeInitEnv });
   assert.equal(human.status, 0, human.stderr);
   assert.match(human.stdout, /宿主迁移待办：\.dove\/install\/MIGRATION_PENDING\.md/u);
 }
 writeJson(path.join(homeInitEnv.XDG_CONFIG_HOME, "dove/settings.json"), { hostMigration: false });
-const dshPendingOff = cliDove(["update", "--project", dshPendingRoot, "--json"], { env: homeInitEnv });
-assert.equal(dshPendingOff.status, 0, dshPendingOff.stderr);
-assert.equal(JSON.parse(dshPendingOff.stdout).hostMigrationPending, null);
+const pendingOff = cliDove(["update", "--project", pendingRoot, "--json"], { env: homeInitEnv });
+assert.equal(pendingOff.status, 0, pendingOff.stderr);
+assert.equal(JSON.parse(pendingOff.stdout).hostMigrationPending, null);
 
 const factsRoot = makeProject();
 roots.push(factsRoot);
@@ -507,7 +505,7 @@ validateSessionFacts(factsRoot, path.join(ROOT, "bin/dove.mjs"));
 const doctorRoot = makeProject();
 roots.push(doctorRoot);
 validateDoctorVersions(doctorRoot, path.join(ROOT, "bin/dove.mjs"));
-for (const hosts of [["claude"], ["dsh"], ["claude", "dsh"]]) {
+for (const hosts of [["claude"]]) {
   const root = scratch();
   const initialized = initializeProjectIntegration(root, { ...PACKAGE_OPTIONS, hosts });
   assert.deepEqual(fs.readdirSync(path.join(root, ".dove/research")), ["RESEARCH.md"]);
@@ -551,10 +549,6 @@ for (const hosts of [["claude"], ["dsh"], ["claude", "dsh"]]) {
     assert.deepEqual(added.manifest.managed.find((entry) => entry.path === reference.path), references.find((entry) => entry.path === reference.path));
     assert.equal(fs.readFileSync(path.join(root, reference.path), "utf8"), reference.content);
   }
-  const changed = updateProjectIntegration(root, { ...PACKAGE_OPTIONS, hosts: hosts.includes("claude") ? ["dsh"] : ["claude"] });
-  assert.equal(changed.manifest.hosts.length, 1);
-  assert.deepEqual(changed.manifest.managed.filter((entry) => entry.path.startsWith(".dove/")), references);
-  for (const reference of REFERENCES) assert.equal(changed.changedPaths.includes(reference.path), false, "Shared references survive host changes without rewriting.");
   assert.equal(inspectProjectDoctor(root, PACKAGE_OPTIONS).setup.mode, "current");
 }
 
@@ -645,17 +639,17 @@ const manifest = readJson(manifestPath);
 for (const relativePath of [".dove/research/RESEARCH.md", ".dove/install/DOCTOR.md", ".dove/install/unknown.md", ".dove/install/manifest.json", ".dove/reviews/review.json", ".dove/runs/run.jsonl", ".dove", ".dove/install", ...REFERENCES.flatMap((entry) => [`${entry.path}/extra`, `${entry.path}.bak`, entry.path.toLowerCase()])]) {
   const invalid = structuredClone(manifest);
   invalid.managed.push({ path: relativePath, kind: "exclusive-file", selector: null, digest: "a".repeat(64) });
-  assert.throws(() => validateProjectInstallationManifest(invalid, { hostIds: ["claude", "dsh"] }), /must not manage/u);
+  assert.throws(() => validateProjectInstallationManifest(invalid, { hostIds: ["claude"] }), /must not manage/u);
 }
 for (const reference of REFERENCES) {
   for (const kind of ["json-fragment", "text-block", "exclusive-file"]) {
     const fragmented = structuredClone(manifest);
     Object.assign(fragmented.managed.find((entry) => entry.path === reference.path), { kind, selector: "/anything" });
-    assert.throws(() => validateProjectInstallationManifest(fragmented, { hostIds: ["claude", "dsh"] }), /one exclusive file/u);
+    assert.throws(() => validateProjectInstallationManifest(fragmented, { hostIds: ["claude"] }), /one exclusive file/u);
   }
   const duplicated = structuredClone(manifest);
   duplicated.managed.push(structuredClone(duplicated.managed.find((entry) => entry.path === reference.path)));
-  assert.throws(() => validateProjectInstallationManifest(duplicated, { hostIds: ["claude", "dsh"] }), /must be unique/u);
+  assert.throws(() => validateProjectInstallationManifest(duplicated, { hostIds: ["claude"] }), /must be unique/u);
   const root = scratch();
   writeFile(root, reference.path, "unowned reference customization\n");
   const before = treeSnapshot(root);
@@ -685,7 +679,7 @@ for (const modify of [
     assert.match(JSON.parse(hook.stdout).systemMessage, /read-only|dove doctor/u);
   }
   // Compact and resume may refresh the derived user-originals summary; nothing else changes.
-  const derived = /^\.dove\/install(?:$|\/USER_ORIGINALS\.md$|\/user-originals-index\.json$)/u;
+  const derived = /^\.dove\/install(?:$|\/USER_ORIGINALS\.md$|\/user-originals-index\.json$|\/activity-index\.json$|\/hook-state\.json$)/u;
   assert.deepEqual(treeSnapshot(preservedRoot).filter((entry) => !derived.test(entry.path)), before.filter((entry) => !derived.test(entry.path)));
 }
 writeJson(manifestPath, manifest);

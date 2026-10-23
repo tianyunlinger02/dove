@@ -11,6 +11,8 @@ export {
   mergeClaudeUserPromptSubmitSettings,
   DOVE_CLAUDE_STATUS_LINE,
   DOVE_CLAUDE_STATUS_LINE_COMMAND,
+  DOVE_CLAUDE_STOP_HOOK_COMMAND,
+  DOVE_CLAUDE_STOP_HOOK_ENTRY,
   renderClaudeAmbientRule
 } from "./ambient-policy.mjs";
 
@@ -44,8 +46,9 @@ export {
 
 export * from "./dove-research-contract.mjs";
 export {
-  DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS,
-  DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS,
+  DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH,
+  DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATH,
+  DOVE_USER_SAYINGS,
   renderDoveAuthorPreferencesReference,
   renderDoveAuthorPreferencesFullReference
 } from "./dove-author-preferences.mjs";
@@ -55,11 +58,7 @@ export {
   generatedDoveAgentEntries,
   renderClaudeDoveAgent
 } from "./dove-agent-definition.mjs";
-export {
-  renderDoveAgentInstructions,
-  renderDoveAuthorStanceSection,
-  renderDoveSharedResearchContractSection
-} from "./dove-agent-persona.mjs";
+export { renderDoveAgentInstructions } from "./dove-agent-persona.mjs";
 export {
   COMMAND_SURFACES,
   COMMAND_SURFACE_BY_ID,
@@ -73,6 +72,8 @@ export { exportPaperBibtex, groupPaperLibrary, readPaperLibrary, renderPaperLibr
 export { readHostSettings, writeHostSettings } from "./host-migration.mjs";
 export { figureTools, generateFigure } from "./figure-generation.mjs";
 export { renderMentorBrief } from "./mentor-brief.mjs";
+export { inspectRoundState, renderRoundSituation, renderRoundStatusSummary } from "./round-state.mjs";
+export { parseStopPayload, stopHookOutput } from "./stop-hook.mjs";
 export {
   initializeProjectIntegration,
   inspectProjectIntegration,
@@ -83,16 +84,3 @@ export {
 } from "./project-installation.mjs";
 export { completeReinstallDoveLifecycle, previewUninstallDoveLifecycle, uninstallDoveLifecycle, updateDoveLifecycle } from "./dove-lifecycle.mjs";
 export { inspectProjectDoctor } from "./project-doctor.mjs";
-export {
-  RUNS_DIRECTORY_PATH,
-  RUN_EVENT_SCHEMA_VERSION,
-  appendFinalizedRun,
-  compareRuns,
-  createRunId,
-  inspectRunStatus,
-  normalizeRunId,
-  readRunEvents,
-  runRelativePaths,
-  summarizeRun
-} from "./run-record.mjs";
-export { resumeRun, startDetachedRunSupervisor } from "./run-supervisor.mjs";

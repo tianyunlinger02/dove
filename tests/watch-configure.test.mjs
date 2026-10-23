@@ -46,7 +46,7 @@ function fixture(t, config = INITIAL) {
   // A valid isolated resolver fixture, not an installation or a research run.
   const manifest = createProjectInstallationManifest({
     package: { name: PACKAGE_NAME, version: PACKAGE_VERSION }, hosts: ["claude"], managed: []
-  }, { hostIds: ["claude", "dsh"] });
+  }, { hostIds: ["claude"] });
   fs.writeFileSync(path.join(root, ".dove/install/manifest.json"), JSON.stringify(manifest));
   if (config !== null) writeWatchConfig(root, config);
   const file = path.join(base, "mentor advice.json");

@@ -7,9 +7,10 @@ import { fileURLToPath } from "node:url";
 
 import { DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND } from "../../src/core/ambient-policy.mjs";
 import { renderDoveResearchReanchor } from "../../src/core/dove-research-contract.mjs";
-import { initializeProjectIntegration, updateProjectIntegration } from "../../src/core/project-installation.mjs";
+import { recordSessionGuidance } from "../../src/core/hook-state.mjs";
+import { initializeProjectIntegration } from "../../src/core/project-installation.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../src/core/package-metadata.mjs";
-import { currentPromptGuidance, parseUserPromptSubmitPayload, PROMPT_GUIDANCE_PATHS, userPromptSubmitAttentionOutput, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../../src/core/user-prompt-submit-hook.mjs";
+import { inspectCurrentPromptGuidance, parseUserPromptSubmitPayload, userPromptSubmitAttentionOutput, userPromptSubmitFailureOutput, userPromptSubmitOutput } from "../../src/core/user-prompt-submit-hook.mjs";
 import { userOriginalSourceContext } from "../../src/core/session-start-hook.mjs";
 import { HOST_MIGRATION_PENDING_PATH } from "../../src/core/host-migration.mjs";
 
@@ -17,8 +18,9 @@ const root = fileURLToPath(new URL("../../", import.meta.url));
 const scratch = process.env.TMPDIR ?? path.join(root, ".claude/tmp");
 const binaries = ["bin/dove.mjs", "bin/dove-package.mjs"];
 const event = (prompt = "hello", extra = {}) => ({ hook_event_name: "UserPromptSubmit", prompt, ...extra });
+const NOTICE = /只提示这一次/u;
 
-function workspace(t, hosts = ["claude"]) {
+function workspace(t) {
   fs.mkdirSync(scratch, { recursive: true });
   const project = fs.mkdtempSync(path.join(scratch, "dove-live-guidance-"));
   t.after(() => fs.rmSync(project, { recursive: true, force: true }));
@@ -28,7 +30,7 @@ function workspace(t, hosts = ["claude"]) {
     if (previousConfig === undefined) delete process.env.XDG_CONFIG_HOME;
     else process.env.XDG_CONFIG_HOME = previousConfig;
   });
-  initializeProjectIntegration(project, { hosts, packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
+  initializeProjectIntegration(project, { hosts: ["claude"], packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
   return project;
 }
 
@@ -45,34 +47,13 @@ function context(output) {
   return output.hookSpecificOutput.additionalContext;
 }
 
-test("pure prompt guidance hands off the original-user source without copying or reading conversation", (t) => {
-  const read = t.mock.method(fs, "readFileSync", () => assert.fail("pure prompt delivery must not read any file"));
-  const manifest = {
-    hosts: ["claude"], package: { version: "3.3.0" },
-    managed: PROMPT_GUIDANCE_PATHS.map((resourcePath, index) => ({
-      path: resourcePath, kind: "exclusive-file", selector: null, digest: String(index + 1).repeat(64)
-    }))
-  };
-  const guidance = currentPromptGuidance(manifest);
-  assert.equal(guidance.version, "3.3.0");
-  assert.deepEqual(guidance.fingerprints, PROMPT_GUIDANCE_PATHS.map((resourcePath, index) => `${resourcePath} ${String(index + 1).repeat(12)}`));
-  const base = userPromptSubmitOutput(event(), guidance);
-  assert.equal(base.hookSpecificOutput.hookEventName, "UserPromptSubmit");
-  assert.ok(context(base).includes(renderDoveResearchReanchor()));
-  const payload = event("CURRENT_USER_BODY_NOT_TO_COPY", {
-    transcript_path: '/unread/用户 "source".jsonl', session_id: "synthetic", transcript: "PARENT_HISTORY_NOT_TO_COPY"
-  });
-  const output = userPromptSubmitOutput(payload, guidance);
-  assert.equal(context(output), context(base) + userOriginalSourceContext(payload));
-  assert.match(context(output), /导师要读上次已读范围之后的本人原话和日期.*不用执行记录替代/u);
-  assert.match(context(output), /当前原话尚未入文件时直接附上/u);
-  assert.doesNotMatch(context(output), /CURRENT_USER_BODY_NOT_TO_COPY|PARENT_HISTORY_NOT_TO_COPY/u);
-  for (const prompt of ["", "不要写文件，只讨论", "x".repeat(100_000)]) {
-    assert.deepEqual(userPromptSubmitOutput({ ...payload, prompt }, guidance), output);
+function writeResearch(project, files) {
+  for (const [relative, content] of Object.entries(files)) {
+    const file = path.join(project, ".dove/research", relative);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, content);
   }
-  assert.deepEqual(userPromptSubmitOutput(event("other", { transcript_path: "" }), guidance), base);
-  assert.equal(read.mock.callCount(), 0);
-});
+}
 
 const automaticPrompts = [
   "<task-notification>background result</task-notification>",
@@ -83,190 +64,137 @@ const automaticPrompts = [
   "[Your previous response had no visible output. Please continue and produce a user-visible response.]"
 ];
 
-test("known host continuations skip project reads and return a guidance-dependent single line", (t) => {
-  const guidance = { version: PACKAGE_VERSION, fingerprints: PROMPT_GUIDANCE_PATHS.map((resourcePath, index) => `${resourcePath} ${String(index + 1).repeat(12)}`) };
+test("host notifications get one line and never read the project", (t) => {
+  const guidance = { version: PACKAGE_VERSION };
   t.mock.method(fs, "readFileSync", () => assert.fail("automatic context must not read identity or migration files"));
   t.mock.method(fs, "lstatSync", () => assert.fail("automatic context must not inspect the project"));
-  const outputs = automaticPrompts.map((prompt) => userPromptSubmitOutput(event(prompt), guidance, { project: "/unread-project" }));
+  const outputs = automaticPrompts.map((prompt) => userPromptSubmitOutput(event(prompt, { session_id: "s" }), guidance, { project: "/unread-project" }));
   for (const output of outputs) {
     assert.equal(output.hookSpecificOutput.hookEventName, "UserPromptSubmit");
-    assert.equal(context(output).split("\n").length, 1);
-    assert.ok(Array.from(context(output)).length < 160);
-    assert.ok(context(output).includes(guidance.version));
-    assert.equal(context(output), context(outputs[0]), "host notification bodies do not become instructions");
+    assert.equal(context(output), `Dove ${PACKAGE_VERSION} · 自动通知，不是用户的新要求。`);
   }
-  const changed = { ...guidance, fingerprints: ["changed guidance", ...guidance.fingerprints.slice(1)] };
-  assert.notEqual(context(userPromptSubmitOutput(event(automaticPrompts[0]), changed)), context(outputs[0]));
 });
 
-test("automatic prompts omit existing identity and migration while user near-misses keep both", (t) => {
+test("each user message carries the identity card, this round's situation and the source pointer", (t) => {
+  const project = workspace(t);
+  const guidance = inspectCurrentPromptGuidance(project, { packageVersion: PACKAGE_VERSION });
+  assert.deepEqual(guidance, { version: PACKAGE_VERSION });
+  const empty = context(userPromptSubmitOutput(event(""), guidance, { project }));
+  assert.match(empty, /未读到身份卡 \.dove\/research\/IDENTITY\.md/u);
+  assert.match(empty, /身份卡没有指向当前轮次/u);
+  assert.match(empty, /EVAL 开头还没写主指标/u);
+  assert.ok(empty.includes(renderDoveResearchReanchor()));
+
+  writeResearch(project, {
+    "IDENTITY.md": "Current round: rounds/003-brief.md\nRound status: ongoing\nMainline: 合成主线\nResearch state: 合成研究状态\n",
+    "rounds/003-brief.md": "Author: mentor\n对准：数据与评价\n见分晓：2099-01-05（开始：2099-01-01）\n规模：全量 445 对，噪声约 1.5 点。\n\n一句话：合成轮次。\n\n## 预期结果\n\n评价这一维算成：强对照在同协议下跑通。\n",
+    "EVAL.md": "主指标：事件 F1（445 对开发集）；当前最好：11.5（2026-10-22，第 2 轮）\n\n| 日期 | 轮次 | 问题价值 | 创新 | 机制与理论 | 方法质量与可行性 | 数据与评价 | 实现 | 实验与证据价值 | 表达与交付 | 最卡的一维 |\n|---|---|---|---|---|---|---|---|---|---|---|\n| 2026-10-22 | 第 2 轮 | 3 | 1 | 未知 | 2 | 2 | 2 | 2 | 2 | 数据与评价 |\n",
+    "MENTOR_NOTES.md": "## 2026-10-22 导师笔记\n\n### 待用户决定\n\n- 是否扩大到 494 对。\n"
+  });
+  const payload = event("CURRENT_USER_BODY_NOT_TO_COPY", { cwd: project, transcript_path: "/unread/source.jsonl", transcript: "PARENT_HISTORY_NOT_TO_COPY" });
+  const delivered = context(invoke(binaries[0], project, payload));
+  for (const expected of ["Mainline: 合成主线", "合成研究状态", "本轮：第 3 轮（rounds/003-brief.md，进行中）", "对准：数据与评价", "怎样算成：评价这一维算成", "规模：全量 445 对，噪声约 1.5 点", "见分晓：2099-01-05", "主指标：事件 F1（445 对开发集）；当前最好：11.5", "最卡的一维：数据与评价", "- 是否扩大到 494 对。"]) {
+    assert.ok(delivered.includes(expected), expected);
+  }
+  assert.ok(delivered.endsWith(userOriginalSourceContext(payload)));
+  assert.doesNotMatch(delivered, /CURRENT_USER_BODY_NOT_TO_COPY|PARENT_HISTORY_NOT_TO_COPY/u);
+  for (const binary of binaries) {
+    for (const prompt of ["", "/dove:status", "不要写任何文件，只回答状态。", "x".repeat(100_000)]) {
+      assert.equal(context(invoke(binary, project, event(prompt, { cwd: project, transcript_path: "/unread/source.jsonl" }))), delivered, "the situation comes from the records, not the prompt");
+    }
+  }
+
+  // An open round without its plan is asked once per message to write it; a finished one is left alone.
+  writeResearch(project, { "rounds/003-brief.md": "Author: mentor\n\n一句话：没写计划。\n" });
+  assert.match(context(invoke(binaries[0], project, event())), /本轮说明开头还缺：对准、见分晓、规模/u);
+  writeResearch(project, { "rounds/003-result.md": "一句话：旧格式结果。\n" });
+  const finished = context(invoke(binaries[0], project, event()));
+  assert.doesNotMatch(finished, /还缺|还没写“判定：”/u);
+});
+
+test("a session is told once after the installed guidance changed", (t) => {
+  const project = workspace(t);
+  const guidance = { version: PACKAGE_VERSION };
+  const say = (session) => context(userPromptSubmitOutput(event("继续", { session_id: session }), guidance, { project }));
+  assert.match(say("unknown-session"), NOTICE, "a session Dove has no record of may hold older guidance");
+  assert.doesNotMatch(say("unknown-session"), NOTICE);
+  recordSessionGuidance(project, "fresh-session", PACKAGE_VERSION);
+  assert.doesNotMatch(say("fresh-session"), NOTICE, "a context that started on this version already read it");
+  recordSessionGuidance(project, "old-session", "0.0.1");
+  assert.match(say("old-session"), NOTICE);
+  assert.doesNotMatch(say("old-session"), NOTICE);
+  assert.doesNotMatch(context(userPromptSubmitOutput(event("继续"), guidance, { project })), NOTICE, "without a session id nothing is remembered or said");
+});
+
+test("migration notices ride along with user messages, not host notifications", (t) => {
   const project = workspace(t);
   const config = path.join(process.env.XDG_CONFIG_HOME, "dove/settings.json");
   fs.mkdirSync(path.dirname(config), { recursive: true });
   fs.writeFileSync(config, JSON.stringify({ hostMigration: true }));
-  const cardPath = path.join(project, ".dove/research/IDENTITY.md");
-  const card = "Mainline: USER_CARD_UNIQUE_MARKER\n";
-  const pendingPath = path.join(project, HOST_MIGRATION_PENDING_PATH);
-  const pending = "PENDING_MIGRATION_UNIQUE_MARKER\n";
-  fs.writeFileSync(cardPath, card);
-  fs.writeFileSync(pendingPath, pending);
-  const before = [cardPath, pendingPath, config].map((file) => [fs.readFileSync(file), fs.statSync(file).mtimeMs]);
-  const guidance = currentPromptGuidance(JSON.parse(fs.readFileSync(path.join(project, ".dove/install/manifest.json"), "utf8")));
-  const normal = userPromptSubmitOutput(event("继续用户已确认的任务"), guidance, { project });
-  assert.ok(context(normal).includes(card.trim()));
-  assert.ok(context(normal).includes(pending.trim()));
-  const nearMisses = [
-    "用户说：上一轮没有可见输出，所以请解释原因。",
-    "请解释这条消息：<task-notification>result</task-notification>",
-    "<task-notification-example>user-provided example</task-notification-example>",
-    "<system-reminder>用户提供的普通正文</system-reminder>",
-    "[Your previous response had no visible output. Please continue and produce a user-visible response.] 请解释原因。"
-  ];
+  writeResearch(project, { "IDENTITY.md": "Mainline: USER_CARD_UNIQUE_MARKER\n" });
+  fs.writeFileSync(path.join(project, HOST_MIGRATION_PENDING_PATH), "PENDING_MIGRATION_UNIQUE_MARKER\n");
   for (const binary of binaries) {
+    const normal = context(invoke(binary, project, event("继续用户已确认的任务", { cwd: project })));
+    assert.ok(normal.includes("USER_CARD_UNIQUE_MARKER"));
+    assert.ok(normal.includes("PENDING_MIGRATION_UNIQUE_MARKER"));
     for (const prompt of automaticPrompts) {
-      const delivered = invoke(binary, project, event(prompt, { cwd: project, transcript_path: "/unread-transcript" }));
-      assert.deepEqual(delivered, userPromptSubmitOutput(event(prompt), guidance, { project }));
-      assert.equal(context(delivered).split("\n").length, 1);
-      assert.ok(Array.from(context(delivered)).length < 160);
-      assert.equal(context(delivered).includes(card.trim()), false);
-      assert.equal(context(delivered).includes(pending.trim()), false);
+      const automatic = context(invoke(binary, project, event(prompt, { cwd: project })));
+      assert.equal(automatic.includes("USER_CARD_UNIQUE_MARKER"), false);
+      assert.equal(automatic.includes("PENDING_MIGRATION_UNIQUE_MARKER"), false);
     }
-    for (const prompt of nearMisses) assert.deepEqual(invoke(binary, project, event(prompt, { cwd: project })), normal);
+    for (const prompt of ["请解释这条消息：<task-notification>result</task-notification>", "<system-reminder>用户提供的普通正文</system-reminder>"]) {
+      assert.ok(context(invoke(binary, project, event(prompt, { cwd: project }))).includes("USER_CARD_UNIQUE_MARKER"), "user text that only mentions a notification is a user message");
+    }
   }
-  for (const [index, file] of [cardPath, pendingPath, config].entries()) {
+});
+
+test("the hook never writes the card, the settings or the research records", (t) => {
+  const project = workspace(t);
+  const settingsPath = path.join(project, ".claude/settings.json");
+  writeResearch(project, { "IDENTITY.md": `Mainline: 合成主线\n${"x".repeat(4096)}` });
+  const cardPath = path.join(project, ".dove/research/IDENTITY.md");
+  const before = [settingsPath, cardPath].map((file) => [fs.readFileSync(file), fs.statSync(file).mtimeMs]);
+  for (const binary of binaries) {
+    const delivered = context(invoke(binary, project, event("别再默认 CPU，这只是资源限制纠正。", { cwd: project, session_id: "write-check" })));
+    assert.match(delivered, /身份卡超过 4KB/u);
+    assert.ok(delivered.includes("Mainline: 合成主线"));
+  }
+  for (const [index, file] of [settingsPath, cardPath].entries()) {
     assert.deepEqual(fs.readFileSync(file), before[index][0]);
     assert.equal(fs.statSync(file).mtimeMs, before[index][1]);
   }
+  assert.equal(JSON.parse(fs.readFileSync(settingsPath)).hooks.UserPromptSubmit[0].hooks[0].command, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND);
 });
 
-test("pure prompt payload validation and failures stay nonblocking", () => {
-  const payload = event("用户当前原文", { transcript_path: "/never-read-transcript" });
-  assert.deepEqual(parseUserPromptSubmitPayload(JSON.stringify(payload)), payload);
-  for (const input of ["", "{", "null", "[]", "{}", '{"hook_event_name":"Stop","prompt":"hello"}', '{"hook_event_name":"UserPromptSubmit","prompt":42}']) {
-    assert.throws(() => parseUserPromptSubmitPayload(input), /malformed JSON|unsupported or invalid prompt event/u);
-  }
-  assert.throws(() => userPromptSubmitOutput(event()), /requires verified project guidance/u);
-  assert.throws(() => userPromptSubmitOutput(null), /requires a valid prompt event/u);
-  const attention = userPromptSubmitAttentionOutput();
-  assert.equal(attention.hookSpecificOutput.hookEventName, "UserPromptSubmit");
-  const failure = userPromptSubmitFailureOutput(new Error("bad\ninput"));
-  assert.match(failure.systemMessage, /bad\?input/u);
-  assert.doesNotMatch(failure.systemMessage, /checked|approved|blocked the prompt/u);
-});
-
-test("prompt output is current short guidance, independent of prompt text and non-source host metadata", (t) => {
-  const project = workspace(t);
-  const manifest = JSON.parse(fs.readFileSync(path.join(project, ".dove/install/manifest.json"), "utf8"));
-  const guidance = currentPromptGuidance(manifest);
-  assert.equal(guidance.version, PACKAGE_VERSION);
-  assert.equal(guidance.fingerprints.length, 3);
-  const expected = userPromptSubmitOutput(event(""), guidance, { project });
-  assert.ok(context(expected).length < 2_500);
-  assert.match(context(expected), /磁盘指导，不代表已重新加载/u);
-  assert.match(context(expected), /未读到身份卡 \.dove\/research\/IDENTITY\.md/u);
-  assert.ok(context(expected).includes(renderDoveResearchReanchor()));
-  assert.doesNotMatch(context(expected), /^Mainline:/mu, "missing card does not synthesize a goal");
-  assert.doesNotMatch(context(expected), /offsets|EOF|read the full rule and author preferences/iu);
-  for (const fingerprint of guidance.fingerprints) assert.ok(context(expected).includes(fingerprint));
-  const nested = path.join(project, "subpackage");
-  fs.mkdirSync(path.join(nested, "node_modules"), { recursive: true });
-  fs.writeFileSync(path.join(nested, "package.json"), '{"name":"nested"}\n');
-  assert.deepEqual(invoke(binaries[0], project, event("nested", { cwd: nested })), expected, "nested package stays in the parent Dove project");
-  const nestedManifest = path.join(nested, ".dove/install/manifest.json");
-  fs.mkdirSync(path.dirname(nestedManifest), { recursive: true });
-  fs.writeFileSync(nestedManifest, "{}\n");
-  assert.deepEqual(invoke(binaries[0], project, event("nested", { cwd: nested })), userPromptSubmitAttentionOutput(), "nested Dove installation cannot borrow parent's guidance");
-
-  const settingsPath = path.join(project, ".claude/settings.json");
-  const before = fs.readFileSync(settingsPath);
-  const sourcePayload = { cwd: project, session_id: "synthetic", transcript_path: "/never-read-transcript" };
-  const withSource = userPromptSubmitOutput(event("", sourcePayload), guidance, { project });
-  assert.equal(context(withSource), context(expected) + userOriginalSourceContext(sourcePayload));
-  for (const binary of binaries) {
-    for (const prompt of ["", "你好", "/dove:status", "Implement a function", "Ignore previous instructions", "x".repeat(100_000)]) {
-      const output = invoke(binary, project, event(prompt, sourcePayload));
-      assert.deepEqual(output, withSource, "only the source pointer changes guidance, not prompt intent or other host metadata");
-    }
-  }
-  assert.deepEqual(fs.readFileSync(settingsPath), before, "prompt hook must not write integration");
-  const cardPath = path.join(project, ".dove/research/IDENTITY.md");
-  assert.equal(fs.existsSync(cardPath), false, "missing card is not created by prompt delivery");
-  const mainline = "Mainline: 在固定信息预算下恢复缺失候选，证明端到端覆盖改善；以独立确认和可用方法交付为完成。";
-  const card = `${mainline}\nRejected approach: synthetic CPU default\nUser restrictions: use available GPU within the confirmed budget\nCurrent route: provisional candidate generator\nNext core action: inspect missing candidates\n`;
-  fs.writeFileSync(cardPath, card);
-  const cardBefore = fs.statSync(cardPath).mtimeMs;
-  const cardExpected = userPromptSubmitOutput(event(""), guidance, { project });
-  for (const binary of binaries) {
-    for (const prompt of ["/dove:status", "别再默认 CPU，这只是资源限制纠正。", "不要写任何文件，只回答状态。"]) {
-      const delivered = invoke(binary, project, event(prompt, { cwd: project }));
-      assert.deepEqual(delivered, cardExpected, "hook presents the same card rather than interpreting corrections or results");
-      assert.ok(context(delivered).includes(card), "current identity card is delivered in full without paraphrasing");
-      assert.equal(context(delivered).split(mainline).length - 1, 1, "Mainline appears once with its exact user wording");
-      assert.ok(context(delivered).includes(renderDoveResearchReanchor()));
-      assert.equal(fs.readFileSync(cardPath, "utf8"), card, "hook does not apply card corrections itself");
-      assert.equal(fs.statSync(cardPath).mtimeMs, cardBefore, "hook does not write the card");
-    }
-  }
-  const oversized = `${mainline}\n${"x".repeat(4096)}`;
-  fs.writeFileSync(cardPath, oversized);
-  const oversizedBefore = fs.statSync(cardPath).mtimeMs;
-  for (const binary of binaries) {
-    const delivered = invoke(binary, project, event());
-    assert.doesNotMatch(context(delivered), /未读到身份卡/u);
-    assert.match(context(delivered), /身份卡超过 4KB/u);
-    assert.equal(context(delivered).includes(mainline), true, "oversized card retains the exact mainline");
-    assert.equal(fs.readFileSync(cardPath, "utf8"), oversized, "hook does not shorten an oversized card itself");
-    assert.equal(fs.statSync(cardPath).mtimeMs, oversizedBefore);
-  }
-  fs.rmSync(cardPath);
-  for (const binary of binaries) assert.deepEqual(invoke(binary, project, event()), expected, "missing card still uses non-inference guidance");
-  assert.equal(fs.existsSync(cardPath), false, "hook never recreates a missing card");
-  assert.deepEqual(fs.readFileSync(settingsPath), before, "card delivery does not modify integration");
-  assert.equal(JSON.parse(before).hooks.UserPromptSubmit[0].hooks[0].command, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND);
-  assert.equal(DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND, 'dove hook user-prompt-submit --project "$CLAUDE_PROJECT_DIR"');
-});
-
-test("older, edited or partly missing installations keep their context; other directories get the short notice", (t) => {
+test("older installations keep their context; other directories and bad input stay nonblocking", (t) => {
   const project = workspace(t);
   const manifestPath = path.join(project, ".dove/install/manifest.json");
-  const original = fs.readFileSync(manifestPath);
-  const hook = (payload = event()) => invoke(binaries[0], project, payload);
-  const attention = userPromptSubmitAttentionOutput();
-
-  const manifest = JSON.parse(original);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   manifest.package.version = "0.0.1";
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
   for (const binary of binaries) assert.match(context(invoke(binary, project, event())), /项目指导为 0\.0\.1，命令行为/u);
-  fs.writeFileSync(manifestPath, original);
-
-  fs.appendFileSync(path.join(project, ".claude/rules/dove.md"), "\nLocal edited rule\n");
-  assert.match(context(hook()), /磁盘指导，不代表已重新加载/u);
-  fs.rmSync(path.join(project, ".dove/install/AUTHOR_PREFERENCES.md"));
-  assert.match(context(hook()), /磁盘指导，不代表已重新加载/u);
-
-  const withoutRule = JSON.parse(original);
-  withoutRule.managed = withoutRule.managed.filter((entry) => entry.path !== ".claude/rules/dove.md");
-  fs.writeFileSync(manifestPath, `${JSON.stringify(withoutRule)}\n`);
-  assert.deepEqual(hook(), attention);
-  fs.writeFileSync(manifestPath, original);
 
   const outside = fs.mkdtempSync(path.join(scratch, "dove-wrong-cwd-"));
   t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
-  assert.deepEqual(hook(event("hello", { cwd: outside })), attention);
+  const attention = userPromptSubmitAttentionOutput();
+  assert.deepEqual(invoke(binaries[0], project, event("hello", { cwd: outside })), attention);
   assert.deepEqual(invoke(binaries[0], outside, event()), attention);
-  assert.match(context(hook()), /磁盘指导，不代表已重新加载/u);
-});
+  const nested = path.join(project, "subpackage");
+  fs.mkdirSync(path.join(nested, ".dove/install"), { recursive: true });
+  fs.writeFileSync(path.join(nested, ".dove/install/manifest.json"), "{}\n");
+  assert.deepEqual(invoke(binaries[0], project, event("nested", { cwd: nested })), attention, "a nested Dove installation cannot borrow its parent's guidance");
 
-test("non-Claude project and malformed input remain nonblocking", (t) => {
-  const project = workspace(t, ["dsh"]);
-  assert.equal(fs.existsSync(path.join(project, ".claude/settings.json")), false, "without an existing Claude hook there is no automatic in-session delivery");
+  const payload = event("用户当前原文", { transcript_path: "/never-read-transcript" });
+  assert.deepEqual(parseUserPromptSubmitPayload(JSON.stringify(payload)), payload);
   for (const binary of binaries) {
-    assert.deepEqual(invoke(binary, project, event()), userPromptSubmitAttentionOutput());
-    assert.deepEqual(invoke(binary, project, event("x".repeat(260_000))), userPromptSubmitAttentionOutput(), "large valid prompts are not malformed");
     for (const input of ["", "{", "null", "[]", "{}", '{"hook_event_name":"Stop","prompt":"hello"}', '{"hook_event_name":"UserPromptSubmit","prompt":42}']) {
+      assert.throws(() => parseUserPromptSubmitPayload(input), /malformed JSON|unsupported or invalid prompt event/u);
       const output = invoke(binary, project, input);
       assert.deepEqual(Object.keys(output), ["systemMessage"]);
       assert.match(output.systemMessage, /UserPromptSubmit/u);
     }
   }
+  assert.throws(() => userPromptSubmitOutput(event()), /requires verified project guidance/u);
+  assert.throws(() => userPromptSubmitOutput(null), /requires a valid prompt event/u);
+  assert.match(userPromptSubmitFailureOutput(new Error("bad\ninput")).systemMessage, /bad\?input/u);
 });

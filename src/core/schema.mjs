@@ -11,5 +11,4 @@ export const ARTIFACT_PATHS = Object.freeze({
   runsDir: ".dove/runs",
   researchDocumentsDir: ".dove/research",
   researchOverview: ".dove/research/RESEARCH.md",
-  researchLessons: ".dove/research/lessons/LESSONS.md"
 });

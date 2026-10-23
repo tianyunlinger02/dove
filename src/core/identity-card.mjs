@@ -60,10 +60,9 @@ export function identityCardContext(project, options = {}) {
   const otherFields = new TextDecoder().decode(otherBytes.subarray(0, MAX_CARD_BYTES), { stream: otherBytes.length > MAX_CARD_BYTES }).trim();
   const lines = [
     "项目身份卡（研究者维护；只更正相关字段，不改写未变的 Mainline）：",
-    state ? `研究状态（原卡原文）：\n${state}` : "研究状态：原卡未填写；请宿主根据真实结果补约 300 字白话，不从其他字段臆造。"
+    state ? `研究状态（原卡原文）：\n${state}` : "研究状态：原卡未填写；下次请导师判断时由导师写，不从其他字段臆造。"
   ];
-  if (Array.from(state).length > 300) lines.push("研究状态超过约 300 字目标；请宿主按原始证据重写为白话。这里保留原文，不裁字冒充语义摘要，也不自动改研究内容。");
   if (otherFields) lines.push("其余身份卡字段：", otherFields);
-  if (card.truncated) lines.push(`身份卡超过 4KB；研究状态已从完整原卡提取，其余字段最多展示前 4KB，全文见 ${DOVE_IDENTITY_CARD_PATH}。请宿主重写为约 1200 字的短卡、约 300 字的白话研究状态；方法设计留在 Method design 指向的 brief，不自动改研究内容。`);
+  if (card.truncated) lines.push(`身份卡超过 4KB；研究状态已从完整原卡提取，其余字段只展示前 4KB，全文见 ${DOVE_IDENTITY_CARD_PATH}。方法设计留在 Method design 指向的说明里，过程细节移到普通项目文件，卡上只留字段本身。`);
   return lines.join("\n");
 }

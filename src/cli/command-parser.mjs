@@ -2,16 +2,8 @@ const value = (name, options = {}) => ({ name, kind: "value", key: optionKey(nam
 const boolean = (name, options = {}) => ({ name, kind: "boolean", key: optionKey(name), ...options });
 
 const projectOption = value("--project");
-const hostOption = value("--host", { repeatable: true, commaSeparated: true, dedupe: true, choices: ["claude", "dsh"] });
+const hostOption = value("--host", { repeatable: true, commaSeparated: true, dedupe: true, choices: ["claude"] });
 const outputOptions = [boolean("--json", { conflictsWith: ["--format"] }), value("--format", { choices: ["json"], conflictsWith: ["--json"] })];
-const runMetricOptions = [value("--metric-name"), value("--direction", { choices: ["min", "max"] }), value("--metric-unit")];
-const runBasisOptions = [value("--data"), value("--evaluator"), value("--resource-basis")];
-const runBudgetOptions = [value("--wall-time"), value("--timeout-ms"), value("--kill-grace-ms")];
-const runStartOptions = [projectOption, value("--id"), value("--group"), value("--seed"), ...runBudgetOptions, ...runMetricOptions, ...runBasisOptions, ...outputOptions];
-const runStatusOptions = [projectOption, value("--id", { conflictsWith: ["--group"] }), value("--group", { conflictsWith: ["--id"] }), ...outputOptions];
-const runResumeOptions = [projectOption, value("--id"), ...outputOptions];
-const runFinalizeOptions = [projectOption, value("--id"), ...runMetricOptions, value("--metric-value"), value("--decision"), value("--note"), ...outputOptions];
-const runCompareOptions = [projectOption, value("--id", { repeatable: true, conflictsWith: ["--group"] }), value("--group", { conflictsWith: ["--id"] }), ...outputOptions];
 
 function optionKey(name) {
   return String(name).replace(/^--/u, "").replace(/-([a-z0-9])/giu, (_, character) => character.toUpperCase());
@@ -36,8 +28,8 @@ export const CLI_COMMAND_SPECS = Object.freeze({
   }),
   topic: command([], { subcommands: { start: command([projectOption, ...outputOptions]) } }),
   figure: command([projectOption, value("--prompt"), value("--prompt-file"), value("--image", { repeatable: true }), value("--output"), value("--size"), value("--quality"), value("--background"), boolean("--tools"), ...outputOptions]),
-  settings: command([value("--host-migration", { choices: ["on", "off"] }), ...outputOptions]),
-  mentor: command([], { subcommands: { brief: command([projectOption, value("--trigger"), value("--user-source"), value("--since"), value("--until"), value("--user-original"), value("--opinion"), value("--artifact", { repeatable: true }), ...outputOptions]) } }),
+  settings: command([value("--host-migration", { choices: ["on", "off"] }), value("--stop-prompts", { choices: ["on", "off"] }), ...outputOptions]),
+  mentor: command([], { subcommands: { brief: command([projectOption, value("--trigger"), value("--user-source"), value("--since"), value("--until"), value("--user-original"), value("--opinion"), value("--artifact", { repeatable: true }), boolean("--watch"), ...outputOptions]) } }),
   projects: command([], {
     subcommands: {
       import: command([value("--project", { repeatable: true, dedupe: true }), boolean("--sync"), ...outputOptions]),
@@ -46,20 +38,12 @@ export const CLI_COMMAND_SPECS = Object.freeze({
       postinstall: command([])
     }
   }),
-  run: command([], {
-    subcommands: {
-      start: command(runStartOptions, { passthroughAfterSeparator: true }),
-      status: command(runStatusOptions),
-      resume: command(runResumeOptions),
-      finalize: command(runFinalizeOptions),
-      compare: command(runCompareOptions)
-    }
-  }),
   hook: command([], {
     subcommands: {
       "session-start": command([projectOption]),
       "user-prompt-submit": command([projectOption]),
-      statusline: command([projectOption])
+      statusline: command([projectOption]),
+      stop: command([projectOption])
     }
   })
 });

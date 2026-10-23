@@ -5,6 +5,7 @@ import {
   DOVE_CLAUDE_SETTINGS_PATH,
   DOVE_CLAUDE_STATUS_LINE,
   mergeClaudeSessionStartSettings,
+  mergeClaudeStopSettings,
   mergeClaudeUserPromptSubmitSettings
 } from "./ambient-policy.mjs";
 import {
@@ -332,6 +333,7 @@ function planExclusive(root, desired, oldEntry, fsOps, options = {}) {
 function addFragment(resource, value) {
   if (resource.selector === USER_PROMPT_SUBMIT_SELECTOR) return mergeClaudeUserPromptSubmitSettings(value).settings;
   if (resource.selector === SESSION_START_SELECTOR) return mergeClaudeSessionStartSettings(value).settings;
+  if (resource.selector === STOP_SELECTOR) return mergeClaudeStopSettings(value).settings;
   if (resource.selector === STATUS_LINE_SELECTOR) return { ...value, statusLine: resource.fragment };
   if (resource.selector === WEB_FETCH_DENY_SELECTOR) return mergeWebFetchDenyPermission(value).settings;
   if (resource.selector === PAPER_SEARCH_MCP_SELECTOR) {
@@ -516,6 +518,13 @@ export function planResource(root, desired, oldEntry, fsOps = fs, options = {}) 
   throw new Error(`Unsupported project integration resource kind: ${kind}.`);
 }
 
+const RETIRED_EXCLUSIVE_PATHS = Object.freeze([
+  ".claude/agents/dove-reviewer.md",
+  ".claude/commands/dove/lessons.md",
+  ".claude/commands/dove/rebuttal.md",
+  ".dove/install/RESEARCH_QUALITY_FULL.md"
+]);
+
 export function assertManagedOwnership(manifest) {
   const hosts = manifest?.hosts ?? [];
   const knownKeys = new Set(resourcesForHosts(hosts).filter((entry) => entry.kind === "exclusive-file").map(managedKey));
@@ -528,8 +537,10 @@ export function assertManagedOwnership(manifest) {
       knownKeys.add(managedKey({ path: PAPER_SEARCH_MCP_PATH, kind: "json-fragment", selector }));
     }
   }
-  // Recognize this retired package file only so its manifest-owned copy can be removed.
-  knownKeys.add(managedKey({ path: ".claude/agents/dove-reviewer.md", kind: "exclusive-file", selector: null }));
+  // Recognize retired package files only so their manifest-owned copies can be removed.
+  for (const retiredPath of RETIRED_EXCLUSIVE_PATHS) {
+    knownKeys.add(managedKey({ path: retiredPath, kind: "exclusive-file", selector: null }));
+  }
   for (const entry of manifest?.managed ?? []) {
     if (!knownKeys.has(managedKey(entry))) {
       throw new Error(`Dove project integration contains unknown ownership: ${entry.path}${entry.selector ? `#${entry.selector}` : ""}.`);

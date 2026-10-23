@@ -13,9 +13,10 @@ const QUESTIONS = [
   "1. 如果用户现在问‘这段时间取得了什么实质科研进展’，诚实的一句话回答是什么？",
   "2. 最近的工作是在检验核心方法，还是在修工程、修评价、搭系统？",
   "3. 按现在的做法，离用户要的最终结果还差什么、大概多久能到？有没有更直接、更快的路？",
-  "4. 对照 brief 的“方法设计”：问题及真实数据证据和要达到的程度、外部方法（含本领域高手的默认做法）的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？",
-  "5. 对照 USER_ORIGINALS.md 中用户过去的纠正，当前做法有没有重犯？",
-  "6. 方向还服务用户的核心目标吗？相对最接近的工作新在哪里、离目标档次差什么，下一步最值得检验什么（至少考虑一个不是从当前做法改出来的方案）？"
+  "4. 本轮判定对得上说明里事先写下的对准维度和成败标准吗？",
+  "5. 对照说明的“方法设计”：问题及真实数据证据和要达到的程度、外部方法（含本领域高手的默认做法）的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？这一步怎样改善原问题、改善多少？",
+  "6. 对照 USER_ORIGINALS.md 中用户过去的纠正和导师笔记里被否掉的方法，当前做法有没有重犯？",
+  "7. 方向还服务用户的核心目标吗？相对最接近的工作新在哪里、离目标档次差什么，下一步最值得检验什么（至少考虑一个不是从当前做法改出来的方案）？"
 ].join("\n");
 
 // Every project byte lives in this Map. No disk fixtures or real project reads.
@@ -75,7 +76,10 @@ test("empty memory project renders a short fixed template without creating recor
   const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps });
   assert.equal(typeof brief, "string");
   assert.ok(brief.endsWith(`${QUESTIONS}\n`));
-  assert.equal((brief.match(/^\d+\. /gmu) ?? []).length, 6);
+  assert.equal((brief.match(/^\d+\. /gmu) ?? []).length, 7);
+  assert.match(brief, /## Dove 算出的事实/u);
+  assert.match(brief, /当前轮次：身份卡没有指向当前轮次/u);
+  assert.match(brief, /主指标：EVAL 开头还没写/u);
   assert.match(brief, /长期意图对照到期（导师笔记缺失）/u, "a first mentor reads the project's whole goal history");
   for (const file of [".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`, ".dove/install/TOPIC_CRITERIA.md", `${RESEARCH}/topics/PROJECT.md`, `${WATCH}/config.json`]) {
     assert.ok(brief.includes(`\`${file}\`（缺失）`), file);
@@ -137,7 +141,10 @@ test("materials use actual paths, recent numbered rounds, and verbatim user fiel
   assert.ok(brief.endsWith(`${QUESTIONS}\n`));
   const opened = memory.reads.map(({ file }) => path.relative(ROOT, file));
   assert.ok(opened.includes(artifact), "explicit artifacts are bounded source attachments");
-  assert.ok(opened.every((file) => file === artifact || file === `${RESEARCH}/MENTOR_NOTES.md` || /^\.dove\/research\/rounds\/\d+-brief\.md$/u.test(file)));
+  // Besides explicit artifacts, Dove reads only the records it computes facts from.
+  assert.ok(opened.every((file) => file === artifact || [`${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/EVAL.md`].includes(file) || /^\.dove\/research\/rounds\/\d+-(?:brief|result)\.md$/u.test(file)), opened.join(", "));
+  assert.equal(opened.includes(`${RESEARCH}/rounds/execution-dialogue.md`), false);
+  assert.equal(opened.includes(".dove/install/AUTHOR_PREFERENCES.md"), false);
   assert.ok(!memory.inspected.includes(source), "source pointer is not even stat-ed");
   assert.ok(memory.inspected.includes(path.join(ROOT, artifact)), "only explicit artifact paths are inspected");
   assert.deepEqual([...memory.files], before);
@@ -158,8 +165,7 @@ test("large original results get a bounded sourced tail instead of an EVAL concl
   assert.ok(brief.includes("最新-19"));
   assert.ok(!brief.includes("最新-0 |"));
   assert.ok(!brief.includes("旧测量行"));
-  assert.ok(!brief.includes("重大突破"));
-  assert.ok(!memory.reads.some(({ file }) => file.endsWith("/EVAL.md")));
+  assert.ok(!brief.includes("重大突破"), "Dove reads only EVAL's main-metric line and trend table, never its conclusions");
   assert.ok(!brief.includes("�"));
   assert.ok(Buffer.byteLength(brief) < 15000);
 });

@@ -22,7 +22,11 @@ function virtualFiles(entries) {
       if (!files.has(target) && !directories.has(target)) throw Object.assign(new Error("absent"), { code: "ENOENT" });
       return { mode: 0o644, isSymbolicLink: () => false, isDirectory: () => directories.has(target), isFile: () => files.has(target) };
     },
-    readFileSync(target) { reads.push(target); return files.get(target); }
+    readFileSync(target) { reads.push(target); return files.get(target); },
+    readdirSync(target) {
+      if (!directories.has(target)) throw Object.assign(new Error("absent"), { code: "ENOENT" });
+      return [...new Set([...files.keys(), ...directories].filter((item) => path.dirname(item) === target).map((item) => path.basename(item)))];
+    }
   };
   return { root, files, reads, fsOps };
 }
@@ -71,10 +75,14 @@ test("doctor reads core documents without requiring or inspecting historical sum
   assert.deepEqual(fixture.reads.map((target) => path.relative(fixture.root, target)).sort(), [".dove/research/EVAL.md", ".dove/research/IDENTITY.md"]);
 });
 
-test("statusline shows the round number from the card without scanning round contents", () => {
-  const fixture = virtualFiles({ ".dove/research/IDENTITY.md": "Current round: rounds/007-brief.md\nRound status: ongoing\nMainline: stable goal\n" });
+test("statusline's second line shows this round's aim, due date and the main metric from the records", () => {
+  const fixture = virtualFiles({
+    ".dove/research/IDENTITY.md": "Current round: rounds/007-brief.md\nRound status: ongoing\nMainline: stable goal\n",
+    ".dove/research/rounds/007-brief.md": "Author: mentor\n对准：实验与证据价值\n见分晓：2099-03-09（开始：2099-03-01）\n规模：全量。\n",
+    ".dove/research/EVAL.md": "主指标：联合正确件数（验证集 10370 件）；当前最好：4120/10370 件（2026-10-20，第 6 轮）\n"
+  });
   const output = renderDoveStatusLine({}, { projectRoot: fixture.root, fsOps: fixture.fsOps, branch: null, env: { NO_COLOR: "1" } });
-  assert.equal(output, "第7轮 · stable goal\n/virtual-project");
-  assert.equal(fixture.reads.length, 1);
-  assert.ok(fixture.reads.every((target) => target.endsWith("/IDENTITY.md")));
+  assert.equal(output, "stable goal\n第7轮 · 对准 实验与证据价值 · 03-09 见分晓 · 主指标 联合正确件数 4120/10370 件（第6轮）\n/virtual-project");
+  const bare = virtualFiles({ ".dove/research/IDENTITY.md": "Mainline: stable goal\n" });
+  assert.equal(renderDoveStatusLine({}, { projectRoot: bare.root, fsOps: bare.fsOps, branch: null, env: { NO_COLOR: "1" } }), "stable goal\n/virtual-project", "without a round or metric the status line keeps two lines");
 });

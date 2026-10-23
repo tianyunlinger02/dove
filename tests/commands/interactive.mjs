@@ -7,13 +7,13 @@ import {
   HOST_REGISTRY,
   PROJECT_HOST_IDS as REGISTERED_PROJECT_HOST_IDS
 } from "../../src/core/host-registry.mjs";
-const EXPECTED_HOST_IDS = ["claude", "dsh"];
+const EXPECTED_HOST_IDS = ["claude"];
 
 export async function assertInteractiveHostSelection() {
   assert.deepEqual(REGISTERED_PROJECT_HOST_IDS, EXPECTED_HOST_IDS);
   assert.deepEqual(DEFAULT_INITIALIZABLE_HOSTS, ["claude"]);
 
-  for (const { selectedHosts, bootstrap } of [["claude"], ["dsh"], ["claude", "dsh"]].flatMap((selectedHosts) => [true, false].map((bootstrap) => ({ selectedHosts, bootstrap })))) {
+  for (const { selectedHosts, bootstrap } of [["claude"]].flatMap((selectedHosts) => [true, false].map((bootstrap) => ({ selectedHosts, bootstrap })))) {
     const target = "/workspace/example-project";
     let inspectionCount = 0;
     let initializeCall = null;
@@ -67,7 +67,7 @@ export async function assertInteractiveHostSelection() {
       assert.match(text, /现有研究目录保持不变/u);
       assert.doesNotMatch(text, /RESEARCH\.md 已建立/u);
     }
-    if (selectedHosts.includes("claude")) assert.match(text, /SessionStart 与 UserPromptSubmit 已配置/u);
+    if (selectedHosts.includes("claude")) assert.match(text, /SessionStart、UserPromptSubmit 与 Stop 已配置/u);
     else assert.doesNotMatch(text, /WebFetch 禁用|Exa MCP/u);
   }
 
@@ -158,7 +158,7 @@ export async function assertInteractiveLifecycleMenus() {
       target,
       inspect: async () => ({
         target,
-        projectIntegration: { state: "current", manifest: { hosts: ["dsh"] } },
+        projectIntegration: { state: "current", manifest: { hosts: ["claude"] } },
         setup: { mode: "current", reason: "current", allowedActions: ["change-hosts", "reinstall", "uninstall", "details", "exit"] }
       }),
       promptSelect: async (config) => {
@@ -168,7 +168,7 @@ export async function assertInteractiveLifecycleMenus() {
       },
       promptCheckbox: async (config) => {
         checkboxConfig = config;
-        return ["claude", "dsh"];
+        return ["claude"];
       },
       update: async (receivedTarget, lifecycleOptions) => {
         updateCall = { target: receivedTarget, lifecycleOptions };
@@ -178,10 +178,9 @@ export async function assertInteractiveLifecycleMenus() {
       env: { NO_COLOR: "1" }
     });
     assert.equal(result.action, "change-hosts");
-    assert.deepEqual(updateCall, { target, lifecycleOptions: { hosts: ["claude", "dsh"] } });
+    assert.deepEqual(updateCall, { target, lifecycleOptions: { hosts: ["claude"] } });
     assert.deepEqual(checkboxConfig.choices.map(({ value, checked }) => ({ value, checked })), [
-      { value: "claude", checked: false },
-      { value: "dsh", checked: true }
+      { value: "claude", checked: true }
     ]);
   }
 
@@ -192,17 +191,17 @@ export async function assertInteractiveLifecycleMenus() {
       target,
       inspect: async () => ({
         target,
-        projectIntegration: { state: "needs-update", manifest: { hosts: ["dsh"] } },
+        projectIntegration: { state: "needs-update", manifest: { hosts: ["claude"] } },
         setup: { mode: "needs-update", reason: "needs-update", allowedActions: ["update", "details", "exit"] }
       }),
       promptSelect: async (config) => {
         assert.deepEqual(config.choices.map((choice) => choice.value), ["update", "details", "exit"]);
         return "update";
       },
-      promptCheckbox: async () => ["dsh"],
+      promptCheckbox: async () => ["claude"],
       update: async (receivedTarget, lifecycleOptions) => {
         updateCall = { target: receivedTarget, lifecycleOptions };
-        return { status: "updated", target: receivedTarget, hosts: ["dsh"], writtenPaths: [], removedPaths: [], changedPaths: [] };
+        return { status: "updated", target: receivedTarget, hosts: ["claude"], writtenPaths: [], removedPaths: [], changedPaths: [] };
       },
       stream,
       env: { NO_COLOR: "1" }

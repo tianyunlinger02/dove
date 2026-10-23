@@ -16,8 +16,9 @@ import { semanticDigest, STOP_SELECTOR } from "../src/core/project-installation-
 const root = fileURLToPath(new URL("../", import.meta.url));
 const cli = path.join(root, "bin/dove.mjs");
 const scratch = process.env.DOVE_TEMP_ROOT || process.env.TMPDIR || fileURLToPath(new URL("../.claude/tmp/", import.meta.url));
-const retiredStop = { hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] };
-const retiredStopOwner = { path: ".claude/settings.json", kind: "json-fragment", selector: STOP_SELECTOR, digest: semanticDigest(retiredStop) };
+const doveStop = { hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] };
+const userStop = { hooks: [{ type: "command", command: "user-owned-stop" }] };
+const stopOwner = { path: ".claude/settings.json", kind: "json-fragment", selector: STOP_SELECTOR, digest: semanticDigest(doveStop) };
 
 function workspace(t) {
   fs.mkdirSync(scratch, { recursive: true });
@@ -120,16 +121,16 @@ function driftMcpFragment(projectRoot) {
   fs.writeFileSync(target, `${JSON.stringify(config, null, 2)}\n`);
 }
 
-function seedRetiredStop(projectRoot, fragment = retiredStop, owned = true) {
-  const settingsPath = path.join(projectRoot, retiredStopOwner.path);
+// Set the project's Stop hooks (the user's own first) and whether the manifest owns Dove's.
+function seedStop(projectRoot, fragment, owned) {
+  const settingsPath = path.join(projectRoot, stopOwner.path);
   const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-  settings.hooks.Stop = [{ hooks: [{ type: "command", command: "user-owned-stop" }] }, ...(fragment ? [fragment] : [])];
+  settings.hooks.Stop = [userStop, ...(fragment ? [fragment] : [])];
   fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
-  if (owned) {
-    const value = manifest(projectRoot);
-    value.managed.push(retiredStopOwner);
-    fs.writeFileSync(path.join(projectRoot, INSTALLATION_MANIFEST_PATH), `${JSON.stringify(value, null, 2)}\n`);
-  }
+  const value = manifest(projectRoot);
+  value.managed = value.managed.filter((entry) => entry.selector !== STOP_SELECTOR);
+  if (owned) value.managed.push(stopOwner);
+  fs.writeFileSync(path.join(projectRoot, INSTALLATION_MANIFEST_PATH), `${JSON.stringify(value, null, 2)}\n`);
 }
 
 function register(ws, ...projects) {
@@ -274,38 +275,39 @@ test("missing managed files and MCP fragments stay missing while the rest update
   assertCurrent(clean);
 });
 
-test("auto-sync retires unchanged owned Stop, preserves edited or missing ownership and stays idempotent", (t) => {
+test("auto-sync adds Dove's Stop beside the user's own, keeps edited or removed ones and stays idempotent", (t) => {
   const ws = workspace(t);
-  const clean = project(ws.base, "stop-clean");
+  const fresh = project(ws.base, "stop-fresh");
   const edited = project(ws.base, "stop-edited");
   const missing = project(ws.base, "stop-missing");
   const unowned = project(ws.base, "stop-unowned");
-  const targets = [clean, edited, missing, unowned];
+  const targets = [fresh, edited, missing, unowned];
   for (const target of targets) {
     dove(ws, "init", "--project", target, "--host", "claude");
     markOld(target);
   }
-  seedRetiredStop(clean);
-  seedRetiredStop(edited, { hooks: [{ ...retiredStop.hooks[0], timeout: 20 }] });
-  seedRetiredStop(missing, null);
-  seedRetiredStop(unowned, retiredStop, false);
+  const editedStop = { hooks: [{ ...doveStop.hooks[0], timeout: 20 }] };
+  seedStop(fresh, null, false);
+  seedStop(edited, editedStop, true);
+  seedStop(missing, null, true);
+  seedStop(unowned, doveStop, false);
   register(ws, ...targets);
-  const stops = (target) => JSON.parse(fs.readFileSync(path.join(target, retiredStopOwner.path), "utf8")).hooks.Stop;
+  const stops = (target) => JSON.parse(fs.readFileSync(path.join(target, stopOwner.path), "utf8")).hooks.Stop;
   const before = targets.map(stops);
   const owner = (target) => manifest(target).managed.find((entry) => entry.selector === STOP_SELECTOR);
 
   const report = JSON.parse(dove(ws, "projects", "sync").stdout);
   assert.equal(report.status, "current");
-  assert.deepEqual(stops(clean), [before[0][0]], "only the old owned fragment is removed");
-  assert.deepEqual(stops(unowned), before[3], "foreign and identical unowned hooks survive");
-  for (const target of [clean, unowned]) {
-    assert.equal(owner(target), undefined);
+  assert.deepEqual(stops(fresh), [userStop, doveStop], "an older project without Stop gets Dove's beside the user's own");
+  assert.deepEqual(stops(unowned), before[3], "an identical unowned Stop is adopted, not duplicated");
+  for (const target of [fresh, unowned]) {
+    assert.deepEqual(owner(target), stopOwner);
     assertCurrent(target);
   }
   for (const target of [edited, missing]) {
-    assert.deepEqual(stops(target), before[targets.indexOf(target)]);
-    assert.deepEqual(owner(target), retiredStopOwner, "retain the old digest rather than adopting local content");
-    assert.deepEqual(report.projects.find((item) => item.target === target).preservedLocalEdits, [{ path: retiredStopOwner.path, selector: STOP_SELECTOR }]);
+    assert.deepEqual(stops(target), before[targets.indexOf(target)], "automatic sync keeps the user's change");
+    assert.deepEqual(owner(target), stopOwner);
+    assert.deepEqual(report.projects.find((item) => item.target === target).preservedLocalEdits, [{ path: stopOwner.path, selector: STOP_SELECTOR }]);
   }
   const synced = targets.map(snapshot);
   const repeated = JSON.parse(dove(ws, "projects", "sync").stdout);
@@ -322,7 +324,7 @@ test("global npm postinstall syncs registered projects and keeps local edits", (
   markOld(edited);
   drift(edited);
   markOld(clean);
-  seedRetiredStop(clean);
+  seedStop(clean, null, false);
   const untouched = snapshot(edited);
   const packed = JSON.parse(checked(ws, "npm", ["pack", root, "--json", "--ignore-scripts"]).stdout);
   assert.equal(packed.length, 1);
@@ -336,8 +338,8 @@ test("global npm postinstall syncs registered projects and keeps local edits", (
   assert.match(fs.readFileSync(path.join(edited, ".dove/install/RESEARCH_QUALITY.md"), "utf8"), /Synthetic local edit/u, "postinstall keeps the local edit");
   assert.notDeepEqual(snapshot(edited), untouched);
   assertCurrent(clean);
-  assert.equal(manifest(clean).managed.some((entry) => entry.selector === STOP_SELECTOR), false);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(clean, retiredStopOwner.path), "utf8")).hooks.Stop, [{ hooks: [{ type: "command", command: "user-owned-stop" }] }]);
+  assert.deepEqual(manifest(clean).managed.find((entry) => entry.selector === STOP_SELECTOR), stopOwner);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(clean, stopOwner.path), "utf8")).hooks.Stop, [userStop, doveStop]);
   const executable = path.join(ws.env.npm_config_prefix, "bin", process.platform === "win32" ? "dove.cmd" : "dove");
   assert.equal(fs.existsSync(executable), true, "test must exercise an actual isolated global npm installation");
 });

@@ -8,21 +8,17 @@ import {
   renderClaudeAmbientRule
 } from "../src/core/ambient-policy.mjs";
 import { DOVE_AGENT_SURFACES, generatedDoveAgentEntries } from "../src/core/dove-agent-definition.mjs";
-import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "../src/core/dove-agent-persona.mjs";
-import { USER_RESPONSE_POLICY } from "../src/core/user-response-policy.mjs";
 import {
-  DOVE_RESEARCH_QUALITY_REFERENCE_PATHS,
-  DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS,
-  renderDoveResearchQualityReference,
-  renderDoveResearchQualityFullReference
+  DOVE_RESEARCH_QUALITY_REFERENCE_PATH,
+  renderDoveResearchQualityReference
 } from "../src/core/dove-research-contract.mjs";
 import {
-  DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS,
-  DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS,
+  DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH,
+  DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATH,
   renderDoveAuthorPreferencesReference,
   renderDoveAuthorPreferencesFullReference
 } from "../src/core/dove-author-preferences.mjs";
-import { DOVE_TOPIC_CRITERIA_REFERENCE_PATHS, renderDoveTopicCriteriaReference } from "../src/core/dove-topic-criteria.mjs";
+import { DOVE_TOPIC_CRITERIA_REFERENCE_PATH, renderDoveTopicCriteriaReference } from "../src/core/dove-topic-criteria.mjs";
 import {
   PAPER_SEARCH_SUPPORT_SKILL_PATH,
   renderPaperSearchSupportSkill
@@ -35,17 +31,12 @@ import {
   COMMAND_SURFACES,
   PROJECT_HOST_IDS,
   adapterPathForCommand,
-  hostCommandSlug,
   packageResourcePath
 } from "../src/core/command-manifest.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
-
-function markdownTitle(command) {
-  return command.title.replace(/\b\w/g, (char) => char.toUpperCase());
-}
 
 function yamlString(value) {
   return JSON.stringify(String(value).replace(/\n/g, " "));
@@ -55,8 +46,7 @@ function unique(values) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-function exampleBullets(command, hostId = null) {
-  if (hostId === "dsh") return [];
+function exampleBullets(command) {
   const examples = command.examples;
   if (!Array.isArray(examples)) return [];
   return examples.map((example) => String(example).trim()).filter(Boolean);
@@ -104,8 +94,8 @@ function renderCapabilityContract(command, hostId = null) {
   return sections.join("\n\n");
 }
 
-function renderExamples(command, hostId = null) {
-  const examples = exampleBullets(command, hostId);
+function renderExamples(command) {
+  const examples = exampleBullets(command);
   return examples.length > 0 ? `\n\n## 示例\n\n${examples.map((example) => `- \`${example}\``).join("\n")}` : "";
 }
 
@@ -114,24 +104,14 @@ function renderArgumentBlock(hostId) {
   return "## 当前请求\n\n$ARGUMENTS";
 }
 
+// The project rule (operating manual) owns every shared instruction; a Skill
+// carries only its own practice, so nothing is stated twice in one context.
 function renderBody(command, heading, hostId = null) {
   const purpose = command.summary;
   const args = renderArgumentBlock(hostId);
-  const examples = renderExamples(command, hostId);
+  const examples = renderExamples(command);
   const contract = renderCapabilityContract(command, hostId);
-  const responsePolicy = hostId === "dsh" ? USER_RESPONSE_POLICY.join("\n") : "";
-  // Author stance owns the short preference read trigger for the eight author
-  // Skills. Status only inspects and reports; Claude uses its rule.
-  const shared = hostId === "dsh" ? [
-    responsePolicy,
-    renderDoveSharedResearchContractSection(),
-    command.id === "dove.status"
-      ? `质量摘要：\`${DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.dsh}\`；具体判断需要时再查 \`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\` 的相关部分，规则不是研究证据。`
-      : `质量细则：\`${DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS.dsh}\`。新作者主上下文亲自读两份短摘要，压缩或恢复后沿用；全文按需查，不反复通读。规则不是研究证据。`,
-    command.id === "dove.status" ? "状态查询只读回答，应用用户纠正，但不启动研究或更新记录。"
-      : renderDoveAuthorStanceSection()
-  ].join("\n\n") : "";
-  return [`# ${heading}`, purpose, args, examples.trim(), shared, contract].filter(Boolean).join("\n\n") + "\n";
+  return [`# ${heading}`, purpose, args, examples.trim(), contract].filter(Boolean).join("\n\n") + "\n";
 }
 
 function renderFrontmatter(command, fields = {}) {
@@ -151,17 +131,9 @@ function renderMarkdownCommand(command, heading, hostId = null) {
   return `${renderFrontmatter(command, { argumentHint: "可选：请求、产物路径、投稿目标、约束或后续背景" })}\n${renderBody(command, heading, hostId)}`;
 }
 
-function renderSkill(command, hostId = null) {
-  const name = `dove-${hostCommandSlug(command.id)}`;
-  return `${renderFrontmatter(command, { name })}\n${renderBody(command, markdownTitle(command), hostId)}`;
-}
-
 export function renderCommandAdapter(hostId, command) {
-  switch (hostId) {
-    case "claude": return renderMarkdownCommand(command, command.id, hostId);
-    case "dsh": return renderSkill(command, hostId);
-    default: throw new Error(`Unknown host adapter: ${hostId}`);
-  }
+  if (hostId === "claude") return renderMarkdownCommand(command, command.id, hostId);
+  throw new Error(`Unknown host adapter: ${hostId}`);
 }
 
 export function generatedAdapterEntries() {
@@ -174,29 +146,27 @@ export function generatedAdapterEntries() {
   })));
 }
 
-export function generatedResearchQualityReferenceEntries() {
-  return PROJECT_HOST_IDS.flatMap((hostId) => [
-    [DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId], renderDoveResearchQualityReference()],
-    [DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS[hostId], renderDoveResearchQualityFullReference()],
-    [DOVE_TOPIC_CRITERIA_REFERENCE_PATHS[hostId], renderDoveTopicCriteriaReference()]
-  ].map(([destinationPath, content]) => ({
-    hostId,
+function referenceEntries(pairs) {
+  return pairs.map(([destinationPath, content]) => ({
+    hostId: "claude",
     destinationPath,
-    relativePath: packageResourcePath(hostId, destinationPath),
+    relativePath: packageResourcePath("claude", destinationPath),
     content
-  })));
+  }));
+}
+
+export function generatedResearchQualityReferenceEntries() {
+  return referenceEntries([
+    [DOVE_RESEARCH_QUALITY_REFERENCE_PATH, renderDoveResearchQualityReference()],
+    [DOVE_TOPIC_CRITERIA_REFERENCE_PATH, renderDoveTopicCriteriaReference()]
+  ]);
 }
 
 export function generatedAuthorPreferencesReferenceEntries() {
-  return PROJECT_HOST_IDS.flatMap((hostId) => [
-    [DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId], renderDoveAuthorPreferencesReference()],
-    [DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS[hostId], renderDoveAuthorPreferencesFullReference()]
-  ].map(([destinationPath, content]) => ({
-    hostId,
-    destinationPath,
-    relativePath: packageResourcePath(hostId, destinationPath),
-    content
-  })));
+  return referenceEntries([
+    [DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH, renderDoveAuthorPreferencesReference()],
+    [DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATH, renderDoveAuthorPreferencesFullReference()]
+  ]);
 }
 
 export function generatedClaudeAmbientProjectEntries() {
@@ -295,17 +265,13 @@ function listFiles(root, relativeDir, acceptPath) {
   return files;
 }
 
+// Earlier releases also generated the full quality reference and a DSH host;
+// their files are listed here so regeneration removes them as stale.
 function existingGeneratedAdapterPaths(root) {
   return unique([
-    ...PROJECT_HOST_IDS.flatMap((hostId) => [
-      packageResourcePath(hostId, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS[hostId]),
-      packageResourcePath(hostId, DOVE_RESEARCH_QUALITY_FULL_REFERENCE_PATHS[hostId]),
-      packageResourcePath(hostId, DOVE_TOPIC_CRITERIA_REFERENCE_PATHS[hostId]),
-      packageResourcePath(hostId, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS[hostId]),
-      packageResourcePath(hostId, DOVE_AUTHOR_PREFERENCES_FULL_REFERENCE_PATHS[hostId])
-    ]).filter((relativePath) => fs.existsSync(path.join(root, relativePath))),
+    ...listFiles(root, "package-resources/hosts/claude/.dove/install", (relativePath) => relativePath.endsWith(".md")),
+    ...listFiles(root, "package-resources/hosts/dsh", () => true),
     ...listFiles(root, "package-resources/hosts/claude/.claude/commands/dove", (relativePath) => /\/dove\/.*\.md$/.test(relativePath)),
-    ...listFiles(root, "package-resources/hosts/dsh/.dsh/skills", (relativePath) => /\/dove-[^/]+\/SKILL\.md$/.test(relativePath)),
     ...listFiles(root, "package-resources/hosts/claude/.claude/rules", (relativePath) => relativePath.endsWith("/.claude/rules/dove.md")),
     ...listFiles(root, "package-resources/hosts/claude/.claude/skills/dove-intake", (relativePath) => relativePath.endsWith("/dove-intake/SKILL.md")),
     ...listFiles(root, "package-resources/hosts/claude/.claude/skills/dove-paper-search", (relativePath) => relativePath.endsWith("/dove-paper-search/SKILL.md")),

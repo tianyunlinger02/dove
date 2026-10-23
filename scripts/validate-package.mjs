@@ -10,12 +10,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { COMMAND_SURFACES, MANAGED_PACKAGE_PATHS, PACKAGE_BRAND_PATHS, PACKAGE_LEGAL_PATHS } from "../src/core/command-manifest.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { EXA_WEB_SUPPORT_SKILL_PATH } from "../src/core/web-access-integration.mjs";
-import { renderDoveResearchQualityReference, renderDoveResearchQualityFullReference } from "../src/core/dove-research-contract.mjs";
+import { renderDoveResearchQualityReference } from "../src/core/dove-research-contract.mjs";
 import { renderDoveAuthorPreferencesReference } from "../src/core/dove-author-preferences.mjs";
 import { resolveTempWorkspaceBase } from "./temp-workspace.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "installation:validate", "uninstall:validate", "review:validate", "runs:validate", "behavior:validate", "behavior:eval", "package:validate", "check", "release:check"];
+const REQUIRED_SCRIPTS = ["build", "build:check", "commands:check", "commands:validate", "installation:validate", "uninstall:validate", "review:validate", "package:validate", "check", "release:check"];
 const PRODUCTION_DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "bundleDependencies", "bundledDependencies"];
 const REQUIRED_PACKAGE_KEYWORDS = ["research", "academic-writing", "experiments", "claude-code", "markdown", "cli"];
 const THIRD_PARTY_LICENSES = new Set(["MIT", "ISC"]);
@@ -227,7 +227,7 @@ function assertInstalledCli(installedBin, cwd) {
   assert.match(help.stdout, /^dove\n/u);
   assert.match(help.stdout, /dove --version/u);
   assert.match(help.stdout, /dove init \[--project <dir>\]/u);
-  assert.match(help.stdout, /CLI 管理项目接入、诊断和运行收据/u);
+  assert.match(help.stdout, /CLI 管理项目接入、诊断、面板和论文追踪/u);
 }
 
 function expectedReferences() {
@@ -235,14 +235,13 @@ function expectedReferences() {
     [".dove/install/AUTHOR_PREFERENCES.md", renderDoveAuthorPreferencesReference()],
     [".dove/install/AUTHOR_PREFERENCES_FULL.md", fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md"), "utf8")],
     [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()],
-    [".dove/install/RESEARCH_QUALITY_FULL.md", renderDoveResearchQualityFullReference()],
     [".dove/install/TOPIC_CRITERIA.md", fs.readFileSync(path.join(ROOT, "docs/TOPIC_CRITERIA.md"), "utf8")]
   ].map(([relativePath, content]) => ({ path: relativePath, content: `${content.trimEnd()}\n` })).sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function assertPackagedReferences(packageRoot) {
   assert.deepEqual(fs.readFileSync(path.join(packageRoot, "docs/AUTHOR_PREFERENCES.md")), fs.readFileSync(path.join(ROOT, "docs/AUTHOR_PREFERENCES.md")));
-  for (const host of ["claude", "dsh"]) {
+  for (const host of ["claude"]) {
     for (const reference of expectedReferences()) {
       assert.equal(fs.readFileSync(path.join(packageRoot, "package-resources/hosts", host, reference.path), "utf8"), reference.content, `Packed ${host} reference must preserve its canonical summary or full text: ${reference.path}`);
     }
@@ -464,20 +463,17 @@ assertLegalInventory(bundledPackageNames);
 assertLockfile();
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "review-runtime:validate"), false);
 assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "review:validate"), true);
-assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "runs:validate"), true);
-assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "behavior:validate"), true);
-assert.equal(Object.hasOwn(packageJson.scripts ?? {}, "behavior:eval"), true);
 for (const script of REQUIRED_SCRIPTS) assert.equal(typeof packageJson.scripts?.[script], "string", `missing package script ${script}`);
-assert.doesNotMatch(packageJson.scripts.check, /behavior:(?:validate|eval)/u, "default check must not treat behavior evaluation as a release gate");
-assert.doesNotMatch(packageJson.scripts["release:check"], /behavior:eval/u, "release:check must not invoke the real behavior runner");
-assert.equal(packageJson.files.some((entry) => entry === "evals" || entry.startsWith("evals/")), false, "behavior eval corpus must not be packed");
+// Run receipts and the synthetic behavior evaluation are retired; Dove is checked by replaying real decision points on project copies.
+for (const script of ["runs:validate", "behavior:validate", "behavior:eval"]) assert.equal(Object.hasOwn(packageJson.scripts ?? {}, script), false, `retired package script remains: ${script}`);
+assert.equal(fs.existsSync(path.join(ROOT, "evals")), false, "the synthetic behavior eval corpus is retired");
 for (const script of FORBIDDEN_SCRIPTS) assert.equal(Object.hasOwn(packageJson.scripts ?? {}, script), false, `retired package script remains: ${script}`);
 for (const relativePath of FORBIDDEN_PACKAGE_PATHS) assert.equal(packageJson.files.includes(relativePath), false, `retired package file remains: ${relativePath}`);
 assert.equal(packageJson.files.some((entry) => /user-prompt-submit/iu.test(entry)), false, "package files manifest must not include retired prompt hook files");
 
 assert.deepEqual(COMMAND_SURFACES.map((surface) => surface.id), [
   "dove.research", "dove.status", "dove.source", "dove.experiment", "dove.draft",
-  "dove.figure", "dove.review", "dove.rebuttal", "dove.lessons"
+  "dove.figure", "dove.review"
 ]);
 assert.equal(MANAGED_PACKAGE_PATHS.includes(`package-resources/hosts/claude/${EXA_WEB_SUPPORT_SKILL_PATH}`), true);
 
@@ -522,11 +518,11 @@ try {
   const standaloneBin = path.join(standaloneRoot, "dove-package.mjs");
   fs.copyFileSync(path.join(installedRoot, "bin/dove-package.mjs"), standaloneBin);
   assert.deepEqual(fs.readdirSync(standaloneRoot), ["dove-package.mjs"], "Standalone init must work without docs, package resources, or source modules alongside the bundle.");
-  for (const hosts of [["claude"], ["dsh"], ["claude", "dsh"]]) {
+  for (const hosts of [["claude"]]) {
     assertReferenceInstallation(path.join(installedRoot, "bin/dove-package.mjs"), path.join(tempRoot, `packed-${hosts.join("-")}`), hosts);
     assertReferenceInstallation(standaloneBin, path.join(tempRoot, `standalone-${hosts.join("-")}`), hosts);
   }
-  console.log(JSON.stringify({ status: "passed", packed: pack.filename, installedVersion: packageJson.version, references: "full canonical text from tarball and standalone init for claude, dsh, and both hosts", ptyBareMenuExit: { exitCode: smoke.exitCode, zeroProjectWrites: true } }, null, 2));
+  console.log(JSON.stringify({ status: "passed", packed: pack.filename, installedVersion: packageJson.version, references: "full canonical text from tarball and standalone init", ptyBareMenuExit: { exitCode: smoke.exitCode, zeroProjectWrites: true } }, null, 2));
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
 }

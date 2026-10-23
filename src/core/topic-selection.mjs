@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { DOVE_TOPIC_CRITERIA_REFERENCE_PATHS, renderDoveTopicCriteriaReference } from "./dove-topic-criteria.mjs";
+import { DOVE_TOPIC_CRITERIA_REFERENCE_PATH, renderDoveTopicCriteriaReference } from "./dove-topic-criteria.mjs";
 
 // Topic selection follows Dove's own standard (docs/TOPIC_CRITERIA.md),
 // installed in every project as .dove/install/TOPIC_CRITERIA.md and updated
@@ -42,9 +42,9 @@ export function readTopicCriteriaInfo() {
 
 // A project reads the copy Dove installed; before installation, the bundled one.
 function projectCriteria(root) {
-  const file = path.join(root, DOVE_TOPIC_CRITERIA_REFERENCE_PATHS.claude);
+  const file = path.join(root, DOVE_TOPIC_CRITERIA_REFERENCE_PATH);
   try {
-    return { ...describe(fs.readFileSync(file, "utf8"), fs.statSync(file)), path: DOVE_TOPIC_CRITERIA_REFERENCE_PATHS.claude };
+    return { ...describe(fs.readFileSync(file, "utf8"), fs.statSync(file)), path: DOVE_TOPIC_CRITERIA_REFERENCE_PATH };
   } catch {
     return readTopicCriteriaInfo();
   }

@@ -3,23 +3,90 @@ import path from "node:path";
 
 import { parsePaperImpactLine } from "./dashboard-data.mjs";
 import { latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
-import { USER_ORIGINALS_PATH } from "./user-originals.mjs";
+import { inspectRoundState, VERDICT_LABELS } from "./round-state.mjs";
+import { readActivity, USER_ORIGINALS_PATH } from "./user-originals.mjs";
 
 const RESEARCH = ".dove/research";
 const ROUND_FILE = /^(\d+)[-_](brief|result)\.md$/iu;
 const IMPACT_FILE = /^impact-\d{4}-\d{2}-\d{2}\.md$/u;
 const DIGEST_FILE = /^\d{4}-\d{2}-\d{2}\.json$/u;
 const SCAN_FILE = /^scan-\d{4}-\d{2}-\d{2}\.md$/u;
+const DAY_MS = 86400000;
+const WATCH_INTERVAL_DAYS = 7;
 
 // Shared questions for the mentor's independent research judgment.
 const QUESTIONS = [
   "如果用户现在问‘这段时间取得了什么实质科研进展’，诚实的一句话回答是什么？",
   "最近的工作是在检验核心方法，还是在修工程、修评价、搭系统？",
   "按现在的做法，离用户要的最终结果还差什么、大概多久能到？有没有更直接、更快的路？",
-  "对照 brief 的“方法设计”：问题及真实数据证据和要达到的程度、外部方法（含本领域高手的默认做法）的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？",
-  "对照 USER_ORIGINALS.md 中用户过去的纠正，当前做法有没有重犯？",
+  "本轮判定对得上说明里事先写下的对准维度和成败标准吗？",
+  "对照说明的“方法设计”：问题及真实数据证据和要达到的程度、外部方法（含本领域高手的默认做法）的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？这一步怎样改善原问题、改善多少？",
+  "对照 USER_ORIGINALS.md 中用户过去的纠正和导师笔记里被否掉的方法，当前做法有没有重犯？",
   "方向还服务用户的核心目标吗？相对最接近的工作新在哪里、离目标档次差什么，下一步最值得检验什么（至少考虑一个不是从当前做法改出来的方案）？"
 ];
+
+function dayText(time) {
+  const value = new Date(time);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+function sumSince(counts, since) {
+  return Object.entries(counts).filter(([day]) => day >= since).reduce((sum, [, count]) => sum + count, 0);
+}
+
+// What Dove reads from the records itself, so the mentor checks facts rather than the host's account of them.
+function computedFacts(project, fsOps, now) {
+  let state;
+  try {
+    state = inspectRoundState(project, { fsOps, now });
+  } catch (error) {
+    return [`未能读取轮次记录：${error.message}`];
+  }
+  const lines = [];
+  const round = state.currentRound;
+  if (!round) lines.push("- 当前轮次：身份卡没有指向当前轮次。");
+  else if (!round.brief) lines.push(`- 当前轮次：${round.reference}（说明文件缺失）。`);
+  else {
+    const brief = round.brief;
+    lines.push(`- 当前轮次：第 ${round.number} 轮（${brief.file}${round.result ? `，结果 ${round.result.file}` : "，尚无结果"}）。`);
+    lines.push(`  对准：${brief.targetDimension ?? brief.target ?? "未写"}；见分晓：${brief.due ?? "未写"}${brief.start ? `（开始 ${brief.start}）` : ""}；规模：${brief.scale ?? "未写"}。`);
+    if (brief.success) lines.push(`  预期结果首段：${brief.success}`);
+  }
+  if (state.overrun) lines.push(`- 超时：原定 ${state.overrun.due} 见分晓，预计 ${state.overrun.plannedDays} 天，已过 ${state.overrun.daysPastDue} 天，还没有结果。`);
+  if (state.stall) lines.push(`- 停滞：第 ${state.stall.rounds.join("、")} 轮判定都是未兑现，其间没有方法取舍。`);
+  const recent = state.rounds.filter((item) => item.result).slice(0, 6);
+  lines.push(recent.length ? "- 最近几轮的判定（只按结果文件开头的“判定：”读取）：" : "- 最近几轮的判定：还没有结果文件。");
+  for (const item of recent) {
+    const target = item.brief?.targetDimension ?? item.brief?.target ?? "未写";
+    lines.push(`  - 第 ${item.number} 轮：对准 ${target}；判定 ${item.result.verdict ?? "未写"}${item.result.verdictKind ? "" : item.result.verdict ? "（不是兑现／未兑现／方法取舍之一）" : ""}。`);
+  }
+  lines.push(state.mainMetric ? `- 主指标：${state.mainMetric.text}` : "- 主指标：EVAL 开头还没写。");
+  const latest = state.trend?.latest;
+  lines.push(latest ? `- 八维走势：共 ${state.trend.rows.length} 次判断；最近一次 ${latest.date ?? "未写日期"}（${latest.round ?? "未写轮次"}），最卡的一维 ${latest.bottleneck ?? "未写"}。` : "- 八维走势：EVAL 里还没有走势表。");
+  try {
+    const activity = readActivity(project, { fsOps });
+    if (activity.scanned) {
+      const since = dayText(new Date(now ?? Date.now()).getTime() - 13 * DAY_MS);
+      const finished = state.rounds.filter((item) => item.result?.mtime && dayText(item.result.mtime) >= since);
+      const verdicts = finished.map((item) => VERDICT_LABELS[item.result.verdictKind] ?? "未写判定");
+      lines.push(`- 最近 14 天的活动量：子代理调用 ${sumSince(activity.agents, since)} 次，上下文压缩 ${sumSince(activity.compactions, since)} 次；同期出结果的轮次 ${finished.length} 个${verdicts.length ? `（${verdicts.join("、")}）` : ""}。`);
+    }
+  } catch {
+    // Activity is a side view; the mentor works without it.
+  }
+  lines.push(state.pending.length ? "- 等用户定的事：" : "- 等用户定的事：无。");
+  for (const item of state.pending) lines.push(`  - ${item.text}`);
+  return lines;
+}
+
+// The latest saved paper-impact judgment decides whether a weekly watch review is due.
+function watchDue(project, fsOps, now) {
+  const names = list(path.join(project, RESEARCH, "watch"), fsOps).filter((name) => IMPACT_FILE.test(name)).sort();
+  const last = names.at(-1)?.slice(7, 17) ?? null;
+  if (!last) return { due: true, last: null };
+  const age = (Date.parse(`${dayText(now ?? Date.now())}T00:00:00Z`) - Date.parse(`${last}T00:00:00Z`)) / DAY_MS;
+  return { due: age >= WATCH_INTERVAL_DAYS || age < 0, last };
+}
 
 function list(directory, fsOps) {
   try {
@@ -171,6 +238,14 @@ function watchMaterials(root, rounds, fsOps) {
   return lines.join("\n");
 }
 
+function watchSection(project, rounds, fsOps, options) {
+  const schedule = watchDue(project, fsOps, options.now);
+  if (options.watch || schedule.due) {
+    return [schedule.last ? `上次判断追踪结果是 ${schedule.last}，${options.watch ? "用户要求本次判断" : "已满一周"}。` : "还没有保存过追踪判断。", "", watchMaterials(project, rounds, fsOps)];
+  }
+  return [`上次判断追踪结果是 ${schedule.last}，未满一周；本次不附追踪材料，也不判断论文。用户要求时用 dove mentor brief --watch。`];
+}
+
 function opinionAttachment(root, opinion, fsOps) {
   if (!opinion) return "未附意见文件。";
   const file = path.resolve(root, opinion);
@@ -185,7 +260,8 @@ function opinionAttachment(root, opinion, fsOps) {
 /**
  * Render a read-only mentor handoff; no model invocation or research writes.
  * Options: trigger, userSource, since, until, userOriginal, userOriginals,
- * opinion (one path), artifact (path array), fsOps (synchronous filesystem injection).
+ * opinion (one path), artifact (path array), watch (include the paper watch even
+ * if judged within the week), now, fsOps (synchronous filesystem injection).
  * Only the saved originals index and explicit artifacts get bounded excerpts;
  * private sessions and paths mentioned inside records are never opened here.
  */
@@ -214,6 +290,9 @@ export function renderMentorBrief(root, options = {}) {
     sourceAttachment(project, originals, fsOps),
     ...(options.userOriginalsError ? [`- 汇总整理失败：${options.userOriginalsError}。已有摘录可能不完整，缺失不等于用户没说过。`] : []),
     longTermIntentDue(intent, options.now) ? `- 长期意图对照到期（${intentStatus}）：读 USER_ORIGINALS.md 并核对本人来源，返回带日期的“长期意图”。` : `- 长期意图对照：${intentStatus}，尚未到期。`, "",
+    "## Dove 算出的事实", "",
+    "以下由 Dove 直接从身份卡、轮次说明和结果开头、EVAL 和导师笔记读出，不经宿主转述；记录本身写错时以原始结果为准。", "",
+    ...computedFacts(project, fsOps, options.now), "",
     "## 原始结果文件与数字", "",
     "只展开显式提供的前 4 个文件，每个最多末尾 8 KiB；不递归找数据，不追读文件中的路径。未附原始结果就直说证据不足，宿主声称已读或已测不算证据。",
     ...(options.artifact?.length
@@ -232,7 +311,7 @@ export function renderMentorBrief(root, options = {}) {
     "### 选题阶段适用的标准", "",
     `- ${describe(project, ".dove/install/TOPIC_CRITERIA.md", fsOps)}（Dove 的选题标准）`,
     `- ${describe(project, `${RESEARCH}/topics/PROJECT.md`, fsOps)}（本项目的选题设置）`, "",
-    "## 论文追踪", "", watchMaterials(project, rounds, fsOps), "",
+    "## 论文追踪", "", ...watchSection(project, rounds, fsOps, options), "",
     "## 固定问题（先答前三问）", "",
     ...QUESTIONS.map((question, index) => `${index + 1}. ${question}`)
   ];

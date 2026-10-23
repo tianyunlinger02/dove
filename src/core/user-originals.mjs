@@ -7,8 +7,12 @@ import path from "node:path";
 // tool output. Derived on mentor calls and daily prewarming; research records stay untouched.
 export const USER_ORIGINALS_PATH = ".dove/install/USER_ORIGINALS.md";
 export const USER_ORIGINALS_INDEX_PATH = ".dove/install/user-originals-index.json";
+// How much the host does, from the same transcripts: subagent calls and context
+// compactions per day, set against verdicts and the main metric on the dashboard.
+export const ACTIVITY_INDEX_PATH = ".dove/install/activity-index.json";
+const ACTIVITY_SCHEMA = 1;
 
-const SKIP = /^(?:<|\[Image|\[Your previous response|\[Request interrupted|This session is being continued|Base directory for this skill|# dove\.|Another Claude session sent|Caveat:|Continue the conversation from where)/u;
+const SKIP = /^(?:<|\[Image|\[Your previous response|\[Request interrupted|This session is being continued|Base directory for this skill|# dove\.|Another Claude session sent|Caveat:|Continue the conversation from where|Stop hook feedback|【Dove 引用用户)/u;
 // Messages typed into the host on the user's behalf by a supervising session or a document.
 const RELAY = /^(?:主会话 ?Claude|Claude[:：，,]|用户已同意|【用户已同意|告知[:：]|更正上一条|转达|用户 ?\d{4}-\d{2}-\d{2} ?决定|用户原话（|请先完整阅读)/u;
 const SHORT = 6;
@@ -96,6 +100,44 @@ function scanNewLines(file, start, fsOps, onLine, deadline) {
   return consumed;
 }
 
+function insideRoot(record, root) {
+  if (typeof record?.cwd !== "string" || !path.isAbsolute(record.cwd)) return false;
+  const relative = path.relative(root, record.cwd);
+  return !(relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative));
+}
+
+function localDay(timestamp) {
+  const time = Date.parse(String(timestamp ?? ""));
+  if (!Number.isFinite(time)) return null;
+  const value = new Date(time);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+function collectActivity(line, root, found) {
+  const compaction = line.includes('"compact_boundary"');
+  const agent = line.includes('"tool_use"') && (line.includes('"name":"Agent"') || line.includes('"name":"Task"'));
+  if (!compaction && !agent) return;
+  let record;
+  try {
+    record = JSON.parse(line);
+  } catch {
+    return;
+  }
+  if (record?.isSidechain || !insideRoot(record, root)) return;
+  const day = localDay(record.timestamp);
+  if (!day) return;
+  if (compaction && record.type === "system" && record.subtype === "compact_boundary") found.compactions[day] = (found.compactions[day] ?? 0) + 1;
+  if (agent && record.type === "assistant" && Array.isArray(record.message?.content)) {
+    const calls = record.message.content.filter((block) => block?.type === "tool_use" && (block.name === "Agent" || block.name === "Task")).length;
+    if (calls) found.agents[day] = (found.agents[day] ?? 0) + calls;
+  }
+}
+
+function addCounts(target, source) {
+  for (const [day, count] of Object.entries(source ?? {})) target[day] = (target[day] ?? 0) + count;
+  return target;
+}
+
 function collect(line, session, root, found) {
   // Tool results are user-typed records too; they never hold the user's words.
   if (!line.includes('"user"') || line.includes('"tool_use_id"')) return;
@@ -106,9 +148,7 @@ function collect(line, session, root, found) {
     return;
   }
   // Encoded paths can collide, and a session can change cwd between messages.
-  if (typeof record?.cwd !== "string" || !path.isAbsolute(record.cwd)) return;
-  const relative = path.relative(root, record.cwd);
-  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return;
+  if (!insideRoot(record, root)) return;
   for (const raw of messageTexts(record)) {
     // Words typed after a slash command arrive wrapped in command tags.
     const args = /^\s*<command-(?:message|name)>/u.test(raw) ? raw.match(/<command-args>([\s\S]*?)<\/command-args>/u)?.[1] : undefined;
@@ -145,7 +185,7 @@ function render(directories, entries, short, pending) {
   const lines = [
     "# 用户本人原话汇总",
     "",
-    "Dove 在生成导师调用材料时整理，常驻面板每天预热；目前只整理本项目全部 Claude Code 会话，暂不包含 DSH 会话。已排除子任务对话、工具返回、上下文压缩摘要、技能说明、后台通知和系统注入；由监督会话或文档代为输入的内容标为“转述”，不当作用户原话。只有几个字的消息（如“继续”）只计数。",
+    "Dove 在生成导师调用材料时整理，常驻面板每天预热；整理本项目全部 Claude Code 会话。已排除子任务对话、工具返回、上下文压缩摘要、技能说明、后台通知和系统注入；由监督会话或文档代为输入的内容标为“转述”，不当作用户原话。只有几个字的消息（如“继续”）只计数。",
     "",
     `会话目录：${directories.map((directory) => `\`${directory}\``).join("、") || "未找到"}`,
     `本人 ${own} 条，转述 ${entries.length - own} 条，短消息 ${short} 条。按时间排列。`,
@@ -156,16 +196,16 @@ function render(directories, entries, short, pending) {
   return `${lines.join("\n")}\n`;
 }
 
-export function refreshUserOriginals(project, options = {}) {
-  const fsOps = options.fsOps ?? fs;
-  const root = path.resolve(project);
-  const directories = sessionDirectories(root, options);
-  const sourceDirectory = sessionDirectory(root, options);
-  const indexFile = path.join(root, USER_ORIGINALS_INDEX_PATH);
-  const previous = readIndex(indexFile, root, fsOps);
-  const files = {};
-  const deadline = Date.now() + (options.budgetMs ?? USER_ORIGINALS_BUDGET_MS);
-  let pending = 0;
+function readActivityIndex(file, root, fsOps) {
+  try {
+    const index = JSON.parse(fsOps.readFileSync(file, "utf8"));
+    return index?.schema === ACTIVITY_SCHEMA && index.root === root && index.files && typeof index.files === "object" ? index : { files: {} };
+  } catch {
+    return { files: {} };
+  }
+}
+
+function transcriptsOf(directories, fsOps) {
   const transcripts = [];
   for (const directory of directories) {
     let names = [];
@@ -180,12 +220,74 @@ export function refreshUserOriginals(project, options = {}) {
         const stat = fsOps.statSync(file);
         transcripts.push({ file, name, size: stat.size, mtime: stat.mtimeMs ?? 0 });
       } catch {
-        // Unreadable now; anything gathered from it earlier is kept below.
+        // Unreadable now; anything counted from it earlier is kept.
       }
     }
   }
-  // The newest sessions go first so recent words are current within the time budget.
-  transcripts.sort((left, right) => right.mtime - left.mtime);
+  // Newest sessions first, so recent weeks are complete within the time budget.
+  return transcripts.sort((left, right) => right.mtime - left.mtime);
+}
+
+/** Count subagent calls and compactions per day, resuming where the last scan stopped. */
+export function refreshActivity(project, options = {}) {
+  const fsOps = options.fsOps ?? fs;
+  const root = path.resolve(project);
+  const indexFile = path.join(root, ACTIVITY_INDEX_PATH);
+  const previous = readActivityIndex(indexFile, root, fsOps);
+  const deadline = Date.now() + (options.budgetMs ?? USER_ORIGINALS_BUDGET_MS);
+  const files = {};
+  let pending = 0;
+  for (const { file, size } of transcriptsOf(sessionDirectories(root, options), fsOps)) {
+    const known = previous.files[file];
+    const resume = known && known.offset <= size ? known : { offset: 0, agents: {}, compactions: {} };
+    if (resume.offset === size || Date.now() >= deadline) {
+      files[file] = resume;
+      if (resume.offset < size) pending += size - resume.offset;
+      continue;
+    }
+    const found = { agents: {}, compactions: {} };
+    const offset = scanNewLines(file, resume.offset, fsOps, (line) => collectActivity(line, root, found), deadline);
+    files[file] = { offset, agents: addCounts({ ...resume.agents }, found.agents), compactions: addCounts({ ...resume.compactions }, found.compactions) };
+    if (offset < size) pending += size - offset;
+  }
+  for (const [file, item] of Object.entries(previous.files)) if (!(file in files)) files[file] = item;
+  writeAtomic(indexFile, `${JSON.stringify({ schema: ACTIVITY_SCHEMA, root, files })}\n`, fsOps);
+  return { pendingBytes: pending };
+}
+
+/**
+ * Per-day subagent calls and compactions counted so far, without scanning.
+ * With `pending: true`, also stats the transcripts to report bytes not yet counted.
+ */
+export function readActivity(project, options = {}) {
+  const fsOps = options.fsOps ?? fs;
+  const root = path.resolve(project);
+  const index = readActivityIndex(path.join(root, ACTIVITY_INDEX_PATH), root, fsOps);
+  const agents = {};
+  const compactions = {};
+  for (const item of Object.values(index.files)) {
+    addCounts(agents, item.agents);
+    addCounts(compactions, item.compactions);
+  }
+  const result = { agents, compactions, scanned: Object.keys(index.files).length > 0 };
+  if (options.pending) {
+    result.pendingBytes = transcriptsOf(sessionDirectories(root, options), fsOps)
+      .reduce((sum, { file, size }) => sum + Math.max(0, size - (index.files[file]?.offset ?? 0)), 0);
+  }
+  return result;
+}
+
+export function refreshUserOriginals(project, options = {}) {
+  const fsOps = options.fsOps ?? fs;
+  const root = path.resolve(project);
+  const directories = sessionDirectories(root, options);
+  const sourceDirectory = sessionDirectory(root, options);
+  const indexFile = path.join(root, USER_ORIGINALS_INDEX_PATH);
+  const previous = readIndex(indexFile, root, fsOps);
+  const files = {};
+  const deadline = Date.now() + (options.budgetMs ?? USER_ORIGINALS_BUDGET_MS);
+  let pending = 0;
+  const transcripts = transcriptsOf(directories, fsOps);
   {
     for (const { file, name, size } of transcripts) {
       const known = previous.files[file];
@@ -206,5 +308,11 @@ export function refreshUserOriginals(project, options = {}) {
   const short = Object.values(files).reduce((sum, item) => sum + item.short, 0);
   writeAtomic(indexFile, `${JSON.stringify({ schema: INDEX_SCHEMA, root, files })}\n`, fsOps);
   writeAtomic(path.join(root, USER_ORIGINALS_PATH), render(directories, entries, short, pending), fsOps);
-  return { path: USER_ORIGINALS_PATH, directories, own: entries.filter((entry) => entry.kind === "own").length, relay: entries.filter((entry) => entry.kind === "relay").length, pendingBytes: pending };
+  let activity = { pendingBytes: null };
+  try {
+    activity = refreshActivity(root, { ...options, budgetMs: Math.max(0, deadline - Date.now()) });
+  } catch {
+    // Activity counts are a side view; the originals summary stands on its own.
+  }
+  return { path: USER_ORIGINALS_PATH, directories, own: entries.filter((entry) => entry.kind === "own").length, relay: entries.filter((entry) => entry.kind === "relay").length, pendingBytes: pending, activityPendingBytes: activity.pendingBytes };
 }

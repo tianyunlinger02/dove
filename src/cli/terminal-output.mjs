@@ -173,10 +173,7 @@ export function renderDoveLifecycleResult(command, result, options = {}) {
   const stream = options.stream ?? process.stdout;
   const env = options.env ?? process.env;
   const color = terminalColorEnabled(stream, env);
-  const hosts = Array.isArray(result.hosts) ? result.hosts : [];
-  const preferenceActivation = hosts.includes("claude")
-    ? "完整作者偏好已恢复。当前已打开的主 agent现在应亲自完整读取 .dove/install/AUTHOR_PREFERENCES.md；普通 shell 用户请新开 Claude 会话或在现有会话中 /clear。安装本身不代表已经读过。"
-    : "完整作者偏好已恢复。DSH 没有 SessionStart；首次进入作者侧 Dove Skill 时，当前主 agent若尚未读取，必须先亲自完整读取 .dove/install/AUTHOR_PREFERENCES.md。安装本身不代表已经读过。";
+  const preferenceActivation = "用户最常说的话已恢复。当前已打开的主 agent 现在应亲自读 .dove/install/AUTHOR_PREFERENCES.md；普通 shell 用户请新开 Claude 会话或在现有会话中 /clear。安装本身不代表已经读过。";
   return [
     terminalStyle("Dove 项目配置完全重新安装完成", "bold", { color }),
     "",

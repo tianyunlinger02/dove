@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { CLI_COMMAND_SPECS, parseDoveCli } from "../../src/cli/command-parser.mjs";
 import { renderDoveHelp } from "../../src/cli/help-output.mjs";
 import { renderProjectIntegrationResult } from "../../src/cli/project-integration-output.mjs";
-import { renderRunMetric, renderRunResult } from "../../src/cli/run-output.mjs";
 import {
   DOVE_PIXEL_ART,
   renderDoveHome,
@@ -14,12 +13,12 @@ import {
 function assertRuntimeCli() {
   assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "init"));
   assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "hook"));
-  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS.hook.subcommands), ["session-start", "user-prompt-submit", "statusline"], "hook subcommands must be formal parser subcommands");
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS.hook.subcommands), ["session-start", "user-prompt-submit", "statusline", "stop"], "hook subcommands must be formal parser subcommands");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "mcp"), false, "CLI must not expose the retired MCP server");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "migrate-research"), false, "CLI must not expose format migration");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "export-research"), false, "CLI must not expose the retired legacy export command");
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "review"), false, "Review is a native read-only Agent, not a CLI model or record runtime");
-  assert.ok(Object.hasOwn(CLI_COMMAND_SPECS, "run"), "CLI must expose detached experiment run receipts");
+  assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, "run"), false, "run receipts are retired; EVAL rows link their result files");
 
   const assertParserShape = (value) => {
     assert.deepEqual(Object.keys(value), ["command", "subcommand", "options", "passthrough"], "parser result must expose only command/subcommand/options/passthrough");
@@ -46,6 +45,13 @@ function assertRuntimeCli() {
     command: "settings", subcommand: null, options: { hostMigration: "on", json: true }, passthrough: []
   });
   assertParserError(["settings", "--host-migration", "yes"], /--host-migration 只接受 on 或 off/u, false);
+  assert.deepEqual(parseDoveCli(["settings", "--stop-prompts", "off"]), {
+    command: "settings", subcommand: null, options: { stopPrompts: "off" }, passthrough: []
+  });
+  assertParserError(["settings", "--stop-prompts", "maybe"], /--stop-prompts 只接受 on 或 off/u, false);
+  assert.deepEqual(parseDoveCli(["mentor", "brief", "--watch"]), {
+    command: "mentor", subcommand: "brief", options: { watch: true }, passthrough: []
+  });
   assert.deepEqual(parseDoveCli(["mentor", "brief", "--trigger", "用户纠正", "--user-source", "/source", "--since", "2026-10-14", "--until", "2026-10-15", "--user-original", "原话", "--opinion", "opinion.md", "--artifact", "a.csv", "--artifact", "b.png"]), {
     command: "mentor", subcommand: "brief", options: { trigger: "用户纠正", userSource: "/source", since: "2026-10-14", until: "2026-10-15", userOriginal: "原话", opinion: "opinion.md", artifact: ["a.csv", "b.png"] }, passthrough: []
   });
@@ -104,34 +110,21 @@ function assertRuntimeCli() {
     assertParserError(["watch", "configure", option, "--json"], /Dove 不支持这个参数/u, true);
   }
   assertParserError(["watch", "run", "--mentor", "advice.json"], /Dove 不支持这个参数：--mentor/u, false);
-  assertParserError(["hook", "stop"], /hook 只接受这些子命令/u, false);
-  assertParserError(["hook", "stop", "--project=/workspace"], /hook 只接受这些子命令/u, false);
-  assert.deepEqual(assertParserShape(parseDoveCli(["init", "--host", "claude,dsh", "--host=dsh,claude", "--project=/workspace"])), {
+  assert.deepEqual(parseDoveCli(["hook", "stop", "--project=/workspace"]), {
+    command: "hook", subcommand: "stop", options: { project: "/workspace" }, passthrough: []
+  });
+  assertParserError(["hook", "pre-tool-use", "--project=/workspace"], /hook 只接受这些子命令/u, false);
+  assert.deepEqual(assertParserShape(parseDoveCli(["init", "--host", "claude", "--host=claude", "--project=/workspace"])), {
     command: "init",
     subcommand: null,
-    options: { host: ["claude", "dsh"], project: "/workspace" },
+    options: { host: ["claude"], project: "/workspace" },
     passthrough: []
   });
-  assert.deepEqual(assertParserShape(parseDoveCli(["run", "start", "--project", "/workspace", "--id", "run-a", "--seed", "42", "--metric-name", "score", "--direction", "max", "--", "node", "script.mjs", "--flag", "--not-dove"])), {
-    command: "run",
-    subcommand: "start",
-    options: { project: "/workspace", id: "run-a", seed: "42", metricName: "score", direction: "max" },
-    passthrough: ["node", "script.mjs", "--flag", "--not-dove"]
-  });
-  assert.deepEqual(assertParserShape(parseDoveCli(["run", "start", "--project", "/workspace", "--", "node", "script.mjs", "--json", "--format", "json"])), {
-    command: "run",
-    subcommand: "start",
-    options: { project: "/workspace" },
-    passthrough: ["node", "script.mjs", "--json", "--format", "json"]
-  });
-  assertParserError(["run", "status", "--project", "/workspace", "--id", "run-a", "--group", "group-a"], /(?:--id 不能和 --group|--group 不能和 --id) 同时使用/iu, false);
-  assertParserError(["run", "start", "--project", "/workspace", "--format", "text", "--", "node"], /--format 只接受 json/iu, false);
-  assertParserError(["run", "start", "--project", "/workspace", "--direction", "mean", "--", "node"], /--direction 只接受 min 或 max/iu, false);
+  assertParserError(["init", "--host", "dsh"], /--host 只接受 claude/iu, false);
   assertParserError(["doctor", "--json", "--format", "json"], /--format 不能和 --json 同时使用/iu, true);
   assertParserError(["doctor", "--", "--json"], /doctor 不接受位置参数/iu, false);
-  assertParserError(["run", "start", "--project", "/workspace", "node"], /run start 需要在 '--' 后提供要执行的命令/iu, false);
-  assertParserError(["run", "start", "--project", "/workspace", "node", "--", "script.mjs"], /Dove 选项必须写在 '--' 前/iu, false);
   assertParserError(["mcp", "serve"], /Dove 不支持这个命令：mcp/iu, false);
+  assertParserError(["run", "start", "--project", "/workspace", "--", "node"], /Dove 不支持这个命令：run/iu, false);
   for (const command of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
     assertParserError([command], new RegExp(`Dove 不支持这个命令：${command}`), false);
   }
@@ -144,7 +137,10 @@ function assertDoveCliHelpRenderer() {
   assert.match(output, /^dove\n/u);
   assert.match(output, /dove init \[--project <dir>\] \[--host <host>\.\.\.\] \[--json\|--format json\]/u);
   assert.doesNotMatch(output, /dove review (?:handoff|resume|rerun|status|import|report)/u);
-  assert.match(output, /dove run start --project <dir>.*--seed <short-text>.* -- <command> \[args\.\.\.\]/u);
+  assert.doesNotMatch(output, /dove run /u);
+  assert.match(output, /dove hook stop --project <dir>/u);
+  assert.match(output, /dove settings \[--host-migration on\|off\] \[--stop-prompts on\|off\]/u);
+  assert.match(output, /超时.*停滞.*各引用一次用户原话追问/u);
   assert.match(output, /dove hook session-start --project <dir>/u);
   assert.match(output, /dove hook user-prompt-submit --project <dir>/u);
   assert.match(output, /dove figure --project <root> \(--prompt <text>\|--prompt-file <file>\) \[--image <file> \.\.\.\] --output <file\.png> \[--size <size>\]/u);
@@ -157,7 +153,7 @@ function assertDoveCliHelpRenderer() {
   assert.match(figureHelp, /相对.*路径.*--project.*当前目录/u);
   assert.match(figureHelp, /CLI.*不能调用.*宿主内置 image_gen/u);
   assert.match(output, /导师 dove-mentor.*论文审稿 dove-review.*宿主原生.*全新只读/u);
-  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "dashboard", "watch", "topic", "figure", "settings", "mentor", "projects", "run", "hook"], "CLI inventory, not help prose, owns public command exposure");
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "dashboard", "watch", "topic", "figure", "settings", "mentor", "projects", "hook"], "CLI inventory, not help prose, owns public command exposure");
   for (const command of Object.keys(CLI_COMMAND_SPECS)) {
     assert.ok(output.includes(`dove ${command}`), `${command}: help exposes the parser's public commands`);
   }
@@ -212,9 +208,9 @@ function assertProjectIntegrationRenderer() {
   assert.match(output, /已覆盖 1 个 manifest-owned 本地编辑/u);
   assert.match(output, /\.claude\/settings\?\.json#\/hooks\/SessionStart\[dove-session-start\]/u);
   assert.match(output, /SessionStart 完全只读，不会修改这些本地编辑/u);
-  assert.match(output, /主 agent.*读取两个短要点/u);
+  assert.match(output, /主会话本人先读“用户最常说的话”/u);
   assert.match(output, /安装本身不代表模型已经读过/u);
-  assert.match(output, /现有主 agent.*补读/u);
+  assert.match(output, /已打开的会话.*一次更新提示/u);
   assert.match(output, /missions.*experiments.*claims.*保留原地/u);
   const warningOutput = renderProjectIntegrationResult("update", {
     status: "updated",
@@ -267,22 +263,13 @@ function assertProjectIntegrationRenderer() {
   }, { stream: { isTTY: true }, env: { NO_COLOR: "1" } });
   assert.equal(ttyUpdate.includes(plainMascot), false, "update must not show the mascot");
 
-  const dshOnly = renderProjectIntegrationResult("init", {
-    ...initializedResult,
-    hosts: ["dsh"],
-    writtenPaths: [".dove/install/manifest.json"]
+  const pending = renderProjectIntegrationResult("update", {
+    ...initializedResult, status: "unchanged", hosts: ["claude"], hostMigrationPending: ".dove/install/MIGRATION_PENDING.md"
   }, { stream: { isTTY: false }, env: {} });
-  assert.match(dshOnly, /DSH 没有 SessionStart/u);
-  assert.match(dshOnly, /主 agent.*读取两个短要点/u);
-  assert.doesNotMatch(dshOnly, /Claude startup/u);
-  const dshPending = renderProjectIntegrationResult("update", {
-    ...initializedResult, status: "unchanged", hosts: ["dsh"], hostMigrationPending: ".dove/install/MIGRATION_PENDING.md"
-  }, { stream: { isTTY: false }, env: {} });
-  assert.match(dshPending, /宿主迁移待办：\.dove\/install\/MIGRATION_PENDING\.md/u);
-  assert.match(dshPending, /当前工作告一段落且用户允许/u);
-  assert.doesNotMatch(dshOnly, /宿主迁移待办：/u);
+  assert.match(pending, /宿主迁移待办：\.dove\/install\/MIGRATION_PENDING\.md/u);
+  assert.match(pending, /当前工作告一段落且用户允许/u);
 
-  for (const hosts of [["claude"], ["dsh"], ["claude", "dsh"]]) {
+  for (const hosts of [["claude"]]) {
     const alreadyInitialized = renderProjectIntegrationResult("init", {
       ...initializedResult,
       status: "already-initialized",
@@ -311,95 +298,6 @@ function assertProjectIntegrationRenderer() {
   }, { stream: { isTTY: false }, env: {} });
   assert.match(warningReinstall, /主操作已提交.*2 项/u);
   assert.match(warningReinstall, /不表示项目集成回滚/u);
-  const dshReinstall = renderDoveLifecycleResult("reinstall", {
-    status: "reinstalled",
-    hosts: ["dsh"]
-  }, { stream: { isTTY: false }, env: {} });
-  assert.match(dshReinstall, /DSH 没有 SessionStart/u);
-  assert.doesNotMatch(dshReinstall, /新开 Claude 会话/u);
-}
-
-function assertRunResultRenderer() {
-  assert.equal(renderRunMetric(null), "未指定");
-  assert.equal(renderRunMetric({ name: "score", direction: "max", unit: "f1", value: 0.9 }), "score max f1=0.9");
-
-  const start = renderRunResult({
-    command: "start",
-    project: "/workspace/example-project",
-    runId: "run-1",
-    status: "running",
-    supervisorPid: 1234,
-    argv: ["node", "script.mjs"],
-    cwd: "/workspace/example-project",
-    seed: { declaration: "declared", value: "42" },
-    commit: "a".repeat(40),
-    dirty: false,
-    paths: { journalPath: ".dove/runs/run-1/run.jsonl", stdoutPath: ".dove/runs/run-1/stdout.log", stderrPath: ".dove/runs/run-1/stderr.log" }
-  });
-  assert.match(start, /Dove run 已启动/u);
-  assert.match(start, /seed（用户声明）：42/u);
-  assert.match(start, /Git：commit [a-f0-9]{40}；dirty false/u);
-  assert.match(start, /日志：\.dove\/runs\/run-1\/run\.jsonl/u);
-  assert.doesNotMatch(start, /^Run：|^Journal：/mu);
-  assert.match(start, /本地执行收据/u);
-
-  const listStatus = renderRunResult({
-    command: "status",
-    project: "/workspace/example-project",
-    group: "main",
-    runs: [{ runId: "run-1", status: "terminal", group: "main", finalized: true, metric: { name: "score", direction: "max", value: 0.9 } }]
-  });
-  assert.match(listStatus, /Dove run 状态/u);
-  assert.match(listStatus, /分组：main/u);
-  assert.match(listStatus, /run-1：terminal，分组 main，指标 score max=0.9/u);
-
-  const emptyListStatus = renderRunResult({ command: "status", project: "/workspace/example-project", runs: [] });
-  assert.match(emptyListStatus, /尚无匹配的 \.dove\/runs\/\*\* 记录/u);
-
-  const detailStatus = renderRunResult({
-    command: "status",
-    project: "/workspace/example-project",
-    runId: "run-1",
-    status: "terminal",
-    lifecycle: "completed",
-    terminal: true,
-    finalized: false,
-    exitCode: 0,
-    signal: null,
-    metric: { name: "score", direction: "max" },
-    paths: { journalPath: ".dove/runs/run-1/run.jsonl", stdoutPath: ".dove/runs/run-1/stdout.log", stderrPath: ".dove/runs/run-1/stderr.log" }
-  });
-  assert.match(detailStatus, /PID 只作为观察信号，不是强身份/u);
-  assert.match(detailStatus, /退出码：0/u);
-  assert.match(detailStatus, /信号：无/u);
-  assert.doesNotMatch(detailStatus, /^Run：|^Lifecycle：|^Terminal：|^Finalized：|^Exit：|^Signal：|^Metric：|^Journal：/mu);
-
-  const resume = renderRunResult({ command: "resume", status: "terminal", action: "none", write: "none", reason: "already terminal", run: { runId: "run-1" } });
-  assert.match(resume, /Dove run resume/u);
-  assert.match(resume, /动作：none/u);
-
-  const finalize = renderRunResult({ command: "finalize", summary: { runId: "run-1" }, event: { metric: { name: "score", direction: "max", unit: "f1", value: 0.9 }, decision: "keep", note: "ok" } });
-  assert.match(finalize, /Dove run 已 finalize/u);
-  assert.match(finalize, /指标：score max f1=0.9/u);
-  assert.doesNotMatch(finalize, /^Metric：|^Decision：|^Note：/mu);
-
-  const notComparable = renderRunResult({ command: "compare", comparable: false, fields: ["metric", "budget"] });
-  assert.match(notComparable, /可比较：false/u);
-  assert.match(notComparable, /Git commit\/dirty 只是运行事实/u);
-  assert.match(notComparable, /terminal 且 finalized/u);
-  assert.doesNotMatch(notComparable, /环境对比|environmentComparison/u);
-
-  const comparable = renderRunResult({
-    command: "compare",
-    comparable: true,
-    basis: { metric: { name: "score", direction: "max", value: 0.9 } },
-    ranking: [{ rank: 1, runId: "run-1", metricValue: 0.9, deltaFromBest: 0 }]
-  });
-  assert.match(comparable, /可比较：true/u);
-  assert.match(comparable, /1\. run-1 指标值 0\.9，与最佳差值 0/u);
-
-  const fallback = renderRunResult({ command: "unknown", value: 1 });
-  assert.equal(fallback, JSON.stringify({ command: "unknown", value: 1 }, null, 2));
 }
 
 function assertCliParserAdditionalCases() {
@@ -410,19 +308,13 @@ function assertCliParserAdditionalCases() {
   assert.deepEqual(assertParserShape(parseDoveCli(["--help"])), { command: "--help", subcommand: null, options: {}, passthrough: [] });
   assert.deepEqual(assertParserShape(parseDoveCli(["--version"])), { command: "--version", subcommand: null, options: {}, passthrough: [] });
   assert.deepEqual(assertParserShape(parseDoveCli(["doctor", "--format=json"])), { command: "doctor", subcommand: null, options: { format: "json" }, passthrough: [] });
-  assert.deepEqual(assertParserShape(parseDoveCli(["run", "compare", "--project", "/workspace", "--id", "run-a", "--id=run-b"])), {
-    command: "run",
-    subcommand: "compare",
-    options: { project: "/workspace", id: ["run-a", "run-b"] },
-    passthrough: []
-  });
 
   for (const [argv, pattern, jsonRequested] of [
     [["--help", "extra"], /--help 后面不接受其他参数/iu, false],
     [["doctor", "--json=true"], /--json 不接受值/iu, true],
     [["doctor", "--json", "--json"], /--json 只能提供一次/iu, true],
     [["init", "--host", ",,"], /--host 需要一个值/iu, false],
-    [["init", "--host", "all"], /--host 只接受 claude 或 dsh/iu, false],
+    [["init", "--host", "all"], /--host 只接受 claude/iu, false],
     [["doctor", "--json", "--", "--format", "json"], /doctor 不接受位置参数/iu, true]
   ]) {
     let caught = null;
@@ -443,5 +335,4 @@ export function assertCliParserAndRenderers() {
   assertDoveCliHelpRenderer();
   assertDoveMascotRenderer();
   assertProjectIntegrationRenderer();
-  assertRunResultRenderer();
 }

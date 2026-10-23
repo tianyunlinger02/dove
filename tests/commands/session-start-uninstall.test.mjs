@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { initializeProjectIntegration } from "../../src/core/project-installation.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../src/core/package-metadata.mjs";
-import { USER_ORIGINALS_PATH, USER_ORIGINALS_INDEX_PATH } from "../../src/core/user-originals.mjs";
+import { ACTIVITY_INDEX_PATH, USER_ORIGINALS_PATH, USER_ORIGINALS_INDEX_PATH } from "../../src/core/user-originals.mjs";
 import { sessionStartOutput, userOriginalSourceContext } from "../../src/core/session-start-hook.mjs";
 import { DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP } from "../../src/core/dove-author-preferences.mjs";
 import { DOVE_RESEARCH_REFLECTION_CONTINUITY } from "../../src/core/dove-research-contract.mjs";
@@ -54,7 +54,7 @@ function fixture(t) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, content);
   }
-  return { root, project, home, session, pointer, card, env: fixtureEnv, cachePaths: [USER_ORIGINALS_PATH, USER_ORIGINALS_INDEX_PATH].map((relative) => path.join(project, relative)) };
+  return { root, project, home, session, pointer, card, env: fixtureEnv, cachePaths: [USER_ORIGINALS_PATH, USER_ORIGINALS_INDEX_PATH, ACTIVITY_INDEX_PATH].map((relative) => path.join(project, relative)) };
 }
 
 function snapshot(root, cachePaths = []) {
@@ -167,7 +167,7 @@ function privateTranscriptGuard(store, { failRefresh = false } = {}) {
       const file = path.resolve(target instanceof URL ? fileURLToPath(target) : String(target));
       const relative = path.relative(project, file).split(path.sep).join("/");
       if ((file.endsWith(".jsonl") && file !== session) || file === pointer
-        || (relative.startsWith(".dove/research/") && relative !== ".dove/research/IDENTITY.md")
+        || (relative.startsWith(".dove/research/") && !/^\\.dove\\/research\\/(?:IDENTITY\\.md|EVAL\\.md|MENTOR_NOTES\\.md|rounds\\/\\d+[-_](?:brief|result)\\.md)$/u.test(relative))
         || relative.startsWith(".dove/reviews/") || relative.startsWith(".dove/runs/")) {
         process.stderr.write("Unexpected SessionStart read: " + file + "\\n");
         throw new Error("Unexpected SessionStart read");
@@ -185,16 +185,15 @@ function privateTranscriptGuard(store, { failRefresh = false } = {}) {
 test("SessionStart startup and clear anchor the canonical bootstrap to the validated project root", () => {
   const project = path.resolve("synthetic project");
   const reference = path.join(project, ".dove/install/AUTHOR_PREFERENCES.md");
-  const qualityReference = path.join(project, ".dove/install/RESEARCH_QUALITY.md");
   for (const source of ["startup", "clear"]) {
     for (const status of ["current", "needs-update"]) {
       const output = sessionStartOutput({ source, cwd: path.join(project, "nested") }, { status }, { project, env });
       assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
       const context = output.hookSpecificOutput.additionalContext;
       assert.ok(context.includes(`\`${reference}\``));
-      assert.ok(context.includes(`\`${qualityReference}\``));
-      assert.equal(context.replace(reference, ".dove/install/AUTHOR_PREFERENCES.md").replace(qualityReference, ".dove/install/RESEARCH_QUALITY.md"), DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP);
-      assert.doesNotMatch(context, /offsets|EOF|beginning to end|_FULL\.md/u);
+      assert.equal(context.replace(reference, ".dove/install/AUTHOR_PREFERENCES.md"), DOVE_AUTHOR_PREFERENCES_MAIN_AGENT_BOOTSTRAP);
+      assert.match(context, /用户最常说的话/u);
+      assert.doesNotMatch(context, /offsets|EOF|beginning to end|_FULL\.md|RESEARCH_QUALITY/u);
       assert.equal(Boolean(output.systemMessage), status !== "current");
     }
     for (const project of [undefined, "relative-project"]) {

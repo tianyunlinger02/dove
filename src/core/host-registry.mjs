@@ -1,4 +1,4 @@
-export const PROJECT_HOST_IDS = Object.freeze(["claude", "dsh"]);
+export const PROJECT_HOST_IDS = Object.freeze(["claude"]);
 
 const HOST_DEFINITIONS = [
   {
@@ -14,14 +14,6 @@ const HOST_DEFINITIONS = [
       ".claude/rules/dove.md",
       ".claude/agents/dove.md"
     ]
-  },
-  {
-    id: "dsh",
-    label: "DeepSeek Harness (dsh)",
-    order: 1,
-    projectInitializable: true,
-    capabilities: { commandAdapters: true, projectHooks: false, sharedInstructions: false },
-    legacySignatures: [".dsh/skills/dove-status/SKILL.md"]
   }
 ];
 
@@ -59,7 +51,7 @@ export function normalizeHostSelection(raw, options = {}) {
     if (typeof hostId !== "string" || !hostId || hostId !== hostId.trim()) {
       throw new Error(`Invalid Dove project host id: ${String(hostId)}.`);
     }
-    if (hostId === "all") throw new Error("Dove host selection accepts only claude or dsh; 'all' is not supported.");
+    if (hostId === "all") throw new Error("Dove host selection accepts only claude; 'all' is not supported.");
   }
 
   const unknown = [...new Set(source.filter((hostId) => !PROJECT_HOST_IDS.includes(hostId)))];

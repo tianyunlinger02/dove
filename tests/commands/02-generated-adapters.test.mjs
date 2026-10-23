@@ -5,30 +5,17 @@ import test from "node:test";
 import {
   COMMAND_SURFACES,
   PACKAGE_GENERATED_SUPPORT_PATHS,
-  PROJECT_HOST_IDS,
   adapterPathForCommand,
   packageResourcePath,
   renderDoveAmbientParticipationSection
 } from "../../src/core/command-manifest.mjs";
-import { generatedDoveAgentEntries, renderClaudeDoveAgent } from "../../src/core/dove-agent-definition.mjs";
-import { renderDoveAuthorStanceSection, renderDoveSharedResearchContractSection } from "../../src/core/dove-agent-persona.mjs";
-import { DOVE_AUTHOR_PREFERENCES_READ_TRIGGER, renderDoveAuthorPreferencesReference, renderDoveAuthorPreferencesFullReference } from "../../src/core/dove-author-preferences.mjs";
+import { generatedDoveAgentEntries } from "../../src/core/dove-agent-definition.mjs";
+import { DOVE_USER_SAYINGS, renderDoveAuthorPreferencesReference, renderDoveAuthorPreferencesFullReference } from "../../src/core/dove-author-preferences.mjs";
 import {
-  DOVE_RESEARCH_ACTION_SPINE,
-  DOVE_RESEARCH_CLARIFICATION,
-  DOVE_RESEARCH_CORRECTION_RECORDING,
-  DOVE_RESEARCH_CROSS_DOMAIN_INTUITION,
-  DOVE_RESEARCH_DECISION_CONSEQUENCE,
-  DOVE_RESEARCH_EVALUATION,
-  DOVE_RESEARCH_EXPERIMENT_ITERATION,
-  DOVE_RESEARCH_MAINLINE_ANCHORING,
+  DOVE_OPERATING_MOMENTS,
   DOVE_RESEARCH_QUALITY_CRITERIA,
-  DOVE_RESEARCH_REVIEW_DUAL_COMPLETION,
-  DOVE_RESEARCH_ROUND_CYCLE,
-  DOVE_RESEARCH_ROUND_RECORDS,
   DOVE_RESEARCH_STANCE_BULLETS,
-  renderDoveResearchQualityReference,
-  renderDoveResearchQualityFullReference
+  renderDoveResearchQualityReference
 } from "../../src/core/dove-research-contract.mjs";
 import { USER_RESPONSE_POLICY } from "../../src/core/user-response-policy.mjs";
 import { createProjectInstallationManifest } from "../../src/core/project-installation-manifest.mjs";
@@ -42,129 +29,109 @@ import {
   renderCommandAdapter
 } from "../../scripts/generate-command-adapters.mjs";
 
-const REFERENCE_PATHS = [".dove/install/AUTHOR_PREFERENCES_FULL.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY_FULL.md", ".dove/install/RESEARCH_QUALITY.md", ".dove/install/TOPIC_CRITERIA.md"];
+const REFERENCE_PATHS = [".dove/install/AUTHOR_PREFERENCES_FULL.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY.md", ".dove/install/TOPIC_CRITERIA.md"];
 const normalized = (content) => `${content.trimEnd()}\n`;
+const rule = () => generatedClaudeAmbientProjectEntries().find(({ destinationPath }) => destinationPath === ".claude/rules/dove.md").content;
 
-test("rendered host adapters and agents reach installation resources without extra Skills", () => {
+test("each Skill's own practice reaches its installed file and nothing else is added", () => {
   const entries = generatedAdapterEntries();
   assert.ok(COMMAND_SURFACES.find(({ id }) => id === "dove.figure").contract.modelPrompt?.trim(), "Figure owns an adaptable design brief");
-  assert.equal(new Set(entries.map(({ relativePath }) => relativePath)).size, entries.length);
-  for (const hostId of PROJECT_HOST_IDS) {
-    const hostEntries = entries.filter((entry) => entry.hostId === hostId);
-    assert.deepEqual(hostEntries.map(({ command }) => command.id), COMMAND_SURFACES.map(({ id }) => id));
-    const resources = resourcesForHosts([hostId]);
-    for (const entry of hostEntries) {
-      assert.equal(entry.destinationPath, adapterPathForCommand(hostId, entry.command));
-      assert.equal(packageResourcePath(hostId, entry.destinationPath), `package-resources/hosts/${hostId}/${entry.destinationPath}`);
-      assert.equal(entry.relativePath, packageResourcePath(hostId, entry.destinationPath));
-      assert.equal(entry.content, renderCommandAdapter(hostId, entry.command));
-      assert.equal(resources.find(({ path }) => path === entry.destinationPath).content, normalized(entry.content));
-      const contract = entry.command.contract;
-      for (const instruction of [contract.purpose, contract.when, ...(contract.responsibilities ?? []), ...contract.actions, ...contract.boundaries, ...(contract.modelPrompt ? [contract.modelPrompt] : []), ...(contract.nonGoals ?? []), ...(contract.clarification ?? []), ...(contract.returnWith ?? []), ...(contract.hostGuidance?.common ?? []), ...(contract.hostGuidance?.[hostId] ?? [])]) {
-        assert.ok(entry.content.includes(instruction), `${entry.command.id}: canonical contract reaches ${hostId}`);
-      }
-      assert.equal(entry.content.includes("$ARGUMENTS"), hostId === "claude");
+  assert.deepEqual(entries.map(({ command }) => command.id), COMMAND_SURFACES.map(({ id }) => id));
+  const resources = resourcesForHosts(["claude"]);
+  for (const entry of entries) {
+    assert.equal(entry.destinationPath, adapterPathForCommand("claude", entry.command));
+    assert.equal(entry.relativePath, packageResourcePath("claude", entry.destinationPath));
+    assert.equal(entry.content, renderCommandAdapter("claude", entry.command));
+    assert.equal(resources.find(({ path }) => path === entry.destinationPath).content, normalized(entry.content));
+    const contract = entry.command.contract;
+    for (const instruction of [contract.purpose, contract.when, ...(contract.responsibilities ?? []), ...contract.actions, ...contract.boundaries, ...(contract.modelPrompt ? [contract.modelPrompt] : []), ...(contract.hostGuidance?.common ?? []), ...(contract.hostGuidance?.claude ?? [])]) {
+      assert.ok(entry.content.includes(instruction), `${entry.command.id}: its own practice is installed`);
     }
+    assert.ok(entry.content.includes("$ARGUMENTS"));
   }
   for (const entry of [
     ...generatedDoveAgentEntries().map((entry) => ({ ...entry, destinationPath: entry.relativePath })),
     ...generatedClaudeAmbientProjectEntries()
   ]) {
     assert.ok(PACKAGE_GENERATED_SUPPORT_PATHS.includes(packageResourcePath("claude", entry.destinationPath)), entry.destinationPath);
-    assert.equal(resourcesForHosts(["claude"]).find(({ path }) => path === entry.destinationPath).content, normalized(entry.content));
+    assert.equal(resources.find(({ path }) => path === entry.destinationPath).content, normalized(entry.content));
   }
-  assert.throws(() => renderCommandAdapter("unknown", COMMAND_SURFACES[0]), /Unknown host adapter/u);
+  assert.throws(() => renderCommandAdapter("dsh", COMMAND_SURFACES[0]), /Unknown host adapter/u);
 });
 
-test("ordinary Claude and standalone DSH carry one applicable shared and author owner", () => {
-  const rule = generatedClaudeAmbientProjectEntries().find(({ destinationPath }) => destinationPath === ".claude/rules/dove.md").content;
-  const shared = renderDoveSharedResearchContractSection();
-  const author = renderDoveAuthorStanceSection();
+test("the operating manual is the one place that states the operating rules", () => {
+  const manual = rule();
+  for (const moment of DOVE_OPERATING_MOMENTS) assert.equal(manual.split(moment).length - 1, 1);
+  for (const policy of USER_RESPONSE_POLICY) assert.equal(manual.split(policy).length - 1, 1);
   const participation = renderDoveAmbientParticipationSection();
-  assert.ok(rule.includes(participation));
-  assert.ok(author.includes(DOVE_RESEARCH_CORRECTION_RECORDING));
-  assert.match(author, /主会话负责用户沟通、科研判断、实际工作和记录/u);
-  for (const contract of [DOVE_RESEARCH_MAINLINE_ANCHORING, DOVE_RESEARCH_ACTION_SPINE, DOVE_RESEARCH_DECISION_CONSEQUENCE, DOVE_RESEARCH_CROSS_DOMAIN_INTUITION, DOVE_RESEARCH_ROUND_CYCLE, DOVE_RESEARCH_ROUND_RECORDS, DOVE_RESEARCH_EVALUATION, DOVE_RESEARCH_CLARIFICATION, DOVE_RESEARCH_EXPERIMENT_ITERATION, DOVE_RESEARCH_REVIEW_DUAL_COMPLETION]) {
-    assert.equal(shared.split(contract).length - 1, 1, "Each shared owner reaches the host contract once");
-  }
-  for (const command of COMMAND_SURFACES) assert.ok(participation.includes(command.contract.ambientParticipation));
-  for (const policy of USER_RESPONSE_POLICY) assert.equal(rule.split(policy).length - 1, 1);
-  assert.equal(participation.split("\n").filter((line) => line.startsWith("- Dove ")).length, 9);
+  assert.ok(manual.includes(participation));
+  assert.equal(participation.split("\n").filter((line) => line.startsWith("- Dove ")).length, COMMAND_SURFACES.length);
+  // Skills carry their own practice only; the moments and response policy are not repeated in them.
   for (const entry of generatedAdapterEntries()) {
-    const contexts = entry.hostId === "claude" ? [`${rule}\n${entry.content}`, `${rule}\n${renderClaudeDoveAgent()}\n${entry.content}`] : [entry.content];
-    const authorOwners = entry.hostId === "dsh" && entry.command.id === "dove.status" ? 0 : 1;
-    for (const context of contexts) {
-      assert.equal(context.split(shared).length - 1, 1, `${entry.command.id}: shared guidance once`);
-      assert.equal(context.split(author).length - 1, authorOwners, `${entry.command.id}: applicable author stance`);
-      assert.equal(context.split(DOVE_AUTHOR_PREFERENCES_READ_TRIGGER).length - 1, authorOwners, `${entry.command.id}: main-context bootstrap only`);
-      for (const policy of USER_RESPONSE_POLICY) assert.equal(context.split(policy).length - 1, 1, `${entry.command.id}: one response-policy owner`);
-    }
-    assert.equal(entry.content.includes(participation), false);
+    for (const moment of DOVE_OPERATING_MOMENTS) assert.equal(entry.content.includes(moment), false, `${entry.command.id} restates a moment`);
+    for (const policy of USER_RESPONSE_POLICY) assert.equal(entry.content.includes(policy), false, `${entry.command.id} restates the response policy`);
   }
-  assert.match(shared, /Claude 使用 dove-mentor.*DSH 使用宿主可用的全新只读隔离上下文/u);
-  assert.match(shared, /没有等价能力就说明缺口/u);
-  const dshResearch = renderCommandAdapter("dsh", COMMAND_SURFACES.find(({ id }) => id === "dove.research"));
-  assert.match(dshResearch, /dove settings --json.*hostMigration/u);
-  assert.match(dshResearch, /开启且有 \.dove\/install\/MIGRATION_PENDING\.md/u);
-  assert.equal(rule.split(shared).length - 1, 1, "ordinary conversation needs no optional agent or Skill");
+  // The records a round needs and the three reasons to stop.
+  for (const field of ["对准：", "见分晓：", "规模：", "判定：", "主指标：", "八维走势表"]) assert.ok(manual.includes(field), field);
+  assert.match(manual, /只为三类情况停下来/u);
+  assert.match(manual, /限制只能来自用户原话/u);
+  assert.match(manual, /CROSS_PROJECT_EXPERIENCE\.md/u);
 });
 
-test("quality and preference summaries and full references remain shared installation resources", () => {
-  const expected = new Map([
-    [".dove/install/RESEARCH_QUALITY.md", renderDoveResearchQualityReference()],
-    [".dove/install/RESEARCH_QUALITY_FULL.md", renderDoveResearchQualityFullReference()],
-    [".dove/install/TOPIC_CRITERIA.md", fs.readFileSync(new URL("../../docs/TOPIC_CRITERIA.md", import.meta.url), "utf8")],
-    [".dove/install/AUTHOR_PREFERENCES.md", renderDoveAuthorPreferencesReference()],
-    [".dove/install/AUTHOR_PREFERENCES_FULL.md", renderDoveAuthorPreferencesFullReference()]
-  ]);
-  const quality = renderDoveResearchQualityReference();
-  const fullQuality = renderDoveResearchQualityFullReference();
-  for (const stance of DOVE_RESEARCH_STANCE_BULLETS) {
-    for (const surface of [renderDoveSharedResearchContractSection(), quality, fullQuality]) {
-      assert.equal(surface.split(stance).length - 1, 1, "The canonical stance reaches shared and quality consumers once");
-    }
-  }
-  assert.ok(quality.includes("RESEARCH_QUALITY_FULL.md"), "The short reference points to its full criteria");
-  assert.ok(renderDoveAuthorPreferencesReference().includes("AUTHOR_PREFERENCES_FULL.md"));
+test("one research standard replaces the quality summary and full reference", () => {
+  const standard = renderDoveResearchQualityReference();
+  for (const stance of DOVE_RESEARCH_STANCE_BULLETS) assert.equal(standard.split(stance).length - 1, 1);
+  for (const criterion of DOVE_RESEARCH_QUALITY_CRITERIA) assert.equal(standard.split(criterion).length - 1, 1);
   assert.deepEqual(DOVE_RESEARCH_QUALITY_CRITERIA.map((criterion) => criterion.split(" — ")[0]), [
     "问题价值（1–4）", "创新（1–4）", "机制与理论（1–4）",
     "方法质量与可行性（1–4）", "数据与评价（1–4）",
     "实现（1–3）", "实验与证据价值（1–4）", "表达与交付（1–4）"
   ]);
-  for (const criterion of DOVE_RESEARCH_QUALITY_CRITERIA) assert.ok(fullQuality.includes(criterion));
-  assert.match(fullQuality, /跨领域按相同贡献粒度/u);
-  assert.match(fullQuality, /功能相同未必贡献相同/u);
-  assert.match(fullQuality, /未知、未形成或不适用写原因，不填零/u);
+  for (const heading of ["## 研究者立场", "## 从问题到方法", "## 八维判断", "## 证据与实验", "## 选题与新意"]) assert.ok(standard.includes(heading), heading);
+  assert.equal(standard.includes("RESEARCH_QUALITY_FULL"), false);
+  const expected = new Map([
+    [".dove/install/RESEARCH_QUALITY.md", standard],
+    [".dove/install/TOPIC_CRITERIA.md", fs.readFileSync(new URL("../../docs/TOPIC_CRITERIA.md", import.meta.url), "utf8")],
+    [".dove/install/AUTHOR_PREFERENCES.md", renderDoveAuthorPreferencesReference()],
+    [".dove/install/AUTHOR_PREFERENCES_FULL.md", renderDoveAuthorPreferencesFullReference()]
+  ]);
   for (const entry of [...generatedResearchQualityReferenceEntries(), ...generatedAuthorPreferencesReferenceEntries()]) {
     assert.equal(entry.content, expected.get(entry.destinationPath));
     assert.ok(PACKAGE_GENERATED_SUPPORT_PATHS.includes(entry.relativePath));
   }
-  for (const hosts of [["claude"], ["dsh"], PROJECT_HOST_IDS]) {
-    const references = resourcesForHosts(hosts).filter(({ path }) => path.startsWith(".dove/"));
-    assert.deepEqual(references.map(({ path }) => path), REFERENCE_PATHS);
-    for (const reference of references) {
-      assert.equal(reference.kind, "exclusive-file");
-      assert.equal(reference.selector, null);
-      assert.equal(reference.content, normalized(expected.get(reference.path)));
-    }
+  const references = resourcesForHosts(["claude"]).filter(({ path }) => path.startsWith(".dove/"));
+  assert.deepEqual(references.map(({ path }) => path), REFERENCE_PATHS);
+  for (const reference of references) {
+    assert.equal(reference.kind, "exclusive-file");
+    assert.equal(reference.content, normalized(expected.get(reference.path)));
   }
 });
 
-test("author preferences preserve their sole full Markdown source and Unicode module content", async () => {
+test("the user's most frequent sayings are quoted with dates and what to do", () => {
+  const reference = renderDoveAuthorPreferencesReference();
+  assert.equal(DOVE_USER_SAYINGS.length, 12);
+  for (const saying of DOVE_USER_SAYINGS) {
+    assert.ok(reference.includes(`“${saying.quote}”（${saying.date}）`), saying.id);
+    assert.ok(reference.includes(`所以：${saying.so}`), saying.id);
+  }
+  assert.ok(reference.includes("AUTHOR_PREFERENCES_FULL.md"));
   assert.equal(renderDoveAuthorPreferencesFullReference(), fs.readFileSync(new URL("../../docs/AUTHOR_PREFERENCES.md", import.meta.url), "utf8"));
+});
+
+test("author preferences keep their full Markdown source and Unicode module content", async () => {
   const content = '# 中文\n`code` ${expression} \\ "quote"\n\n';
   const generated = renderAuthorPreferencesContentModule(content);
   const module = await import(`data:text/javascript;base64,${Buffer.from(generated).toString("base64")}`);
   assert.equal(module.DOVE_AUTHOR_PREFERENCES_CONTENT, content);
 });
 
-test("installation manifests own references but not core research or historical documents", () => {
-  const hosts = ["claude", "dsh"];
+test("installation manifests own references but not research or historical documents", () => {
+  const hosts = ["claude"];
   const input = {
-    package: { name: "dove", version: "3.0.11" },
+    package: { name: "dove", version: "3.5.0" },
     hosts,
     managed: resourcesForHosts(hosts),
-    now: "2026-09-13T00:00:00.000Z"
+    now: "2026-10-23T00:00:00.000Z"
   };
   const manifest = createProjectInstallationManifest(input, { hostIds: hosts });
   assert.equal(manifest.revision, "2.0");
@@ -174,7 +141,7 @@ test("installation manifests own references but not core research or historical 
       assert.throws(() => createProjectInstallationManifest({ ...input, managed: [{ path, kind, selector: "/anything", digest: "a".repeat(64) }] }, { hostIds: hosts }), /one exclusive file/u);
     }
   }
-  for (const path of [".dove/install/DOCTOR.md", ".dove/install/manifest.json", ".dove/research/IDENTITY.md", ".dove/research/EVAL.md", ".dove/research/MENTOR_NOTES.md", ".dove/research/rounds/001-brief.md", ".dove/research/rounds/001-result.md", ".dove/research/watch/config.json", ".dove/research/watch/impact-2026-10-15.md", ".dove/research/watch/scan-2026-10-15.md", ".dove/research/papers/2610.04074.md", ".dove/research/papers/library.json", ".dove/research/papers/library.md", ".dove/research/missions/old.md", ".dove/research/experiments/old.md", ".dove/research/claims/old.md", ".dove/research/lessons/LESSONS.md"]) {
+  for (const path of [".dove/install/DOCTOR.md", ".dove/install/manifest.json", ".dove/install/hook-state.json", ".dove/install/CROSS_PROJECT_EXPERIENCE.md", ".dove/research/IDENTITY.md", ".dove/research/EVAL.md", ".dove/research/MENTOR_NOTES.md", ".dove/research/rounds/001-brief.md", ".dove/research/rounds/001-result.md", ".dove/research/watch/config.json", ".dove/research/papers/library.json", ".dove/research/missions/old.md", ".dove/research/lessons/LESSONS.md"]) {
     assert.throws(() => createProjectInstallationManifest({ ...input, managed: [{ path, kind: "exclusive-file", selector: null, digest: "a".repeat(64) }] }, { hostIds: hosts }), /must not manage/u);
   }
 });

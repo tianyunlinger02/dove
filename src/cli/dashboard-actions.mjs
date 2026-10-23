@@ -7,7 +7,8 @@ import { readHostSettings, writeHostSettings } from "../core/host-migration.mjs"
 import { exportPaperBibtex, groupPaperLibrary, readPaperLibrary, renderPaperLibrary } from "../core/paper-library.mjs";
 import { readTopicCriteriaInfo, readTopics, startTopicSelection } from "../core/topic-selection.mjs";
 import { changeRegisteredProjects, readRegisteredProjects } from "../core/project-registry.mjs";
-import { USER_ORIGINALS_BUDGET_MS, USER_ORIGINALS_PATH } from "../core/user-originals.mjs";
+import { readActivity, USER_ORIGINALS_BUDGET_MS, USER_ORIGINALS_PATH } from "../core/user-originals.mjs";
+import { collectTransferable, refreshCrossProjectExperience, summarizeCorrections } from "../core/cross-project.mjs";
 import { refreshUserOriginalsInBackground } from "./user-originals-worker.mjs";
 import {
   draftWatchConfigWithSources,
@@ -52,8 +53,21 @@ function originalsRefreshedToday(root, today) {
   }
 }
 
+// Activity counting over large transcripts can take several passes; while
+// bytes remain, a project is scanned again at most once an hour.
+const ACTIVITY_RETRY_MS = 3600000;
+
+function activityPending(root, env) {
+  try {
+    return readActivity(root, { pending: true, env, home: env.HOME }).pendingBytes > 0;
+  } catch {
+    return false;
+  }
+}
+
 // Dashboard reads stay read-only. Explicit actions and the daily scheduler
-// perform their named writes; only prewarming touches the derived originals.
+// perform their named writes; prewarming touches only Dove's derived files
+// (the originals summary, activity counts and the cross-project experience file).
 export function createDashboardActions({ packageOptions = {}, passwordFile = null, run = runWatch, refreshOriginals = refreshUserOriginalsInBackground, env = process.env } = {}) {
   const options = { ...packageOptions, env };
   let running = null;
@@ -63,13 +77,17 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
   let prewarmErrors = [];
   const prewarmAttempts = new Map();
   const registered = () => readRegisteredProjects(options);
-  const startPrewarm = (roots, today) => {
+  const startPrewarm = (roots, today, nowMs = Date.now(), daily = true) => {
     if (prewarming) return;
-    const due = roots.filter((root) => prewarmAttempts.get(root) !== today && !originalsRefreshedToday(root, today));
+    const due = roots.filter((root) => {
+      const attempt = prewarmAttempts.get(root);
+      if (daily && attempt?.day !== today && !originalsRefreshedToday(root, today)) return true;
+      return (!attempt || nowMs - attempt.at >= ACTIVITY_RETRY_MS) && activityPending(root, env);
+    });
     if (!due.length) return;
     // Reserve before yielding so overlapping ticks cannot enqueue duplicates.
     // A failed project retries tomorrow (or on restart), not every ten minutes.
-    for (const root of due) prewarmAttempts.set(root, today);
+    for (const root of due) prewarmAttempts.set(root, { day: today, at: nowMs });
     prewarmErrors = [];
     prewarming = Promise.resolve().then(async () => {
       // One child at a time bounds memory and disk load across large projects.
@@ -131,6 +149,14 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
     },
     syncPaperLibrary({ root }) {
       return syncPaperLibrary(root);
+    },
+    readExperience() {
+      const roots = registered().filter((root) => isDirectory(path.join(root, ".dove/research")));
+      return { items: collectTransferable(roots) };
+    },
+    readCorrections({ now = Date.now() } = {}) {
+      const roots = registered().filter((root) => isDirectory(path.join(root, ".dove/research")));
+      return summarizeCorrections(roots, { now });
     },
     readTopicsOverview() {
       return {
@@ -210,10 +236,13 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
       const tick = () => {
         const settings = readGlobalWatchSettings(options);
         const current = now();
-        if (current.getHours() < settings.dailyHour) return;
         const today = localDate(current);
         const roots = registered().filter(isDirectory);
-        startPrewarm(roots, today);
+        // The shared experience file and unfinished activity counts do not wait for the daily hour.
+        refreshCrossProjectExperience(roots);
+        const daily = current.getHours() >= settings.dailyHour;
+        startPrewarm(roots, today, current.getTime(), daily);
+        if (!daily) return;
         const state = readGlobalWatchState(options);
         const latestAttempt = Math.max(lastAttempt, Date.parse(state.lastAttempt ?? "") || 0);
         if (current.getTime() - latestAttempt >= 3600000) {

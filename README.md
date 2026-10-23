@@ -2,9 +2,15 @@
 
 <img src="./dove.png" alt="Dove pixel-art pigeon carrying a branch" width="320">
 
-Dove helps move research forward: inspect sources, design methods, run experiments, interpret evidence, write papers, create figures, review the work and respond to criticism.
+Dove is a research partner layer installed in each research project. It lets the model in Claude Code push the research forward on its own while the user only corrects course now and then.
 
-The main session owns the user conversation, execution and delivery. An isolated mentor judges direction rather than engineering. Work is scaled to answer the question, not to make the smallest possible change. Ordinary questions and bounded tasks retain their scope.
+Dove does not think for the model. It does three things:
+
+1. At the right moments it puts the right questions and facts in front of the model.
+2. What the model does poorly by itself, Dove computes or asks on the user's behalf.
+3. Decisions that are genuinely the user's go to the user, in a form readable at a glance.
+
+The user decides three kinds of things: the mainline and its main metric; new method designs; and, on an overrun or a stall, whether to continue, change the method or change direction. The host stops only for those, for an overrun or stall, or when the user says stop — never just to write a report. The independent mentor judges at decision points and raises questions instead of rubber-stamping.
 
 ## Start
 
@@ -18,52 +24,54 @@ dove
 
 The bare public npm name `dove` is unrelated. Global upgrades with lifecycle scripts enabled refresh registered projects, never an arbitrary directory scan. Import older projects with `dove projects import --project <root>... --sync`; inspect `dove projects status`. Bulk sync preserves local owned edits while updating the rest; explicit `dove update` may replace valid owned edits. Research history is preserved. See [Installation](docs/INSTALL.md).
 
-## Ordinary conversation first
+## What the host reads, and when
 
-Start ordinary `claude` in the initialized project. The project rule provides the complete primary entrance; `claude --agent dove` and nine flat Skills are optional shortcuts, not personas, stages or permissions. DSH receives filesystem Skills and shared references, not Claude agents or hooks. There is no Auto command.
+| When | What |
+|---|---|
+| Session start | The operating manual (`.claude/rules/dove.md`, the one place operating rules live) and "the user's most frequent sayings" (`.dove/install/AUTHOR_PREFERENCES.md`: twelve verbatim quotes with dates, each followed by what to do) |
+| Every user message | The identity card; this round's one-line aim, the dimension it targets, how it counts as done, its scale and due date; what waits for the user; once after an update, a notice to re-read the manual and the sayings |
+| After compaction | The same, plus the user's latest own words |
+| At the moments the manual names | The matching section of the research standard (`.dove/install/RESEARCH_QUALITY.md`) |
+| Topic selection | The topic-selection standard |
+
+Ordinary `claude` in the initialized project is the primary entrance. `claude --agent dove` and seven flat Skills are optional shortcuts:
 
 | Skill | Use it for |
 |---|---|
-| `dove.research` | Explore parallel candidates for the user's choice, or advance a confirmed mainline. |
-| `dove.status` | Report results, core evidence, blockers and current round without new work. |
-| `dove.source` | Discover and inspect sources, verify citation identity and check claims. |
-| `dove.experiment` | Develop, evaluate and analyze methods through fair comparisons. |
-| `dove.draft` | Write evidence-grounded text and inspect the authoritative build/export. |
-| `dove.figure` | Gather materials, create and inspect visuals, and deliver captions and editable sources. |
-| `dove.review` | Distinguish author self-check, delivery checks and independent current-paper review. |
-| `dove.rebuttal` | Verify review concerns, respond and make requested revisions. |
-| `dove.lessons` | Read or preserve grounded transferable advice. |
+| `dove.research` | Offer grounded candidates for the user's choice, or advance a confirmed mainline. |
+| `dove.status` | Report real results, the main metric, the current round and blockers without new work. |
+| `dove.source` | Discover and read sources, verify citations and check claims. |
+| `dove.experiment` | Develop and evaluate methods through fair comparisons. |
+| `dove.draft` | Write and revise the authoritative manuscript, including responses to reviews. |
+| `dove.figure` | Design, draw, inspect and deliver figures. |
+| `dove.review` | Independent current-paper review, author self-check or delivery check. |
 
-Each fresh author main context personally reads the short Chinese quality and preference essentials; full companions are on demand. Installation and hooks do not prove reading or application.
+## Records
 
-## Research direction and records
+Researcher-owned Markdown under `.dove/research/`:
 
-For actual topic selection, read Dove's topic-selection standard, installed as `.dove/install/TOPIC_CRITERIA.md` and revised only in Dove, together with the project's own settings in `.dove/research/topics/PROJECT.md`. Ground gaps in full-text near misses and search transferable mechanisms according to key unknowns, not query or field quotas. Candidate cards name the gap, source, mapping, assumptions, closest-work difference and risk. Active counter-search informs the judgment and changes addressing shared causes. Offer the best 2–3 choices, or one without padding; before selection, only standards-allowed diagnostics, not method implementation. These limits do not recast already-authorized bounded work as selection or reopen confirmed mainlines on takeover.
+- **`IDENTITY.md`** — mainline, research state (written by the mentor), method design pointer, core capability with the user's words, target tier, completion, sourced restrictions.
+- **`rounds/NNN-brief.md`** opens with `Author:`, `对准：<dimension>`, `见分晓：YYYY-MM-DD（开始：YYYY-MM-DD）` and `规模：…`; a new method adds the three-part method design and the user's reply. **`NNN-result.md`** opens with `判定：兑现 / 未兑现 / 方法取舍（…）`, judged only against the brief.
+- **`EVAL.md`** opens with `主指标：<name>（<data and protocol>）；当前最好：<value>（<date>，第 N 轮）`, then the eight-dimension trend table (one row per mentor judgment, ending with the dimension most holding the work back) and the method-version table whose rows link result files.
+- **`MENTOR_NOTES.md`** — the mentor's own memory, including rejected method families, `可迁移：` lessons and `### 待用户决定`.
 
-Researcher-owned Markdown under `.dove/research/` keeps current context short:
+Old rounds, conclusions and user words are never rewritten.
 
-- **`IDENTITY.md`** holds the mainline, core capability with the user's words, target tier, completion, sourced restrictions and current research state in readable fixed fields.
-- **`EVAL.md`** has one row per method version and seven columns, with numbers and plain-language conclusions linking to details. The executor repairs evaluation and restores comparability for the current claim, necessary history and strong baselines; affected older results retain their protocol labels. The mentor's current eight-dimensional assessment replaces the previous one below the table.
-- **`rounds/`** has one authored brief and one result per round, linking ordinary artifacts. Both use natural Chinese full sentences: the brief explains expected outcomes, and the result compares them with actual measurements and records changes and factual objections.
-- **`MENTOR_NOTES.md`** holds the mentor's own memory; consolidation preserves the latest long-term intent comparison and its date, along with issues already raised and their answers. Dated impacts and scans live in `watch/`; `papers/` keeps cumulative full-text Q&A and a direction-grouped JSON/Markdown library with Chinese takeaways and BibTeX export. The dashboard shows core capability beneath the mainline and the latest long-term intent comparison with its date in a collapsed section.
+## What Dove computes
 
-Existing missions, experiments and claims stay in place without migration or new entries. `RESEARCH.md` is a short history index; init creates only that bootstrap when the research tree is absent. Lifecycle operations preserve research. Optional `dove settings --host-migration on` registers upgrade tasks for the host to finish after current work, not a CLI rewrite; default is off. Status and bounded replies need no round.
+From those records Dove computes, without asking the host: the current round's aim, due date and scale; each verdict; overrun (the due date passed by as long again as the plan); stall (two consecutive missed verdicts with no method decision); the main metric and trend; what waits for the user; and per-week subagent calls and compactions from the session transcripts. These feed the per-message context, the three-line status line, the mentor handoff (`dove mentor brief`) and the dashboard.
 
-## Mentor and independent paper review
+When the host ends a turn on an overrun or a stall, the Stop hook quotes the user's own words once per condition — 10-11 for an overrun, 10-23 ("先整理一下……") for a stall — labeled as Dove quoting the user, never while the host is already answering it. `dove settings --stop-prompts off` turns this off.
 
-After mainline confirmation, first establish real task evaluation: working official metrics, a real development set and the strongest available external comparison. Before implementing a new method or core module, show the user the real failure, the specific gap in prior mechanisms, and the proposed fix with predicted success/failure criteria. Keep that rationale in the existing brief and display it under the dashboard mainline; routine fixes do not repeat this step.
+## Mentor and independent review
 
-Call the mentor at round end, on direction corrections and before route changes. After two consecutive rounds without new scientific results, stop and ask whether to continue the method with reasons, change methods or change direction. Engineering, verification and evaluator repairs count. `dove mentor brief` places user-original excerpts and explicitly supplied raw text artifacts before executor summaries. In a fresh context, the mentor first states substantive progress and whether recent work tested the method or built/repaired infrastructure, then checks the rationale, prior corrections and contribution. Main-session research judgment stays with the main session.
+The mentor (`dove-mentor`, a fresh read-only native agent) is called when a round has a verdict, on an overrun or stall, for a new method design and when the user asks. It first answers three questions (what substantive progress, whether recent work tested the method or built infrastructure, what is left and whether there is a faster path), then checks the verdict, updates the eight-dimension judgment, writes the next brief and the plain-language research state, and keeps its notes. Paper-watch judgments happen weekly or on request.
 
-The generated `.dove/install/USER_ORIGINALS.md` distinguishes the user's own words from relays. Check recorded “user wording” or “user confirmation” against it; incomplete coverage is not evidence the user never said something, so consult the original session or current direct words when needed. Collection currently covers Claude Code, not DSH. The resident dashboard prewarms it for every registered project in the daily paper-watch schedule, even when that project's tracking is disabled, using the existing scan budget. When mentor notes have no dated long-term intent section or its date is strictly more than seven days old, the mentor compares long-term intent, core capability and the actual work, then returns a dated section. Raise conclusions needing a user decision once; do not autonomously continue a route that has reached the two-round stagnation point.
+Independent `dove-review` reads only the specified complete current manuscript, cited results and supplied grounding through Read/Grep/Glob.
 
-Every mentor checks tracking, unjudged papers and overdue scans independently of rounds. For draft or off-target tracking, the main session saves the mentor's actual suggested JSON fields to a file and runs `dove watch configure --project <root> --mentor <建议.json> [--json]`. Only suggested fields are replaced; `enabled`, `categories` and other settings remain. Check the receipt's saved values and `source: mentor`, which records actual saved advice, not user confirmation of research direction. Without advice, keep the draft.
+## Dashboard
 
-Independent `dove-review` uses only Read/Grep/Glob on the specified complete current manuscript, cited results and supplied grounding. It receives no author conversation or preferences, does not retrieve, execute or edit, and lists what it read. No frozen copy, hashes or external workspace is required. Author self-check is not independent review; submission completion needs scientific sufficiency, current independent review and actual delivery readiness. Software checks do not certify scientific correctness or acceptance.
-
-## Run receipts
-
-For authorized local work, optional `dove run start [--seed <short text>] -- <command> [args...]` directly launches a command without a shell and records timing, outcome, metric/comparison basis and minimum seed/Git facts. Status is read-only; resume never reruns; finalize adds a scalar after completion; compare ranks compatible finalized runs. Receipts are execution facts, not scientific conclusions.
+`dove dashboard` shows each project's mainline, main metric, eight-dimension trend, each round's aim, verdict and scale, overrun and stall flags, activity against results and what waits for the user; plus a cross-project page of mentors' transferable lessons (also written into each project as `.dove/install/CROSS_PROJECT_EXPERIENCE.md`) and a page of the user's recurring corrections by topic.
 
 ## License
 

@@ -10,14 +10,15 @@ Dove 已在此项目启用
 项目  example-project
 宿主  Claude Code
 
-✓ Dove 与 9 个可选专项入口已安装；导师和论文审稿使用原生只读子 agent
-✓ SessionStart 与 UserPromptSubmit 上下文展示已配置；状态栏空缺时安装只读显示
+✓ Dove 与 7 个可选专项入口已安装；导师和论文审稿使用原生只读子 agent
+✓ Claude SessionStart、UserPromptSubmit 与 Stop 已配置；状态栏空缺时安装只读显示
 ✓ 论文检索 MCP 与网页 Exa MCP 已声明
 ✓ 最小研究入口 RESEARCH.md 已建立
 ✓ 项目集成记录已建立
 
 科研记录由主会话维护：IDENTITY.md、EVAL.md、rounds/。已有 missions、experiments、claims 保留原地。
-两个中文短要点已安装；当前主 agent 在实质工作前亲自读取，完整内容仅按需查阅。安装本身不代表模型已经读过。
+已安装：操作说明 .claude/rules/dove.md、用户最常说的话 .dove/install/AUTHOR_PREFERENCES.md、研究标准 .dove/install/RESEARCH_QUALITY.md；作者偏好全文按需查阅。
+新会话和 /clear 后，主会话本人先读“用户最常说的话”；研究标准到对应时刻再查。已打开的会话在下一条消息时收到一次更新提示，重读操作说明和“用户最常说的话”。安装本身不代表模型已经读过。
 
 下一步  从项目进入 Claude Code，直接说明目标；/dove:* 是可选快捷入口。外部来源工具的批准仍由你决定。
 ```
@@ -74,63 +75,121 @@ Search according to the key unknowns and actively challenge novelty; query and f
 
 ## Mentor brief
 
-At the existing mentor triggers, generate the call with `dove mentor brief --project <root>`; use `--trigger` for a repeat call's reason, sourced `--user-original` for direct words, and `--opinion` / repeatable `--artifact` for attachments. The generator supplies materials and fixed questions, not a model call. Save the fresh mentor's brief and notes verbatim. Shape-only return:
+At a decision point (a round's verdict, an overrun or stall, a new method design, or the user's request), generate the call with `dove mentor brief --project <root>`; use `--trigger` for the reason, sourced `--user-original` for direct words, `--opinion` / repeatable `--artifact` for attachments, and `--watch` when the user asks for a paper-watch review within the week. The generator supplies materials, the facts Dove computed and fixed questions, not a model call. The computed facts look like:
+
+```text
+## Dove 算出的事实
+
+- 当前轮次：第 4 轮（rounds/004-brief.md，尚无结果）。
+  对准：数据与评价；见分晓：2026-10-25（开始 2026-10-20）；规模：445 对全量，噪声约 1.5 点。
+- 最近几轮的判定（只按结果文件开头的“判定：”读取）：
+  - 第 3 轮：对准 方法质量与可行性；判定 未兑现（未见类别 46%→48%，低于预期的 55%）。
+- 主指标：事件 F1（445 对真实开发集，官方评分）；当前最好：11.5（2026-10-22，第 3 轮）
+- 八维走势：共 2 次判断；最近一次 2026-10-22（第 3 轮），最卡的一维 数据与评价。
+- 最近 14 天的活动量：子代理调用 63 次，上下文压缩 9 次；同期出结果的轮次 1 个（未兑现）。
+- 等用户定的事：
+  - 是否把 494 对保留集留到最终确认。
+```
+
+Shape-only return:
 
 ```text
 作者：导师
 
-上一轮：开发集成功率从 74% 到 81%，未见类别仍为 46%。原预测未见类别会到 55%，实际没对上。读到的改动只给两类输入加分支，没解决跨类别对应关系；继续这族补丁价值不大。
+三问：这段时间的实质进展是确认了强对照在真实开发集上的位置；最近的工作主要在修评价，没有检验核心方法；离最终结果还差一个在真实评测上胜过强对照的方法，按现在的做法还要两轮以上，更快的路是先在同协议下跑通任务匹配的强对照。
 
-下一轮：用共享对应关系替换类别分支，检验失败是否来自局部规则无法组合。依据是失败样例在相同连接处出错，而不是类别本身不同。预测开发集保持约 80%，未见类别到 55–60%；这是待验证预测，不是已观测结果或通过线。
+判定核对：第 3 轮写的成败标准是未见类别到 55%，实际 48%，判定“未兑现”成立。
 
-完成标志：按已确认协议跑完这两列，把实际值写进 EVAL。负结果也算本轮结果；单元测试通过不算。方法仍在已确认主线和资源内，不需重新批准。
+八维判断：| 2026-10-22 | 第 3 轮 | 3 | 1 | 未知 | 2 | 2 | 2 | 2 | 2 | 数据与评价 |
+依据：……
 
-实际读过的文件：IDENTITY.md、EVAL.md、rounds/002-brief.md、rounds/002-result.md、src/mapping.py。
+下一轮说明：
+Author: mentor（v4；用户来源 2026-10-21）
+对准：数据与评价
+见分晓：2026-10-25（开始：2026-10-22）
+规模：445 对全量……
+一句话：……
+## 预期结果
+……
+
+研究状态：……（约 300 字白话）
+
+导师笔记：
+- 上次预测未见类别 55%，实际 48%，没兑现；类别分支这一族放弃，原因是……
+- 可迁移：先在真实开发集上对齐最强外部方法，再判断新模块收益。
+### 待用户决定
+- 是否把 494 对保留集留到最终确认。
+
+实际读过的文件：IDENTITY.md、EVAL.md、rounds/003-brief.md、rounds/003-result.md、src/mapping.py。
 ```
 
-The mentor's paper-level eight-dimensional assessment belongs in `EVAL.md` after important results. The main session saves that returned judgment rather than duplicating it with a self-score. Missing evidence remains unknown, not zero.
+The main session appends the notes verbatim, copies the research state onto the card and appends the trend row to EVAL. Missing evidence remains unknown, not zero.
 
 ## Round result and evaluation row
 
-Keep a result within 3000 characters and its brief within 2000. Hypothetical example:
+Hypothetical example:
 
 ```markdown
-## Changes and version
+判定：未兑现（未见类别 48%，低于说明里写的 55%）
+
+一句话：共享映射在开发集上保持，但没解决未见类别。
+## 改了什么
 v3：src/mapping.py 用共享连接映射替换类别分支。
-## Measurements and artifacts
-开发集 80%，未见类别 57%；artifacts/round-003.json。
-## Prediction versus actual
-与开发集约 80%、未见类别 55–60% 的预测相符；未做最终留出确认。
-## Objections to this brief / factual corrections
+## 测到了什么
+开发集 80/100 件，未见类别 48/100 件；artifacts/round-003.json。
+## 预期与实际
+预期未见类别 55–60%，实际 48%；判断改变：失败不来自类别分支，下一轮转向评价协议本身。离最终结果没有更近。
+## 对本轮说明的反驳与事实更正
 无。
 ```
 
-Use one row per method version, with at most 200 characters per cell:
+The top of EVAL:
 
 ```markdown
+主指标：未见类别正确件数（eval.py，dev-unseen 100 件）；当前最好：48/100 件（2026-10-22，第 3 轮）
+
+| 日期 | 轮次 | 问题价值 | 创新 | 机制与理论 | 方法质量与可行性 | 数据与评价 | 实现 | 实验与证据价值 | 表达与交付 | 最卡的一维 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-10-22 | 第 3 轮 | 3 | 1 | 未知 | 2 | 2 | 2 | 2 | 2 | 数据与评价 |
+
 | Date | Version/round | Protocol/split | Measurements | Unseen data/train-test gap | Conclusion | Artifacts |
 |---|---|---|---|---|---|---|
-| 2026-10-05 | v3 / 003 | eval.py / dev-unseen | dev 80% | unseen 57%; gap 23pp | 有改善，未完成目标 | artifacts/round-003.json |
+| 2026-10-22 | v3 / 003 | eval.py / dev-unseen | dev 80/100 件 | unseen 48/100 件；差 32 件 | 未兑现 | [结果](rounds/003-result.md) |
 ```
 
 Briefs identify their actual author as mentor, user, or external. New core records use `rounds/`, not new `missions/`, `experiments/`, or `claims/` entries. Historical files stay in place; `RESEARCH.md` is only a short history index.
 
 ## Status example
 
-Status reads the card, last evaluation rows, and current brief, without running evaluation or filling unknowns. The following short example is illustrative, not a four-sentence requirement:
+Status reads the card, the main metric and trend, recent method versions and the current brief, without running evaluation or filling unknowns. Illustrative, not a template:
 
 ```text
-共享映射已实现，开发集结果为 80%。
-未见类别从 46% 到 57%，有进展，但还没达到已确认的整体完成标准。
-当前卡点是长尾连接失败，最终 heldout 结论尚未取得。
-正在执行导师给出的下一轮，针对共同失败原因改对应关系，再按同一评测表取结果。
+主指标还停在 48/100 件（第 3 轮），离用户要的“明显超过最强外部方法”还差一个真实可比的方法。
+第 4 轮对准“数据与评价”：在同一协议下跑通任务匹配的强对照，10-25 见分晓。
+卡点是评价协议还没和外部方法对齐，第 3 轮的数字只能算开发信号。
 ```
 
-Status may end the reply without completing or pausing the round. Progress comes from actual research evidence, not a Git branch, timestamp or test pass.
+## Status line
+
+```text
+Opus (200K) · ctx 61% · main · 1h12m · 部分可观测重访图像的事件级联合证据推断与描述
+第4轮 · 对准 数据与评价 · 10-25 见分晓 · 主指标 事件 F1 11.5（第3轮）
+/home/user/project
+```
+
+## Stop prompt
+
+When the host ends a turn on a stall, once:
+
+```text
+【Dove 引用用户 10-23 的原话】“先整理一下，哪些是我们现在立刻就能做，但之前一直没有做且非常重要的，……”
+
+第 2、3 轮的判定都是未兑现，其间没有方法取舍。请按这句话整理一遍，然后停下来用一页决定备忘问用户：继续当前方法（附理由）、换方法（至少给一个不是从当前方法改出来的方法族，可以来自其他领域解同构问题的做法），还是换方向。……这段话是 Dove 根据记录自动提出的，不是用户刚说的。
+```
 
 ## Bounded identity and compact/resume
 
-Keep the card short; its research state is about 300 plain-language characters. Point to the current method's existing brief:
+Keep the card short; its research state is about 300 plain-language characters written by the mentor. Point to the current method's existing brief:
 
 ```text
 Current round: rounds/004-brief.md
@@ -145,17 +204,13 @@ User restrictions: <原话或转述、日期与来源、长期或本任务范围
 Recent corrections: <近期纠正>
 ```
 
-Compact/resume places the recorded research state first, then the bounded card and continuity guidance, not a generated summary of old Mission/Review/Run records. If the state is too long, it asks the host to rewrite it plainly; it does not invent a shorter scientific judgment.
+Each user message and compact/resume place the recorded research state first, then the bounded card and this round's situation, not a generated summary of old records. Hooks never shorten or rewrite the state.
 
-Startup/clear instead supplies the two-essentials read bootstrap. Hooks present context; they do not prove reading, write research, or perform mentor judgment.
+Startup/clear instead asks the main context to read the user's most frequent sayings. Hooks present context; they do not prove reading, write research, or perform mentor judgment.
 
-## Repeated cross-project correction
+## Recurring corrections
 
-The suggestion is one sentence, not an automatic preference edit:
-
-```text
-其他已注册项目也出现过“不要按样本写特例”的纠正，要不要把它加进全局 AUTHOR_PREFERENCES？
-```
+The dashboard's 纠正 page groups the user's own words of the last 30 days by topic, with counts per project and recent wording. It is input for Dove's development; the sayings change only with the user's agreement.
 
 ## Paper review
 
@@ -180,42 +235,20 @@ Native `dove-review` reads the specified current manuscript and cited results wi
 
 The main session preserves the actual return when useful and assesses its objections before authorized response/revision. A supplied external review retains its real provenance. Revisions need a fresh review of the full current version; an old recommendation is historical, not current acceptance. Unavailable native review is stated, not replaced by relabeled self-check.
 
-## Run receipt output
-
-`dove run` records execution facts, not scientific conclusions:
-
-```text
-Dove run 已启动
-
-项目：/workspace/example-project
-运行记录：run-20260903-a1b2c3d4
-状态：started
-Supervisor PID：12345
-命令：node scripts/diagnostic.mjs
-工作目录：/workspace/example-project
-seed（用户声明）：seed-42
-Git：commit 0123456789abcdef0123456789abcdef01234567；dirty false
-日志：.dove/runs/run-20260903-a1b2c3d4/run.jsonl
-stdout：.dove/runs/run-20260903-a1b2c3d4/stdout.log
-stderr：.dove/runs/run-20260903-a1b2c3d4/stderr.log
-```
-
-`status` is read-only; `resume` never reruns a target. `compare` ranks only compatible terminal finalized runs by metric/budget/data/evaluator/resource basis. Git facts do not change ranking. For `start`, flags after `--` belong to the target command, not Dove output selection.
-
 ## Error result
 
 Parser errors preserve exact command/flag names while explaining plainly:
 
 ```text
-Dove 不能继续：--direction 只接受 min 或 max。
+Dove 不能继续：--stop-prompts 只接受 on 或 off。
 ```
 
-If JSON was requested before `--`:
+If JSON was requested:
 
 ```json
 {
   "status": "blocked",
-  "message": "--direction 只接受 min 或 max。"
+  "message": "--stop-prompts 只接受 on 或 off。"
 }
 ```
 

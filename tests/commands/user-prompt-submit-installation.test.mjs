@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY as promptHook, mergeClaudeUserPromptSubmitSettings } from "../../src/core/ambient-policy.mjs";
 import { planJsonFragments } from "../../src/core/project-installation-plan.mjs";
-import { claudeResources, dshResources, semanticDigest, USER_PROMPT_SUBMIT_SELECTOR } from "../../src/core/project-installation-resources.mjs";
+import { claudeResources, semanticDigest, USER_PROMPT_SUBMIT_SELECTOR } from "../../src/core/project-installation-resources.mjs";
 
 const projectHook = { matcher: "", hooks: [{ type: "command", command: "user prompt hook" }] };
 const legacy = { hooks: [{ type: "command", command: 'node "$CLAUDE_PROJECT_DIR/scripts/dove-user-prompt-submit-package.mjs"', timeout: 10 }] };
@@ -32,11 +32,10 @@ test("UserPromptSubmit merge is idempotent and preserves unrelated hooks and set
   assert.throws(() => mergeClaudeUserPromptSubmitSettings({ hooks: { UserPromptSubmit: [{ ...promptHook, matcher: "custom" }] } }), /conflicting/u);
 });
 
-test("UserPromptSubmit is a desired Claude-only managed resource", () => {
+test("UserPromptSubmit is one desired managed resource", () => {
   const entries = claudeResources().filter((entry) => entry.selector === USER_PROMPT_SUBMIT_SELECTOR);
   assert.equal(entries.length, 1);
   assert.deepEqual(entries[0].fragment, promptHook);
-  assert.equal(dshResources().some((entry) => entry.selector === USER_PROMPT_SUBMIT_SELECTOR), false);
 });
 
 test("prompt lifecycle installs, repairs explicit owned edits, and removes only unchanged owned hooks", () => {

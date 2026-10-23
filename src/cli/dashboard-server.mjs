@@ -158,6 +158,14 @@ export function createDashboardServer({ collect, listRoots, readDocument, passwo
         sendJson(response, 200, await actions.readTrends());
         return;
       }
+      if (url.pathname === "/api/experience" && actions) {
+        sendJson(response, 200, await actions.readExperience());
+        return;
+      }
+      if (url.pathname === "/api/corrections" && actions) {
+        sendJson(response, 200, await actions.readCorrections());
+        return;
+      }
       if (url.pathname === "/api/library" && actions) {
         const root = url.searchParams.get("project");
         if (!knownRoot(root)) { response.writeHead(404).end(); return; }
@@ -387,6 +395,10 @@ dl.kv dd { margin: 0; overflow-wrap: anywhere; }
 .md table { margin: 8px 0; }
 details summary { cursor: pointer; color: var(--muted); }
 .note { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.warnbox { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); margin-bottom: 10px; font-weight: 600; }
+h3.sub3 { font-size: 13.5px; margin: 16px 0 6px; display: flex; align-items: baseline; gap: 8px; }
+h3.sub3 .sub { color: var(--muted); font-size: 12px; font-weight: 400; }
+.pending li { margin: 3px 0; }
 select.mobile { display: none; }
 nav.tabsnav { display: flex; gap: 4px; margin-left: 12px; }
 nav.tabsnav button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
@@ -431,7 +443,7 @@ tr.cardrow:hover td { background: var(--accent-soft); }
 <body>
 <header class="top">
   <span class="brand">🕊 Dove 科研面板</span>
-  ${canEdit ? '<nav class="tabsnav"><button id="navProjects" class="on">项目</button><button id="navTrends">动态</button><button id="navTopics">选题</button><button id="navSettings">设置</button></nav>' : ""}
+  ${canEdit ? '<nav class="tabsnav"><button id="navProjects" class="on">项目</button><button id="navTrends">动态</button><button id="navTopics">选题</button><button id="navExperience">经验</button><button id="navCorrections">纠正</button><button id="navSettings">设置</button></nav>' : ""}
   <span class="meta" id="meta">加载中…</span>
   <button id="theme" title="切换明暗">明/暗</button>
   <button id="reload">刷新</button>
@@ -445,7 +457,10 @@ tr.cardrow:hover td { background: var(--accent-soft); }
 <div id="toast"></div>
 <script>
 const CAN_EDIT = ${canEdit ? "true" : "false"};
-const MODES = ["settings", "trends", "topics"];
+const MODES = ["settings", "trends", "topics", "experience", "corrections"];
+const DIMS = ["问题价值", "创新", "机制与理论", "方法质量与可行性", "数据与评价", "实现", "实验与证据价值", "表达与交付"];
+let experience = null;
+let corrections = null;
 let mode = CAN_EDIT && MODES.includes(location.hash.slice(1)) ? location.hash.slice(1) : "projects";
 let trends = null;
 let topics = null;
@@ -455,7 +470,7 @@ const watchCache = new Map();
 const STATUS = { ongoing: ["ongoing", "进行中"], "进行中": ["ongoing", "进行中"], paused: ["paused", "已暂停"], "暂停": ["paused", "已暂停"], completed: ["completed", "已完成"], "完成": ["completed", "已完成"] };
 const AUTHOR = { mentor: "导师", user: "用户", external: "外部", other: "其他" };
 let data = null;
-let selected = ["#settings", "#trends", "#topics"].includes(location.hash) ? null : decodeURIComponent(location.hash.slice(1)) || null;
+let selected = ["#settings", "#trends", "#topics", "#experience", "#corrections"].includes(location.hash) ? null : decodeURIComponent(location.hash.slice(1)) || null;
 const open = new Map();
 
 function esc(value) {
@@ -524,7 +539,7 @@ function renderList() {
   const picker = document.getElementById("picker");
   list.innerHTML = data.projects.map((p) =>
     '<button class="project' + (p.root === selected ? " active" : "") + '" data-root="' + esc(p.root) + '">' +
-      '<div class="row"><span class="name">' + esc(p.name) + "</span>" + statusChip(p.roundStatus) + "</div>" +
+      '<div class="row"><span class="name">' + esc(p.name) + "</span>" + statusChip(p.roundStatus) + (p.progress && p.progress.overrun ? '<span class="chip none">超时</span>' : "") + (p.progress && p.progress.stall ? '<span class="chip none">停滞</span>' : "") + "</div>" +
       '<div class="main">' + esc(p.mainline || "未写主线") + "</div>" +
       '<div class="foot"><span>' + esc(p.currentSummary ? "本轮：" + p.currentSummary : (p.currentRound ? "本轮：" + roundNo(p.currentRound) : "—")) + "</span><span>" + ago(p.lastActivity) + "</span></div>" +
     "</button>").join("") || '<div class="empty">没有已登记且有研究记录的项目。</div>';
@@ -556,7 +571,7 @@ function nowSection(p, running, latest) {
     const b = r.brief || {}, res = r.result || {};
     const isRunning = !r.result;
     html += '<div class="now" style="margin-bottom:10px"><div class="facts" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
-      '<strong>第 ' + esc(r.label) + ' 轮</strong>' + authorChip(r.author) + '<span class="chip ' + (isRunning ? "ongoing" : "completed") + '">' + (isRunning ? "进行中" : "最近一轮已有结果") + '</span><span class="note" style="margin:0">' + ago((r.result || r.brief || {}).mtime) + "</span>" + roundTabs(p, r) + "</div>" +
+      '<strong>第 ' + esc(r.label) + ' 轮</strong>' + authorChip(r.author) + '<span class="chip ' + (isRunning ? "ongoing" : "completed") + '">' + (isRunning ? "进行中" : "最近一轮已有结果") + '</span>' + verdictChip(res.verdictKind, res.verdict) + '<span class="note" style="margin:0">' + ago((r.result || r.brief || {}).mtime) + "</span>" + roundTabs(p, r) + "</div>" +
       '<div class="what">' + esc(b.summary || r.title || "这一轮的说明没有写一句话目标。") + "</div>" +
       '<div class="grid2">' +
       '<div class="box expect' + (b.expected ? "" : " missing") + '"><div class="k">预期结果</div>' + esc(b.expected || "说明里没有写预期结果。") + "</div>" +
@@ -576,7 +591,7 @@ function trajectorySection(p, newestDone) {
     return '<div class="tl ' + cls + '"><span class="dot"></span><div class="round' + (cls === "running" ? " current" : "") + '"><div class="head">' +
       '<span class="no">第 ' + esc(r.label) + " 轮</span>" + authorChip(r.author) + '<span class="chip ' + (cls === "done" ? "completed" : cls === "running" ? "ongoing" : "none") + '">' + label + "</span>" +
       '<span class="time">' + ago((r.result || r.brief || {}).mtime) + "</span>" + roundTabs(p, r) + "</div>" +
-      '<div class="lines">' + line("目标", b.summary || r.title) + line("预期", b.expected) + line("结果", res.actual || res.summary) + "</div>" +
+      '<div class="lines">' + line("目标", b.summary || r.title) + line("对准", b.target) + line("规模", b.scale) + line("见分晓", b.due) + line("预期", b.expected) + line("判定", res.verdict) + line("结果", res.actual || res.summary) + "</div>" +
       roundBodyOpen(p, r) + "</div></div>";
   }).join("") + "</div>";
   if (p.rounds.length > 8) html += '<button class="btn more" data-toggle="' + esc(p.root + "#trajectory") + '">' + (showAll ? "只看最近 8 轮" : "展开全部 " + p.rounds.length + " 轮") + "</button>";
@@ -588,15 +603,45 @@ function evaluationSection(p) {
   if (!p.evaluation.tables.length) return html + '<div class="card md">' + md(p.evaluation.text) + "</div></section>";
   const showAll = open.get(p.root + "#eval") === "all";
   for (const t of p.evaluation.tables) {
-    const assessment = t.header.some((c) => /维度|dimension/i.test(c));
+    const assessment = t.header.some((c) => /维度|dimension|最卡/i.test(c));
     if (assessment) continue;
     const rows = showAll ? t.rows : t.rows.slice(-5);
     html += '<div class="tablewrap">' + tableHtml([t.header.map((c) => COLUMNS[c] || c), ...rows], true).replace("<table>", '<table class="wrap">') + "</div>";
     if (t.rows.length > 5) html += '<button class="btn more" data-toggle="' + esc(p.root + "#eval") + '">' + (showAll ? "只看最近 5 行" : "展开全部 " + t.rows.length + " 行") + "</button>";
   }
-  const judged = p.evaluation.tables.filter((t) => t.header.some((c) => /维度|dimension/i.test(c)));
+  const judged = p.evaluation.tables.filter((t) => t.header.some((c) => /维度|dimension/i.test(c)) && !t.header.some((c) => c.includes("最卡")));
   if (judged.length) html += '<details class="card" style="margin-top:10px"><summary>导师对研究质量的当前判断（八个维度）</summary>' + judged.map((t) => '<div class="tablewrap" style="margin-top:8px">' + tableHtml([t.header, ...t.rows], false).replace("<table>", '<table class="wrap">') + "</div>").join("") + "</details>";
   html += lazyDoc(p.root, "EVAL.md", "查看 EVAL.md 原文");
+  return html + "</section>";
+}
+function verdictChip(kind, text) {
+  if (!text) return "";
+  const cls = kind === "delivered" ? "completed" : kind === "decision" ? "mentor" : kind === "missed" ? "none" : "other";
+  return '<span class="chip ' + cls + '">' + esc(kind ? { delivered: "兑现", missed: "未兑现", decision: "方法取舍" }[kind] : "判定写法不规范") + "</span>";
+}
+function trendTable(trend) {
+  const head = ["日期", "轮次", ...DIMS, "最卡的一维"];
+  const rows = trend.rows.map((r) => [r.date || "—", r.round || "—", ...DIMS.map((d) => (r.grades && r.grades[d]) || "—"), r.bottleneck || "—"]);
+  return tableHtml([head, ...rows], true);
+}
+function activityTable(weeks) {
+  const head = ["周", "子代理调用", "上下文压缩", "出结果的轮次与判定"];
+  const rows = weeks.map((w) => [w.start.slice(5) + " — " + w.end.slice(5), String(w.agents), String(w.compactions), w.results.length ? w.results.map((x) => "第 " + x.number + " 轮 " + x.verdict).join("；") : "—"]);
+  return tableHtml([head, ...rows], false);
+}
+function progressSection(p) {
+  const g = p.progress;
+  if (!g) return "";
+  const cur = p.rounds.find((r) => p.currentRound && p.currentRound.includes(r.label));
+  const b = cur && cur.brief ? cur.brief : null;
+  let html = '<section><h2>进展 <span class="sub">Dove 直接从身份卡、轮次和 EVAL 读出，不经宿主转述</span></h2>';
+  html += '<div class="tiles">' + tile("主指标", g.mainMetric ? (g.mainMetric.name || g.mainMetric.text) : "EVAL 开头还没写") + tile("当前最好", g.mainMetric && g.mainMetric.best ? g.mainMetric.best : "—") + tile("本轮对准", b && b.target ? b.target : "未写") + tile("见分晓", b && b.due ? b.due : "未写") + "</div>";
+  if (b && b.scale) html += '<div class="card" style="margin-bottom:10px"><span class="note" style="margin-right:6px">本轮规模</span>' + esc(b.scale) + "</div>";
+  if (g.overrun) html += '<div class="card warnbox">超时：本轮原定 ' + esc(g.overrun.due) + " 见分晓，预计 " + g.overrun.plannedDays + " 天，已过 " + g.overrun.daysPastDue + " 天，还没有结果。</div>";
+  if (g.stall) html += '<div class="card warnbox">停滞：第 ' + esc(g.stall.rounds.join("、")) + " 轮判定都是未兑现，其间没有方法取舍。</div>";
+  html += '<h3 class="sub3">等你定的事</h3>' + (g.pending.length ? '<div class="card pending"><ul style="margin:0;padding-left:20px">' + g.pending.map((x) => "<li>" + esc(x.text) + "</li>").join("") + "</ul></div>" : '<div class="card note">没有。</div>');
+  html += '<h3 class="sub3">八维走势 <span class="sub">每次导师判断一行，最后一列是当时最卡的一维</span></h3>' + (g.trend && g.trend.rows.length ? '<div class="tablewrap">' + trendTable(g.trend) + "</div>" : '<div class="card note">EVAL 里还没有八维走势表。</div>');
+  html += '<h3 class="sub3">活动量和结果 <span class="sub">每周的子代理调用和上下文压缩，对照同周出结果的轮次</span></h3>' + (g.activity ? '<div class="tablewrap">' + activityTable(g.activity) + "</div>" : '<div class="card note">还没有统计；面板每日预热或生成导师材料时从会话记录里数。</div>');
   return html + "</section>";
 }
 function identitySection(p) {
@@ -643,6 +688,7 @@ function renderView() {
     (p.coreCapability ? '<div class="state"><span class="note" style="margin-right:6px">核心能力</span>' + esc(p.coreCapability) + "</div>" : '<div class="state"><span class="note" style="margin-right:6px">核心能力</span>身份卡里还没有写。</div>') +
     '<div class="facts">' + statusChip(p.roundStatus) + (p.targetTier ? "<span>目标档次：" + esc(p.targetTier) + "</span>" : "") + "<span>共 " + p.rounds.length + " 轮</span><span>最近更新 " + ago(p.lastActivity) + "</span></div>" +
     (p.researchState ? '<div class="state"><span class="note" style="margin-right:6px">研究现状</span>' + esc(p.researchState) + "</div>" : "") + "</div>";
+  html += progressSection(p);
   html += methodDesignSection(p);
   html += '<section><h2>长期意图 <span class="sub">导师最近一次对照</span></h2>' + intentSection(p) + "</section>";
   html += nowSection(p, running, p.rounds[0]);
@@ -755,6 +801,36 @@ function renderTrends() {
   html += trends.scans.map((x) => '<details class="note"><summary>' + esc(x.project) + " · " + esc(x.date || "尚未扫描") + (x.due ? " · 下次导师调用待更新" : "") + '</summary><div class="card md">' + (x.text ? md(x.text) : "不依赖轮次；主会话保存导师返回的领域扫描到 watch/scan-YYYY-MM-DD.md。") + "</div></details>").join("") || '<div class="card note">还没有扫描记录。</div>';
   html += "</section>";
   view.innerHTML = html;
+}
+function renderExperience() {
+  const view = document.getElementById("view");
+  if (!experience) { view.innerHTML = '<div class="empty">加载中…</div>'; loadPage("experience"); return; }
+  if (experience.error) { view.innerHTML = '<div class="empty">' + esc(experience.error) + "</div>"; return; }
+  let html = '<h1 class="title">跨项目经验</h1><div class="path">各项目导师笔记里标着“可迁移：”的认识，新的在前。同一份内容也写进每个项目的 .dove/install/CROSS_PROJECT_EXPERIENCE.md，宿主写方法设计时会看。</div>';
+  html += '<section style="margin-top:18px"><div class="card" style="padding:0">' + (experience.items.length ? experience.items.map((x) => '<div class="paper"><div class="why">' + esc((x.date || "未注明日期") + " · " + x.project) + '</div><div class="takeaway">' + inline(x.text) + "</div></div>").join("") : '<div class="paper note">还没有导师标过可迁移的认识。</div>') + "</div></section>";
+  view.innerHTML = html;
+}
+function renderCorrections() {
+  const view = document.getElementById("view");
+  if (!corrections) { view.innerHTML = '<div class="empty">加载中…</div>'; loadPage("corrections"); return; }
+  if (corrections.error) { view.innerHTML = '<div class="empty">' + esc(corrections.error) + "</div>"; return; }
+  let html = '<h1 class="title">反复出现的纠正</h1><div class="path">最近 30 天（自 ' + esc(corrections.since) + " 起）你在各项目里的 " + corrections.messages + " 条原话，按关键词归到主题；只作 Dove 开发的线索，归类可能有误。要把某个主题加进“你最常说的话”，在 Dove 开发时提出，经你同意再改。</div>";
+  if (!corrections.topics.length) { view.innerHTML = html + '<div class="card note" style="margin-top:18px">最近 30 天没有归到主题的原话。</div>'; return; }
+  html += '<section style="margin-top:18px"><div class="tablewrap">' + tableHtml([["主题", "最近 7 天", "最近 30 天", "各项目"], ...corrections.topics.map((t) => [t.label, String(t.count7), String(t.count30), Object.entries(t.projects).map(([k, v]) => k + " " + v).join("，")])], false) + "</div></section>";
+  html += "<section><h2>各主题最近的原话</h2>" + corrections.topics.map((t) => '<details class="card" style="margin-bottom:8px"><summary>' + esc(t.label) + " · " + t.count30 + " 条</summary>" + t.recent.map((x) => '<div class="paper"><div class="why">' + esc(x.time + " · " + x.project) + '</div><div class="abs">' + esc(x.text) + "</div></div>").join("") + "</details>").join("") + "</section>";
+  view.innerHTML = html;
+}
+async function loadPage(name) {
+  let value;
+  try {
+    const res = await fetch("/api/" + name, { cache: "no-store" });
+    if (res.status === 401) { location.reload(); return; }
+    value = res.ok ? await res.json() : { error: "读取失败（" + res.status + "）" };
+  } catch (error) {
+    value = { error: "读取失败：" + error.message };
+  }
+  if (name === "experience") experience = value; else corrections = value;
+  if (mode === name) (name === "experience" ? renderExperience : renderCorrections)();
 }
 const TOPIC_STATUS = { 推荐: "completed", 选定: "completed", 维持: "ongoing", 候选: "paused", 限定: "none", 暂缓: "none", 撤回: "other" };
 function renderTopics() {
@@ -894,7 +970,7 @@ function renderSettings() {
     '<label>arXiv 分类（逗号分隔）<input type="text" class="wCats" value="' + esc(p.watch.categories.join(", ")) + '"></label>' +
     '<div class="btns"><button class="btn primary wSaveP" data-root="' + esc(p.root) + '">保存</button><button class="btn wRunP" data-root="' + esc(p.root) + '">只运行这个项目</button><button class="btn wDraftP" data-root="' + esc(p.root) + '">根据项目资料生成初稿</button>' + (p.watch.source === "draft" ? '<span class="badge-draft">当前是自动初稿</span>' : "") + "</div>" + (p.guidance ? '<div class="note">' + esc(p.guidance) + '</div>' : "") + "</div>").join("");
   html += "</section>";
-  html += '<section><h2>更新后的宿主迁移</h2><div class="card form"><label><span><input type="checkbox" id="hostMigration"' + (settings.hostSettings?.hostMigration ? ' checked' : '') + '> 连带更新时登记迁移待办（默认关闭）</span></label><div class="note">钩子只送达待办；项目宿主在当前工作告一段落后整理已有记录，不暂停或重启训练、评测，不改研究结论和用户原话。完成后同一版本不重复。</div><div class="btns"><button class="btn primary" id="hostSave">保存迁移设置</button></div></div></section>';
+  html += '<section><h2>宿主设置</h2><div class="card form"><label><span><input type="checkbox" id="hostMigration"' + (settings.hostSettings?.hostMigration ? ' checked' : '') + '> 连带更新时登记迁移待办（默认关闭）</span></label><div class="note">钩子只送达待办；项目宿主在当前工作告一段落后整理已有记录，不暂停或重启训练、评测，不改研究结论和用户原话。完成后同一版本不重复。</div><label><span><input type="checkbox" id="stopPrompts"' + (settings.hostSettings?.stopPrompts !== false ? ' checked' : '') + '> 超时和停滞时引用你的原话追问（默认打开）</span></label><div class="note">宿主收尾时，Dove 按记录算出超时（见分晓日期过去，超出预计时长一倍还没有结果）或停滞（连续两轮未兑现、其间没有方法取舍），各追问一次；宿主正在回应追问时不再触发。</div><div class="btns"><button class="btn primary" id="hostSave">保存宿主设置</button></div></div></section>';
   html += '<section><h2>项目登记 <span class="sub">登记的项目会随 Dove 升级自动更新，并显示在面板里</span></h2><div class="card">' +
     settings.registered.map((r) => '<div class="reg"><span class="p">' + esc(r.root) + "</span>" + (r.exists ? "" : '<span class="chip none">目录不存在</span>') + '<button class="btn danger regRemove" data-root="' + esc(r.root) + '">移出登记</button></div>').join("") +
     '<div class="reg"><input type="text" id="regPath" placeholder="已安装 Dove 的项目绝对路径" style="flex:1 1 260px;font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)"><button class="btn" id="regAdd">登记</button><button class="btn" id="regSync">把所有项目更新到当前版本</button></div></div></section>';
@@ -904,7 +980,7 @@ function renderSettings() {
   const byId = (id) => document.getElementById(id);
   byId("wSave").addEventListener("click", run(async () => { await act("saveWatchGlobal", { settings: { dailyHour: Number(byId("wHour").value), lookbackDays: Number(byId("wDays").value), maxPerDigest: Number(byId("wMax").value), proxy: byId("wProxy").value, supplementOlder: byId("wSupplement").checked } }); toast("已保存"); await loadSettings(); }));
   byId("wRunAll").addEventListener("click", run(() => startWatchFromPanel()));
-  byId("hostSave").addEventListener("click", run(async () => { await act("saveHostSettings", { settings: { hostMigration: byId("hostMigration").checked } }); toast("已保存迁移设置"); await loadSettings(); }));
+  byId("hostSave").addEventListener("click", run(async () => { await act("saveHostSettings", { settings: { hostMigration: byId("hostMigration").checked, stopPrompts: byId("stopPrompts").checked } }); toast("已保存宿主设置"); await loadSettings(); }));
   byId("s2Save").addEventListener("click", run(async () => { if (!byId("s2Key").value.trim()) throw new Error("先粘贴 key"); await act("saveS2Key", { key: byId("s2Key").value }); toast("key 已保存"); await loadSettings(); }));
   if (byId("s2Clear")) byId("s2Clear").addEventListener("click", run(async () => { await act("saveS2Key", { key: "" }); toast("key 已清除"); await loadSettings(); }));
   view.querySelectorAll(".wSaveP").forEach((b) => b.addEventListener("click", run(async (btn) => {
@@ -931,7 +1007,11 @@ function setMode(next) {
   document.getElementById("navTrends")?.classList.toggle("on", mode === "trends");
   document.getElementById("navSettings")?.classList.toggle("on", mode === "settings");
   document.getElementById("navTopics")?.classList.toggle("on", mode === "topics");
+  document.getElementById("navExperience")?.classList.toggle("on", mode === "experience");
+  document.getElementById("navCorrections")?.classList.toggle("on", mode === "corrections");
   if (mode === "topics") { history.replaceState(null, "", "#topics"); topics = null; renderTopics(); return; }
+  if (mode === "experience") { history.replaceState(null, "", "#experience"); experience = null; renderExperience(); return; }
+  if (mode === "corrections") { history.replaceState(null, "", "#corrections"); corrections = null; renderCorrections(); return; }
   if (mode === "settings") { history.replaceState(null, "", "#settings"); settings = null; renderSettings(); }
   else if (mode === "trends") { history.replaceState(null, "", "#trends"); trends = null; renderTrends(); }
   else { if (selected) history.replaceState(null, "", "#" + encodeURIComponent(selected)); renderView(); }
@@ -939,7 +1019,7 @@ function setMode(next) {
 function tile(k, v) { return '<div class="tile"><div class="k">' + k + '</div><div class="v" title="' + esc(v) + '">' + esc(v) + "</div></div>"; }
 function select(root) {
   selected = root;
-  if (mode !== "projects") { mode = "projects"; document.getElementById("navProjects")?.classList.add("on"); document.getElementById("navSettings")?.classList.remove("on"); document.getElementById("navTrends")?.classList.remove("on"); document.getElementById("navTopics")?.classList.remove("on"); }
+  if (mode !== "projects") { mode = "projects"; document.getElementById("navProjects")?.classList.add("on"); for (const id of ["navSettings", "navTrends", "navTopics", "navExperience", "navCorrections"]) document.getElementById(id)?.classList.remove("on"); }
   history.replaceState(null, "", "#" + encodeURIComponent(root));
   renderList(); renderView();
 }
@@ -960,11 +1040,13 @@ async function load() {
       : "读取失败：" + error.message;
   }
 }
-document.getElementById("reload").addEventListener("click", () => { texts.clear(); watchCache.clear(); load(); if (mode === "settings") loadSettings(); if (mode === "trends") loadTrends(); if (mode === "topics") loadTopics(); });
+document.getElementById("reload").addEventListener("click", () => { texts.clear(); watchCache.clear(); load(); if (mode === "settings") loadSettings(); if (mode === "trends") loadTrends(); if (mode === "topics") loadTopics(); if (mode === "experience" || mode === "corrections") loadPage(mode); });
 document.getElementById("navProjects")?.addEventListener("click", () => setMode("projects"));
 document.getElementById("navSettings")?.addEventListener("click", () => setMode("settings"));
 document.getElementById("navTrends")?.addEventListener("click", () => setMode("trends"));
 document.getElementById("navTopics")?.addEventListener("click", () => setMode("topics"));
+document.getElementById("navExperience")?.addEventListener("click", () => setMode("experience"));
+document.getElementById("navCorrections")?.addEventListener("click", () => setMode("corrections"));
 if (mode !== "projects") setMode(mode);
 document.getElementById("picker").addEventListener("change", (e) => select(e.target.value));
 document.getElementById("theme").addEventListener("click", () => {

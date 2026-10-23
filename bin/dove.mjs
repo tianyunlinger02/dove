@@ -14,14 +14,15 @@ import { runWatch } from "../src/core/paper-watch.mjs";
 import { configureWatchFromMentor } from "../src/core/watch-configure.mjs";
 import { startTopicSelection } from "../src/core/topic-selection.mjs";
 import { figureTools, generateFigure } from "../src/core/figure-generation.mjs";
-import { HOST_MIGRATION_PENDING_PATH, hostMigrationContext, readHostSettings, writeHostSettings } from "../src/core/host-migration.mjs";
+import { HOST_MIGRATION_PENDING_PATH, hostMigrationContext, readHostSettings, stopPromptsEnabled, writeHostSettings } from "../src/core/host-migration.mjs";
+import { parseStopPayload, stopHookOutput } from "../src/core/stop-hook.mjs";
+import { refreshCrossProjectExperience } from "../src/core/cross-project.mjs";
 import { renderMentorBrief } from "../src/core/mentor-brief.mjs";
 import { refreshUserOriginals } from "../src/core/user-originals.mjs";
 import { renderDoveDoctor } from "../src/cli/doctor-output.mjs";
 import { renderDoveHelp } from "../src/cli/help-output.mjs";
 import { runInteractiveDoveSetup } from "../src/cli/interactive-setup.mjs";
 import { renderProjectIntegrationResult } from "../src/cli/project-integration-output.mjs";
-import { renderRunResult } from "../src/cli/run-output.mjs";
 import {
   isInteractiveTerminal,
   renderCompleteReinstallInventory,
@@ -43,14 +44,11 @@ import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
 import { initializeProjectIntegration, inspectProjectIntegration, previewProjectCompleteReinstall } from "../src/core/project-installation.mjs";
 import { readProjectInstallationManifest } from "../src/core/project-installation-manifest.mjs";
 import { resolveExactInstalledProjectRoot, resolveInstalledProjectRoot, resolveProjectRootForInit } from "../src/core/project-root.mjs";
-import { appendFinalizedRun, compareRuns, inspectRunStatus } from "../src/core/run-record.mjs";
-import { isRunSupervisorInvocation, resumeRun, runSupervisorMain, startDetachedRunSupervisor } from "../src/core/run-supervisor.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
-if (isRunSupervisorInvocation(process.argv.slice(2))) await runSupervisorMain(process.argv.slice(2));
 
 function projectOption(options) {
   return options.project ?? undefined;
@@ -58,34 +56,6 @@ function projectOption(options) {
 
 function selectedHosts(options) {
   return options.host ?? undefined;
-}
-
-function runIds(options) {
-  if (Array.isArray(options.id)) return options.id.length > 0 ? options.id : undefined;
-  return options.id === undefined ? undefined : [options.id];
-}
-
-function runCommonOptions(options) {
-  return {
-    project: projectOption(options) ?? process.cwd(),
-    id: Array.isArray(options.id) ? undefined : options.id,
-    group: options.group,
-    seed: options.seed,
-    wallTime: options.wallTime,
-    timeoutMs: options.timeoutMs,
-    killGraceMs: options.killGraceMs,
-    metricName: options.metricName,
-    direction: options.direction,
-    metricUnit: options.metricUnit,
-    data: options.data,
-    evaluator: options.evaluator,
-    resourceBasis: options.resourceBasis,
-    decision: options.decision,
-    note: options.note,
-    metricValue: options.metricValue,
-    cwd: process.cwd(),
-    executablePath: __filename
-  };
 }
 
 function wantsJson(options = {}) {
@@ -109,11 +79,6 @@ function writeIntegrationResult(command, result, options) {
 function writeLifecycleResult(command, result, options) {
   if (wantsJson(options)) writeJson(integrationResult(result));
   else console.log(renderDoveLifecycleResult(command, result, { stream: process.stdout, env: process.env }));
-}
-
-function writeRunResult(result, options) {
-  if (wantsJson(options)) writeJson(result);
-  else console.log(renderRunResult(result));
 }
 
 function operationalFailure(error, jsonOrOptions = {}) {
@@ -408,11 +373,16 @@ try {
   }
 
   if (command === "settings") {
-    const result = options.hostMigration === undefined
-      ? readHostSettings(PACKAGE_OPTIONS)
-      : writeHostSettings({ hostMigration: options.hostMigration === "on" }, PACKAGE_OPTIONS);
+    const changes = {
+      ...(options.hostMigration === undefined ? {} : { hostMigration: options.hostMigration === "on" }),
+      ...(options.stopPrompts === undefined ? {} : { stopPrompts: options.stopPrompts === "on" })
+    };
+    const result = Object.keys(changes).length === 0 ? readHostSettings(PACKAGE_OPTIONS) : writeHostSettings(changes, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson(result);
-    else console.log(`宿主迁移：${result.hostMigration ? "打开" : "关闭"}（默认关闭；打开后，更新登记待办，由项目宿主闲下时处理）`);
+    else console.log([
+      `宿主迁移：${result.hostMigration ? "打开" : "关闭"}（默认关闭；打开后，更新登记待办，由项目宿主闲下时处理）`,
+      `超时和停滞追问：${result.stopPrompts !== false ? "打开" : "关闭"}（默认打开；宿主收尾时，Dove 按记录算出超时或停滞，各引用一次用户原话追问）`
+    ].join("\n"));
     process.exit(0);
   }
 
@@ -425,6 +395,12 @@ try {
       userOriginals = refreshUserOriginals(root);
     } catch (error) {
       userOriginalsError = error instanceof Error ? error.message : String(error);
+    }
+    // Keep the shared experience file current for the host's next method design.
+    try {
+      refreshCrossProjectExperience(readRegisteredProjects());
+    } catch {
+      // The brief does not depend on it.
     }
     const brief = renderMentorBrief(root, { ...options, userOriginals, userOriginalsError });
     if (wantsJson(options)) writeJson({ brief });
@@ -488,29 +464,6 @@ try {
     process.exit(result.staticChecksPassed ? 0 : 1);
   }
 
-  if (command === "run") {
-    const common = runCommonOptions(options);
-    let result;
-    if (subcommand === "start") {
-      result = await startDetachedRunSupervisor({ ...common, argv: parsed.passthrough });
-    } else if (subcommand === "status") {
-      result = inspectRunStatus(common);
-    } else if (subcommand === "resume") {
-      if (!common.id) throw new Error("dove run resume 需要 --id <run-id>。");
-      result = resumeRun(common);
-    } else if (subcommand === "finalize") {
-      if (!common.id) throw new Error("dove run finalize 需要 --id <run-id>。");
-      if (common.metricValue === undefined) throw new Error("dove run finalize 需要 --metric-value <number>。");
-      result = { command: "finalize", ...appendFinalizedRun(common.project, common.id, common) };
-    } else if (subcommand === "compare") {
-      result = compareRuns({ ...common, ids: runIds(options) });
-    } else {
-      throw new Error("dove run 只接受 start、status、resume、finalize 或 compare。");
-    }
-    writeRunResult(result, options);
-    process.exit(result.complete === false ? 1 : 0);
-  }
-
   if (command === "hook") {
     const hookName = subcommand;
     if (projectOption(options) === undefined) throw new Error(`dove hook ${hookName} 需要 --project <dir>。`);
@@ -546,7 +499,13 @@ try {
           // An integration check that cannot run must not cost the session its bootstrap or re-anchor.
           result = { status: "unknown" };
         }
-        const output = sessionStartOutput(payload, result, { project: target });
+        let guidanceVersion = null;
+        try {
+          guidanceVersion = inspectCurrentPromptGuidance(target, PACKAGE_OPTIONS).version;
+        } catch {
+          guidanceVersion = null;
+        }
+        const output = sessionStartOutput(payload, result, { project: target, guidanceVersion });
         if (output !== null) process.stdout.write(JSON.stringify(output));
         process.exit(0);
       } catch (error) {
@@ -561,7 +520,20 @@ try {
       process.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path.resolve(projectOption(options)) })}\n`);
       process.exit(0);
     }
-    throw new Error("dove hook only supports session-start, user-prompt-submit and statusline.");
+    if (hookName === "stop") {
+      // A Stop prompt is optional help; any failure lets the host stop normally.
+      try {
+        const target = prepareHookProject(projectOption(options));
+        const payload = parseStopPayload(input);
+        assertHookPayloadProject(payload, target);
+        const output = stopHookOutput(payload, target, { enabled: stopPromptsEnabled(PACKAGE_OPTIONS) });
+        if (output !== null) process.stdout.write(JSON.stringify(output));
+      } catch {
+        // Nothing to say; the host stops as usual.
+      }
+      process.exit(0);
+    }
+    throw new Error("dove hook only supports session-start, user-prompt-submit, stop and statusline.");
   }
 } catch (error) {
   operationalFailure(error, options);

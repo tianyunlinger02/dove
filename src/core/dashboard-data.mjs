@@ -4,6 +4,10 @@ import path from "node:path";
 import { parseDoveCurrentRound, cardField } from "./identity-card.mjs";
 import { latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
 import { readRegisteredProjects } from "./project-registry.mjs";
+import { inspectRoundState, METHOD_ARGUMENTS, parseMarkdownTables, parseMethodDesign, VERDICT_LABELS } from "./round-state.mjs";
+import { readActivity } from "./user-originals.mjs";
+
+export { parseMarkdownTables };
 
 // Read-only view of each registered project's research core: identity card,
 // EVAL.md and rounds/. Nothing here writes to a project.
@@ -11,11 +15,8 @@ const RESEARCH_ROOT = ".dove/research";
 const MAX_TEXT_BYTES = 64 * 1024;
 const MAX_ROUNDS = 40;
 const ROUND_FILE = /^(\d+)[-_](brief|result)\.md$/iu;
-const METHOD_ARGUMENTS = [
-  ["problem", "要解决什么问题"],
-  ["externalMethods", "外部方法为什么不行"],
-  ["change", "我们的改法为什么能修"]
-];
+const DAY_MS = 86400000;
+const ACTIVITY_WEEKS = 6;
 const AUTHOR_LABELS = [
   [/导师|mentor/iu, "mentor"],
   [/用户|user/iu, "user"],
@@ -122,63 +123,9 @@ export function summarizeRoundText(text = "", kind = "brief") {
   };
 }
 
-// Keep the full argument and the user's recorded words, not a one-line round summary.
-function parseMethodDesign(text = "") {
-  const paragraphs = { problem: [], externalMethods: [], change: [], userReply: [] };
-  let inDesign = false;
-  let active = null;
-  let fence = null;
-  for (const line of text.split(/\r?\n/u)) {
-    const marker = line.match(/^\s*(`{3,}|~{3,})(.*)$/u);
-    if (fence) {
-      if (active) paragraphs[active].push(line);
-      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = null;
-      continue;
-    }
-    if (marker) {
-      fence = marker[1];
-      if (active) paragraphs[active].push(line);
-      continue;
-    }
-    const heading = line.match(/^\s*(#{1,3})\s+(.+?)\s*#*\s*$/u);
-    if (!inDesign) {
-      if (heading?.[1] === "##" && heading[2] === "方法设计") inDesign = true;
-      continue;
-    }
-    if (heading) {
-      if (heading[1].length <= 2) break;
-      active = METHOD_ARGUMENTS.find(([, label]) => label === heading[2])?.[0] ?? (heading[2] === "用户答复" ? "userReply" : null);
-      continue;
-    }
-    if (active) paragraphs[active].push(line);
-  }
-  if (!inDesign) return null;
-  const fields = Object.fromEntries(Object.entries(paragraphs).map(([key, lines]) => [key, lines.join("\n").trim() || null]));
-  return { ...fields, missing: METHOD_ARGUMENTS.filter(([key]) => !fields[key]).map(([, label]) => label) };
-}
-
 function firstHeading(text = "") {
   const heading = text.split(/\r?\n/u).find((line) => /^#{1,3}\s+\S/u.test(line));
   return heading ? heading.replace(/^#{1,3}\s+/u, "").trim() : null;
-}
-
-export function parseMarkdownTables(text = "") {
-  const tables = [];
-  let current = null;
-  const cells = (line) => line.trim().replace(/^\|/u, "").replace(/\|$/u, "").split("|").map((cell) => cell.trim());
-  for (const line of text.split(/\r?\n/u)) {
-    if (!/^\s*\|.*\|\s*$/u.test(line)) {
-      if (current) tables.push(current);
-      current = null;
-      continue;
-    }
-    const row = cells(line);
-    if (row.every((cell) => /^:?-+:?$/u.test(cell))) continue;
-    if (!current) current = { header: row, rows: [] };
-    else current.rows.push(row);
-  }
-  if (current) tables.push(current);
-  return tables;
 }
 
 function collectRounds(directory, fsOps) {
@@ -223,6 +170,60 @@ function methodDesignSummary(research, reference, fsOps, explicit) {
   };
 }
 
+function dayString(time) {
+  const value = new Date(time);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+// Weekly activity (subagent calls, compactions) beside the rounds that ended
+// that week and their verdicts: how much was done against what it settled.
+function activityWeeks(root, rounds, options) {
+  let activity;
+  try {
+    activity = readActivity(root, { fsOps: options.fsOps, home: options.home, env: options.env });
+  } catch {
+    return null;
+  }
+  if (!activity.scanned) return null;
+  const now = new Date(options.now ?? Date.now());
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7)).getTime();
+  const weeks = [];
+  for (let index = 0; index < ACTIVITY_WEEKS; index += 1) {
+    const start = dayString(monday - index * 7 * DAY_MS);
+    const end = dayString(monday - (index - 1) * 7 * DAY_MS - DAY_MS);
+    const within = (day) => day >= start && day <= end;
+    const sum = (counts) => Object.entries(counts).filter(([day]) => within(day)).reduce((total, [, count]) => total + count, 0);
+    const ended = rounds.filter((round) => round.result?.mtime && within(dayString(round.result.mtime)));
+    weeks.push({
+      start,
+      end,
+      agents: sum(activity.agents),
+      compactions: sum(activity.compactions),
+      results: ended.map((round) => ({ number: round.number, verdict: VERDICT_LABELS[round.result.verdictKind] ?? (round.result.verdict ? "其他写法" : "未写判定") }))
+    });
+  }
+  return weeks;
+}
+
+function progressSummary(root, options) {
+  try {
+    const state = inspectRoundState(root, { fsOps: options.fsOps, now: options.now, maxRounds: MAX_ROUNDS });
+    return {
+      state,
+      progress: {
+        mainMetric: state.mainMetric,
+        trend: state.trend ? { header: state.trend.header, rows: state.trend.rows } : null,
+        overrun: state.overrun,
+        stall: state.stall,
+        pending: state.pending,
+        activity: activityWeeks(root, state.rounds, options)
+      }
+    };
+  } catch {
+    return { state: null, progress: null };
+  }
+}
+
 export function summarizeProject(root, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const research = path.join(root, RESEARCH_ROOT);
@@ -243,6 +244,14 @@ export function summarizeProject(root, options = {}) {
   const statusMatch = identity ? cardField(identity.text, "Round status") : null;
   const methodReference = identity ? cardField(identity.text, "Method design") : null;
   const methodDesign = methodDesignSummary(research, methodReference ?? current?.brief, fsOps, Boolean(methodReference));
+  const { state, progress } = exists ? progressSummary(root, options) : { state: null, progress: null };
+  // Each round also carries what its brief committed to and what its result decided.
+  for (const round of rounds) {
+    const computed = state?.rounds.find((item) => item.number === round.number);
+    if (!computed) continue;
+    if (round.brief && computed.brief) Object.assign(round.brief, { target: computed.brief.targetDimension ?? computed.brief.target, due: computed.brief.due, scale: computed.brief.scale });
+    if (round.result && computed.result) Object.assign(round.result, { verdict: computed.result.verdict, verdictKind: computed.result.verdictKind });
+  }
   const times = [identity?.mtime, evaluation?.mtime, ...rounds.flatMap((round) => [round.brief?.mtime, round.result?.mtime])].filter((value) => typeof value === "number");
   return {
     root,
@@ -261,6 +270,7 @@ export function summarizeProject(root, options = {}) {
     identity: identity ? { text: identity.text, truncated: identity.truncated, mtime: identity.mtime } : null,
     evaluation: evaluation ? evaluationSummary(evaluation) : null,
     rounds,
+    progress,
     doctor: doctor ? { mtime: doctor.mtime } : null
   };
 }

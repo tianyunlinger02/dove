@@ -3,12 +3,14 @@ import path from "node:path";
 
 import {
   DOVE_AUTHOR_PREFERENCES_CONTINUITY,
-  DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS,
+  DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH,
   renderDoveAuthorPreferencesBootstrap
 } from "./dove-author-preferences.mjs";
-import { DOVE_RESEARCH_QUALITY_REFERENCE_PATHS, DOVE_RESEARCH_REFLECTION_CONTINUITY } from "./dove-research-contract.mjs";
+import { DOVE_RESEARCH_REFLECTION_CONTINUITY } from "./dove-research-contract.mjs";
 import { identityCardContext } from "./identity-card.mjs";
 import { hostMigrationContext } from "./host-migration.mjs";
+import { recordSessionGuidance } from "./hook-state.mjs";
+import { inspectRoundState, renderRoundSituation } from "./round-state.mjs";
 import { classifyUserText, refreshUserOriginals, USER_ORIGINALS_PATH } from "./user-originals.mjs";
 
 export function parseSessionStartPayload(input) {
@@ -58,6 +60,18 @@ export function userOriginalSourceContext(payload) {
   return `\n用户原话来源：${JSON.stringify(payload.transcript_path)}。导师要读上次已读范围之后的本人原话和日期，不用执行记录替代；当前原话尚未入文件时直接附上。来源写在本轮说明里，不新建台账。`;
 }
 
+function roundSituation(project, options) {
+  try {
+    return renderRoundSituation(inspectRoundState(project, options), options);
+  } catch {
+    return "未能读取本轮记录；按身份卡和用户原话接着做。";
+  }
+}
+
+/**
+ * Options: project (absolute root), guidanceVersion (installed guidance the
+ * new context reads), fsOps, now.
+ */
 export function sessionStartOutput(payload, result = null, options = {}) {
   const output = {};
   if (result && result.status !== "current") {
@@ -67,17 +81,16 @@ export function sessionStartOutput(payload, result = null, options = {}) {
     if (typeof options.project !== "string" || !path.isAbsolute(options.project)) {
       throw new Error("Dove SessionStart bootstrap requires an explicit absolute project root.");
     }
+    // A fresh context reads the current guidance, so it needs no update notice later.
+    if (options.guidanceVersion) recordSessionGuidance(options.project, payload.session_id, options.guidanceVersion, options);
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
-      additionalContext: renderDoveAuthorPreferencesBootstrap(
-        path.join(options.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATHS.claude),
-        path.join(options.project, DOVE_RESEARCH_QUALITY_REFERENCE_PATHS.claude)
-      )
+      additionalContext: renderDoveAuthorPreferencesBootstrap(path.join(options.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH))
     };
   } else if (payload.source === "compact" || payload.source === "resume") {
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
-      additionalContext: `${identityCardContext(options.project, options)}\n${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n${DOVE_RESEARCH_REFLECTION_CONTINUITY}\n${recentUserOriginalsContext(options.project, options)}`
+      additionalContext: `${identityCardContext(options.project, options)}\n\n${roundSituation(options.project, options)}\n\n${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n${DOVE_RESEARCH_REFLECTION_CONTINUITY}\n${recentUserOriginalsContext(options.project, options)}`
     };
   }
   if (output.hookSpecificOutput) output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload) + hostMigrationContext(options.project, options);

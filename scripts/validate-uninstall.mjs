@@ -11,7 +11,7 @@ import {
   uninstallProjectIntegration,
   updateProjectIntegration
 } from "../src/core/project-installation.mjs";
-import { DOVE_CLAUDE_STATUS_LINE, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY } from "../src/core/ambient-policy.mjs";
+import { DOVE_CLAUDE_STATUS_LINE, DOVE_CLAUDE_STOP_HOOK_ENTRY, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY } from "../src/core/ambient-policy.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../src/core/package-metadata.mjs";
 import { semanticDigest, STOP_SELECTOR } from "../src/core/project-installation-resources.mjs";
 import { inspectProjectDoctor } from "../src/core/project-doctor.mjs";
@@ -26,7 +26,7 @@ import {
 } from "../src/core/web-access-integration.mjs";
 
 const scratchRoot = resolveTempWorkspaceBase();
-const referencePaths = [".dove/install/AUTHOR_PREFERENCES_FULL.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY_FULL.md", ".dove/install/RESEARCH_QUALITY.md", ".dove/install/TOPIC_CRITERIA.md"];
+const referencePaths = [".dove/install/AUTHOR_PREFERENCES_FULL.md", ".dove/install/AUTHOR_PREFERENCES.md", ".dove/install/RESEARCH_QUALITY.md", ".dove/install/TOPIC_CRITERIA.md"];
 fs.mkdirSync(scratchRoot, { recursive: true });
 let fixture;
 const userPromptHook = { hooks: [{ type: "command", command: "project prompt hook" }] };
@@ -54,11 +54,12 @@ function treeSnapshot(directory = fixture) {
 }
 
 reset();
-const initialized = initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude", "dsh"] });
+const initialized = initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
 assert.equal(initialized.manifest.managed.some((entry) => entry.selector === EXA_MCP_SELECTOR), true, "missing Exa is installed and owned");
 const initializedSettings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.deepEqual(initializedSettings.statusLine, DOVE_CLAUDE_STATUS_LINE);
 assert.deepEqual(initializedSettings.hooks.UserPromptSubmit, [userPromptHook, DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_ENTRY]);
+assert.deepEqual(initializedSettings.hooks.Stop, [DOVE_CLAUDE_STOP_HOOK_ENTRY]);
 assert.equal(initializedSettings.permissions?.deny?.includes(WEB_FETCH_DENY_PERMISSION) ?? false, false, "Dove leaves WebFetch available");
 const initializedMcp = JSON.parse(fs.readFileSync(path.join(fixture, ".mcp.json"), "utf8"));
 assert.deepEqual(initializedMcp.mcpServers[EXA_MCP_SERVER_NAME], EXA_MCP_FRAGMENT);
@@ -89,7 +90,7 @@ for (const relativePath of [".dove/install/DOCTOR.md", ".dove/install/unknown.bi
   assert.equal(preview.removedPaths.includes(relativePath), false);
 }
 assert(preview.removedPaths.includes(".claude/agents/dove.md"));
-assert(preview.removedPaths.includes(".dsh/skills/dove-research/SKILL.md"));
+assert(preview.removedPaths.includes(".claude/commands/dove/research.md"));
 assert.throws(() => uninstallProjectIntegration(fixture, { confirmed: true }), /approved uninstall preview/u);
 const wrongActionPreview = previewProjectCompleteReinstall(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION });
 assert.throws(
@@ -101,7 +102,7 @@ assert.throws(
   () => uninstallProjectIntegration(fixture, { confirmed: true, preview: targetMismatchPreview }),
   /preview is stale/u
 );
-fs.rmSync(path.join(fixture, ".dsh/skills/dove-research/SKILL.md"));
+fs.rmSync(path.join(fixture, ".claude/commands/dove/research.md"));
 assert.throws(
   () => uninstallProjectIntegration(fixture, { confirmed: true, preview }),
   /preview is stale/u
@@ -111,12 +112,13 @@ assert.equal(result.status, "uninstalled");
 assert.equal(fs.existsSync(path.join(fixture, ".dove", "install", "manifest.json")), false);
 assert.equal(fs.existsSync(legacyMarker), true);
 assert.equal(fs.existsSync(path.join(fixture, ".claude", "agents", "dove.md")), false);
-assert.equal(fs.existsSync(path.join(fixture, ".dsh", "skills", "dove-research", "SKILL.md")), false);
+assert.equal(fs.existsSync(path.join(fixture, ".claude", "commands", "dove", "research.md")), false);
 for (const relativePath of referencePaths) assert.equal(fs.existsSync(path.join(fixture, relativePath)), false);
 assert.deepEqual({ doctor: digest(doctor), research: digest(research), review: digest(reviewRecord), run: digest(runRecord) }, before);
 const settings = JSON.parse(fs.readFileSync(path.join(fixture, ".claude", "settings.json"), "utf8"));
 assert.equal(settings.statusLine, undefined);
 assert.deepEqual(settings.hooks.UserPromptSubmit, [userPromptHook]);
+assert.equal(settings.hooks.Stop, undefined, "uninstall removes Dove's own Stop hook");
 assert.equal(settings.permissions, undefined);
 assert.equal(settings.enabledPlugins.demo, true);
 assert.equal(settings.hooks.SessionStart.length, 1);
@@ -129,11 +131,6 @@ assert.equal(postUninstallDoctor.setup.mode, "uninitialized");
 assert.equal(postUninstallDoctor.setup.reason, "uninitialized");
 assert.deepEqual(postUninstallDoctor.actions, [{ kind: "init", command: `dove init --project '${fixture.replace(/'/gu, "'\\\\''")}'` }]);
 assert.equal(resolveProjectRootForInit(fixture), fixture);
-
-reset();
-initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude", "dsh"] });
-updateProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["dsh"] });
-assert.deepEqual(JSON.parse(fs.readFileSync(path.join(fixture, ".claude/settings.json"), "utf8")).hooks.UserPromptSubmit, [userPromptHook]);
 
 reset();
 const preexistingStatusLineSettingsPath = path.join(fixture, ".claude", "settings.json");
@@ -238,32 +235,22 @@ reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
 const stopSettingsPath = path.join(fixture, ".claude", "settings.json");
 const stopSettings = JSON.parse(fs.readFileSync(stopSettingsPath, "utf8"));
-assert.equal(stopSettings.hooks.Stop, undefined);
-const retiredStop = { hooks: [{ type: "command", command: 'dove hook stop --project "$CLAUDE_PROJECT_DIR"', timeout: 10 }] };
-stopSettings.hooks.Stop = [
-  { hooks: [{ type: "command", command: "user-owned-stop", timeout: 5 }] },
-  retiredStop
-];
+assert.deepEqual(stopSettings.hooks.Stop, [DOVE_CLAUDE_STOP_HOOK_ENTRY]);
+const stopManifest = JSON.parse(fs.readFileSync(path.join(fixture, ".dove/install/manifest.json"), "utf8"));
+assert.deepEqual(stopManifest.managed.find((entry) => entry.selector === STOP_SELECTOR)?.digest, semanticDigest(DOVE_CLAUDE_STOP_HOOK_ENTRY));
+const userStop = { hooks: [{ type: "command", command: "user-owned-stop", timeout: 5 }] };
+stopSettings.hooks.Stop = [userStop, ...stopSettings.hooks.Stop];
 fs.writeFileSync(stopSettingsPath, `${JSON.stringify(stopSettings, null, 2)}\n`);
-const stopManifestPath = path.join(fixture, ".dove/install/manifest.json");
-const stopManifest = JSON.parse(fs.readFileSync(stopManifestPath, "utf8"));
-assert.equal(stopManifest.managed.some((entry) => entry.selector === STOP_SELECTOR), false);
-stopManifest.managed.push({ path: ".claude/settings.json", kind: "json-fragment", selector: STOP_SELECTOR, digest: semanticDigest(retiredStop) });
-fs.writeFileSync(stopManifestPath, `${JSON.stringify(stopManifest, null, 2)}\n`);
 uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
-const stopCleanedSettings = JSON.parse(fs.readFileSync(stopSettingsPath, "utf8"));
-assert.deepEqual(stopCleanedSettings.hooks.Stop, [stopSettings.hooks.Stop[0]]);
+assert.deepEqual(JSON.parse(fs.readFileSync(stopSettingsPath, "utf8")).hooks.Stop, [userStop], "uninstall keeps the user's own Stop hook");
 
-for (const unownedStop of [stopSettings.hooks.Stop, "user-owned-stop"]) {
-  reset();
-  initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
-  const settingsPath = path.join(fixture, ".claude/settings.json");
-  const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-  settings.hooks.Stop = unownedStop;
-  fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
-  uninstallProjectIntegration(fixture, { confirmed: true, preview: previewProjectUninstall(fixture) });
-  assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, "utf8")).hooks.Stop, unownedStop);
-}
+reset();
+initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
+const editedStopSettingsPath = path.join(fixture, ".claude", "settings.json");
+const editedStopSettings = JSON.parse(fs.readFileSync(editedStopSettingsPath, "utf8"));
+editedStopSettings.hooks.Stop = [{ hooks: [{ ...DOVE_CLAUDE_STOP_HOOK_ENTRY.hooks[0], timeout: 20 }] }];
+fs.writeFileSync(editedStopSettingsPath, `${JSON.stringify(editedStopSettings, null, 2)}\n`);
+assert.throws(() => previewProjectUninstall(fixture), /ownership drift/u, "an edited Dove Stop is not removed silently");
 
 reset();
 initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
@@ -339,14 +326,14 @@ assert.deepEqual(preexistingPermissionAfterUninstall.permissions.deny, [WEB_FETC
 
 for (const relativePath of referencePaths) {
   reset();
-  initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude", "dsh"] });
+  initializeProjectIntegration(fixture, { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION, hosts: ["claude"] });
   const referenceFile = path.join(fixture, relativePath);
   const unknownInstallFile = path.join(fixture, ".dove/install/unknown.bin");
   const unknownBytes = Buffer.from([0xff, 0x00, 0x01]);
   fs.writeFileSync(unknownInstallFile, unknownBytes);
   const canonicalBytes = fs.readFileSync(referenceFile);
   fs.appendFileSync(referenceFile, "local reference edit\n");
-  const observedPaths = [relativePath, ".dove/install/manifest.json", ".claude/settings.json", ".dsh/skills/dove-research/SKILL.md"];
+  const observedPaths = [relativePath, ".dove/install/manifest.json", ".claude/settings.json", ".claude/commands/dove/research.md"];
   const observe = () => observedPaths.map((file) => digest(path.join(fixture, file)));
   const before = observe();
   assert.throws(() => previewProjectUninstall(fixture), /ownership drift/u);

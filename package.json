@@ -1,6 +1,6 @@
 {
   "name": "dove",
-  "version": "3.4.34",
+  "version": "3.5.0",
   "description": "Local-first Markdown research workflow for papers, experiments, figures, review, and revision.",
   "type": "module",
   "bin": {
@@ -36,13 +36,10 @@
     "cascade:validate": "node --test ./tests/auto-sync.test.mjs ./tests/project-registry.test.mjs",
     "uninstall:validate": "node ./scripts/validate-uninstall.mjs",
     "review:validate": "node ./scripts/validate-review.mjs",
-    "runs:validate": "node ./scripts/validate-runs.mjs",
-    "runtime:validate": "node --test ./tests/figure-generation.test.mjs ./tests/file-write-safety.test.mjs ./tests/guidance-hook-memory.test.mjs ./tests/host-migration-memory.test.mjs ./tests/mentor-brief-memory.test.mjs ./tests/mentor-intent.test.mjs ./tests/user-originals.test.mjs ./tests/watch-configure.test.mjs",
+    "runtime:validate": "node --test ./tests/figure-generation.test.mjs ./tests/file-write-safety.test.mjs ./tests/guidance-hook-memory.test.mjs ./tests/host-migration-memory.test.mjs ./tests/mentor-brief-memory.test.mjs ./tests/mentor-intent.test.mjs ./tests/round-state.test.mjs ./tests/user-originals.test.mjs ./tests/watch-configure.test.mjs",
     "dashboard:validate": "node --test ./tests/dashboard.test.mjs ./tests/dashboard-scheduler.test.mjs ./tests/paper-watch.test.mjs ./tests/paper-watch-memory.test.mjs ./tests/reference-absorption-memory.test.mjs ./tests/topic-selection.test.mjs",
-    "behavior:validate": "node ./evals/behavior/validate.mjs",
-    "behavior:eval": "node ./evals/behavior/eval.mjs",
     "package:validate": "node ./scripts/validate-package.mjs",
-    "check": "npm run build:check && npm run commands:check && npm run commands:validate && npm run uninstall:validate && npm run installation:validate && npm run cascade:validate && npm run review:validate && npm run runs:validate && npm run runtime:validate && npm run dashboard:validate",
+    "check": "npm run build:check && npm run commands:check && npm run commands:validate && npm run uninstall:validate && npm run installation:validate && npm run cascade:validate && npm run review:validate && npm run runtime:validate && npm run dashboard:validate",
     "release:check": "npm run check && npm run package:validate",
     "pack:dry-run": "npm pack --dry-run",
     "build": "node ./scripts/generate-command-adapters-cli.mjs && node ./scripts/build-package.mjs",

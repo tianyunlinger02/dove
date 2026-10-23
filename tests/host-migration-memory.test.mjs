@@ -16,7 +16,7 @@ import {
 } from "../src/core/project-installation.mjs";
 import { readLastProjectSync } from "../src/core/project-registry.mjs";
 import { sessionStartOutput } from "../src/core/session-start-hook.mjs";
-import { USER_ORIGINALS_PATH, USER_ORIGINALS_INDEX_PATH } from "../src/core/user-originals.mjs";
+import { ACTIVITY_INDEX_PATH, USER_ORIGINALS_PATH, USER_ORIGINALS_INDEX_PATH } from "../src/core/user-originals.mjs";
 import { inspectCurrentPromptGuidance, userPromptSubmitOutput } from "../src/core/user-prompt-submit-hook.mjs";
 
 const ROOT = "/memory/dove/project";
@@ -288,28 +288,6 @@ test("enabled installation only registers version, time and existing-record task
   assertResearchUntouched(store, originals);
 });
 
-test("DSH install and unchanged update deliver enabled pending work without touching research", (t) => {
-  const store = memory(t);
-  const originals = seedResearch(store);
-  const options = { ...store.options, hosts: ["dsh"] };
-  assert.equal(initializeProjectIntegration(ROOT, options).hostMigrationPending, null);
-  writeHostSettings({ hostMigration: true }, options);
-  const registered = updateProjectIntegration(ROOT, options);
-  assert.equal(registered.hostMigrationPending, HOST_MIGRATION_PENDING_PATH);
-  const unchanged = updateProjectIntegration(ROOT, options);
-  assert.equal(unchanged.status, "unchanged");
-  assert.equal(unchanged.hostMigrationPending, HOST_MIGRATION_PENDING_PATH);
-  assert.equal(unchanged.manifest.managed.some((entry) => entry.path.startsWith(".claude/")), false);
-  const pending = store.text(PENDING);
-  writeHostSettings({ hostMigration: false }, options);
-  assert.equal(updateProjectIntegration(ROOT, options).hostMigrationPending, null);
-  assert.equal(store.text(PENDING), pending);
-  writeHostSettings({ hostMigration: true }, options);
-  store.fsOps.unlinkSync(PENDING);
-  assert.equal(updateProjectIntegration(ROOT, options).hostMigrationPending, null);
-  assertResearchUntouched(store, originals);
-});
-
 test("duplicate host setting keys reject reads and writes without modifying bytes", (t) => {
   const store = memory(t);
   for (const content of ['{"hostMigration":true,"hostMigration":false}', '{"hostMigration":true,"host\\u004digration":false}']) {
@@ -419,7 +397,7 @@ test("registered-project cascade uses the same settings and preserves statusLine
 });
 
 function isDerivedUserOriginalWrite(file) {
-  return [USER_ORIGINALS_PATH, USER_ORIGINALS_INDEX_PATH].some((relative) => {
+  return [USER_ORIGINALS_PATH, USER_ORIGINALS_INDEX_PATH, ACTIVITY_INDEX_PATH].some((relative) => {
     const target = path.join(ROOT, relative);
     return file === target || file === `${target}.${process.pid}.tmp`;
   });

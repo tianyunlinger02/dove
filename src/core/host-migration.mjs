@@ -9,18 +9,17 @@ import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 export const HOST_MIGRATION_PENDING_PATH = ".dove/install/MIGRATION_PENDING.md";
 export const HOST_MIGRATION_REGISTERED_PATH = ".dove/install/migration-registered.json";
 
-// Carry forward record normalization for consumers skipping earlier releases.
+// What a running project changes once to use this release's records. A new
+// task replaces an unfinished earlier notice, so items still worth doing from
+// the previous task are carried in it.
 // Leave empty in a release that has no host-side migration work.
-export const HOST_MIGRATION_TASK = `整理 3.4.0 起已有的研究记录，只处理已有内容，不为迁移另开研究任务：
+export const HOST_MIGRATION_TASK = `把研究记录接到新的记录格式上：只补格式和缺的字段，不重跑、不改结论和用户原话，旧轮次不回改。
 
-1. 身份卡保留主线、核心能力和用户原话，研究状态改约300字白话并放前面。Method design 指向已有三段论证的 brief；没有就留空，不补造设计或用户确认。限制附原话、日期来源和适用范围；缺目标档次且没问过就问一次。
-2. .dove/research/EVAL.md 改为一个方法版本一行，单元格写已有数字加一句话（约 200 字符）；旧的长内容原样移到同目录历史文件并链接，结论和结果保持原样。
-3. MENTOR_NOTES.md 超过约 6000 字符时，下次正常导师调用请导师合并成约 3000 字符的全文。
-4. watch/config.json 仍是 draft 时，下次正常导师调用请导师给出追踪修正建议，主会话写回并标 source: mentor。要等下次调用的事项在已有记录里留一句提醒，这一项就算完成。
-5. 选题仍一轮交有来源的候选供用户选，不等方法闭合。已定主线接下来先打通真实评测；新方法的三段论证让用户看过，连续两轮无新科研结果就问用户继续、换方法还是换方向。只改后续安排，不重跑、不改进行中材料或用户标准。
-6. 核对当前身份卡和说明里的限制：必须指到用户原话，不把宿主自加的单卡、绑卡或验证要求当授权边界。验证跟决策相称，结果无争议不做哈希、指纹、逐位等价或释放核验。
-7. 当前记录用自然中文讲做了什么、真实结果、含义和下一步，去掉无解释代号和套话。说明补“一句话：”和“## 预期结果”，结果补“一句话：”和“## 预期与实际”，旧轮次不回改。
-8. 身份卡加“Core capability（核心能力）”一栏：从用户历史原话里找这个研究必须体现的能力并附原话；找不到就问用户一次。若当前做法已不再体现它，用大白话说明一次拿掉了什么、原路线为何停下，按用户回答执行并记录，不重复提。`;
+1. EVAL 开头补一行主指标：\`主指标：<名称>（<数据与协议>）；当前最好：<值>（<日期>，第 N 轮）\`。主指标是真实任务上最能代表最终目标的那个数；你按完成标准起草，然后问用户确认一次。
+2. EVAL 的八维部分改成走势表，列为日期、轮次、八个等级、最卡的一维；从现有的最近一次判断记第一行，表下保留它的详细依据。方法版本表一个版本一行，数字写成“数值/分母+单位”，每行链接结果文件；放不进表格的旧长内容原样移到同目录的历史文件并链接。
+3. 进行中的这一轮，在说明开头补上三行：\`对准：<八维中的一维>\`（取最近一次导师判断里最卡的那一维）、\`见分晓：YYYY-MM-DD（开始：YYYY-MM-DD）\`、\`规模：<样本数、训练量和算力，以及为什么足以分出结果>\`。
+4. 研究状态以后由导师写：下次请导师判断时，把导师返回的研究状态原样更新到身份卡。
+5. 上一版迁移里还没做的两项：身份卡没有 Core capability（核心能力）一栏的，从用户历史原话里找出处补上，找不到就问用户一次；User restrictions 里没附用户原话的限制，找到原话补上，找不到就删去。`;
 
 function settingsPath(options) {
   const env = options.env ?? process.env;
@@ -31,9 +30,11 @@ function settingsPath(options) {
 
 function hostSettings(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)
-    || (value.hostMigration !== undefined && typeof value.hostMigration !== "boolean")) {
-    throw new Error("Dove host settings require a boolean hostMigration value.");
+    || (value.hostMigration !== undefined && typeof value.hostMigration !== "boolean")
+    || (value.stopPrompts !== undefined && typeof value.stopPrompts !== "boolean")) {
+    throw new Error("Dove host settings require boolean hostMigration and stopPrompts values.");
   }
+  // stopPrompts stays absent until the user sets it; absent means on.
   return { ...value, hostMigration: value.hostMigration ?? false };
 }
 
@@ -94,6 +95,16 @@ function migrationEnabled(options) {
     return readHostSettings(options).hostMigration === true;
   } catch {
     return false;
+  }
+}
+
+// Dove's Stop prompts are on unless the user turned them off; an unreadable
+// settings file keeps the default.
+export function stopPromptsEnabled(options = {}) {
+  try {
+    return readHostSettings(options).stopPrompts !== false;
+  } catch {
+    return true;
   }
 }
 

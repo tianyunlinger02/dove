@@ -1,7 +1,0 @@
-{
-  "attempts": [
-    {"id": "a", "status": "completed", "error": 0.12},
-    {"id": "b", "status": "completed", "error": 0.18},
-    {"id": "c", "status": "failed", "error": null}
-  ]
-}

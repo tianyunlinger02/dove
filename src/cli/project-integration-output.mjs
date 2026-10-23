@@ -48,15 +48,11 @@ function localEditLabel(item) {
   return selector ? `${relativePath}#${selector}` : relativePath;
 }
 
-function authorPreferenceActivationLines(hosts) {
-  if (hosts.includes("claude")) return [
-    "中文短要点已安装：.dove/install/RESEARCH_QUALITY.md、AUTHOR_PREFERENCES.md；完整内容在对应 _FULL.md，按需查阅。",
-    "Claude startup 与 /clear 要求当前主 agent 本人读取两个短要点；现有主 agent 在实质工作前补读尚未读过或已更新的内容。安装本身不代表模型已经读过。",
-    "UserPromptSubmit 只读核对集成并呈现身份卡和当前指导，不写研究或决定权限。完整加载新增 agent、hooks 和宿主配置请新开会话；下一条提示不等于宿主热重载。"
-  ];
+function authorPreferenceActivationLines() {
   return [
-    "中文短要点已安装：.dove/install/RESEARCH_QUALITY.md、AUTHOR_PREFERENCES.md；对应 _FULL.md 仅按需查阅。",
-    "DSH 没有 SessionStart；首次使用作者侧 Dove Skill 时，当前主 agent 若尚未读过，先本人读取两个短要点。安装本身不代表模型已经读过。"
+    "已安装：操作说明 .claude/rules/dove.md、用户最常说的话 .dove/install/AUTHOR_PREFERENCES.md、研究标准 .dove/install/RESEARCH_QUALITY.md；作者偏好全文按需查阅。",
+    "新会话和 /clear 后，主会话本人先读“用户最常说的话”；研究标准到对应时刻再查。已打开的会话在下一条消息时收到一次更新提示，重读操作说明和“用户最常说的话”。安装本身不代表模型已经读过。",
+    "每条消息前只读地附上身份卡和本轮情境，不写研究或决定权限。完整加载新增 agent、hooks 和宿主配置请新开会话；下一条提示不等于宿主热重载。"
   ];
 }
 
@@ -96,13 +92,11 @@ function headingFor(command, status) {
 
 function setupLines(command, { status, hosts, writtenPaths = [] }) {
   const hasClaude = hosts.includes("claude");
-  const hasDsh = hosts.includes("dsh");
   const lines = [];
   if (command === "init" && status === "already-initialized") return ["✓ 现有项目集成保持不变，没有写入任何文件"];
   if (hasClaude) {
-    lines.push("✓ Dove 与 9 个可选专项入口已安装；导师和论文审稿使用原生只读子 agent", "✓ Claude SessionStart 与 UserPromptSubmit 已配置；状态栏空缺时安装只读显示", "✓ 论文检索 MCP 与网页 Exa MCP 已配置");
+    lines.push("✓ Dove 与 7 个可选专项入口已安装；导师和论文审稿使用原生只读子 agent", "✓ Claude SessionStart、UserPromptSubmit 与 Stop 已配置；状态栏空缺时安装只读显示", "✓ 论文检索 MCP 与网页 Exa MCP 已配置");
   }
-  if (hasDsh) lines.push("✓ DSH 项目级 filesystem Skills 已安装");
   if (command === "init") lines.push(
     writtenPaths.includes(".dove/research/RESEARCH.md")
       ? "✓ 最小研究入口 RESEARCH.md 已建立"
@@ -158,16 +152,12 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
   if (command === "init" && result.status === "already-initialized") {
     lines.push("本次 init 未刷新短要点或宿主引导，不能据此确认它们已就绪；需要时运行 dove update。安装本身不代表模型已经读过。", "");
   } else {
-    lines.push(...authorPreferenceActivationLines(result.hosts), "");
+    lines.push(...authorPreferenceActivationLines(), "");
   }
   if (result.hosts.includes("claude")) {
     lines.push("论文检索需要本机已有 uvx；首次使用 dove-paper-search 或 exa 时的宿主批准仍由你决定。Dove 不安装依赖或写凭据；WebSearch 与 WebFetch 照常可用。");
     lines.push("");
   }
-  if (result.hosts.includes("claude")) {
-    lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入 Claude Code，直接说明目标；/dove:* 是可选快捷入口。`);
-  } else {
-    lines.push(`${terminalStyle("下一步", "bold", { color })}  在 DSH 中使用已安装的项目级 Dove filesystem Skills；DSH 不提供 Claude slash 命令、Hooks 或 MCP 声明。`);
-  }
+  lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入 Claude Code，直接说明目标；/dove:* 是可选快捷入口。`);
   return lines.join("\n");
 }

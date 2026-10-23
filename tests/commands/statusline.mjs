@@ -150,5 +150,17 @@ export function assertDoveStatusLineCli() {
       assert.equal(result.stderr, "");
       assert.equal(result.stdout, expected, entry);
     }
+    // The second line carries this round's aim and due date and the main metric, read from the records.
+    writeCard("# Identity\nCurrent round: rounds/007-brief.md\nRound status: ongoing\nMainline: 合成确认主线\n");
+    const research = path.dirname(overview);
+    fs.mkdirSync(path.join(research, "rounds"), { recursive: true });
+    fs.writeFileSync(path.join(research, "rounds/007-brief.md"), "Author: mentor\n对准：数据与评价\n见分晓：2099-01-05（开始：2099-01-01）\n规模：全量 445 对。\n\n一句话：合成轮次。\n");
+    fs.writeFileSync(path.join(research, "EVAL.md"), "# EVAL\n\n主指标：事件 F1（445 对开发集，官方评分）；当前最好：11.54（2026-10-22，第 6 轮）\n");
+    const progress = `Synthetic model (272K) · ctx 24% · 2m · \x1b[36m合成确认主线\x1b[0m\n第7轮 · 对准 数据与评价 · 01-05 见分晓 · 主指标 事件 F1 11.54（第6轮）\n${project}\n`;
+    const result = spawnSync(process.execPath, [path.join(ROOT, "bin/dove.mjs"), "hook", "statusline", "--project", project], {
+      cwd: project, input: payload, encoding: "utf8", env, timeout: 10_000
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, progress);
   });
 }

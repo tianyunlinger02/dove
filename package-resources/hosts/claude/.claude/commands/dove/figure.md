@@ -55,8 +55,3 @@ Choose representations that expose the central [mechanism/state change, informat
 Use consistent visual identities and meaningful color. Give headings, ordinary labels, mathematical symbols/subscripts and program tokens intentional roles consistent with the manuscript. Select type, line weights, spacing and contrast for final-size legibility, not to fill inherited boxes. Use depth, texture, shading, simple geometry or boxes where they help this explanation; no fixed font, palette, layout or minimal/rich style applies to every field.
 Preserve supplied evidence and its identity for separate placement. Quantitative marks come from supplied data and plotting code, not invented model-rendered values; indicate where separately rendered plots belong. Make schematics recognizable as explanatory, not measured results. Keep labels concise and close to their referents, with the full title and extended explanation in the caption. Plan separately editable labels/connectors and replaceable illustrations/evidence so the selected hierarchy, correspondence and visual language can survive implementation and be checked in the actual export.
 ```
-
-### 使用宿主工具
-
-- 直接用本机和 Dove 已配置的工具服务完成任务，不逐次申请。工具缺失或失败时说明并找可用替代；真实评测缺口立刻问用户，不拿替代数据充数。
-- 真正耗时的操作用 Claude Code 等待或后台工具，结果由主会话判断。

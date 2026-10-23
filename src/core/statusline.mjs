@@ -2,7 +2,8 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
-import { cardField, parseDoveCurrentRound, readDoveIdentityCard } from "./identity-card.mjs";
+import { cardField, readDoveIdentityCard } from "./identity-card.mjs";
+import { inspectRoundState, renderRoundStatusSummary } from "./round-state.mjs";
 const MAX_MAINLINE_CODE_POINTS = 80;
 
 const STATUS_SEPARATOR = " · ";
@@ -171,12 +172,18 @@ export function renderDoveStatusLine(input, options = {}) {
   if (model) parts.push(capacity && !CAPACITY_IN_MODEL_NAME.test(model) ? `${model} (${capacity})` : model);
   else if (capacity) parts.push(`ctx ${capacity}`);
   if (remaining !== null) parts.push(`ctx ${remaining}%`);
-  const round = parseDoveCurrentRound(card);
-  const roundNumber = round?.brief.match(/(?:^|\/)0*(\d+)-brief\.md(?:\)|$)/u)?.[1];
-  if (roundNumber) parts.push(`第${Number(roundNumber)}轮`);
   if (branch) parts.push(branch);
   if (duration) parts.push(duration);
   if (mainline) parts.push(noColor ? mainline : `\x1b[36m${mainline}\x1b[0m`);
   const session = parts.length > 0 ? parts.join(STATUS_SEPARATOR) : "Dove";
-  return project ? `${session}\n${project}` : session;
+  // Second line: this round's aim and due date, and the main metric, as Dove reads them from the records.
+  let progress = Object.hasOwn(options, "progress") ? oneLine(options.progress) : null;
+  if (!Object.hasOwn(options, "progress") && options.projectRoot) {
+    try {
+      progress = oneLine(renderRoundStatusSummary(inspectRoundState(path.resolve(options.projectRoot), options)));
+    } catch {
+      progress = null;
+    }
+  }
+  return [session, progress, project].filter(Boolean).join("\n");
 }

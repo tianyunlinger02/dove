@@ -1,7 +1,0 @@
-{
-  "id": "run-017",
-  "status": "completed",
-  "command": "python evaluate_routes.py",
-  "output": "results/refutation.md",
-  "note": "This receipt records execution completion only."
-}
