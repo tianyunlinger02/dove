@@ -58,6 +58,10 @@ function selectedHosts(options) {
   return options.host ?? undefined;
 }
 
+function writeOut(text) {
+  return new Promise((resolve) => (text ? process.stdout.write(text, resolve) : resolve()));
+}
+
 function wantsJson(options = {}) {
   return options.json === true || options.format === "json";
 }
@@ -468,26 +472,26 @@ try {
     const hookName = subcommand;
     if (projectOption(options) === undefined) throw new Error(`dove hook ${hookName} 需要 --project <dir>。`);
     const input = await readStdin();
+    let text = "";
     if (hookName === "user-prompt-submit") {
-      let payload;
+      let payload = null;
       try {
         payload = parseUserPromptSubmitPayload(input);
       } catch (error) {
-        process.stdout.write(JSON.stringify(userPromptSubmitFailureOutput(error)));
-        process.exit(0);
+        text = JSON.stringify(userPromptSubmitFailureOutput(error));
       }
-      try {
-        const target = prepareHookProject(projectOption(options));
-        assertHookPayloadProject(payload, target);
-        const guidance = inspectCurrentPromptGuidance(target, PACKAGE_OPTIONS);
-        process.stdout.write(JSON.stringify(userPromptSubmitOutput(payload, guidance, { project: target })));
-      } catch {
-        // Without a readable installation there is no project context to attach.
-        process.stdout.write(JSON.stringify(userPromptSubmitAttentionOutput()));
+      if (payload) {
+        try {
+          const target = prepareHookProject(projectOption(options));
+          assertHookPayloadProject(payload, target);
+          const guidance = inspectCurrentPromptGuidance(target, PACKAGE_OPTIONS);
+          text = JSON.stringify(userPromptSubmitOutput(payload, guidance, { project: target }));
+        } catch {
+          // Without a readable installation there is no project context to attach.
+          text = JSON.stringify(userPromptSubmitAttentionOutput());
+        }
       }
-      process.exit(0);
-    }
-    if (hookName === "session-start") {
+    } else if (hookName === "session-start") {
       try {
         const target = prepareHookProject(projectOption(options));
         const payload = parseSessionStartPayload(input);
@@ -506,34 +510,31 @@ try {
           guidanceVersion = null;
         }
         const output = sessionStartOutput(payload, result, { project: target, guidanceVersion });
-        if (output !== null) process.stdout.write(JSON.stringify(output));
-        process.exit(0);
+        if (output !== null) text = JSON.stringify(output);
       } catch (error) {
-        const output = sessionStartFailureOutput(error);
-        process.stdout.write(JSON.stringify(output));
         // Claude processes hook JSON only on exit 0. The systemMessage reports
         // the failed integration inspection; only the compact/resume derived cache refresh may write.
-        process.exit(0);
+        text = JSON.stringify(sessionStartFailureOutput(error));
       }
-    }
-    if (hookName === "statusline") {
-      process.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path.resolve(projectOption(options)) })}\n`);
-      process.exit(0);
-    }
-    if (hookName === "stop") {
+    } else if (hookName === "statusline") {
+      text = `${renderDoveStatusLine(input, { projectRoot: path.resolve(projectOption(options)) })}\n`;
+    } else if (hookName === "stop") {
       // A Stop prompt is optional help; any failure lets the host stop normally.
       try {
         const target = prepareHookProject(projectOption(options));
         const payload = parseStopPayload(input);
         assertHookPayloadProject(payload, target);
         const output = stopHookOutput(payload, target, { enabled: stopPromptsEnabled(PACKAGE_OPTIONS) });
-        if (output !== null) process.stdout.write(JSON.stringify(output));
+        if (output !== null) text = JSON.stringify(output);
       } catch {
         // Nothing to say; the host stops as usual.
       }
-      process.exit(0);
+    } else {
+      throw new Error("dove hook only supports session-start, user-prompt-submit, stop and statusline.");
     }
-    throw new Error("dove hook only supports session-start, user-prompt-submit, stop and statusline.");
+    // A pipe can take a large write in parts; exit only after stdout has all of it.
+    await writeOut(text);
+    process.exit(0);
   }
 } catch (error) {
   operationalFailure(error, options);

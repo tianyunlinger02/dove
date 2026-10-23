@@ -14161,7 +14161,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.5.0" : null;
+var injectedVersion = true ? "3.5.1" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -22833,6 +22833,9 @@ function projectOption2(options2) {
 function selectedHosts(options2) {
   return options2.host ?? void 0;
 }
+function writeOut(text) {
+  return new Promise((resolve) => text ? process5.stdout.write(text, resolve) : resolve());
+}
 function wantsJson(options2 = {}) {
   return options2.json === true || options2.format === "json";
 }
@@ -23213,25 +23216,25 @@ try {
     const hookName = subcommand;
     if (projectOption2(options) === void 0) throw new Error(`dove hook ${hookName} \u9700\u8981 --project <dir>\u3002`);
     const input = await readStdin();
+    let text = "";
     if (hookName === "user-prompt-submit") {
-      let payload;
+      let payload = null;
       try {
         payload = parseUserPromptSubmitPayload(input);
       } catch (error) {
-        process5.stdout.write(JSON.stringify(userPromptSubmitFailureOutput(error)));
-        process5.exit(0);
+        text = JSON.stringify(userPromptSubmitFailureOutput(error));
       }
-      try {
-        const target = prepareHookProject(projectOption2(options));
-        assertHookPayloadProject(payload, target);
-        const guidance = inspectCurrentPromptGuidance(target, PACKAGE_OPTIONS);
-        process5.stdout.write(JSON.stringify(userPromptSubmitOutput(payload, guidance, { project: target })));
-      } catch {
-        process5.stdout.write(JSON.stringify(userPromptSubmitAttentionOutput()));
+      if (payload) {
+        try {
+          const target = prepareHookProject(projectOption2(options));
+          assertHookPayloadProject(payload, target);
+          const guidance = inspectCurrentPromptGuidance(target, PACKAGE_OPTIONS);
+          text = JSON.stringify(userPromptSubmitOutput(payload, guidance, { project: target }));
+        } catch {
+          text = JSON.stringify(userPromptSubmitAttentionOutput());
+        }
       }
-      process5.exit(0);
-    }
-    if (hookName === "session-start") {
+    } else if (hookName === "session-start") {
       try {
         const target = prepareHookProject(projectOption2(options));
         const payload = parseSessionStartPayload(input);
@@ -23249,31 +23252,27 @@ try {
           guidanceVersion = null;
         }
         const output = sessionStartOutput(payload, result, { project: target, guidanceVersion });
-        if (output !== null) process5.stdout.write(JSON.stringify(output));
-        process5.exit(0);
+        if (output !== null) text = JSON.stringify(output);
       } catch (error) {
-        const output = sessionStartFailureOutput(error);
-        process5.stdout.write(JSON.stringify(output));
-        process5.exit(0);
+        text = JSON.stringify(sessionStartFailureOutput(error));
       }
-    }
-    if (hookName === "statusline") {
-      process5.stdout.write(`${renderDoveStatusLine(input, { projectRoot: path29.resolve(projectOption2(options)) })}
-`);
-      process5.exit(0);
-    }
-    if (hookName === "stop") {
+    } else if (hookName === "statusline") {
+      text = `${renderDoveStatusLine(input, { projectRoot: path29.resolve(projectOption2(options)) })}
+`;
+    } else if (hookName === "stop") {
       try {
         const target = prepareHookProject(projectOption2(options));
         const payload = parseStopPayload(input);
         assertHookPayloadProject(payload, target);
         const output = stopHookOutput(payload, target, { enabled: stopPromptsEnabled(PACKAGE_OPTIONS) });
-        if (output !== null) process5.stdout.write(JSON.stringify(output));
+        if (output !== null) text = JSON.stringify(output);
       } catch {
       }
-      process5.exit(0);
+    } else {
+      throw new Error("dove hook only supports session-start, user-prompt-submit, stop and statusline.");
     }
-    throw new Error("dove hook only supports session-start, user-prompt-submit, stop and statusline.");
+    await writeOut(text);
+    process5.exit(0);
   }
 } catch (error) {
   operationalFailure(error, options);

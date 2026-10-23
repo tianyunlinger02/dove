@@ -198,3 +198,18 @@ test("older installations keep their context; other directories and bad input st
   assert.throws(() => userPromptSubmitOutput(null), /requires a valid prompt event/u);
   assert.match(userPromptSubmitFailureOutput(new Error("bad\ninput")).systemMessage, /bad\?input/u);
 });
+
+test("large context arrives whole through the pipe the host reads", (t) => {
+  const project = workspace(t);
+  const config = path.join(process.env.XDG_CONFIG_HOME, "dove/settings.json");
+  fs.mkdirSync(path.dirname(config), { recursive: true });
+  fs.writeFileSync(config, JSON.stringify({ hostMigration: true }));
+  // A pending notice far beyond one pipe buffer.
+  fs.writeFileSync(path.join(project, HOST_MIGRATION_PENDING_PATH), `${"迁移待办正文。".repeat(40_000)}\nEND_OF_PENDING\n`);
+  for (const binary of binaries) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const delivered = context(invoke(binary, project, event("继续", { cwd: project })));
+      assert.ok(delivered.includes("END_OF_PENDING"), `${binary} attempt ${attempt}: output is complete`);
+    }
+  }
+});
