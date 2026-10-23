@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
-import { parseDoveCurrentRound, readDoveIdentityCard } from "./identity-card.mjs";
+import { cardField, parseDoveCurrentRound, readDoveIdentityCard } from "./identity-card.mjs";
 const MAX_MAINLINE_CODE_POINTS = 80;
 
 const STATUS_SEPARATOR = " · ";
@@ -85,17 +85,10 @@ function htmlBlockTag(line) {
   return match && HTML_BLOCK_TAG.test(match[1]) ? match[1].toLowerCase() : null;
 }
 
-function isBlockContinuation(line) {
-  return /^ {0,3}(?:>\s?|(?:[-+*]|\d+[.)])\s+)/u.test(line);
-}
-
-function isMainlineBoundary(line) {
-  return !(line ?? "").trim()
-    || /^ {0,3}#{1,6}(?:[ \t]|$)/u.test(line ?? "")
-    || /^ {0,3}(?:`{3,}|~{3,})/u.test(line ?? "")
-    || /^ {0,3}(?:---|\.\.\.|-->)\s*$/u.test(line ?? "")
-    || /^ {0,3}<!--/u.test(line ?? "")
-    || /^(?:Current round|Round status):/u.test(line ?? "");
+// Card fields come in several styles ("Mainline: x", "- Mainline: x", "- **Mainline（说明）**：x")
+// and in any order, so the field reader is shared with the hooks and the dashboard.
+function mainlineField(line) {
+  return line === undefined ? null : cardField(line, "Mainline");
 }
 
 export function parseResearchMainline(markdown, options = {}) {
@@ -139,18 +132,16 @@ export function parseResearchMainline(markdown, options = {}) {
       else comment = false;
     }
     if (startsInComment || comment) continue;
-    if (line.startsWith("Mainline:")) {
-      const previousLine = lines[index - 1] ?? "";
-      if (/^Mainline:/u.test(previousLine)) return null;
-      const accepted = (index === 0 || isMainlineBoundary(previousLine))
-        && !isBlockContinuation(previousLine)
-        && !/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "");
-      if (accepted && options.uncertainFinalLine && index === lines.length - 2) return null;
-      if (accepted) matches.push(line.slice("Mainline:".length));
+    const value = mainlineField(line);
+    if (value !== null) {
+      if (mainlineField(lines[index - 1]) !== null) return null;
+      if (/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "")) continue;
+      if (options.uncertainFinalLine && index === lines.length - 2) return null;
+      matches.push(value);
       if (matches.length > 1) return null;
     }
   }
-  return matches.length === 1 && matches[0].startsWith(" ") ? oneLine(matches[0]) : null;
+  return matches.length === 1 ? oneLine(matches[0]) : null;
 }
 
 export function inspectResearchMainline(projectRoot, options = {}) {

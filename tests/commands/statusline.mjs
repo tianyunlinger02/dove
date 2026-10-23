@@ -69,10 +69,14 @@ export function assertDoveStatusLineRenderer() {
 export function assertResearchMainlineParsing() {
   assert.equal(parseResearchMainline("# Identity\n\nMainline:  用户确认的合成目标  \n"), "用户确认的合成目标");
   assert.equal(parseResearchMainline("Mainline: First\nMainline: Second\n"), null);
-  for (const text of ["", "# Mainline: Heading", "- Mainline: List", "> Mainline: Quote", "```\nMainline: Example\n```", "---\nMainline: Metadata\n---", "Mainline: "]) {
+  for (const text of ["", "# Mainline: Heading", "> Mainline: Quote", "```\nMainline: Example\n```", "---\nMainline: Metadata\n---", "Mainline: "]) {
     assert.equal(parseResearchMainline(text), null, text);
   }
   assert.equal(parseResearchMainline(RESEARCH_DEFAULT_DOCUMENTS[0].content), null, "fresh bootstrap does not invent a mainline");
+  assert.equal(parseResearchMainline("- Mainline: List"), "List", "list-style card fields are fields");
+  assert.equal(parseResearchMainline("Research state: 研究状态\nCurrent round: rounds/092-brief.md\nRound status: completed\nMethod design:\nMainline: 同一主线\n"), "同一主线", "any card field may sit above the mainline");
+  assert.equal(parseResearchMainline("- **Round status（状态）**：completed\n- **Mainline（主线，沿用原文）**：完整纸样编辑\n"), "完整纸样编辑", "bold annotated fields read as the hooks and dashboard read them");
+  assert.equal(parseResearchMainline("Research state: 第一行\n第二行接着写\nMainline: 主线\n"), "主线", "a multi-line field may sit above the mainline");
 }
 
 function withStatusLineFixture(run) {

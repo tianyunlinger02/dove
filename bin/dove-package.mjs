@@ -14185,7 +14185,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.4.32" : null;
+var injectedVersion = true ? "3.4.33" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -21724,11 +21724,8 @@ function htmlBlockTag(line) {
   const match = line.match(/^ {0,3}<([A-Za-z][A-Za-z0-9-]*)\b[^>]*>/u);
   return match && HTML_BLOCK_TAG.test(match[1]) ? match[1].toLowerCase() : null;
 }
-function isBlockContinuation(line) {
-  return /^ {0,3}(?:>\s?|(?:[-+*]|\d+[.)])\s+)/u.test(line);
-}
-function isMainlineBoundary(line) {
-  return !(line ?? "").trim() || /^ {0,3}#{1,6}(?:[ \t]|$)/u.test(line ?? "") || /^ {0,3}(?:`{3,}|~{3,})/u.test(line ?? "") || /^ {0,3}(?:---|\.\.\.|-->)\s*$/u.test(line ?? "") || /^ {0,3}<!--/u.test(line ?? "") || /^(?:Current round|Round status):/u.test(line ?? "");
+function mainlineField(line) {
+  return line === void 0 ? null : cardField(line, "Mainline");
 }
 function parseResearchMainline(markdown2, options2 = {}) {
   let fence = null;
@@ -21771,16 +21768,16 @@ function parseResearchMainline(markdown2, options2 = {}) {
       else comment = false;
     }
     if (startsInComment || comment) continue;
-    if (line.startsWith("Mainline:")) {
-      const previousLine = lines[index - 1] ?? "";
-      if (/^Mainline:/u.test(previousLine)) return null;
-      const accepted = (index === 0 || isMainlineBoundary(previousLine)) && !isBlockContinuation(previousLine) && !/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "");
-      if (accepted && options2.uncertainFinalLine && index === lines.length - 2) return null;
-      if (accepted) matches.push(line.slice("Mainline:".length));
+    const value2 = mainlineField(line);
+    if (value2 !== null) {
+      if (mainlineField(lines[index - 1]) !== null) return null;
+      if (/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "")) continue;
+      if (options2.uncertainFinalLine && index === lines.length - 2) return null;
+      matches.push(value2);
       if (matches.length > 1) return null;
     }
   }
-  return matches.length === 1 && matches[0].startsWith(" ") ? oneLine(matches[0]) : null;
+  return matches.length === 1 ? oneLine(matches[0]) : null;
 }
 function renderDoveStatusLine(input, options2 = {}) {
   const payload = typeof input === "string" ? parseDoveStatusLinePayload(input) : plainObject5(input) ? input : {};
