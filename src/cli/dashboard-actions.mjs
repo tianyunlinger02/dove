@@ -9,6 +9,7 @@ import { readTopicCriteriaInfo, readTopics, startTopicSelection } from "../core/
 import { changeRegisteredProjects, readRegisteredProjects } from "../core/project-registry.mjs";
 import { readActivity, USER_ORIGINALS_BUDGET_MS, USER_ORIGINALS_PATH } from "../core/user-originals.mjs";
 import { collectTransferable, refreshCrossProjectExperience, summarizeCorrections } from "../core/cross-project.mjs";
+import { roundLedger } from "../core/round-ledger.mjs";
 import { refreshUserOriginalsInBackground } from "./user-originals-worker.mjs";
 import {
   draftWatchConfigWithSources,
@@ -156,7 +157,16 @@ export function createDashboardActions({ packageOptions = {}, passwordFile = nul
     },
     readCorrections({ now = Date.now() } = {}) {
       const roots = registered().filter((root) => isDirectory(path.join(root, ".dove/research")));
-      return summarizeCorrections(roots, { now });
+      // Corrections per round, so fast and slow projects can be compared.
+      const perRound = roots.map((root) => {
+        try {
+          const ledger = roundLedger(root, { now, env, home: env.HOME });
+          return { project: path.basename(root), rounds: ledger.rows.map((row) => ({ number: row.number, corrections: row.corrections })), average: ledger.summary.correctionsPerRound };
+        } catch {
+          return { project: path.basename(root), rounds: [], average: null };
+        }
+      });
+      return { ...summarizeCorrections(roots, { now }), perRound };
     },
     readTopicsOverview() {
       return {

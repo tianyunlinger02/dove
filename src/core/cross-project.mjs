@@ -119,9 +119,23 @@ function ownEntries(text) {
   const entries = [];
   for (const line of String(text).split(/\r?\n/u)) {
     const match = line.match(/^- (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) · 本人 · (.*)$/u);
-    if (match) entries.push({ date: match[1], time: `${match[1]} ${match[2]}`, text: match[3] });
+    if (!match) continue;
+    // The summary keeps transcript time (UTC); rounds are counted in local days.
+    const at = Date.parse(`${match[1]}T${match[2]}:00Z`);
+    entries.push({ date: match[1], time: `${match[1]} ${match[2]}`, at, day: dayString(at), text: match[3] });
   }
   return entries;
+}
+
+/** The user's own messages from a project's originals summary, with their local day. */
+export function readOwnEntries(root, options = {}) {
+  const text = readText(path.join(root, USER_ORIGINALS_PATH), options.fsOps ?? fs);
+  return text ? ownEntries(text) : [];
+}
+
+/** Whether one of the user's own messages is a correction on a recurring topic. */
+export function isCorrection(text) {
+  return CORRECTION_TOPICS.some((topic) => topic.pattern.test(text));
 }
 
 function clip(text, limit) {

@@ -1,5 +1,3 @@
-const DAY_MS = 86400000;
-
 function dateIn(text) {
   const date = String(text).match(/\b\d{4}-\d{2}-\d{2}\b/u)?.[0];
   const time = date ? Date.parse(`${date}T00:00:00Z`) : NaN;
@@ -44,10 +42,19 @@ export function latestLongTermIntent(text = "") {
   return latest;
 }
 
-export function longTermIntentDue(intent, now = new Date()) {
+export const LONG_TERM_INTENT_ROUNDS = 3;
+
+/**
+ * Counted in rounds, not calendar days: due when there is no dated comparison
+ * yet, once three rounds have ended since it, or when a round since it
+ * decided on the core method. `finishedRounds` is [{ day: "YYYY-MM-DD", kind }].
+ */
+export function longTermIntentDue(intent, finishedRounds = []) {
   if (!intent?.date || dateIn(intent.date) !== intent.date) return true;
-  const current = new Date(now);
-  const today = Date.UTC(current.getFullYear(), current.getMonth(), current.getDate());
-  const age = (today - Date.parse(`${intent.date}T00:00:00Z`)) / DAY_MS;
-  return age > 7 || age < 0;
+  const since = finishedRounds.filter((round) => round?.day && round.day > intent.date);
+  return since.length >= LONG_TERM_INTENT_ROUNDS || since.some((round) => round.kind === "decision");
+}
+
+export function finishedRoundsOf(rounds = [], dayOf) {
+  return rounds.filter((round) => round.result).map((round) => ({ day: dayOf(round.result.createdAt ?? round.result.mtime), kind: round.result.verdictKind }));
 }

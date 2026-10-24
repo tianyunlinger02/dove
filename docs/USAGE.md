@@ -129,13 +129,14 @@ The executor repairs evaluator errors, immediately marks affected results, and f
 
 A round is one complete test of a method version on the real evaluation, or one decision on the core method; the diagnostics, fixes and small experiments it needs happen inside the round and are recorded in ordinary project files, not as rounds or mentor calls of their own. Each round has one `rounds/NNN-brief.md` (about 2000 characters) and one `NNN-result.md` (about 3000).
 
-A brief opens with four lines, then `一句话：` and `## 预期结果`:
+A brief opens with five lines, then `一句话：` and `## 预期结果`:
 
 ```text
 Author: mentor / user / external（method version; dated user source）
 对准：<one of the eight dimensions — the latest mentor judgment's bottleneck>
 见分晓：YYYY-MM-DD（开始：YYYY-MM-DD）
 规模：<samples, training and compute, and why that is enough to tell the result>
+预测：<the quantity> <its value now> → <the expected value or range>
 ```
 
 `## 预期结果` says how the targeted dimension counts as done, how the end-to-end metric of the original task should move, which link it depends on and what result would change the decision. User instructions take priority; save mentor text verbatim and identify replacement authors/reasons.
@@ -154,7 +155,9 @@ Proposed fix, predicted outcome, success/failure criteria, why the scale can sep
 Actual user words after seeing the rationale, with date/source; absent means unknown.
 ```
 
-A result opens with `判定：兑现 / 未兑现 / 方法取舍（采纳或放弃什么）`, judged only against what the brief wrote in advance, then `一句话：` and four headings: `## 改了什么`, `## 测到了什么`, `## 预期与实际` (including what judgment changed, what the next step changes and how much closer the final result is) and `## 对本轮说明的反驳与事实更正`.
+A result opens with `判定：兑现 / 未兑现 / 方法取舍（采纳或放弃什么）`, judged only against what the brief wrote in advance, and `实测：<the same quantity> <its value>`, then `一句话：` and four headings: `## 改了什么`, `## 测到了什么`, `## 预期与实际` (including what judgment changed, what the next step changes and how much closer the final result is) and `## 对本轮说明的反驳与事实更正`.
+
+Dove reconciles each round's `预测` with its `实测` (whether the measurement fell in the predicted range, and how large the predicted change was against the real one) and checks whether the numbers under `## 测到了什么` appear in the text artifacts the result links. These are statistics for the mentor and the dashboard, counted per round; the host is not prompted about them.
 
 A scientific result is a change in the real-task metrics or a clear decision on the core method (adopting or dropping a method family). A negative result that settles such a decision counts; a diagnostic that only rules out one local variant, parameter or implementation hypothesis does not, nor does a plan, launch, smoke test or engineering check.
 
@@ -180,7 +183,7 @@ When the host ends a turn, the Stop hook checks overrun and stall. Each conditio
 
 ### Mentor judgment and memory
 
-Call the independent mentor (the native `dove-mentor` agent) when a round has a verdict, on an overrun or stall, for a new method design and when the user asks. Use a fresh native context with the body from `dove mentor brief --project <root>` plus one sentence of trigger; the same judgment may be asked two or three follow-ups. The handoff places user-original excerpts, bounded raw text from explicitly supplied `--artifact` files and the facts Dove computed before the host's records; EVAL, briefs and opinions are navigation, not the conclusion frame. Paper-watch materials are attached once a week, or with `--watch` when the user asks.
+Call the independent mentor (the native `dove-mentor` agent) when a round has a verdict, on an overrun or stall, for a new method design and when the user asks. Use a fresh native context with the body from `dove mentor brief --project <root>` plus one sentence of trigger; the same judgment may be asked two or three follow-ups. The handoff places user-original excerpts, bounded raw text from explicitly supplied `--artifact` files and the facts Dove computed before the host's records; EVAL, briefs and opinions are navigation, not the conclusion frame. Paper-watch materials are attached once a week, or with `--watch` when the user asks. The long-term intent comparison is due when there is none yet, three rounds after the last one, or after a round that decided on the core method.
 
 The mentor first answers:
 1. If asked what substantive research progress occurred, what is the honest one-sentence answer?
@@ -251,7 +254,7 @@ After substantive changes, a fresh review reads the complete current version; ol
 
 ## Dashboard, tracking and topics
 
-`dove dashboard` serves registered projects at `127.0.0.1:7788`. Each project page shows the main metric, the eight-dimension trend, each round's aim, verdict and scale, overrun and stall flags, weekly activity (subagent calls and compactions) beside the rounds that ended that week, and what waits for the user. **经验** collects the mentors' `可迁移：` lessons across projects (also written into each project as `.dove/install/CROSS_PROJECT_EXPERIENCE.md`); **纠正** groups the user's own words of the last 30 days by topic with counts and recent wording, as input for Dove's development and for updating the sayings with the user's agreement. Research views and library exports are read-only; Settings edits registry, tracking, host settings and passwords. Use SSH forwarding remotely, or `--password-file` before public exposure so all pages/APIs require login. `--json` returns the summary without a browser.
+`dove dashboard` serves registered projects at `127.0.0.1:7788`. Each project page shows the main metric, the eight-dimension trend, each round's aim, verdict and scale, overrun and stall flags, a ledger with one row per round (days taken, subagent, compaction and mentor counts, the user's corrections, verdict, prediction against measurement), a per-round bias table (reconciliation, how many reported numbers the linked artifacts back, hedging per thousand characters of replies, newly written gate words, claims that something was verified or passed in a turn that neither ran nor read anything), and what waits for the user. **经验** collects the mentors' `可迁移：` lessons across projects (also written into each project as `.dove/install/CROSS_PROJECT_EXPERIENCE.md`); **纠正** groups the user's own words of the last 30 days by topic with counts and recent wording, and counts corrections per round in each project, as input for Dove's development and for updating the sayings with the user's agreement. Research views and library exports are read-only; Settings edits registry, tracking, host settings and passwords. Use SSH forwarding remotely, or `--password-file` before public exposure so all pages/APIs require login. `--json` returns the summary without a browser.
 
 Tracking runs daily while the dashboard is up, or with `dove watch run [--project <dir>]`. It combines paced arXiv queries, optional community/venue/citation enrichment and OpenAlex neighbor/institution searches, with bounded rate-limit retries. Recent arXiv retrieval pages through a fixed submission-date window with a finite page budget; a later-page failure or unfinished window preserves discovered items, reports partial retrieval and keeps the previous successful waterline. Discovery requires no Semantic Scholar key. Errors or incomplete retrieval are not “no relevant papers”.
 

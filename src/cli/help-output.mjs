@@ -31,7 +31,7 @@ Dove 从项目记录里替宿主算几件事：本轮对准哪一维、哪天见
 
 dove figure 调用 settings.figure（baseURL、model，可选 apiKeyEnv）配置的图像模型，向服务发送 prompt 和输入图；用户配置了图像服务并要求画图，就是对这些请求的授权，不必每次另行确认。无 --image 时生成，有图时编辑，--image 可重复；图片和输出可在任意位置，相对路径按 --project（默认当前目录）解析，输出文件已存在时自动加序号，不覆盖。密钥依次取 Dove 配置目录里的 figure-api-key 文件、apiKeyEnv 指定的环境变量；图像接口就是宿主所用的模型网关时，也用宿主已有的密钥。遇到限流或网关错误会自动重试，失败时显示服务返回的原因。它用来做构图和示意素材，真实结果与文字在 PPT 里组合；dove figure --tools 列出本机做 PPT 的 Python、PPTX 转 PDF 与 PDF 转 PNG 的命令。CLI 不能调用宿主内置 image_gen，Claude Code 宿主也没有这种工具。
 
-dove dashboard 在本机起一个网页，只读查看已登记项目的主线、主指标、八维走势、每轮的对准维度、判定和规模、超时和停滞、等你定的事、活动量与结果的对照，以及跨项目经验和各项目反复出现的纠正（默认 127.0.0.1:7788，远程用 SSH 端口转发打开；挂到公网隧道时用 --password-file 开启密码登录，所有页面和数据接口都要先登录）。面板的「设置」页可管理项目登记、论文追踪（关键词、作者、arXiv 分类、每天运行时间、代理、可选的 Semantic Scholar key）和面板密码；论文追踪在面板运行期间每天自动执行，也可用 dove watch run 手动执行，结果写入各项目 .dove/research/watch/。导师每周判断一次追踪结果（或用户要求时，dove mentor brief --watch），返回中文一句话与方向；有用论文累积为可导 BibTeX 的项目文献库。无新论文时补旧文默认关闭。
+dove dashboard 在本机起一个网页，只读查看已登记项目的主线、主指标、八维走势、每轮的对准维度、判定和规模、超时和停滞、等你定的事、每轮的投入与预测对账和偏差统计，以及跨项目经验和各项目反复出现的纠正（默认 127.0.0.1:7788，远程用 SSH 端口转发打开；挂到公网隧道时用 --password-file 开启密码登录，所有页面和数据接口都要先登录）。面板的「设置」页可管理项目登记、论文追踪（关键词、作者、arXiv 分类、每天运行时间、代理、可选的 Semantic Scholar key）和面板密码；论文追踪在面板运行期间每天自动执行，也可用 dove watch run 手动执行，结果写入各项目 .dove/research/watch/。导师每周判断一次追踪结果（或用户要求时，dove mentor brief --watch），返回中文一句话与方向；有用论文累积为可导 BibTeX 的项目文献库。无新论文时补旧文默认关闭。
 
 dove watch configure 显式保存导师追踪建议，只修改 --project 解析到的单个已接入项目。--mentor 接收 JSON 文件路径（相对路径按当前工作目录解析），不是内联 JSON 或导师文本；对象只允许 keywords、authors、venues、institutions、seedPapers 的字符串数组，至少提供一项。出现字段替换，缺席保留，[] 清空；enabled、categories 保持不变，source: mentor 只表示导师建议已落盘，不代表用户确认。此命令不调用导师、模型或网络，不执行追踪；watch run 行为不变。
 

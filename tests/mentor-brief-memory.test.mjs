@@ -20,11 +20,12 @@ const QUESTIONS = [
 ].join("\n");
 
 // Every project byte lives in this Map. No disk fixtures or real project reads.
-function memoryFiles(t, entries = {}) {
+function memoryFiles(t, entries = {}, times = {}) {
   for (const name of ["readFileSync", "writeFileSync", "appendFileSync", "mkdirSync", "mkdtempSync", "renameSync", "unlinkSync", "rmSync", "statSync", "lstatSync", "realpathSync", "readdirSync", "openSync", "readSync", "closeSync"]) {
     t.mock.method(fs, name, () => assert.fail(`Unexpected disk I/O: ${name}`));
   }
   const files = new Map(Object.entries(entries).map(([file, text]) => [path.resolve(ROOT, file), Buffer.from(text)]));
+  const mtimes = new Map(Object.entries(times).map(([file, time]) => [path.resolve(ROOT, file), time]));
   const reads = [];
   const inspected = [];
   const handles = new Map();
@@ -35,7 +36,7 @@ function memoryFiles(t, entries = {}) {
     statSync(file) {
       inspected.push(file);
       if (!files.has(file) && !directory(file)) throw absent(file);
-      return { size: files.get(file)?.length ?? 0, isFile: () => files.has(file), isDirectory: () => directory(file) };
+      return { size: files.get(file)?.length ?? 0, mtimeMs: mtimes.get(file), isFile: () => files.has(file), isDirectory: () => directory(file) };
     },
     readdirSync(file) {
       inspected.push(file);
@@ -80,7 +81,7 @@ test("empty memory project renders a short fixed template without creating recor
   assert.match(brief, /## Dove 算出的事实/u);
   assert.match(brief, /当前轮次：身份卡没有指向当前轮次/u);
   assert.match(brief, /主指标：EVAL 开头还没写/u);
-  assert.match(brief, /长期意图对照到期（导师笔记缺失）/u, "a first mentor reads the project's whole goal history");
+  assert.match(brief, /长期意图对照到期（导师笔记缺失/u, "a first mentor reads the project's whole goal history");
   for (const file of [".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`, ".dove/install/TOPIC_CRITERIA.md", `${RESEARCH}/topics/PROJECT.md`, `${WATCH}/config.json`]) {
     assert.ok(brief.includes(`\`${file}\`（缺失）`), file);
   }
@@ -312,20 +313,21 @@ test("watch bounds summaries and marks incomplete history, oversized or malforme
   assert.ok(memory.reads.every(({ file, length }) => length <= (file.endsWith(".json") ? 262144 : 65536)));
 });
 
-test("existing mentor notes receive periodic intent reminders, not just a first-use reminder", (t) => {
-  const file = `${RESEARCH}/MENTOR_NOTES.md`;
-  const memory = memoryFiles(t, { [file]: "# 导师笔记\n普通判断 2026-10-16。" });
-  const options = { fsOps: memory.fsOps, now: new Date(2026, 9, 16, 18) };
-  for (const [notes, due] of [
-    ["# 导师笔记\n普通判断 2026-10-16。", true],
-    ["## 长期意图\n无日期。", true],
-    ["## 长期意图（2026-10-09）\n最近对照。", false],
-    ["## 长期意图（2026-10-08）\n已过期。", true],
-    [`${"历史。\n".repeat(20000)}\n## 长期意图（2026-10-16）\n今天的对照。`, false]
-  ]) {
-    memory.files.set(path.join(ROOT, file), Buffer.from(notes));
-    assert.equal(renderMentorBrief(ROOT, options).includes("长期意图对照到期"), due);
-  }
+test("the long-term intent comparison comes due by rounds, not calendar days", (t) => {
+  const notesFile = `${RESEARCH}/MENTOR_NOTES.md`;
+  const resultFile = `${RESEARCH}/rounds/001-result.md`;
+  const memory = memoryFiles(t, {
+    [notesFile]: "## 长期意图（2026-10-10）\n最近对照。",
+    [`${RESEARCH}/rounds/001-brief.md`]: "Author: mentor\n",
+    [resultFile]: "判定：未兑现\n"
+  }, { [resultFile]: Date.parse("2026-10-11T12:00:00") });
+  const due = () => renderMentorBrief(ROOT, { fsOps: memory.fsOps }).includes("长期意图对照到期");
+  assert.equal(due(), false, "one round since the comparison");
+  memory.files.set(path.join(ROOT, notesFile), Buffer.from("## 长期意图\n无日期。"));
+  assert.equal(due(), true, "an undated comparison is due");
+  memory.files.set(path.join(ROOT, notesFile), Buffer.from(`${"历史。\n".repeat(20000)}\n## 长期意图（2026-10-10）\n最近对照。`));
+  memory.files.set(path.join(ROOT, resultFile), Buffer.from("判定：方法取舍（放弃类别分支）\n"));
+  assert.equal(due(), true, "a method decision since the comparison");
 });
 
 test("tracking guidance reflects the saved source and never treats broken configuration as adopted", (t) => {

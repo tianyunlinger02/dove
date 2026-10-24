@@ -3,13 +3,17 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  calibrateRound,
   computeOverrun,
   inspectRoundState,
   parseBriefHeader,
   parseMainMetric,
   parseMentorPending,
+  parseActual,
   parseMethodDesign,
+  parsePrediction,
   parseResultHeader,
+  resultProvenance,
   parseTrendTable,
   renderRoundSituation
 } from "../src/core/round-state.mjs";
@@ -114,4 +118,33 @@ test("stall and overrun are computed from the records, and the situation names w
   const later = inspectRoundState(decided.root, { fsOps: decided.fsOps, now: at("2026-10-23") });
   assert.equal(later.stall, null, "a method decision between misses is not a stall");
   assert.deepEqual(later.overrun, { due: "2026-10-10", daysPastDue: 13, plannedDays: 2 });
+});
+
+test("a prediction and its measurement are reconciled", () => {
+  const prediction = parsePrediction("事件 F1 12.7 → 15–18");
+  assert.deepEqual([prediction.baseline, prediction.low, prediction.high], [12.7, 15, 18]);
+  const missed = calibrateRound(prediction, parseActual("事件 F1 13.2（第 40 轮）"));
+  assert.equal(missed.hit, false);
+  assert.ok(Math.abs(missed.ratio - 7.6) < 1e-9, "the predicted change was 7.6 times the real one");
+  const hit = calibrateRound(prediction, parseActual("F1 16"));
+  assert.deepEqual([hit.hit, hit.wrongWay, Math.round(hit.ratio * 100) / 100], [true, false, 1.15]);
+  assert.equal(calibrateRound(parsePrediction("F1 12.7 → 15"), parseActual("F1 12.0")).wrongWay, true);
+  const fractions = parsePrediction("结构通过 76/100 → 85/100");
+  assert.deepEqual([fractions.baseline, fractions.low], [76, 85]);
+  assert.equal(calibrateRound(fractions, parseActual("结构通过 85/100")).hit, true);
+  assert.deepEqual([parsePrediction("事件 F1 15").baseline, parsePrediction("事件 F1 15").low], [null, 15], "without an arrow there is no baseline");
+  assert.equal(calibrateRound(parsePrediction("写出可执行的整衣程序"), parseActual("F1 1.0")), null, "no number, no reconciliation");
+  const header = parseBriefHeader("Author: mentor\n对准：数据与评价\n预测（主指标）：F1 12.7 → 15\n");
+  assert.equal(header.prediction.low, 15);
+  assert.equal(parseResultHeader("判定：未兑现\n实测：F1 13.2\n").actual.value, 13.2);
+});
+
+test("numbers a result reports are checked against the artifacts it links", () => {
+  const { root, fsOps } = memory({
+    ".dove/research/rounds/005-result.md": "判定：未兑现\n实测：F1 13.2\n\n## 测到了什么\n\nF1 13.20，召回 41.5%，结构 76/100；另有 9.99 不在产物里。见[结果](../../../outputs/metrics.json)。\n\n## 预期与实际\n\n12.7 不在这一节里。\n",
+    "outputs/metrics.json": "{\"f1\": 0.132, \"recall\": 0.4152, \"structure_pass\": 76, \"total\": 100}"
+  });
+  assert.deepEqual(resultProvenance(root, "rounds/005-result.md", { fsOps }), { numbers: 4, found: 3, artifacts: 1 });
+  const unlinked = memory({ ".dove/research/rounds/006-result.md": "## 测到了什么\n\nF1 13.20，见[说明](006-brief.md)。\n", ".dove/research/rounds/006-brief.md": "预测：F1 13.20\n" });
+  assert.deepEqual(resultProvenance(unlinked.root, "rounds/006-result.md", { fsOps: unlinked.fsOps }), { numbers: 1, found: null, artifacts: 0 }, "Dove's own records are not artifacts");
 });

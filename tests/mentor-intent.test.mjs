@@ -3,14 +3,14 @@ import test from "node:test";
 
 import { latestLongTermIntent, longTermIntentDue } from "../src/core/mentor-intent.mjs";
 
-const now = new Date(2026, 9, 16, 18, 0);
-
-test("intent comparison is due only after seven local calendar days", () => {
-  assert.equal(longTermIntentDue(null, now), true);
-  assert.equal(longTermIntentDue({ date: null }, now), true);
-  for (const [date, due] of [["2026-10-16", false], ["2026-10-10", false], ["2026-10-09", false], ["2026-10-08", true], ["2026-10-17", true]]) {
-    assert.equal(longTermIntentDue({ date }, now), due, date);
-  }
+test("the intent comparison comes due by rounds: three ended since it, or a method decision", () => {
+  assert.equal(longTermIntentDue(null, []), true);
+  assert.equal(longTermIntentDue({ date: null }, []), true);
+  const intent = { date: "2026-10-10" };
+  assert.equal(longTermIntentDue(intent, []), false, "calendar time alone does not make it due");
+  assert.equal(longTermIntentDue(intent, [{ day: "2026-10-09", kind: "missed" }, { day: "2026-10-11", kind: "missed" }, { day: "2026-10-12", kind: "delivered" }]), false, "a round before the comparison does not count");
+  assert.equal(longTermIntentDue(intent, [{ day: "2026-10-11", kind: "missed" }, { day: "2026-10-12", kind: "delivered" }, { day: "2026-10-13", kind: "missed" }]), true);
+  assert.equal(longTermIntentDue(intent, [{ day: "2026-10-11", kind: "decision" }]), true, "a decision on the core method makes it due at once");
 });
 
 test("latest dated intent wins regardless of append order and keeps nested Markdown", () => {
@@ -32,7 +32,7 @@ test("a code example or child section date cannot renew an undated intent draft"
   for (const example of ["```md\n日期：2026-10-16\n```", "### 近邻论文\n日期：2026-10-16"]) {
     const intent = latestLongTermIntent(`## 长期意图（2026-10-01）\n旧目标。\n## 长期意图\n无日期的新草稿。\n${example}`);
     assert.deepEqual(intent, { date: "2026-10-01", text: "旧目标。" });
-    assert.equal(longTermIntentDue(intent, now), true);
+    assert.equal(longTermIntentDue(intent, [{ day: "2026-10-02", kind: "decision" }]), true);
   }
 });
 

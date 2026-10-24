@@ -313,3 +313,34 @@ test("method design is visible below the mainline, preserves lines, escapes text
   assert.match(view.innerHTML, /外部方法为什么不行<\/h3><div class="note">缺口：这一段还没写，论证不完整。/u);
   assert.match(view.innerHTML, /尚未记录用户看过后的答复/u);
 });
+
+test("project view shows one ledger row and one bias row per round, escaped", () => {
+  const root = "/memory/project";
+  const row = (number, extra) => ({ number, duration: "5 小时", open: false, agents: 4, compactions: 1, mentor: 1, corrections: 2, verdictLabel: "未兑现", prediction: "F1 <10> → 12", actual: "F1 10.5", calibration: { hit: false, ratio: 6, wrongWay: false }, provenance: { numbers: 5, found: 4, artifacts: 2 }, hedgesPer1k: 2.5, gates: 3, unrunClaims: 1, ...extra });
+  const project = {
+    root, name: "Project", mainline: "主线", rounds: [],
+    progress: {
+      mainMetric: null, trend: null, overrun: null, stall: null, pending: [],
+      ledger: {
+        rows: [row(3, { open: true, verdictLabel: null, actual: null, calibration: null, provenance: null }), row(2, { provenance: { numbers: 7, found: null, artifacts: 0 } }), row(1, {})],
+        activityScanned: true,
+        summary: { finished: 2, withoutPrediction: 0, calibrated: 2, hits: 0, wrongWay: 0, medianRatio: 6, correctionsPerRound: 2 }
+      }
+    }
+  };
+  const view = { innerHTML: "", querySelectorAll: () => [] };
+  const script = renderDashboardHtml().split("<script>")[1].split("</script>")[0];
+  const section = script.slice(script.indexOf("function esc("), script.indexOf("const texts ="));
+  const context = { document: { getElementById: () => view }, data: { projects: [project] }, selected: root, open: new Map(), CAN_EDIT: false, STATUS: {}, AUTHOR: {} };
+  const tile = script.slice(script.indexOf("function tile("), script.indexOf("\n", script.indexOf("function tile(")));
+  vm.runInNewContext(`${section}\n${tile}\nrenderView();`, context);
+  const html = view.innerHTML;
+  assert.match(html, /每轮的投入和结果/u);
+  assert.match(html, /第 3 轮（进行中）/u);
+  assert.match(html, /平均每轮被纠正 2 次/u);
+  assert.match(html, /不在范围内，预测变化是实际的 6 倍/u);
+  assert.match(html, /没链接产物/u);
+  assert.match(html, /4\/5/u);
+  assert.ok(html.includes("F1 &lt;10&gt; → 12"));
+  assert.ok(!html.includes("<10>"));
+});

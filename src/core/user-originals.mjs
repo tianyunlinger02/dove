@@ -7,10 +7,25 @@ import path from "node:path";
 // tool output. Derived on mentor calls and daily prewarming; research records stay untouched.
 export const USER_ORIGINALS_PATH = ".dove/install/USER_ORIGINALS.md";
 export const USER_ORIGINALS_INDEX_PATH = ".dove/install/user-originals-index.json";
-// How much the host does, from the same transcripts: subagent calls and context
-// compactions per day, set against verdicts and the main metric on the dashboard.
+// How much the host does, and how it writes, from the same transcripts, in
+// ten-minute buckets: subagent and mentor calls, context compactions, reply
+// length, hedging, newly written gate words, and claims that something was
+// verified or passed made in a turn that neither ran nor read anything; plus when
+// each round's brief and result were first written, which is where one round
+// ends and the next begins. Several rounds can share a day, so days are too
+// coarse. Nothing here is shown to the host: it is statistics for the mentor
+// and the dashboard.
+export { ACTIVITY_FIELDS };
 export const ACTIVITY_INDEX_PATH = ".dove/install/activity-index.json";
-const ACTIVITY_SCHEMA = 1;
+export const ACTIVITY_BUCKET_MS = 600000;
+const ACTIVITY_SCHEMA = 2;
+const HEDGES = ["但是", "不过", "可能", "尚未", "仍需", "不代表", "不等于", "不能宣称", "不保证", "证据边界", "有待", "暂不"];
+// Bare "hash" and "frozen" are left out: in code they are ordinary (hash(), frozen dataclasses).
+const GATES = /sha256|哈希|冻结|门禁|equivalence gate|只读清单/giu;
+const ROUND_FILE = /(?:^|\/)\.dove\/research\/rounds\/(\d+)[-_](brief|result)\.md$/u;
+// "实测" is left out: records ask for a "实测：" line, so the word itself is no claim.
+const CLAIMS = /已验证|验证通过|测试通过|全部通过|已跑通|跑通了|已确认可用/gu;
+const ACTIVITY_FIELDS = Object.freeze(["agents", "compactions", "mentor", "chars", "hedges", "gates", "claims", "unrun"]);
 
 const SKIP = /^(?:<|\[Image|\[Your previous response|\[Request interrupted|This session is being continued|Base directory for this skill|# dove\.|Another Claude session sent|Caveat:|Continue the conversation from where|Stop hook feedback|【Dove 引用用户)/u;
 // Messages typed into the host on the user's behalf by a supervising session or a document.
@@ -106,17 +121,28 @@ function insideRoot(record, root) {
   return !(relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative));
 }
 
-function localDay(timestamp) {
-  const time = Date.parse(String(timestamp ?? ""));
-  if (!Number.isFinite(time)) return null;
-  const value = new Date(time);
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+
+function bump(found, bucket, field, amount = 1) {
+  if (!amount) return;
+  const counts = found.buckets[bucket] ?? (found.buckets[bucket] = {});
+  counts[field] = (counts[field] ?? 0) + amount;
 }
 
-function collectActivity(line, root, found) {
+function mark(found, key, time) {
+  if (!(found.marks[key] <= time)) found.marks[key] = time;
+}
+
+function occurrences(text, needle) {
+  return text.split(needle).length - 1;
+}
+
+// `state.evidence` says whether the current turn has run or read anything yet;
+// a new user message starts a new turn.
+function collectActivity(line, root, found, state) {
   const compaction = line.includes('"compact_boundary"');
-  const agent = line.includes('"tool_use"') && (line.includes('"name":"Agent"') || line.includes('"name":"Task"'));
-  if (!compaction && !agent) return;
+  const userText = line.includes('"type":"user"') && !line.includes('"tool_use_id"');
+  const assistant = line.includes('"type":"assistant"');
+  if (!compaction && !userText && !assistant) return;
   let record;
   try {
     record = JSON.parse(line);
@@ -124,17 +150,54 @@ function collectActivity(line, root, found) {
     return;
   }
   if (record?.isSidechain || !insideRoot(record, root)) return;
-  const day = localDay(record.timestamp);
-  if (!day) return;
-  if (compaction && record.type === "system" && record.subtype === "compact_boundary") found.compactions[day] = (found.compactions[day] ?? 0) + 1;
-  if (agent && record.type === "assistant" && Array.isArray(record.message?.content)) {
-    const calls = record.message.content.filter((block) => block?.type === "tool_use" && (block.name === "Agent" || block.name === "Task")).length;
-    if (calls) found.agents[day] = (found.agents[day] ?? 0) + calls;
+  const time = Date.parse(record.timestamp);
+  if (!Number.isFinite(time)) return;
+  const bucket = String(Math.floor(time / ACTIVITY_BUCKET_MS));
+  if (record.type === "system" && record.subtype === "compact_boundary") {
+    bump(found, bucket, "compactions");
+    return;
+  }
+  if (record.type === "user") {
+    if (!record.isMeta && !record.isCompactSummary && messageTexts(record).some((text) => text.trim())) state.evidence = false;
+    return;
+  }
+  if (record.type !== "assistant" || !Array.isArray(record.message?.content)) return;
+  for (const block of record.message.content) {
+    if (block?.type === "tool_use") {
+      const input = block.input ?? {};
+      if (block.name === "Agent" || block.name === "Task") {
+        bump(found, bucket, "agents");
+        if (input.subagent_type === "dove-mentor") bump(found, bucket, "mentor");
+      } else if (block.name === "Bash" || block.name === "Read") {
+        state.evidence = true;
+      } else if (block.name === "Write" || block.name === "Edit") {
+        const target = String(input.file_path ?? "");
+        const round = target.match(ROUND_FILE);
+        if (round && block.name === "Write" && (!path.isAbsolute(target) || target.startsWith(`${root}${path.sep}`))) mark(found, `${round[2]}:${Number(round[1])}`, time);
+        const written = `${input.content ?? ""}${input.new_string ?? ""}`.match(GATES)?.length ?? 0;
+        const before = String(input.old_string ?? "").match(GATES)?.length ?? 0;
+        bump(found, bucket, "gates", Math.max(0, written - before));
+      }
+    } else if (block?.type === "text" && typeof block.text === "string") {
+      bump(found, bucket, "chars", Array.from(block.text).length);
+      bump(found, bucket, "hedges", HEDGES.reduce((sum, word) => sum + occurrences(block.text, word), 0));
+      const claims = block.text.match(CLAIMS)?.length ?? 0;
+      bump(found, bucket, "claims", claims);
+      if (!state.evidence) bump(found, bucket, "unrun", claims);
+    }
   }
 }
 
-function addCounts(target, source) {
-  for (const [day, count] of Object.entries(source ?? {})) target[day] = (target[day] ?? 0) + count;
+function mergeBuckets(target, source) {
+  for (const [bucket, counts] of Object.entries(source ?? {})) {
+    const into = target[bucket] ?? (target[bucket] = {});
+    for (const field of ACTIVITY_FIELDS) if (counts[field]) into[field] = (into[field] ?? 0) + counts[field];
+  }
+  return target;
+}
+
+function mergeMarks(target, source) {
+  for (const [key, time] of Object.entries(source ?? {})) if (!(target[key] <= time)) target[key] = time;
   return target;
 }
 
@@ -239,15 +302,16 @@ export function refreshActivity(project, options = {}) {
   let pending = 0;
   for (const { file, size } of transcriptsOf(sessionDirectories(root, options), fsOps)) {
     const known = previous.files[file];
-    const resume = known && known.offset <= size ? known : { offset: 0, agents: {}, compactions: {} };
+    const resume = known && known.offset <= size ? known : { offset: 0, buckets: {}, marks: {}, evidence: false };
     if (resume.offset === size || Date.now() >= deadline) {
       files[file] = resume;
       if (resume.offset < size) pending += size - resume.offset;
       continue;
     }
-    const found = { agents: {}, compactions: {} };
-    const offset = scanNewLines(file, resume.offset, fsOps, (line) => collectActivity(line, root, found), deadline);
-    files[file] = { offset, agents: addCounts({ ...resume.agents }, found.agents), compactions: addCounts({ ...resume.compactions }, found.compactions) };
+    const found = { buckets: {}, marks: {} };
+    const state = { evidence: Boolean(resume.evidence) };
+    const offset = scanNewLines(file, resume.offset, fsOps, (line) => collectActivity(line, root, found, state), deadline);
+    files[file] = { offset, buckets: mergeBuckets(structuredClone(resume.buckets ?? {}), found.buckets), marks: mergeMarks({ ...resume.marks }, found.marks), evidence: state.evidence };
     if (offset < size) pending += size - offset;
   }
   for (const [file, item] of Object.entries(previous.files)) if (!(file in files)) files[file] = item;
@@ -256,20 +320,22 @@ export function refreshActivity(project, options = {}) {
 }
 
 /**
- * Per-day subagent calls and compactions counted so far, without scanning.
+ * Counts per ten-minute bucket (see ACTIVITY_FIELDS; keys are epoch time /
+ * ACTIVITY_BUCKET_MS) and first-write times of round files ("brief:15",
+ * "result:14"), gathered so far, without scanning.
  * With `pending: true`, also stats the transcripts to report bytes not yet counted.
  */
 export function readActivity(project, options = {}) {
   const fsOps = options.fsOps ?? fs;
   const root = path.resolve(project);
   const index = readActivityIndex(path.join(root, ACTIVITY_INDEX_PATH), root, fsOps);
-  const agents = {};
-  const compactions = {};
+  const buckets = {};
+  const marks = {};
   for (const item of Object.values(index.files)) {
-    addCounts(agents, item.agents);
-    addCounts(compactions, item.compactions);
+    mergeBuckets(buckets, item.buckets);
+    mergeMarks(marks, item.marks);
   }
-  const result = { agents, compactions, scanned: Object.keys(index.files).length > 0 };
+  const result = { buckets, marks, scanned: Object.keys(index.files).length > 0 };
   if (options.pending) {
     result.pendingBytes = transcriptsOf(sessionDirectories(root, options), fsOps)
       .reduce((sum, { file, size }) => sum + Math.max(0, size - (index.files[file]?.offset ?? 0)), 0);

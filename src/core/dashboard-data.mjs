@@ -2,10 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { parseDoveCurrentRound, cardField } from "./identity-card.mjs";
-import { latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
+import { finishedRoundsOf, latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
 import { readRegisteredProjects } from "./project-registry.mjs";
-import { inspectRoundState, METHOD_ARGUMENTS, parseMarkdownTables, parseMethodDesign, VERDICT_LABELS } from "./round-state.mjs";
-import { readActivity } from "./user-originals.mjs";
+import { roundLedger } from "./round-ledger.mjs";
+import { inspectRoundState, METHOD_ARGUMENTS, parseMarkdownTables, parseMethodDesign, roundStateLocalDate } from "./round-state.mjs";
 
 export { parseMarkdownTables };
 
@@ -15,8 +15,7 @@ const RESEARCH_ROOT = ".dove/research";
 const MAX_TEXT_BYTES = 64 * 1024;
 const MAX_ROUNDS = 40;
 const ROUND_FILE = /^(\d+)[-_](brief|result)\.md$/iu;
-const DAY_MS = 86400000;
-const ACTIVITY_WEEKS = 6;
+
 const AUTHOR_LABELS = [
   [/导师|mentor/iu, "mentor"],
   [/用户|user/iu, "user"],
@@ -170,41 +169,6 @@ function methodDesignSummary(research, reference, fsOps, explicit) {
   };
 }
 
-function dayString(time) {
-  const value = new Date(time);
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-}
-
-// Weekly activity (subagent calls, compactions) beside the rounds that ended
-// that week and their verdicts: how much was done against what it settled.
-function activityWeeks(root, rounds, options) {
-  let activity;
-  try {
-    activity = readActivity(root, { fsOps: options.fsOps, home: options.home, env: options.env });
-  } catch {
-    return null;
-  }
-  if (!activity.scanned) return null;
-  const now = new Date(options.now ?? Date.now());
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7)).getTime();
-  const weeks = [];
-  for (let index = 0; index < ACTIVITY_WEEKS; index += 1) {
-    const start = dayString(monday - index * 7 * DAY_MS);
-    const end = dayString(monday - (index - 1) * 7 * DAY_MS - DAY_MS);
-    const within = (day) => day >= start && day <= end;
-    const sum = (counts) => Object.entries(counts).filter(([day]) => within(day)).reduce((total, [, count]) => total + count, 0);
-    const ended = rounds.filter((round) => round.result?.mtime && within(dayString(round.result.mtime)));
-    weeks.push({
-      start,
-      end,
-      agents: sum(activity.agents),
-      compactions: sum(activity.compactions),
-      results: ended.map((round) => ({ number: round.number, verdict: VERDICT_LABELS[round.result.verdictKind] ?? (round.result.verdict ? "其他写法" : "未写判定") }))
-    });
-  }
-  return weeks;
-}
-
 function progressSummary(root, options) {
   try {
     const state = inspectRoundState(root, { fsOps: options.fsOps, now: options.now, maxRounds: MAX_ROUNDS });
@@ -216,7 +180,7 @@ function progressSummary(root, options) {
         overrun: state.overrun,
         stall: state.stall,
         pending: state.pending,
-        activity: activityWeeks(root, state.rounds, options)
+        ledger: roundLedger(root, { fsOps: options.fsOps, now: options.now, state, provenance: true, home: options.home, env: options.env })
       }
     };
   } catch {
@@ -259,7 +223,7 @@ export function summarizeProject(root, options = {}) {
     exists,
     mainline: fields.Mainline ?? fields["主线"] ?? null,
     coreCapability: fields["Core capability"] ?? fields["Core capability（核心能力）"] ?? fields["Core capability (核心能力)"] ?? fields["核心能力"] ?? null,
-    longTermIntent: intent ? { ...intent, due: longTermIntentDue(intent, options.now) } : null,
+    longTermIntent: intent ? { ...intent, due: longTermIntentDue(intent, finishedRoundsOf(state?.rounds ?? [], roundStateLocalDate)) } : null,
     currentRound: current?.brief ?? null,
     currentSummary: rounds.find((round) => current?.brief?.includes(round.label))?.brief?.summary ?? null,
     methodDesign,

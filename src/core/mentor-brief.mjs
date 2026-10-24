@@ -2,9 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { parsePaperImpactLine } from "./dashboard-data.mjs";
-import { latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
-import { inspectRoundState, VERDICT_LABELS } from "./round-state.mjs";
-import { readActivity, USER_ORIGINALS_PATH } from "./user-originals.mjs";
+import { finishedRoundsOf, latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
+import { renderLedgerRow, roundLedger } from "./round-ledger.mjs";
+import { inspectRoundState, roundStateLocalDate } from "./round-state.mjs";
+import { USER_ORIGINALS_PATH } from "./user-originals.mjs";
 
 const RESEARCH = ".dove/research";
 const ROUND_FILE = /^(\d+)[-_](brief|result)\.md$/iu;
@@ -30,18 +31,9 @@ function dayText(time) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 
-function sumSince(counts, since) {
-  return Object.entries(counts).filter(([day]) => day >= since).reduce((sum, [, count]) => sum + count, 0);
-}
-
 // What Dove reads from the records itself, so the mentor checks facts rather than the host's account of them.
-function computedFacts(project, fsOps, now) {
-  let state;
-  try {
-    state = inspectRoundState(project, { fsOps, now });
-  } catch (error) {
-    return [`未能读取轮次记录：${error.message}`];
-  }
+function computedFacts(project, fsOps, now, state) {
+  if (!state) return ["未能读取轮次记录。"];
   const lines = [];
   const round = state.currentRound;
   if (!round) lines.push("- 当前轮次：身份卡没有指向当前轮次。");
@@ -60,20 +52,21 @@ function computedFacts(project, fsOps, now) {
     const target = item.brief?.targetDimension ?? item.brief?.target ?? "未写";
     lines.push(`  - 第 ${item.number} 轮：对准 ${target}；判定 ${item.result.verdict ?? "未写"}${item.result.verdictKind ? "" : item.result.verdict ? "（不是兑现／未兑现／方法取舍之一）" : ""}。`);
   }
+  // Cost beside what each round settled, and how the host wrote: statistics, not a verdict on the host.
+  try {
+    const ledger = roundLedger(project, { fsOps, now, state, limit: 4, provenance: true });
+    if (ledger.rows.length) {
+      lines.push("- 最近几轮的投入、对账和写法统计（新的在前；一轮从上一轮结果写成到本轮结果写成，按会话记录统计）：");
+      for (const row of ledger.rows) lines.push(`  - ${renderLedgerRow(row)}。`);
+      const summary = ledger.summary;
+      if (summary.finished) lines.push(`  - 这几轮里：写了可检验预测并出了实测的 ${summary.calibrated} 轮，落在预测范围内的 ${summary.hits} 轮，方向和预测相反的 ${summary.wrongWay} 轮${summary.medianRatio != null ? `，预测的变化中位是实际的 ${Math.round(summary.medianRatio * 10) / 10} 倍` : ""}；没写预测的 ${summary.withoutPrediction} 轮；平均每轮用户纠正 ${summary.correctionsPerRound} 次。`);
+    }
+  } catch {
+    // The ledger is a side view; the brief works without it.
+  }
   lines.push(state.mainMetric ? `- 主指标：${state.mainMetric.text}` : "- 主指标：EVAL 开头还没写。");
   const latest = state.trend?.latest;
   lines.push(latest ? `- 八维走势：共 ${state.trend.rows.length} 次判断；最近一次 ${latest.date ?? "未写日期"}（${latest.round ?? "未写轮次"}），最卡的一维 ${latest.bottleneck ?? "未写"}。` : "- 八维走势：EVAL 里还没有走势表。");
-  try {
-    const activity = readActivity(project, { fsOps });
-    if (activity.scanned) {
-      const since = dayText(new Date(now ?? Date.now()).getTime() - 13 * DAY_MS);
-      const finished = state.rounds.filter((item) => item.result?.mtime && dayText(item.result.mtime) >= since);
-      const verdicts = finished.map((item) => VERDICT_LABELS[item.result.verdictKind] ?? "未写判定");
-      lines.push(`- 最近 14 天的活动量：子代理调用 ${sumSince(activity.agents, since)} 次，上下文压缩 ${sumSince(activity.compactions, since)} 次；同期出结果的轮次 ${finished.length} 个${verdicts.length ? `（${verdicts.join("、")}）` : ""}。`);
-    }
-  } catch {
-    // Activity is a side view; the mentor works without it.
-  }
   lines.push(state.pending.length ? "- 等用户定的事：" : "- 等用户定的事：无。");
   for (const item of state.pending) lines.push(`  - ${item.text}`);
   return lines;
@@ -273,6 +266,13 @@ export function renderMentorBrief(root, options = {}) {
   const selected = recentRounds(rounds);
   const notes = readWindow(path.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
   const intent = notes.error ? null : latestLongTermIntent(notes.text);
+  let state = null;
+  try {
+    state = inspectRoundState(project, { fsOps, now: options.now });
+  } catch {
+    state = null;
+  }
+  const intentDue = longTermIntentDue(intent, finishedRoundsOf(state?.rounds ?? [], roundStateLocalDate));
   const intentStatus = notes.error ? `导师笔记${notes.error}` : !intent ? "笔记中没有长期意图一节" : !intent.date ? "长期意图没有有效日期" : `最近一次为 ${intent.date}`;
   const originals = options.userOriginals?.path ?? USER_ORIGINALS_PATH;
   const lines = [
@@ -289,10 +289,10 @@ export function renderMentorBrief(root, options = {}) {
       : []),
     sourceAttachment(project, originals, fsOps),
     ...(options.userOriginalsError ? [`- 汇总整理失败：${options.userOriginalsError}。已有摘录可能不完整，缺失不等于用户没说过。`] : []),
-    longTermIntentDue(intent, options.now) ? `- 长期意图对照到期（${intentStatus}）：读 USER_ORIGINALS.md 并核对本人来源，返回带日期的“长期意图”。` : `- 长期意图对照：${intentStatus}，尚未到期。`, "",
+    intentDue ? `- 长期意图对照到期（${intentStatus}；每 3 轮或出现方法取舍时到期）：读 USER_ORIGINALS.md 并核对本人来源，返回带日期的“长期意图”。` : `- 长期意图对照：${intentStatus}，尚未到期（每 3 轮或出现方法取舍时到期）。`, "",
     "## Dove 算出的事实", "",
     "以下由 Dove 直接从身份卡、轮次说明和结果开头、EVAL 和导师笔记读出，不经宿主转述；记录本身写错时以原始结果为准。", "",
-    ...computedFacts(project, fsOps, options.now), "",
+    ...computedFacts(project, fsOps, options.now, state), "",
     "## 原始结果文件与数字", "",
     "只展开显式提供的前 4 个文件，每个最多末尾 8 KiB；不递归找数据，不追读文件中的路径。未附原始结果就直说证据不足，宿主声称已读或已测不算证据。",
     ...(options.artifact?.length

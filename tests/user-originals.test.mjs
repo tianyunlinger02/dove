@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { refreshUserOriginals, sessionDirectories, USER_ORIGINALS_INDEX_PATH, USER_ORIGINALS_PATH } from "../src/core/user-originals.mjs";
+import { readActivity, refreshUserOriginals, sessionDirectories, USER_ORIGINALS_INDEX_PATH, USER_ORIGINALS_PATH } from "../src/core/user-originals.mjs";
 
 const encode = (value) => value.replace(/[^A-Za-z0-9]/gu, "-");
 const user = (cwd, time, content, extra = {}) => JSON.stringify({ type: "user", cwd, timestamp: time, message: { role: "user", content }, ...extra });
@@ -195,4 +195,33 @@ test("huge tool and image lines are skipped and a time budget defers the rest to
   const done = refreshUserOriginals(project, { home });
   assert.deepEqual([done.own, done.pendingBytes], [1, 0]);
   assert.doesNotMatch(fs.readFileSync(path.join(project, USER_ORIGINALS_PATH), "utf8"), /xxxx/u);
+});
+
+test("activity counts calls, compactions, writing and claims made without running or reading", (t) => {
+  const { home, project, directory } = fixture(t);
+  const assistant = (time, content, extra = {}) => JSON.stringify({ type: "assistant", cwd: project, timestamp: time, message: { role: "assistant", content }, ...extra });
+  fs.writeFileSync(path.join(directory, "aaaaaaaa-activity.jsonl"), [
+    user(project, "2026-10-20T10:00:00Z", "继续推进"),
+    assistant("2026-10-20T10:01:00Z", [{ type: "text", text: "已跑通，实测可能不错，但是仍需核对。" }]),
+    assistant("2026-10-20T10:02:00Z", [{ type: "tool_use", id: "a", name: "Bash", input: { command: "python eval.py" } }]),
+    assistant("2026-10-20T10:03:00Z", [{ type: "text", text: "已验证通过。" }]),
+    assistant("2026-10-20T10:04:00Z", [{ type: "tool_use", id: "b", name: "Agent", input: { subagent_type: "dove-mentor", prompt: "x" } }, { type: "tool_use", id: "c", name: "Agent", input: { subagent_type: "general-purpose", prompt: "y" } }]),
+    assistant("2026-10-20T10:05:00Z", [{ type: "tool_use", id: "d", name: "Write", input: { file_path: "/x", content: "sha256 冻结 hash(x) @dataclass(frozen=True)" } }]),
+    assistant("2026-10-20T10:06:00Z", [{ type: "tool_use", id: "e", name: "Write", input: { file_path: `${project}/.dove/research/rounds/016-brief.md`, content: "Author: mentor" } }]),
+    assistant("2026-10-20T10:07:00Z", [{ type: "tool_use", id: "f", name: "Write", input: { file_path: ".dove/research/rounds/016-brief.md", content: "改写" } }]),
+    assistant("2026-10-20T10:08:00Z", [{ type: "tool_use", id: "g", name: "Write", input: { file_path: "/elsewhere/.dove/research/rounds/017-brief.md", content: "别的项目" } }]),
+    JSON.stringify({ type: "system", subtype: "compact_boundary", cwd: project, timestamp: "2026-10-20T11:00:00Z" }),
+    user(project, "2026-10-20T12:00:00Z", "下一步呢"),
+    assistant("2026-10-20T12:01:00Z", [{ type: "text", text: "测试通过。" }]),
+    assistant("2026-10-20T12:02:00Z", [{ type: "text", text: "子任务里的实测不算" }], { isSidechain: true }),
+    ""
+  ].join("\n"));
+  refreshUserOriginals(project, { home });
+  const activity = readActivity(project, { home });
+  assert.deepEqual(activity.marks, { "brief:16": Date.parse("2026-10-20T10:06:00Z") }, "the first write of a round file in this project");
+  assert.ok(Object.keys(activity.buckets).length >= 3, "ten-minute buckets keep the hours apart");
+  const totals = {};
+  for (const counts of Object.values(activity.buckets)) for (const [field, value] of Object.entries(counts)) totals[field] = (totals[field] ?? 0) + value;
+  const chars = ["已跑通，实测可能不错，但是仍需核对。", "已验证通过。", "测试通过。"].reduce((sum, text) => sum + Array.from(text).length, 0);
+  assert.deepEqual(totals, { agents: 2, mentor: 1, compactions: 1, gates: 2, chars, hedges: 3, claims: 3, unrun: 2 });
 });

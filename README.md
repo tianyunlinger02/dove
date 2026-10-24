@@ -65,7 +65,7 @@ When the host ends a turn on an overrun or a stall, the Stop hook quotes the use
 
 ## Mentor and independent review
 
-The mentor (`dove-mentor`, a fresh read-only native agent) is called when a round has a verdict, on an overrun or stall, for a new method design and when the user asks. It first answers three questions (what substantive progress, whether recent work tested the method or built infrastructure, what is left and whether there is a faster path), then checks the verdict, updates the eight-dimension judgment, writes the next brief and the plain-language research state, and keeps its notes. Paper-watch judgments happen weekly or on request.
+The mentor (`dove-mentor`, a fresh read-only native agent) is called when a round has a verdict, on an overrun or stall, for a new method design and when the user asks. It first answers three questions (what substantive progress, whether recent work tested the method or built infrastructure, what is left and whether there is a faster path), then checks the verdict, updates the eight-dimension judgment, writes the next brief and the plain-language research state, and keeps its notes. Paper-watch judgments happen weekly or on request; the long-term intent comparison comes due every three rounds or after a method decision.
 
 Independent `dove-review` reads only the specified complete current manuscript, cited results and supplied grounding through Read/Grep/Glob.
 

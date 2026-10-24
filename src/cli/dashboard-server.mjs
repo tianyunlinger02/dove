@@ -624,10 +624,20 @@ function trendTable(trend) {
   const rows = trend.rows.map((r) => [r.date || "—", r.round || "—", ...DIMS.map((d) => (r.grades && r.grades[d]) || "—"), r.bottleneck || "—"]);
   return tableHtml([head, ...rows], true);
 }
-function activityTable(weeks) {
-  const head = ["周", "子代理调用", "上下文压缩", "出结果的轮次与判定"];
-  const rows = weeks.map((w) => [w.start.slice(5) + " — " + w.end.slice(5), String(w.agents), String(w.compactions), w.results.length ? w.results.map((x) => "第 " + x.number + " 轮 " + x.verdict).join("；") : "—"]);
-  return tableHtml([head, ...rows], false);
+function ledgerTable(rows) {
+  const head = ["轮次", "用时", "子代理", "上下文压缩", "导师", "被纠正", "判定", "预测 → 实测"];
+  const body = rows.map((r) => ["第 " + r.number + " 轮" + (r.open ? "（进行中）" : ""), r.duration, r.agents == null ? "—" : String(r.agents), r.compactions == null ? "—" : String(r.compactions), r.mentor == null ? "—" : String(r.mentor), String(r.corrections), r.verdictLabel || "—", (r.prediction || r.actual) ? (r.prediction || "未写") + " → " + (r.actual || (r.open ? "未出" : "未写")) : "—"]);
+  return tableHtml([head, ...body], false);
+}
+function biasTable(rows) {
+  const head = ["轮次", "预测对账", "结果数字有出处", "每千字兜底词", "新增门禁词", "没运行也没读取就说已验证或通过"];
+  const body = rows.map((r) => {
+    const c = r.calibration;
+    const check = c ? (c.hit ? "落在范围内" : "不在范围内") + (c.wrongWay ? "，方向相反" : c.ratio != null ? "，预测变化是实际的 " + (Math.round(c.ratio * 10) / 10) + " 倍" : "") : (r.open ? "—" : (r.prediction ? "缺实测" : "没写预测"));
+    const source = r.provenance ? (r.provenance.artifacts ? r.provenance.found + "/" + r.provenance.numbers : "没链接产物") : "—";
+    return ["第 " + r.number + " 轮", check, source, r.hedgesPer1k == null ? "—" : String(r.hedgesPer1k), r.gates == null ? "—" : String(r.gates), r.unrunClaims == null ? "—" : String(r.unrunClaims)];
+  });
+  return tableHtml([head, ...body], false);
 }
 function progressSection(p) {
   const g = p.progress;
@@ -641,7 +651,9 @@ function progressSection(p) {
   if (g.stall) html += '<div class="card warnbox">停滞：第 ' + esc(g.stall.rounds.join("、")) + " 轮判定都是未兑现，其间没有方法取舍。</div>";
   html += '<h3 class="sub3">等你定的事</h3>' + (g.pending.length ? '<div class="card pending"><ul style="margin:0;padding-left:20px">' + g.pending.map((x) => "<li>" + esc(x.text) + "</li>").join("") + "</ul></div>" : '<div class="card note">没有。</div>');
   html += '<h3 class="sub3">八维走势 <span class="sub">每次导师判断一行，最后一列是当时最卡的一维</span></h3>' + (g.trend && g.trend.rows.length ? '<div class="tablewrap">' + trendTable(g.trend) + "</div>" : '<div class="card note">EVAL 里还没有八维走势表。</div>');
-  html += '<h3 class="sub3">活动量和结果 <span class="sub">每周的子代理调用和上下文压缩，对照同周出结果的轮次</span></h3>' + (g.activity ? '<div class="tablewrap">' + activityTable(g.activity) + "</div>" : '<div class="card note">还没有统计；面板每日预热或生成导师材料时从会话记录里数。</div>');
+  const ledger = g.ledger;
+  html += '<h3 class="sub3">每轮的投入和结果 <span class="sub">一轮从上一轮结果写成到本轮结果写成；新的在上</span></h3>' + (ledger && ledger.rows.length ? '<div class="tablewrap">' + ledgerTable(ledger.rows) + "</div>" + (ledger.summary.finished ? '<div class="note">最近 ' + ledger.summary.finished + " 轮已出结果：平均每轮被纠正 " + ledger.summary.correctionsPerRound + " 次；写了可检验预测并有实测的 " + ledger.summary.calibrated + " 轮，落在预测范围内 " + ledger.summary.hits + " 轮" + (ledger.summary.medianRatio != null ? "，预测变化中位是实际的 " + (Math.round(ledger.summary.medianRatio * 10) / 10) + " 倍" : "") + "；没写预测 " + ledger.summary.withoutPrediction + " 轮。</div>" : "") + (ledger.activityScanned ? "" : '<div class="note">会话记录还在统计中，子代理、压缩等列暂缺。</div>') : '<div class="card note">还没有轮次记录。</div>');
+  html += '<h3 class="sub3">偏差体检 <span class="sub">只作统计，不提示宿主；结果数字有出处 = 能在结果链接的产物里找到的数字 / 结果里的数字</span></h3>' + (ledger && ledger.rows.length ? '<div class="tablewrap">' + biasTable(ledger.rows) + "</div>" : '<div class="card note">还没有轮次记录。</div>');
   return html + "</section>";
 }
 function identitySection(p) {
@@ -817,6 +829,7 @@ function renderCorrections() {
   let html = '<h1 class="title">反复出现的纠正</h1><div class="path">最近 30 天（自 ' + esc(corrections.since) + " 起）你在各项目里的 " + corrections.messages + " 条原话，按关键词归到主题；只作 Dove 开发的线索，归类可能有误。要把某个主题加进“你最常说的话”，在 Dove 开发时提出，经你同意再改。</div>";
   if (!corrections.topics.length) { view.innerHTML = html + '<div class="card note" style="margin-top:18px">最近 30 天没有归到主题的原话。</div>'; return; }
   html += '<section style="margin-top:18px"><div class="tablewrap">' + tableHtml([["主题", "最近 7 天", "最近 30 天", "各项目"], ...corrections.topics.map((t) => [t.label, String(t.count7), String(t.count30), Object.entries(t.projects).map(([k, v]) => k + " " + v).join("，")])], false) + "</div></section>";
+  if (corrections.perRound && corrections.perRound.length) html += '<section><h2>每轮被纠正几次 <span class="sub">按每个项目最近几轮的起止日期统计；验收比的是每轮平均，不是每周</span></h2><div class="tablewrap">' + tableHtml([["项目", "最近几轮（新 → 旧）", "已出结果的轮次平均"], ...corrections.perRound.map((x) => [x.project, x.rounds.map((r) => "第" + r.number + "轮 " + r.corrections).join("，") || "—", x.average == null ? "—" : String(x.average)])], false) + "</div></section>";
   html += "<section><h2>各主题最近的原话</h2>" + corrections.topics.map((t) => '<details class="card" style="margin-bottom:8px"><summary>' + esc(t.label) + " · " + t.count30 + " 条</summary>" + t.recent.map((x) => '<div class="paper"><div class="why">' + esc(x.time + " · " + x.project) + '</div><div class="abs">' + esc(x.text) + "</div></div>").join("") + "</details>").join("") + "</section>";
   view.innerHTML = html;
 }

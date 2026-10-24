@@ -155,6 +155,54 @@ function sectionParagraph(lines, pattern) {
   return body.join(" ") || null;
 }
 
+// A number that is not part of a name such as "F1" or "R2"; fractions count as percent.
+const QUANTITY = /(?<![A-Za-z0-9.])(\d+(?:\.\d+)?)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*([%％])?/gu;
+const RANGE = /(?<![A-Za-z0-9.])(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?\s*[%％]?)\s*(?:–|—|-|~|～|至|到)\s*(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?\s*[%％]?)/u;
+
+function quantities(text) {
+  return [...String(text ?? "").matchAll(QUANTITY)].map((match) => {
+    const value = Number(match[1]);
+    const denominator = match[2] === undefined ? null : Number(match[2]);
+    return denominator ? (value / denominator) * 100 : value;
+  }).filter((value) => Number.isFinite(value));
+}
+
+/**
+ * "预测：事件 F1 12.7 → 15–18": the value now (last number before the arrow)
+ * and the predicted value or range (after it). Without an arrow there is no baseline.
+ */
+export function parsePrediction(text) {
+  if (!text) return null;
+  const [left, ...rest] = String(text).split(/→|->|⇒|=>/u);
+  const right = rest.length ? rest.join(" ") : left;
+  const range = right.match(RANGE);
+  const values = range ? [...quantities(range[1]), ...quantities(range[2])] : quantities(right).slice(0, 1);
+  const baseline = rest.length ? quantities(left).at(-1) ?? null : null;
+  if (!values.length) return { text, baseline, low: null, high: null };
+  return { text, baseline, low: Math.min(...values), high: Math.max(...values) };
+}
+
+/** "实测：事件 F1 13.2": the first value. */
+export function parseActual(text) {
+  if (!text) return null;
+  return { text, value: quantities(text)[0] ?? null };
+}
+
+/** Did the actual land in the predicted range, and how did the predicted change compare with the real one? */
+export function calibrateRound(prediction, actual) {
+  if (prediction?.low == null || actual?.value == null) return null;
+  const hit = actual.value >= prediction.low - 1e-9 && actual.value <= prediction.high + 1e-9;
+  let ratio = null;
+  let wrongWay = false;
+  if (prediction.baseline != null) {
+    const predicted = (prediction.low + prediction.high) / 2 - prediction.baseline;
+    const real = actual.value - prediction.baseline;
+    if (predicted !== 0 && (real === 0 || Math.sign(real) !== Math.sign(predicted))) wrongWay = true;
+    else if (real !== 0) ratio = predicted / real;
+  }
+  return { hit, ratio, wrongWay };
+}
+
 /** The plan a round brief commits to at its top. */
 export function parseBriefHeader(text = "") {
   const lines = unfencedLines(text);
@@ -172,6 +220,7 @@ export function parseBriefHeader(text = "") {
     due: validDate(dates[0]),
     start: validDate(startAfter ?? startBefore),
     scale: headerField(head, "规模")?.replace(/[。；;，,\s]+$/u, "") || null,
+    prediction: parsePrediction(headerField(head, "预测")),
     success: plainLine(sectionParagraph(lines, /预期结果/u), 300)
   };
 }
@@ -189,8 +238,9 @@ export const VERDICT_LABELS = Object.freeze({ delivered: "兑现", missed: "未�
 
 /** The verdict a round result records against its own brief. */
 export function parseResultHeader(text = "") {
-  const verdict = headerField(unfencedLines(text, HEADER_LINES), "判定");
-  return { verdict, verdictKind: verdictKind(verdict) };
+  const head = unfencedLines(text, HEADER_LINES);
+  const verdict = headerField(head, "判定");
+  return { verdict, verdictKind: verdictKind(verdict), actual: parseActual(headerField(head, "实测")) };
 }
 
 export function parseMarkdownTables(text = "") {
@@ -359,7 +409,7 @@ export function inspectRoundState(project, options = {}) {
       number: entry.number,
       label: entry.label,
       ...(brief ? { brief: { file: `rounds/${entry.brief}`, createdAt: brief.birthtime ?? brief.mtime, ...parseBriefHeader(brief.text) } } : {}),
-      ...(result ? { result: { file: `rounds/${entry.result}`, mtime: result.mtime, ...parseResultHeader(result.text) } } : {})
+      ...(result ? { result: { file: `rounds/${entry.result}`, mtime: result.mtime, createdAt: result.birthtime ?? result.mtime, ...parseResultHeader(result.text) } } : {})
     };
   });
 
@@ -420,12 +470,13 @@ export function renderRoundSituation(state, options = {}) {
     const brief = round.brief;
     const status = round.result ? "已出结果" : round.open ? "进行中" : (round.status ?? "未写状态");
     lines.push(`本轮：第 ${round.number} 轮（${brief.file}，${status}）${brief.summary ? `：${brief.summary}` : "。"}`);
-    const missing = [["对准", brief.target], ["见分晓", brief.due], ["规模", brief.scale]].filter(([, value]) => !value).map(([name]) => name);
+    const missing = [["对准", brief.target], ["见分晓", brief.due], ["规模", brief.scale], ["预测", brief.prediction]].filter(([, value]) => !value).map(([name]) => name);
     lines.push(`对准：${brief.targetDimension ?? brief.target ?? "未写"}；怎样算成：${brief.success ?? "说明里还没有“## 预期结果”"}`);
     lines.push(`规模：${brief.scale ?? "未写"}；见分晓：${dueText(brief.due, options.now)}。`);
+    if (brief.prediction) lines.push(`预测：${brief.prediction.text}`);
     // Only the open round is asked to complete its plan; finished rounds are never rewritten.
     if (round.open && missing.length) lines.push(`本轮说明开头还缺：${missing.join("、")}。补上再接着做。`);
-    const newFormat = Boolean(brief.target || brief.due || brief.scale);
+    const newFormat = Boolean(brief.target || brief.due || brief.scale || brief.prediction);
     if (round.result?.verdict) lines.push(`判定：${round.result.verdict}。`);
     else if (round.result && newFormat) lines.push("判定：结果开头还没写“判定：”（兑现／未兑现／方法取舍），请对照说明里事先写下的标准补上。");
   }
@@ -457,6 +508,63 @@ export function renderRoundStatusSummary(state, options = {}) {
     parts.push(`主指标 ${plainLine([name, value].filter(Boolean).join(" "), options.metricLimit ?? 40)}${where ? `（${where.replace(/\s+/gu, "")}）` : ""}`);
   }
   return parts.join(" · ");
+}
+
+// Numbers a result reports that its linked artifacts can back: decimals,
+// percentages and fraction numerators, matched within the reported precision
+// (also as a percentage of a ratio). A hint for the mentor, not a verdict.
+const REPORTED = /(?<![A-Za-z0-9.])(\d+\.\d+|\d+(?:\.\d+)?\s*[%％]|\d+\s*\/\s*\d+)/gu;
+const ARTIFACT_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?/gu;
+const TEXT_ARTIFACT = /\.(?:json|jsonl|csv|tsv|txt|md|log|ya?ml|tex)$/iu;
+const provenanceCache = new Map();
+
+function reportedNumbers(text) {
+  return [...String(text).matchAll(REPORTED)].map((match) => {
+    const token = match[1].replace(/\s+/gu, "");
+    const numerator = token.split("/")[0].replace(/[%％]/u, "");
+    const decimals = numerator.includes(".") ? numerator.split(".")[1].length : 0;
+    return { token, value: Number(numerator), tolerance: 0.5 * 10 ** -decimals };
+  }).filter((item) => Number.isFinite(item.value));
+}
+
+function measuredSection(text) {
+  const lines = String(text).split(/\r?\n/u);
+  const start = lines.findIndex((line) => /^\s*#{1,4}\s+.*(?:测到了什么|Measurements)/u.test(line));
+  if (start === -1) return text;
+  const end = lines.findIndex((line, index) => index > start && /^\s*#{1,4}\s+/u.test(line));
+  return lines.slice(start + 1, end === -1 ? undefined : end).join("\n");
+}
+
+export function resultProvenance(project, resultFile, options = {}) {
+  const fsOps = options.fsOps ?? fs;
+  const file = path.join(project, RESEARCH, resultFile);
+  const read = readText(file, fsOps, MAX_TEXT_BYTES);
+  if (!read) return null;
+  const key = `${file}:${read.mtime}`;
+  if (provenanceCache.has(key)) return provenanceCache.get(key);
+  const numbers = reportedNumbers(measuredSection(read.text));
+  const links = [...read.text.matchAll(/\]\(([^)\s]+)\)/gu)].map((match) => match[1].split("#")[0])
+    .filter((link) => link && !/^[a-z]+:/iu.test(link) && TEXT_ARTIFACT.test(link));
+  // Dove's own records (the brief, mentor notes) restate numbers; only artifacts outside them count.
+  const records = `${path.join(path.resolve(project), ".dove")}${path.sep}`;
+  const artifacts = [...new Set(links.map((link) => path.resolve(path.dirname(file), decodeURIComponent(link))))]
+    .filter((artifact) => !artifact.startsWith(records)).slice(0, 10);
+  const values = [];
+  let opened = 0;
+  for (const artifact of artifacts) {
+    const content = readText(artifact, fsOps, 4 << 20);
+    if (!content) continue;
+    opened += 1;
+    for (const match of content.text.matchAll(ARTIFACT_NUMBER)) {
+      if (values.length >= 300_000) break;
+      values.push(Number(match[0]));
+    }
+  }
+  const found = opened ? numbers.filter((item) => values.some((value) => Math.abs(value - item.value) <= item.tolerance || Math.abs(value * 100 - item.value) <= item.tolerance)).length : 0;
+  const result = numbers.length ? { numbers: numbers.length, found: opened ? found : null, artifacts: opened } : null;
+  provenanceCache.set(key, result);
+  if (provenanceCache.size > 500) provenanceCache.delete(provenanceCache.keys().next().value);
+  return result;
 }
 
 export { localDate as roundStateLocalDate };

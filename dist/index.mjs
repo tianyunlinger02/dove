@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.5.2" : null;
+var injectedVersion = true ? "3.5.3" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -179,9 +179,9 @@ var DOVE_OPERATING_RECORDS = `\u8EAB\u4EFD\u5361\u3001\u8F6E\u6B21\u548C EVAL \u
 - \u5199\u201C\u7528\u6237\u539F\u8BDD\uFF0F\u7528\u6237\u786E\u8BA4\u201D\u65F6\uFF0C\u9010\u6761\u5BF9 \`.dove/install/USER_ORIGINALS.md\` \u91CC\u7684\u672C\u4EBA\u8BB0\u5F55\u6838\u5B9E\uFF0C\u8F6C\u8FF0\u6807\u4E3A\u8F6C\u8FF0\uFF1B\u6C47\u603B\u8986\u76D6\u4E0D\u5168\u4E0D\u7B49\u4E8E\u7528\u6237\u6CA1\u8BF4\u8FC7\uFF0C\u9700\u8981\u65F6\u67E5\u539F\u4F1A\u8BDD\u3002\u5361\u7247\u3001\u5EFA\u8BAE\u6216\u5B57\u6BB5\u5B58\u5728\u90FD\u4E0D\u7B49\u4E8E\u7528\u6237\u786E\u8BA4\uFF0C\u6682\u5B9A\u7684\u4FDD\u6301\u6682\u5B9A\uFF0C\u539F\u8BDD\u8BB0\u9519\u5C31\u66F4\u6B63\uFF0C\u4E0D\u964D\u4F4E\u76EE\u6807\u3002\u672A\u53D8\u7684 Mainline \u539F\u6587\u4E0D\u6539\uFF1B\u65B9\u6CD5\u5426\u51B3\u5199\u5728\u8BF4\u660E\u6216\u5BFC\u5E08\u7B14\u8BB0\u91CC\u3002\u4F5C\u8005\u504F\u597D\u7531 Dove \u7EF4\u62A4\uFF0C\u7528\u6237\u8981\u6539\u901A\u7528\u504F\u597D\u65F6\uFF0C\u63D0\u9192\u7528\u6237\u4E00\u6B21\u5728 Dove \u91CC\u6539\uFF0C\u9879\u76EE\u9650\u5236\u7559\u5728 User restrictions\u3002
 
 **\u8F6E\u6B21 \`rounds/NNN-brief.md\` \u548C \`NNN-result.md\`\u3002** \u4E00\u8F6E\u662F\u4E00\u4E2A\u65B9\u6CD5\u7248\u672C\u5728\u771F\u5B9E\u8BC4\u6D4B\u4E0A\u7684\u4E00\u6B21\u5B8C\u6574\u68C0\u9A8C\uFF0C\u6216\u4E00\u6B21\u5BF9\u6838\u5FC3\u65B9\u6CD5\u7684\u53D6\u820D\u3002\u4E3A\u5B83\u505A\u7684\u8BCA\u65AD\u3001\u4FEE\u590D\u548C\u5C0F\u5B9E\u9A8C\u90FD\u5728\u8FD9\u4E00\u8F6E\u91CC\u5B8C\u6210\uFF0C\u8BB0\u5728\u666E\u901A\u9879\u76EE\u6587\u4EF6\u91CC\uFF0C\u4E0D\u5355\u72EC\u5F00\u8F6E\uFF0C\u4E5F\u4E0D\u5355\u72EC\u8C03\u5BFC\u5E08\u3002
-- \u8BF4\u660E\u5F00\u5934\u56DB\u884C\uFF1A\`Author: mentor / user / external\` \u52A0\u65B9\u6CD5\u7248\u672C\u548C\u5E26\u65E5\u671F\u7684\u7528\u6237\u6765\u6E90\uFF1B\`\u5BF9\u51C6\uFF1A<\u516B\u7EF4\u4E2D\u7684\u4E00\u7EF4>\`\uFF0C\u53D6\u6700\u8FD1\u4E00\u6B21\u5BFC\u5E08\u5224\u65AD\u91CC\u6700\u5361\u7684\u90A3\u4E00\u7EF4\uFF1B\`\u89C1\u5206\u6653\uFF1AYYYY-MM-DD\uFF08\u5F00\u59CB\uFF1AYYYY-MM-DD\uFF09\`\uFF1B\`\u89C4\u6A21\uFF1A<\u6837\u672C\u6570\u3001\u8BAD\u7EC3\u91CF\u548C\u7B97\u529B\uFF0C\u4EE5\u53CA\u4E3A\u4EC0\u4E48\u8DB3\u4EE5\u5206\u51FA\u7ED3\u679C>\`\u3002\u63A5\u7740\u5199\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u8BF4\u660E\u672C\u8F6E\u505A\u4EC0\u4E48\uFF0C\u518D\u5199 \`## \u9884\u671F\u7ED3\u679C\`\uFF1A\u5BF9\u51C6\u7684\u90A3\u4E00\u7EF4\u600E\u6837\u7B97\u6210\uFF0C\u539F\u4EFB\u52A1\u7AEF\u5230\u7AEF\u6307\u6807\u9884\u8BA1\u600E\u6837\u53D8\uFF0C\u4F9D\u8D56\u54EA\u6761\u8FDE\u63A5\uFF0C\u4EC0\u4E48\u7ED3\u679C\u4F1A\u6539\u53D8\u51B3\u5B9A\u3002\u7EA6 2000 \u5B57\u3002
+- \u8BF4\u660E\u5F00\u5934\u4E94\u884C\uFF1A\`Author: mentor / user / external\` \u52A0\u65B9\u6CD5\u7248\u672C\u548C\u5E26\u65E5\u671F\u7684\u7528\u6237\u6765\u6E90\uFF1B\`\u5BF9\u51C6\uFF1A<\u516B\u7EF4\u4E2D\u7684\u4E00\u7EF4>\`\uFF0C\u53D6\u6700\u8FD1\u4E00\u6B21\u5BFC\u5E08\u5224\u65AD\u91CC\u6700\u5361\u7684\u90A3\u4E00\u7EF4\uFF1B\`\u89C1\u5206\u6653\uFF1AYYYY-MM-DD\uFF08\u5F00\u59CB\uFF1AYYYY-MM-DD\uFF09\`\uFF1B\`\u89C4\u6A21\uFF1A<\u6837\u672C\u6570\u3001\u8BAD\u7EC3\u91CF\u548C\u7B97\u529B\uFF0C\u4EE5\u53CA\u4E3A\u4EC0\u4E48\u8DB3\u4EE5\u5206\u51FA\u7ED3\u679C>\`\uFF1B\`\u9884\u6D4B\uFF1A<\u8981\u6D4B\u7684\u91CF> <\u73B0\u5728\u7684\u503C> \u2192 <\u9884\u8BA1\u7684\u503C\u6216\u533A\u95F4>\`\uFF0C\u91CF\u53D6\u4E3B\u6307\u6807\u6216\u5BF9\u51C6\u90A3\u4E00\u7EF4\u91CC\u80FD\u6D4B\u7684\u6570\uFF0C\u5355\u4F4D\u548C\u5199\u6CD5\u8DDF\u5B9E\u6D4B\u4E00\u81F4\u3002\u63A5\u7740\u5199\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u8BF4\u660E\u672C\u8F6E\u505A\u4EC0\u4E48\uFF0C\u518D\u5199 \`## \u9884\u671F\u7ED3\u679C\`\uFF1A\u5BF9\u51C6\u7684\u90A3\u4E00\u7EF4\u600E\u6837\u7B97\u6210\uFF0C\u539F\u4EFB\u52A1\u7AEF\u5230\u7AEF\u6307\u6807\u9884\u8BA1\u600E\u6837\u53D8\uFF0C\u4F9D\u8D56\u54EA\u6761\u8FDE\u63A5\uFF0C\u4EC0\u4E48\u7ED3\u679C\u4F1A\u6539\u53D8\u51B3\u5B9A\u3002\u7EA6 2000 \u5B57\u3002
 - \u65B0\u65B9\u6CD5\u65F6\uFF0C\u5728\u540C\u4E00\u4EFD\u8BF4\u660E\u91CC\u52A0 \`## \u65B9\u6CD5\u8BBE\u8BA1\`\uFF0C\u4F9D\u6B21\u5199 \`### \u8981\u89E3\u51B3\u4EC0\u4E48\u95EE\u9898\`\u3001\`### \u5916\u90E8\u65B9\u6CD5\u4E3A\u4EC0\u4E48\u4E0D\u884C\`\u3001\`### \u6211\u4EEC\u7684\u6539\u6CD5\u4E3A\u4EC0\u4E48\u80FD\u4FEE\`\uFF08\u8981\u56DE\u7B54\u7684\u5185\u5BB9\u89C1\u4E0B\u9762\u201C\u52A8\u624B\u505A\u65B0\u65B9\u6CD5\u524D\u201D\uFF09\u3002\u7528\u6237\u672C\u4EBA\u770B\u8FC7\u540E\uFF0C\u5728 \`### \u7528\u6237\u7B54\u590D\` \u8BB0\u4E0B\u7528\u6237\u7684\u539F\u8BDD\u548C\u51FA\u5904\uFF1B\u7B54\u590D\u4E4B\u524D\u8FD9\u4E00\u8282\u7559\u7A7A\uFF0C\u4E0D\u5199\u8BF4\u660E\u6216\u8BC4\u8BBA\uFF0CDove \u636E\u6B64\u628A\u5B83\u5217\u4E3A\u7B49\u7528\u6237\u5B9A\u7684\u4E8B\u3002\u4E0D\u5F97\u5236\u9020\u786E\u8BA4\uFF0C\u5B57\u6BB5\u5B58\u5728\u4E5F\u4E0D\u7B49\u4E8E\u6279\u51C6\u3002\u8EAB\u4EFD\u5361\u7684 Method design \u6307\u5411\u8FD9\u4EFD\u8BF4\u660E\uFF0C\u540E\u7EED\u4FEE\u590D\u8F6E\u590D\u7528\uFF0C\u4E0D\u590D\u5236\u3001\u4E0D\u53E6\u5EFA\u6587\u4EF6\u3002
-- \u7ED3\u679C\u5F00\u5934\u4E00\u884C\uFF1A\`\u5224\u5B9A\uFF1A\u5151\u73B0 / \u672A\u5151\u73B0 / \u65B9\u6CD5\u53D6\u820D\uFF08\u91C7\u7EB3\u6216\u653E\u5F03\u4EC0\u4E48\uFF09\`\uFF0C\u53EA\u5BF9\u7167\u8BF4\u660E\u91CC\u4E8B\u5148\u5199\u4E0B\u7684\u6807\u51C6\u3002\u63A5\u7740\u5199\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\uFF0C\u518D\u5206 \`## \u6539\u4E86\u4EC0\u4E48\`\u3001\`## \u6D4B\u5230\u4E86\u4EC0\u4E48\`\u3001\`## \u9884\u671F\u4E0E\u5B9E\u9645\`\uFF08\u542B\u6539\u53D8\u4E86\u4EC0\u4E48\u5224\u65AD\u3001\u4E0B\u4E00\u6B65\u56E0\u6B64\u6539\u4EC0\u4E48\u3001\u79BB\u6700\u7EC8\u7ED3\u679C\u8FD1\u4E86\u591A\u5C11\uFF09\u3001\`## \u5BF9\u672C\u8F6E\u8BF4\u660E\u7684\u53CD\u9A73\u4E0E\u4E8B\u5B9E\u66F4\u6B63\`\u3002\u7EA6 3000 \u5B57\u3002
+- \u7ED3\u679C\u5F00\u5934\u4E24\u884C\uFF1A\`\u5224\u5B9A\uFF1A\u5151\u73B0 / \u672A\u5151\u73B0 / \u65B9\u6CD5\u53D6\u820D\uFF08\u91C7\u7EB3\u6216\u653E\u5F03\u4EC0\u4E48\uFF09\`\uFF0C\u53EA\u5BF9\u7167\u8BF4\u660E\u91CC\u4E8B\u5148\u5199\u4E0B\u7684\u6807\u51C6\uFF1B\`\u5B9E\u6D4B\uFF1A<\u540C\u4E00\u4E2A\u91CF> <\u5B9E\u9645\u503C>\`\u3002Dove \u62FF\u9884\u6D4B\u548C\u5B9E\u6D4B\u9010\u8F6E\u5BF9\u8D26\uFF0C\u7EDF\u8BA1\u7ED9\u5BFC\u5E08\u548C\u9762\u677F\u770B\u3002\u63A5\u7740\u5199\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\uFF0C\u518D\u5206 \`## \u6539\u4E86\u4EC0\u4E48\`\u3001\`## \u6D4B\u5230\u4E86\u4EC0\u4E48\`\u3001\`## \u9884\u671F\u4E0E\u5B9E\u9645\`\uFF08\u542B\u6539\u53D8\u4E86\u4EC0\u4E48\u5224\u65AD\u3001\u4E0B\u4E00\u6B65\u56E0\u6B64\u6539\u4EC0\u4E48\u3001\u79BB\u6700\u7EC8\u7ED3\u679C\u8FD1\u4E86\u591A\u5C11\uFF09\u3001\`## \u5BF9\u672C\u8F6E\u8BF4\u660E\u7684\u53CD\u9A73\u4E0E\u4E8B\u5B9E\u66F4\u6B63\`\u3002\u7EA6 3000 \u5B57\u3002
 - \u8BF4\u660E\u7684\u4F5C\u8005\u4F18\u5148\u7EA7\u662F\u7528\u6237 > \u5916\u90E8 > \u5BFC\u5E08\uFF1B\u5BFC\u5E08\u5199\u7684\u8BF4\u660E\u539F\u6837\u4FDD\u5B58\uFF0C\u66FF\u6362\u65F6\u6CE8\u660E\u4F5C\u8005\u548C\u539F\u56E0\u3002\u65E7\u8F6E\u6B21\u4E0D\u56DE\u6539\u3002RESEARCH.md \u53EA\u4F5C\u77ED\u5386\u53F2\u7D22\u5F15\uFF0C\u65E7\u7684 missions/\u3001experiments/\u3001claims/ \u4FDD\u7559\uFF0C\u4E0D\u518D\u8FFD\u52A0\u3002
 
 **EVAL \`.dove/research/EVAL.md\`\u3002**
@@ -192,7 +192,7 @@ var DOVE_OPERATING_RECORDS = `\u8EAB\u4EFD\u5361\u3001\u8F6E\u6B21\u548C EVAL \u
 var DOVE_OPERATING_MOMENTS = Object.freeze([
   "**\u4E3B\u7EBF\u786E\u8BA4\u540E**\uFF1A\u7B2C\u4E00\u4EF6\u4E8B\u662F\u642D\u771F\u5B9E\u8BC4\u6D4B\u3002\u6253\u901A\u5B98\u65B9\u6307\u6807\uFF1B\u51C6\u5907\u771F\u5B9E\u5F00\u53D1\u96C6\uFF08\u4E0D\u662F\u4ECE\u8BAD\u7EC3\u6570\u636E\u5207\u51FA\u6765\u7684\u5408\u6210\u96C6\uFF09\uFF1B\u590D\u73B0\u6700\u5F3A\u53EF\u5F97\u7684\u5916\u90E8\u65B9\u6CD5\uFF0C\u6216\u81F3\u5C11\u5BF9\u9F50\u5B83\u62A5\u544A\u7684\u6570\u5B57\uFF1B\u5728 EVAL \u5F00\u5934\u5199\u597D\u4E3B\u6307\u6807\uFF0C\u8BF7\u7528\u6237\u786E\u8BA4\u3002\u7F3A\u6570\u636E\u3001\u6A21\u578B\u3001\u7F51\u7EDC\u6216\u8D44\u6E90\uFF0C\u7ACB\u523B\u544A\u8BC9\u7528\u6237\u7F3A\u4EC0\u4E48\uFF0C\u4E0D\u5E26\u7740\u7F3A\u53E3\u7EE7\u7EED\u505A\u65B9\u6CD5\u3002\u8BAD\u7EC3\u5206\u5E03\u6216\u5408\u6210\u96C6\u4E0A\u7684\u6570\u5B57\u53EA\u7B97\u5F00\u53D1\u4FE1\u53F7\u3002",
   "**\u52A8\u624B\u505A\u65B0\u65B9\u6CD5\u6216\u65B0\u6838\u5FC3\u6A21\u5757\u524D**\uFF1A\u6309\u7814\u7A76\u6807\u51C6\u91CC\u7684\u201C\u4ECE\u95EE\u9898\u5230\u65B9\u6CD5\u201D\u63A8\uFF0C\u7136\u540E\u5728\u65B9\u6CD5\u8BBE\u8BA1\u4E09\u6BB5\u91CC\u56DE\u7B54\u56DB\u4EF6\u4E8B\uFF1A\u8981\u89E3\u51B3\u7684\u5177\u4F53\u5931\u8D25\u548C\u771F\u5B9E\u6570\u636E\u8BC1\u636E\uFF0C\u4EE5\u53CA\u505A\u6210\u8981\u5230\u4EC0\u4E48\u7A0B\u5EA6\uFF08\u53C2\u7167\u76EE\u6807\u6863\u6B21\u771F\u5B9E\u5F55\u7528\u7684\u540C\u7C7B\u8BBA\u6587\uFF1A\u5728\u4EC0\u4E48\u57FA\u51C6\u4E0A\u3001\u6BD4\u6700\u5F3A\u65B9\u6CD5\u597D\u591A\u5C11\uFF09\uFF1B\u5916\u90E8\u65B9\u6CD5\u4E3A\u4EC0\u4E48\u4E0D\u884C\uFF0C\u70B9\u540D\u5177\u4F53\u673A\u5236\u548C\u4E0D\u8DB3\u7684\u4F9D\u636E\uFF0C\u5916\u90E8\u65B9\u6CD5\u5305\u62EC\u672C\u9886\u57DF\u9AD8\u624B\u7684\u9ED8\u8BA4\u505A\u6CD5\uFF08\u6700\u5F3A\u65B9\u6CD5\u3001\u6210\u719F\u5DE5\u5177\u3001\u5E38\u89C4\u6570\u636E\u548C\u8BAD\u7EC3\u89C4\u6A21\uFF09\u548C\u5176\u4ED6\u9886\u57DF\u89E3\u540C\u6784\u95EE\u9898\u7684\u505A\u6CD5\uFF0C\u4E0D\u7528\u5B83\u4EEC\u8981\u8BF4\u4E3A\u4EC0\u4E48\uFF1B\u6211\u4EEC\u7684\u6539\u6CD5\u3001\u9884\u671F\u3001\u6210\u7ACB\u548C\u5931\u8D25\u7684\u6807\u51C6\uFF0C\u89C4\u6A21\u4E3A\u4EC0\u4E48\u8DB3\u4EE5\u5206\u51FA\u7ED3\u679C\uFF0C\u7B2C\u4E00\u4E2A\u771F\u5B9E\u7ED3\u679C\u9884\u8BA1\u591A\u4E45\u80FD\u51FA\uFF1B\u8FD9\u4E00\u6B65\u4E3A\u4EC0\u4E48\u80FD\u6539\u5584\u539F\u95EE\u9898\u3001\u80FD\u6539\u5584\u591A\u5C11\uFF08\u5148\u7528\u7406\u60F3\u7ED3\u679C\u4EE3\u5165\uFF0C\u6216\u5728\u5C11\u91CF\u771F\u5B9E\u76EE\u6807\u4E0A\u68C0\u9A8C\u8FD9\u6761\u8FDE\u63A5\uFF09\u3002\u540C\u65F6\u8BF4\u660E\u5B83\u548C\u5BFC\u5E08\u7B14\u8BB0\u91CC\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u6709\u4EC0\u4E48\u4E0D\u540C\uFF0C\u5E76\u770B\u4E00\u773C `.dove/install/CROSS_PROJECT_EXPERIENCE.md`\uFF08\u5404\u9879\u76EE\u5BFC\u5E08\u6807\u4E3A\u53EF\u8FC1\u79FB\u7684\u8BA4\u8BC6\uFF09\u3002\u7528\u6237\u672C\u4EBA\u770B\u8FC7\u540E\uFF0C\u6309\u7528\u6237\u7684\u771F\u5B9E\u7B54\u590D\u5F00\u5DE5\uFF1B\u540C\u4E00\u65B9\u6848\u770B\u8FC7\u5C31\u4E0D\u91CD\u590D\uFF0C\u4FEE bug\u3001\u4FEE\u8BC4\u4EF7\u4E0D\u8D70\u8FD9\u4E00\u6B65\u3002\u65B9\u6CD5\u7B2C\u4E00\u7248\u5C31\u505A\u6210\u80FD\u5728\u771F\u5B9E\u8BC4\u6D4B\u4E0A\u8DD1\u901A\u7684\u5B8C\u6574\u7248\u672C\uFF0C\u6838\u5FC3\u521B\u65B0\u4E4B\u5916\u7528\u6210\u719F\u7684\u5E93\u3001\u4EE3\u7801\u548C\u5E38\u89C4\u8BAD\u7EC3\u65B9\u6848\uFF0C\u5148\u62FF\u5230\u771F\u5B9E\u6570\u5B57\uFF0C\u518D\u6309\u6570\u5B57\u653B\u6700\u5927\u7684\u74F6\u9888\uFF0C\u4E0D\u5148\u628A\u67D0\u4E2A\u90E8\u4EF6\u505A\u5230\u5B8C\u7F8E\u3002",
-  "**\u6BCF\u8F6E\u5F00\u59CB**\uFF1A\u5199\u6E05\u5BF9\u51C6\u54EA\u4E00\u7EF4\u3001\u600E\u6837\u7B97\u6210\u3001\u89C4\u6A21\u591A\u5927\u548C\u4E3A\u4EC0\u4E48\u591F\u3001\u54EA\u5929\u89C1\u5206\u6653\u3002\u89C4\u6A21\u6309\u7814\u7A76\u6807\u51C6\u201C\u8BC1\u636E\u4E0E\u5B9E\u9A8C\u201D\u5148\u7B97\u9884\u671F\u5DEE\u522B\u548C\u566A\u58F0\uFF0C\u5206\u4E0D\u51FA\u7ED3\u679C\u5C31\u6539\u8BBE\u8BA1\uFF0C\u4E0D\u8DD1\u6CE8\u5B9A\u5206\u4E0D\u51FA\u7ED3\u679C\u7684\u5C0F\u7248\u672C\u3002\u4E92\u4E0D\u4F9D\u8D56\u7684\u89E3\u91CA\u6216\u65B9\u6CD5\u540C\u65F6\u8BD5\uFF0C\u5728\u7528\u6237\u7684\u8D44\u6E90\u89C4\u5219\u5185\u7528\u8DB3\u7A7A\u95F2\u7B97\u529B\u3002\u8865\u79CD\u5B50\u3001\u52A0\u8BAD\u7EC3\u6B65\u6570\u3001\u8865\u6D88\u878D\u6216\u57FA\u7EBF\uFF0C\u90FD\u4E0D\u80FD\u4EE3\u66FF\u4FEE\u5DF2\u77E5\u7F3A\u9677\u3002",
+  "**\u6BCF\u8F6E\u5F00\u59CB**\uFF1A\u5199\u6E05\u5BF9\u51C6\u54EA\u4E00\u7EF4\u3001\u600E\u6837\u7B97\u6210\u3001\u89C4\u6A21\u591A\u5927\u548C\u4E3A\u4EC0\u4E48\u591F\u3001\u54EA\u5929\u89C1\u5206\u6653\uFF0C\u4EE5\u53CA\u9884\u6D4B\u7684\u6570\u5B57\u3002\u89C4\u6A21\u6309\u7814\u7A76\u6807\u51C6\u201C\u8BC1\u636E\u4E0E\u5B9E\u9A8C\u201D\u5148\u7B97\u9884\u671F\u5DEE\u522B\u548C\u566A\u58F0\uFF0C\u5206\u4E0D\u51FA\u7ED3\u679C\u5C31\u6539\u8BBE\u8BA1\uFF0C\u4E0D\u8DD1\u6CE8\u5B9A\u5206\u4E0D\u51FA\u7ED3\u679C\u7684\u5C0F\u7248\u672C\u3002\u4E92\u4E0D\u4F9D\u8D56\u7684\u89E3\u91CA\u6216\u65B9\u6CD5\u540C\u65F6\u8BD5\uFF0C\u5728\u7528\u6237\u7684\u8D44\u6E90\u89C4\u5219\u5185\u7528\u8DB3\u7A7A\u95F2\u7B97\u529B\u3002\u8865\u79CD\u5B50\u3001\u52A0\u8BAD\u7EC3\u6B65\u6570\u3001\u8865\u6D88\u878D\u6216\u57FA\u7EBF\uFF0C\u90FD\u4E0D\u80FD\u4EE3\u66FF\u4FEE\u5DF2\u77E5\u7F3A\u9677\u3002",
   "**\u6BCF\u8F6E\u7ED3\u675F**\uFF1A\u5199\u5224\u5B9A\uFF0C\u4EE5\u53CA\u8FD9\u4E00\u8F6E\u6539\u53D8\u4E86\u4EC0\u4E48\u5224\u65AD\u3001\u4E0B\u4E00\u6B65\u56E0\u6B64\u6539\u4EC0\u4E48\u3001\u79BB\u6700\u7EC8\u7ED3\u679C\u8FD1\u4E86\u591A\u5C11\uFF0C\u7136\u540E\u8BF7\u5BFC\u5E08\u5224\u65AD\u3002\u79D1\u7814\u7ED3\u679C\u53EA\u6709\u4E24\u79CD\uFF1A\u771F\u5B9E\u4EFB\u52A1\u8BC4\u6D4B\u4E0A\u7684\u6307\u6807\u53D8\u5316\uFF0C\u6216\u5BF9\u6838\u5FC3\u65B9\u6CD5\u7684\u660E\u786E\u53D6\u820D\uFF08\u91C7\u7EB3\u6216\u653E\u5F03\u4E00\u4E2A\u65B9\u6CD5\u65CF\uFF09\u3002\u53EA\u6392\u9664\u67D0\u4E2A\u5C40\u90E8\u5199\u6CD5\u3001\u53C2\u6570\u6216\u5B9E\u73B0\u5047\u8BBE\u7684\u8BCA\u65AD\uFF0C\u7B97\u5DE5\u4F5C\u8FDB\u5C55\uFF0C\u4E0D\u7B97\u79D1\u7814\u7ED3\u679C\uFF1B\u6709\u6548\u8D1F\u7ED3\u679C\u80FD\u5B9A\u4E0B\u65B9\u6CD5\u53D6\u820D\u65F6\u624D\u7B97\u3002",
   "**\u8D85\u65F6\u6216\u505C\u6EDE**\uFF1A\u4E00\u8F6E\u8D85\u8FC7\u9884\u8BA1\u65F6\u95F4\u4E00\u500D\u8FD8\u6CA1\u6709\u7ED3\u679C\uFF0C\u6216\u8005\u8FDE\u7EED\u4E24\u8F6E\u5224\u5B9A\u4E3A\u672A\u5151\u73B0\u3001\u5176\u95F4\u4E5F\u6CA1\u6709\u65B9\u6CD5\u53D6\u820D\uFF0CDove \u4F1A\u5F15\u7528\u7528\u6237\u7684\u539F\u8BDD\u8FFD\u95EE\u3002\u8BA4\u771F\u56DE\u7B54\uFF1A\u5361\u5728\u54EA\u91CC\uFF0C\u6709\u6CA1\u6709\u66F4\u5FEB\u7684\u8DEF\uFF1B\u54EA\u4E9B\u73B0\u5728\u5C31\u80FD\u505A\u5374\u4E00\u76F4\u6CA1\u505A\u800C\u4E14\u5F88\u91CD\u8981\uFF0C\u54EA\u4E9B\u5F88\u91CD\u8981\u5374\u4E00\u76F4\u6CA1\u653B\u514B\u3001\u6709\u6CA1\u6709\u529E\u6CD5\u8FD8\u662F\u5F97\u964D\u4F4E\u8981\u6C42\uFF0C\u54EA\u4E9B\u53EF\u6709\u53EF\u65E0\u5374\u4E00\u76F4\u5728\u505A\u3002\u7136\u540E\u505C\u4E0B\u6765\uFF0C\u7528\u4E00\u9875\u51B3\u5B9A\u5907\u5FD8\u95EE\u7528\u6237\uFF1A\u7EE7\u7EED\u5F53\u524D\u65B9\u6CD5\uFF08\u9644\u7406\u7531\uFF09\u3001\u6362\u65B9\u6CD5\uFF08\u81F3\u5C11\u7ED9\u4E00\u4E2A\u4E0D\u662F\u4ECE\u5F53\u524D\u65B9\u6CD5\u6539\u51FA\u6765\u7684\u65B9\u6CD5\u65CF\uFF0C\u53EF\u4EE5\u6765\u81EA\u5176\u4ED6\u9886\u57DF\u89E3\u540C\u6784\u95EE\u9898\u7684\u505A\u6CD5\uFF0C\u8BF4\u6E05\u4E24\u8FB9\u600E\u4E48\u5BF9\u5E94\uFF09\uFF0C\u8FD8\u662F\u6362\u65B9\u5411\u3002\u4E0D\u80FD\u7528\u72EC\u7ACB\u8BCA\u65AD\u4EE3\u66FF\u7528\u6237\u7684\u9009\u62E9\u3002",
   "**\u7528\u6237\u7EA0\u6B63\u4E4B\u540E**\uFF1A\u5148\u6539\u4E0B\u4E00\u6B65\u505A\u6CD5\uFF0C\u628A\u201C\u4E0B\u4E00\u6B65\u5177\u4F53\u6539\u6210\u4EC0\u4E48\u201D\u5199\u8FDB\u4E0B\u4E00\u8F6E\u8BF4\u660E\u3002\u7B80\u77ED\u56DE\u5E94\uFF0C\u53EA\u6309\u8BB0\u5F55\u8BF4\u6E05\u9519\u5728\u54EA\uFF0C\u4E0D\u7F16\u9020\u51FA\u9519\u539F\u56E0\uFF0C\u4E0D\u6269\u6210\u666E\u904D\u7981\u4EE4\uFF0C\u4E5F\u4E0D\u5B58\u6210\u89C4\u5219\u3002"
@@ -418,7 +418,7 @@ tools: Read, Grep, Glob, WebSearch, WebFetch, mcp__exa, mcp__dove-paper-search
 
 ## \u4F60\u624B\u91CC\u7684\u6750\u6599
 
-\u8C03\u7528\u6B63\u6587\u7531 \`dove mentor brief\` \u751F\u6210\uFF0C\u4F9D\u6B21\u662F\uFF1A\u7528\u6237\u539F\u8BDD\u3001\u660E\u786E\u9644\u4E0A\u7684\u539F\u59CB\u7ED3\u679C\u3001Dove \u4ECE\u8BB0\u5F55\u91CC\u7B97\u51FA\u7684\u4E8B\u5B9E\uFF08\u672C\u8F6E\u5BF9\u51C6\u54EA\u4E00\u7EF4\u3001\u89C1\u5206\u6653\u548C\u89C4\u6A21\uFF0C\u6700\u8FD1\u51E0\u8F6E\u7684\u5224\u5B9A\uFF0C\u8D85\u65F6\u548C\u505C\u6EDE\uFF0C\u4E3B\u6307\u6807\uFF0C\u516B\u7EF4\u8D70\u52BF\uFF0C\u5B50\u4EE3\u7406\u548C\u538B\u7F29\u6B21\u6570\uFF0C\u7B49\u7528\u6237\u5B9A\u7684\u4E8B\uFF09\uFF0C\u4EE5\u53CA\u5BBF\u4E3B\u8BB0\u5F55\u7684\u76EE\u5F55\u3002\u518D\u8BFB ${DOVE_RESEARCH_QUALITY_REFERENCE_PATH}\uFF08\u7814\u7A76\u6807\u51C6\uFF09\u3002
+\u8C03\u7528\u6B63\u6587\u7531 \`dove mentor brief\` \u751F\u6210\uFF0C\u4F9D\u6B21\u662F\uFF1A\u7528\u6237\u539F\u8BDD\u3001\u660E\u786E\u9644\u4E0A\u7684\u539F\u59CB\u7ED3\u679C\u3001Dove \u4ECE\u8BB0\u5F55\u91CC\u7B97\u51FA\u7684\u4E8B\u5B9E\uFF08\u672C\u8F6E\u5BF9\u51C6\u54EA\u4E00\u7EF4\u3001\u89C1\u5206\u6653\u548C\u89C4\u6A21\uFF0C\u6700\u8FD1\u51E0\u8F6E\u7684\u5224\u5B9A\uFF0C\u8D85\u65F6\u548C\u505C\u6EDE\uFF0C\u4E3B\u6307\u6807\uFF0C\u516B\u7EF4\u8D70\u52BF\uFF0C\u6BCF\u8F6E\u7684\u6295\u5165\u3001\u9884\u6D4B\u4E0E\u5B9E\u6D4B\u7684\u5BF9\u8D26\u548C\u5199\u6CD5\u7EDF\u8BA1\uFF0C\u7B49\u7528\u6237\u5B9A\u7684\u4E8B\uFF09\uFF0C\u4EE5\u53CA\u5BBF\u4E3B\u8BB0\u5F55\u7684\u76EE\u5F55\u3002\u5BF9\u8D26\u548C\u5199\u6CD5\u7EDF\u8BA1\u662F\u7EBF\u7D22\uFF1A\u9884\u6D4B\u4E00\u518D\u9AD8\u4F30\u3001\u7ED3\u679C\u91CC\u7684\u6570\u5B57\u5728\u94FE\u63A5\u7684\u4EA7\u7269\u91CC\u627E\u4E0D\u5230\u3001\u6CA1\u8FD0\u884C\u5C31\u8BF4\u9A8C\u8BC1\uFF0C\u6216\u8005\u4E00\u518D\u4E0D\u5199\u53EF\u68C0\u9A8C\u7684\u9884\u6D4B\u3001\u515C\u5E95\u8BCD\u548C\u81EA\u8BBE\u5173\u5361\u504F\u591A\uFF0C\u90FD\u503C\u5F97\u5728\u65B9\u5411\u548C\u7591\u95EE\u91CC\u6307\u51FA\uFF0C\u5E76\u5BF9\u7167\u539F\u59CB\u7ED3\u679C\u6838\u5B9E\u3002\u518D\u8BFB ${DOVE_RESEARCH_QUALITY_REFERENCE_PATH}\uFF08\u7814\u7A76\u6807\u51C6\uFF09\u3002
 
 \u7528\u6237\u539F\u8BDD\u6C47\u603B USER_ORIGINALS.md \u662F\u7D22\u5F15\u6027\u6458\u5F55\uFF08\u6BCF\u6761\u6700\u591A 700 \u5B57\uFF09\uFF0C\u4E0D\u662F\u5B8C\u6574\u4F1A\u8BDD\uFF1B\u5FC5\u8981\u65F6\u6309\u6765\u6E90\u548C\u65E5\u671F\u56DE\u67E5\u672C\u4EBA\u6B63\u6587\uFF0C\u6392\u9664\u8F6C\u8FF0\u3001\u5DE5\u5177\u8FD4\u56DE\u4E0E\u7CFB\u7EDF\u6CE8\u5165\u3002\u6C47\u603B\u6CA1\u8986\u76D6\u4E0D\u7B49\u4E8E\u7528\u6237\u6CA1\u8BF4\u8FC7\u3002\u9650\u5236\u5FC5\u987B\u6307\u5230\u7528\u6237\u539F\u8BDD\uFF0C\u533A\u5206\u957F\u671F\u4E0E\u5355\u6B21\u4EFB\u52A1\u3002
 
@@ -445,7 +445,7 @@ EVAL\u3001\u8BF4\u660E\u3001\u7ED3\u679C\u548C\u6267\u884C\u8005\u610F\u89C1\u53
 1. **\u4E09\u95EE\u7684\u56DE\u7B54**\u3002
 2. **\u65B9\u5411\u548C\u7591\u95EE\u3001\u5224\u5B9A\u6838\u5BF9**\uFF1A\u767D\u8BDD\uFF0C\u7ED3\u8BBA\u5728\u524D\u3002
 3. **\u516B\u7EF4\u5224\u65AD**\uFF1A\u6309\u7814\u7A76\u6807\u51C6\uFF08\u5B9E\u73B0 1\u20133\uFF0C\u5176\u4F59 1\u20134\uFF09\uFF0C\u5199\u6210 EVAL \u8D70\u52BF\u8868\u7684\u4E00\u884C\uFF08\u65E5\u671F\u3001\u8F6E\u6B21\u3001\u516B\u4E2A\u7B49\u7EA7\u3001\u6700\u5361\u7684\u4E00\u7EF4\uFF09\uFF0C\u8868\u4E0B\u9644\u4F9D\u636E\u3001\u672A\u77E5\u548C\u5171\u540C\u74F6\u9888\u3002\u6700\u5361\u7684\u4E00\u7EF4\u5C31\u662F\u4E0B\u4E00\u8F6E\u7684\u5BF9\u51C6\u3002
-4. **\u4E0B\u4E00\u8F6E\u8BF4\u660E**\uFF1A\u6309\u64CD\u4F5C\u8BF4\u660E\u7684\u8BF4\u660E\u683C\u5F0F\uFF0C\u5F00\u5934\u5199 Author\u3001\u5BF9\u51C6\u3001\u89C1\u5206\u6653\uFF08\u542B\u5F00\u59CB\u65E5\u671F\uFF09\u3001\u89C4\u6A21\uFF0C\u7136\u540E\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u548C\u201C## \u9884\u671F\u7ED3\u679C\u201D\uFF1B\u5199\u6E05\u505A\u4EC0\u4E48\u3001\u4E3A\u4EC0\u4E48\u3001\u771F\u5B9E\u7ED3\u679C\u610F\u5473\u7740\u4EC0\u4E48\u3001\u7ED3\u679C\u600E\u6837\u6539\u53D8\u51B3\u5B9A\uFF0C\u4EE5\u53CA\u516C\u5E73\u5BF9\u7167\u3001\u8F93\u5165\u3001\u9884\u7B97\u548C\u4E3A\u4EC0\u4E48\u8DB3\u4EE5\u5206\u51FA\u7ED3\u679C\u3002
+4. **\u4E0B\u4E00\u8F6E\u8BF4\u660E**\uFF1A\u6309\u64CD\u4F5C\u8BF4\u660E\u7684\u8BF4\u660E\u683C\u5F0F\uFF0C\u5F00\u5934\u5199 Author\u3001\u5BF9\u51C6\u3001\u89C1\u5206\u6653\uFF08\u542B\u5F00\u59CB\u65E5\u671F\uFF09\u3001\u89C4\u6A21\u3001\u9884\u6D4B\uFF0C\u7136\u540E\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u548C\u201C## \u9884\u671F\u7ED3\u679C\u201D\uFF1B\u5199\u6E05\u505A\u4EC0\u4E48\u3001\u4E3A\u4EC0\u4E48\u3001\u771F\u5B9E\u7ED3\u679C\u610F\u5473\u7740\u4EC0\u4E48\u3001\u7ED3\u679C\u600E\u6837\u6539\u53D8\u51B3\u5B9A\uFF0C\u4EE5\u53CA\u516C\u5E73\u5BF9\u7167\u3001\u8F93\u5165\u3001\u9884\u7B97\u548C\u4E3A\u4EC0\u4E48\u8DB3\u4EE5\u5206\u51FA\u7ED3\u679C\u3002
 5. **\u7814\u7A76\u72B6\u6001**\uFF1A\u7EA6 300 \u5B57\u767D\u8BDD\uFF0C\u8BA9\u7B2C\u4E00\u6B21\u63A5\u624B\u7684\u4EBA\u770B\u61C2\uFF1A\u73B0\u5728\u5728\u505A\u4EC0\u4E48\u3001\u771F\u5B9E\u7ED3\u679C\u662F\u591A\u5C11\u3001\u610F\u5473\u7740\u4EC0\u4E48\u3001\u5361\u5728\u54EA\u91CC\u3002\u4E3B\u4F1A\u8BDD\u539F\u6837\u66F4\u65B0\u5230\u8EAB\u4EFD\u5361\u3002
 6. **\u5BFC\u5E08\u7B14\u8BB0**\uFF1A\u4F60\u7684\u5224\u65AD\u548C\u62C5\u5FE7\uFF1B\u4E0A\u6B21\u7684\u9884\u6D4B\u6709\u6CA1\u6709\u5151\u73B0\uFF1B\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u65CF\u548C\u539F\u56E0\uFF1B\u4EE5\u201C\u53EF\u8FC1\u79FB\uFF1A\u201D\u5F00\u5934\u5199\u51FA\u80FD\u7528\u5230\u5176\u4ED6\u9879\u76EE\u7684\u8BA4\u8BC6\uFF08\u8DE8\u9879\u76EE\u7ECF\u9A8C\u9875\u6C47\u603B\u8FD9\u4E9B\u884C\uFF09\uFF1B\u201C### \u5F85\u7528\u6237\u51B3\u5B9A\u201D\u5217\u51FA\u53EA\u6709\u7528\u6237\u80FD\u5B9A\u7684\u4E8B\uFF0C\u6CA1\u6709\u5C31\u5199\u201C\u65E0\u201D\u3002\u4E3B\u4F1A\u8BDD\u539F\u6837\u8FFD\u52A0\u5230 MENTOR_NOTES.md\u3002
 \u672B\u5C3E\u6CE8\u660E\u65B9\u6CD5\u7248\u672C\u3001\u5B9E\u9645\u8BFB\u8FC7\u7684\u6587\u4EF6\u548C\u7247\u6BB5\u3001\u7528\u6237\u539F\u8BDD\u7684\u8303\u56F4\u3002
@@ -1667,6 +1667,10 @@ function today(now) {
   const current = new Date(now ?? Date.now());
   return Date.UTC(current.getFullYear(), current.getMonth(), current.getDate());
 }
+function localDate(time) {
+  const value = new Date(time);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
 function unfencedLines(text, limit = Infinity) {
   const lines = [];
   let fence = null;
@@ -1717,6 +1721,42 @@ function sectionParagraph(lines, pattern) {
   }
   return body.join(" ") || null;
 }
+var QUANTITY = /(?<![A-Za-z0-9.])(\d+(?:\.\d+)?)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*([%％])?/gu;
+var RANGE = /(?<![A-Za-z0-9.])(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?\s*[%％]?)\s*(?:–|—|-|~|～|至|到)\s*(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?\s*[%％]?)/u;
+function quantities(text) {
+  return [...String(text ?? "").matchAll(QUANTITY)].map((match) => {
+    const value = Number(match[1]);
+    const denominator = match[2] === void 0 ? null : Number(match[2]);
+    return denominator ? value / denominator * 100 : value;
+  }).filter((value) => Number.isFinite(value));
+}
+function parsePrediction(text) {
+  if (!text) return null;
+  const [left, ...rest] = String(text).split(/→|->|⇒|=>/u);
+  const right = rest.length ? rest.join(" ") : left;
+  const range = right.match(RANGE);
+  const values = range ? [...quantities(range[1]), ...quantities(range[2])] : quantities(right).slice(0, 1);
+  const baseline = rest.length ? quantities(left).at(-1) ?? null : null;
+  if (!values.length) return { text, baseline, low: null, high: null };
+  return { text, baseline, low: Math.min(...values), high: Math.max(...values) };
+}
+function parseActual(text) {
+  if (!text) return null;
+  return { text, value: quantities(text)[0] ?? null };
+}
+function calibrateRound(prediction, actual) {
+  if (prediction?.low == null || actual?.value == null) return null;
+  const hit = actual.value >= prediction.low - 1e-9 && actual.value <= prediction.high + 1e-9;
+  let ratio = null;
+  let wrongWay = false;
+  if (prediction.baseline != null) {
+    const predicted = (prediction.low + prediction.high) / 2 - prediction.baseline;
+    const real = actual.value - prediction.baseline;
+    if (predicted !== 0 && (real === 0 || Math.sign(real) !== Math.sign(predicted))) wrongWay = true;
+    else if (real !== 0) ratio = predicted / real;
+  }
+  return { hit, ratio, wrongWay };
+}
 function parseBriefHeader(text = "") {
   const lines = unfencedLines(text);
   const head = lines.slice(0, HEADER_LINES);
@@ -1732,6 +1772,7 @@ function parseBriefHeader(text = "") {
     due: validDate(dates[0]),
     start: validDate(startAfter ?? startBefore),
     scale: headerField(head, "\u89C4\u6A21")?.replace(/[。；;，,\s]+$/u, "") || null,
+    prediction: parsePrediction(headerField(head, "\u9884\u6D4B")),
     success: plainLine(sectionParagraph(lines, /预期结果/u), 300)
   };
 }
@@ -1745,8 +1786,9 @@ function verdictKind(value) {
 }
 var VERDICT_LABELS = Object.freeze({ delivered: "\u5151\u73B0", missed: "\u672A\u5151\u73B0", decision: "\u65B9\u6CD5\u53D6\u820D" });
 function parseResultHeader(text = "") {
-  const verdict = headerField(unfencedLines(text, HEADER_LINES), "\u5224\u5B9A");
-  return { verdict, verdictKind: verdictKind(verdict) };
+  const head = unfencedLines(text, HEADER_LINES);
+  const verdict = headerField(head, "\u5224\u5B9A");
+  return { verdict, verdictKind: verdictKind(verdict), actual: parseActual(headerField(head, "\u5B9E\u6D4B")) };
 }
 function parseMarkdownTables(text = "") {
   const tables = [];
@@ -1891,7 +1933,7 @@ function inspectRoundState(project, options = {}) {
       number: entry.number,
       label: entry.label,
       ...brief ? { brief: { file: `rounds/${entry.brief}`, createdAt: brief.birthtime ?? brief.mtime, ...parseBriefHeader(brief.text) } } : {},
-      ...result ? { result: { file: `rounds/${entry.result}`, mtime: result.mtime, ...parseResultHeader(result.text) } } : {}
+      ...result ? { result: { file: `rounds/${entry.result}`, mtime: result.mtime, createdAt: result.birthtime ?? result.mtime, ...parseResultHeader(result.text) } } : {}
     };
   });
   const currentNumber = roundNumberOf(current?.brief);
@@ -1939,11 +1981,12 @@ function renderRoundSituation(state2, options = {}) {
     const brief = round.brief;
     const status = round.result ? "\u5DF2\u51FA\u7ED3\u679C" : round.open ? "\u8FDB\u884C\u4E2D" : round.status ?? "\u672A\u5199\u72B6\u6001";
     lines.push(`\u672C\u8F6E\uFF1A\u7B2C ${round.number} \u8F6E\uFF08${brief.file}\uFF0C${status}\uFF09${brief.summary ? `\uFF1A${brief.summary}` : "\u3002"}`);
-    const missing = [["\u5BF9\u51C6", brief.target], ["\u89C1\u5206\u6653", brief.due], ["\u89C4\u6A21", brief.scale]].filter(([, value]) => !value).map(([name]) => name);
+    const missing = [["\u5BF9\u51C6", brief.target], ["\u89C1\u5206\u6653", brief.due], ["\u89C4\u6A21", brief.scale], ["\u9884\u6D4B", brief.prediction]].filter(([, value]) => !value).map(([name]) => name);
     lines.push(`\u5BF9\u51C6\uFF1A${brief.targetDimension ?? brief.target ?? "\u672A\u5199"}\uFF1B\u600E\u6837\u7B97\u6210\uFF1A${brief.success ?? "\u8BF4\u660E\u91CC\u8FD8\u6CA1\u6709\u201C## \u9884\u671F\u7ED3\u679C\u201D"}`);
     lines.push(`\u89C4\u6A21\uFF1A${brief.scale ?? "\u672A\u5199"}\uFF1B\u89C1\u5206\u6653\uFF1A${dueText(brief.due, options.now)}\u3002`);
+    if (brief.prediction) lines.push(`\u9884\u6D4B\uFF1A${brief.prediction.text}`);
     if (round.open && missing.length) lines.push(`\u672C\u8F6E\u8BF4\u660E\u5F00\u5934\u8FD8\u7F3A\uFF1A${missing.join("\u3001")}\u3002\u8865\u4E0A\u518D\u63A5\u7740\u505A\u3002`);
-    const newFormat = Boolean(brief.target || brief.due || brief.scale);
+    const newFormat = Boolean(brief.target || brief.due || brief.scale || brief.prediction);
     if (round.result?.verdict) lines.push(`\u5224\u5B9A\uFF1A${round.result.verdict}\u3002`);
     else if (round.result && newFormat) lines.push("\u5224\u5B9A\uFF1A\u7ED3\u679C\u5F00\u5934\u8FD8\u6CA1\u5199\u201C\u5224\u5B9A\uFF1A\u201D\uFF08\u5151\u73B0\uFF0F\u672A\u5151\u73B0\uFF0F\u65B9\u6CD5\u53D6\u820D\uFF09\uFF0C\u8BF7\u5BF9\u7167\u8BF4\u660E\u91CC\u4E8B\u5148\u5199\u4E0B\u7684\u6807\u51C6\u8865\u4E0A\u3002");
   }
@@ -1973,6 +2016,53 @@ function renderRoundStatusSummary(state2, options = {}) {
   }
   return parts.join(" \xB7 ");
 }
+var REPORTED = /(?<![A-Za-z0-9.])(\d+\.\d+|\d+(?:\.\d+)?\s*[%％]|\d+\s*\/\s*\d+)/gu;
+var ARTIFACT_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?/gu;
+var TEXT_ARTIFACT = /\.(?:json|jsonl|csv|tsv|txt|md|log|ya?ml|tex)$/iu;
+var provenanceCache = /* @__PURE__ */ new Map();
+function reportedNumbers(text) {
+  return [...String(text).matchAll(REPORTED)].map((match) => {
+    const token = match[1].replace(/\s+/gu, "");
+    const numerator = token.split("/")[0].replace(/[%％]/u, "");
+    const decimals = numerator.includes(".") ? numerator.split(".")[1].length : 0;
+    return { token, value: Number(numerator), tolerance: 0.5 * 10 ** -decimals };
+  }).filter((item) => Number.isFinite(item.value));
+}
+function measuredSection(text) {
+  const lines = String(text).split(/\r?\n/u);
+  const start = lines.findIndex((line) => /^\s*#{1,4}\s+.*(?:测到了什么|Measurements)/u.test(line));
+  if (start === -1) return text;
+  const end = lines.findIndex((line, index) => index > start && /^\s*#{1,4}\s+/u.test(line));
+  return lines.slice(start + 1, end === -1 ? void 0 : end).join("\n");
+}
+function resultProvenance(project, resultFile, options = {}) {
+  const fsOps = options.fsOps ?? fs7;
+  const file = path6.join(project, RESEARCH, resultFile);
+  const read = readText(file, fsOps, MAX_TEXT_BYTES);
+  if (!read) return null;
+  const key = `${file}:${read.mtime}`;
+  if (provenanceCache.has(key)) return provenanceCache.get(key);
+  const numbers = reportedNumbers(measuredSection(read.text));
+  const links = [...read.text.matchAll(/\]\(([^)\s]+)\)/gu)].map((match) => match[1].split("#")[0]).filter((link) => link && !/^[a-z]+:/iu.test(link) && TEXT_ARTIFACT.test(link));
+  const records = `${path6.join(path6.resolve(project), ".dove")}${path6.sep}`;
+  const artifacts = [...new Set(links.map((link) => path6.resolve(path6.dirname(file), decodeURIComponent(link))))].filter((artifact) => !artifact.startsWith(records)).slice(0, 10);
+  const values = [];
+  let opened = 0;
+  for (const artifact of artifacts) {
+    const content = readText(artifact, fsOps, 4 << 20);
+    if (!content) continue;
+    opened += 1;
+    for (const match of content.text.matchAll(ARTIFACT_NUMBER)) {
+      if (values.length >= 3e5) break;
+      values.push(Number(match[0]));
+    }
+  }
+  const found = opened ? numbers.filter((item) => values.some((value) => Math.abs(value - item.value) <= item.tolerance || Math.abs(value * 100 - item.value) <= item.tolerance)).length : 0;
+  const result = numbers.length ? { numbers: numbers.length, found: opened ? found : null, artifacts: opened } : null;
+  provenanceCache.set(key, result);
+  if (provenanceCache.size > 500) provenanceCache.delete(provenanceCache.keys().next().value);
+  return result;
+}
 
 // src/core/session-start-hook.mjs
 import fs9 from "node:fs";
@@ -1985,7 +2075,13 @@ import path7 from "node:path";
 var USER_ORIGINALS_PATH = ".dove/install/USER_ORIGINALS.md";
 var USER_ORIGINALS_INDEX_PATH = ".dove/install/user-originals-index.json";
 var ACTIVITY_INDEX_PATH = ".dove/install/activity-index.json";
-var ACTIVITY_SCHEMA = 1;
+var ACTIVITY_BUCKET_MS = 6e5;
+var ACTIVITY_SCHEMA = 2;
+var HEDGES = ["\u4F46\u662F", "\u4E0D\u8FC7", "\u53EF\u80FD", "\u5C1A\u672A", "\u4ECD\u9700", "\u4E0D\u4EE3\u8868", "\u4E0D\u7B49\u4E8E", "\u4E0D\u80FD\u5BA3\u79F0", "\u4E0D\u4FDD\u8BC1", "\u8BC1\u636E\u8FB9\u754C", "\u6709\u5F85", "\u6682\u4E0D"];
+var GATES = /sha256|哈希|冻结|门禁|equivalence gate|只读清单/giu;
+var ROUND_FILE2 = /(?:^|\/)\.dove\/research\/rounds\/(\d+)[-_](brief|result)\.md$/u;
+var CLAIMS = /已验证|验证通过|测试通过|全部通过|已跑通|跑通了|已确认可用/gu;
+var ACTIVITY_FIELDS = Object.freeze(["agents", "compactions", "mentor", "chars", "hedges", "gates", "claims", "unrun"]);
 var SKIP = /^(?:<|\[Image|\[Your previous response|\[Request interrupted|This session is being continued|Base directory for this skill|# dove\.|Another Claude session sent|Caveat:|Continue the conversation from where|Stop hook feedback|【Dove 引用用户)/u;
 var RELAY = /^(?:主会话 ?Claude|Claude[:：，,]|用户已同意|【用户已同意|告知[:：]|更正上一条|转达|用户 ?\d{4}-\d{2}-\d{2} ?决定|用户原话（|请先完整阅读)/u;
 var SHORT = 6;
@@ -2069,16 +2165,22 @@ function insideRoot(record, root) {
   const relative = path7.relative(root, record.cwd);
   return !(relative === ".." || relative.startsWith(`..${path7.sep}`) || path7.isAbsolute(relative));
 }
-function localDay(timestamp) {
-  const time = Date.parse(String(timestamp ?? ""));
-  if (!Number.isFinite(time)) return null;
-  const value = new Date(time);
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+function bump(found, bucket, field, amount = 1) {
+  if (!amount) return;
+  const counts = found.buckets[bucket] ?? (found.buckets[bucket] = {});
+  counts[field] = (counts[field] ?? 0) + amount;
 }
-function collectActivity(line, root, found) {
+function mark(found, key, time) {
+  if (!(found.marks[key] <= time)) found.marks[key] = time;
+}
+function occurrences(text, needle) {
+  return text.split(needle).length - 1;
+}
+function collectActivity(line, root, found, state2) {
   const compaction = line.includes('"compact_boundary"');
-  const agent = line.includes('"tool_use"') && (line.includes('"name":"Agent"') || line.includes('"name":"Task"'));
-  if (!compaction && !agent) return;
+  const userText = line.includes('"type":"user"') && !line.includes('"tool_use_id"');
+  const assistant = line.includes('"type":"assistant"');
+  if (!compaction && !userText && !assistant) return;
   let record;
   try {
     record = JSON.parse(line);
@@ -2086,16 +2188,52 @@ function collectActivity(line, root, found) {
     return;
   }
   if (record?.isSidechain || !insideRoot(record, root)) return;
-  const day = localDay(record.timestamp);
-  if (!day) return;
-  if (compaction && record.type === "system" && record.subtype === "compact_boundary") found.compactions[day] = (found.compactions[day] ?? 0) + 1;
-  if (agent && record.type === "assistant" && Array.isArray(record.message?.content)) {
-    const calls = record.message.content.filter((block) => block?.type === "tool_use" && (block.name === "Agent" || block.name === "Task")).length;
-    if (calls) found.agents[day] = (found.agents[day] ?? 0) + calls;
+  const time = Date.parse(record.timestamp);
+  if (!Number.isFinite(time)) return;
+  const bucket = String(Math.floor(time / ACTIVITY_BUCKET_MS));
+  if (record.type === "system" && record.subtype === "compact_boundary") {
+    bump(found, bucket, "compactions");
+    return;
+  }
+  if (record.type === "user") {
+    if (!record.isMeta && !record.isCompactSummary && messageTexts(record).some((text) => text.trim())) state2.evidence = false;
+    return;
+  }
+  if (record.type !== "assistant" || !Array.isArray(record.message?.content)) return;
+  for (const block of record.message.content) {
+    if (block?.type === "tool_use") {
+      const input = block.input ?? {};
+      if (block.name === "Agent" || block.name === "Task") {
+        bump(found, bucket, "agents");
+        if (input.subagent_type === "dove-mentor") bump(found, bucket, "mentor");
+      } else if (block.name === "Bash" || block.name === "Read") {
+        state2.evidence = true;
+      } else if (block.name === "Write" || block.name === "Edit") {
+        const target = String(input.file_path ?? "");
+        const round = target.match(ROUND_FILE2);
+        if (round && block.name === "Write" && (!path7.isAbsolute(target) || target.startsWith(`${root}${path7.sep}`))) mark(found, `${round[2]}:${Number(round[1])}`, time);
+        const written = `${input.content ?? ""}${input.new_string ?? ""}`.match(GATES)?.length ?? 0;
+        const before = String(input.old_string ?? "").match(GATES)?.length ?? 0;
+        bump(found, bucket, "gates", Math.max(0, written - before));
+      }
+    } else if (block?.type === "text" && typeof block.text === "string") {
+      bump(found, bucket, "chars", Array.from(block.text).length);
+      bump(found, bucket, "hedges", HEDGES.reduce((sum, word) => sum + occurrences(block.text, word), 0));
+      const claims = block.text.match(CLAIMS)?.length ?? 0;
+      bump(found, bucket, "claims", claims);
+      if (!state2.evidence) bump(found, bucket, "unrun", claims);
+    }
   }
 }
-function addCounts(target, source) {
-  for (const [day, count] of Object.entries(source ?? {})) target[day] = (target[day] ?? 0) + count;
+function mergeBuckets(target, source) {
+  for (const [bucket, counts] of Object.entries(source ?? {})) {
+    const into = target[bucket] ?? (target[bucket] = {});
+    for (const field of ACTIVITY_FIELDS) if (counts[field]) into[field] = (into[field] ?? 0) + counts[field];
+  }
+  return target;
+}
+function mergeMarks(target, source) {
+  for (const [key, time] of Object.entries(source ?? {})) if (!(target[key] <= time)) target[key] = time;
   return target;
 }
 function collect(line, session, root, found) {
@@ -2188,15 +2326,16 @@ function refreshActivity(project, options = {}) {
   let pending = 0;
   for (const { file, size } of transcriptsOf(sessionDirectories(root, options), fsOps)) {
     const known = previous.files[file];
-    const resume = known && known.offset <= size ? known : { offset: 0, agents: {}, compactions: {} };
+    const resume = known && known.offset <= size ? known : { offset: 0, buckets: {}, marks: {}, evidence: false };
     if (resume.offset === size || Date.now() >= deadline) {
       files[file] = resume;
       if (resume.offset < size) pending += size - resume.offset;
       continue;
     }
-    const found = { agents: {}, compactions: {} };
-    const offset = scanNewLines(file, resume.offset, fsOps, (line) => collectActivity(line, root, found), deadline);
-    files[file] = { offset, agents: addCounts({ ...resume.agents }, found.agents), compactions: addCounts({ ...resume.compactions }, found.compactions) };
+    const found = { buckets: {}, marks: {} };
+    const state2 = { evidence: Boolean(resume.evidence) };
+    const offset = scanNewLines(file, resume.offset, fsOps, (line) => collectActivity(line, root, found, state2), deadline);
+    files[file] = { offset, buckets: mergeBuckets(structuredClone(resume.buckets ?? {}), found.buckets), marks: mergeMarks({ ...resume.marks }, found.marks), evidence: state2.evidence };
     if (offset < size) pending += size - offset;
   }
   for (const [file, item] of Object.entries(previous.files)) if (!(file in files)) files[file] = item;
@@ -2208,13 +2347,13 @@ function readActivity(project, options = {}) {
   const fsOps = options.fsOps ?? fs8;
   const root = path7.resolve(project);
   const index = readActivityIndex(path7.join(root, ACTIVITY_INDEX_PATH), root, fsOps);
-  const agents = {};
-  const compactions = {};
+  const buckets = {};
+  const marks = {};
   for (const item of Object.values(index.files)) {
-    addCounts(agents, item.agents);
-    addCounts(compactions, item.compactions);
+    mergeBuckets(buckets, item.buckets);
+    mergeMarks(marks, item.marks);
   }
-  const result = { agents, compactions, scanned: Object.keys(index.files).length > 0 };
+  const result = { buckets, marks, scanned: Object.keys(index.files).length > 0 };
   if (options.pending) {
     result.pendingBytes = transcriptsOf(sessionDirectories(root, options), fsOps).reduce((sum, { file, size }) => sum + Math.max(0, size - (index.files[file]?.offset ?? 0)), 0);
   }
@@ -2907,15 +3046,14 @@ function figureTools(options = {}) {
 }
 
 // src/core/mentor-brief.mjs
+import fs17 from "node:fs";
+import path15 from "node:path";
+
+// src/core/dashboard-data.mjs
 import fs16 from "node:fs";
 import path14 from "node:path";
 
-// src/core/dashboard-data.mjs
-import fs15 from "node:fs";
-import path13 from "node:path";
-
 // src/core/mentor-intent.mjs
-var DAY_MS2 = 864e5;
 function dateIn(text) {
   const date = String(text).match(/\b\d{4}-\d{2}-\d{2}\b/u)?.[0];
   const time = date ? Date.parse(`${date}T00:00:00Z`) : NaN;
@@ -2956,12 +3094,14 @@ function latestLongTermIntent(text = "") {
   }
   return latest;
 }
-function longTermIntentDue(intent, now = /* @__PURE__ */ new Date()) {
+var LONG_TERM_INTENT_ROUNDS = 3;
+function longTermIntentDue(intent, finishedRounds = []) {
   if (!intent?.date || dateIn(intent.date) !== intent.date) return true;
-  const current = new Date(now);
-  const today2 = Date.UTC(current.getFullYear(), current.getMonth(), current.getDate());
-  const age = (today2 - Date.parse(`${intent.date}T00:00:00Z`)) / DAY_MS2;
-  return age > 7 || age < 0;
+  const since = finishedRounds.filter((round) => round?.day && round.day > intent.date);
+  return since.length >= LONG_TERM_INTENT_ROUNDS || since.some((round) => round.kind === "decision");
+}
+function finishedRoundsOf(rounds = [], dayOf) {
+  return rounds.filter((round) => round.result).map((round) => ({ day: dayOf(round.result.createdAt ?? round.result.mtime), kind: round.result.verdictKind }));
 }
 
 // src/core/project-registry.mjs
@@ -2969,6 +3109,181 @@ import crypto from "node:crypto";
 import fs14 from "node:fs";
 import os4 from "node:os";
 import path12 from "node:path";
+
+// src/core/cross-project.mjs
+import fs15 from "node:fs";
+import path13 from "node:path";
+var CROSS_PROJECT_EXPERIENCE_PATH = ".dove/install/CROSS_PROJECT_EXPERIENCE.md";
+function readText2(file, fsOps) {
+  try {
+    const stat = fsOps.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink()) return null;
+    return fsOps.readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+var CORRECTION_TOPICS = Object.freeze([
+  { id: "plain", label: "\u8BF4\u4EBA\u8BDD\u3001\u8BB2\u6E05\u695A", pattern: /说人话|看不懂|听不懂|大白话|白话|第一次接手|讲清楚|说清楚/u },
+  { id: "drift", label: "\u8DD1\u504F\u3001\u6362\u6210\u522B\u7684\u95EE\u9898", pattern: /跑偏|带偏|偏了|偏离|等价成|主问题|不是我要的|离题|答非所问/u },
+  { id: "limits", label: "\u7ED9\u81EA\u5DF1\u8BBE\u9650", pattern: /给自己设|自设|套授权|不要给自己|别给自己|设那[么麽]多|自己加的限制|不需要授权/u },
+  { id: "scale", label: "\u5B9E\u9A8C\u592A\u5C0F", pattern: /小规模|规模太小|样本太少|跑全量/u },
+  { id: "engineering", label: "\u53D8\u6210\u5DE5\u7A0B", pattern: /变成工程|工程化|不是科研|工程上的/u },
+  { id: "seeds", label: "\u8865\u79CD\u5B50\u3001\u52A0\u6B65\u6570", pattern: /种子|seed/iu },
+  { id: "facts", label: "\u83AB\u987B\u6709\u3001\u7F16\u9020", pattern: /莫须有|编造|瞎说|胡说|乱说|没有依据/u },
+  { id: "generality", label: "\u901A\u7528\u548C\u6CDB\u5316", pattern: /泛化|狭窄|局限成/u },
+  { id: "finish", label: "\u6CA1\u505A\u5B8C\u3001\u534A\u9014\u6536\u7A84", pattern: /没做完|赶紧做完|半途|收窄/u },
+  { id: "method-first", label: "\u5148\u8BB2\u6E05\u95EE\u9898\u548C\u65B9\u6CD5", pattern: /现有方法为什么不好|要解决什么问题|先回答我/u },
+  { id: "stall", label: "\u505C\u6EDE\u3001\u6CA1\u8FDB\u5C55", pattern: /停滞|没进展|没有进展|进展缓慢|一直没有|原地/u }
+]);
+function ownEntries(text) {
+  const entries = [];
+  for (const line of String(text).split(/\r?\n/u)) {
+    const match = line.match(/^- (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) · 本人 · (.*)$/u);
+    if (!match) continue;
+    const at = Date.parse(`${match[1]}T${match[2]}:00Z`);
+    entries.push({ date: match[1], time: `${match[1]} ${match[2]}`, at, day: dayString(at), text: match[3] });
+  }
+  return entries;
+}
+function readOwnEntries(root, options = {}) {
+  const text = readText2(path13.join(root, USER_ORIGINALS_PATH), options.fsOps ?? fs15);
+  return text ? ownEntries(text) : [];
+}
+function isCorrection(text) {
+  return CORRECTION_TOPICS.some((topic) => topic.pattern.test(text));
+}
+function dayString(time) {
+  const value = new Date(time);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+// src/core/round-ledger.mjs
+var HOUR_MS = 36e5;
+var LEDGER_ROUNDS = 8;
+function localMidnight(day) {
+  const [year, month, date] = String(day).split("-").map(Number);
+  return new Date(year, month - 1, date).getTime();
+}
+function finite(...values) {
+  return values.find((value) => typeof value === "number" && Number.isFinite(value) && value > 0) ?? null;
+}
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+function clip(text, limit = 60) {
+  if (text == null) return null;
+  const characters = Array.from(String(text));
+  return characters.length > limit ? `${characters.slice(0, limit).join("")}\u2026` : characters.join("");
+}
+function clock(time) {
+  const value = new Date(time);
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+function durationText(milliseconds) {
+  const hours = milliseconds / HOUR_MS;
+  return hours < 24 ? `${Math.max(1, Math.round(hours))} \u5C0F\u65F6` : `${Math.round(hours / 2.4) / 10} \u5929`;
+}
+function roundSpans(rounds, marks, now) {
+  const ordered = [...rounds].filter((round) => round.brief || round.result).sort((left, right) => left.number - right.number);
+  const briefTime = (round) => finite(marks[`brief:${round.number}`], round.brief?.createdAt, round.brief?.start ? localMidnight(round.brief.start) : null);
+  const resultTime = (round) => round.result ? finite(marks[`result:${round.number}`], round.result.createdAt, round.result.mtime) : null;
+  const spans = /* @__PURE__ */ new Map();
+  let previousEnd = null;
+  ordered.forEach((round, index) => {
+    const next = ordered[index + 1];
+    const end = resultTime(round) ?? (next ? briefTime(next) ?? resultTime(next) : null) ?? now;
+    let start = previousEnd ?? briefTime(round) ?? end;
+    if (start > end) start = briefTime(round) && briefTime(round) <= end ? briefTime(round) : end;
+    spans.set(round.number, { start, end });
+    previousEnd = Math.max(previousEnd ?? end, end);
+  });
+  return spans;
+}
+function roundLedger(project, options = {}) {
+  const state2 = options.state ?? inspectRoundState(project, options);
+  const now = finite(typeof options.now === "number" ? options.now : options.now?.getTime?.()) ?? Date.now();
+  let activity = { buckets: {}, marks: {}, scanned: false };
+  try {
+    activity = readActivity(project, options);
+  } catch {
+  }
+  let corrections = [];
+  try {
+    corrections = readOwnEntries(project, options).filter((entry) => Number.isFinite(entry.at) && isCorrection(entry.text));
+  } catch {
+    corrections = [];
+  }
+  const buckets = Object.entries(activity.buckets ?? {}).map(([key, counts]) => [(Number(key) + 0.5) * ACTIVITY_BUCKET_MS, counts]);
+  const spans = roundSpans(state2.rounds, activity.marks ?? {}, now);
+  const rows = state2.rounds.filter((round) => round.brief && spans.has(round.number)).slice(0, options.limit ?? LEDGER_ROUNDS).map((round) => {
+    const { start, end } = spans.get(round.number);
+    const open = !round.result;
+    const within = (time) => time >= start && (time < end || open && time < end + ACTIVITY_BUCKET_MS);
+    const sum = (field) => buckets.reduce((total, [time, counts]) => total + (within(time) ? counts[field] ?? 0 : 0), 0);
+    const chars = sum("chars");
+    return {
+      number: round.number,
+      start,
+      end,
+      duration: durationText(end - start),
+      open,
+      agents: activity.scanned ? sum("agents") : null,
+      compactions: activity.scanned ? sum("compactions") : null,
+      mentor: activity.scanned ? sum("mentor") : null,
+      corrections: corrections.filter((entry) => entry.at >= start && entry.at < (open ? end + ACTIVITY_BUCKET_MS : end)).length,
+      verdict: round.result?.verdict ?? null,
+      verdictKind: round.result?.verdictKind ?? null,
+      verdictLabel: round.result ? VERDICT_LABELS[round.result.verdictKind] ?? (round.result.verdict ? "\u5176\u4ED6\u5199\u6CD5" : "\u672A\u5199\u5224\u5B9A") : null,
+      prediction: clip(round.brief.prediction?.text),
+      actual: clip(round.result?.actual?.text),
+      calibration: calibrateRound(round.brief.prediction, round.result?.actual),
+      provenance: options.provenance && round.result ? resultProvenance(project, round.result.file, options) : null,
+      hedgesPer1k: activity.scanned && chars ? Math.round(1e4 * sum("hedges") / chars) / 10 : null,
+      gates: activity.scanned ? sum("gates") : null,
+      claims: activity.scanned ? sum("claims") : null,
+      unrunClaims: activity.scanned ? sum("unrun") : null
+    };
+  });
+  const finished = rows.filter((row) => !row.open);
+  const calibrated = finished.filter((row) => row.calibration);
+  const ratios = calibrated.map((row) => row.calibration.ratio).filter((ratio) => ratio != null);
+  return {
+    rows,
+    activityScanned: activity.scanned,
+    summary: {
+      finished: finished.length,
+      withoutPrediction: finished.filter((row) => !row.prediction).length,
+      calibrated: calibrated.length,
+      hits: calibrated.filter((row) => row.calibration.hit).length,
+      wrongWay: calibrated.filter((row) => row.calibration.wrongWay).length,
+      medianRatio: median(ratios),
+      correctionsPerRound: finished.length ? Math.round(10 * finished.reduce((total, row) => total + row.corrections, 0) / finished.length) / 10 : null
+    }
+  };
+}
+function spanText(row) {
+  return `${clock(row.start)}${row.open ? " \u8D77\uFF0C\u8FDB\u884C\u4E2D" : ` \u2014 ${clock(row.end)}`}\uFF0C${row.duration}`;
+}
+function renderLedgerRow(row) {
+  const parts = [`\u7B2C ${row.number} \u8F6E\uFF08${spanText(row)}\uFF09`];
+  if (row.agents != null) parts.push(`\u5B50\u4EE3\u7406 ${row.agents} \u6B21\u3001\u4E0A\u4E0B\u6587\u538B\u7F29 ${row.compactions} \u6B21\u3001\u5BFC\u5E08 ${row.mentor} \u6B21`);
+  parts.push(`\u7528\u6237\u7EA0\u6B63 ${row.corrections} \u6B21`);
+  if (row.verdictLabel) parts.push(`\u5224\u5B9A ${row.verdict ?? row.verdictLabel}`);
+  if (row.prediction || row.actual) {
+    const check = row.calibration ? `\uFF08${row.calibration.hit ? "\u843D\u5728\u9884\u6D4B\u8303\u56F4\u5185" : "\u4E0D\u5728\u9884\u6D4B\u8303\u56F4\u5185"}${row.calibration.wrongWay ? "\uFF0C\u65B9\u5411\u548C\u9884\u6D4B\u76F8\u53CD" : row.calibration.ratio != null ? `\uFF0C\u9884\u6D4B\u7684\u53D8\u5316\u662F\u5B9E\u9645\u7684 ${Math.round(row.calibration.ratio * 10) / 10} \u500D` : ""}\uFF09` : "";
+    parts.push(`\u9884\u6D4B ${row.prediction ?? "\u672A\u5199"} \u2192 \u5B9E\u6D4B ${row.actual ?? (row.open ? "\u672A\u51FA" : "\u672A\u5199")}${check}`);
+  } else if (!row.open) {
+    parts.push("\u6CA1\u5199\u9884\u6D4B\u548C\u5B9E\u6D4B");
+  }
+  if (row.provenance) parts.push(row.provenance.artifacts ? `\u7ED3\u679C\u91CC ${row.provenance.numbers} \u4E2A\u6570\u5B57\u6709 ${row.provenance.found} \u4E2A\u80FD\u5728\u94FE\u63A5\u7684 ${row.provenance.artifacts} \u4E2A\u4EA7\u7269\u91CC\u627E\u5230` : `\u7ED3\u679C\u91CC\u7684 ${row.provenance.numbers} \u4E2A\u6570\u5B57\u6CA1\u6709\u94FE\u63A5\u53EF\u6838\u5BF9\u7684\u6587\u672C\u4EA7\u7269`);
+  if (row.hedgesPer1k != null) parts.push(`\u56DE\u590D\u6BCF\u5343\u5B57\u515C\u5E95\u8BCD ${row.hedgesPer1k}\uFF0C\u65B0\u589E\u95E8\u7981\u8BCD ${row.gates}\uFF0C\u6CA1\u8FD0\u884C\u4E5F\u6CA1\u8BFB\u53D6\u5C31\u8BF4\u5DF2\u9A8C\u8BC1\u6216\u901A\u8FC7 ${row.unrunClaims} \u6B21`);
+  return parts.join("\uFF1B");
+}
 
 // src/core/dashboard-data.mjs
 var RESEARCH_ROOT2 = ".dove/research";
@@ -2999,11 +3314,11 @@ function parsePaperImpactLine(line = "") {
 
 // src/core/mentor-brief.mjs
 var RESEARCH2 = ".dove/research";
-var ROUND_FILE2 = /^(\d+)[-_](brief|result)\.md$/iu;
+var ROUND_FILE3 = /^(\d+)[-_](brief|result)\.md$/iu;
 var IMPACT_FILE = /^impact-\d{4}-\d{2}-\d{2}\.md$/u;
 var DIGEST_FILE = /^\d{4}-\d{2}-\d{2}\.json$/u;
 var SCAN_FILE = /^scan-\d{4}-\d{2}-\d{2}\.md$/u;
-var DAY_MS3 = 864e5;
+var DAY_MS2 = 864e5;
 var WATCH_INTERVAL_DAYS = 7;
 var QUESTIONS = [
   "\u5982\u679C\u7528\u6237\u73B0\u5728\u95EE\u2018\u8FD9\u6BB5\u65F6\u95F4\u53D6\u5F97\u4E86\u4EC0\u4E48\u5B9E\u8D28\u79D1\u7814\u8FDB\u5C55\u2019\uFF0C\u8BDA\u5B9E\u7684\u4E00\u53E5\u8BDD\u56DE\u7B54\u662F\u4EC0\u4E48\uFF1F",
@@ -3018,16 +3333,8 @@ function dayText(time) {
   const value = new Date(time);
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
-function sumSince(counts, since) {
-  return Object.entries(counts).filter(([day]) => day >= since).reduce((sum, [, count]) => sum + count, 0);
-}
-function computedFacts(project, fsOps, now) {
-  let state2;
-  try {
-    state2 = inspectRoundState(project, { fsOps, now });
-  } catch (error) {
-    return [`\u672A\u80FD\u8BFB\u53D6\u8F6E\u6B21\u8BB0\u5F55\uFF1A${error.message}`];
-  }
+function computedFacts(project, fsOps, now, state2) {
+  if (!state2) return ["\u672A\u80FD\u8BFB\u53D6\u8F6E\u6B21\u8BB0\u5F55\u3002"];
   const lines = [];
   const round = state2.currentRound;
   if (!round) lines.push("- \u5F53\u524D\u8F6E\u6B21\uFF1A\u8EAB\u4EFD\u5361\u6CA1\u6709\u6307\u5411\u5F53\u524D\u8F6E\u6B21\u3002");
@@ -3046,28 +3353,28 @@ function computedFacts(project, fsOps, now) {
     const target = item.brief?.targetDimension ?? item.brief?.target ?? "\u672A\u5199";
     lines.push(`  - \u7B2C ${item.number} \u8F6E\uFF1A\u5BF9\u51C6 ${target}\uFF1B\u5224\u5B9A ${item.result.verdict ?? "\u672A\u5199"}${item.result.verdictKind ? "" : item.result.verdict ? "\uFF08\u4E0D\u662F\u5151\u73B0\uFF0F\u672A\u5151\u73B0\uFF0F\u65B9\u6CD5\u53D6\u820D\u4E4B\u4E00\uFF09" : ""}\u3002`);
   }
-  lines.push(state2.mainMetric ? `- \u4E3B\u6307\u6807\uFF1A${state2.mainMetric.text}` : "- \u4E3B\u6307\u6807\uFF1AEVAL \u5F00\u5934\u8FD8\u6CA1\u5199\u3002");
-  const latest = state2.trend?.latest;
-  lines.push(latest ? `- \u516B\u7EF4\u8D70\u52BF\uFF1A\u5171 ${state2.trend.rows.length} \u6B21\u5224\u65AD\uFF1B\u6700\u8FD1\u4E00\u6B21 ${latest.date ?? "\u672A\u5199\u65E5\u671F"}\uFF08${latest.round ?? "\u672A\u5199\u8F6E\u6B21"}\uFF09\uFF0C\u6700\u5361\u7684\u4E00\u7EF4 ${latest.bottleneck ?? "\u672A\u5199"}\u3002` : "- \u516B\u7EF4\u8D70\u52BF\uFF1AEVAL \u91CC\u8FD8\u6CA1\u6709\u8D70\u52BF\u8868\u3002");
   try {
-    const activity = readActivity(project, { fsOps });
-    if (activity.scanned) {
-      const since = dayText(new Date(now ?? Date.now()).getTime() - 13 * DAY_MS3);
-      const finished = state2.rounds.filter((item) => item.result?.mtime && dayText(item.result.mtime) >= since);
-      const verdicts = finished.map((item) => VERDICT_LABELS[item.result.verdictKind] ?? "\u672A\u5199\u5224\u5B9A");
-      lines.push(`- \u6700\u8FD1 14 \u5929\u7684\u6D3B\u52A8\u91CF\uFF1A\u5B50\u4EE3\u7406\u8C03\u7528 ${sumSince(activity.agents, since)} \u6B21\uFF0C\u4E0A\u4E0B\u6587\u538B\u7F29 ${sumSince(activity.compactions, since)} \u6B21\uFF1B\u540C\u671F\u51FA\u7ED3\u679C\u7684\u8F6E\u6B21 ${finished.length} \u4E2A${verdicts.length ? `\uFF08${verdicts.join("\u3001")}\uFF09` : ""}\u3002`);
+    const ledger = roundLedger(project, { fsOps, now, state: state2, limit: 4, provenance: true });
+    if (ledger.rows.length) {
+      lines.push("- \u6700\u8FD1\u51E0\u8F6E\u7684\u6295\u5165\u3001\u5BF9\u8D26\u548C\u5199\u6CD5\u7EDF\u8BA1\uFF08\u65B0\u7684\u5728\u524D\uFF1B\u4E00\u8F6E\u4ECE\u4E0A\u4E00\u8F6E\u7ED3\u679C\u5199\u6210\u5230\u672C\u8F6E\u7ED3\u679C\u5199\u6210\uFF0C\u6309\u4F1A\u8BDD\u8BB0\u5F55\u7EDF\u8BA1\uFF09\uFF1A");
+      for (const row of ledger.rows) lines.push(`  - ${renderLedgerRow(row)}\u3002`);
+      const summary = ledger.summary;
+      if (summary.finished) lines.push(`  - \u8FD9\u51E0\u8F6E\u91CC\uFF1A\u5199\u4E86\u53EF\u68C0\u9A8C\u9884\u6D4B\u5E76\u51FA\u4E86\u5B9E\u6D4B\u7684 ${summary.calibrated} \u8F6E\uFF0C\u843D\u5728\u9884\u6D4B\u8303\u56F4\u5185\u7684 ${summary.hits} \u8F6E\uFF0C\u65B9\u5411\u548C\u9884\u6D4B\u76F8\u53CD\u7684 ${summary.wrongWay} \u8F6E${summary.medianRatio != null ? `\uFF0C\u9884\u6D4B\u7684\u53D8\u5316\u4E2D\u4F4D\u662F\u5B9E\u9645\u7684 ${Math.round(summary.medianRatio * 10) / 10} \u500D` : ""}\uFF1B\u6CA1\u5199\u9884\u6D4B\u7684 ${summary.withoutPrediction} \u8F6E\uFF1B\u5E73\u5747\u6BCF\u8F6E\u7528\u6237\u7EA0\u6B63 ${summary.correctionsPerRound} \u6B21\u3002`);
     }
   } catch {
   }
+  lines.push(state2.mainMetric ? `- \u4E3B\u6307\u6807\uFF1A${state2.mainMetric.text}` : "- \u4E3B\u6307\u6807\uFF1AEVAL \u5F00\u5934\u8FD8\u6CA1\u5199\u3002");
+  const latest = state2.trend?.latest;
+  lines.push(latest ? `- \u516B\u7EF4\u8D70\u52BF\uFF1A\u5171 ${state2.trend.rows.length} \u6B21\u5224\u65AD\uFF1B\u6700\u8FD1\u4E00\u6B21 ${latest.date ?? "\u672A\u5199\u65E5\u671F"}\uFF08${latest.round ?? "\u672A\u5199\u8F6E\u6B21"}\uFF09\uFF0C\u6700\u5361\u7684\u4E00\u7EF4 ${latest.bottleneck ?? "\u672A\u5199"}\u3002` : "- \u516B\u7EF4\u8D70\u52BF\uFF1AEVAL \u91CC\u8FD8\u6CA1\u6709\u8D70\u52BF\u8868\u3002");
   lines.push(state2.pending.length ? "- \u7B49\u7528\u6237\u5B9A\u7684\u4E8B\uFF1A" : "- \u7B49\u7528\u6237\u5B9A\u7684\u4E8B\uFF1A\u65E0\u3002");
   for (const item of state2.pending) lines.push(`  - ${item.text}`);
   return lines;
 }
 function watchDue(project, fsOps, now) {
-  const names = list(path14.join(project, RESEARCH2, "watch"), fsOps).filter((name) => IMPACT_FILE.test(name)).sort();
+  const names = list(path15.join(project, RESEARCH2, "watch"), fsOps).filter((name) => IMPACT_FILE.test(name)).sort();
   const last = names.at(-1)?.slice(7, 17) ?? null;
   if (!last) return { due: true, last: null };
-  const age = (Date.parse(`${dayText(now ?? Date.now())}T00:00:00Z`) - Date.parse(`${last}T00:00:00Z`)) / DAY_MS3;
+  const age = (Date.parse(`${dayText(now ?? Date.now())}T00:00:00Z`) - Date.parse(`${last}T00:00:00Z`)) / DAY_MS2;
   return { due: age >= WATCH_INTERVAL_DAYS || age < 0, last };
 }
 function list(directory, fsOps) {
@@ -3080,7 +3387,7 @@ function list(directory, fsOps) {
 }
 function describe(root, relative, fsOps) {
   try {
-    return `\`${relative}\`${fsOps.statSync(path14.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
+    return `\`${relative}\`${fsOps.statSync(path15.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
   } catch (error) {
     return `\`${relative}\`\uFF08${error.code === "ENOENT" ? "\u7F3A\u5931" : `\u65E0\u6CD5\u8BFB\u53D6\uFF1A${error.code ?? error.message}`}\uFF09`;
   }
@@ -3105,7 +3412,7 @@ function readWindow(file, fsOps, maxBytes = 16384, tail = false) {
     if (fd !== void 0) fsOps.closeSync(fd);
   }
 }
-function clip(text, limit) {
+function clip2(text, limit) {
   const characters = Array.from(String(text));
   return characters.length <= limit ? characters.join("") : `${characters.slice(0, limit).join("")}\u2026`;
 }
@@ -3113,7 +3420,7 @@ function quote(text) {
   return String(text).split("\n").map((line) => `> ${line}`).join("\n");
 }
 function sourceAttachment(root, suppliedPath, fsOps) {
-  const file = path14.resolve(root, suppliedPath);
+  const file = path15.resolve(root, suppliedPath);
   const result = readWindow(file, fsOps, 8192, true);
   const source = `- \u6765\u6E90\uFF1A\`${file}\``;
   if (result.error) return `${source}\uFF08${result.error}\uFF1B\u672A\u9644\u6B63\u6587\uFF09`;
@@ -3123,18 +3430,18 @@ function sourceAttachment(root, suppliedPath, fsOps) {
 ${result.text ? quote(result.text) : "\u6587\u4EF6\u4E3A\u7A7A\u3002"}`;
 }
 function recentRounds(names) {
-  const sorted = names.filter((name) => ROUND_FILE2.test(name)).sort((left, right) => Number(right.match(ROUND_FILE2)[1]) - Number(left.match(ROUND_FILE2)[1]) || left.localeCompare(right));
+  const sorted = names.filter((name) => ROUND_FILE3.test(name)).sort((left, right) => Number(right.match(ROUND_FILE3)[1]) - Number(left.match(ROUND_FILE3)[1]) || left.localeCompare(right));
   const counts = { brief: 0, result: 0 };
-  return sorted.filter((name) => ++counts[name.match(ROUND_FILE2)[2].toLowerCase()] <= 2);
+  return sorted.filter((name) => ++counts[name.match(ROUND_FILE3)[2].toLowerCase()] <= 2);
 }
 function watchMaterials(root, rounds, fsOps) {
   const relative = `${RESEARCH2}/watch`;
-  const directory = path14.join(root, relative);
+  const directory = path15.join(root, relative);
   const names = list(directory, fsOps).sort().reverse();
   const config = `${relative}/config.json`;
   const lines = [`- \u914D\u7F6E\uFF1A${describe(root, config, fsOps)}`];
-  const configText = readWindow(path14.join(root, config), fsOps, 8192);
-  if (!configText.error) lines.push(quote(clip(configText.text.trim(), 1600)), "\u914D\u7F6E\u4EC5\u6458\u5F55\uFF0C\u5168\u6587\u89C1\u8DEF\u5F84\u3002");
+  const configText = readWindow(path15.join(root, config), fsOps, 8192);
+  if (!configText.error) lines.push(quote(clip2(configText.text.trim(), 1600)), "\u914D\u7F6E\u4EC5\u6458\u5F55\uFF0C\u5168\u6587\u89C1\u8DEF\u5F84\u3002");
   let source = null;
   if (!configText.error && !configText.truncated) {
     try {
@@ -3147,8 +3454,8 @@ function watchMaterials(root, rounds, fsOps) {
   let incomplete = false;
   const impacts = names.filter((name) => IMPACT_FILE.test(name));
   const records = [
-    ...rounds.filter((name) => ROUND_FILE2.test(name) && /brief\.md$/iu.test(name)).sort((left, right) => parseInt(left) - parseInt(right)).map((name) => path14.join(root, RESEARCH2, "rounds", name)),
-    ...[...impacts].reverse().map((name) => path14.join(directory, name))
+    ...rounds.filter((name) => ROUND_FILE3.test(name) && /brief\.md$/iu.test(name)).sort((left, right) => parseInt(left) - parseInt(right)).map((name) => path15.join(root, RESEARCH2, "rounds", name)),
+    ...[...impacts].reverse().map((name) => path15.join(directory, name))
   ];
   for (const file of records) {
     const record = readWindow(file, fsOps, 65536, true);
@@ -3169,7 +3476,7 @@ function watchMaterials(root, rounds, fsOps) {
   const digests = names.filter((name) => DIGEST_FILE.test(name));
   const pending = /* @__PURE__ */ new Map();
   for (const name of digests.slice(0, 3)) {
-    const file = path14.join(directory, name);
+    const file = path15.join(directory, name);
     lines.push(`- \u8FD1\u671F\u6E05\u5355\uFF1A${describe(root, `${relative}/${name}`, fsOps)}`);
     const result = readWindow(file, fsOps, 262144);
     if (result.error || result.truncated) {
@@ -3200,10 +3507,10 @@ function watchMaterials(root, rounds, fsOps) {
     digests.length ? `\u4ECE\u6700\u8FD1 ${Math.min(3, digests.length)} / ${digests.length} \u4EFD\u6E05\u5355\u627E\u5230 ${pending.size} \u9879\uFF0C\u6700\u591A\u5C55\u5F00 8 \u9879\uFF1B\u5176\u4F59\u89C1 \`${relative}/\`\uFF0C\u4E0D\u4EE3\u8868\u5168\u90E8\u5386\u53F2\u3002` : "\u672A\u627E\u5230\u8FFD\u8E2A\u6E05\u5355\u3002"
   );
   for (const [id, { item, file }] of [...pending].slice(0, 8)) {
-    lines.push("", quote(`${id} \xB7 ${clip(item.title ?? "\u672A\u63D0\u4F9B\u6807\u9898", 200)}
+    lines.push("", quote(`${id} \xB7 ${clip2(item.title ?? "\u672A\u63D0\u4F9B\u6807\u9898", 200)}
 \u539F\u59CB\u53D1\u8868\u65E5\u671F\uFF1A${item.published || "\u672A\u8BB0\u5F55"}
 \u6765\u6E90\uFF1A${file}
-${item.line ? "\u5DF2\u6709\u4E00\u53E5\u8BDD" : "\u539F\u6458\u8981"}\uFF08\u4E0D\u4EE3\u8868\u5168\u6587\u5DF2\u8BFB\uFF09\uFF1A${clip(item.line || item.abstract || "\u672A\u63D0\u4F9B\u6458\u8981", 400)}`));
+${item.line ? "\u5DF2\u6709\u4E00\u53E5\u8BDD" : "\u539F\u6458\u8981"}\uFF08\u4E0D\u4EE3\u8868\u5168\u6587\u5DF2\u8BFB\uFF09\uFF1A${clip2(item.line || item.abstract || "\u672A\u63D0\u4F9B\u6458\u8981", 400)}`));
   }
   const scan = names.find((name) => SCAN_FILE.test(name));
   lines.push("", scan ? `- \u6700\u8FD1\u626B\u63CF\uFF08${scan.slice(5, 15)}\uFF09\uFF1A${describe(root, `${relative}/${scan}`, fsOps)}` : "- \u6700\u8FD1\u626B\u63CF\uFF1A\u672A\u627E\u5230\u3002");
@@ -3218,7 +3525,7 @@ function watchSection(project, rounds, fsOps, options) {
 }
 function opinionAttachment(root, opinion, fsOps) {
   if (!opinion) return "\u672A\u9644\u610F\u89C1\u6587\u4EF6\u3002";
-  const file = path14.resolve(root, opinion);
+  const file = path15.resolve(root, opinion);
   const result = readWindow(file, fsOps, 4096);
   if (result.error) throw new Error(`\u610F\u89C1\u6587\u4EF6${result.error}\uFF1A${file}`);
   const length = Array.from(result.text).length;
@@ -3228,13 +3535,20 @@ ${quote(`\u4F5C\u8005\uFF1A${author ?? "\u672A\u7F72\u540D\uFF08\u6309\u6267\u88
 \u7BC7\u5E45\uFF1A${result.truncated ? "\u8D85\u8FC7 4 KiB\uFF0C\u5BFC\u5E08\u6309\u8DEF\u5F84\u8BFB\u5168\u6587" : `\u7EA6 ${length} \u5B57\uFF08\u5EFA\u8BAE 1000 \u5B57\u5185\uFF09`}`)}`;
 }
 function renderMentorBrief(root, options = {}) {
-  const fsOps = options.fsOps ?? fs16;
-  const project = path14.resolve(root);
-  const research = path14.join(project, RESEARCH2);
-  const rounds = list(path14.join(research, "rounds"), fsOps);
+  const fsOps = options.fsOps ?? fs17;
+  const project = path15.resolve(root);
+  const research = path15.join(project, RESEARCH2);
+  const rounds = list(path15.join(research, "rounds"), fsOps);
   const selected = recentRounds(rounds);
-  const notes = readWindow(path14.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
+  const notes = readWindow(path15.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
   const intent = notes.error ? null : latestLongTermIntent(notes.text);
+  let state2 = null;
+  try {
+    state2 = inspectRoundState(project, { fsOps, now: options.now });
+  } catch {
+    state2 = null;
+  }
+  const intentDue = longTermIntentDue(intent, finishedRoundsOf(state2?.rounds ?? [], localDate));
   const intentStatus = notes.error ? `\u5BFC\u5E08\u7B14\u8BB0${notes.error}` : !intent ? "\u7B14\u8BB0\u4E2D\u6CA1\u6709\u957F\u671F\u610F\u56FE\u4E00\u8282" : !intent.date ? "\u957F\u671F\u610F\u56FE\u6CA1\u6709\u6709\u6548\u65E5\u671F" : `\u6700\u8FD1\u4E00\u6B21\u4E3A ${intent.date}`;
   const originals = options.userOriginals?.path ?? USER_ORIGINALS_PATH;
   const lines = [
@@ -3258,18 +3572,18 @@ ${quote(options.userOriginal)}` : "\u672A\u76F4\u63A5\u9644\u539F\u8BDD\u3002",
     ...options.userOriginals ? [`- \u6574\u7406\u8303\u56F4\uFF1A\u672C\u4EBA ${options.userOriginals.own} \u6761\u3001\u8F6C\u8FF0 ${options.userOriginals.relay} \u6761\uFF0C${options.userOriginals.directories.length} \u4E2A\u4F1A\u8BDD\u76EE\u5F55${options.userOriginals.pendingBytes ? "\uFF08\u5C1A\u672A\u6574\u7406\u5B8C\uFF0C\u5F53\u524D\u53EF\u80FD\u7F3A\u65F6\u6BB5\uFF09" : ""}\u3002`, `- \u539F\u4F1A\u8BDD\u76EE\u5F55\uFF08\u4EC5\u4F9B\u5BFC\u5E08\u6309\u6765\u6E90\u5B9A\u4F4D\uFF09\uFF1A${options.userOriginals.directories.map((directory) => `\`${directory}\``).join("\u3001") || "\u672A\u627E\u5230"}\u3002`] : [],
     sourceAttachment(project, originals, fsOps),
     ...options.userOriginalsError ? [`- \u6C47\u603B\u6574\u7406\u5931\u8D25\uFF1A${options.userOriginalsError}\u3002\u5DF2\u6709\u6458\u5F55\u53EF\u80FD\u4E0D\u5B8C\u6574\uFF0C\u7F3A\u5931\u4E0D\u7B49\u4E8E\u7528\u6237\u6CA1\u8BF4\u8FC7\u3002`] : [],
-    longTermIntentDue(intent, options.now) ? `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\uFF08${intentStatus}\uFF09\uFF1A\u8BFB USER_ORIGINALS.md \u5E76\u6838\u5BF9\u672C\u4EBA\u6765\u6E90\uFF0C\u8FD4\u56DE\u5E26\u65E5\u671F\u7684\u201C\u957F\u671F\u610F\u56FE\u201D\u3002` : `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\uFF1A${intentStatus}\uFF0C\u5C1A\u672A\u5230\u671F\u3002`,
+    intentDue ? `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\uFF08${intentStatus}\uFF1B\u6BCF 3 \u8F6E\u6216\u51FA\u73B0\u65B9\u6CD5\u53D6\u820D\u65F6\u5230\u671F\uFF09\uFF1A\u8BFB USER_ORIGINALS.md \u5E76\u6838\u5BF9\u672C\u4EBA\u6765\u6E90\uFF0C\u8FD4\u56DE\u5E26\u65E5\u671F\u7684\u201C\u957F\u671F\u610F\u56FE\u201D\u3002` : `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\uFF1A${intentStatus}\uFF0C\u5C1A\u672A\u5230\u671F\uFF08\u6BCF 3 \u8F6E\u6216\u51FA\u73B0\u65B9\u6CD5\u53D6\u820D\u65F6\u5230\u671F\uFF09\u3002`,
     "",
     "## Dove \u7B97\u51FA\u7684\u4E8B\u5B9E",
     "",
     "\u4EE5\u4E0B\u7531 Dove \u76F4\u63A5\u4ECE\u8EAB\u4EFD\u5361\u3001\u8F6E\u6B21\u8BF4\u660E\u548C\u7ED3\u679C\u5F00\u5934\u3001EVAL \u548C\u5BFC\u5E08\u7B14\u8BB0\u8BFB\u51FA\uFF0C\u4E0D\u7ECF\u5BBF\u4E3B\u8F6C\u8FF0\uFF1B\u8BB0\u5F55\u672C\u8EAB\u5199\u9519\u65F6\u4EE5\u539F\u59CB\u7ED3\u679C\u4E3A\u51C6\u3002",
     "",
-    ...computedFacts(project, fsOps, options.now),
+    ...computedFacts(project, fsOps, options.now, state2),
     "",
     "## \u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u4E0E\u6570\u5B57",
     "",
     "\u53EA\u5C55\u5F00\u663E\u5F0F\u63D0\u4F9B\u7684\u524D 4 \u4E2A\u6587\u4EF6\uFF0C\u6BCF\u4E2A\u6700\u591A\u672B\u5C3E 8 KiB\uFF1B\u4E0D\u9012\u5F52\u627E\u6570\u636E\uFF0C\u4E0D\u8FFD\u8BFB\u6587\u4EF6\u4E2D\u7684\u8DEF\u5F84\u3002\u672A\u9644\u539F\u59CB\u7ED3\u679C\u5C31\u76F4\u8BF4\u8BC1\u636E\u4E0D\u8DB3\uFF0C\u5BBF\u4E3B\u58F0\u79F0\u5DF2\u8BFB\u6216\u5DF2\u6D4B\u4E0D\u7B97\u8BC1\u636E\u3002",
-    ...options.artifact?.length ? options.artifact.map((file, index) => index < 4 ? sourceAttachment(project, file, fsOps) : `- \`${path14.resolve(project, file)}\`\uFF08\u8D85\u51FA\u672C\u6B21\u5C55\u5F00\u6570\u91CF\uFF0C\u4EC5\u5217\u8DEF\u5F84\uFF09`) : ["\u672A\u63D0\u4F9B\u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u6216\u6570\u5B57\u3002"],
+    ...options.artifact?.length ? options.artifact.map((file, index) => index < 4 ? sourceAttachment(project, file, fsOps) : `- \`${path15.resolve(project, file)}\`\uFF08\u8D85\u51FA\u672C\u6B21\u5C55\u5F00\u6570\u91CF\uFF0C\u4EC5\u5217\u8DEF\u5F84\uFF09`) : ["\u672A\u63D0\u4F9B\u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u6216\u6570\u5B57\u3002"],
     "",
     "## \u5BBF\u4E3B\u8BB0\u5F55\u4E0E\u76EE\u5F55\uFF08\u4E0D\u662F\u7ED3\u8BBA\u6846\u67B6\uFF09",
     "",
@@ -3353,8 +3667,8 @@ import path20 from "node:path";
 
 // src/core/file-set-transaction.mjs
 import crypto2 from "node:crypto";
-import fs17 from "node:fs";
-import path15 from "node:path";
+import fs18 from "node:fs";
+import path16 from "node:path";
 var MAX_CLEANUP_WARNINGS = 20;
 var ENTRY_FIELDS = /* @__PURE__ */ new Set(["root", "relativePath", "content", "encoding", "force", "delete", "deleteEmptyDirectory", "expectedState", "label"]);
 function errorMessage(error) {
@@ -3391,10 +3705,10 @@ function expectedState(raw, index) {
 }
 function parentDirectories(relativePath) {
   const directories = [];
-  let current = path15.posix.dirname(relativePath);
+  let current = path16.posix.dirname(relativePath);
   while (current !== ".") {
     directories.push(current);
-    current = path15.posix.dirname(current);
+    current = path16.posix.dirname(current);
   }
   return directories.reverse();
 }
@@ -3423,7 +3737,7 @@ function removeNewTransactionParents(anchor, transaction) {
   }
 }
 function assertNoUnexpectedChildren(entry, resolved) {
-  const scheduledChildren = new Set(resolved.filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path15.posix.dirname(candidate.relativePath) === entry.relativePath).map((candidate) => path15.posix.basename(candidate.relativePath)));
+  const scheduledChildren = new Set(resolved.filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path16.posix.dirname(candidate.relativePath) === entry.relativePath).map((candidate) => path16.posix.basename(candidate.relativePath)));
   const unexpected = entry.anchor.readdir(entry.relativePath).map((child) => typeof child === "string" ? child : child.name).filter((child) => !scheduledChildren.has(child));
   if (unexpected.length > 0) {
     throw new Error(`Transactional directory deletion found an unscheduled child: ${entry.relativePath}/${unexpected.sort().join(`, ${entry.relativePath}/`)}.`);
@@ -3441,7 +3755,7 @@ function committedResult(entries, cleanupFailures) {
 }
 function writeFileSetTransaction(entries, options = {}) {
   if (!Array.isArray(entries)) throw new Error("Transactional write entries must be an array.");
-  const fsOps = options.fsOps ?? fs17;
+  const fsOps = options.fsOps ?? fs18;
   const transactionId = (options.transactionId ?? crypto2.randomUUID()).replace(/[^a-z0-9._-]/giu, "-");
   const anchors = /* @__PURE__ */ new Map();
   const resolved = [];
@@ -3450,7 +3764,7 @@ function writeFileSetTransaction(entries, options = {}) {
   const promotions = [];
   const createdDirectories = /* @__PURE__ */ new Map();
   const anchorFor = (root) => {
-    const canonicalRoot = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path15.resolve(root)) : fsOps.realpathSync(path15.resolve(root));
+    const canonicalRoot = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path16.resolve(root)) : fsOps.realpathSync(path16.resolve(root));
     if (!anchors.has(canonicalRoot)) anchors.set(canonicalRoot, openRootedFilesystem(canonicalRoot, { fsOps }));
     return anchors.get(canonicalRoot);
   };
@@ -3498,8 +3812,8 @@ function writeFileSetTransaction(entries, options = {}) {
     }
     for (const [index, entry] of resolved.entries()) {
       if (entry.deleting) continue;
-      const parent = path15.posix.dirname(entry.relativePath);
-      const temporaryName = `.${path15.posix.basename(entry.relativePath)}.${transactionId}.${index}.tmp`;
+      const parent = path16.posix.dirname(entry.relativePath);
+      const temporaryName = `.${path16.posix.basename(entry.relativePath)}.${transactionId}.${index}.tmp`;
       entry.stagedPath = parent === "." ? temporaryName : `${parent}/${temporaryName}`;
       ensureParentDirectories(entry.anchor, entry.relativePath, createdDirectories.get(entry.anchor));
       entry.anchor.writeNewFile(entry.stagedPath, entry.content);
@@ -3579,24 +3893,6 @@ function writeFileSetTransaction(entries, options = {}) {
     throw new Error(`Transactional write failed and all staged changes were rolled back: ${errorMessage(error)}`, { cause: error });
   }
 }
-
-// src/core/cross-project.mjs
-import fs18 from "node:fs";
-import path16 from "node:path";
-var CROSS_PROJECT_EXPERIENCE_PATH = ".dove/install/CROSS_PROJECT_EXPERIENCE.md";
-var CORRECTION_TOPICS = Object.freeze([
-  { id: "plain", label: "\u8BF4\u4EBA\u8BDD\u3001\u8BB2\u6E05\u695A", pattern: /说人话|看不懂|听不懂|大白话|白话|第一次接手|讲清楚|说清楚/u },
-  { id: "drift", label: "\u8DD1\u504F\u3001\u6362\u6210\u522B\u7684\u95EE\u9898", pattern: /跑偏|带偏|偏了|偏离|等价成|主问题|不是我要的|离题|答非所问/u },
-  { id: "limits", label: "\u7ED9\u81EA\u5DF1\u8BBE\u9650", pattern: /给自己设|自设|套授权|不要给自己|别给自己|设那[么麽]多|自己加的限制|不需要授权/u },
-  { id: "scale", label: "\u5B9E\u9A8C\u592A\u5C0F", pattern: /小规模|规模太小|样本太少|跑全量/u },
-  { id: "engineering", label: "\u53D8\u6210\u5DE5\u7A0B", pattern: /变成工程|工程化|不是科研|工程上的/u },
-  { id: "seeds", label: "\u8865\u79CD\u5B50\u3001\u52A0\u6B65\u6570", pattern: /种子|seed/iu },
-  { id: "facts", label: "\u83AB\u987B\u6709\u3001\u7F16\u9020", pattern: /莫须有|编造|瞎说|胡说|乱说|没有依据/u },
-  { id: "generality", label: "\u901A\u7528\u548C\u6CDB\u5316", pattern: /泛化|狭窄|局限成/u },
-  { id: "finish", label: "\u6CA1\u505A\u5B8C\u3001\u534A\u9014\u6536\u7A84", pattern: /没做完|赶紧做完|半途|收窄/u },
-  { id: "method-first", label: "\u5148\u8BB2\u6E05\u95EE\u9898\u548C\u65B9\u6CD5", pattern: /现有方法为什么不好|要解决什么问题|先回答我/u },
-  { id: "stall", label: "\u505C\u6EDE\u3001\u6CA1\u8FDB\u5C55", pattern: /停滞|没进展|没有进展|进展缓慢|一直没有|原地/u }
-]);
 
 // src/core/project-installation-plan.mjs
 import fs20 from "node:fs";
