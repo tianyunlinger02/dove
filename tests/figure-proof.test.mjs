@@ -7,7 +7,7 @@ import test from "node:test";
 import zlib from "node:zlib";
 
 import { findExecutable, figureTools } from "../src/core/figure-generation.mjs";
-import { composeFigureProof, lengthInInches, parseFigureSpec } from "../src/core/figure-proof.mjs";
+import { composeFigureProof, composePageOverview, lengthInInches, parseFigureSpec } from "../src/core/figure-proof.mjs";
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -90,4 +90,41 @@ test("before/after and the whole set are composed at their printed widths", (t) 
   assert.ok(setWidth >= page && setWidth < page + 100, "the page is as wide as the widest figure");
   assert.ok(setHeight > Math.round((700 / 2100) * page) + single / 2, "the two single-column figures share a row below the wide one");
   assert.match(proof.items[0].label, /wide\.png - 174\.6 mm/u);
+});
+
+test("a manuscript's pages are laid out in one sheet with blank columns and the body length", (t) => {
+  const python = pillowPython();
+  const pdflatex = findExecutable("pdflatex", process.env);
+  if (!python || !pdflatex || !findExecutable("pdftotext", process.env) || !findExecutable("pdftoppm", process.env)) {
+    t.skip("needs Pillow, pdflatex and poppler");
+    return;
+  }
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-pages-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const paragraph = "Garments are structured objects whose panels are sewn together and draped on a body, and a writer of such objects must keep every seam consistent. ".repeat(6);
+  // Page one: the left column and a third of the right one; page two starts the references.
+  const body = Array.from({ length: 5 }, () => paragraph).join("\n\n");
+  fs.writeFileSync(path.join(root, "paper.tex"), [
+    "\\documentclass[letterpaper,twocolumn,10pt]{article}",
+    "\\usepackage[margin=0.75in]{geometry}",
+    "\\begin{document}",
+    "\\section{Introduction}",
+    body,
+    "\\clearpage",
+    "\\section*{References}",
+    Array.from({ length: 12 }, (_, index) => `[${index + 1}] A. Author and B. Author. A paper about panels and seams. In Proceedings, 2025.\n`).join("\n"),
+    "\\end{document}",
+    ""
+  ].join("\n"));
+  const build = spawnSync(pdflatex, ["-interaction=nonstopmode", "-halt-on-error", "paper.tex"], { cwd: root, encoding: "utf8" });
+  assert.equal(build.status, 0, build.stdout.slice(-500));
+  const result = composePageOverview(root, { pages: "paper.pdf", bodyPages: 2, output: "checks/pages.png", python });
+  assert.equal(result.pages, 2);
+  assert.equal(result.columns, 2);
+  assert.equal(result.referencesPage, 2);
+  assert.ok(result.bodyPages >= 1 && result.bodyPages < 1.2, `body pages ${result.bodyPages}`);
+  assert.ok(result.flags.some((flag) => /第 1 页右栏底部空着约/u.test(flag)), result.flags.join("; "));
+  assert.ok(result.flags.some((flag) => /上限 2 页，还有约/u.test(flag)), result.flags.join("; "));
+  assert.ok(!result.flags.some((flag) => /第 2 页/u.test(flag)), "the reference pages are not a layout problem");
+  assert.ok(fs.existsSync(result.outputPath));
 });

@@ -20,6 +20,7 @@ export function renderDoveHelp() {
   dove figure --tools [--json|--format json]
   dove figure --compare --before <file> --after <file> --width <length> --output <file.png> [--dpi <n>] [--project <root>] [--json|--format json]
   dove figure --proof --figure <file>@<length> [--figure <file>@<length> ...] --output <file.png> [--dpi <n>] [--project <root>] [--json|--format json]
+  dove figure --pages <manuscript.pdf> [--body-pages <n>] --output <file.png> [--dpi <n>] [--project <root>] [--json|--format json]
   dove settings [--host-migration on|off] [--stop-prompts on|off] [--json|--format json]
   dove mentor brief [--project <dir>] [--trigger <text>] [--user-source <path>] [--since <range>] [--until <range>] [--user-original <text>] [--opinion <path>] [--artifact <path>...] [--watch] [--json|--format json]
   dove hook session-start --project <dir>
@@ -33,7 +34,7 @@ Dove 从项目记录里替宿主算几件事：本轮对准哪一维、哪天见
 
 dove figure 调用 settings.figure（baseURL、model，可选 apiKeyEnv）配置的图像模型，向服务发送 prompt 和输入图；用户配置了图像服务并要求画图，就是对这些请求的授权，不必每次另行确认。无 --image 时生成，有图时编辑，--image 可重复；图片和输出可在任意位置，相对路径按 --project（默认当前目录）解析，输出文件已存在时自动加序号，不覆盖。密钥依次取 Dove 配置目录里的 figure-api-key 文件、apiKeyEnv 指定的环境变量；图像接口就是宿主所用的模型网关时，也用宿主已有的密钥。遇到限流或网关错误会自动重试，失败时显示服务返回的原因。它用来做构图和示意素材，真实结果与文字在 PPT 里组合；dove figure --tools 列出本机做 PPT 的 Python、PPTX 转 PDF 与 PDF 转 PNG 的命令。CLI 不能调用宿主内置 image_gen，Claude Code 宿主也没有这种工具。
 
-dove figure --compare 把同一张图的改前和改后按投稿里的实际宽度（如 83.34mm、3.28in、236.84pt）排成对照，单栏图并排、通栏图上下排；--proof 把整套图各按自己的实际宽度排进一张总览，单栏图两两并排、通栏图独占一行，用来对照字号阶梯、配色和着色方式。输入是 PNG、JPEG、WebP 或 PDF（取第一页），默认 150 dpi；位图按 300 dpi 印刷不够清晰时会提示。合成用 dove figure --tools 找到的带 python-pptx 的 Python（自带 Pillow），PDF 用 pdftoppm 转换；相对路径按 --project 解析，输出文件已存在时自动加序号。
+dove figure --compare 把同一张图的改前和改后按投稿里的实际宽度（如 83.34mm、3.28in、236.84pt）排成对照，单栏图并排、通栏图上下排；--proof 把整套图各按自己的实际宽度排进一张总览，单栏图两两并排、通栏图独占一行，用来对照字号阶梯、配色和着色方式。输入是 PNG、JPEG、WebP 或 PDF（取第一页），默认 150 dpi；位图按 300 dpi 印刷不够清晰时会提示。合成用 dove figure --tools 找到的带 python-pptx 的 Python（自带 Pillow），PDF 用 pdftoppm 转换；相对路径按 --project 解析，输出文件已存在时自动加序号。dove figure --pages 把编译好的稿件 PDF 所有页排成一张版面总览，标出各栏底部空白、中间大片空白和几乎只放图表的栏，并按参考文献标题算出正文用了几页；给 --body-pages（如 8）时再和正文页数上限比较。需要 pdftoppm 和 pdftotext。
 
 dove dashboard 在本机起一个网页，只读查看已登记项目的主线、主指标、八维走势、每轮的对准维度、判定和规模、超时和停滞、等你定的事、每轮的投入与预测对账和偏差统计，以及跨项目经验和各项目反复出现的纠正（默认 127.0.0.1:7788，远程用 SSH 端口转发打开；挂到公网隧道时用 --password-file 开启密码登录，所有页面和数据接口都要先登录）。面板的「设置」页可管理项目登记、论文追踪（关键词、作者、arXiv 分类、每天运行时间、代理、可选的 Semantic Scholar key）和面板密码；论文追踪在面板运行期间每天自动执行，也可用 dove watch run 手动执行，结果写入各项目 .dove/research/watch/。导师每周判断一次追踪结果（或用户要求时，dove mentor brief --watch），返回中文一句话与方向；有用论文累积为可导 BibTeX 的项目文献库。无新论文时补旧文默认关闭。
 

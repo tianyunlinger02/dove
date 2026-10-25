@@ -14,7 +14,7 @@ import { runWatch } from "../src/core/paper-watch.mjs";
 import { configureWatchFromMentor } from "../src/core/watch-configure.mjs";
 import { startTopicSelection } from "../src/core/topic-selection.mjs";
 import { figureTools, generateFigure } from "../src/core/figure-generation.mjs";
-import { composeFigureProof } from "../src/core/figure-proof.mjs";
+import { composeFigureProof, composePageOverview } from "../src/core/figure-proof.mjs";
 import { HOST_MIGRATION_PENDING_PATH, hostMigrationContext, readHostSettings, stopPromptsEnabled, writeHostSettings } from "../src/core/host-migration.mjs";
 import { parseStopPayload, stopHookOutput } from "../src/core/stop-hook.mjs";
 import { refreshCrossProjectExperience } from "../src/core/cross-project.mjs";
@@ -432,6 +432,19 @@ try {
         `PPTX 转 PDF：${show(tools.exportPdf)}`,
         `PDF 转 PNG：${show(tools.pdfToPng)}`,
         ...(tools.notes ? [`工具说明：${tools.notes}`] : [])
+      ].join("\n"));
+    }
+    process.exit(0);
+  }
+
+  if (command === "figure" && options.pages) {
+    const result = composePageOverview(path.resolve(options.project ?? process.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    if (wantsJson(options)) writeJson(result);
+    else {
+      const length = result.bodyPages === null ? "没找到参考文献标题，算不出正文页数" : `正文约 ${result.bodyPages.toFixed(1)} 页${result.limit ? `（上限 ${result.limit} 页）` : ""}，参考文献从第 ${result.referencesPage} 页开始`;
+      console.log([
+        `版面总览：${result.outputPath}（共 ${result.pages} 页，${result.columns === 2 ? "双栏" : "单栏"}；${length}）`,
+        ...(result.flags.length ? result.flags.map((flag) => `- ${flag}`) : ["- 没发现空栏、大片空白或只放图表的栏"])
       ].join("\n"));
     }
     process.exit(0);
