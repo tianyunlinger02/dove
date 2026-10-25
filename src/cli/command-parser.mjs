@@ -27,7 +27,7 @@ export const CLI_COMMAND_SPECS = Object.freeze({
     }
   }),
   topic: command([], { subcommands: { start: command([projectOption, ...outputOptions]) } }),
-  figure: command([projectOption, value("--prompt"), value("--prompt-file"), value("--image", { repeatable: true }), value("--output"), value("--size"), value("--quality"), value("--background"), boolean("--tools"), ...outputOptions]),
+  figure: command([projectOption, value("--prompt"), value("--prompt-file"), value("--image", { repeatable: true }), value("--output"), value("--size"), value("--quality"), value("--background"), boolean("--tools"), boolean("--compare"), boolean("--proof"), value("--before"), value("--after"), value("--width"), value("--figure", { repeatable: true }), value("--dpi"), ...outputOptions]),
   settings: command([value("--host-migration", { choices: ["on", "off"] }), value("--stop-prompts", { choices: ["on", "off"] }), ...outputOptions]),
   mentor: command([], { subcommands: { brief: command([projectOption, value("--trigger"), value("--user-source"), value("--since"), value("--until"), value("--user-original"), value("--opinion"), value("--artifact", { repeatable: true }), boolean("--watch"), ...outputOptions]) } }),
   projects: command([], {

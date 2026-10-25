@@ -14,6 +14,7 @@ import { runWatch } from "../src/core/paper-watch.mjs";
 import { configureWatchFromMentor } from "../src/core/watch-configure.mjs";
 import { startTopicSelection } from "../src/core/topic-selection.mjs";
 import { figureTools, generateFigure } from "../src/core/figure-generation.mjs";
+import { composeFigureProof } from "../src/core/figure-proof.mjs";
 import { HOST_MIGRATION_PENDING_PATH, hostMigrationContext, readHostSettings, stopPromptsEnabled, writeHostSettings } from "../src/core/host-migration.mjs";
 import { parseStopPayload, stopHookOutput } from "../src/core/stop-hook.mjs";
 import { refreshCrossProjectExperience } from "../src/core/cross-project.mjs";
@@ -431,6 +432,19 @@ try {
         `PPTX 转 PDF：${show(tools.exportPdf)}`,
         `PDF 转 PNG：${show(tools.pdfToPng)}`,
         ...(tools.notes ? [`工具说明：${tools.notes}`] : [])
+      ].join("\n"));
+    }
+    process.exit(0);
+  }
+
+  if (command === "figure" && (options.compare || options.proof)) {
+    const result = composeFigureProof(path.resolve(options.project ?? process.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    if (wantsJson(options)) writeJson(result);
+    else {
+      const soft = result.items.filter((item) => !item.enough);
+      console.log([
+        `${result.mode === "compare" ? "改前改后对照" : "整套总览"}：${result.outputPath}（按印刷时的实际宽度，${result.dpi} dpi）`,
+        ...soft.map((item) => `分辨率不够印刷：${item.label}，原图宽 ${item.sourcePx} 像素，按 300 dpi 需要约 ${item.neededPx} 像素`)
       ].join("\n"));
     }
     process.exit(0);

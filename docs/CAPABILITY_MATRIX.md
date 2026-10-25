@@ -11,7 +11,7 @@ Dove is one research partner. Ordinary Claude conversation is the primary entran
 | `dove.source` | Discover sources, verify citations and claims, and accumulate question-led full-text notes in `papers/<id>.md`. |
 | `dove.experiment` | Form methods from real failures and test them through fair comparisons at a scale that can tell the result. |
 | `dove.draft` | Write and revise the authoritative manuscript, group related work from the paper library, export verified BibTeX, and respond to reviews with evidence-backed revisions. |
-| `dove.figure` | Gather materials, draw, inspect and deliver figures, captions and editable sources. |
+| `dove.figure` | Gather materials, draw, inspect and deliver figures, captions and editable sources; compare revisions and the whole set at printed widths. |
 | `dove.review` | Distinguish author self-check, delivery inspection, independent current-paper review and returned opinions. |
 
 ## Surfaces

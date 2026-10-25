@@ -165,6 +165,10 @@ export async function generateFigure(projectRoot, options = {}) {
   return { status: "generated", mode: inputs.length ? "edit" : "generate", model, outputPath: output, inputs: inputs.length };
 }
 
+export function findExecutable(name, env = process.env) {
+  return onPath(name, env);
+}
+
 function onPath(name, env) {
   for (const directory of String(env.PATH ?? "").split(path.delimiter)) {
     if (!directory) continue;

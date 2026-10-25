@@ -632,8 +632,7 @@ function ledgerTable(rows) {
 function biasTable(rows) {
   const head = ["轮次", "预测对账", "结果数字有出处", "每千字兜底词", "新增门禁词", "没运行也没读取就说已验证或通过"];
   const body = rows.map((r) => {
-    const c = r.calibration;
-    const check = c ? (c.hit ? "落在范围内" : "不在范围内") + (c.wrongWay ? "，方向相反" : c.ratio != null ? "，预测变化是实际的 " + (Math.round(c.ratio * 10) / 10) + " 倍" : "") : (r.open ? "—" : (r.prediction ? "缺实测" : "没写预测"));
+    const check = (r.check || (r.open ? "—" : (r.prediction ? "缺实测" : "没写预测"))) + (r.flags && r.flags.length ? "；" + r.flags.join("、") : "");
     const source = r.provenance ? (r.provenance.artifacts ? r.provenance.found + "/" + r.provenance.numbers : "没链接产物") : "—";
     return ["第 " + r.number + " 轮", check, source, r.hedgesPer1k == null ? "—" : String(r.hedgesPer1k), r.gates == null ? "—" : String(r.gates), r.unrunClaims == null ? "—" : String(r.unrunClaims)];
   });
@@ -652,7 +651,7 @@ function progressSection(p) {
   html += '<h3 class="sub3">等你定的事</h3>' + (g.pending.length ? '<div class="card pending"><ul style="margin:0;padding-left:20px">' + g.pending.map((x) => "<li>" + esc(x.text) + "</li>").join("") + "</ul></div>" : '<div class="card note">没有。</div>');
   html += '<h3 class="sub3">八维走势 <span class="sub">每次导师判断一行，最后一列是当时最卡的一维</span></h3>' + (g.trend && g.trend.rows.length ? '<div class="tablewrap">' + trendTable(g.trend) + "</div>" : '<div class="card note">EVAL 里还没有八维走势表。</div>');
   const ledger = g.ledger;
-  html += '<h3 class="sub3">每轮的投入和结果 <span class="sub">一轮从上一轮结果写成到本轮结果写成；新的在上</span></h3>' + (ledger && ledger.rows.length ? '<div class="tablewrap">' + ledgerTable(ledger.rows) + "</div>" + (ledger.summary.finished ? '<div class="note">最近 ' + ledger.summary.finished + " 轮已出结果：平均每轮被纠正 " + ledger.summary.correctionsPerRound + " 次；写了可检验预测并有实测的 " + ledger.summary.calibrated + " 轮，落在预测范围内 " + ledger.summary.hits + " 轮" + (ledger.summary.medianRatio != null ? "，预测变化中位是实际的 " + (Math.round(ledger.summary.medianRatio * 10) / 10) + " 倍" : "") + "；没写预测 " + ledger.summary.withoutPrediction + " 轮。</div>" : "") + (ledger.activityScanned ? "" : '<div class="note">会话记录还在统计中，子代理、压缩等列暂缺。</div>') : '<div class="card note">还没有轮次记录。</div>');
+  html += '<h3 class="sub3">每轮的投入和结果 <span class="sub">一轮从上一轮结果写成到本轮结果写成；新的在上</span></h3>' + (ledger && ledger.rows.length ? '<div class="tablewrap">' + ledgerTable(ledger.rows) + "</div>" + (ledger.summary.finished ? '<div class="note">平均每轮被纠正 ' + ledger.summary.correctionsPerRound + " 次。预测对账：" + esc(ledger.summary.text) + "</div>" : "") + (ledger.activityScanned ? "" : '<div class="note">会话记录还在统计中，子代理、压缩等列暂缺。</div>') : '<div class="card note">还没有轮次记录。</div>');
   html += '<h3 class="sub3">偏差体检 <span class="sub">只作统计，不提示宿主；结果数字有出处 = 能在结果链接的产物里找到的数字 / 结果里的数字</span></h3>' + (ledger && ledger.rows.length ? '<div class="tablewrap">' + biasTable(ledger.rows) + "</div>" : '<div class="card note">还没有轮次记录。</div>');
   return html + "</section>";
 }

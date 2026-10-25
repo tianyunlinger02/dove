@@ -71,6 +71,7 @@ export { USER_RESPONSE_POLICY } from "./user-response-policy.mjs";
 export { exportPaperBibtex, groupPaperLibrary, readPaperLibrary, renderPaperLibrary } from "./paper-library.mjs";
 export { readHostSettings, writeHostSettings } from "./host-migration.mjs";
 export { figureTools, generateFigure } from "./figure-generation.mjs";
+export { composeFigureProof } from "./figure-proof.mjs";
 export { renderMentorBrief } from "./mentor-brief.mjs";
 export { inspectRoundState, renderRoundSituation, renderRoundStatusSummary } from "./round-state.mjs";
 export { parseStopPayload, stopHookOutput } from "./stop-hook.mjs";

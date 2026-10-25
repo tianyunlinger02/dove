@@ -316,15 +316,15 @@ test("method design is visible below the mainline, preserves lines, escapes text
 
 test("project view shows one ledger row and one bias row per round, escaped", () => {
   const root = "/memory/project";
-  const row = (number, extra) => ({ number, duration: "5 小时", open: false, agents: 4, compactions: 1, mentor: 1, corrections: 2, verdictLabel: "未兑现", prediction: "F1 <10> → 12", actual: "F1 10.5", calibration: { hit: false, ratio: 6, wrongWay: false }, provenance: { numbers: 5, found: 4, artifacts: 2 }, hedgesPer1k: 2.5, gates: 3, unrunClaims: 1, ...extra });
+  const row = (number, extra) => ({ number, duration: "5 小时", open: false, agents: 4, compactions: 1, mentor: 1, corrections: 2, verdictLabel: "未兑现", prediction: "F1 <10> → 12–14", actual: "F1 10.5", check: "落在区间外，差 1.5，预测的变化是实际的 6 倍", flags: [], calibration: { hit: false, ratio: 6, wrongWay: false }, provenance: { numbers: 5, found: 4, artifacts: 2 }, hedgesPer1k: 2.5, gates: 3, unrunClaims: 1, ...extra });
   const project = {
     root, name: "Project", mainline: "主线", rounds: [],
     progress: {
       mainMetric: null, trend: null, overrun: null, stall: null, pending: [],
       ledger: {
-        rows: [row(3, { open: true, verdictLabel: null, actual: null, calibration: null, provenance: null }), row(2, { provenance: { numbers: 7, found: null, artifacts: 0 } }), row(1, {})],
+        rows: [row(3, { open: true, verdictLabel: null, actual: null, check: null, flags: ["只给了下限"], calibration: null, provenance: null }), row(2, { provenance: { numbers: 7, found: null, artifacts: 0 } }), row(1, {})],
         activityScanned: true,
-        summary: { finished: 2, withoutPrediction: 0, calibrated: 2, hits: 0, wrongWay: 0, medianRatio: 6, correctionsPerRound: 2 }
+        summary: { finished: 2, correctionsPerRound: 2, text: "最近 2 轮出了结果，能按八成区间打分 2 轮。结论：能打分的轮次还不够 <3> 轮。" }
       }
     }
   };
@@ -338,9 +338,11 @@ test("project view shows one ledger row and one bias row per round, escaped", ()
   assert.match(html, /每轮的投入和结果/u);
   assert.match(html, /第 3 轮（进行中）/u);
   assert.match(html, /平均每轮被纠正 2 次/u);
-  assert.match(html, /不在范围内，预测变化是实际的 6 倍/u);
+  assert.match(html, /落在区间外，差 1\.5，预测的变化是实际的 6 倍/u);
+  assert.match(html, /—；只给了下限/u, "an open round shows how its prediction is written");
+  assert.ok(html.includes("预测对账：最近 2 轮出了结果，能按八成区间打分 2 轮。结论：能打分的轮次还不够 &lt;3&gt; 轮。"));
   assert.match(html, /没链接产物/u);
   assert.match(html, /4\/5/u);
-  assert.ok(html.includes("F1 &lt;10&gt; → 12"));
+  assert.ok(html.includes("F1 &lt;10&gt; → 12–14"));
   assert.ok(!html.includes("<10>"));
 });

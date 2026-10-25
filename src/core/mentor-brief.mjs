@@ -59,7 +59,10 @@ function computedFacts(project, fsOps, now, state) {
       lines.push("- 最近几轮的投入、对账和写法统计（新的在前；一轮从上一轮结果写成到本轮结果写成，按会话记录统计）：");
       for (const row of ledger.rows) lines.push(`  - ${renderLedgerRow(row)}。`);
       const summary = ledger.summary;
-      if (summary.finished) lines.push(`  - 这几轮里：写了可检验预测并出了实测的 ${summary.calibrated} 轮，落在预测范围内的 ${summary.hits} 轮，方向和预测相反的 ${summary.wrongWay} 轮${summary.medianRatio != null ? `，预测的变化中位是实际的 ${Math.round(summary.medianRatio * 10) / 10} 倍` : ""}；没写预测的 ${summary.withoutPrediction} 轮；平均每轮用户纠正 ${summary.correctionsPerRound} 次。`);
+      if (summary.finished) {
+        lines.push(`  - 预测对账：${summary.text}`);
+        lines.push(`  - 平均每轮用户纠正 ${summary.correctionsPerRound} 次。`);
+      }
     }
   } catch {
     // The ledger is a side view; the brief works without it.

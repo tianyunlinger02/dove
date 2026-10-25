@@ -57,7 +57,8 @@ function assertRuntimeCli() {
   });
   assertParserError(["mentor", "brief", "--task", "请裁决工程"], /Dove 不支持这个参数：--task/u, false);
   assert.equal(Object.hasOwn(CLI_COMMAND_SPECS.figure, "subcommands"), false, "figure generation and editing share one CLI entry point");
-  assert.deepEqual(CLI_COMMAND_SPECS.figure.options.map((option) => option.name), ["--project", "--prompt", "--prompt-file", "--image", "--output", "--size", "--quality", "--background", "--tools", "--json", "--format"]);
+  assert.deepEqual(CLI_COMMAND_SPECS.figure.options.map((option) => option.name), ["--project", "--prompt", "--prompt-file", "--image", "--output", "--size", "--quality", "--background", "--tools", "--compare", "--proof", "--before", "--after", "--width", "--figure", "--dpi", "--json", "--format"]);
+  assert.deepEqual(parseDoveCli(["figure", "--proof", "--figure", "figs/a.pdf@174.63mm", "--figure=figs/b.png@83.34mm", "--output", "checks/set.png"]).options.figure, ["figs/a.pdf@174.63mm", "figs/b.png@83.34mm"]);
   assert.deepEqual(assertParserShape(parseDoveCli(["figure", "--project", "/workspace", "--prompt-file", "prompt.txt", "--output", "figures/new.png", "--json"])), {
     command: "figure", subcommand: null, options: { project: "/workspace", promptFile: "prompt.txt", output: "figures/new.png", json: true }, passthrough: []
   });
@@ -144,6 +145,8 @@ function assertDoveCliHelpRenderer() {
   assert.match(output, /dove hook session-start --project <dir>/u);
   assert.match(output, /dove hook user-prompt-submit --project <dir>/u);
   assert.match(output, /dove figure --project <root> \(--prompt <text>\|--prompt-file <file>\) \[--image <file> \.\.\.\] --output <file\.png> \[--size <size>\]/u);
+  assert.match(output, /dove figure --compare --before <file> --after <file> --width <length>/u);
+  assert.match(output, /dove figure --proof --figure <file>@<length>/u);
   assert.match(output, /dove figure --tools \[--json\|--format json\]/u);
   const figureHelp = output.split("\n").find((line) => line.startsWith("dove figure "));
   assert.ok(figureHelp, "help explains the figure command's model and data boundary");

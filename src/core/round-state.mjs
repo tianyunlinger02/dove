@@ -157,7 +157,41 @@ function sectionParagraph(lines, pattern) {
 
 // A number that is not part of a name such as "F1" or "R2"; fractions count as percent.
 const QUANTITY = /(?<![A-Za-z0-9.])(\d+(?:\.\d+)?)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*([%％])?/gu;
-const RANGE = /(?<![A-Za-z0-9.])(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?\s*[%％]?)\s*(?:–|—|-|~|～|至|到)\s*(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?\s*[%％]?)/u;
+const NUMBER = String.raw`(?<![A-Za-z0-9.])\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?\s*[%％]?`;
+const RANGE = new RegExp(String.raw`(${NUMBER})\s*(?:–|—|-|~|～|至|到)\s*(${NUMBER})`, "u");
+const AT_LEAST = new RegExp(String.raw`(?:≥|>=|不低于|不少于|不小于|至少|(?<!不)(?:超过|高于|大于|多于))\s*约?\s*(${NUMBER})|(${NUMBER})\s*(?:及以上|以上)`, "u");
+const AT_MOST = new RegExp(String.raw`(?:≤|<=|不超过|不高于|不多于|不大于|至多|最多|(?<!不)(?:低于|小于|少于))\s*约?\s*(${NUMBER})|(${NUMBER})\s*(?:及以下|以下)`, "u");
+const ARROW = /→|->|⇒|=>/u;
+const UNMEASURED = /未测|尚未实?测|没测|待测|未知/u;
+const CONFIDENCE = /\d+\s*[%％]\s*的?(?:把握|置信)|(?:把握|置信度?)\s*[:：]?\s*\d+\s*[%％]|[一二三四五六七八九十]成的?把握/gu;
+// Wording that makes a prediction impossible to get wrong, and caveats that
+// stand in for a range: uncertainty belongs in the width of the range.
+const CONDITIONAL = /(?<!倘)若(?!干)|如果|假如|倘若|否则|取决于|视[^，。；;]{0,20}而定/u;
+const CAVEATS = /不是|不代表|不代替|不等于|不保证|并非|仅|只是|低置信|置信度低|不确定|不用于|外推|可能/gu;
+// An eighty-percent interval: a miss costs ten times its distance (2 / (1 - 0.8)).
+const MISS_WEIGHT = 10;
+
+// Clauses of a prediction or measurement: split at ；;。 and at commas outside
+// brackets (a comma between digits belongs to the number).
+function splitClauses(text) {
+  const clauses = [];
+  let depth = 0;
+  let current = "";
+  const characters = Array.from(String(text));
+  characters.forEach((character, index) => {
+    if ("（([【".includes(character)) depth += 1;
+    else if ("）)]】".includes(character)) depth = Math.max(0, depth - 1);
+    const comma = character === "，" || (character === "," && !/\d/u.test(characters[index + 1] ?? ""));
+    if ("；;。".includes(character) || (comma && depth === 0)) {
+      clauses.push(current);
+      current = "";
+    } else {
+      current += character;
+    }
+  });
+  clauses.push(current);
+  return clauses.map((clause) => clause.trim()).filter(Boolean);
+}
 
 function quantities(text) {
   return [...String(text ?? "").matchAll(QUANTITY)].map((match) => {
@@ -167,40 +201,161 @@ function quantities(text) {
   }).filter((value) => Number.isFinite(value));
 }
 
+// "0–3/136": the lower end shares the upper end's denominator.
+function rangeValues(lowText, highText) {
+  const denominator = (text) => text.match(/\/\s*(\d+(?:\.\d+)?)/u)?.[1] ?? null;
+  const share = (text, other) => (!denominator(text) && other && !/[%％]/u.test(text) ? `${text.trim()}/${other}` : text);
+  return [quantities(share(lowText, denominator(highText)))[0], quantities(share(highText, denominator(lowText)))[0]]
+    .filter((value) => value !== undefined)
+    .sort((left, right) => left - right);
+}
+
+function parseSegment(raw, index) {
+  const text = raw.replace(CONFIDENCE, " ").trim();
+  const parts = text.split(ARROW);
+  const arrow = parts.length > 1;
+  const left = arrow ? parts[0] : "";
+  const right = arrow ? parts.slice(1).join(" ") : text;
+  const unmeasured = arrow && UNMEASURED.test(left);
+  const leftNumbers = arrow ? [...left.matchAll(QUANTITY)] : [];
+  const baselineMatch = unmeasured ? null : leftNumbers.at(-1) ?? null;
+  const baseline = baselineMatch ? quantities(baselineMatch[0])[0] ?? null : null;
+  // What is measured: the words before the value now, used to find the same value in the result.
+  const label = arrow ? left.slice(0, baselineMatch ? baselineMatch.index : left.search(UNMEASURED)).trim() || null : null;
+  let low = null;
+  let high = null;
+  let point = null;
+  const range = right.match(RANGE);
+  const ends = range ? rangeValues(range[1], range[2]) : [];
+  if (ends.length === 2) {
+    [low, high] = ends;
+  } else {
+    const atLeast = right.match(AT_LEAST);
+    const atMost = right.match(AT_MOST);
+    const bound = (match) => (match ? quantities(match[1] ?? match[2])[0] ?? null : null);
+    low = bound(atLeast);
+    high = bound(atMost);
+    if (low === null && high === null) point = quantities(right)[0] ?? null;
+    else {
+      low ??= -Infinity;
+      high ??= Infinity;
+    }
+  }
+  return { index, conditional: CONDITIONAL.test(text), baseline, unmeasured, label, low, high, point };
+}
+
 /**
- * "预测：事件 F1 12.7 → 15–18": the value now (last number before the arrow)
- * and the predicted value or range (after it). Without an arrow there is no baseline.
+ * "预测：事件 F1 12.7 → 14–17": one quantity, its value now (or 未测) and an
+ * eighty-percent range. Lines written otherwise still parse: several
+ * quantities, one-sided bounds, a point without a range, conditional wording.
+ * The first two-sided, unconditional quantity is the one scored.
  */
 export function parsePrediction(text) {
   if (!text) return null;
-  const [left, ...rest] = String(text).split(/→|->|⇒|=>/u);
-  const right = rest.length ? rest.join(" ") : left;
-  const range = right.match(RANGE);
-  const values = range ? [...quantities(range[1]), ...quantities(range[2])] : quantities(right).slice(0, 1);
-  const baseline = rest.length ? quantities(left).at(-1) ?? null : null;
-  if (!values.length) return { text, baseline, low: null, high: null };
-  return { text, baseline, low: Math.min(...values), high: Math.max(...values) };
+  const segments = splitClauses(text).map(parseSegment);
+  const numeric = segments.filter((segment) => segment.low !== null || segment.point !== null);
+  const twoSided = (segment) => Number.isFinite(segment.low) && Number.isFinite(segment.high);
+  const primary = numeric.find((segment) => !segment.conditional && twoSided(segment))
+    ?? numeric.find((segment) => !segment.conditional && segment.low !== null)
+    ?? numeric.find((segment) => !segment.conditional)
+    ?? numeric[0]
+    ?? null;
+  return {
+    text,
+    segments: segments.length,
+    quantities: numeric.length,
+    conditionalSegments: segments.filter((segment) => segment.conditional).length,
+    caveats: (String(text).match(CAVEATS) ?? []).length,
+    primaryIndex: primary?.index ?? null,
+    conditional: primary ? primary.conditional : segments.some((segment) => segment.conditional),
+    label: primary?.label ?? null,
+    baseline: primary?.baseline ?? null,
+    unmeasured: primary?.unmeasured ?? false,
+    low: primary?.low ?? null,
+    high: primary?.high ?? null,
+    point: primary?.point ?? null
+  };
 }
 
-/** "实测：事件 F1 13.2": the first value. */
+/** "实测：事件 F1 13.2": the value per segment (first number). */
 export function parseActual(text) {
   if (!text) return null;
-  return { text, value: quantities(text)[0] ?? null };
+  const segments = splitClauses(text);
+  const values = segments.map((segment) => quantities(segment.replace(CONFIDENCE, " "))[0] ?? null);
+  return { text, segments, values, value: values.find((value) => value !== null) ?? null };
 }
 
-/** Did the actual land in the predicted range, and how did the predicted change compare with the real one? */
+// The measured value for the predicted quantity: the same segment when the
+// result lists as many as the prediction, after the quantity's own name.
+function actualValue(prediction, actual) {
+  const aligned = prediction.primaryIndex !== null && actual.segments?.length === prediction.segments ? actual.segments[prediction.primaryIndex] : null;
+  const source = aligned ?? actual.segments?.[0] ?? actual.text ?? "";
+  const label = prediction.label;
+  const rest = label && source.includes(label) ? source.slice(source.indexOf(label) + label.length) : null;
+  return (rest !== null ? quantities(rest.replace(CONFIDENCE, " "))[0] : undefined) ?? quantities(String(source).replace(CONFIDENCE, " "))[0] ?? actual.value ?? null;
+}
+
+/** How a prediction is written, independent of its result. */
+export function predictionFlags(prediction) {
+  if (!prediction) return [];
+  const flags = [];
+  const { low, high, baseline } = prediction;
+  if (low === null && prediction.point === null) flags.push("没有数字");
+  else if (low === null) flags.push("没有区间");
+  else if (!Number.isFinite(low) || !Number.isFinite(high)) flags.push(Number.isFinite(low) ? "只给了下限" : "只给了上限");
+  if (prediction.conditionalSegments) flags.push("条件式");
+  if (prediction.quantities > 1) flags.push(`写了 ${prediction.quantities} 个量`);
+  if (baseline !== null && Number.isFinite(low) && Number.isFinite(high) && baseline >= low && baseline <= high) flags.push("区间包住了现在的值");
+  if (prediction.caveats) flags.push(`带 ${prediction.caveats} 处前提`);
+  return flags;
+}
+
+/** The flags that keep a prediction from being scored as written. */
+export function unscorableFlags(prediction) {
+  return predictionFlags(prediction).filter((flag) => /^(没有数字|没有区间|只给了|条件式|写了)/u.test(flag));
+}
+
+/**
+ * Score one round against an eighty-percent range: whether the measurement
+ * fell inside, the interval score (width plus ten times any miss), the width
+ * against the real change, and whether a miss fell short of the predicted
+ * change or went beyond it.
+ */
 export function calibrateRound(prediction, actual) {
-  if (prediction?.low == null || actual?.value == null) return null;
-  const hit = actual.value >= prediction.low - 1e-9 && actual.value <= prediction.high + 1e-9;
+  if (!prediction || !actual) return null;
+  const value = actualValue(prediction, actual);
+  if (value === null || (prediction.low === null && prediction.point === null)) return null;
+  const { low, high, baseline } = prediction;
+  const ranged = low !== null;
+  const twoSided = ranged && Number.isFinite(low) && Number.isFinite(high);
+  const center = prediction.point ?? (twoSided ? (low + high) / 2 : ranged ? (Number.isFinite(low) ? low : high) : null);
   let ratio = null;
   let wrongWay = false;
-  if (prediction.baseline != null) {
-    const predicted = (prediction.low + prediction.high) / 2 - prediction.baseline;
-    const real = actual.value - prediction.baseline;
+  if (baseline !== null && center !== null) {
+    const predicted = center - baseline;
+    const real = value - baseline;
     if (predicted !== 0 && (real === 0 || Math.sign(real) !== Math.sign(predicted))) wrongWay = true;
-    else if (real !== 0) ratio = predicted / real;
+    else if (real !== 0 && predicted !== 0) ratio = predicted / real;
   }
-  return { hit, ratio, wrongWay };
+  const hit = ranged ? value >= low - 1e-9 && value <= high + 1e-9 : null;
+  let missSide = null;
+  if (hit === false && baseline !== null && center !== null && center !== baseline) {
+    missSide = (center > baseline ? value > high : value < low) ? "beyond" : "short";
+  }
+  const width = twoSided ? high - low : null;
+  return {
+    value,
+    hit,
+    scorable: twoSided && !prediction.conditional,
+    width,
+    miss: hit === false && twoSided ? Math.max(low - value, value - high) : null,
+    score: twoSided ? width + MISS_WEIGHT * (Math.max(0, low - value) + Math.max(0, value - high)) : null,
+    widthRatio: twoSided && baseline !== null ? (value === baseline ? Infinity : width / Math.abs(value - baseline)) : null,
+    includesBaseline: twoSided && baseline !== null ? baseline >= low && baseline <= high : null,
+    missSide,
+    ratio,
+    wrongWay
+  };
 }
 
 /** The plan a round brief commits to at its top. */

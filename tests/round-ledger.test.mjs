@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { renderLedgerRow, roundLedger } from "../src/core/round-ledger.mjs";
+import { calibrationSummary, renderCalibrationSummary, renderLedgerRow, roundLedger } from "../src/core/round-ledger.mjs";
+import { calibrateRound, parseActual, parsePrediction, predictionFlags } from "../src/core/round-state.mjs";
 import { ACTIVITY_BUCKET_MS, ACTIVITY_INDEX_PATH, USER_ORIGINALS_PATH } from "../src/core/user-originals.mjs";
 
 const at = (iso) => Date.parse(iso);
@@ -25,7 +26,7 @@ test("rounds on the same day are split where each result was first written", (t)
     ".dove/research/IDENTITY.md": "Current round: rounds/003-brief.md\nRound status: ongoing\n",
     ".dove/research/rounds/001-brief.md": "Author: mentor\n预测：F1 10 → 12–14\n",
     ".dove/research/rounds/001-result.md": "判定：未兑现\n实测：F1 10.5\n",
-    ".dove/research/rounds/002-brief.md": "Author: mentor\n预测：F1 10.5 → 12\n",
+    ".dove/research/rounds/002-brief.md": "Author: mentor\n预测：F1 10.5 → 11.5–12.5\n",
     ".dove/research/rounds/002-result.md": "判定：兑现\n实测：F1 12.0\n",
     ".dove/research/rounds/003-brief.md": "Author: mentor\n",
     [USER_ORIGINALS_PATH]: [
@@ -59,8 +60,10 @@ test("rounds on the same day are split where each result was first written", (t)
   assert.equal(byNumber[1].hedgesPer1k, 3);
   assert.equal(byNumber[1].calibration.hit, false);
   assert.equal(byNumber[2].calibration.hit, true);
-  assert.deepEqual([ledger.summary.finished, ledger.summary.calibrated, ledger.summary.hits, ledger.summary.correctionsPerRound], [2, 2, 1, 1]);
-  assert.match(renderLedgerRow(byNumber[1]), /^第 1 轮（.*，2 小时）；子代理 3 次、上下文压缩 1 次、导师 1 次；用户纠正 1 次；判定 未兑现；预测 F1 10 → 12–14 → 实测 F1 10\.5（不在预测范围内，预测的变化是实际的 6 倍）/u);
+  assert.deepEqual([ledger.summary.finished, ledger.summary.scored, ledger.summary.hits, ledger.summary.correctionsPerRound], [2, 2, 1, 1]);
+  assert.match(ledger.summary.text, /能按八成区间打分 2 轮；能打分的命中 1\/2/u);
+  assert.match(ledger.summary.text, /结论：能打分的轮次还不够 3 轮/u);
+  assert.match(renderLedgerRow(byNumber[1]), /^第 1 轮（.*，2 小时）；子代理 3 次、上下文压缩 1 次、导师 1 次；用户纠正 1 次；判定 未兑现；预测 F1 10 → 12–14 → 实测 F1 10\.5（落在区间外，差 1\.5，预测的变化是实际的 6 倍，区间宽度是实际变化的 4 倍）/u);
 });
 
 test("without scanned transcripts the ledger still lists rounds, verdicts and corrections", (t) => {
@@ -72,4 +75,22 @@ test("without scanned transcripts the ledger still lists rounds, verdicts and co
   assert.equal(ledger.activityScanned, false);
   assert.deepEqual([ledger.rows[0].agents, ledger.rows[0].verdictLabel, ledger.rows[0].corrections], [null, "方法取舍", 0]);
   assert.match(renderLedgerRow(ledger.rows[0]), /判定 方法取舍（放弃类别分支）；没写预测和实测$/u);
+});
+
+test("the direction comes from the record: conservative, optimistic or vague", () => {
+  const row = (prediction, actual) => {
+    const parsed = parsePrediction(prediction);
+    return { open: false, prediction, flags: predictionFlags(parsed), caveats: parsed?.caveats ?? 0, calibration: calibrateRound(parsed, parseActual(actual)) };
+  };
+  const conservative = calibrationSummary([row("F1 10 → 6–16", "F1 11"), row("F1 11 → 7–17", "F1 12"), row("F1 12 → 8–18", "F1 12.5")]);
+  assert.equal(conservative.direction, "conservative");
+  assert.match(renderCalibrationSummary(conservative), /结论：偏保守：命中 3\/3/u);
+  const optimistic = calibrationSummary([row("F1 10 → 14–16", "F1 10.5"), row("F1 10.5 → 15–17", "F1 11"), row("F1 11 → 15–18", "F1 11.4")]);
+  assert.equal(optimistic.direction, "optimistic");
+  assert.match(renderCalibrationSummary(optimistic), /偏乐观：命中 0\/3，落空 3 轮里 3 轮没达到预测的变化/u);
+  const calibrated = calibrationSummary([row("F1 10 → 11–13", "F1 12"), row("F1 12 → 12.5–14", "F1 13.5"), row("F1 13.5 → 14–16", "F1 13.8"), row("F1 13.8 → 14–15.5", "F1 14.9"), row("F1 14.9 → 15–16.5", "F1 15.6")]);
+  assert.equal(calibrated.direction, "calibrated");
+  const vague = calibrationSummary([row("候选数 0/2 → 至少 1/2", "候选数 1/2"), row("D 若能解决瓶颈预计超过 58/136，否则不超过", "D 60/136"), row("F1 10 → 11–13", "F1 12")]);
+  assert.deepEqual([vague.scored, vague.oneSided, vague.conditional, vague.findings[0].kind], [1, 1, 1, "vague"]);
+  assert.match(renderCalibrationSummary(vague), /另有条件式 1、只给一边 1/u);
 });
