@@ -44,7 +44,7 @@ Ordinary `claude` in the initialized project is the primary entrance. `claude --
 | `dove.experiment` | Develop and evaluate methods through fair comparisons. |
 | `dove.draft` | Write and revise the authoritative manuscript, including responses to reviews. |
 | `dove.figure` | Design, draw, inspect and deliver figures. |
-| `dove.review` | Independent current-paper review, author self-check or delivery check. |
+| `dove.review` | Independent current-paper review, a cold read of the compiled PDF by a first-time reader, author self-check or delivery check. |
 
 ## Records
 

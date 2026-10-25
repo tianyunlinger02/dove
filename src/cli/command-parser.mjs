@@ -30,6 +30,7 @@ export const CLI_COMMAND_SPECS = Object.freeze({
   figure: command([projectOption, value("--prompt"), value("--prompt-file"), value("--image", { repeatable: true }), value("--output"), value("--size"), value("--quality"), value("--background"), boolean("--tools"), boolean("--compare"), boolean("--proof"), value("--before"), value("--after"), value("--width"), value("--figure", { repeatable: true }), value("--dpi"), value("--pages"), value("--body-pages"), ...outputOptions]),
   settings: command([value("--host-migration", { choices: ["on", "off"] }), value("--stop-prompts", { choices: ["on", "off"] }), ...outputOptions]),
   mentor: command([], { subcommands: { brief: command([projectOption, value("--trigger"), value("--user-source"), value("--since"), value("--until"), value("--user-original"), value("--opinion"), value("--artifact", { repeatable: true }), boolean("--watch"), ...outputOptions]) } }),
+  "cold-read": command([projectOption, value("--pdf", { repeatable: true }), value("--venue"), ...outputOptions]),
   projects: command([], {
     subcommands: {
       import: command([value("--project", { repeatable: true, dedupe: true }), boolean("--sync"), ...outputOptions]),

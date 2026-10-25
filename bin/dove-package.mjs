@@ -1128,15 +1128,15 @@ var require_route = __commonJS({
       };
     }
     function wrapConversion(toModel, graph) {
-      const path31 = [graph[toModel].parent, toModel];
+      const path32 = [graph[toModel].parent, toModel];
       let fn = conversions[graph[toModel].parent][toModel];
       let cur = graph[toModel].parent;
       while (graph[cur].parent) {
-        path31.unshift(graph[cur].parent);
+        path32.unshift(graph[cur].parent);
         fn = link(conversions[graph[cur].parent][cur], fn);
         cur = graph[cur].parent;
       }
-      fn.conversion = path31;
+      fn.conversion = path32;
       return fn;
     }
     module.exports = function(fromModel) {
@@ -7632,10 +7632,10 @@ var require_lib2 = __commonJS({
     exports.analyse = analyse;
     var detectFile = (filepath, opts = {}) => new Promise((resolve, reject) => {
       let fd;
-      const fs31 = (0, node_1.default)();
+      const fs33 = (0, node_1.default)();
       const handler = (err, buffer) => {
         if (fd) {
-          fs31.closeSync(fd);
+          fs33.closeSync(fd);
         }
         if (err) {
           reject(err);
@@ -7647,9 +7647,9 @@ var require_lib2 = __commonJS({
       };
       const sampleSize = (opts === null || opts === void 0 ? void 0 : opts.sampleSize) || 0;
       if (sampleSize > 0) {
-        fd = fs31.openSync(filepath, "r");
+        fd = fs33.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(sampleSize);
-        fs31.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
+        fs33.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
           if (err) {
             handler(err, null);
           } else {
@@ -7661,22 +7661,22 @@ var require_lib2 = __commonJS({
         });
         return;
       }
-      fs31.readFile(filepath, handler);
+      fs33.readFile(filepath, handler);
     });
     exports.detectFile = detectFile;
     var detectFileSync = (filepath, opts = {}) => {
-      const fs31 = (0, node_1.default)();
+      const fs33 = (0, node_1.default)();
       if (opts && opts.sampleSize) {
-        const fd = fs31.openSync(filepath, "r");
+        const fd = fs33.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(opts.sampleSize);
-        const bytesRead = fs31.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
+        const bytesRead = fs33.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
         if (bytesRead < opts.sampleSize) {
           sample = sample.subarray(0, bytesRead);
         }
-        fs31.closeSync(fd);
+        fs33.closeSync(fd);
         return (0, exports.detect)(sample);
       }
-      return (0, exports.detect)(fs31.readFileSync(filepath));
+      return (0, exports.detect)(fs33.readFileSync(filepath));
     };
     exports.detectFileSync = detectFileSync;
     exports.default = {
@@ -11477,8 +11477,8 @@ var require_lib3 = __commonJS({
 });
 
 // bin/dove.mjs
-import fs30 from "node:fs";
-import path30 from "node:path";
+import fs32 from "node:fs";
+import path31 from "node:path";
 import process5 from "node:process";
 import { fileURLToPath as fileURLToPath5 } from "node:url";
 
@@ -13913,6 +13913,7 @@ var CLI_COMMAND_SPECS = Object.freeze({
   figure: command([projectOption, value("--prompt"), value("--prompt-file"), value("--image", { repeatable: true }), value("--output"), value("--size"), value("--quality"), value("--background"), boolean("--tools"), boolean("--compare"), boolean("--proof"), value("--before"), value("--after"), value("--width"), value("--figure", { repeatable: true }), value("--dpi"), value("--pages"), value("--body-pages"), ...outputOptions]),
   settings: command([value("--host-migration", { choices: ["on", "off"] }), value("--stop-prompts", { choices: ["on", "off"] }), ...outputOptions]),
   mentor: command([], { subcommands: { brief: command([projectOption, value("--trigger"), value("--user-source"), value("--since"), value("--until"), value("--user-original"), value("--opinion"), value("--artifact", { repeatable: true }), boolean("--watch"), ...outputOptions]) } }),
+  "cold-read": command([projectOption, value("--pdf", { repeatable: true }), value("--venue"), ...outputOptions]),
   projects: command([], {
     subcommands: {
       import: command([value("--project", { repeatable: true, dedupe: true }), boolean("--sync"), ...outputOptions]),
@@ -14161,7 +14162,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.5.7" : null;
+var injectedVersion = true ? "3.5.8" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -14238,8 +14239,8 @@ var ARTIFACT_PATHS = Object.freeze({
 });
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path31) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path31 === "$" ? key : `${path31}.${key}`}.`);
+function duplicateKeyError(label, key, path32) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path32 === "$" ? key : `${path32}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -14275,7 +14276,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path31) {
+  function parseArray(path32) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -14284,7 +14285,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path31}[${itemIndex}]`);
+      parseValue(`${path32}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -14296,7 +14297,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path31) {
+  function parseObject(path32) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -14306,12 +14307,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path31);
+      if (keys.has(key)) duplicateKeyError(label, key, path32);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path31 === "$" ? `$.${key}` : `${path31}.${key}`);
+      parseValue(path32 === "$" ? `$.${key}` : `${path32}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -14322,11 +14323,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path31) {
+  function parseValue(path32) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path31);
-    else if (character === "[") parseArray(path31);
+    if (character === "{") parseObject(path32);
+    else if (character === "[") parseArray(path32);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -14908,6 +14909,8 @@ tools: Read, Grep, Glob
 
 \u53EA\u8BFB\u6307\u5B9A\u7684\u5F53\u524D\u5B8C\u6574\u7A3F\u4EF6\uFF08\u542B\u6307\u5B9A\u9644\u5F55\u3001\u56FE\u8868\u548C\u4EA4\u4ED8\u7A3F\uFF09\u3001\u5176\u5F15\u7528\u7684\u7ED3\u679C\uFF0C\u4EE5\u53CA\u7ED9\u5B9A\u7684\u6295\u7A3F\u8981\u6C42\u548C\u6587\u732E\u3002\u4E0D\u8BFB\u8EAB\u4EFD\u5361\u3001\u8F6E\u6B21\u3001\u4F5C\u8005\u504F\u597D\u3001\u65E7\u5BA1\u7A3F\u3001\u5BF9\u8BDD\u6216\u5BBF\u4E3B\u8BBE\u7F6E\uFF1B\u4E0D\u8054\u7F51\u3001\u4E0D\u6267\u884C\u3001\u4E0D\u6539\u7A3F\u3002\u7F3A\u8BC1\u636E\u5C31\u6CE8\u660E\uFF0C\u4E0D\u81EA\u884C\u6269\u5927\u9605\u8BFB\u8303\u56F4\uFF0C\u4E0D\u8981\u6C42\u51BB\u7ED3\u3001\u590D\u5236\u6216\u54C8\u5E0C\u3002
 
+\u8C03\u7528\u6B63\u6587\u4EE5\u201C\u51B7\u8BFB\u201D\u5F00\u5934\u65F6\uFF0C\u4F60\u662F\u7B2C\u4E00\u6B21\u8BFB\u8FD9\u7BC7\u7A3F\u5B50\u7684\u8BFB\u8005\uFF1A\u53EA\u8BFB\u6B63\u6587\u5217\u51FA\u7684\u9010\u9875\u6587\u5B57\u548C\u9875\u9762\u56FE\u7247\uFF0C\u4E0D\u6253\u5F00\u9879\u76EE\u91CC\u7684\u4EFB\u4F55\u5176\u4ED6\u6587\u4EF6\uFF0C\u4E0D\u8054\u7F51\uFF1B\u8BFB\u4E0D\u61C2\u5C31\u7167\u5B9E\u62A5\u544A\uFF0C\u4E0D\u53BB\u522B\u5904\u627E\u7B54\u6848\uFF0C\u4E5F\u4E0D\u6838\u5BF9\u6570\u5B57\u3002\u6309\u6B63\u6587\u5217\u51FA\u7684\u5404\u9879\u8FD4\u56DE\u3002
+
 \u4ECE\u7A3F\u4EF6\u91CD\u5EFA\u8D21\u732E\uFF0C\u4E0D\u6CBF\u7528\u5BBF\u4E3B\u7684\u7ED3\u8BBA\uFF1A\u65B9\u6CD5\u56DE\u7B54\u95EE\u9898\u4E86\u5417\uFF0C\u673A\u5236\u3001\u672F\u8BED\u3001\u6BD4\u8F83\u3001\u6587\u732E\u548C\u5C40\u9650\u5BF9\u5417\uFF0C\u8BC1\u636E\u4E0E\u8868\u8FBE\u591F\u76EE\u6807\u4F1A\u8BAE\u6216\u671F\u520A\u5417\uFF1F\u7ED9\u51FA\u6700\u5F3A\u5408\u7406\u53CD\u5BF9\u610F\u89C1\u53CA\u6240\u9700\u8BC1\u636E\uFF1B\u7F3A\u6295\u7A3F\u6216\u6587\u732E\u4F9D\u636E\u5C31\u8BF4\u6E05\u5224\u65AD\u9650\u5236\u3002
 
 \u7528\u7B80\u77ED\u767D\u8BDD\u8FD4\u56DE\u603B\u4F53\u5224\u65AD\u3001\u5B9E\u8D28\u95EE\u9898\u3001\u7A3F\u4EF6\u4F4D\u7F6E\u6216\u539F\u59CB\u7ED3\u679C\u4F9D\u636E\u3001\u4F5C\u8005\u4E0B\u4E00\u6B65\uFF0C\u4EE5\u53CA\u5B9E\u9645\u8BFB\u8FC7\u7684\u6587\u4EF6\u548C\u90E8\u5206\u3002\u5408\u5E76\u5171\u56E0\uFF0C\u672A\u77E5\u4FDD\u6301\u672A\u77E5\uFF1B\u683C\u5F0F\u3001\u6784\u5EFA\u548C\u5C40\u90E8\u6307\u6807\u901A\u8FC7\u4E0D\u7B49\u4E8E\u79D1\u7814\u6210\u7ACB\uFF0C\u4E0D\u80FD\u9690\u53BB\u5931\u8D25\u6216\u7F29\u5C0F\u95EE\u9898\u3002\u4F60\u53EA\u7ED9\u5224\u65AD\uFF0C\u4E3B\u4F1A\u8BDD\u8D1F\u8D23\u56DE\u5E94\u548C\u4FEE\u8BA2\uFF1B\u63A8\u8350\u4E0D\u662F\u5916\u90E8\u63A5\u6536\u3002`;
@@ -15083,7 +15086,7 @@ function contract(slug) {
       "\u7528 `.dove/research/papers/library.json` \u548C `library.md` \u6309\u65B9\u5411\u7EC4\u7EC7\u76F8\u5173\u5DE5\u4F5C\uFF0C\u6BCF\u7EC4\u4EE5\u672C\u6587\u548C\u8FD9\u7EC4\u5DE5\u4F5C\u7684\u533A\u522B\u6536\u5C3E\uFF1B\u636E `papers/<id>.md` \u6838\u4E3B\u5F20\u652F\u6301\u3002\u5F15\u7528\u6216\u5BFC\u51FA BibTeX \u524D\u7528 Source \u6838\u5143\u6570\u636E\uFF0C\u53EA\u5BFC\u5DF2\u6838\u5B57\u6BB5\uFF0C\u4E0D\u7F16\u4F5C\u8005\u3001\u573A\u5408\u3001\u65E5\u671F\u6216\u6807\u8BC6\u3002\u663E\u5F0F\u79EF\u7D2F\u6216\u540E\u7EED watch \u624D\u66F4\u65B0\u5E93\uFF0C\u53EA\u8BFB\u4E0D\u5199\u3002",
       "\u4EFB\u4F55\u56FE\u6539\u52A8\u540E\uFF0C\u5305\u62EC Figure \u4EA4\u56DE\u7684\u65B0\u56FE\uFF0C\u56DE\u67E5\u56FE\u6CE8\u3001\u6B63\u6587\u63CF\u8FF0\u548C\u4EA4\u53C9\u5F15\u7528\uFF0C\u518D\u8D70\u5B9E\u9645\u6784\u5EFA\uFF0F\u5BFC\u51FA\u8DEF\u5F84\u3002\u7F16\u8BD1\u540E\u68C0\u67E5\u6EA2\u51FA\u6846\u3001\u672A\u5B9A\u4E49\u5F15\u7528\u3001\u56FE\u8868\u7F16\u53F7\u3001\u53CC\u680F\u5BBD\u8868\u662F\u5426\u901A\u680F\uFF0C\u9010\u9875\u770B\u7A7A\u680F\u3001\u53EA\u653E\u6D6E\u52A8\u4F53\u7684\u680F\u3001\u5927\u7247\u7A7A\u767D\uFF08dove figure --pages <\u7A3F\u4EF6.pdf> --body-pages <\u6B63\u6587\u9875\u6570\u4E0A\u9650> --output <\u603B\u89C8.png> \u628A\u6240\u6709\u9875\u6392\u6210\u4E00\u5F20\u603B\u89C8\uFF0C\u6807\u51FA\u8FD9\u4E9B\u4F4D\u7F6E\uFF0C\u5E76\u6309\u53C2\u8003\u6587\u732E\u6807\u9898\u7B97\u51FA\u6B63\u6587\u5B9E\u9645\u7528\u4E86\u51E0\u9875\uFF09\uFF0C\u4EE5\u53CA\u56FE\u8868\u662F\u5426\u79BB\u9996\u6B21\u5F15\u7528\u8D85\u8FC7\u4E00\u9875\u3001\u6392\u5230\u7ED3\u8BBA\u4E4B\u540E\u6216\u53C2\u8003\u6587\u732E\u9875\u3001\u6B63\u6587\u662F\u5426\u63D0\u524D\u7ED3\u675F\u800C\u6CA1\u7528\u8DB3\u9875\u6570\u3002\u6B63\u6587\u5B57\u6570\u4ECE\u6E90\u7801\u7B97\uFF0C\u6392\u9664\u8868\u683C\u3001\u56FE\u6CE8\u548C\u53C2\u8003\u6587\u732E\uFF0C\u4E0E\u76EE\u6807\u6838\u5BF9\uFF1B\u6309\u6295\u7A3F\u8981\u6C42\u6838\u5BF9\u6B63\u6587\u9875\u6570\uFF08\u542B\u56FE\u8868\uFF09\uFF0C\u4FDD\u6301\u6700\u7EC8\u5B57\u53F7\u548C\u5173\u952E\u8BC1\u636E\u3002\u6536\u5C3E\u628A\u5168\u6587\u9010\u9875\u6E32\u67D3\uFF0C\u4E00\u6B21\u770B\u5B8C\u7248\u9762\u3001\u56FE\u6587\u90BB\u8FD1\u3001\u56FE\u6CE8\u4E00\u81F4\u548C\u6574\u5957\u56FE\u98CE\u683C\uFF0C\u770B\u8FC7\u8F93\u51FA\u624D\u79F0\u5F53\u524D\u7A3F\uFF1B\u4FEE\u8303\u56F4\u5185\u95EE\u9898\uFF0C\u8BF4\u660E\u5269\u4F59\u6750\u6599\u9650\u5236\u3002",
       "LaTeX \u7A3F\u4EF6\u5728\u6295\u7A3F\u6A21\u677F\u5141\u8BB8\u7684\u8303\u56F4\u5185\u9ED8\u8BA4\u653E\u5BBD\u6D6E\u52A8\u53C2\u6570\uFF1A\\renewcommand{\\topfraction}{0.9}\u3001\\renewcommand{\\dbltopfraction}{0.9}\u3001\\renewcommand{\\textfraction}{0.08}\u3001\\renewcommand{\\floatpagefraction}{0.9}\u3001\\setcounter{topnumber}{3}\u3002\u4ECD\u6392\u4E0D\u4E0B\u65F6\u8C03\u6574\u56FE\u8868\u5728\u6E90\u6587\u4EF6\u91CC\u7684\u4F4D\u7F6E\u6216\u5185\u5BB9\u53D6\u820D\uFF0C\u4E0D\u9760\u8D1F\u95F4\u8DDD\u6216\u7F29\u5B57\u53F7\u585E\u7248\u9762\u3002",
-      "\u4EA4\u7A3F\u6216\u6295\u7A3F\u524D\u518D\u6838\u5BF9\uFF1A\u6458\u8981\u3001\u5F15\u8A00\u3001\u6B63\u6587\u3001\u8868\u683C\u3001\u56FE\u6CE8\u548C\u8865\u5145\u6750\u6599\u91CC\u7684\u540C\u4E00\u4E2A\u6570\u90FD\u4ECE\u7ED3\u679C\u6587\u4EF6\u53D6\u3001\u5904\u5904\u4E00\u81F4\uFF0C\u7ED3\u679C\u6539\u8FC7\u5C31\u5168\u6587\u67E5\u4E00\u904D\uFF1B\u6B63\u6587\u6BCF\u5904\u6307\u5411\u8865\u5145\u6750\u6599\u7684\u5F15\u7528\u90FD\u80FD\u5728\u8865\u5145\u91CC\u627E\u5230\uFF0C\u8865\u5145\u5355\u72EC\u7F16\u8BD1\u3001\u5355\u72EC\u770B\u7248\u9762\uFF1B\u53CC\u76F2\u6295\u7A3F\u67E5\u533F\u540D\uFF1A\u4F5C\u8005\u4FE1\u606F\u3001\u81F4\u8C22\u3001\u5E26\u7528\u6237\u540D\u6216\u673A\u6784\u7684\u94FE\u63A5\u3001\u7B2C\u4E00\u4EBA\u79F0\u81EA\u5F15\u3001PDF \u5143\u6570\u636E\u548C\u8865\u5145\u6750\u6599\u91CC\u7684\u6587\u4EF6\u3002",
+      "\u6BCF\u6B21\u4EA4\u7ED9\u7528\u6237\u6216\u6295\u7A3F\u4E4B\u524D\u90FD\u505A\u7EC8\u68C0\uFF0C\u6309\u987A\u5E8F\uFF1A\u7F16\u8BD1\u540E\u7528 dove figure --pages \u770B\u7248\u9762\uFF1B\u6309 Review \u7684\u51B7\u8BFB\uFF0C\u8BA9\u4E00\u4E2A\u5168\u65B0\u7684\u8BFB\u8005\u53EA\u8BFB\u7F16\u8BD1\u597D\u7684 PDF\uFF0C\u5904\u7406\u5B83\u5217\u51FA\u7684\u884C\u8BDD\u3001\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u3001\u9632\u5FA1\u63AA\u8F9E\u548C\u7248\u9762\u95EE\u9898\uFF0C\u6539\u5B8C\u518D\u51B7\u8BFB\u4E00\u6B21\uFF1B\u518D\u6838\u5BF9\u6458\u8981\u3001\u5F15\u8A00\u3001\u6B63\u6587\u3001\u8868\u683C\u3001\u56FE\u6CE8\u548C\u8865\u5145\u6750\u6599\u91CC\u7684\u540C\u4E00\u4E2A\u6570\u90FD\u4ECE\u7ED3\u679C\u6587\u4EF6\u53D6\u3001\u5904\u5904\u4E00\u81F4\uFF0C\u7ED3\u679C\u6539\u8FC7\u5C31\u5168\u6587\u67E5\u4E00\u904D\uFF1B\u6B63\u6587\u6BCF\u5904\u6307\u5411\u8865\u5145\u6750\u6599\u7684\u5F15\u7528\u90FD\u80FD\u5728\u8865\u5145\u91CC\u627E\u5230\uFF0C\u8865\u5145\u5355\u72EC\u7F16\u8BD1\u3001\u5355\u72EC\u770B\u7248\u9762\uFF1B\u53CC\u76F2\u6295\u7A3F\u67E5\u533F\u540D\uFF1A\u4F5C\u8005\u4FE1\u606F\u3001\u81F4\u8C22\u3001\u5E26\u7528\u6237\u540D\u6216\u673A\u6784\u7684\u94FE\u63A5\u3001\u7B2C\u4E00\u4EBA\u79F0\u81EA\u5F15\u3001PDF \u5143\u6570\u636E\u548C\u8865\u5145\u6750\u6599\u91CC\u7684\u6587\u4EF6\u3002\u4EA4\u4ED8\u8BF4\u660E\u91CC\u5199\u6E05\u51B7\u8BFB\u53D1\u73B0\u4E86\u4EC0\u4E48\u3001\u6539\u4E86\u4EC0\u4E48\u3002\u5199\u7A3F\u7684\u4EBA\u67E5\u4E0D\u51FA\u81EA\u5DF1\u7684\u884C\u8BDD\uFF0C\u53EA\u67E5\u7F16\u8BD1\u3001\u9875\u6570\u548C\u6570\u5B57\u4E0D\u7B97\u7EC8\u68C0\u3002",
       "\u6A21\u677F\u7F3A\u5B57\u4F53\u6216\u5305\u65F6\uFF0C\u7528\u5141\u8BB8\u5DE5\u5177\u653E\u5728\u9879\u76EE\u672C\u5730 texmf \u5E76\u8BA9\u6784\u5EFA\u4F7F\u7528\uFF0C\u4E0D\u9759\u9ED8\u6362\u5B57\u4F53\u6216\u6539\u7CFB\u7EDF\u5B89\u88C5\u3002",
       "\u56DE\u5E94\u5BA1\u7A3F\u610F\u89C1\u65F6\uFF0C\u8BFB\u5BA1\u7A3F\u3001\u5B83\u8BFB\u8FC7\u7684\u6750\u6599\u6E05\u5355\u548C\u5F53\u524D\u4EA7\u7269\uFF0C\u5171\u56E0\u95EE\u9898\u5408\u5E76\u5904\u7406\uFF0C\u6838\u5B9E\u4F9D\u636E\uFF0C\u4E0D\u5168\u76D8\u63A5\u53D7\uFF1B\u6309\u5B9E\u8D28\u5F71\u54CD\u6392\u5E8F\uFF0C\u51B3\u5B9A\u63A5\u53D7\u3001\u53CD\u9A73\u3001\u9650\u5B9A\u6216\u8C03\u67E5\uFF0C\u6BCF\u4E2A\u91CD\u8981\u95EE\u9898\u90FD\u8986\u76D6\u3002\u7528 Source \u6838\u65B0\u5F15\u6587\u4E0E\u4E3B\u5F20\uFF0C\u7528 Experiment \u53D6\u5F97\u6216\u89E3\u91CA\u7ED3\u679C\uFF1B\u6BD4\u8F83\u539F\u4E3B\u5F20\u3001\u5BA1\u7A3F\u7406\u89E3\u3001\u56DE\u5E94\u548C\u6539\u540E\u4E3B\u5F20\uFF0C\u4E0D\u6697\u6539\u786E\u5B9A\u6027\u3001\u56E0\u679C\u3001\u8303\u56F4\u3001\u6570\u91CF\u9650\u5B9A\u4E0E\u65B0\u610F\u3002",
       "\u6309\u8981\u6C42\u6539\u8BC1\u636E\u3001\u5206\u6790\u3001\u6587\u5B57\u3001\u56FE\u8868\u3001\u8865\u5145\u6750\u6599\u6216\u6295\u7A3F\u6587\u4EF6\uFF0C\u4E0D\u53EA\u6539\u8BED\u6C14\uFF1B\u5C40\u90E8\u7B54\u590D\u89E3\u51B3\u4E0D\u4E86\u5C31\u4FEE\u5171\u56E0\u3002\u9010\u9879\u8BF4\u660E\u62C5\u5FE7\u5DF2\u89E3\u51B3\u3001\u51CF\u8F7B\u8FD8\u662F\u4ECD\u6709\u9650\u5236\uFF0C\u5199\u4E86\u7B54\u590D\u4E0D\u7B49\u4E8E\u89E3\u51B3\u6216\u5BA1\u7A3F\u4EBA\u63A5\u53D7\u3002\u5BA1\u7A3F\u539F\u6587\u4E0E\u4F5C\u8005\u56DE\u5E94\u5206\u5F00\u4FDD\u7559\uFF0C\u5E76\u94FE\u63A5\u5230\u6539\u52A8\u4EA7\u7269\uFF1B\u4F9D\u8D56\u65E7\u5BA1\u7A3F\u5EFA\u8BAE\u524D\uFF0C\u6309 Review \u67E5\u5F53\u524D\u7248\u672C\u3002"
@@ -15120,7 +15123,7 @@ Supplied evidence (real outputs such as renders, meshes, photos or predictions) 
     ]
   });
   if (slug === "review") return capabilityContract({
-    ambientParticipation: "\u5728\u5E72\u51C0\u53EA\u8BFB\u4E0A\u4E0B\u6587\u5224\u65AD\u6307\u5B9A\u5F53\u524D\u8BBA\u6587\uFF0C\u533A\u5206\u72EC\u7ACB\u5BA1\u7A3F\u3001\u4F5C\u8005\u81EA\u67E5\u548C\u4EA4\u4ED8\u68C0\u67E5\u3002",
+    ambientParticipation: "\u5728\u5E72\u51C0\u53EA\u8BFB\u4E0A\u4E0B\u6587\u5224\u65AD\u6307\u5B9A\u5F53\u524D\u8BBA\u6587\uFF0C\u533A\u5206\u72EC\u7ACB\u5BA1\u7A3F\u3001\u51B7\u8BFB\uFF08\u53EA\u62FF\u5230 PDF \u7684\u7B2C\u4E00\u6B21\u8BFB\u8005\uFF09\u3001\u4F5C\u8005\u81EA\u67E5\u548C\u4EA4\u4ED8\u68C0\u67E5\u3002",
     purpose: "\u8BC4\u4F30\u8BBA\u6587\u79D1\u5B66\u8D28\u91CF\u3001\u5C40\u90E8\u4EA7\u7269\u3001\u4EA4\u4ED8\u5C31\u7EEA\u6216\u5DF2\u6709\u5BA1\u7A3F\u610F\u89C1\u3002",
     when: "\u5224\u65AD\u8BBA\u6587\u6216\u68C0\u67E5\u5BA1\u7A3F\u65F6\u4F7F\u7528\uFF0C\u4E0D\u4EE3\u66FF\u5BFC\u5E08\u5B9A\u65B9\u5411\u3002",
     responsibilities: [
@@ -15129,7 +15132,8 @@ Supplied evidence (real outputs such as renders, meshes, photos or predictions) 
     ],
     actions: [
       DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS,
-      `\u72EC\u7ACB\u5BA1\u7A3F\u5728\u5168\u65B0\u53EA\u8BFB\u4E0A\u4E0B\u6587\u8C03\u7528 ${DOVE_RESEARCH_REVIEW_AGENT_NAME}\uFF0C\u7ED9\u5F53\u524D\u7A3F\u3001\u6240\u5F15\u7ED3\u679C\u4E0E\u76F8\u5173\u5B9E\u8BFB\u6295\u7A3F\uFF0F\u6587\u732E\u6750\u6599\u3002\u5B83\u7528 Read/Grep/Glob \u8BFB\u6307\u5B9A\u6587\u4EF6\uFF0C\u4E0D\u63A5\u6536\u4F5C\u8005\u6267\u884C\u5BF9\u8BDD\uFF0C\u4E0D\u9700\u51BB\u7ED3\u5FEB\u7167\u3001\u5BA1\u7A3F CLI \u6216\u6301\u4E45\u4F1A\u8BDD\u3002`,
+      `\u72EC\u7ACB\u5BA1\u7A3F\u5728\u5168\u65B0\u53EA\u8BFB\u4E0A\u4E0B\u6587\u8C03\u7528 ${DOVE_RESEARCH_REVIEW_AGENT_NAME}\uFF0C\u7ED9\u5F53\u524D\u7A3F\u3001\u6240\u5F15\u7ED3\u679C\u4E0E\u76F8\u5173\u5B9E\u8BFB\u6295\u7A3F\uFF0F\u6587\u732E\u6750\u6599\u3002\u5B83\u7528 Read/Grep/Glob \u8BFB\u6307\u5B9A\u6587\u4EF6\uFF0C\u4E0D\u63A5\u6536\u4F5C\u8005\u6267\u884C\u5BF9\u8BDD\uFF0C\u4E0D\u9700\u51BB\u7ED3\u5FEB\u7167\u3001\u5BA1\u7A3F CLI \u6216\u6301\u4E45\u4F1A\u8BDD\u3002\u8FD9\u662F\u770B\u8BC1\u636E\u7684\u5BA1\u7A3F\uFF0C\u67E5\u4E3B\u5F20\u3001\u6BD4\u8F83\u548C\u6570\u5B57\u3002`,
+      "\u51B7\u8BFB\u53E6\u505A\uFF0C\u4EA4\u4ED8\u524D\u548C\u7528\u6237\u8981\u5916\u884C\u89C6\u89D2\u65F6\u90FD\u505A\uFF1Adove cold-read --project <root> --pdf <\u7A3F\u4EF6.pdf> [--pdf <\u8865\u5145.pdf>] [--venue <\u6295\u7A3F\u76EE\u6807>] \u628A\u7F16\u8BD1\u597D\u7684 PDF \u8F6C\u6210\u9010\u9875\u6587\u5B57\u548C\u9875\u9762\u56FE\u7247\uFF0C\u5E76\u8F93\u51FA\u8C03\u7528\u6B63\u6587\uFF1B\u628A\u6B63\u6587\u539F\u6837\u4EA4\u7ED9\u4E00\u4E2A\u5168\u65B0\u7684 dove-review\uFF0C\u53EA\u7ED9\u8FD9\u4EFD PDF\uFF0C\u4E0D\u7ED9 tex\u3001\u8BFB\u6570\u6587\u6863\u6216\u9879\u76EE\u80CC\u666F\uFF0C\u90A3\u662F\u5F00\u53D1\u8005\u89C6\u89D2\uFF0C\u4F1A\u628A\u6CE8\u610F\u529B\u5F15\u5230\u6838\u6570\u5B57\u4E0A\u3002\u5199\u7A3F\u7684\u4EBA\u5728\u9879\u76EE\u91CC\u6CE1\u4E45\u4E86\uFF0C\u67E5\u4E0D\u51FA\u81EA\u5DF1\u7684\u884C\u8BDD\uFF0C\u51B7\u8BFB\u4E0D\u80FD\u7528\u81EA\u67E5\u4EE3\u66FF\u3002\u51B7\u8BFB\u7ED3\u679C\u539F\u6837\u5B58\u5230\u7A3F\u4EF6\u65C1\uFF0C\u9010\u6761\u5904\u7406\uFF1A\u884C\u8BDD\u5728\u7B2C\u4E00\u6B21\u51FA\u73B0\u65F6\u5B9A\u4E49\u6216\u6362\u6210\u901A\u7528\u8BF4\u6CD5\uFF0C\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u91CD\u5199\uFF0C\u9632\u5FA1\u63AA\u8F9E\u5220\u6389\u6216\u96C6\u4E2D\u5230\u5C40\u9650\u6BB5\uFF0C\u56FE\u8868\u548C\u7248\u9762\u95EE\u9898\u4EA4\u7ED9 Figure \u548C Draft\uFF1B\u6539\u5B8C\u518D\u51B7\u8BFB\u4E00\u6B21\uFF0C\u76F4\u5230\u4E0D\u518D\u6709\u65B0\u7684\u8BFB\u4E0D\u61C2\u4E4B\u5904\u3002",
       "\u8FD4\u56DE\u7B80\u6D01\u5224\u65AD\u3001\u963B\u6321\u95EE\u9898\u3001\u8BC1\u636E\u3001\u4F5C\u8005\u53EF\u505A\u7684\u4FEE\u6539\u548C\u5B9E\u9645\u8BFB\u8FC7\u7684\u6587\u4EF6\uFF1B\u6750\u6599\u4E0D\u8DB3\u5C31\u9650\u5B9A\u5224\u65AD\u3002\u6574\u7BC7\u5BA1\u7A3F\u8BFB\u5B8C\u6574\u5F53\u524D\u7248\uFF0C\u5C40\u90E8\u5BA1\u67E5\u4FDD\u6301\u5C40\u90E8\uFF1B\u5B9E\u8D28\u4FEE\u6539\u540E\u9700\u91CD\u5BA1\u5B8C\u6574\u65B0\u7248\uFF0C\u65E7\u5EFA\u8BAE\u624D\u53EF\u89C6\u4E3A\u5F53\u524D\u3002",
       "\u5FE0\u5B9E\u4FDD\u7559\u771F\u5B9E\u5BA1\u7A3F\u8FD4\u56DE\uFF0C\u533A\u5206\u7528\u6237\u8D34\u6765\u7684\u610F\u89C1\u4E0E\u5B9E\u9645\u5B8C\u6210\u7684\u72EC\u7ACB\u5BA1\u7A3F\u3002\u6709\u7528\u8FD4\u56DE\u653E\u666E\u901A\u9879\u76EE\u6750\u6599\uFF0C\u4E0D\u5EFA\u8FD0\u884C\u65F6\u4EA4\u6362\u5E93\uFF1B\u9605\u8BFB\u6216\u4FDD\u5B58\u672C\u8EAB\u4E0D\u6388\u6743\u4FEE\u6539\u6216\u91CD\u5BA1\u3002"
     ],
@@ -18653,8 +18657,8 @@ function clip2(text, limit = 60) {
 }
 function clock(time) {
   const value2 = new Date(time);
-  const pad = (number) => String(number).padStart(2, "0");
-  return `${pad(value2.getMonth() + 1)}-${pad(value2.getDate())} ${pad(value2.getHours())}:${pad(value2.getMinutes())}`;
+  const pad2 = (number) => String(number).padStart(2, "0");
+  return `${pad2(value2.getMonth() + 1)}-${pad2(value2.getDate())} ${pad2(value2.getHours())}:${pad2(value2.getMinutes())}`;
 }
 function durationText(milliseconds) {
   const hours = milliseconds / HOUR_MS;
@@ -22158,7 +22162,134 @@ function composePageOverview(projectRoot, options2 = {}) {
   }
 }
 
+// src/core/cold-read.mjs
+import { createHash } from "node:crypto";
+import { spawnSync as spawnSync4 } from "node:child_process";
+import fs25 from "node:fs";
+import os9 from "node:os";
+import path24 from "node:path";
+var COLD_READ_KEY = "coldread:last";
+var PAGE_DPI = 100;
+function pad(number, width) {
+  return String(number).padStart(width, "0");
+}
+function folderFor(root, env) {
+  const base = env.DOVE_COLD_READ_DIR || path24.join(os9.tmpdir(), "dove-cold-read");
+  return path24.join(base, `${path24.basename(root)}-${createHash("sha256").update(root).digest("hex").slice(0, 8)}`);
+}
+function preparePdf(pdf, target, tools) {
+  const stem = path24.basename(pdf, path24.extname(pdf));
+  const folder = path24.join(target, stem);
+  fs25.mkdirSync(folder, { recursive: true });
+  const text = spawnSync4(tools.pdftotext, ["-layout", pdf, "-"], { encoding: "utf8", maxBuffer: 64 << 20, timeout: 3e5 });
+  if (text.status !== 0) throw new Error(`pdftotext could not read ${pdf}: ${(text.stderr || "").trim().slice(0, 300)}`);
+  const pages = text.stdout.split("\f");
+  if (pages.length > 1 && !pages.at(-1).trim()) pages.pop();
+  const width = String(pages.length).length;
+  pages.forEach((page, index) => fs25.writeFileSync(path24.join(folder, `page-${pad(index + 1, width)}.txt`), page));
+  const render2 = spawnSync4(tools.pdftoppm, ["-png", "-r", String(PAGE_DPI), pdf, path24.join(folder, "page")], { encoding: "utf8", timeout: 6e5 });
+  if (render2.status !== 0) throw new Error(`pdftoppm could not render ${pdf}: ${(render2.stderr || "").trim().slice(0, 300)}`);
+  const images = fs25.readdirSync(folder).filter((name) => /^page-\d+\.png$/u.test(name)).sort((left, right) => Number(left.match(/\d+/u)[0]) - Number(right.match(/\d+/u)[0]));
+  return { pdf, stem, folder, pages: pages.length, texts: pages.map((_, index) => path24.join(folder, `page-${pad(index + 1, width)}.txt`)), images: images.map((name) => path24.join(folder, name)) };
+}
+function renderBody2(prepared, options2) {
+  const lines = [
+    "# \u51B7\u8BFB\uFF1A\u7B2C\u4E00\u6B21\u8BFB\u8FD9\u7BC7\u7A3F\u5B50\u7684\u8BFB\u8005",
+    "",
+    "\u4F60\u4ECE\u6CA1\u63A5\u89E6\u8FC7\u8FD9\u4E2A\u9879\u76EE\uFF0C\u53EA\u62FF\u5230\u4E0B\u9762\u8FD9\u4EFD\u7F16\u8BD1\u597D\u7684\u7A3F\u4EF6\u3002\u50CF\u5BA1\u7A3F\u4EBA\u7B2C\u4E00\u6B21\u62FF\u5230\u5B83\u90A3\u6837\u4ECE\u5934\u8BFB\uFF0C\u53EA\u770B\u8FD9\u91CC\u5217\u51FA\u7684\u9010\u9875\u6587\u5B57\u548C\u9875\u9762\u56FE\u7247\uFF1B\u4E0D\u6253\u5F00\u9879\u76EE\u91CC\u7684\u4EFB\u4F55\u5176\u4ED6\u6587\u4EF6\uFF08tex \u6E90\u7801\u3001\u7ED3\u679C\u3001\u8BB0\u5F55\u3001\u7B14\u8BB0\u90FD\u4E0D\u770B\uFF09\uFF0C\u4E5F\u4E0D\u8054\u7F51\u67E5\u3002\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u6B63\u662F\u8981\u62A5\u544A\u7684\u5730\u65B9\uFF0C\u4E0D\u8981\u53BB\u522B\u5904\u627E\u7B54\u6848\u3002",
+    ""
+  ];
+  if (options2.venue) lines.push(`\u6295\u7A3F\u76EE\u6807\uFF1A${options2.venue}`, "");
+  for (const item of prepared) {
+    lines.push(`## ${path24.basename(item.pdf)}\uFF08\u5171 ${item.pages} \u9875\uFF09`, "");
+    lines.push(`- \u9010\u9875\u6587\u5B57\uFF1A${item.folder}/page-*.txt\uFF08${path24.basename(item.texts[0] ?? "")} \u5230 ${path24.basename(item.texts.at(-1) ?? "")}\uFF09`);
+    lines.push(`- \u9875\u9762\u56FE\u7247\uFF1A${item.folder}/page-*.png\uFF08\u770B\u56FE\u3001\u56FE\u91CC\u7684\u5B57\u548C\u7248\u9762\uFF09`, "");
+  }
+  lines.push(
+    "\u8BFB\u5B8C\u7528\u4E2D\u6587\u8FD4\u56DE\uFF0C\u5F15\u7528\u539F\u6587\u65F6\u4FDD\u7559\u82F1\u6587\u539F\u53E5\u5E76\u6CE8\u660E\u9875\u7801\uFF1A",
+    "",
+    "1. \u8BFB\u5B8C\u7B2C\u4E00\u9875\uFF0C\u7528\u4E00\u4E24\u53E5\u8BDD\u8BF4\u8FD9\u7BC7\u8BBA\u6587\u89E3\u51B3\u4EC0\u4E48\u95EE\u9898\u3001\u65B0\u5728\u54EA\u91CC\u3001\u4E3B\u8981\u7ED3\u679C\u662F\u4EC0\u4E48\uFF1B\u8BFB\u5B8C\u5168\u6587\uFF0C\u518D\u5217\u4F60\u8BA4\u4E3A\u5B83\u6709\u54EA\u51E0\u6761\u8D21\u732E\u3002",
+    "2. \u884C\u8BDD\u6E05\u5355\uFF1A\u7B2C\u4E00\u6B21\u51FA\u73B0\u65F6\u6CA1\u6709\u5B9A\u4E49\u3001\u5B9A\u4E49\u5F97\u592A\u665A\uFF0C\u6216\u8005\u542C\u8D77\u6765\u50CF\u9879\u76EE\u5185\u90E8\u8BF4\u6CD5\u7684\u8BCD\uFF08\u5185\u90E8\u4EE3\u53F7\u3001\u914D\u7F6E\u540D\u3001\u6CA1\u89E3\u91CA\u7684\u7F29\u5199\u548C\u6570\u5B57\u8BBE\u5B9A\uFF09\uFF1B\u6B63\u6587\u3001\u56FE\u91CC\u7684\u6807\u7B7E\u548C\u56FE\u4F8B\u3001\u8868\u5934\u90FD\u7B97\u3002\u6BCF\u4E2A\u6CE8\u660E\u662F\u8FD9\u4E2A\u9886\u57DF\u7684\u901A\u7528\u8BF4\u6CD5\u8FD8\u662F\u50CF\u9879\u76EE\u5185\u90E8\u7684\u8BF4\u6CD5\uFF0C\u5185\u90E8\u8BF4\u6CD5\u6392\u5728\u524D\u9762\uFF1B\u9010\u4E2A\u7ED9\u51FA\u9875\u7801\u3001\u539F\u53E5\u3001\u4F60\u731C\u5B83\u6307\u4EC0\u4E48\u3001\u5916\u884C\u53EF\u80FD\u600E\u4E48\u8BEF\u89E3\u3002",
+    "3. \u8BFB\u4E0D\u61C2\u6216\u8981\u8BFB\u4E24\u904D\u7684\u5730\u65B9\uFF1A\u9875\u7801\u3001\u539F\u53E5\u3001\u5361\u5728\u54EA\u91CC\u3002",
+    "4. \u9632\u5FA1\u6027\u63AA\u8F9E\uFF1A\u53CD\u590D\u51FA\u73B0\u7684\u9650\u5B9A\u3001\u514D\u8D23\u548C\u627E\u8865\uFF0C\u6458\u8981\u6216\u6BB5\u843D\u7ED3\u5C3E\u843D\u5728\u5C40\u9650\u4E0A\u7684\u5730\u65B9\uFF0C\u540C\u4E00\u4E2A\u9650\u5B9A\u8BF4\u4E86\u51E0\u6B21\u3002",
+    "5. \u56FE\u8868\uFF1A\u53EA\u770B\u56FE\u548C\u56FE\u6CE8\u80FD\u4E0D\u80FD\u61C2\uFF1B\u8FD9\u4E2A\u5C3A\u5BF8\u4E0B\u770B\u4E0D\u6E05\u7684\u5B57\uFF0C\u6CA1\u89E3\u91CA\u7684\u7B26\u53F7\u3001\u989C\u8272\u6216\u7F29\u5199\u3002",
+    "6. \u7248\u9762\uFF1A\u7A7A\u680F\u3001\u5927\u7247\u7A7A\u767D\u3001\u79BB\u7B2C\u4E00\u6B21\u63D0\u5230\u592A\u8FDC\u7684\u56FE\u8868\u3002",
+    "7. \u5982\u679C\u4F60\u662F\u5BA1\u7A3F\u4EBA\uFF0C\u6700\u60F3\u95EE\u4F5C\u8005\u7684\u4E09\u4E2A\u95EE\u9898\u3002",
+    "",
+    "\u6309\u5BF9\u7B2C\u4E00\u6B21\u8BFB\u7684\u4EBA\u5F71\u54CD\u5927\u5C0F\u6392\u5E8F\uFF0C\u6BCF\u6761\u90FD\u5177\u4F53\u5230\u9875\u7801\u548C\u539F\u53E5\u3002\u4E0D\u6838\u5BF9\u6570\u5B57\u548C\u5B9E\u9A8C\u771F\u5047\uFF0C\u90A3\u662F\u53E6\u4E00\u79CD\u5BA1\u7A3F\u3002"
+  );
+  return `${lines.join("\n")}
+`;
+}
+function prepareColdRead(projectRoot, options2 = {}) {
+  const env = options2.env ?? process.env;
+  const root = path24.resolve(projectRoot);
+  const pdfs = [].concat(options2.pdf ?? []).map((item) => path24.resolve(root, String(item)));
+  if (!pdfs.length) throw new Error("Give the compiled manuscript: --pdf <paper.pdf> (repeat for the supplement).");
+  for (const pdf of pdfs) {
+    if (!/\.pdf$/iu.test(pdf) || !fs25.existsSync(pdf)) throw new Error(`Not a compiled PDF: ${pdf}`);
+  }
+  const tools = { pdftotext: findExecutable("pdftotext", env), pdftoppm: findExecutable("pdftoppm", env) };
+  if (!tools.pdftotext || !tools.pdftoppm) throw new Error("pdftotext and pdftoppm (poppler) are needed for a cold read.");
+  const folder = folderFor(root, env);
+  fs25.rmSync(folder, { recursive: true, force: true });
+  fs25.mkdirSync(folder, { recursive: true });
+  const prepared = pdfs.map((pdf) => preparePdf(pdf, folder, tools));
+  const body = renderBody2(prepared, options2);
+  fs25.writeFileSync(path24.join(folder, "handoff.md"), body);
+  const at = new Date(options2.now ?? Date.now()).toISOString();
+  updateHookState(root, (state2) => {
+    state2.asked[COLD_READ_KEY] = at;
+  }, options2);
+  return { status: "prepared", folder, handoff: path24.join(folder, "handoff.md"), documents: prepared.map((item) => ({ pdf: item.pdf, pages: item.pages, folder: item.folder })), body };
+}
+
 // src/core/stop-hook.mjs
+import fs26 from "node:fs";
+var MANUSCRIPT_BUILD = /\b(?:latexmk|pdflatex|xelatex|lualatex|tectonic)\b/u;
+var TRANSCRIPT_TAIL_BYTES = 4 << 20;
+function turnRebuiltManuscript(transcriptPath, fsOps = fs26) {
+  if (typeof transcriptPath !== "string" || !transcriptPath) return false;
+  let text;
+  try {
+    const size = fsOps.statSync(transcriptPath).size;
+    const start = Math.max(0, size - TRANSCRIPT_TAIL_BYTES);
+    const fd = fsOps.openSync(transcriptPath, "r");
+    try {
+      const buffer = Buffer.alloc(size - start);
+      fsOps.readSync(fd, buffer, 0, buffer.length, start);
+      text = buffer.toString("utf8");
+    } finally {
+      fsOps.closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+  const lines = text.split("\n");
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    let record;
+    try {
+      record = JSON.parse(lines[index]);
+    } catch {
+      continue;
+    }
+    if (!record || record.isSidechain) continue;
+    const content = record.message?.content;
+    if (record.type === "user" && !record.isMeta) {
+      const toolResult = Array.isArray(content) && content.some((block) => block?.type === "tool_result");
+      const own = typeof content === "string" ? Boolean(content.trim()) : Array.isArray(content) && content.some((block) => block?.type === "text" && block.text?.trim());
+      if (own && !toolResult) return false;
+      continue;
+    }
+    if (record.type === "assistant" && Array.isArray(content)) {
+      if (content.some((block) => block?.type === "tool_use" && block.name === "Bash" && MANUSCRIPT_BUILD.test(String(block.input?.command ?? "")))) return true;
+    }
+  }
+  return false;
+}
+function coldReadPrompt() {
+  return "\u8FD9\u4E00\u8F6E\u91CD\u65B0\u7F16\u8BD1\u4E86\u7A3F\u4EF6\u3002\u4EA4\u7ED9\u7528\u6237\u4E4B\u524D\uFF0C\u6309 Draft \u7684\u7EC8\u68C0\u505A\u4E00\u6B21\u51B7\u8BFB\uFF1A\u5148 dove figure --pages <\u7A3F\u4EF6.pdf> --body-pages <\u6B63\u6587\u9875\u6570\u4E0A\u9650> --output <\u603B\u89C8.png> \u770B\u7248\u9762\uFF0C\u518D dove cold-read --pdf <\u7A3F\u4EF6.pdf>\uFF0C\u628A\u5B83\u8F93\u51FA\u7684\u8C03\u7528\u6B63\u6587\u539F\u6837\u4EA4\u7ED9\u4E00\u4E2A\u5168\u65B0\u7684 dove-review\uFF0C\u53EA\u7ED9\u8FD9\u4EFD PDF\uFF0C\u4E0D\u7ED9\u6E90\u7801\u3001\u8BFB\u6570\u6216\u9879\u76EE\u80CC\u666F\uFF1B\u9010\u6761\u5904\u7406\u5B83\u5217\u51FA\u7684\u884C\u8BDD\u3001\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u548C\u9632\u5FA1\u63AA\u8F9E\uFF0C\u6539\u5B8C\u518D\u51B7\u8BFB\u4E00\u6B21\u3002\u5199\u7A3F\u7684\u4EBA\u81EA\u5DF1\u67E5\u4E0D\u51FA\u81EA\u5DF1\u7684\u884C\u8BDD\uFF0C\u8FD9\u4E00\u6B65\u4E0D\u80FD\u7528\u81EA\u67E5\u4EE3\u66FF\u3002\u8FD8\u5728\u6539\u5C31\u63A5\u7740\u6539\uFF0C\u4EA4\u4ED8\u524D\u518D\u505A\u3002\u8FD9\u6BB5\u8BDD\u662F Dove \u6839\u636E\u672C\u8F6E\u64CD\u4F5C\u81EA\u52A8\u63D0\u51FA\u7684\uFF0C\u4E0D\u662F\u7528\u6237\u521A\u8BF4\u7684\u3002";
+}
 function parseStopPayload(input) {
   let payload;
   try {
@@ -22187,10 +22318,11 @@ function stallPrompt(state2) {
 function stopHookOutput(payload, project, options2 = {}) {
   if (options2.enabled === false || payload?.stop_hook_active === true) return null;
   const state2 = inspectRoundState(project, options2);
+  const asked = readHookState(project, options2).asked;
   const candidates = [];
   if (state2.overrun) candidates.push({ key: `overrun:${state2.currentRound.brief.file}:${state2.overrun.due}`, reason: overrunPrompt(state2) });
   if (state2.stall) candidates.push({ key: `stall:${state2.stall.results.at(-1)}`, reason: stallPrompt(state2) });
-  const asked = readHookState(project, options2).asked;
+  if (turnRebuiltManuscript(payload?.transcript_path, options2.fsOps)) candidates.push({ key: `coldread:remind:${asked[COLD_READ_KEY] ?? "never"}`, reason: coldReadPrompt() });
   const next = candidates.find((candidate) => !asked[candidate.key]);
   if (!next) return null;
   updateHookState(project, (hookState) => {
@@ -22200,8 +22332,8 @@ function stopHookOutput(payload, project, options2 = {}) {
 }
 
 // src/core/mentor-brief.mjs
-import fs25 from "node:fs";
-import path24 from "node:path";
+import fs27 from "node:fs";
+import path25 from "node:path";
 var RESEARCH2 = ".dove/research";
 var ROUND_FILE4 = /^(\d+)[-_](brief|result)\.md$/iu;
 var IMPACT_FILE = /^impact-\d{4}-\d{2}-\d{2}\.md$/u;
@@ -22263,7 +22395,7 @@ function computedFacts(project, fsOps, now, state2) {
   return lines;
 }
 function watchDue(project, fsOps, now) {
-  const names = list(path24.join(project, RESEARCH2, "watch"), fsOps).filter((name) => IMPACT_FILE.test(name)).sort();
+  const names = list(path25.join(project, RESEARCH2, "watch"), fsOps).filter((name) => IMPACT_FILE.test(name)).sort();
   const last = names.at(-1)?.slice(7, 17) ?? null;
   if (!last) return { due: true, last: null };
   const age = (Date.parse(`${dayText(now ?? Date.now())}T00:00:00Z`) - Date.parse(`${last}T00:00:00Z`)) / DAY_MS3;
@@ -22279,7 +22411,7 @@ function list(directory, fsOps) {
 }
 function describe2(root, relative, fsOps) {
   try {
-    return `\`${relative}\`${fsOps.statSync(path24.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
+    return `\`${relative}\`${fsOps.statSync(path25.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
   } catch (error) {
     return `\`${relative}\`\uFF08${error.code === "ENOENT" ? "\u7F3A\u5931" : `\u65E0\u6CD5\u8BFB\u53D6\uFF1A${error.code ?? error.message}`}\uFF09`;
   }
@@ -22312,7 +22444,7 @@ function quote(text) {
   return String(text).split("\n").map((line) => `> ${line}`).join("\n");
 }
 function sourceAttachment(root, suppliedPath, fsOps) {
-  const file = path24.resolve(root, suppliedPath);
+  const file = path25.resolve(root, suppliedPath);
   const result = readWindow(file, fsOps, 8192, true);
   const source = `- \u6765\u6E90\uFF1A\`${file}\``;
   if (result.error) return `${source}\uFF08${result.error}\uFF1B\u672A\u9644\u6B63\u6587\uFF09`;
@@ -22328,11 +22460,11 @@ function recentRounds(names) {
 }
 function watchMaterials(root, rounds, fsOps) {
   const relative = `${RESEARCH2}/watch`;
-  const directory = path24.join(root, relative);
+  const directory = path25.join(root, relative);
   const names = list(directory, fsOps).sort().reverse();
   const config = `${relative}/config.json`;
   const lines = [`- \u914D\u7F6E\uFF1A${describe2(root, config, fsOps)}`];
-  const configText = readWindow(path24.join(root, config), fsOps, 8192);
+  const configText = readWindow(path25.join(root, config), fsOps, 8192);
   if (!configText.error) lines.push(quote(clip3(configText.text.trim(), 1600)), "\u914D\u7F6E\u4EC5\u6458\u5F55\uFF0C\u5168\u6587\u89C1\u8DEF\u5F84\u3002");
   let source = null;
   if (!configText.error && !configText.truncated) {
@@ -22346,8 +22478,8 @@ function watchMaterials(root, rounds, fsOps) {
   let incomplete = false;
   const impacts = names.filter((name) => IMPACT_FILE.test(name));
   const records = [
-    ...rounds.filter((name) => ROUND_FILE4.test(name) && /brief\.md$/iu.test(name)).sort((left, right) => parseInt(left) - parseInt(right)).map((name) => path24.join(root, RESEARCH2, "rounds", name)),
-    ...[...impacts].reverse().map((name) => path24.join(directory, name))
+    ...rounds.filter((name) => ROUND_FILE4.test(name) && /brief\.md$/iu.test(name)).sort((left, right) => parseInt(left) - parseInt(right)).map((name) => path25.join(root, RESEARCH2, "rounds", name)),
+    ...[...impacts].reverse().map((name) => path25.join(directory, name))
   ];
   for (const file of records) {
     const record = readWindow(file, fsOps, 65536, true);
@@ -22368,7 +22500,7 @@ function watchMaterials(root, rounds, fsOps) {
   const digests = names.filter((name) => DIGEST_FILE.test(name));
   const pending = /* @__PURE__ */ new Map();
   for (const name of digests.slice(0, 3)) {
-    const file = path24.join(directory, name);
+    const file = path25.join(directory, name);
     lines.push(`- \u8FD1\u671F\u6E05\u5355\uFF1A${describe2(root, `${relative}/${name}`, fsOps)}`);
     const result = readWindow(file, fsOps, 262144);
     if (result.error || result.truncated) {
@@ -22417,7 +22549,7 @@ function watchSection(project, rounds, fsOps, options2) {
 }
 function opinionAttachment(root, opinion, fsOps) {
   if (!opinion) return "\u672A\u9644\u610F\u89C1\u6587\u4EF6\u3002";
-  const file = path24.resolve(root, opinion);
+  const file = path25.resolve(root, opinion);
   const result = readWindow(file, fsOps, 4096);
   if (result.error) throw new Error(`\u610F\u89C1\u6587\u4EF6${result.error}\uFF1A${file}`);
   const length = Array.from(result.text).length;
@@ -22427,12 +22559,12 @@ ${quote(`\u4F5C\u8005\uFF1A${author ?? "\u672A\u7F72\u540D\uFF08\u6309\u6267\u88
 \u7BC7\u5E45\uFF1A${result.truncated ? "\u8D85\u8FC7 4 KiB\uFF0C\u5BFC\u5E08\u6309\u8DEF\u5F84\u8BFB\u5168\u6587" : `\u7EA6 ${length} \u5B57\uFF08\u5EFA\u8BAE 1000 \u5B57\u5185\uFF09`}`)}`;
 }
 function renderMentorBrief(root, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs25;
-  const project = path24.resolve(root);
-  const research = path24.join(project, RESEARCH2);
-  const rounds = list(path24.join(research, "rounds"), fsOps);
+  const fsOps = options2.fsOps ?? fs27;
+  const project = path25.resolve(root);
+  const research = path25.join(project, RESEARCH2);
+  const rounds = list(path25.join(research, "rounds"), fsOps);
   const selected = recentRounds(rounds);
-  const notes = readWindow(path24.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
+  const notes = readWindow(path25.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
   const intent = notes.error ? null : latestLongTermIntent(notes.text);
   let state2 = null;
   try {
@@ -22475,7 +22607,7 @@ ${quote(options2.userOriginal)}` : "\u672A\u76F4\u63A5\u9644\u539F\u8BDD\u3002",
     "## \u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u4E0E\u6570\u5B57",
     "",
     "\u53EA\u5C55\u5F00\u663E\u5F0F\u63D0\u4F9B\u7684\u524D 4 \u4E2A\u6587\u4EF6\uFF0C\u6BCF\u4E2A\u6700\u591A\u672B\u5C3E 8 KiB\uFF1B\u4E0D\u9012\u5F52\u627E\u6570\u636E\uFF0C\u4E0D\u8FFD\u8BFB\u6587\u4EF6\u4E2D\u7684\u8DEF\u5F84\u3002\u672A\u9644\u539F\u59CB\u7ED3\u679C\u5C31\u76F4\u8BF4\u8BC1\u636E\u4E0D\u8DB3\uFF0C\u5BBF\u4E3B\u58F0\u79F0\u5DF2\u8BFB\u6216\u5DF2\u6D4B\u4E0D\u7B97\u8BC1\u636E\u3002",
-    ...options2.artifact?.length ? options2.artifact.map((file, index) => index < 4 ? sourceAttachment(project, file, fsOps) : `- \`${path24.resolve(project, file)}\`\uFF08\u8D85\u51FA\u672C\u6B21\u5C55\u5F00\u6570\u91CF\uFF0C\u4EC5\u5217\u8DEF\u5F84\uFF09`) : ["\u672A\u63D0\u4F9B\u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u6216\u6570\u5B57\u3002"],
+    ...options2.artifact?.length ? options2.artifact.map((file, index) => index < 4 ? sourceAttachment(project, file, fsOps) : `- \`${path25.resolve(project, file)}\`\uFF08\u8D85\u51FA\u672C\u6B21\u5C55\u5F00\u6570\u91CF\uFF0C\u4EC5\u5217\u8DEF\u5F84\uFF09`) : ["\u672A\u63D0\u4F9B\u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u6216\u6570\u5B57\u3002"],
     "",
     "## \u5BBF\u4E3B\u8BB0\u5F55\u4E0E\u76EE\u5F55\uFF08\u4E0D\u662F\u7ED3\u8BBA\u6846\u67B6\uFF09",
     "",
@@ -22801,6 +22933,7 @@ function renderDoveHelp() {
   dove figure --proof --figure <file>@<length> [--figure <file>@<length> ...] --output <file.png> [--dpi <n>] [--project <root>] [--json|--format json]
   dove figure --pages <manuscript.pdf> [--body-pages <n>] --output <file.png> [--dpi <n>] [--project <root>] [--json|--format json]
   dove settings [--host-migration on|off] [--stop-prompts on|off] [--json|--format json]
+  dove cold-read --pdf <manuscript.pdf> [--pdf <supplement.pdf>] [--venue <text>] [--project <dir>] [--json|--format json]
   dove mentor brief [--project <dir>] [--trigger <text>] [--user-source <path>] [--since <range>] [--until <range>] [--user-original <text>] [--opinion <path>] [--artifact <path>...] [--watch] [--json|--format json]
   dove hook session-start --project <dir>
   dove hook user-prompt-submit --project <dir>
@@ -22819,15 +22952,17 @@ dove dashboard \u5728\u672C\u673A\u8D77\u4E00\u4E2A\u7F51\u9875\uFF0C\u53EA\u8BF
 
 dove watch configure \u663E\u5F0F\u4FDD\u5B58\u5BFC\u5E08\u8FFD\u8E2A\u5EFA\u8BAE\uFF0C\u53EA\u4FEE\u6539 --project \u89E3\u6790\u5230\u7684\u5355\u4E2A\u5DF2\u63A5\u5165\u9879\u76EE\u3002--mentor \u63A5\u6536 JSON \u6587\u4EF6\u8DEF\u5F84\uFF08\u76F8\u5BF9\u8DEF\u5F84\u6309\u5F53\u524D\u5DE5\u4F5C\u76EE\u5F55\u89E3\u6790\uFF09\uFF0C\u4E0D\u662F\u5185\u8054 JSON \u6216\u5BFC\u5E08\u6587\u672C\uFF1B\u5BF9\u8C61\u53EA\u5141\u8BB8 keywords\u3001authors\u3001venues\u3001institutions\u3001seedPapers \u7684\u5B57\u7B26\u4E32\u6570\u7EC4\uFF0C\u81F3\u5C11\u63D0\u4F9B\u4E00\u9879\u3002\u51FA\u73B0\u5B57\u6BB5\u66FF\u6362\uFF0C\u7F3A\u5E2D\u4FDD\u7559\uFF0C[] \u6E05\u7A7A\uFF1Benabled\u3001categories \u4FDD\u6301\u4E0D\u53D8\uFF0Csource: mentor \u53EA\u8868\u793A\u5BFC\u5E08\u5EFA\u8BAE\u5DF2\u843D\u76D8\uFF0C\u4E0D\u4EE3\u8868\u7528\u6237\u786E\u8BA4\u3002\u6B64\u547D\u4EE4\u4E0D\u8C03\u7528\u5BFC\u5E08\u3001\u6A21\u578B\u6216\u7F51\u7EDC\uFF0C\u4E0D\u6267\u884C\u8FFD\u8E2A\uFF1Bwatch run \u884C\u4E3A\u4E0D\u53D8\u3002
 
+dove cold-read \u4E3A\u51B7\u8BFB\u505A\u51C6\u5907\uFF0C\u672C\u8EAB\u4E0D\u8C03\u7528\u4EFB\u4F55\u6A21\u578B\uFF1A\u628A\u7F16\u8BD1\u597D\u7684\u7A3F\u4EF6 PDF \u8F6C\u6210\u9010\u9875\u6587\u5B57\u548C\u9875\u9762\u56FE\u7247\uFF0C\u653E\u5728\u9879\u76EE\u5916\u7684\u4E34\u65F6\u76EE\u5F55\uFF0C\u5E76\u8F93\u51FA\u8C03\u7528\u6B63\u6587\uFF1B\u5BBF\u4E3B\u628A\u6B63\u6587\u539F\u6837\u4EA4\u7ED9\u4E00\u4E2A\u5168\u65B0\u7684 dove-review\uFF0C\u8BFB\u8005\u53EA\u770B\u8FD9\u4EFD\u7A3F\u4EF6\uFF0C\u4E0D\u8BFB\u6E90\u7801\u3001\u7ED3\u679C\u6216\u9879\u76EE\u80CC\u666F\uFF0C\u8FD4\u56DE\u8BFB\u5B8C\u7B2C\u4E00\u9875\u7684\u7406\u89E3\u3001\u884C\u8BDD\u6E05\u5355\u3001\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u3001\u9632\u5FA1\u6027\u63AA\u8F9E\u3001\u56FE\u8868\u548C\u7248\u9762\u95EE\u9898\u3002\u9700\u8981 pdftotext \u548C pdftoppm\u3002
+
 dove mentor brief \u751F\u6210\u5BFC\u5E08\u8C03\u7528\u6750\u6599\uFF1A\u7528\u6237\u539F\u8BDD\u6458\u5F55\u3001\u660E\u786E\u63D0\u4F9B\u7684\u539F\u59CB\u7ED3\u679C\u3001Dove \u7B97\u51FA\u7684\u4E8B\u5B9E\uFF0C\u4EE5\u53CA\u5BBF\u4E3B\u8BB0\u5F55\u7684\u76EE\u5F55\u3002hostMigration \u9ED8\u8BA4\u5173\u95ED\uFF0C\u5F00\u542F\u540E\u5347\u7EA7\u53EA\u767B\u8BB0\u4E00\u6B21\u5F85\u529E\uFF0C\u5BBF\u4E3B\u5728\u5DE5\u4F5C\u544A\u4E00\u6BB5\u843D\u65F6\u5904\u7406\uFF0C\u4E0D\u505C\u4EFB\u52A1\u3001\u4E0D\u6539\u7ED3\u8BBA\u6216\u539F\u8BDD\u3002\u78C1\u76D8\u66F4\u65B0\u4E0D\u7B49\u4E8E\u6D3B\u4F1A\u8BDD\u91CD\u8F7D\u3002
 `;
 }
 
 // src/cli/interactive-setup.mjs
-import path26 from "node:path";
+import path27 from "node:path";
 
 // src/cli/project-integration-output.mjs
-import path25 from "node:path";
+import path26 from "node:path";
 var INTERNAL_FIELD_NAMES = /* @__PURE__ */ new Set([
   "writtenPaths",
   "removedPaths",
@@ -22928,7 +23063,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
   const showMascot = options2.showMascot !== false;
   const color = terminalColorEnabled(stream, env);
   const heading = headingFor(command3, result.status);
-  const projectName = terminalSafeText2(path25.basename(result.target) || result.target);
+  const projectName = terminalSafeText2(path26.basename(result.target) || result.target);
   const lines = [];
   if (showMascot && command3 === "init" && ["initialized", "already-initialized"].includes(result.status) && interactive) {
     lines.push(renderDovePixelArt({ color }), "");
@@ -22968,7 +23103,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
 
 // src/cli/interactive-setup.mjs
 function safeProjectName(target) {
-  return path26.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
+  return path27.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
 }
 function resultHosts(result) {
   return result.hosts ?? result.projectIntegration?.manifest?.hosts ?? [];
@@ -23177,8 +23312,8 @@ ${renderProjectIntegrationResult("update", {
 }
 
 // src/core/session-start-hook.mjs
-import fs26 from "node:fs";
-import path27 from "node:path";
+import fs28 from "node:fs";
+import path28 from "node:path";
 function parseSessionStartPayload(input) {
   let payload;
   try {
@@ -23199,7 +23334,7 @@ function recentUserOriginalsContext(project, options2) {
   if (!project) return COMPACTION_REANCHOR_NOTICE;
   try {
     const result = refreshUserOriginals(project, { ...options2, budgetMs: 1500 });
-    const summary = (options2.fsOps ?? fs26).readFileSync(path27.join(project, USER_ORIGINALS_PATH), "utf8");
+    const summary = (options2.fsOps ?? fs28).readFileSync(path28.join(project, USER_ORIGINALS_PATH), "utf8");
     const entries = summary.split("\n").filter((line) => {
       const own = line.match(/^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 本人 · (.*)$/u);
       return own && classifyUserText(own[1]) === "own" && !/^(?:Claude\s+代用户转达[:：]|【用户(?:指出|已同意)[^】]*】|用户\s*\d{4}-\d{2}-\d{2}(?:\s|$)|用户授权)/u.test(own[1]);
@@ -23234,13 +23369,13 @@ function sessionStartOutput(payload, result = null, options2 = {}) {
     output.systemMessage = "Dove\uFF1A\u672C\u9879\u76EE\u7684\u5B89\u88C5\u548C\u5F53\u524D\u7248\u672C\u6709\u5DEE\u5F02\uFF0C\u6216\u8005\u6709\u672C\u5730\u6539\u52A8\uFF1Bdove doctor \u53EF\u770B\u662F\u54EA\u51E0\u5904\u3002\u662F\u4F60\u81EA\u5DF1\u7684\u6539\u52A8\u5C31\u4E0D\u7528\u7BA1\uFF0Cdove update \u4F1A\u628A\u5B83\u4EEC\u6362\u56DE Dove \u7684\u7248\u672C\u3002";
   }
   if (payload.source === "startup" || payload.source === "clear") {
-    if (typeof options2.project !== "string" || !path27.isAbsolute(options2.project)) {
+    if (typeof options2.project !== "string" || !path28.isAbsolute(options2.project)) {
       throw new Error("Dove SessionStart bootstrap requires an explicit absolute project root.");
     }
     if (options2.guidanceVersion) recordSessionGuidance(options2.project, payload.session_id, options2.guidanceVersion, options2);
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
-      additionalContext: renderDoveAuthorPreferencesBootstrap(path27.join(options2.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH))
+      additionalContext: renderDoveAuthorPreferencesBootstrap(path28.join(options2.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH))
     };
   } else if (payload.source === "compact" || payload.source === "resume") {
     output.hookSpecificOutput = {
@@ -23343,8 +23478,8 @@ function userPromptSubmitFailureOutput(error) {
 }
 
 // src/core/statusline.mjs
-import { spawnSync as spawnSync4 } from "node:child_process";
-import path28 from "node:path";
+import { spawnSync as spawnSync5 } from "node:child_process";
+import path29 from "node:path";
 import process4 from "node:process";
 var MAX_MAINLINE_CODE_POINTS = 80;
 var STATUS_SEPARATOR = " \xB7 ";
@@ -23390,7 +23525,7 @@ function formatSessionDuration(value2) {
   return hours > 0 ? `${hours}h${minutes % 60}m` : `${minutes}m`;
 }
 function inspectGitBranch(projectRoot, options2 = {}) {
-  const run = options2.spawnSync ?? spawnSync4;
+  const run = options2.spawnSync ?? spawnSync5;
   try {
     const result = run("git", ["branch", "--show-current"], {
       cwd: projectRoot,
@@ -23400,7 +23535,7 @@ function inspectGitBranch(projectRoot, options2 = {}) {
       windowsHide: true,
       env: {
         ...process4.env,
-        GIT_CEILING_DIRECTORIES: path28.dirname(path28.resolve(projectRoot))
+        GIT_CEILING_DIRECTORIES: path29.dirname(path29.resolve(projectRoot))
       }
     });
     if (result?.status !== 0 || result.signal || result.error) return null;
@@ -23476,7 +23611,7 @@ function renderDoveStatusLine(input, options2 = {}) {
   const remainingValue = nonNegativeNumber(payload.context_window?.remaining_percentage);
   const remaining = remainingValue === null ? null : Math.min(100, Math.round(remainingValue));
   const duration = formatSessionDuration(payload.cost?.total_duration_ms);
-  const project = options2.projectRoot ? oneLine(path28.resolve(options2.projectRoot)) : null;
+  const project = options2.projectRoot ? oneLine(path29.resolve(options2.projectRoot)) : null;
   const card = readDoveIdentityCard(options2.projectRoot, options2) ?? "";
   const mainline = shortMainline(Object.hasOwn(options2, "mainline") ? options2.mainline : parseResearchMainline(card));
   const noColorValue = (options2.env ?? process4.env).NO_COLOR;
@@ -23493,7 +23628,7 @@ function renderDoveStatusLine(input, options2 = {}) {
   let progress = Object.hasOwn(options2, "progress") ? oneLine(options2.progress) : null;
   if (!Object.hasOwn(options2, "progress") && options2.projectRoot) {
     try {
-      progress = oneLine(renderRoundStatusSummary(inspectRoundState(path28.resolve(options2.projectRoot), options2)));
+      progress = oneLine(renderRoundStatusSummary(inspectRoundState(path29.resolve(options2.projectRoot), options2)));
     } catch {
       progress = null;
     }
@@ -23502,9 +23637,9 @@ function renderDoveStatusLine(input, options2 = {}) {
 }
 
 // src/core/dove-lifecycle.mjs
-import fs27 from "node:fs";
+import fs29 from "node:fs";
 function updateDoveLifecycle(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs27;
+  const fsOps = options2.fsOps ?? fs29;
   const root = resolveProjectRootForSetup(start, { fsOps });
   return updateProjectIntegration(root, options2);
 }
@@ -23521,12 +23656,12 @@ function uninstallDoveLifecycle(start, options2 = {}) {
 }
 
 // src/core/project-doctor.mjs
-import fs29 from "node:fs";
-import path29 from "node:path";
+import fs31 from "node:fs";
+import path30 from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // src/core/research-documents.mjs
-import fs28 from "node:fs";
+import fs30 from "node:fs";
 var RESEARCH_DOCUMENT_PATHS = Object.freeze({ ...RESEARCH_DEFAULT_PATHS });
 function readableMarkdown(root, relativePath) {
   const stat = root.tryLstat(relativePath);
@@ -23538,7 +23673,7 @@ function readableMarkdown(root, relativePath) {
 function inspectResearchDocuments(project, options2 = {}) {
   const base = { root: RESEARCH_DOCUMENT_PATHS.root, identity: null, evaluation: null, rounds: null, overview: null };
   try {
-    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs28 });
+    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs30 });
     const directory = root.tryLstat(RESEARCH_DOCUMENT_PATHS.root);
     if (!directory) return { ...base, healthy: true, state: "absent" };
     if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error(`${base.root} must be a real directory.`);
@@ -23572,8 +23707,8 @@ function classifyProjectSetup(result) {
 }
 
 // src/core/project-doctor.mjs
-var MODULE_DIRECTORY = path29.dirname(fileURLToPath4(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path29.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path29.basename(MODULE_DIRECTORY)) ? ".." : "../..");
+var MODULE_DIRECTORY = path30.dirname(fileURLToPath4(import.meta.url));
+var DEFAULT_PACKAGE_ROOT = path30.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path30.basename(MODULE_DIRECTORY)) ? ".." : "../..");
 function messageFor(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -23593,18 +23728,18 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 function inspectUserCli(options2) {
-  const fsOps = options2.fsOps ?? fs29;
-  const packageRoot = path29.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
+  const fsOps = options2.fsOps ?? fs31;
+  const packageRoot = path30.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options2.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
-    const absolutePath = path29.resolve(packageRoot, relativePath);
-    const relative = path29.relative(packageRoot, absolutePath);
-    const contained = relative !== "" && !relative.startsWith("..") && !path29.isAbsolute(relative);
+    const absolutePath = path30.resolve(packageRoot, relativePath);
+    const relative = path30.relative(packageRoot, absolutePath);
+    const contained = relative !== "" && !relative.startsWith("..") && !path30.isAbsolute(relative);
     const healthy2 = contained && regularNonSymlink(fsOps, absolutePath);
     return { path: relativePath, healthy: healthy2, state: healthy2 ? "current" : contained ? "missing-or-invalid" : "outside-package-root" };
   });
-  const executablePath = path29.resolve(options2.executablePath ?? path29.join(packageRoot, "bin/dove-package.mjs"));
-  const executableRelative = path29.relative(packageRoot, executablePath);
-  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path29.isAbsolute(executableRelative);
+  const executablePath = path30.resolve(options2.executablePath ?? path30.join(packageRoot, "bin/dove-package.mjs"));
+  const executableRelative = path30.relative(packageRoot, executablePath);
+  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path30.isAbsolute(executableRelative);
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
   const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
@@ -23716,7 +23851,7 @@ function inspectProjectDoctor(start, options2 = {}) {
   try {
     setupRoot = resolveProjectRootForSetup(start, { fsOps: options2.fsOps });
   } catch {
-    setupRoot = typeof start === "string" ? path29.resolve(start) : null;
+    setupRoot = typeof start === "string" ? path30.resolve(start) : null;
   }
   const projectIntegration = inspectIntegration(start, options2);
   const safeRoot = projectIntegration.root ?? setupRoot;
@@ -23738,8 +23873,8 @@ function inspectProjectDoctor(start, options2 = {}) {
 
 // bin/dove.mjs
 var __filename2 = fileURLToPath5(import.meta.url);
-var __dirname2 = path30.dirname(__filename2);
-var PACKAGE_ROOT2 = path30.resolve(__dirname2, "..");
+var __dirname2 = path31.dirname(__filename2);
+var PACKAGE_ROOT2 = path31.resolve(__dirname2, "..");
 var PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
 function projectOption2(options2) {
   return options2.project ?? void 0;
@@ -23827,18 +23962,18 @@ function prepareHookProject(project) {
 function assertHookPayloadProject(payload, target) {
   if (payload?.cwd === void 0) return;
   if (typeof payload.cwd !== "string" || !payload.cwd.trim() || payload.cwd.includes("\0")) throw new Error("Dove hook cwd \u5FC5\u987B\u6307\u5411\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u4E2D\u7684\u76EE\u5F55\u3002");
-  const cwd = fs30.realpathSync(payload.cwd);
-  const stat = fs30.statSync(cwd);
-  const relative = path30.relative(target, cwd);
-  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path30.sep}`) || path30.isAbsolute(relative)) {
+  const cwd = fs32.realpathSync(payload.cwd);
+  const stat = fs32.statSync(cwd);
+  const relative = path31.relative(target, cwd);
+  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path31.sep}`) || path31.isAbsolute(relative)) {
     throw new Error("Dove hook cwd \u4E0D\u5C5E\u4E8E\u58F0\u660E\u7684\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u3002");
   }
   let directory = cwd;
   while (directory !== target) {
-    if (fs30.existsSync(path30.join(directory, ".dove/install/manifest.json")) || fs30.existsSync(path30.join(directory, ".dove-install"))) {
+    if (fs32.existsSync(path31.join(directory, ".dove/install/manifest.json")) || fs32.existsSync(path31.join(directory, ".dove-install"))) {
       throw new Error("Dove hook cwd \u5C5E\u4E8E\u53E6\u4E00\u4E2A\u9879\u76EE\u96C6\u6210\u3002");
     }
-    directory = path30.dirname(directory);
+    directory = path31.dirname(directory);
   }
 }
 async function readStdin() {
@@ -23945,7 +24080,7 @@ try {
     process5.exit(0);
   }
   if (command2 === "reinstall") {
-    const target = path30.resolve(projectOption2(options) ?? process5.cwd());
+    const target = path31.resolve(projectOption2(options) ?? process5.cwd());
     if (wantsJson(options)) {
       const preview2 = previewProjectCompleteReinstall(target, PACKAGE_OPTIONS);
       const { manifest, ...publicPreview } = preview2;
@@ -23970,7 +24105,7 @@ try {
     process5.exit(0);
   }
   if (command2 === "uninstall") {
-    const target = path30.resolve(projectOption2(options) ?? process5.cwd());
+    const target = path31.resolve(projectOption2(options) ?? process5.cwd());
     const preview = previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS);
     if (wantsJson(options)) {
       writeJson2(preview);
@@ -24030,9 +24165,9 @@ try {
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`--port \u9700\u8981 1 \u5230 65535 \u4E4B\u95F4\u7684\u6574\u6570\uFF1A${options.port}`);
     const bind = options.bind ?? DEFAULT_DASHBOARD_BIND;
     let password = null;
-    const passwordFile = options.passwordFile === void 0 ? null : path30.resolve(options.passwordFile);
+    const passwordFile = options.passwordFile === void 0 ? null : path31.resolve(options.passwordFile);
     if (passwordFile) {
-      password = fs30.readFileSync(passwordFile, "utf8").trim();
+      password = fs32.readFileSync(passwordFile, "utf8").trim();
       if (!password) throw new Error(`\u5BC6\u7801\u6587\u4EF6\u4E3A\u7A7A\uFF1A${options.passwordFile}`);
     }
     const actions = createDashboardActions({ packageOptions: PACKAGE_OPTIONS, passwordFile });
@@ -24057,8 +24192,14 @@ try {
     ].join("\n"));
     process5.exit(0);
   }
+  if (command2 === "cold-read") {
+    const result = prepareColdRead(path31.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    if (wantsJson(options)) writeJson2(result);
+    else process5.stdout.write(result.body);
+    process5.exit(0);
+  }
   if (command2 === "mentor") {
-    const root = path30.resolve(options.project ?? process5.cwd());
+    const root = path31.resolve(options.project ?? process5.cwd());
     let userOriginals = null;
     let userOriginalsError = null;
     try {
@@ -24076,10 +24217,10 @@ try {
     process5.exit(0);
   }
   if (command2 === "topic") {
-    const root = path30.resolve(options.project ?? process5.cwd());
+    const root = path31.resolve(options.project ?? process5.cwd());
     const result = startTopicSelection(root, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson2(result);
-    else console.log(`\u9009\u9898\u76EE\u5F55\u5DF2\u5C31\u7EEA\uFF1A${path30.join(root, ".dove/research/topics")}\uFF08\u4F9D\u636E\uFF1A${result.criteria?.title ?? "\u9009\u9898\u6807\u51C6"}${result.criteria?.version ? `\uFF0C\u7B2C ${result.criteria.version} \u7248` : ""}\uFF1B\u5DF2\u6709\u5019\u9009 ${result.cards.length} \u4E2A\uFF09`);
+    else console.log(`\u9009\u9898\u76EE\u5F55\u5DF2\u5C31\u7EEA\uFF1A${path31.join(root, ".dove/research/topics")}\uFF08\u4F9D\u636E\uFF1A${result.criteria?.title ?? "\u9009\u9898\u6807\u51C6"}${result.criteria?.version ? `\uFF0C\u7B2C ${result.criteria.version} \u7248` : ""}\uFF1B\u5DF2\u6709\u5019\u9009 ${result.cards.length} \u4E2A\uFF09`);
     process5.exit(0);
   }
   if (command2 === "figure" && options.tools) {
@@ -24098,7 +24239,7 @@ try {
     process5.exit(0);
   }
   if (command2 === "figure" && options.pages) {
-    const result = composePageOverview(path30.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    const result = composePageOverview(path31.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
     if (wantsJson(options)) writeJson2(result);
     else {
       const length = result.bodyPages === null ? "\u6CA1\u627E\u5230\u53C2\u8003\u6587\u732E\u6807\u9898\uFF0C\u7B97\u4E0D\u51FA\u6B63\u6587\u9875\u6570" : `\u6B63\u6587\u7EA6 ${result.bodyPages.toFixed(1)} \u9875${result.limit ? `\uFF08\u4E0A\u9650 ${result.limit} \u9875\uFF09` : ""}\uFF0C\u53C2\u8003\u6587\u732E\u4ECE\u7B2C ${result.referencesPage} \u9875\u5F00\u59CB`;
@@ -24110,7 +24251,7 @@ try {
     process5.exit(0);
   }
   if (command2 === "figure" && (options.compare || options.proof)) {
-    const result = composeFigureProof(path30.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    const result = composeFigureProof(path31.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
     if (wantsJson(options)) writeJson2(result);
     else {
       const soft = result.items.filter((item) => !item.enough);
@@ -24122,7 +24263,7 @@ try {
     process5.exit(0);
   }
   if (command2 === "figure") {
-    const result = await generateFigure(path30.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    const result = await generateFigure(path31.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
     if (wantsJson(options)) writeJson2(result);
     else console.log(`\u56FE\u50CF\u5DF2${result.mode === "edit" ? "\u7F16\u8F91" : "\u751F\u6210"}\uFF1A${result.outputPath}\uFF08\u6A21\u578B\uFF1A${result.model}\uFF1B\u8F93\u5165\u56FE\uFF1A${result.inputs} \u5F20\uFF09`);
     process5.exit(0);
@@ -24135,10 +24276,10 @@ try {
     process5.exit(0);
   }
   if (command2 === "watch") {
-    const roots = options.project ? [path30.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs30.existsSync(root));
+    const roots = options.project ? [path31.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs32.existsSync(root));
     const result = await runWatch(roots, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson2(result);
-    else for (const item of result.results) console.log(`${path30.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);
+    else for (const item of result.results) console.log(`${path31.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);
     process5.exit(0);
   }
   if (command2 === "doctor") {
@@ -24195,7 +24336,7 @@ try {
         text = JSON.stringify(sessionStartFailureOutput(error));
       }
     } else if (hookName === "statusline") {
-      text = `${renderDoveStatusLine(input, { projectRoot: path30.resolve(projectOption2(options)) })}
+      text = `${renderDoveStatusLine(input, { projectRoot: path31.resolve(projectOption2(options)) })}
 `;
     } else if (hookName === "stop") {
       try {

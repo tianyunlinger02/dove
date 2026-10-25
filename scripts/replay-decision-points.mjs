@@ -6,7 +6,12 @@
 // session may read and write only inside the copy (no shell, no subagents, no web).
 //
 //   node scripts/replay-decision-points.mjs --project /path/to/project [--round 88] \
-//     --cli /path/to/dove-entry.mjs --label new --out /tmp/replays [--prompt <text>] [--max-turns 40]
+//     --cli /path/to/dove-entry.mjs --label new --out /tmp/replays [--prompt <text>] [--max-turns 40] \
+//     [--agent <name> [--agent-body rules]]
+//
+// --agent runs the main thread as that agent (claude --agent). With --agent-body rules
+// the copy gets .claude/agents/<name>.md whose prompt is the copy's own operating
+// manual followed by Dove's main-agent role, so the manual sits in the system prompt.
 //
 // Without --round the copy is the project's current state (the next real decision).
 // With --round N, rounds from N on are removed and the card, EVAL and mentor notes
@@ -126,12 +131,19 @@ copyProject(project, copy);
 const rewound = round === null ? null : rewindRecords(project, copy, round);
 const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, XDG_CONFIG_HOME: config };
 run(path.join(bin, "dove"), ["update", "--project", copy, "--json"], { env });
-const before = new Map(fs.readdirSync(path.join(copy, ".dove/research"), { recursive: true }).map((item) => [item, fs.statSync(path.join(copy, ".dove/research", item)).mtimeMs]));
+if (args.agent && args.agentBody === "rules") {
+  // Strip frontmatter from Dove's own main-agent file and put the manual ahead of its role text.
+  const manual = fs.readFileSync(path.join(copy, ".claude/rules/dove.md"), "utf8").replace(/^---\n[\s\S]*?\n---\n/u, "");
+  const role = fs.readFileSync(path.join(copy, ".claude/agents/dove.md"), "utf8").replace(/^---\n[\s\S]*?\n---\n/u, "");
+  fs.writeFileSync(path.join(copy, `.claude/agents/${args.agent}.md`), `---\nname: ${args.agent}\ndescription: Dove 研究伙伴（操作说明放在系统提示里）\n---\n\n${manual.trim()}\n\n${role.trim()}\n`);
+}
+const before =new Map(fs.readdirSync(path.join(copy, ".dove/research"), { recursive: true }).map((item) => [item, fs.statSync(path.join(copy, ".dove/research", item)).mtimeMs]));
 
 const session = spawnSync("claude", [
   "-p", args.prompt,
   "--output-format", "stream-json", "--verbose",
   "--max-turns", args.maxTurns,
+  ...(args.agent ? ["--agent", args.agent] : []),
   // The host may read the real project but never write to it.
   "--disallowedTools", `Bash,Agent,Task,WebSearch,WebFetch,NotebookEdit,Edit(/${project}/**),Write(/${project}/**),MultiEdit(/${project}/**)`
 ], { cwd: copy, env, encoding: "utf8", maxBuffer: 512 << 20, timeout: 45 * 60 * 1000 });
@@ -148,7 +160,7 @@ const report = [
   rewound === null
     ? "决策点：项目现在的状态（最新一轮之后的下一步）"
     : `决策点：第 ${round} 轮开工前；${rewound.commit ? `身份卡、EVAL、导师笔记还原到 ${rewound.commit.slice(0, 8)} 之前（${rewound.restored.join("、") || "无"}）` : "没有 git 历史，身份卡、EVAL、导师笔记是现在的版本"}`,
-  `CLI：${args.cli}；提示：${args.prompt}；退出码 ${session.status}`,
+  `CLI：${args.cli}；入口：${args.agent ? `claude --agent ${args.agent}${args.agentBody === "rules" ? "（操作说明在系统提示里）" : ""}` : "普通 claude"}；提示：${args.prompt}；退出码 ${session.status}`,
   "",
   "## 宿主最后的回复",
   "",

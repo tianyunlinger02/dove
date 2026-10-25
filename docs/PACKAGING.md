@@ -85,7 +85,7 @@ Lifecycle operations preserve `.dove/research/**`, historical `.dove/reviews/**`
 
 ## CLI inventory and lifecycle
 
-The CLI exposes `init`, `update`, `reinstall`, `uninstall`, `doctor`, `dashboard`, `watch`, `topic`, `figure`, `settings`, `mentor brief`, `projects` and `hook`. The old `review` and `run` CLIs are removed; `/dove:review` remains one of the seven Skills. Native mentor and paper-review model calls belong to the host, not CLI lifecycle operations.
+The CLI exposes `init`, `update`, `reinstall`, `uninstall`, `doctor`, `dashboard`, `watch`, `topic`, `figure`, `settings`, `mentor brief`, `cold-read`, `projects` and `hook`. The old `review` and `run` CLIs are removed; `/dove:review` remains one of the seven Skills, and `cold-read` only prepares the pages and the body for a fresh `dove-review`. Native mentor and paper-review model calls belong to the host, not CLI lifecycle operations.
 
 - Bare `dove` offers state-appropriate setup, host selection/changes, details, and default-No previews for Complete Reinstall/uninstall.
 - `init` writes declared integration and only the absent-tree `RESEARCH.md` bootstrap; initialized roots register for future upgrades.

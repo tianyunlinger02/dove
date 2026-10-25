@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.5.7" : null;
+var injectedVersion = true ? "3.5.8" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -471,6 +471,8 @@ tools: Read, Grep, Glob
 
 \u53EA\u8BFB\u6307\u5B9A\u7684\u5F53\u524D\u5B8C\u6574\u7A3F\u4EF6\uFF08\u542B\u6307\u5B9A\u9644\u5F55\u3001\u56FE\u8868\u548C\u4EA4\u4ED8\u7A3F\uFF09\u3001\u5176\u5F15\u7528\u7684\u7ED3\u679C\uFF0C\u4EE5\u53CA\u7ED9\u5B9A\u7684\u6295\u7A3F\u8981\u6C42\u548C\u6587\u732E\u3002\u4E0D\u8BFB\u8EAB\u4EFD\u5361\u3001\u8F6E\u6B21\u3001\u4F5C\u8005\u504F\u597D\u3001\u65E7\u5BA1\u7A3F\u3001\u5BF9\u8BDD\u6216\u5BBF\u4E3B\u8BBE\u7F6E\uFF1B\u4E0D\u8054\u7F51\u3001\u4E0D\u6267\u884C\u3001\u4E0D\u6539\u7A3F\u3002\u7F3A\u8BC1\u636E\u5C31\u6CE8\u660E\uFF0C\u4E0D\u81EA\u884C\u6269\u5927\u9605\u8BFB\u8303\u56F4\uFF0C\u4E0D\u8981\u6C42\u51BB\u7ED3\u3001\u590D\u5236\u6216\u54C8\u5E0C\u3002
 
+\u8C03\u7528\u6B63\u6587\u4EE5\u201C\u51B7\u8BFB\u201D\u5F00\u5934\u65F6\uFF0C\u4F60\u662F\u7B2C\u4E00\u6B21\u8BFB\u8FD9\u7BC7\u7A3F\u5B50\u7684\u8BFB\u8005\uFF1A\u53EA\u8BFB\u6B63\u6587\u5217\u51FA\u7684\u9010\u9875\u6587\u5B57\u548C\u9875\u9762\u56FE\u7247\uFF0C\u4E0D\u6253\u5F00\u9879\u76EE\u91CC\u7684\u4EFB\u4F55\u5176\u4ED6\u6587\u4EF6\uFF0C\u4E0D\u8054\u7F51\uFF1B\u8BFB\u4E0D\u61C2\u5C31\u7167\u5B9E\u62A5\u544A\uFF0C\u4E0D\u53BB\u522B\u5904\u627E\u7B54\u6848\uFF0C\u4E5F\u4E0D\u6838\u5BF9\u6570\u5B57\u3002\u6309\u6B63\u6587\u5217\u51FA\u7684\u5404\u9879\u8FD4\u56DE\u3002
+
 \u4ECE\u7A3F\u4EF6\u91CD\u5EFA\u8D21\u732E\uFF0C\u4E0D\u6CBF\u7528\u5BBF\u4E3B\u7684\u7ED3\u8BBA\uFF1A\u65B9\u6CD5\u56DE\u7B54\u95EE\u9898\u4E86\u5417\uFF0C\u673A\u5236\u3001\u672F\u8BED\u3001\u6BD4\u8F83\u3001\u6587\u732E\u548C\u5C40\u9650\u5BF9\u5417\uFF0C\u8BC1\u636E\u4E0E\u8868\u8FBE\u591F\u76EE\u6807\u4F1A\u8BAE\u6216\u671F\u520A\u5417\uFF1F\u7ED9\u51FA\u6700\u5F3A\u5408\u7406\u53CD\u5BF9\u610F\u89C1\u53CA\u6240\u9700\u8BC1\u636E\uFF1B\u7F3A\u6295\u7A3F\u6216\u6587\u732E\u4F9D\u636E\u5C31\u8BF4\u6E05\u5224\u65AD\u9650\u5236\u3002
 
 \u7528\u7B80\u77ED\u767D\u8BDD\u8FD4\u56DE\u603B\u4F53\u5224\u65AD\u3001\u5B9E\u8D28\u95EE\u9898\u3001\u7A3F\u4EF6\u4F4D\u7F6E\u6216\u539F\u59CB\u7ED3\u679C\u4F9D\u636E\u3001\u4F5C\u8005\u4E0B\u4E00\u6B65\uFF0C\u4EE5\u53CA\u5B9E\u9645\u8BFB\u8FC7\u7684\u6587\u4EF6\u548C\u90E8\u5206\u3002\u5408\u5E76\u5171\u56E0\uFF0C\u672A\u77E5\u4FDD\u6301\u672A\u77E5\uFF1B\u683C\u5F0F\u3001\u6784\u5EFA\u548C\u5C40\u90E8\u6307\u6807\u901A\u8FC7\u4E0D\u7B49\u4E8E\u79D1\u7814\u6210\u7ACB\uFF0C\u4E0D\u80FD\u9690\u53BB\u5931\u8D25\u6216\u7F29\u5C0F\u95EE\u9898\u3002\u4F60\u53EA\u7ED9\u5224\u65AD\uFF0C\u4E3B\u4F1A\u8BDD\u8D1F\u8D23\u56DE\u5E94\u548C\u4FEE\u8BA2\uFF1B\u63A8\u8350\u4E0D\u662F\u5916\u90E8\u63A5\u6536\u3002`;
@@ -602,7 +604,7 @@ function contract(slug) {
       "\u7528 `.dove/research/papers/library.json` \u548C `library.md` \u6309\u65B9\u5411\u7EC4\u7EC7\u76F8\u5173\u5DE5\u4F5C\uFF0C\u6BCF\u7EC4\u4EE5\u672C\u6587\u548C\u8FD9\u7EC4\u5DE5\u4F5C\u7684\u533A\u522B\u6536\u5C3E\uFF1B\u636E `papers/<id>.md` \u6838\u4E3B\u5F20\u652F\u6301\u3002\u5F15\u7528\u6216\u5BFC\u51FA BibTeX \u524D\u7528 Source \u6838\u5143\u6570\u636E\uFF0C\u53EA\u5BFC\u5DF2\u6838\u5B57\u6BB5\uFF0C\u4E0D\u7F16\u4F5C\u8005\u3001\u573A\u5408\u3001\u65E5\u671F\u6216\u6807\u8BC6\u3002\u663E\u5F0F\u79EF\u7D2F\u6216\u540E\u7EED watch \u624D\u66F4\u65B0\u5E93\uFF0C\u53EA\u8BFB\u4E0D\u5199\u3002",
       "\u4EFB\u4F55\u56FE\u6539\u52A8\u540E\uFF0C\u5305\u62EC Figure \u4EA4\u56DE\u7684\u65B0\u56FE\uFF0C\u56DE\u67E5\u56FE\u6CE8\u3001\u6B63\u6587\u63CF\u8FF0\u548C\u4EA4\u53C9\u5F15\u7528\uFF0C\u518D\u8D70\u5B9E\u9645\u6784\u5EFA\uFF0F\u5BFC\u51FA\u8DEF\u5F84\u3002\u7F16\u8BD1\u540E\u68C0\u67E5\u6EA2\u51FA\u6846\u3001\u672A\u5B9A\u4E49\u5F15\u7528\u3001\u56FE\u8868\u7F16\u53F7\u3001\u53CC\u680F\u5BBD\u8868\u662F\u5426\u901A\u680F\uFF0C\u9010\u9875\u770B\u7A7A\u680F\u3001\u53EA\u653E\u6D6E\u52A8\u4F53\u7684\u680F\u3001\u5927\u7247\u7A7A\u767D\uFF08dove figure --pages <\u7A3F\u4EF6.pdf> --body-pages <\u6B63\u6587\u9875\u6570\u4E0A\u9650> --output <\u603B\u89C8.png> \u628A\u6240\u6709\u9875\u6392\u6210\u4E00\u5F20\u603B\u89C8\uFF0C\u6807\u51FA\u8FD9\u4E9B\u4F4D\u7F6E\uFF0C\u5E76\u6309\u53C2\u8003\u6587\u732E\u6807\u9898\u7B97\u51FA\u6B63\u6587\u5B9E\u9645\u7528\u4E86\u51E0\u9875\uFF09\uFF0C\u4EE5\u53CA\u56FE\u8868\u662F\u5426\u79BB\u9996\u6B21\u5F15\u7528\u8D85\u8FC7\u4E00\u9875\u3001\u6392\u5230\u7ED3\u8BBA\u4E4B\u540E\u6216\u53C2\u8003\u6587\u732E\u9875\u3001\u6B63\u6587\u662F\u5426\u63D0\u524D\u7ED3\u675F\u800C\u6CA1\u7528\u8DB3\u9875\u6570\u3002\u6B63\u6587\u5B57\u6570\u4ECE\u6E90\u7801\u7B97\uFF0C\u6392\u9664\u8868\u683C\u3001\u56FE\u6CE8\u548C\u53C2\u8003\u6587\u732E\uFF0C\u4E0E\u76EE\u6807\u6838\u5BF9\uFF1B\u6309\u6295\u7A3F\u8981\u6C42\u6838\u5BF9\u6B63\u6587\u9875\u6570\uFF08\u542B\u56FE\u8868\uFF09\uFF0C\u4FDD\u6301\u6700\u7EC8\u5B57\u53F7\u548C\u5173\u952E\u8BC1\u636E\u3002\u6536\u5C3E\u628A\u5168\u6587\u9010\u9875\u6E32\u67D3\uFF0C\u4E00\u6B21\u770B\u5B8C\u7248\u9762\u3001\u56FE\u6587\u90BB\u8FD1\u3001\u56FE\u6CE8\u4E00\u81F4\u548C\u6574\u5957\u56FE\u98CE\u683C\uFF0C\u770B\u8FC7\u8F93\u51FA\u624D\u79F0\u5F53\u524D\u7A3F\uFF1B\u4FEE\u8303\u56F4\u5185\u95EE\u9898\uFF0C\u8BF4\u660E\u5269\u4F59\u6750\u6599\u9650\u5236\u3002",
       "LaTeX \u7A3F\u4EF6\u5728\u6295\u7A3F\u6A21\u677F\u5141\u8BB8\u7684\u8303\u56F4\u5185\u9ED8\u8BA4\u653E\u5BBD\u6D6E\u52A8\u53C2\u6570\uFF1A\\renewcommand{\\topfraction}{0.9}\u3001\\renewcommand{\\dbltopfraction}{0.9}\u3001\\renewcommand{\\textfraction}{0.08}\u3001\\renewcommand{\\floatpagefraction}{0.9}\u3001\\setcounter{topnumber}{3}\u3002\u4ECD\u6392\u4E0D\u4E0B\u65F6\u8C03\u6574\u56FE\u8868\u5728\u6E90\u6587\u4EF6\u91CC\u7684\u4F4D\u7F6E\u6216\u5185\u5BB9\u53D6\u820D\uFF0C\u4E0D\u9760\u8D1F\u95F4\u8DDD\u6216\u7F29\u5B57\u53F7\u585E\u7248\u9762\u3002",
-      "\u4EA4\u7A3F\u6216\u6295\u7A3F\u524D\u518D\u6838\u5BF9\uFF1A\u6458\u8981\u3001\u5F15\u8A00\u3001\u6B63\u6587\u3001\u8868\u683C\u3001\u56FE\u6CE8\u548C\u8865\u5145\u6750\u6599\u91CC\u7684\u540C\u4E00\u4E2A\u6570\u90FD\u4ECE\u7ED3\u679C\u6587\u4EF6\u53D6\u3001\u5904\u5904\u4E00\u81F4\uFF0C\u7ED3\u679C\u6539\u8FC7\u5C31\u5168\u6587\u67E5\u4E00\u904D\uFF1B\u6B63\u6587\u6BCF\u5904\u6307\u5411\u8865\u5145\u6750\u6599\u7684\u5F15\u7528\u90FD\u80FD\u5728\u8865\u5145\u91CC\u627E\u5230\uFF0C\u8865\u5145\u5355\u72EC\u7F16\u8BD1\u3001\u5355\u72EC\u770B\u7248\u9762\uFF1B\u53CC\u76F2\u6295\u7A3F\u67E5\u533F\u540D\uFF1A\u4F5C\u8005\u4FE1\u606F\u3001\u81F4\u8C22\u3001\u5E26\u7528\u6237\u540D\u6216\u673A\u6784\u7684\u94FE\u63A5\u3001\u7B2C\u4E00\u4EBA\u79F0\u81EA\u5F15\u3001PDF \u5143\u6570\u636E\u548C\u8865\u5145\u6750\u6599\u91CC\u7684\u6587\u4EF6\u3002",
+      "\u6BCF\u6B21\u4EA4\u7ED9\u7528\u6237\u6216\u6295\u7A3F\u4E4B\u524D\u90FD\u505A\u7EC8\u68C0\uFF0C\u6309\u987A\u5E8F\uFF1A\u7F16\u8BD1\u540E\u7528 dove figure --pages \u770B\u7248\u9762\uFF1B\u6309 Review \u7684\u51B7\u8BFB\uFF0C\u8BA9\u4E00\u4E2A\u5168\u65B0\u7684\u8BFB\u8005\u53EA\u8BFB\u7F16\u8BD1\u597D\u7684 PDF\uFF0C\u5904\u7406\u5B83\u5217\u51FA\u7684\u884C\u8BDD\u3001\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u3001\u9632\u5FA1\u63AA\u8F9E\u548C\u7248\u9762\u95EE\u9898\uFF0C\u6539\u5B8C\u518D\u51B7\u8BFB\u4E00\u6B21\uFF1B\u518D\u6838\u5BF9\u6458\u8981\u3001\u5F15\u8A00\u3001\u6B63\u6587\u3001\u8868\u683C\u3001\u56FE\u6CE8\u548C\u8865\u5145\u6750\u6599\u91CC\u7684\u540C\u4E00\u4E2A\u6570\u90FD\u4ECE\u7ED3\u679C\u6587\u4EF6\u53D6\u3001\u5904\u5904\u4E00\u81F4\uFF0C\u7ED3\u679C\u6539\u8FC7\u5C31\u5168\u6587\u67E5\u4E00\u904D\uFF1B\u6B63\u6587\u6BCF\u5904\u6307\u5411\u8865\u5145\u6750\u6599\u7684\u5F15\u7528\u90FD\u80FD\u5728\u8865\u5145\u91CC\u627E\u5230\uFF0C\u8865\u5145\u5355\u72EC\u7F16\u8BD1\u3001\u5355\u72EC\u770B\u7248\u9762\uFF1B\u53CC\u76F2\u6295\u7A3F\u67E5\u533F\u540D\uFF1A\u4F5C\u8005\u4FE1\u606F\u3001\u81F4\u8C22\u3001\u5E26\u7528\u6237\u540D\u6216\u673A\u6784\u7684\u94FE\u63A5\u3001\u7B2C\u4E00\u4EBA\u79F0\u81EA\u5F15\u3001PDF \u5143\u6570\u636E\u548C\u8865\u5145\u6750\u6599\u91CC\u7684\u6587\u4EF6\u3002\u4EA4\u4ED8\u8BF4\u660E\u91CC\u5199\u6E05\u51B7\u8BFB\u53D1\u73B0\u4E86\u4EC0\u4E48\u3001\u6539\u4E86\u4EC0\u4E48\u3002\u5199\u7A3F\u7684\u4EBA\u67E5\u4E0D\u51FA\u81EA\u5DF1\u7684\u884C\u8BDD\uFF0C\u53EA\u67E5\u7F16\u8BD1\u3001\u9875\u6570\u548C\u6570\u5B57\u4E0D\u7B97\u7EC8\u68C0\u3002",
       "\u6A21\u677F\u7F3A\u5B57\u4F53\u6216\u5305\u65F6\uFF0C\u7528\u5141\u8BB8\u5DE5\u5177\u653E\u5728\u9879\u76EE\u672C\u5730 texmf \u5E76\u8BA9\u6784\u5EFA\u4F7F\u7528\uFF0C\u4E0D\u9759\u9ED8\u6362\u5B57\u4F53\u6216\u6539\u7CFB\u7EDF\u5B89\u88C5\u3002",
       "\u56DE\u5E94\u5BA1\u7A3F\u610F\u89C1\u65F6\uFF0C\u8BFB\u5BA1\u7A3F\u3001\u5B83\u8BFB\u8FC7\u7684\u6750\u6599\u6E05\u5355\u548C\u5F53\u524D\u4EA7\u7269\uFF0C\u5171\u56E0\u95EE\u9898\u5408\u5E76\u5904\u7406\uFF0C\u6838\u5B9E\u4F9D\u636E\uFF0C\u4E0D\u5168\u76D8\u63A5\u53D7\uFF1B\u6309\u5B9E\u8D28\u5F71\u54CD\u6392\u5E8F\uFF0C\u51B3\u5B9A\u63A5\u53D7\u3001\u53CD\u9A73\u3001\u9650\u5B9A\u6216\u8C03\u67E5\uFF0C\u6BCF\u4E2A\u91CD\u8981\u95EE\u9898\u90FD\u8986\u76D6\u3002\u7528 Source \u6838\u65B0\u5F15\u6587\u4E0E\u4E3B\u5F20\uFF0C\u7528 Experiment \u53D6\u5F97\u6216\u89E3\u91CA\u7ED3\u679C\uFF1B\u6BD4\u8F83\u539F\u4E3B\u5F20\u3001\u5BA1\u7A3F\u7406\u89E3\u3001\u56DE\u5E94\u548C\u6539\u540E\u4E3B\u5F20\uFF0C\u4E0D\u6697\u6539\u786E\u5B9A\u6027\u3001\u56E0\u679C\u3001\u8303\u56F4\u3001\u6570\u91CF\u9650\u5B9A\u4E0E\u65B0\u610F\u3002",
       "\u6309\u8981\u6C42\u6539\u8BC1\u636E\u3001\u5206\u6790\u3001\u6587\u5B57\u3001\u56FE\u8868\u3001\u8865\u5145\u6750\u6599\u6216\u6295\u7A3F\u6587\u4EF6\uFF0C\u4E0D\u53EA\u6539\u8BED\u6C14\uFF1B\u5C40\u90E8\u7B54\u590D\u89E3\u51B3\u4E0D\u4E86\u5C31\u4FEE\u5171\u56E0\u3002\u9010\u9879\u8BF4\u660E\u62C5\u5FE7\u5DF2\u89E3\u51B3\u3001\u51CF\u8F7B\u8FD8\u662F\u4ECD\u6709\u9650\u5236\uFF0C\u5199\u4E86\u7B54\u590D\u4E0D\u7B49\u4E8E\u89E3\u51B3\u6216\u5BA1\u7A3F\u4EBA\u63A5\u53D7\u3002\u5BA1\u7A3F\u539F\u6587\u4E0E\u4F5C\u8005\u56DE\u5E94\u5206\u5F00\u4FDD\u7559\uFF0C\u5E76\u94FE\u63A5\u5230\u6539\u52A8\u4EA7\u7269\uFF1B\u4F9D\u8D56\u65E7\u5BA1\u7A3F\u5EFA\u8BAE\u524D\uFF0C\u6309 Review \u67E5\u5F53\u524D\u7248\u672C\u3002"
@@ -639,7 +641,7 @@ Supplied evidence (real outputs such as renders, meshes, photos or predictions) 
     ]
   });
   if (slug === "review") return capabilityContract({
-    ambientParticipation: "\u5728\u5E72\u51C0\u53EA\u8BFB\u4E0A\u4E0B\u6587\u5224\u65AD\u6307\u5B9A\u5F53\u524D\u8BBA\u6587\uFF0C\u533A\u5206\u72EC\u7ACB\u5BA1\u7A3F\u3001\u4F5C\u8005\u81EA\u67E5\u548C\u4EA4\u4ED8\u68C0\u67E5\u3002",
+    ambientParticipation: "\u5728\u5E72\u51C0\u53EA\u8BFB\u4E0A\u4E0B\u6587\u5224\u65AD\u6307\u5B9A\u5F53\u524D\u8BBA\u6587\uFF0C\u533A\u5206\u72EC\u7ACB\u5BA1\u7A3F\u3001\u51B7\u8BFB\uFF08\u53EA\u62FF\u5230 PDF \u7684\u7B2C\u4E00\u6B21\u8BFB\u8005\uFF09\u3001\u4F5C\u8005\u81EA\u67E5\u548C\u4EA4\u4ED8\u68C0\u67E5\u3002",
     purpose: "\u8BC4\u4F30\u8BBA\u6587\u79D1\u5B66\u8D28\u91CF\u3001\u5C40\u90E8\u4EA7\u7269\u3001\u4EA4\u4ED8\u5C31\u7EEA\u6216\u5DF2\u6709\u5BA1\u7A3F\u610F\u89C1\u3002",
     when: "\u5224\u65AD\u8BBA\u6587\u6216\u68C0\u67E5\u5BA1\u7A3F\u65F6\u4F7F\u7528\uFF0C\u4E0D\u4EE3\u66FF\u5BFC\u5E08\u5B9A\u65B9\u5411\u3002",
     responsibilities: [
@@ -648,7 +650,8 @@ Supplied evidence (real outputs such as renders, meshes, photos or predictions) 
     ],
     actions: [
       DOVE_RESEARCH_REVIEW_FOUR_QUESTIONS,
-      `\u72EC\u7ACB\u5BA1\u7A3F\u5728\u5168\u65B0\u53EA\u8BFB\u4E0A\u4E0B\u6587\u8C03\u7528 ${DOVE_RESEARCH_REVIEW_AGENT_NAME}\uFF0C\u7ED9\u5F53\u524D\u7A3F\u3001\u6240\u5F15\u7ED3\u679C\u4E0E\u76F8\u5173\u5B9E\u8BFB\u6295\u7A3F\uFF0F\u6587\u732E\u6750\u6599\u3002\u5B83\u7528 Read/Grep/Glob \u8BFB\u6307\u5B9A\u6587\u4EF6\uFF0C\u4E0D\u63A5\u6536\u4F5C\u8005\u6267\u884C\u5BF9\u8BDD\uFF0C\u4E0D\u9700\u51BB\u7ED3\u5FEB\u7167\u3001\u5BA1\u7A3F CLI \u6216\u6301\u4E45\u4F1A\u8BDD\u3002`,
+      `\u72EC\u7ACB\u5BA1\u7A3F\u5728\u5168\u65B0\u53EA\u8BFB\u4E0A\u4E0B\u6587\u8C03\u7528 ${DOVE_RESEARCH_REVIEW_AGENT_NAME}\uFF0C\u7ED9\u5F53\u524D\u7A3F\u3001\u6240\u5F15\u7ED3\u679C\u4E0E\u76F8\u5173\u5B9E\u8BFB\u6295\u7A3F\uFF0F\u6587\u732E\u6750\u6599\u3002\u5B83\u7528 Read/Grep/Glob \u8BFB\u6307\u5B9A\u6587\u4EF6\uFF0C\u4E0D\u63A5\u6536\u4F5C\u8005\u6267\u884C\u5BF9\u8BDD\uFF0C\u4E0D\u9700\u51BB\u7ED3\u5FEB\u7167\u3001\u5BA1\u7A3F CLI \u6216\u6301\u4E45\u4F1A\u8BDD\u3002\u8FD9\u662F\u770B\u8BC1\u636E\u7684\u5BA1\u7A3F\uFF0C\u67E5\u4E3B\u5F20\u3001\u6BD4\u8F83\u548C\u6570\u5B57\u3002`,
+      "\u51B7\u8BFB\u53E6\u505A\uFF0C\u4EA4\u4ED8\u524D\u548C\u7528\u6237\u8981\u5916\u884C\u89C6\u89D2\u65F6\u90FD\u505A\uFF1Adove cold-read --project <root> --pdf <\u7A3F\u4EF6.pdf> [--pdf <\u8865\u5145.pdf>] [--venue <\u6295\u7A3F\u76EE\u6807>] \u628A\u7F16\u8BD1\u597D\u7684 PDF \u8F6C\u6210\u9010\u9875\u6587\u5B57\u548C\u9875\u9762\u56FE\u7247\uFF0C\u5E76\u8F93\u51FA\u8C03\u7528\u6B63\u6587\uFF1B\u628A\u6B63\u6587\u539F\u6837\u4EA4\u7ED9\u4E00\u4E2A\u5168\u65B0\u7684 dove-review\uFF0C\u53EA\u7ED9\u8FD9\u4EFD PDF\uFF0C\u4E0D\u7ED9 tex\u3001\u8BFB\u6570\u6587\u6863\u6216\u9879\u76EE\u80CC\u666F\uFF0C\u90A3\u662F\u5F00\u53D1\u8005\u89C6\u89D2\uFF0C\u4F1A\u628A\u6CE8\u610F\u529B\u5F15\u5230\u6838\u6570\u5B57\u4E0A\u3002\u5199\u7A3F\u7684\u4EBA\u5728\u9879\u76EE\u91CC\u6CE1\u4E45\u4E86\uFF0C\u67E5\u4E0D\u51FA\u81EA\u5DF1\u7684\u884C\u8BDD\uFF0C\u51B7\u8BFB\u4E0D\u80FD\u7528\u81EA\u67E5\u4EE3\u66FF\u3002\u51B7\u8BFB\u7ED3\u679C\u539F\u6837\u5B58\u5230\u7A3F\u4EF6\u65C1\uFF0C\u9010\u6761\u5904\u7406\uFF1A\u884C\u8BDD\u5728\u7B2C\u4E00\u6B21\u51FA\u73B0\u65F6\u5B9A\u4E49\u6216\u6362\u6210\u901A\u7528\u8BF4\u6CD5\uFF0C\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u91CD\u5199\uFF0C\u9632\u5FA1\u63AA\u8F9E\u5220\u6389\u6216\u96C6\u4E2D\u5230\u5C40\u9650\u6BB5\uFF0C\u56FE\u8868\u548C\u7248\u9762\u95EE\u9898\u4EA4\u7ED9 Figure \u548C Draft\uFF1B\u6539\u5B8C\u518D\u51B7\u8BFB\u4E00\u6B21\uFF0C\u76F4\u5230\u4E0D\u518D\u6709\u65B0\u7684\u8BFB\u4E0D\u61C2\u4E4B\u5904\u3002",
       "\u8FD4\u56DE\u7B80\u6D01\u5224\u65AD\u3001\u963B\u6321\u95EE\u9898\u3001\u8BC1\u636E\u3001\u4F5C\u8005\u53EF\u505A\u7684\u4FEE\u6539\u548C\u5B9E\u9645\u8BFB\u8FC7\u7684\u6587\u4EF6\uFF1B\u6750\u6599\u4E0D\u8DB3\u5C31\u9650\u5B9A\u5224\u65AD\u3002\u6574\u7BC7\u5BA1\u7A3F\u8BFB\u5B8C\u6574\u5F53\u524D\u7248\uFF0C\u5C40\u90E8\u5BA1\u67E5\u4FDD\u6301\u5C40\u90E8\uFF1B\u5B9E\u8D28\u4FEE\u6539\u540E\u9700\u91CD\u5BA1\u5B8C\u6574\u65B0\u7248\uFF0C\u65E7\u5EFA\u8BAE\u624D\u53EF\u89C6\u4E3A\u5F53\u524D\u3002",
       "\u5FE0\u5B9E\u4FDD\u7559\u771F\u5B9E\u5BA1\u7A3F\u8FD4\u56DE\uFF0C\u533A\u5206\u7528\u6237\u8D34\u6765\u7684\u610F\u89C1\u4E0E\u5B9E\u9645\u5B8C\u6210\u7684\u72EC\u7ACB\u5BA1\u7A3F\u3002\u6709\u7528\u8FD4\u56DE\u653E\u666E\u901A\u9879\u76EE\u6750\u6599\uFF0C\u4E0D\u5EFA\u8FD0\u884C\u65F6\u4EA4\u6362\u5E93\uFF1B\u9605\u8BFB\u6216\u4FDD\u5B58\u672C\u8EAB\u4E0D\u6388\u6743\u4FEE\u6539\u6216\u91CD\u5BA1\u3002"
     ],
@@ -1074,8 +1077,8 @@ import os from "node:os";
 import path3 from "node:path";
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path23) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path23 === "$" ? key : `${path23}.${key}`}.`);
+function duplicateKeyError(label, key, path24) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path24 === "$" ? key : `${path24}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -1111,7 +1114,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path23) {
+  function parseArray(path24) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -1120,7 +1123,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path23}[${itemIndex}]`);
+      parseValue(`${path24}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -1132,7 +1135,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path23) {
+  function parseObject(path24) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -1142,12 +1145,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path23);
+      if (keys.has(key)) duplicateKeyError(label, key, path24);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path23 === "$" ? `$.${key}` : `${path23}.${key}`);
+      parseValue(path24 === "$" ? `$.${key}` : `${path24}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -1158,11 +1161,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path23) {
+  function parseValue(path24) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path23);
-    else if (character === "[") parseArray(path23);
+    if (character === "{") parseObject(path24);
+    else if (character === "[") parseArray(path24);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -4231,6 +4234,61 @@ ${quote(options.userOriginal)}` : "\u672A\u76F4\u63A5\u9644\u539F\u8BDD\u3002",
 }
 
 // src/core/stop-hook.mjs
+import fs20 from "node:fs";
+
+// src/core/cold-read.mjs
+import { createHash } from "node:crypto";
+import { spawnSync as spawnSync4 } from "node:child_process";
+import fs19 from "node:fs";
+import os6 from "node:os";
+import path17 from "node:path";
+var COLD_READ_KEY = "coldread:last";
+
+// src/core/stop-hook.mjs
+var MANUSCRIPT_BUILD = /\b(?:latexmk|pdflatex|xelatex|lualatex|tectonic)\b/u;
+var TRANSCRIPT_TAIL_BYTES = 4 << 20;
+function turnRebuiltManuscript(transcriptPath, fsOps = fs20) {
+  if (typeof transcriptPath !== "string" || !transcriptPath) return false;
+  let text;
+  try {
+    const size = fsOps.statSync(transcriptPath).size;
+    const start = Math.max(0, size - TRANSCRIPT_TAIL_BYTES);
+    const fd = fsOps.openSync(transcriptPath, "r");
+    try {
+      const buffer = Buffer.alloc(size - start);
+      fsOps.readSync(fd, buffer, 0, buffer.length, start);
+      text = buffer.toString("utf8");
+    } finally {
+      fsOps.closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+  const lines = text.split("\n");
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    let record;
+    try {
+      record = JSON.parse(lines[index]);
+    } catch {
+      continue;
+    }
+    if (!record || record.isSidechain) continue;
+    const content = record.message?.content;
+    if (record.type === "user" && !record.isMeta) {
+      const toolResult = Array.isArray(content) && content.some((block) => block?.type === "tool_result");
+      const own = typeof content === "string" ? Boolean(content.trim()) : Array.isArray(content) && content.some((block) => block?.type === "text" && block.text?.trim());
+      if (own && !toolResult) return false;
+      continue;
+    }
+    if (record.type === "assistant" && Array.isArray(content)) {
+      if (content.some((block) => block?.type === "tool_use" && block.name === "Bash" && MANUSCRIPT_BUILD.test(String(block.input?.command ?? "")))) return true;
+    }
+  }
+  return false;
+}
+function coldReadPrompt() {
+  return "\u8FD9\u4E00\u8F6E\u91CD\u65B0\u7F16\u8BD1\u4E86\u7A3F\u4EF6\u3002\u4EA4\u7ED9\u7528\u6237\u4E4B\u524D\uFF0C\u6309 Draft \u7684\u7EC8\u68C0\u505A\u4E00\u6B21\u51B7\u8BFB\uFF1A\u5148 dove figure --pages <\u7A3F\u4EF6.pdf> --body-pages <\u6B63\u6587\u9875\u6570\u4E0A\u9650> --output <\u603B\u89C8.png> \u770B\u7248\u9762\uFF0C\u518D dove cold-read --pdf <\u7A3F\u4EF6.pdf>\uFF0C\u628A\u5B83\u8F93\u51FA\u7684\u8C03\u7528\u6B63\u6587\u539F\u6837\u4EA4\u7ED9\u4E00\u4E2A\u5168\u65B0\u7684 dove-review\uFF0C\u53EA\u7ED9\u8FD9\u4EFD PDF\uFF0C\u4E0D\u7ED9\u6E90\u7801\u3001\u8BFB\u6570\u6216\u9879\u76EE\u80CC\u666F\uFF1B\u9010\u6761\u5904\u7406\u5B83\u5217\u51FA\u7684\u884C\u8BDD\u3001\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u548C\u9632\u5FA1\u63AA\u8F9E\uFF0C\u6539\u5B8C\u518D\u51B7\u8BFB\u4E00\u6B21\u3002\u5199\u7A3F\u7684\u4EBA\u81EA\u5DF1\u67E5\u4E0D\u51FA\u81EA\u5DF1\u7684\u884C\u8BDD\uFF0C\u8FD9\u4E00\u6B65\u4E0D\u80FD\u7528\u81EA\u67E5\u4EE3\u66FF\u3002\u8FD8\u5728\u6539\u5C31\u63A5\u7740\u6539\uFF0C\u4EA4\u4ED8\u524D\u518D\u505A\u3002\u8FD9\u6BB5\u8BDD\u662F Dove \u6839\u636E\u672C\u8F6E\u64CD\u4F5C\u81EA\u52A8\u63D0\u51FA\u7684\uFF0C\u4E0D\u662F\u7528\u6237\u521A\u8BF4\u7684\u3002";
+}
 function parseStopPayload(input) {
   let payload;
   try {
@@ -4259,10 +4317,11 @@ function stallPrompt(state2) {
 function stopHookOutput(payload, project, options = {}) {
   if (options.enabled === false || payload?.stop_hook_active === true) return null;
   const state2 = inspectRoundState(project, options);
+  const asked = readHookState(project, options).asked;
   const candidates = [];
   if (state2.overrun) candidates.push({ key: `overrun:${state2.currentRound.brief.file}:${state2.overrun.due}`, reason: overrunPrompt(state2) });
   if (state2.stall) candidates.push({ key: `stall:${state2.stall.results.at(-1)}`, reason: stallPrompt(state2) });
-  const asked = readHookState(project, options).asked;
+  if (turnRebuiltManuscript(payload?.transcript_path, options.fsOps)) candidates.push({ key: `coldread:remind:${asked[COLD_READ_KEY] ?? "never"}`, reason: coldReadPrompt() });
   const next = candidates.find((candidate) => !asked[candidate.key]);
   if (!next) return null;
   updateHookState(project, (hookState) => {
@@ -4272,13 +4331,13 @@ function stopHookOutput(payload, project, options = {}) {
 }
 
 // src/core/project-installation.mjs
-import fs23 from "node:fs";
-import path21 from "node:path";
+import fs25 from "node:fs";
+import path22 from "node:path";
 
 // src/core/file-set-transaction.mjs
 import crypto2 from "node:crypto";
-import fs19 from "node:fs";
-import path17 from "node:path";
+import fs21 from "node:fs";
+import path18 from "node:path";
 var MAX_CLEANUP_WARNINGS = 20;
 var ENTRY_FIELDS = /* @__PURE__ */ new Set(["root", "relativePath", "content", "encoding", "force", "delete", "deleteEmptyDirectory", "expectedState", "label"]);
 function errorMessage(error) {
@@ -4315,10 +4374,10 @@ function expectedState(raw, index) {
 }
 function parentDirectories(relativePath) {
   const directories = [];
-  let current = path17.posix.dirname(relativePath);
+  let current = path18.posix.dirname(relativePath);
   while (current !== ".") {
     directories.push(current);
-    current = path17.posix.dirname(current);
+    current = path18.posix.dirname(current);
   }
   return directories.reverse();
 }
@@ -4347,7 +4406,7 @@ function removeNewTransactionParents(anchor, transaction) {
   }
 }
 function assertNoUnexpectedChildren(entry, resolved) {
-  const scheduledChildren = new Set(resolved.filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path17.posix.dirname(candidate.relativePath) === entry.relativePath).map((candidate) => path17.posix.basename(candidate.relativePath)));
+  const scheduledChildren = new Set(resolved.filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path18.posix.dirname(candidate.relativePath) === entry.relativePath).map((candidate) => path18.posix.basename(candidate.relativePath)));
   const unexpected = entry.anchor.readdir(entry.relativePath).map((child) => typeof child === "string" ? child : child.name).filter((child) => !scheduledChildren.has(child));
   if (unexpected.length > 0) {
     throw new Error(`Transactional directory deletion found an unscheduled child: ${entry.relativePath}/${unexpected.sort().join(`, ${entry.relativePath}/`)}.`);
@@ -4365,7 +4424,7 @@ function committedResult(entries, cleanupFailures) {
 }
 function writeFileSetTransaction(entries, options = {}) {
   if (!Array.isArray(entries)) throw new Error("Transactional write entries must be an array.");
-  const fsOps = options.fsOps ?? fs19;
+  const fsOps = options.fsOps ?? fs21;
   const transactionId = (options.transactionId ?? crypto2.randomUUID()).replace(/[^a-z0-9._-]/giu, "-");
   const anchors = /* @__PURE__ */ new Map();
   const resolved = [];
@@ -4374,7 +4433,7 @@ function writeFileSetTransaction(entries, options = {}) {
   const promotions = [];
   const createdDirectories = /* @__PURE__ */ new Map();
   const anchorFor = (root) => {
-    const canonicalRoot = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path17.resolve(root)) : fsOps.realpathSync(path17.resolve(root));
+    const canonicalRoot = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path18.resolve(root)) : fsOps.realpathSync(path18.resolve(root));
     if (!anchors.has(canonicalRoot)) anchors.set(canonicalRoot, openRootedFilesystem(canonicalRoot, { fsOps }));
     return anchors.get(canonicalRoot);
   };
@@ -4422,8 +4481,8 @@ function writeFileSetTransaction(entries, options = {}) {
     }
     for (const [index, entry] of resolved.entries()) {
       if (entry.deleting) continue;
-      const parent = path17.posix.dirname(entry.relativePath);
-      const temporaryName = `.${path17.posix.basename(entry.relativePath)}.${transactionId}.${index}.tmp`;
+      const parent = path18.posix.dirname(entry.relativePath);
+      const temporaryName = `.${path18.posix.basename(entry.relativePath)}.${transactionId}.${index}.tmp`;
       entry.stagedPath = parent === "." ? temporaryName : `${parent}/${temporaryName}`;
       ensureParentDirectories(entry.anchor, entry.relativePath, createdDirectories.get(entry.anchor));
       entry.anchor.writeNewFile(entry.stagedPath, entry.content);
@@ -4505,19 +4564,19 @@ function writeFileSetTransaction(entries, options = {}) {
 }
 
 // src/core/project-installation-plan.mjs
-import fs21 from "node:fs";
-import path19 from "node:path";
+import fs23 from "node:fs";
+import path20 from "node:path";
 
 // src/core/project-installation-resources.mjs
 import crypto3 from "node:crypto";
 
 // scripts/generate-command-adapters.mjs
-import fs20 from "node:fs";
-import path18 from "node:path";
+import fs22 from "node:fs";
+import path19 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var __filename = fileURLToPath2(import.meta.url);
-var __dirname = path18.dirname(__filename);
-var PACKAGE_ROOT = path18.resolve(__dirname, "..");
+var __dirname = path19.dirname(__filename);
+var PACKAGE_ROOT = path19.resolve(__dirname, "..");
 function yamlString(value) {
   return JSON.stringify(String(value).replace(/\n/g, " "));
 }
@@ -4792,11 +4851,11 @@ function lstatOrNull2(fsOps, targetPath) {
     throw error;
   }
 }
-function inspectRegularProjectFile(root, relativePath, fsOps = fs21) {
+function inspectRegularProjectFile(root, relativePath, fsOps = fs23) {
   let current = root;
   const components = relativePath.split("/");
   for (const [index, component] of components.entries()) {
-    current = path19.join(current, component);
+    current = path20.join(current, component);
     const stat = lstatOrNull2(fsOps, current);
     if (stat === null) return { exists: false, bytes: null, digest: null, mode: null, type: "absent" };
     if (stat.isSymbolicLink()) throw new Error(`Dove project integration path must not be a symbolic link: ${relativePath}.`);
@@ -5052,7 +5111,7 @@ function addFragment(resource, value) {
   }
   throw new Error(`Dove does not install unsupported project-local fragment ${resource.path}#${resource.selector}.`);
 }
-function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps = fs21, options = {}) {
+function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps = fs23, options = {}) {
   const replaceDrift = shouldReplaceLocalEdit(options);
   const skipDrift = shouldSkipLocalEdit(options);
   const observed = inspectRegularProjectFile(root, relativePath, fsOps);
@@ -5194,7 +5253,7 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
     retiredHooks
   };
 }
-function planResource(root, desired, oldEntry, fsOps = fs21, options = {}) {
+function planResource(root, desired, oldEntry, fsOps = fs23, options = {}) {
   const kind = desired?.kind ?? oldEntry.kind;
   if (kind === "exclusive-file") return planExclusive(root, desired, oldEntry, fsOps, options);
   throw new Error(`Unsupported project integration resource kind: ${kind}.`);
@@ -5225,7 +5284,7 @@ function assertManagedOwnership(manifest) {
     }
   }
 }
-function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs21, manifest = null, replacementPolicy = "safe" }) {
+function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs23, manifest = null, replacementPolicy = "safe" }) {
   if (manifest && ["identity-mismatch", "invalid-version", "newer"].includes(classifyPackageCompatibility(manifest.package, { name: packageName, version: packageVersion }))) {
     throw new Error("Dove project integration package is incompatible with the running CLI.");
   }
@@ -5311,16 +5370,16 @@ function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs
 }
 
 // src/core/project-root.mjs
-import fs22 from "node:fs";
-import os6 from "node:os";
-import path20 from "node:path";
-var INSTALLATION_DIRECTORY = path20.posix.dirname(INSTALLATION_MANIFEST_PATH);
+import fs24 from "node:fs";
+import os7 from "node:os";
+import path21 from "node:path";
+var INSTALLATION_DIRECTORY = path21.posix.dirname(INSTALLATION_MANIFEST_PATH);
 function realpathNative2(fsOps, targetPath) {
   return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
 }
 function canonicalExistingDirectory(value, label, fsOps) {
   if (typeof value !== "string" || !value.trim() || value.includes("\0")) throw new Error(`${label} must name an existing directory.`);
-  const resolved = path20.resolve(value);
+  const resolved = path21.resolve(value);
   let stat;
   try {
     stat = fsOps.statSync(resolved);
@@ -5336,7 +5395,7 @@ function parentDirectories2(start) {
   let current = start;
   while (true) {
     directories.push(current);
-    const parent = path20.dirname(current);
+    const parent = path21.dirname(current);
     if (parent === current) return directories;
     current = parent;
   }
@@ -5355,16 +5414,16 @@ function preservedInstallationDirectory(directoryPath, directoryStat, fsOps) {
   const children = fsOps.readdirSync(directoryPath).map(String).sort();
   if (children.length > 1 || children.length === 1 && children[0] !== "DOCTOR.md") return false;
   if (children.length === 0) return true;
-  const doctorStat = lstatOrNull3(fsOps, path20.join(directoryPath, "DOCTOR.md"));
+  const doctorStat = lstatOrNull3(fsOps, path21.join(directoryPath, "DOCTOR.md"));
   return doctorStat?.isFile() === true && !doctorStat.isSymbolicLink();
 }
 function installationStateAt(root, options) {
-  const fsOps = options.fsOps ?? fs22;
-  const doveStat = lstatOrNull3(fsOps, path20.join(root, ".dove"));
+  const fsOps = options.fsOps ?? fs24;
+  const doveStat = lstatOrNull3(fsOps, path21.join(root, ".dove"));
   if (doveStat && (doveStat.isSymbolicLink() || !doveStat.isDirectory())) throw new Error(`Dove installation parent must be a real directory: ${root}/.dove.`);
-  if (lstatOrNull3(fsOps, path20.join(root, ".dove-install")) !== null) throw legacyInitError(root);
-  const directoryPath = path20.join(root, INSTALLATION_DIRECTORY);
-  const manifestPath = path20.join(root, INSTALLATION_MANIFEST_PATH);
+  if (lstatOrNull3(fsOps, path21.join(root, ".dove-install")) !== null) throw legacyInitError(root);
+  const directoryPath = path21.join(root, INSTALLATION_DIRECTORY);
+  const manifestPath = path21.join(root, INSTALLATION_MANIFEST_PATH);
   const manifestStat = lstatOrNull3(fsOps, manifestPath);
   if (manifestStat === null) {
     const directoryStat2 = lstatOrNull3(fsOps, directoryPath);
@@ -5390,7 +5449,7 @@ function setupEvidenceAt(root, fsOps) {
     LEGACY_INSTALLATION_MANIFEST_PATH
   ];
   for (const relativePath of paths) {
-    const target = path20.join(root, relativePath);
+    const target = path21.join(root, relativePath);
     const stat = lstatOrNull3(fsOps, target);
     if (stat === null) continue;
     if (stat.isSymbolicLink() || !stat.isFile()) {
@@ -5399,7 +5458,7 @@ function setupEvidenceAt(root, fsOps) {
     return { state: "marker", relativePath };
   }
   for (const relativePath of [INSTALLATION_DIRECTORY, ".dove-install"]) {
-    const target = path20.join(root, relativePath);
+    const target = path21.join(root, relativePath);
     const stat = lstatOrNull3(fsOps, target);
     if (stat === null) continue;
     if (stat.isSymbolicLink() || !stat.isDirectory()) {
@@ -5415,7 +5474,7 @@ function legacyInitError(root) {
 }
 function gitRootFrom(start, fsOps) {
   for (const directory of parentDirectories2(start)) {
-    const dotGit = path20.join(directory, ".git");
+    const dotGit = path21.join(directory, ".git");
     const stat = lstatOrNull3(fsOps, dotGit);
     if (stat === null) continue;
     if (stat.isSymbolicLink()) throw new Error(`Git project marker must not be a symbolic link: ${dotGit}.`);
@@ -5428,14 +5487,14 @@ function initRequiredError(start) {
   return new Error(`Dove project integration is not initialized from ${start}. Run 'dove init' from the project root, or use 'dove init --project <dir>'.`);
 }
 function resolveProjectRootForInit(project, options = {}) {
-  const fsOps = options.fsOps ?? fs22;
+  const fsOps = options.fsOps ?? fs24;
   const explicitProject = project !== void 0 && project !== null;
   const candidateInput = explicitProject ? project : options.cwd ?? process.cwd();
   const candidate = canonicalExistingDirectory(candidateInput, explicitProject ? "Dove project" : "Current working directory", fsOps);
   const gitRoot = gitRootFrom(candidate, fsOps);
   const root = !explicitProject && gitRoot !== null ? gitRoot : candidate;
   if (!explicitProject) {
-    let home = path20.resolve((options.env ?? process.env).HOME || os6.homedir());
+    let home = path21.resolve((options.env ?? process.env).HOME || os7.homedir());
     try {
       home = realpathNative2(fsOps, home);
     } catch (error) {
@@ -5459,19 +5518,19 @@ function resolveProjectRootForInit(project, options = {}) {
   return root;
 }
 function packageProjectBoundary(directory, fsOps) {
-  const packageJson = lstatOrNull3(fsOps, path20.join(directory, "package.json"));
-  const nodeModules = lstatOrNull3(fsOps, path20.join(directory, "node_modules"));
+  const packageJson = lstatOrNull3(fsOps, path21.join(directory, "package.json"));
+  const nodeModules = lstatOrNull3(fsOps, path21.join(directory, "node_modules"));
   return packageJson?.isFile() && !packageJson.isSymbolicLink() && nodeModules?.isDirectory() && !nodeModules.isSymbolicLink();
 }
 function resolveProjectRootForSetup(start, options = {}) {
-  const fsOps = options.fsOps ?? fs22;
+  const fsOps = options.fsOps ?? fs24;
   const candidate = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project setup start", fsOps);
   for (const directory of parentDirectories2(candidate)) {
     if (setupEvidenceAt(directory, fsOps).state !== "absent") return directory;
-    const dotGit = lstatOrNull3(fsOps, path20.join(directory, ".git"));
+    const dotGit = lstatOrNull3(fsOps, path21.join(directory, ".git"));
     if (dotGit !== null) {
       if (dotGit.isSymbolicLink() || !dotGit.isDirectory() && !dotGit.isFile()) {
-        throw new Error(`Git project marker must be a file or directory: ${path20.join(directory, ".git")}.`);
+        throw new Error(`Git project marker must be a file or directory: ${path21.join(directory, ".git")}.`);
       }
       return directory;
     }
@@ -5480,20 +5539,20 @@ function resolveProjectRootForSetup(start, options = {}) {
   return candidate;
 }
 function resolveInstalledProjectRoot(start, options = {}) {
-  const fsOps = options.fsOps ?? fs22;
+  const fsOps = options.fsOps ?? fs24;
   const startingDirectory = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", fsOps);
   for (const directory of parentDirectories2(startingDirectory)) {
     const installation = installationStateAt(directory, options);
     if (installation.state === "initialized") return directory;
     if (installation.state === "residue") throw new Error(`Dove installation state is incomplete at ${directory}.`);
-    if (lstatOrNull3(fsOps, path20.join(directory, ".git")) !== null || packageProjectBoundary(directory, fsOps)) break;
+    if (lstatOrNull3(fsOps, path21.join(directory, ".git")) !== null || packageProjectBoundary(directory, fsOps)) break;
   }
   throw initRequiredError(startingDirectory);
 }
 function inspectProjectRoot(start, options = {}) {
   let canonicalStart = null;
   try {
-    canonicalStart = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", options.fsOps ?? fs22);
+    canonicalStart = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", options.fsOps ?? fs24);
     const root = resolveInstalledProjectRoot(canonicalStart, options);
     return Object.freeze({ state: "initialized", initialized: true, start: canonicalStart, root, error: null });
   } catch (error) {
@@ -5553,7 +5612,7 @@ function appendHostMigration(plan, root, options) {
   plan.hostMigrationPending = pending ? HOST_MIGRATION_PENDING_PATH : null;
 }
 function initializeProjectIntegration(rootOrProject, options = {}) {
-  const fsOps = options.fsOps ?? fs23;
+  const fsOps = options.fsOps ?? fs25;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
   const now = exactTimestamp(options.now);
@@ -5571,7 +5630,7 @@ function initializeProjectIntegration(rootOrProject, options = {}) {
   );
 }
 function prepareInstalledPlan(start, options = {}) {
-  const fsOps = options.fsOps ?? fs23;
+  const fsOps = options.fsOps ?? fs25;
   const root = resolveInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS2 });
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS2 });
   const hosts = options.hosts === void 0 ? [...manifest.hosts] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
@@ -5609,7 +5668,7 @@ function inspectProjectIntegration(start, options = {}) {
   };
 }
 function canonicalLifecycleRoot(start, fsOps) {
-  const resolved = path21.resolve(start ?? process.cwd());
+  const resolved = path22.resolve(start ?? process.cwd());
   const stat = fsOps.lstatSync(resolved);
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove lifecycle project root must be a real directory: ${resolved}.`);
   return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
@@ -5621,7 +5680,7 @@ function prepareLifecycleIntegration(root, options, { hosts, source }) {
     packageName: options.packageName,
     packageVersion: options.packageVersion,
     now: exactTimestamp(options.now),
-    fsOps: options.fsOps ?? fs23,
+    fsOps: options.fsOps ?? fs25,
     manifest: source,
     replacementPolicy: "confirmed-reinstall"
   });
@@ -5658,7 +5717,7 @@ function previewShape(kind, root, hosts, prepared, confirmationRequired) {
   return preview;
 }
 function previewProjectCompleteReinstall(start, options = {}) {
-  const fsOps = options.fsOps ?? fs23;
+  const fsOps = options.fsOps ?? fs25;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS2 });
@@ -5681,7 +5740,7 @@ function reinstallPreviewScope(preview) {
 function completeReinstallProjectIntegration(start, options = {}) {
   if (options.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true after displaying the real destructive scope.");
   if (!options.preview || options.preview.action !== "reinstall") throw new Error("Complete Reinstall requires the approved reinstall preview.");
-  const fsOps = options.fsOps ?? fs23;
+  const fsOps = options.fsOps ?? fs25;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS2 });
@@ -5706,7 +5765,7 @@ function completeReinstallProjectIntegration(start, options = {}) {
   );
 }
 function prepareUninstall(start, options = {}) {
-  const fsOps = options.fsOps ?? fs23;
+  const fsOps = options.fsOps ?? fs25;
   const root = canonicalLifecycleRoot(start, fsOps);
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS2 });
   assertManagedOwnership(manifest);
@@ -5796,9 +5855,9 @@ function uninstallProjectIntegration(start, options = {}) {
 }
 
 // src/core/dove-lifecycle.mjs
-import fs24 from "node:fs";
+import fs26 from "node:fs";
 function updateDoveLifecycle(start, options = {}) {
-  const fsOps = options.fsOps ?? fs24;
+  const fsOps = options.fsOps ?? fs26;
   const root = resolveProjectRootForSetup(start, { fsOps });
   return updateProjectIntegration(root, options);
 }
@@ -5815,8 +5874,8 @@ function uninstallDoveLifecycle(start, options = {}) {
 }
 
 // src/core/project-doctor.mjs
-import fs25 from "node:fs";
-import path22 from "node:path";
+import fs27 from "node:fs";
+import path23 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/core/project-setup-classification.mjs
@@ -5833,8 +5892,8 @@ function classifyProjectSetup(result) {
 }
 
 // src/core/project-doctor.mjs
-var MODULE_DIRECTORY = path22.dirname(fileURLToPath3(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path22.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path22.basename(MODULE_DIRECTORY)) ? ".." : "../..");
+var MODULE_DIRECTORY = path23.dirname(fileURLToPath3(import.meta.url));
+var DEFAULT_PACKAGE_ROOT = path23.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path23.basename(MODULE_DIRECTORY)) ? ".." : "../..");
 function messageFor(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -5854,18 +5913,18 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 function inspectUserCli(options) {
-  const fsOps = options.fsOps ?? fs25;
-  const packageRoot = path22.resolve(options.packageRoot ?? DEFAULT_PACKAGE_ROOT);
+  const fsOps = options.fsOps ?? fs27;
+  const packageRoot = path23.resolve(options.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
-    const absolutePath = path22.resolve(packageRoot, relativePath);
-    const relative = path22.relative(packageRoot, absolutePath);
-    const contained = relative !== "" && !relative.startsWith("..") && !path22.isAbsolute(relative);
+    const absolutePath = path23.resolve(packageRoot, relativePath);
+    const relative = path23.relative(packageRoot, absolutePath);
+    const contained = relative !== "" && !relative.startsWith("..") && !path23.isAbsolute(relative);
     const healthy2 = contained && regularNonSymlink(fsOps, absolutePath);
     return { path: relativePath, healthy: healthy2, state: healthy2 ? "current" : contained ? "missing-or-invalid" : "outside-package-root" };
   });
-  const executablePath = path22.resolve(options.executablePath ?? path22.join(packageRoot, "bin/dove-package.mjs"));
-  const executableRelative = path22.relative(packageRoot, executablePath);
-  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path22.isAbsolute(executableRelative);
+  const executablePath = path23.resolve(options.executablePath ?? path23.join(packageRoot, "bin/dove-package.mjs"));
+  const executableRelative = path23.relative(packageRoot, executablePath);
+  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path23.isAbsolute(executableRelative);
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
   const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
@@ -5977,7 +6036,7 @@ function inspectProjectDoctor(start, options = {}) {
   try {
     setupRoot = resolveProjectRootForSetup(start, { fsOps: options.fsOps });
   } catch {
-    setupRoot = typeof start === "string" ? path22.resolve(start) : null;
+    setupRoot = typeof start === "string" ? path23.resolve(start) : null;
   }
   const projectIntegration = inspectIntegration(start, options);
   const safeRoot = projectIntegration.root ?? setupRoot;

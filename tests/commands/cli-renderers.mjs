@@ -157,7 +157,7 @@ function assertDoveCliHelpRenderer() {
   assert.match(figureHelp, /相对.*路径.*--project.*当前目录/u);
   assert.match(figureHelp, /CLI.*不能调用.*宿主内置 image_gen/u);
   assert.match(output, /导师 dove-mentor.*论文审稿 dove-review.*宿主原生.*全新只读/u);
-  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "dashboard", "watch", "topic", "figure", "settings", "mentor", "projects", "hook"], "CLI inventory, not help prose, owns public command exposure");
+  assert.deepEqual(Object.keys(CLI_COMMAND_SPECS), ["init", "update", "reinstall", "uninstall", "doctor", "dashboard", "watch", "topic", "figure", "settings", "mentor", "cold-read", "projects", "hook"], "CLI inventory, not help prose, owns public command exposure");
   for (const command of Object.keys(CLI_COMMAND_SPECS)) {
     assert.ok(output.includes(`dove ${command}`), `${command}: help exposes the parser's public commands`);
   }

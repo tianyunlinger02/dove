@@ -15,6 +15,7 @@ import { configureWatchFromMentor } from "../src/core/watch-configure.mjs";
 import { startTopicSelection } from "../src/core/topic-selection.mjs";
 import { figureTools, generateFigure } from "../src/core/figure-generation.mjs";
 import { composeFigureProof, composePageOverview } from "../src/core/figure-proof.mjs";
+import { prepareColdRead } from "../src/core/cold-read.mjs";
 import { HOST_MIGRATION_PENDING_PATH, hostMigrationContext, readHostSettings, stopPromptsEnabled, writeHostSettings } from "../src/core/host-migration.mjs";
 import { parseStopPayload, stopHookOutput } from "../src/core/stop-hook.mjs";
 import { refreshCrossProjectExperience } from "../src/core/cross-project.mjs";
@@ -388,6 +389,13 @@ try {
       `宿主迁移：${result.hostMigration ? "打开" : "关闭"}（默认关闭；打开后，更新登记待办，由项目宿主闲下时处理）`,
       `超时和停滞追问：${result.stopPrompts !== false ? "打开" : "关闭"}（默认打开；宿主收尾时，Dove 按记录算出超时或停滞，各引用一次用户原话追问）`
     ].join("\n"));
+    process.exit(0);
+  }
+
+  if (command === "cold-read") {
+    const result = prepareColdRead(path.resolve(options.project ?? process.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    if (wantsJson(options)) writeJson(result);
+    else process.stdout.write(result.body);
     process.exit(0);
   }
 

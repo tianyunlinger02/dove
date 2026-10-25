@@ -22,6 +22,7 @@ export function renderDoveHelp() {
   dove figure --proof --figure <file>@<length> [--figure <file>@<length> ...] --output <file.png> [--dpi <n>] [--project <root>] [--json|--format json]
   dove figure --pages <manuscript.pdf> [--body-pages <n>] --output <file.png> [--dpi <n>] [--project <root>] [--json|--format json]
   dove settings [--host-migration on|off] [--stop-prompts on|off] [--json|--format json]
+  dove cold-read --pdf <manuscript.pdf> [--pdf <supplement.pdf>] [--venue <text>] [--project <dir>] [--json|--format json]
   dove mentor brief [--project <dir>] [--trigger <text>] [--user-source <path>] [--since <range>] [--until <range>] [--user-original <text>] [--opinion <path>] [--artifact <path>...] [--watch] [--json|--format json]
   dove hook session-start --project <dir>
   dove hook user-prompt-submit --project <dir>
@@ -39,6 +40,8 @@ dove figure --compare 把同一张图的改前和改后按投稿里的实际宽�
 dove dashboard 在本机起一个网页，只读查看已登记项目的主线、主指标、八维走势、每轮的对准维度、判定和规模、超时和停滞、等你定的事、每轮的投入与预测对账和偏差统计，以及跨项目经验和各项目反复出现的纠正（默认 127.0.0.1:7788，远程用 SSH 端口转发打开；挂到公网隧道时用 --password-file 开启密码登录，所有页面和数据接口都要先登录）。面板的「设置」页可管理项目登记、论文追踪（关键词、作者、arXiv 分类、每天运行时间、代理、可选的 Semantic Scholar key）和面板密码；论文追踪在面板运行期间每天自动执行，也可用 dove watch run 手动执行，结果写入各项目 .dove/research/watch/。导师每周判断一次追踪结果（或用户要求时，dove mentor brief --watch），返回中文一句话与方向；有用论文累积为可导 BibTeX 的项目文献库。无新论文时补旧文默认关闭。
 
 dove watch configure 显式保存导师追踪建议，只修改 --project 解析到的单个已接入项目。--mentor 接收 JSON 文件路径（相对路径按当前工作目录解析），不是内联 JSON 或导师文本；对象只允许 keywords、authors、venues、institutions、seedPapers 的字符串数组，至少提供一项。出现字段替换，缺席保留，[] 清空；enabled、categories 保持不变，source: mentor 只表示导师建议已落盘，不代表用户确认。此命令不调用导师、模型或网络，不执行追踪；watch run 行为不变。
+
+dove cold-read 为冷读做准备，本身不调用任何模型：把编译好的稿件 PDF 转成逐页文字和页面图片，放在项目外的临时目录，并输出调用正文；宿主把正文原样交给一个全新的 dove-review，读者只看这份稿件，不读源码、结果或项目背景，返回读完第一页的理解、行话清单、读不懂的地方、防御性措辞、图表和版面问题。需要 pdftotext 和 pdftoppm。
 
 dove mentor brief 生成导师调用材料：用户原话摘录、明确提供的原始结果、Dove 算出的事实，以及宿主记录的目录。hostMigration 默认关闭，开启后升级只登记一次待办，宿主在工作告一段落时处理，不停任务、不改结论或原话。磁盘更新不等于活会话重载。
 `;
