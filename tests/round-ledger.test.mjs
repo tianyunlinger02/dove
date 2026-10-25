@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { calibrationSummary, renderCalibrationSummary, renderLedgerRow, roundLedger } from "../src/core/round-ledger.mjs";
+import { calibrationSummary, checkText, renderCalibrationSummary, renderLedgerRow, roundLedger } from "../src/core/round-ledger.mjs";
 import { calibrateRound, parseActual, parsePrediction, predictionFlags } from "../src/core/round-state.mjs";
 import { ACTIVITY_BUCKET_MS, ACTIVITY_INDEX_PATH, USER_ORIGINALS_PATH } from "../src/core/user-originals.mjs";
 
@@ -93,4 +93,12 @@ test("the direction comes from the record: conservative, optimistic or vague", (
   const vague = calibrationSummary([row("候选数 0/2 → 至少 1/2", "候选数 1/2"), row("D 若能解决瓶颈预计超过 58/136，否则不超过", "D 60/136"), row("F1 10 → 11–13", "F1 12")]);
   assert.deepEqual([vague.scored, vague.oneSided, vague.conditional, vague.findings[0].kind], [1, 1, 1, "vague"]);
   assert.match(renderCalibrationSummary(vague), /另有条件式 1、只给一边 1/u);
+});
+
+test("a result that did not move reads as no change, not as the wrong way", () => {
+  const calibration = calibrateRound(parsePrediction("候选数 0/2 → 0–1/2"), parseActual("候选数 0/2"));
+  assert.equal(checkText(calibration), "落在区间内，实际没有变化");
+  const summary = calibrationSummary([{ open: false, prediction: "候选数 0/2 → 0–1/2", flags: predictionFlags(parsePrediction("候选数 0/2 → 0–1/2")), caveats: 0, calibration }]);
+  assert.match(renderCalibrationSummary(summary), /1 轮实际没有变化/u);
+  assert.doesNotMatch(renderCalibrationSummary(summary), /无穷/u);
 });

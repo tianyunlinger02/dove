@@ -193,6 +193,18 @@ function splitClauses(text) {
   return clauses.map((clause) => clause.trim()).filter(Boolean);
 }
 
+// Bracketed notes ("（固定445、官方协议）") describe the quantity; its value is
+// read outside them when there is one. Same-length blanks keep positions.
+const BRACKETED = /（[^（）]*）|\([^()]*\)|【[^【】]*】|\[[^\[\]]*\]/gu;
+
+function outsideBrackets(text) {
+  return String(text ?? "").replace(BRACKETED, (match) => " ".repeat(match.length));
+}
+
+function firstQuantity(text) {
+  return quantities(outsideBrackets(text))[0] ?? quantities(text)[0] ?? null;
+}
+
 function quantities(text) {
   return [...String(text ?? "").matchAll(QUANTITY)].map((match) => {
     const value = Number(match[1]);
@@ -217,7 +229,8 @@ function parseSegment(raw, index) {
   const left = arrow ? parts[0] : "";
   const right = arrow ? parts.slice(1).join(" ") : text;
   const unmeasured = arrow && UNMEASURED.test(left);
-  const leftNumbers = arrow ? [...left.matchAll(QUANTITY)] : [];
+  const outside = [...outsideBrackets(left).matchAll(QUANTITY)];
+  const leftNumbers = arrow ? (outside.length ? outside : [...left.matchAll(QUANTITY)]) : [];
   const baselineMatch = unmeasured ? null : leftNumbers.at(-1) ?? null;
   const baseline = baselineMatch ? quantities(baselineMatch[0])[0] ?? null : null;
   // What is measured: the words before the value now, used to find the same value in the result.
@@ -225,17 +238,20 @@ function parseSegment(raw, index) {
   let low = null;
   let high = null;
   let point = null;
-  const range = right.match(RANGE);
+  // The predicted value or range is read outside bracketed notes when it is there.
+  const plain = outsideBrackets(right);
+  const target = RANGE.test(plain) || AT_LEAST.test(plain) || AT_MOST.test(plain) || quantities(plain).length ? plain : right;
+  const range = target.match(RANGE);
   const ends = range ? rangeValues(range[1], range[2]) : [];
   if (ends.length === 2) {
     [low, high] = ends;
   } else {
-    const atLeast = right.match(AT_LEAST);
-    const atMost = right.match(AT_MOST);
+    const atLeast = target.match(AT_LEAST);
+    const atMost = target.match(AT_MOST);
     const bound = (match) => (match ? quantities(match[1] ?? match[2])[0] ?? null : null);
     low = bound(atLeast);
     high = bound(atMost);
-    if (low === null && high === null) point = quantities(right)[0] ?? null;
+    if (low === null && high === null) point = quantities(target)[0] ?? null;
     else {
       low ??= -Infinity;
       high ??= Infinity;
@@ -281,7 +297,7 @@ export function parsePrediction(text) {
 export function parseActual(text) {
   if (!text) return null;
   const segments = splitClauses(text);
-  const values = segments.map((segment) => quantities(segment.replace(CONFIDENCE, " "))[0] ?? null);
+  const values = segments.map((segment) => firstQuantity(segment.replace(CONFIDENCE, " ")));
   return { text, segments, values, value: values.find((value) => value !== null) ?? null };
 }
 
@@ -292,7 +308,7 @@ function actualValue(prediction, actual) {
   const source = aligned ?? actual.segments?.[0] ?? actual.text ?? "";
   const label = prediction.label;
   const rest = label && source.includes(label) ? source.slice(source.indexOf(label) + label.length) : null;
-  return (rest !== null ? quantities(rest.replace(CONFIDENCE, " "))[0] : undefined) ?? quantities(String(source).replace(CONFIDENCE, " "))[0] ?? actual.value ?? null;
+  return (rest !== null ? firstQuantity(rest.replace(CONFIDENCE, " ")) : null) ?? firstQuantity(String(source).replace(CONFIDENCE, " ")) ?? actual.value ?? null;
 }
 
 /** How a prediction is written, independent of its result. */
@@ -331,15 +347,16 @@ export function calibrateRound(prediction, actual) {
   const center = prediction.point ?? (twoSided ? (low + high) / 2 : ranged ? (Number.isFinite(low) ? low : high) : null);
   let ratio = null;
   let wrongWay = false;
-  if (baseline !== null && center !== null) {
+  const unchanged = baseline !== null && Math.abs(value - baseline) < 1e-9;
+  if (baseline !== null && center !== null && !unchanged) {
     const predicted = center - baseline;
     const real = value - baseline;
-    if (predicted !== 0 && (real === 0 || Math.sign(real) !== Math.sign(predicted))) wrongWay = true;
-    else if (real !== 0 && predicted !== 0) ratio = predicted / real;
+    if (predicted !== 0 && Math.sign(real) !== Math.sign(predicted)) wrongWay = true;
+    else if (predicted !== 0) ratio = predicted / real;
   }
   const hit = ranged ? value >= low - 1e-9 && value <= high + 1e-9 : null;
   let missSide = null;
-  if (hit === false && baseline !== null && center !== null && center !== baseline) {
+  if (hit === false && baseline !== null && center !== null && center !== baseline && !unchanged) {
     missSide = (center > baseline ? value > high : value < low) ? "beyond" : "short";
   }
   const width = twoSided ? high - low : null;
@@ -350,7 +367,8 @@ export function calibrateRound(prediction, actual) {
     width,
     miss: hit === false && twoSided ? Math.max(low - value, value - high) : null,
     score: twoSided ? width + MISS_WEIGHT * (Math.max(0, low - value) + Math.max(0, value - high)) : null,
-    widthRatio: twoSided && baseline !== null ? (value === baseline ? Infinity : width / Math.abs(value - baseline)) : null,
+    widthRatio: twoSided && baseline !== null && !unchanged ? width / Math.abs(value - baseline) : null,
+    unchanged,
     includesBaseline: twoSided && baseline !== null ? baseline >= low && baseline <= high : null,
     missSide,
     ratio,

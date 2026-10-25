@@ -14161,7 +14161,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.5.4" : null;
+var injectedVersion = true ? "3.5.5" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -18179,6 +18179,13 @@ function splitClauses(text) {
   clauses.push(current);
   return clauses.map((clause) => clause.trim()).filter(Boolean);
 }
+var BRACKETED = /（[^（）]*）|\([^()]*\)|【[^【】]*】|\[[^\[\]]*\]/gu;
+function outsideBrackets(text) {
+  return String(text ?? "").replace(BRACKETED, (match) => " ".repeat(match.length));
+}
+function firstQuantity(text) {
+  return quantities(outsideBrackets(text))[0] ?? quantities(text)[0] ?? null;
+}
 function quantities(text) {
   return [...String(text ?? "").matchAll(QUANTITY)].map((match) => {
     const value2 = Number(match[1]);
@@ -18198,24 +18205,27 @@ function parseSegment(raw, index) {
   const left = arrow ? parts[0] : "";
   const right = arrow ? parts.slice(1).join(" ") : text;
   const unmeasured = arrow && UNMEASURED.test(left);
-  const leftNumbers = arrow ? [...left.matchAll(QUANTITY)] : [];
+  const outside = [...outsideBrackets(left).matchAll(QUANTITY)];
+  const leftNumbers = arrow ? outside.length ? outside : [...left.matchAll(QUANTITY)] : [];
   const baselineMatch = unmeasured ? null : leftNumbers.at(-1) ?? null;
   const baseline = baselineMatch ? quantities(baselineMatch[0])[0] ?? null : null;
   const label = arrow ? left.slice(0, baselineMatch ? baselineMatch.index : left.search(UNMEASURED)).trim() || null : null;
   let low = null;
   let high = null;
   let point = null;
-  const range = right.match(RANGE);
+  const plain = outsideBrackets(right);
+  const target = RANGE.test(plain) || AT_LEAST.test(plain) || AT_MOST.test(plain) || quantities(plain).length ? plain : right;
+  const range = target.match(RANGE);
   const ends = range ? rangeValues(range[1], range[2]) : [];
   if (ends.length === 2) {
     [low, high] = ends;
   } else {
-    const atLeast = right.match(AT_LEAST);
-    const atMost = right.match(AT_MOST);
+    const atLeast = target.match(AT_LEAST);
+    const atMost = target.match(AT_MOST);
     const bound = (match) => match ? quantities(match[1] ?? match[2])[0] ?? null : null;
     low = bound(atLeast);
     high = bound(atMost);
-    if (low === null && high === null) point = quantities(right)[0] ?? null;
+    if (low === null && high === null) point = quantities(target)[0] ?? null;
     else {
       low ??= -Infinity;
       high ??= Infinity;
@@ -18248,7 +18258,7 @@ function parsePrediction(text) {
 function parseActual(text) {
   if (!text) return null;
   const segments = splitClauses(text);
-  const values = segments.map((segment) => quantities(segment.replace(CONFIDENCE, " "))[0] ?? null);
+  const values = segments.map((segment) => firstQuantity(segment.replace(CONFIDENCE, " ")));
   return { text, segments, values, value: values.find((value2) => value2 !== null) ?? null };
 }
 function actualValue(prediction, actual) {
@@ -18256,7 +18266,7 @@ function actualValue(prediction, actual) {
   const source = aligned ?? actual.segments?.[0] ?? actual.text ?? "";
   const label = prediction.label;
   const rest = label && source.includes(label) ? source.slice(source.indexOf(label) + label.length) : null;
-  return (rest !== null ? quantities(rest.replace(CONFIDENCE, " "))[0] : void 0) ?? quantities(String(source).replace(CONFIDENCE, " "))[0] ?? actual.value ?? null;
+  return (rest !== null ? firstQuantity(rest.replace(CONFIDENCE, " ")) : null) ?? firstQuantity(String(source).replace(CONFIDENCE, " ")) ?? actual.value ?? null;
 }
 function predictionFlags(prediction) {
   if (!prediction) return [];
@@ -18281,15 +18291,16 @@ function calibrateRound(prediction, actual) {
   const center = prediction.point ?? (twoSided ? (low + high) / 2 : ranged ? Number.isFinite(low) ? low : high : null);
   let ratio = null;
   let wrongWay = false;
-  if (baseline !== null && center !== null) {
+  const unchanged = baseline !== null && Math.abs(value2 - baseline) < 1e-9;
+  if (baseline !== null && center !== null && !unchanged) {
     const predicted = center - baseline;
     const real = value2 - baseline;
-    if (predicted !== 0 && (real === 0 || Math.sign(real) !== Math.sign(predicted))) wrongWay = true;
-    else if (real !== 0 && predicted !== 0) ratio = predicted / real;
+    if (predicted !== 0 && Math.sign(real) !== Math.sign(predicted)) wrongWay = true;
+    else if (predicted !== 0) ratio = predicted / real;
   }
   const hit = ranged ? value2 >= low - 1e-9 && value2 <= high + 1e-9 : null;
   let missSide = null;
-  if (hit === false && baseline !== null && center !== null && center !== baseline) {
+  if (hit === false && baseline !== null && center !== null && center !== baseline && !unchanged) {
     missSide = (center > baseline ? value2 > high : value2 < low) ? "beyond" : "short";
   }
   const width = twoSided ? high - low : null;
@@ -18300,7 +18311,8 @@ function calibrateRound(prediction, actual) {
     width,
     miss: hit === false && twoSided ? Math.max(low - value2, value2 - high) : null,
     score: twoSided ? width + MISS_WEIGHT * (Math.max(0, low - value2) + Math.max(0, value2 - high)) : null,
-    widthRatio: twoSided && baseline !== null ? value2 === baseline ? Infinity : width / Math.abs(value2 - baseline) : null,
+    widthRatio: twoSided && baseline !== null && !unchanged ? width / Math.abs(value2 - baseline) : null,
+    unchanged,
     includesBaseline: twoSided && baseline !== null ? baseline >= low && baseline <= high : null,
     missSide,
     ratio,
@@ -18744,7 +18756,7 @@ function calibrationSummary(finished) {
   if (scored.length >= SCORED_ROUNDS_FOR_DIRECTION) {
     const rate = hits / scored.length;
     if (rate >= 0.9 && ((medianWidth ?? 0) >= 2 || holdsNow * 2 >= scored.length)) {
-      findings.push({ kind: "conservative", text: `\u504F\u4FDD\u5B88\uFF1A\u547D\u4E2D ${hits}/${scored.length}\uFF0C\u533A\u95F4\u5BBD\u5EA6\u4E2D\u4F4D\u662F\u5B9E\u9645\u53D8\u5316\u7684 ${medianWidth === null ? "\u2014" : medianWidth === Infinity ? "\u65E0\u7A77" : round1(medianWidth)} \u500D\uFF0C${holdsNow} \u8F6E\u533A\u95F4\u5305\u4F4F\u4E86\u73B0\u5728\u7684\u503C` });
+      findings.push({ kind: "conservative", text: `\u504F\u4FDD\u5B88\uFF1A\u547D\u4E2D ${hits}/${scored.length}\uFF0C${medianWidth === null ? "" : `\u533A\u95F4\u5BBD\u5EA6\u4E2D\u4F4D\u662F\u5B9E\u9645\u53D8\u5316\u7684 ${round1(medianWidth)} \u500D\uFF0C`}${holdsNow} \u8F6E\u533A\u95F4\u5305\u4F4F\u4E86\u73B0\u5728\u7684\u503C` });
     } else if (medianRatio !== null && medianRatio <= 0.5) {
       findings.push({ kind: "conservative", text: `\u504F\u4FDD\u5B88\uFF1A\u9884\u6D4B\u7684\u53D8\u5316\u4E2D\u4F4D\u53EA\u6709\u5B9E\u9645\u7684 ${round1(medianRatio)} \u500D` });
     }
@@ -18763,6 +18775,7 @@ function calibrationSummary(finished) {
     conditional: count("conditional"),
     noRange: count("noRange"),
     holdsNow,
+    unchanged: finished.filter((row) => row.calibration?.unchanged).length,
     short,
     beyond,
     medianWidth,
@@ -18778,7 +18791,8 @@ function renderCalibrationSummary(summary) {
   const others = [["\u6761\u4EF6\u5F0F", summary.conditional], ["\u53EA\u7ED9\u4E00\u8FB9", summary.oneSided], ["\u6CA1\u6709\u533A\u95F4", summary.noRange]].filter(([, value2]) => value2).map(([name, value2]) => `${name} ${value2}`);
   if (others.length) parts[0] += `\uFF08\u53E6\u6709${others.join("\u3001")}\uFF09`;
   if (summary.scored) parts.push(`\u80FD\u6253\u5206\u7684\u547D\u4E2D ${summary.hits}/${summary.scored}\uFF0C\u516B\u6210\u533A\u95F4\u5E94\u7EA6\u516B\u6210`);
-  if (summary.medianWidth !== null) parts.push(`\u533A\u95F4\u5BBD\u5EA6\u4E2D\u4F4D\u662F\u5B9E\u9645\u53D8\u5316\u7684 ${summary.medianWidth === Infinity ? "\u65E0\u7A77" : round1(summary.medianWidth)} \u500D`);
+  if (summary.medianWidth !== null) parts.push(`\u533A\u95F4\u5BBD\u5EA6\u4E2D\u4F4D\u662F\u5B9E\u9645\u53D8\u5316\u7684 ${round1(summary.medianWidth)} \u500D`);
+  if (summary.unchanged) parts.push(`${summary.unchanged} \u8F6E\u5B9E\u9645\u6CA1\u6709\u53D8\u5316`);
   if (summary.medianRatio !== null) parts.push(`\u9884\u6D4B\u7684\u53D8\u5316\u4E2D\u4F4D\u662F\u5B9E\u9645\u7684 ${round1(summary.medianRatio)} \u500D`);
   if (summary.caveats) parts.push(`\u9884\u6D4B\u884C\u91CC\u5171 ${summary.caveats} \u5904\u524D\u63D0`);
   const verdict = summary.findings.length ? summary.findings.map((item) => item.text).join("\uFF1B") : `\u80FD\u6253\u5206\u7684\u8F6E\u6B21\u8FD8\u4E0D\u591F ${SCORED_ROUNDS_FOR_DIRECTION} \u8F6E\uFF0C\u5148\u4E0D\u4E0B\u7ED3\u8BBA`;
@@ -18789,9 +18803,10 @@ function checkText(calibration) {
   if (calibration.hit === true) words.push("\u843D\u5728\u533A\u95F4\u5185");
   else if (calibration.hit === false) words.push(calibration.miss !== null ? `\u843D\u5728\u533A\u95F4\u5916\uFF0C\u5DEE ${round1(calibration.miss)}` : "\u843D\u5728\u533A\u95F4\u5916");
   else words.push("\u6CA1\u6709\u533A\u95F4\uFF0C\u53EA\u6BD4\u53D8\u5316");
-  if (calibration.wrongWay) words.push("\u65B9\u5411\u548C\u9884\u6D4B\u76F8\u53CD");
+  if (calibration.unchanged) words.push("\u5B9E\u9645\u6CA1\u6709\u53D8\u5316");
+  else if (calibration.wrongWay) words.push("\u65B9\u5411\u548C\u9884\u6D4B\u76F8\u53CD");
   else if (calibration.ratio !== null) words.push(`\u9884\u6D4B\u7684\u53D8\u5316\u662F\u5B9E\u9645\u7684 ${round1(calibration.ratio)} \u500D`);
-  if (calibration.widthRatio !== null && calibration.widthRatio !== void 0) words.push(`\u533A\u95F4\u5BBD\u5EA6\u662F\u5B9E\u9645\u53D8\u5316\u7684 ${calibration.widthRatio === Infinity ? "\u65E0\u7A77" : round1(calibration.widthRatio)} \u500D`);
+  if (calibration.widthRatio !== null && calibration.widthRatio !== void 0) words.push(`\u533A\u95F4\u5BBD\u5EA6\u662F\u5B9E\u9645\u53D8\u5316\u7684 ${round1(calibration.widthRatio)} \u500D`);
   return words.join("\uFF0C");
 }
 function spanText(row) {

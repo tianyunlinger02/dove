@@ -168,6 +168,19 @@ test("predictions written as words instead of a range are read and flagged", () 
   assert.equal(calibrateRound(labelled, parseActual("同一上衣 705 个原缝的最大间隙 6.1 毫米")).value, 6.1, "the value is read after the quantity's own name");
 });
 
+test("values are read outside bracketed notes, and a result that did not move is no change", () => {
+  const prediction = parsePrediction("事件F1（固定445、官方协议）原始模型 11.54% → 微调预计 12%–16%；旧微调另计");
+  assert.deepEqual([prediction.baseline, prediction.low, prediction.high], [11.54, 12, 16]);
+  const result = calibrateRound(prediction, parseActual("事件F1（固定445、官方协议）2.8169%；变化比例 26.0674%（116/445）"));
+  assert.deepEqual([result.value, result.hit, result.wrongWay], [2.8169, false, true], "445 inside the brackets is the protocol, not the value");
+  const flat = parsePrediction("候选数 0/2 → 0–1/2（很低置信度，至少1/2才算兑现）");
+  assert.deepEqual([flat.low, flat.high], [0, 50], "the range outside the brackets wins over the bound inside them");
+  const still = calibrateRound(flat, parseActual("候选数 0/2"));
+  assert.deepEqual([still.hit, still.unchanged, still.wrongWay, still.widthRatio, still.includesBaseline], [true, true, false, null, true]);
+  const missed = calibrateRound(parsePrediction("候选数 0/2 → 至少 1/2"), parseActual("候选数 0/2"));
+  assert.deepEqual([missed.hit, missed.unchanged, missed.wrongWay, missed.missSide], [false, true, false, null]);
+});
+
 test("numbers a result reports are checked against the artifacts it links", () => {
   const { root, fsOps } = memory({
     ".dove/research/rounds/005-result.md": "判定：未兑现\n实测：F1 13.2\n\n## 测到了什么\n\nF1 13.20，召回 41.5%，结构 76/100；另有 9.99 不在产物里。见[结果](../../../outputs/metrics.json)。\n\n## 预期与实际\n\n12.7 不在这一节里。\n",

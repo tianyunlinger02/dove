@@ -167,7 +167,7 @@ export function calibrationSummary(finished) {
   if (scored.length >= SCORED_ROUNDS_FOR_DIRECTION) {
     const rate = hits / scored.length;
     if (rate >= 0.9 && ((medianWidth ?? 0) >= 2 || holdsNow * 2 >= scored.length)) {
-      findings.push({ kind: "conservative", text: `偏保守：命中 ${hits}/${scored.length}，区间宽度中位是实际变化的 ${medianWidth === null ? "—" : medianWidth === Infinity ? "无穷" : round1(medianWidth)} 倍，${holdsNow} 轮区间包住了现在的值` });
+      findings.push({ kind: "conservative", text: `偏保守：命中 ${hits}/${scored.length}，${medianWidth === null ? "" : `区间宽度中位是实际变化的 ${round1(medianWidth)} 倍，`}${holdsNow} 轮区间包住了现在的值` });
     } else if (medianRatio !== null && medianRatio <= 0.5) {
       findings.push({ kind: "conservative", text: `偏保守：预测的变化中位只有实际的 ${round1(medianRatio)} 倍` });
     }
@@ -186,6 +186,7 @@ export function calibrationSummary(finished) {
     conditional: count("conditional"),
     noRange: count("noRange"),
     holdsNow,
+    unchanged: finished.filter((row) => row.calibration?.unchanged).length,
     short,
     beyond,
     medianWidth,
@@ -202,7 +203,8 @@ export function renderCalibrationSummary(summary) {
   const others = [["条件式", summary.conditional], ["只给一边", summary.oneSided], ["没有区间", summary.noRange]].filter(([, value]) => value).map(([name, value]) => `${name} ${value}`);
   if (others.length) parts[0] += `（另有${others.join("、")}）`;
   if (summary.scored) parts.push(`能打分的命中 ${summary.hits}/${summary.scored}，八成区间应约八成`);
-  if (summary.medianWidth !== null) parts.push(`区间宽度中位是实际变化的 ${summary.medianWidth === Infinity ? "无穷" : round1(summary.medianWidth)} 倍`);
+  if (summary.medianWidth !== null) parts.push(`区间宽度中位是实际变化的 ${round1(summary.medianWidth)} 倍`);
+  if (summary.unchanged) parts.push(`${summary.unchanged} 轮实际没有变化`);
   if (summary.medianRatio !== null) parts.push(`预测的变化中位是实际的 ${round1(summary.medianRatio)} 倍`);
   if (summary.caveats) parts.push(`预测行里共 ${summary.caveats} 处前提`);
   const verdict = summary.findings.length ? summary.findings.map((item) => item.text).join("；") : `能打分的轮次还不够 ${SCORED_ROUNDS_FOR_DIRECTION} 轮，先不下结论`;
@@ -215,9 +217,10 @@ export function checkText(calibration) {
   if (calibration.hit === true) words.push("落在区间内");
   else if (calibration.hit === false) words.push(calibration.miss !== null ? `落在区间外，差 ${round1(calibration.miss)}` : "落在区间外");
   else words.push("没有区间，只比变化");
-  if (calibration.wrongWay) words.push("方向和预测相反");
+  if (calibration.unchanged) words.push("实际没有变化");
+  else if (calibration.wrongWay) words.push("方向和预测相反");
   else if (calibration.ratio !== null) words.push(`预测的变化是实际的 ${round1(calibration.ratio)} 倍`);
-  if (calibration.widthRatio !== null && calibration.widthRatio !== undefined) words.push(`区间宽度是实际变化的 ${calibration.widthRatio === Infinity ? "无穷" : round1(calibration.widthRatio)} 倍`);
+  if (calibration.widthRatio !== null && calibration.widthRatio !== undefined) words.push(`区间宽度是实际变化的 ${round1(calibration.widthRatio)} 倍`);
   return words.join("，");
 }
 
