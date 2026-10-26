@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { COLD_READ_KEY } from "./cold-read.mjs";
 import { userSaying } from "./dove-author-preferences.mjs";
 import { readHookState, updateHookState } from "./hook-state.mjs";
-import { correctionReminder, correctionTopics, practiceOnTopic, readPractice, reflectionReminder, reflectionRequested, REFLECTIONS_DIR } from "./practice.mjs";
+import { practiceOnTopic, readPractice, reflectionReminder, reflectionRequested, REFLECTIONS_DIR } from "./practice.mjs";
 import { inspectRoundState } from "./round-state.mjs";
 
 // When the host ends a turn, Dove checks the two conditions it computes from
@@ -102,13 +102,13 @@ export function overrunPrompt(state) {
   const round = state.currentRound;
   return `${quoted("fastest")}
 
-第 ${round.number} 轮（${round.brief.file}）原定 ${state.overrun.due} 见分晓，预计 ${state.overrun.plannedDays} 天，现在已过 ${state.overrun.daysPastDue} 天，还没有结果。请先直接回答：卡在哪里？有没有更快、更直接的路？然后按操作说明“超时或停滞”这一时刻整理，停下来用一页决定备忘问用户：继续当前方法（附理由）、换方法，还是换方向。这段话是 Dove 根据记录自动提出的，不是用户刚说的。`;
+第 ${round.number} 轮（${round.brief.file}）原定 ${state.overrun.due} 见分晓，预计 ${state.overrun.plannedDays} 天，现在已过 ${state.overrun.daysPastDue} 天，还没有结果。请主会话先核对最新真实对话和本事项有来源的用户答复：已有适用的决定就按其事项和范围照做，不重复问；旧同意不能扩成新授权。确实还没有决定时，再直接回答：卡在哪里？有没有更快、更直接的路？然后按操作说明“超时或停滞”这一时刻整理，停下来用一页决定备忘问用户：继续当前方法（附理由）、换方法，还是换方向。这段话是 Dove 根据记录自动提出的，不是用户刚说的。`;
 }
 
 export function stallPrompt(state) {
   return `${quoted("triage")}
 
-第 ${state.stall.rounds.join("、")} 轮的判定都是未兑现，其间没有方法取舍。请按这句话整理一遍，然后停下来用一页决定备忘问用户：继续当前方法（附理由）、换方法（至少给一个不是从当前方法改出来的方法族，可以来自其他领域解同构问题的做法），还是换方向。等用户答复时，只做不依赖这个决定的事。这段话是 Dove 根据记录自动提出的，不是用户刚说的。`;
+第 ${state.stall.rounds.join("、")} 轮的判定都是未兑现，其间没有方法取舍。请主会话先核对最新真实对话和本事项有来源的用户答复：已有适用的决定就按其事项和范围照做，不重复问；旧同意不能扩成新授权。确实还没有决定时，再按这句话整理一遍，然后停下来用一页决定备忘问用户：继续当前方法（附理由）、换方法（至少给一个不是从当前方法改出来的方法族，可以来自其他领域解同构问题的做法），还是换方向。如果确实还没有决定，等用户答复时只做不依赖这个决定的事。这段话是 Dove 根据记录自动提出的，不是用户刚说的。`;
 }
 
 /**
@@ -123,14 +123,10 @@ export function stopHookOutput(payload, project, options = {}) {
   if (state.overrun) candidates.push({ key: `overrun:${state.currentRound.brief.file}:${state.overrun.due}`, reason: overrunPrompt(state) });
   if (state.stall) candidates.push({ key: `stall:${state.stall.results.at(-1)}`, reason: stallPrompt(state) });
   const turn = inspectTurn(payload?.transcript_path, options.fsOps);
-  // A correction not yet written down comes first: it is about this very turn.
-  const corrected = turn.userText ? correctionTopics(turn.userText) : [];
   const reflect = turn.userText ? reflectionRequested(turn.userText) : false;
   if (reflect && (!turn.wroteReflection || !turn.wrotePractice)) {
     const missing = [...(turn.wroteReflection ? [] : [`存到 ${REFLECTIONS_DIR}`]), ...(turn.wrotePractice ? [] : ["把以后怎么做记进做法更正"])];
     candidates.unshift({ key: `reflect:${turn.userKey}`, reason: reflectionReminder(missing) });
-  } else if (corrected.length && !turn.wrotePractice) {
-    candidates.unshift({ key: `practice:${turn.userKey}`, reason: correctionReminder(corrected) });
   }
   if (turn.rebuilt) candidates.push({ key: `coldread:remind:${asked[COLD_READ_KEY] ?? "never"}`, reason: coldReadPrompt(practiceOnTopic(readPractice(project, options), "writing")) });
   const next = candidates.find((candidate) => !asked[candidate.key]);

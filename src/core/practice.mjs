@@ -14,20 +14,13 @@ import { CORRECTION_TOPICS } from "./cross-project.mjs";
 export const PRACTICE_PATH = ".dove/research/PRACTICE.md";
 const MAX_BYTES = 512 * 1024;
 
-// The correction topics plus writing and "other"; patterns find the topic a
-// user's message touches (a correction or simply a request on that subject).
+// Topics for retrieving recorded lessons, plus writing and "other". Keywords
+// only find related entries; they do not judge the user's intent.
 export const PRACTICE_TOPICS = Object.freeze([
   ...CORRECTION_TOPICS.map((topic) => ({ id: topic.id, short: topic.short, pattern: topic.pattern })),
   { id: "writing", short: "写稿和图", pattern: /论文|摘要|引言|图注|画图|配图|作图|版面|排版|行话|写作|稿子|稿件|措辞|投稿/u },
   { id: "other", short: "其他", pattern: null }
 ]);
-
-// A correction says something was wrong or should have been done otherwise.
-const CRITIQUE = /不|别|没|又|还是|为什么|怎么|错|应该/u;
-
-export function practiceTopicNames() {
-  return PRACTICE_TOPICS.map((topic) => topic.short);
-}
 
 /** The topic an entry names, matched by its short name (or a topic's full label). */
 export function topicOfEntry(entry) {
@@ -43,13 +36,6 @@ export function topicOfEntry(entry) {
 export function topicsOfMessage(text) {
   const value = String(text ?? "");
   return PRACTICE_TOPICS.filter((topic) => topic.pattern?.test(value));
-}
-
-/** Whether a user's message reads as a correction of how the work was done. */
-export function correctionTopics(text) {
-  const value = String(text ?? "");
-  if (!CRITIQUE.test(value)) return [];
-  return topicsOfMessage(value);
 }
 
 function field(fields, name) {
@@ -137,9 +123,4 @@ export function reflectionGuidance() {
 
 export function reflectionReminder(missing) {
   return `用户这一轮要你反思，但还没有${missing.join("，也没有")}。${reflectionGuidance()}这段话是 Dove 根据用户消息自动提出的，不是用户刚说的。`;
-}
-
-export function correctionReminder(topics) {
-  const names = topics.map((topic) => topic.short).join("、");
-  return `用户这条消息像是对做法的纠正（${names}）。按操作说明“用户纠正之后”这一时刻，在 ${PRACTICE_PATH} 记一行：- YYYY-MM-DD · 主题 · 原话：“……” · 错在哪：…… · 以后：……。主题从 ${practiceTopicNames().join("、")} 里选；只记这次实际错在哪、以后具体怎么做，不扩成普遍禁令。如果这条其实不是纠正，就不用记。这段话是 Dove 根据用户消息自动提出的，不是用户刚说的。`;
 }

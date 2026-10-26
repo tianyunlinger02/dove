@@ -141,7 +141,6 @@ function assertDoveCliHelpRenderer() {
   assert.doesNotMatch(output, /dove run /u);
   assert.match(output, /dove hook stop --project <dir>/u);
   assert.match(output, /dove settings \[--host-migration on\|off\] \[--stop-prompts on\|off\]/u);
-  assert.match(output, /超时.*停滞.*各引用一次用户原话追问/u);
   assert.match(output, /dove hook session-start --project <dir>/u);
   assert.match(output, /dove hook user-prompt-submit --project <dir>/u);
   assert.match(output, /dove figure --project <root> \(--prompt <text>\|--prompt-file <file>\) \[--image <file> \.\.\.\] --output <file\.png> \[--size <size>\]/u);

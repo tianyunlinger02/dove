@@ -93,7 +93,7 @@ test("each user message carries the identity card, this round's situation and th
   });
   const payload = event("CURRENT_USER_BODY_NOT_TO_COPY", { cwd: project, transcript_path: "/unread/source.jsonl", transcript: "PARENT_HISTORY_NOT_TO_COPY" });
   const delivered = context(invoke(binaries[0], project, payload));
-  for (const expected of ["Mainline: 合成主线", "合成研究状态", "本轮：第 3 轮（rounds/003-brief.md，进行中）", "对准：数据与评价", "怎样算成：评价这一维算成", "规模：全量 445 对，噪声约 1.5 点", "见分晓：2099-01-05", "主指标：事件 F1（445 对开发集）；当前最好：11.5", "最卡的一维：数据与评价", "- 是否扩大到 494 对。"]) {
+  for (const expected of ["Mainline: 合成主线", "合成研究状态", "本轮：第 3 轮（rounds/003-brief.md，进行中）", "对准：数据与评价", "怎样算成：评价这一维算成", "规模：全量 445 对，噪声约 1.5 点", "见分晓：2099-01-05", "主指标：事件 F1（445 对开发集）；当前最好：11.5", "最卡的一维：数据与评价", "是否扩大到 494 对。"]) {
     assert.ok(delivered.includes(expected), expected);
   }
   assert.ok(delivered.endsWith(userOriginalSourceContext(payload)));

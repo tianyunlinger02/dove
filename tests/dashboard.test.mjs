@@ -314,6 +314,37 @@ test("method design is visible below the mainline, preserves lines, escapes text
   assert.match(view.innerHTML, /尚未记录用户看过后的答复/u);
 });
 
+test("project progress shows historical warnings without creating pending decisions", () => {
+  const project = {
+    rounds: [],
+    progress: {
+      mainMetric: null, trend: null, pending: [],
+      overrun: { due: "2026-10-21", plannedDays: 1, daysPastDue: 5 },
+      stall: { rounds: [1, 2] }
+    }
+  };
+  const script = renderDashboardHtml().split("<script>")[1].split("</script>")[0];
+  const section = script.slice(script.indexOf("function esc("), script.indexOf("const texts ="));
+  const tile = script.slice(script.indexOf("function tile("), script.indexOf("\n", script.indexOf("function tile(")));
+  const context = vm.createContext({ project });
+  vm.runInContext(`${section}\n${tile}`, context);
+  const render = () => vm.runInContext("progressSection(project)", context);
+  let html = render();
+  assert.match(html, /本轮原定 2026-10-21 见分晓/u);
+  assert.match(html, /历史停滞信号：第 1、2 轮/u);
+  assert.doesNotMatch(html, /class="card pending"/u, "historical signals alone create no decision list");
+  project.progress.pending = [
+    { kind: "method-design", text: "方法设计（rounds/003-brief.md）尚未记录书面答复（当前文件快照）。" },
+    { kind: "mentor", text: "导师笔记快照：是否增加 <新数据>。" }
+  ];
+  html = render();
+  assert.equal((html.match(/<li>/gu) ?? []).length, 2, "only the supplied record snapshots are pending");
+  assert.ok(html.includes("rounds/003-brief.md"));
+  assert.ok(html.includes("导师笔记快照：是否增加 &lt;新数据&gt;。"));
+  assert.doesNotMatch(html, /<新数据>/u);
+  assert.match(html, /历史停滞信号：第 1、2 轮/u, "pending records do not erase historical signals");
+});
+
 test("project view shows one ledger row and one bias row per round, escaped", () => {
   const root = "/memory/project";
   const row = (number, extra) => ({ number, duration: "5 小时", open: false, agents: 4, compactions: 1, mentor: 1, corrections: 2, verdictLabel: "未兑现", prediction: "F1 <10> → 12–14", actual: "F1 10.5", check: "落在区间外，差 1.5，预测的变化是实际的 6 倍", flags: [], calibration: { hit: false, ratio: 6, wrongWay: false }, provenance: { numbers: 5, found: 4, artifacts: 2 }, hedgesPer1k: 2.5, gates: 3, unrunClaims: 1, ...extra });

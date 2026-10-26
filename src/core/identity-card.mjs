@@ -35,7 +35,7 @@ export function parseDoveCurrentRound(card = "") {
   const status = cardField(card, "Round status");
   if (!value) return null;
   const brief = value.match(/rounds\/[^\s)\]，。；;]+\.md/u)?.[0] ?? value.replace(/^\[([^\]]+)\]\([^)]*\).*$/u, "$1");
-  return { brief, ongoing: /^\**\s*(ongoing|进行中)/iu.test(status ?? "") };
+  return { brief, ongoing: /^\**\s*(?:ongoing|进行中)(?=$|[^\p{L}\p{M}\p{N}_-])/iu.test(status ?? "") };
 }
 
 function separateResearchState(card) {

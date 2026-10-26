@@ -50,7 +50,8 @@ test("author responses to reviews live in the draft Skill", () => {
 test("the mentor is called at decision points and returns what Dove and the host use", () => {
   const mentor = renderClaudeDoveMentorAgent();
   assert.match(mentor, /一轮出判定时、超时或停滞时、新方法设计时、用户要求时/u);
-  for (const question of ["实质科研进展", "检验核心方法，还是在修工程", "离用户要的最终结果还差什么"]) assert.ok(mentor.includes(question), question);
+  const opening = mentor.split("## 先答三问\n")[1].split("\n## ")[0];
+  assert.deepEqual([...opening.matchAll(/^(\d+)\. /gmu)].map((match) => Number(match[1])), [1, 2, 3]);
   // Returns that the dashboard and the hooks read back.
   assert.match(mentor, /最卡的一维/u);
   assert.match(mentor, /可迁移（<八维中的一维>）：/u);

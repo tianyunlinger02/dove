@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 
+import { parseDoveCurrentRound } from "../src/core/identity-card.mjs";
 import {
   calibrateRound,
   computeOverrun,
@@ -17,7 +18,8 @@ import {
   unscorableFlags,
   resultProvenance,
   parseTrendTable,
-  renderRoundSituation
+  renderRoundSituation,
+  renderRoundStatusSummary
 } from "../src/core/round-state.mjs";
 
 const DAY = 86400000;
@@ -62,6 +64,17 @@ test("verdicts are read from the result's first lines and fall into three kinds"
   assert.equal(parseResultHeader("一句话：旧格式结果。\n").verdict, null);
 });
 
+test("the current-round parser recognizes an explicit ongoing token, not a word prefix", () => {
+  const parse = (status) => parseDoveCurrentRound(`Current round: rounds/004-brief.md\n${status === null ? "" : `Round status: ${status}\n`}`);
+  assert.equal(parse("ongoing；A已完成，B待做").ongoing, true);
+  assert.equal(parse("进行中，A已完成，B待做").ongoing, true);
+  assert.equal(parse("**ongoing**（A已完成，B待做）").ongoing, true);
+  for (const status of ["ongoingish", "进行中止", "paused", "completed", "A已完成，B待做", "unknown", null]) {
+    assert.equal(parse(status)?.ongoing ?? false, false, `status is not ongoing: ${status}`);
+  }
+  assert.equal(parseDoveCurrentRound("Round status: ongoing\n"), null, "a missing current-round reference is unknown");
+});
+
 test("overrun means past the due date by as long again as planned", () => {
   const plan = { due: "2026-10-25", start: "2026-10-20" };
   assert.equal(computeOverrun(plan, at("2026-10-30")), null, "five days late on a five-day plan is not yet overrun");
@@ -70,6 +83,75 @@ test("overrun means past the due date by as long again as planned", () => {
   assert.ok(computeOverrun({ due: "2026-10-25", start: null, createdAt: at("2026-10-24") }, at("2026-10-27")), "without a start the brief's creation day counts");
   assert.equal(computeOverrun({ due: null }, at("2027-01-01")), null);
   assert.equal(at("2026-10-31") - at("2026-10-25"), 6 * DAY);
+});
+
+test("only an explicitly ongoing current round without a result can be open or overrun", () => {
+  const overdue = { due: "2026-10-10", daysPastDue: 13, plannedDays: 2 };
+  const statuses = [
+    ["ongoing", true],
+    ["ONGOING；A已完成，B待做", true],
+    ["**ongoing**（A已完成，B待做）", true],
+    ["ongoing，A已暂停并结束，B待做", true],
+    ["进行中；A已完成，B待做", true],
+    ["paused；A已完成，B待做", false],
+    ["completed；B待做", false],
+    ["暂停（后续 ongoing）", false],
+    ["已完成（后续进行中）", false],
+    ["ongoingish", false],
+    ["ongoing_next", false],
+    ["ongoing-next", false],
+    ["ongoing2", false],
+    ["ongoing待做", false],
+    ["进行中止", false],
+    ["unknown", false],
+    ["A已完成，B待做", false],
+    ["", false],
+    [null, false]
+  ];
+  for (const [status, ongoing] of statuses) {
+    for (const hasResult of [false, true]) {
+      const { root, fsOps } = memory({
+        ".dove/research/IDENTITY.md": `Current round: rounds/004-brief.md\n${status === null ? "" : `Round status: ${status}\n`}`,
+        ".dove/research/rounds/004-brief.md": "对准：创新\n见分晓：2026-10-10（开始：2026-10-08）\n规模：全量。\n",
+        ...(hasResult ? { ".dove/research/rounds/004-result.md": "判定：未兑现\n" } : {})
+      });
+      const state = inspectRoundState(root, { fsOps, now: at("2026-10-23") });
+      const context = `status=${status}, result=${hasResult}`;
+      assert.equal(state.currentRound.open, ongoing && !hasResult, context);
+      assert.equal(state.currentRound.status, status || null, context);
+      assert.deepEqual(state.overrun, ongoing && !hasResult ? overdue : null, context);
+      assert.deepEqual(state.pending, [], "overrun alone does not imply a pending user decision");
+      if (hasResult) {
+        assert.equal(state.currentRound.result.verdictKind, "missed", context);
+        assert.match(renderRoundSituation(state, { now: at("2026-10-23") }).split("\n")[0], /已出结果/u, context);
+      }
+    }
+  }
+
+  const absent = memory({ ".dove/research/rounds/004-brief.md": "见分晓：2026-10-10\n" });
+  const state = inspectRoundState(absent.root, { fsOps: absent.fsOps, now: at("2026-10-23") });
+  assert.equal(state.currentRound, null, "a round file without an identity-card reference is not the current round");
+  assert.equal(state.overrun, null);
+});
+
+test("an existing current result takes precedence outside the recent-round window and without a brief or verdict", () => {
+  for (const hasBrief of [false, true]) {
+    const { root, fsOps } = memory({
+      ".dove/research/IDENTITY.md": "Current round: rounds/004-brief.md\nRound status: ongoing；A已完成，B待做\n",
+      ".dove/research/rounds/004-result.md": "一句话：旧格式结果。\n",
+      ".dove/research/rounds/005-brief.md": "一句话：下一轮。\n",
+      ...(hasBrief ? { ".dove/research/rounds/004-brief.md": "见分晓：2026-10-10（开始：2026-10-08）\n" } : {})
+    });
+    const state = inspectRoundState(root, { fsOps, maxRounds: 1, now: at("2026-10-23") });
+    assert.deepEqual(state.rounds.map((round) => round.number), [5], "reading the current round does not enlarge the recent-round window");
+    assert.equal(state.currentRound.number, 4);
+    assert.equal(state.currentRound.result.file, "rounds/004-result.md");
+    assert.equal(state.currentRound.result.verdict, null);
+    assert.equal(state.currentRound.open, false);
+    assert.equal(state.overrun, null);
+    assert.match(renderRoundSituation(state, { now: at("2026-10-23") }).split("\n")[0], /已出结果/u);
+    assert.match(renderRoundStatusSummary(state), /已出结果/u);
+  }
 });
 
 test("the main metric line and the trend table are read from EVAL", () => {
@@ -93,23 +175,26 @@ test("what waits for the user: an unanswered method design and the mentor's list
   assert.deepEqual(parseMentorPending("### 待用户决定\n无\n"), []);
 });
 
-test("stall and overrun are computed from the records, and the situation names what is missing", () => {
+test("historical stall stays separate from the method and mentor note snapshots", () => {
   const { root, fsOps } = memory({
     ".dove/research/IDENTITY.md": "Current round: rounds/004-brief.md\nRound status: ongoing\nMethod design: rounds/004-brief.md\nMainline: x\n",
     ".dove/research/rounds/002-result.md": "判定：未兑现\n",
     ".dove/research/rounds/003-result.md": "判定：未兑现（仍低于预期）\n",
     ".dove/research/rounds/004-brief.md": "Author: mentor\n\n一句话：没写计划。\n\n## 方法设计\n### 要解决什么问题\n失败。\n### 用户答复\n\n## 预期结果\n",
+    ".dove/research/MENTOR_NOTES.md": "### 待用户决定\n- 是否扩大到 494 对\n",
     ".dove/research/EVAL.md": "主指标：F1（dev）；当前最好：0.5（第 3 轮）\n"
   });
   const state = inspectRoundState(root, { fsOps, now: at("2026-10-23") });
   assert.deepEqual(state.stall, { results: ["rounds/002-result.md", "rounds/003-result.md"], rounds: [2, 3] });
   assert.equal(state.overrun, null, "a brief without a due date cannot overrun");
-  assert.deepEqual(state.pending.map((item) => item.kind), ["method-design", "stall"]);
+  assert.deepEqual(state.pending.map((item) => item.kind), ["method-design", "mentor"]);
+  assert.equal(state.methodDesign.userReply, null);
+  assert.equal(state.methodDesign.source, "rounds/004-brief.md");
   const situation = renderRoundSituation(state, { now: at("2026-10-23") });
   assert.match(situation, /本轮：第 4 轮（rounds\/004-brief\.md，进行中）：没写计划。/u);
-  assert.match(situation, /本轮说明开头还缺：对准、见分晓、规模/u);
   assert.match(situation, /停滞：第 2、3 轮判定都是未兑现/u);
   assert.match(situation, /主指标：F1（dev）；当前最好：0\.5（第 3 轮）/u);
+  assert.deepEqual(situation.split("\n").filter((line) => line.startsWith("- ")), state.pending.map((item) => `- ${item.text}`), "rendered pending items contain only the recorded method and mentor entries");
 
   const decided = memory({
     ".dove/research/IDENTITY.md": "Current round: rounds/004-brief.md\nRound status: ongoing\n",
@@ -120,6 +205,32 @@ test("stall and overrun are computed from the records, and the situation names w
   const later = inspectRoundState(decided.root, { fsOps: decided.fsOps, now: at("2026-10-23") });
   assert.equal(later.stall, null, "a method decision between misses is not a stall");
   assert.deepEqual(later.overrun, { due: "2026-10-10", daysPastDue: 13, plannedDays: 2 });
+  assert.deepEqual(later.pending, [], "overrun facts do not add a user-decision item");
+});
+
+test("an old written agreement cannot erase later missed verdicts or invent a pending decision", () => {
+  const replies = [
+    ["", null],
+    ["（待用户答复）", null],
+    ["用户 2026-10-01：可以，按这个方法继续。", "用户 2026-10-01：可以，按这个方法继续。"],
+    ["用户 2026-10-01：暂停。", "用户 2026-10-01：暂停。"],
+    ["用户 2026-10-01：换个方向试试。", "用户 2026-10-01：换个方向试试。"]
+  ];
+  for (const [reply, userReply] of replies) {
+    const { root, fsOps } = memory({
+      ".dove/research/IDENTITY.md": "Current round: rounds/004-brief.md\nRound status: ongoing\nMethod design: rounds/001-brief.md\n",
+      ".dove/research/rounds/001-brief.md": `## 方法设计\n### 要解决什么问题\n失败。\n### 外部方法为什么不行\n不足。\n### 我们的改法为什么能修\n改法。\n### 用户答复\n${reply}\n`,
+      ".dove/research/rounds/002-result.md": "判定：未兑现\n",
+      ".dove/research/rounds/003-result.md": "判定：未兑现\n",
+      ".dove/research/rounds/004-brief.md": "对准：创新\n见分晓：2026-10-10（开始：2026-10-08）\n规模：全量。\n"
+    });
+    const state = inspectRoundState(root, { fsOps, now: at("2026-10-23") });
+    assert.deepEqual(state.stall, { results: ["rounds/002-result.md", "rounds/003-result.md"], rounds: [2, 3] }, `recorded reply does not change historical verdicts: ${reply}`);
+    assert.deepEqual(state.overrun, { due: "2026-10-10", daysPastDue: 13, plannedDays: 2 });
+    assert.equal(state.methodDesign.userReply, userReply);
+    assert.deepEqual(state.pending.map((item) => item.kind), userReply ? [] : ["method-design"]);
+    assert.deepEqual(renderRoundSituation(state, { now: at("2026-10-23") }).split("\n").filter((line) => line.startsWith("- ")), state.pending.map((item) => `- ${item.text}`));
+  }
 });
 
 test("a prediction and its measurement are reconciled against an eighty-percent range", () => {

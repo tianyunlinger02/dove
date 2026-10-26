@@ -9,15 +9,6 @@ import { renderMentorBrief } from "../src/core/mentor-brief.mjs";
 const ROOT = "/memory/dove/project";
 const RESEARCH = ".dove/research";
 const WATCH = `${RESEARCH}/watch`;
-const QUESTIONS = [
-  "1. 如果用户现在问‘这段时间取得了什么实质科研进展’，诚实的一句话回答是什么？",
-  "2. 最近的工作是在检验核心方法，还是在修工程、修评价、搭系统？",
-  "3. 按现在的做法，离用户要的最终结果还差什么、大概多久能到？有没有更直接、更快的路？",
-  "4. 本轮判定对得上说明里事先写下的对准维度和成败标准吗？",
-  "5. 对照说明的“方法设计”：问题及真实数据证据和要达到的程度、外部方法（含本领域高手的默认做法）的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？这一步怎样改善原问题、改善多少？",
-  "6. 对照 USER_ORIGINALS.md 中用户过去的纠正和导师笔记里被否掉的方法，当前做法有没有重犯？",
-  "7. 方向还服务用户的核心目标吗？相对最接近的工作新在哪里、离目标档次差什么，下一步最值得检验什么（至少考虑一个不是从当前做法改出来的方案）？"
-].join("\n");
 
 // Every project byte lives in this Map. No disk fixtures or real project reads.
 function memoryFiles(t, entries = {}, times = {}) {
@@ -76,7 +67,6 @@ test("empty memory project renders a short fixed template without creating recor
   const memory = memoryFiles(t);
   const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps });
   assert.equal(typeof brief, "string");
-  assert.ok(brief.endsWith(`${QUESTIONS}\n`));
   assert.equal((brief.match(/^\d+\. /gmu) ?? []).length, 7);
   assert.match(brief, /## Dove 算出的事实/u);
   assert.match(brief, /当前轮次：身份卡没有指向当前轮次/u);
@@ -139,7 +129,6 @@ test("materials use actual paths, recent numbered rounds, and verbatim user fiel
   assert.ok(brief.includes("/external/new-output.json"));
   assert.ok(!brief.includes("arbitrary executor task"));
   assert.ok(!brief.includes("custom template"));
-  assert.ok(brief.endsWith(`${QUESTIONS}\n`));
   const opened = memory.reads.map(({ file }) => path.relative(ROOT, file));
   assert.ok(opened.includes(artifact), "explicit artifacts are bounded source attachments");
   // Besides explicit artifacts, Dove reads only the records it computes facts from.
@@ -149,6 +138,32 @@ test("materials use actual paths, recent numbered rounds, and verbatim user fiel
   assert.ok(!memory.inspected.includes(source), "source pointer is not even stat-ed");
   assert.ok(memory.inspected.includes(path.join(ROOT, artifact)), "only explicit artifact paths are inspected");
   assert.deepEqual([...memory.files], before);
+});
+
+test("mentor facts keep historical misses separate from unanswered record snapshots", (t) => {
+  const identity = `${RESEARCH}/IDENTITY.md`;
+  const design = `${RESEARCH}/rounds/003-brief.md`;
+  const memory = memoryFiles(t, {
+    [identity]: "Current round: rounds/003-brief.md\nRound status: ongoing；A已完成，B待做\nMethod design: rounds/003-brief.md\n",
+    [`${RESEARCH}/rounds/001-result.md`]: "判定：未兑现\n",
+    [`${RESEARCH}/rounds/002-result.md`]: "判定：未兑现\n",
+    [design]: "对准：实现\n见分晓：2026-10-21（开始：2026-10-20）\n规模：完整输入输出。\n",
+    [`${RESEARCH}/MENTOR_NOTES.md`]: "### 待用户决定\n- 是否增加新数据。\n"
+  });
+  const render = () => renderMentorBrief(ROOT, { fsOps: memory.fsOps, now: new Date(2026, 9, 26, 12) });
+  let brief = render();
+  assert.match(brief, /第 1、2 轮判定都是未兑现/u);
+  assert.match(brief, /原定 2026-10-21 见分晓/u);
+  assert.match(brief, /导师笔记快照：是否增加新数据/u);
+  assert.doesNotMatch(brief, /继续当前方法、换方法还是换方向，等用户定/u);
+  memory.files.set(path.join(ROOT, design), Buffer.from("## 方法设计\n### 要解决什么问题\n核心未实现。\n### 外部方法为什么不行\n缺完整输出。\n### 我们的改法为什么能修\n补齐计算链路。\n### 用户答复\n"));
+  brief = render();
+  assert.match(brief, /方法设计（rounds\/003-brief\.md）尚未记录书面答复/u);
+  memory.files.set(path.join(ROOT, design), Buffer.from(`${memory.files.get(path.join(ROOT, design)).toString()}2026-10-26 当前会话：先补齐核心代码。\n`));
+  brief = render();
+  assert.doesNotMatch(brief, /方法设计（rounds\/003-brief\.md）尚未记录书面答复/u);
+  assert.match(brief, /第 1、2 轮判定都是未兑现/u, "recording a reply does not erase the historical misses");
+  assert.match(brief, /导师笔记快照：是否增加新数据/u, "the saved note is still a snapshot, not a current decision judgment");
 });
 
 test("large original results get a bounded sourced tail instead of an EVAL conclusion", (t) => {

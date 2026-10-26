@@ -21,11 +21,11 @@ const WATCH_INTERVAL_DAYS = 7;
 const QUESTIONS = [
   "如果用户现在问‘这段时间取得了什么实质科研进展’，诚实的一句话回答是什么？",
   "最近的工作是在检验核心方法，还是在修工程、修评价、搭系统？",
-  "按现在的做法，离用户要的最终结果还差什么、大概多久能到？有没有更直接、更快的路？",
+  "离用户要的完整结果，最该补的核心能力或修法是什么？下一步具体改哪里，为什么比继续诊断或换题更直接，大概多久能见结果？",
   "本轮判定对得上说明里事先写下的对准维度和成败标准吗？",
   "对照说明的“方法设计”：问题及真实数据证据和要达到的程度、外部方法（含本领域高手的默认做法）的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？这一步怎样改善原问题、改善多少？",
-  "对照 USER_ORIGINALS.md 中用户过去的纠正和导师笔记里被否掉的方法，当前做法有没有重犯？",
-  "方向还服务用户的核心目标吗？相对最接近的工作新在哪里、离目标档次差什么，下一步最值得检验什么（至少考虑一个不是从当前做法改出来的方案）？"
+  "对照用户最新原话、当前方法设计和导师笔记里已确认的关系、有效负证据及被否掉的方法，当前工作保留了什么认识、具体改变了什么？用户纠正有没有落实到当次工作，而不只是新增记录？",
+  "方向还服务用户的核心目标吗？近邻提供了哪些成熟基础、我们还可在哪里做得更好，下一步如何形成完整改法并用反例校准（至少考虑一个不是从当前做法改出来的方案）？"
 ];
 
 function dayText(time) {
@@ -47,7 +47,7 @@ function computedFacts(project, fsOps, now, state) {
     if (brief.success) lines.push(`  预期结果首段：${brief.success}`);
   }
   if (state.overrun) lines.push(`- 超时：原定 ${state.overrun.due} 见分晓，预计 ${state.overrun.plannedDays} 天，已过 ${state.overrun.daysPastDue} 天，还没有结果。`);
-  if (state.stall) lines.push(`- 停滞：第 ${state.stall.rounds.join("、")} 轮判定都是未兑现，其间没有方法取舍。`);
+  if (state.stall) lines.push(`- 历史停滞信号：第 ${state.stall.rounds.join("、")} 轮判定都是未兑现，其间没有记录方法取舍；核对之后是否已有用户决定，不据此认定当前仍待答复。`);
   const recent = state.rounds.filter((item) => item.result).slice(0, 6);
   lines.push(recent.length ? "- 最近几轮的判定（只按结果文件开头的“判定：”读取）：" : "- 最近几轮的判定：还没有结果文件。");
   for (const item of recent) {
@@ -72,7 +72,7 @@ function computedFacts(project, fsOps, now, state) {
   lines.push(state.mainMetric ? `- 主指标：${state.mainMetric.text}` : "- 主指标：EVAL 开头还没写。");
   const latest = state.trend?.latest;
   lines.push(latest ? `- 八维走势：共 ${state.trend.rows.length} 次判断；最近一次 ${latest.date ?? "未写日期"}（${latest.round ?? "未写轮次"}），最卡的一维 ${latest.bottleneck ?? "未写"}。` : "- 八维走势：EVAL 里还没有走势表。");
-  lines.push(state.pending.length ? "- 等用户定的事：" : "- 等用户定的事：无。");
+  lines.push(state.pending.length ? "- 记录里尚未有答复或仍列为笔记事项（不等于用户没有说过）：" : "- 当前记录没有未答复事项。");
   for (const item of state.pending) lines.push(`  - ${item.text}`);
   // Lessons other projects' mentors marked transferable, chosen for this round's aim and plan.
   try {

@@ -7,7 +7,7 @@ import { cardField, parseDoveCurrentRound } from "./identity-card.mjs";
 // What Dove computes from a project's own records, for the hooks, the status
 // line, the mentor handoff and the dashboard alike: the current round's plan
 // (aim, due date, scale), each result's verdict, overrun and stall, the main
-// metric, the eight-dimension trend and what is waiting for the user.
+// metric, the eight-dimension trend and written method/mentor note snapshots.
 // Read-only; a missing or old-format record yields unknown, never a guess.
 
 const RESEARCH = ".dove/research";
@@ -575,7 +575,7 @@ export function inspectRoundState(project, options = {}) {
   const current = card ? parseDoveCurrentRound(card) : null;
   const roundStatus = card ? cardField(card, "Round status") : null;
   const files = collectRoundFiles(path.join(research, "rounds"), fsOps);
-  const rounds = files.slice(0, options.maxRounds ?? 12).map((entry) => {
+  const readRound = (entry) => {
     const brief = entry.brief ? readText(path.join(research, "rounds", entry.brief), fsOps) : null;
     const result = entry.result ? readText(path.join(research, "rounds", entry.result), fsOps) : null;
     return {
@@ -584,12 +584,16 @@ export function inspectRoundState(project, options = {}) {
       ...(brief ? { brief: { file: `rounds/${entry.brief}`, createdAt: brief.birthtime ?? brief.mtime, ...parseBriefHeader(brief.text) } } : {}),
       ...(result ? { result: { file: `rounds/${entry.result}`, mtime: result.mtime, createdAt: result.birthtime ?? result.mtime, ...parseResultHeader(result.text) } } : {})
     };
-  });
+  };
+  const rounds = files.slice(0, options.maxRounds ?? 12).map(readRound);
 
   const currentNumber = roundNumberOf(current?.brief);
+  const currentEntry = files.find((round) => round.number === currentNumber);
   const currentRound = currentNumber === null ? null : rounds.find((round) => round.number === currentNumber)
-    ?? { number: currentNumber, label: String(currentNumber) };
-  const open = currentRound && !currentRound.result && !/paused|暂停|completed|完成|结束/iu.test(roundStatus ?? "");
+    ?? (currentEntry ? readRound(currentEntry) : { number: currentNumber, label: String(currentNumber) });
+  // Only the explicit main status parsed from the identity card can make a
+  // result-less current round open. A result wins over a stale "ongoing" card.
+  const open = Boolean(currentRound && !currentRound.result && current?.ongoing);
   const overrun = open && currentRound.brief ? computeOverrun(currentRound.brief, options.now) : null;
 
   // Stall: the two latest results both missed, with no method decision between them.
@@ -609,14 +613,16 @@ export function inspectRoundState(project, options = {}) {
   const methodDesign = methodText ? parseMethodDesign(methodText) : null;
 
   const notes = readText(path.join(research, "MENTOR_NOTES.md"), fsOps, MAX_TEXT_BYTES, true)?.text ?? "";
+  // Written gaps and mentor notes are snapshots, not evidence of the user's
+  // current decision. Historical stall/overrun facts remain independent.
   const pending = [];
-  if (methodDesign && !methodDesign.userReply) pending.push({ kind: "method-design", text: `方法设计（${methodBrief}）还没有记录用户看过后的答复。` });
-  if (overrun) pending.push({ kind: "overrun", text: `第 ${currentRound.number} 轮超时：原定 ${overrun.due} 见分晓，已过 ${overrun.daysPastDue} 天（预计 ${overrun.plannedDays} 天）。继续当前方法、换方法还是换方向，等用户定。` });
-  if (stall) pending.push({ kind: "stall", text: `第 ${stall.rounds.join("、")} 轮判定都是未兑现，其间没有方法取舍。继续当前方法、换方法还是换方向，等用户定。` });
-  for (const item of parseMentorPending(notes)) pending.push({ kind: "mentor", text: item });
+  if (methodDesign && !methodDesign.userReply) {
+    pending.push({ kind: "method-design", text: `方法设计（${methodBrief}）尚未记录书面答复（当前文件快照）。` });
+  }
+  for (const item of parseMentorPending(notes)) pending.push({ kind: "mentor", text: `导师笔记快照：${item}` });
 
   return {
-    currentRound: currentRound ? { ...currentRound, reference: current.brief, status: roundStatus, open: Boolean(open) } : null,
+    currentRound: currentRound ? { ...currentRound, reference: current.brief, status: roundStatus, open } : null,
     rounds,
     overrun,
     stall,
@@ -633,15 +639,15 @@ function dueText(due, now) {
   return `${due}（${days > 0 ? `还有 ${days} 天` : days === 0 ? "就是今天" : `已过 ${-days} 天`}）`;
 }
 
-/** The per-message situation: this round's plan, flags, main metric and what waits for the user. */
+/** The per-message situation: this round's plan, historical flags and record snapshots. */
 export function renderRoundSituation(state, options = {}) {
   const lines = [];
   const round = state.currentRound;
+  const status = round?.result ? "已出结果" : round?.open ? "进行中" : (round?.status ?? "未写状态");
   if (!round) lines.push("身份卡没有指向当前轮次（Current round）。");
-  else if (!round.brief) lines.push(`当前轮次 ${round.reference} 还没有说明文件。`);
+  else if (!round.brief) lines.push(`当前轮次 ${round.reference}（${status}）还没有说明文件。`);
   else {
     const brief = round.brief;
-    const status = round.result ? "已出结果" : round.open ? "进行中" : (round.status ?? "未写状态");
     lines.push(`本轮：第 ${round.number} 轮（${brief.file}，${status}）${brief.summary ? `：${brief.summary}` : "。"}`);
     const missing = [["对准", brief.target], ["见分晓", brief.due], ["规模", brief.scale], ["预测", brief.prediction]].filter(([, value]) => !value).map(([name]) => name);
     lines.push(`对准：${brief.targetDimension ?? brief.target ?? "未写"}；怎样算成：${brief.success ?? "说明里还没有“## 预期结果”"}`);
@@ -655,10 +661,11 @@ export function renderRoundSituation(state, options = {}) {
   }
   if (state.overrun) lines.push(`超时：本轮已超过预计时长一倍还没有结果。`);
   if (state.stall) lines.push(`停滞：第 ${state.stall.rounds.join("、")} 轮判定都是未兑现，其间没有方法取舍。`);
+  if (state.overrun || state.stall) lines.push("超时和停滞是历史判定，不自动表示当前仍等用户定；请读最新原话。");
   lines.push(state.mainMetric ? `主指标：${state.mainMetric.text}` : "主指标：EVAL 开头还没写主指标（写好后请用户确认一次）。");
   const latest = state.trend?.latest;
   if (latest?.bottleneck) lines.push(`最近一次导师判断（${latest.date ?? "未写日期"}）最卡的一维：${latest.bottleneck}。`);
-  if (state.pending.length) lines.push("等用户定的事：", ...state.pending.map((item) => `- ${item.text}`));
+  if (state.pending.length) lines.push("文件与笔记中的待定记录（快照；请读最新原话）：", ...state.pending.map((item) => `- ${item.text}`));
   return lines.join("\n");
 }
 
@@ -670,9 +677,9 @@ export function renderRoundStatusSummary(state, options = {}) {
   const brief = round?.brief;
   if (brief?.targetDimension || brief?.target) parts.push(`对准 ${brief.targetDimension ?? plainLine(brief.target, 16)}`);
   if (brief?.due && !round.result) parts.push(`${brief.due.slice(5)} 见分晓`);
-  if (round?.result?.verdict) parts.push(`判定 ${VERDICT_LABELS[round.result.verdictKind] ?? plainLine(round.result.verdict, 12)}`);
+  if (round?.result) parts.push(round.result.verdict ? `判定 ${VERDICT_LABELS[round.result.verdictKind] ?? plainLine(round.result.verdict, 12)}` : "已出结果");
   if (state.overrun) parts.push("已超时");
-  if (state.stall) parts.push("停滞");
+  if (state.stall) parts.push("历史停滞");
   if (state.mainMetric) {
     // Short form: the metric's name without its protocol, the best value and its round.
     const name = (state.mainMetric.name ?? state.mainMetric.text).replace(/（[^）]*）|\([^)]*\)/gu, "").trim();
