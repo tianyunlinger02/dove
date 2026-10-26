@@ -321,6 +321,7 @@ test("project view shows one ledger row and one bias row per round, escaped", ()
     root, name: "Project", mainline: "主线", rounds: [],
     progress: {
       mainMetric: null, trend: null, overrun: null, stall: null, pending: [],
+      practice: [{ date: "2026-10-25", topic: "写稿和图", quote: "“查不出 <自己> 的行话”", next: "交付前做冷读" }],
       ledger: {
         rows: [row(3, { open: true, verdictLabel: null, actual: null, check: null, flags: ["只给了下限"], calibration: null, provenance: null }), row(2, { provenance: { numbers: 7, found: null, artifacts: 0 } }), row(1, {})],
         activityScanned: true,
@@ -344,5 +345,7 @@ test("project view shows one ledger row and one bias row per round, escaped", ()
   assert.match(html, /没链接产物/u);
   assert.match(html, /4\/5/u);
   assert.ok(html.includes("F1 &lt;10&gt; → 12–14"));
+  assert.match(html, /做法更正[\s\S]*2026-10-25 · 写稿和图：交付前做冷读/u);
+  assert.ok(html.includes("查不出 &lt;自己&gt; 的行话") && !html.includes("<自己>"));
   assert.ok(!html.includes("<10>"));
 });

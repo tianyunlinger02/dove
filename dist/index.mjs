@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.5.8" : null;
+var injectedVersion = true ? "3.5.9" : null;
 function parseSemver(value) {
   const match = typeof value === "string" ? value.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -195,12 +195,12 @@ var DOVE_OPERATING_MOMENTS = Object.freeze([
   "**\u6BCF\u8F6E\u5F00\u59CB**\uFF1A\u5199\u6E05\u5BF9\u51C6\u54EA\u4E00\u7EF4\u3001\u600E\u6837\u7B97\u6210\u3001\u89C4\u6A21\u591A\u5927\u548C\u4E3A\u4EC0\u4E48\u591F\u3001\u54EA\u5929\u89C1\u5206\u6653\uFF0C\u4EE5\u53CA\u4E00\u4E2A\u91CF\u7684\u516B\u6210\u628A\u63E1\u533A\u95F4\u3002\u89C4\u6A21\u6309\u7814\u7A76\u6807\u51C6\u201C\u8BC1\u636E\u4E0E\u5B9E\u9A8C\u201D\u5148\u7B97\u9884\u671F\u5DEE\u522B\u548C\u566A\u58F0\uFF0C\u5206\u4E0D\u51FA\u7ED3\u679C\u5C31\u6539\u8BBE\u8BA1\uFF0C\u4E0D\u8DD1\u6CE8\u5B9A\u5206\u4E0D\u51FA\u7ED3\u679C\u7684\u5C0F\u7248\u672C\u3002\u4E92\u4E0D\u4F9D\u8D56\u7684\u89E3\u91CA\u6216\u65B9\u6CD5\u540C\u65F6\u8BD5\uFF0C\u5728\u7528\u6237\u7684\u8D44\u6E90\u89C4\u5219\u5185\u7528\u8DB3\u7A7A\u95F2\u7B97\u529B\u3002\u8865\u79CD\u5B50\u3001\u52A0\u8BAD\u7EC3\u6B65\u6570\u3001\u8865\u6D88\u878D\u6216\u57FA\u7EBF\uFF0C\u90FD\u4E0D\u80FD\u4EE3\u66FF\u4FEE\u5DF2\u77E5\u7F3A\u9677\u3002",
   "**\u6BCF\u8F6E\u7ED3\u675F**\uFF1A\u5199\u5224\u5B9A\uFF0C\u4EE5\u53CA\u8FD9\u4E00\u8F6E\u6539\u53D8\u4E86\u4EC0\u4E48\u5224\u65AD\u3001\u4E0B\u4E00\u6B65\u56E0\u6B64\u6539\u4EC0\u4E48\u3001\u79BB\u6700\u7EC8\u7ED3\u679C\u8FD1\u4E86\u591A\u5C11\uFF0C\u7136\u540E\u8BF7\u5BFC\u5E08\u5224\u65AD\u3002\u79D1\u7814\u7ED3\u679C\u53EA\u6709\u4E24\u79CD\uFF1A\u771F\u5B9E\u4EFB\u52A1\u8BC4\u6D4B\u4E0A\u7684\u6307\u6807\u53D8\u5316\uFF0C\u6216\u5BF9\u6838\u5FC3\u65B9\u6CD5\u7684\u660E\u786E\u53D6\u820D\uFF08\u91C7\u7EB3\u6216\u653E\u5F03\u4E00\u4E2A\u65B9\u6CD5\u65CF\uFF09\u3002\u53EA\u6392\u9664\u67D0\u4E2A\u5C40\u90E8\u5199\u6CD5\u3001\u53C2\u6570\u6216\u5B9E\u73B0\u5047\u8BBE\u7684\u8BCA\u65AD\uFF0C\u7B97\u5DE5\u4F5C\u8FDB\u5C55\uFF0C\u4E0D\u7B97\u79D1\u7814\u7ED3\u679C\uFF1B\u6709\u6548\u8D1F\u7ED3\u679C\u80FD\u5B9A\u4E0B\u65B9\u6CD5\u53D6\u820D\u65F6\u624D\u7B97\u3002",
   "**\u8D85\u65F6\u6216\u505C\u6EDE**\uFF1A\u4E00\u8F6E\u8D85\u8FC7\u9884\u8BA1\u65F6\u95F4\u4E00\u500D\u8FD8\u6CA1\u6709\u7ED3\u679C\uFF0C\u6216\u8005\u8FDE\u7EED\u4E24\u8F6E\u5224\u5B9A\u4E3A\u672A\u5151\u73B0\u3001\u5176\u95F4\u4E5F\u6CA1\u6709\u65B9\u6CD5\u53D6\u820D\uFF0CDove \u4F1A\u5F15\u7528\u7528\u6237\u7684\u539F\u8BDD\u8FFD\u95EE\u3002\u8BA4\u771F\u56DE\u7B54\uFF1A\u5361\u5728\u54EA\u91CC\uFF0C\u6709\u6CA1\u6709\u66F4\u5FEB\u7684\u8DEF\uFF1B\u54EA\u4E9B\u73B0\u5728\u5C31\u80FD\u505A\u5374\u4E00\u76F4\u6CA1\u505A\u800C\u4E14\u5F88\u91CD\u8981\uFF0C\u54EA\u4E9B\u5F88\u91CD\u8981\u5374\u4E00\u76F4\u6CA1\u653B\u514B\u3001\u6709\u6CA1\u6709\u529E\u6CD5\u8FD8\u662F\u5F97\u964D\u4F4E\u8981\u6C42\uFF0C\u54EA\u4E9B\u53EF\u6709\u53EF\u65E0\u5374\u4E00\u76F4\u5728\u505A\u3002\u7136\u540E\u505C\u4E0B\u6765\uFF0C\u7528\u4E00\u9875\u51B3\u5B9A\u5907\u5FD8\u95EE\u7528\u6237\uFF1A\u7EE7\u7EED\u5F53\u524D\u65B9\u6CD5\uFF08\u9644\u7406\u7531\uFF09\u3001\u6362\u65B9\u6CD5\uFF08\u81F3\u5C11\u7ED9\u4E00\u4E2A\u4E0D\u662F\u4ECE\u5F53\u524D\u65B9\u6CD5\u6539\u51FA\u6765\u7684\u65B9\u6CD5\u65CF\uFF0C\u53EF\u4EE5\u6765\u81EA\u5176\u4ED6\u9886\u57DF\u89E3\u540C\u6784\u95EE\u9898\u7684\u505A\u6CD5\uFF0C\u8BF4\u6E05\u4E24\u8FB9\u600E\u4E48\u5BF9\u5E94\uFF09\uFF0C\u8FD8\u662F\u6362\u65B9\u5411\u3002\u4E0D\u80FD\u7528\u72EC\u7ACB\u8BCA\u65AD\u4EE3\u66FF\u7528\u6237\u7684\u9009\u62E9\u3002",
-  "**\u7528\u6237\u7EA0\u6B63\u4E4B\u540E**\uFF1A\u5148\u6539\u4E0B\u4E00\u6B65\u505A\u6CD5\uFF0C\u628A\u201C\u4E0B\u4E00\u6B65\u5177\u4F53\u6539\u6210\u4EC0\u4E48\u201D\u5199\u8FDB\u4E0B\u4E00\u8F6E\u8BF4\u660E\u3002\u7B80\u77ED\u56DE\u5E94\uFF0C\u53EA\u6309\u8BB0\u5F55\u8BF4\u6E05\u9519\u5728\u54EA\uFF0C\u4E0D\u7F16\u9020\u51FA\u9519\u539F\u56E0\uFF0C\u4E0D\u6269\u6210\u666E\u904D\u7981\u4EE4\uFF0C\u4E5F\u4E0D\u5B58\u6210\u89C4\u5219\u3002"
+  "**\u7528\u6237\u7EA0\u6B63\u4E4B\u540E**\uFF1A\u5148\u6539\u4E0B\u4E00\u6B65\u505A\u6CD5\uFF0C\u628A\u201C\u4E0B\u4E00\u6B65\u5177\u4F53\u6539\u6210\u4EC0\u4E48\u201D\u5199\u8FDB\u4E0B\u4E00\u8F6E\u8BF4\u660E\uFF1B\u518D\u5728 .dove/research/PRACTICE.md\uFF08\u505A\u6CD5\u66F4\u6B63\uFF09\u8BB0\u4E00\u884C\uFF1A`- YYYY-MM-DD \xB7 \u4E3B\u9898 \xB7 \u539F\u8BDD\uFF1A\u201C\u2026\u2026\u201D \xB7 \u9519\u5728\u54EA\uFF1A\u2026\u2026 \xB7 \u4EE5\u540E\uFF1A\u2026\u2026`\uFF0C\u4E3B\u9898\u4ECE\u8BF4\u4EBA\u8BDD\u3001\u8DD1\u504F\u3001\u8BBE\u9650\u3001\u5B9E\u9A8C\u592A\u5C0F\u3001\u53D8\u6210\u5DE5\u7A0B\u3001\u8865\u79CD\u5B50\u3001\u83AB\u987B\u6709\u3001\u901A\u7528\u548C\u6CDB\u5316\u3001\u6CA1\u505A\u5B8C\u3001\u5148\u8BB2\u6E05\u95EE\u9898\u548C\u65B9\u6CD5\u3001\u505C\u6EDE\u3001\u5199\u7A3F\u548C\u56FE\u3001\u5176\u4ED6\u91CC\u9009\uFF0C\u539F\u8BDD\u7167\u6284\u7528\u6237\u7684\u8BDD\u3002\u7528\u6237\u8981\u4F60\u53CD\u601D\u65F6\uFF0C\u5B8C\u6574\u7684\u53CD\u601D\u5199\u5230 .dove/research/reflections/YYYY-MM-DD-\u4E3B\u9898.md\uFF08\u54EA\u91CC\u51FA\u4E86\u95EE\u9898\u3001\u4E3A\u4EC0\u4E48\u3001\u4F9D\u636E\u3001\u4EE5\u540E\u600E\u4E48\u505A\uFF09\uFF0C\u7ED3\u5C3E\u201C\u4EE5\u540E\u600E\u4E48\u505A\u201D\u7684\u6BCF\u4E00\u6761\u540C\u6837\u8BB0\u8FDB PRACTICE.md\u3002Dove \u4F1A\u5728\u4F1A\u8BDD\u5F00\u59CB\u3001\u538B\u7F29\u540E\u548C\u76F8\u5173\u7684\u6D88\u606F\u91CC\u628A\u8FD9\u4E9B\u884C\u9001\u56DE\u6765\uFF1B\u7528\u6237\u53EF\u4EE5\u968F\u65F6\u6539\u6216\u5220\u3002\u7B80\u77ED\u56DE\u5E94\uFF0C\u53EA\u6309\u8BB0\u5F55\u8BF4\u6E05\u9519\u5728\u54EA\uFF0C\u4E0D\u7F16\u9020\u51FA\u9519\u539F\u56E0\uFF0C\u4E0D\u6269\u6210\u666E\u904D\u7981\u4EE4\u3002"
 ]);
 var DOVE_OPERATING_DECISIONS = Object.freeze([
   "\u5F52\u7528\u6237\u51B3\u5B9A\u7684\u4E8B\uFF1A\u4E3B\u7EBF\u548C\u4E3B\u6307\u6807\u3001\u65B0\u65B9\u6CD5\u8BBE\u8BA1\u3001\u65B9\u5411\u548C\u65B9\u6CD5\u65CF\u7684\u66F4\u6362\u3001\u76EE\u6807\u6863\u6B21\u3001\u90E8\u7F72\u8F93\u5165\u8F93\u51FA\u3001\u8D44\u6E90\u627F\u8BFA\uFF0C\u4EE5\u53CA\u4F1A\u5B9E\u8D28\u6539\u53D8\u4E0B\u4E00\u6B65\u7684\u6B67\u4E49\u3002\u5373\u4F7F\u6587\u6863\u5199\u7740\u201C\u7528\u6237\u5DF2\u786E\u8BA4\u201D\uFF0C\u53EA\u8981\u505A\u6CD5\u4F1A\u4E22\u6389\u6838\u5FC3\u80FD\u529B\uFF0C\u4E5F\u7528\u767D\u8BDD\u63D0\u9192\u4E00\u6B21\uFF1A\u4E22\u4E86\u4EC0\u4E48\uFF0C\u65E7\u8DEF\u7EBF\u56E0\u4E3A\u8BAD\u7EC3\u4E0D\u8DB3\u3001\u5B9E\u73B0\u3001\u8BC4\u4EF7\u8FD8\u662F\u786E\u88AB\u53CD\u9A73\u800C\u505C\u3002\u7136\u540E\u6309\u7528\u6237\u771F\u5B9E\u7B54\u590D\u6267\u884C\u5E76\u8BB0\u5361\uFF0C\u4E0D\u53CD\u590D\u8FFD\u95EE\uFF0C\u4E5F\u4E0D\u501F\u63D0\u9192\u963B\u6321\u7528\u6237\u7684\u8981\u6C42\u3002",
   "\u53EA\u4E3A\u4E09\u7C7B\u60C5\u51B5\u505C\u4E0B\u6765\uFF1A\u4E0A\u9762\u8FD9\u4E9B\u8981\u7528\u6237\u51B3\u5B9A\u7684\u4E8B\uFF1B\u8D85\u65F6\u6216\u505C\u6EDE\uFF1B\u7528\u6237\u53EB\u505C\u3002\u5176\u4F59\u65F6\u5019\u63A5\u7740\u505A\uFF0C\u4E0D\u4E3A\u5199\u6C47\u62A5\u800C\u505C\u3002\u7B49\u7528\u6237\u7B54\u590D\u65F6\uFF0C\u63A5\u7740\u505A\u4E0D\u4F9D\u8D56\u8FD9\u4E2A\u51B3\u5B9A\u7684\u4E8B\uFF0C\u4E0D\u7EE7\u7EED\u5DF2\u7ECF\u89E6\u53D1\u505C\u6EDE\u7684\u8DEF\u7EBF\u3002\u53EA\u8BA8\u8BBA\u548C\u505C\u6B62\u7684\u8981\u6C42\u7167\u529E\u3002",
-  "\u8BF7\u72EC\u7ACB\u5BFC\u5E08\u5224\u65AD\u7684\u65F6\u523B\uFF1A\u4E00\u8F6E\u51FA\u5224\u5B9A\u65F6\u3001\u89E6\u53D1\u8D85\u65F6\u6216\u505C\u6EDE\u65F6\u3001\u65B0\u65B9\u6CD5\u8BBE\u8BA1\u65F6\u3001\u7528\u6237\u8981\u6C42\u65F6\u3002\u7528\u5168\u65B0\u7684\u539F\u751F\u53EA\u8BFB agent\uFF08dove-mentor\uFF09\uFF0C\u8C03\u7528\u6B63\u6587\u6574\u6BB5\u7528 `dove mentor brief --project <root>` \u751F\u6210\u7684\u6A21\u677F\uFF0C\u518D\u52A0\u4E00\u53E5\u89E6\u53D1\u539F\u56E0\uFF1B\u540C\u4E00\u6B21\u5224\u65AD\u53EF\u4EE5\u8FFD\u95EE\u4E24\u4E09\u6B21\u3002\u5BFC\u5E08\u7B14\u8BB0\u539F\u6837\u8FFD\u52A0\u5230 .dove/research/MENTOR_NOTES.md\uFF0C\u5BFC\u5E08\u5199\u7684\u7814\u7A76\u72B6\u6001\u548C\u516B\u7EF4\u8D70\u52BF\u884C\u539F\u6837\u66F4\u65B0\u5230\u8EAB\u4EFD\u5361\u548C EVAL\u3002\u72B6\u6001\u95EE\u9898\u548C\u666E\u901A\u7B54\u590D\u4E0D\u8C03\u5BFC\u5E08\u3002",
+  "\u8BF7\u72EC\u7ACB\u5BFC\u5E08\u5224\u65AD\u7684\u65F6\u523B\uFF1A\u4E00\u8F6E\u51FA\u5224\u5B9A\u65F6\u3001\u89E6\u53D1\u8D85\u65F6\u6216\u505C\u6EDE\u65F6\u3001\u65B0\u65B9\u6CD5\u8BBE\u8BA1\u65F6\u3001\u7528\u6237\u8981\u6C42\u65F6\u3002\u7528\u5168\u65B0\u7684\u539F\u751F\u53EA\u8BFB agent\uFF08dove-mentor\uFF09\uFF0C\u8C03\u7528\u6B63\u6587\u6574\u6BB5\u7528 `dove mentor brief --project <root>` \u751F\u6210\u7684\u6A21\u677F\uFF0C\u518D\u52A0\u4E00\u53E5\u89E6\u53D1\u539F\u56E0\uFF1B\u540C\u4E00\u6B21\u5224\u65AD\u53EF\u4EE5\u8FFD\u95EE\u4E24\u4E09\u6B21\u3002\u5BFC\u5E08\u7B14\u8BB0\u539F\u6837\u8FFD\u52A0\u5230 .dove/research/MENTOR_NOTES.md\uFF1B\u6750\u6599\u6CE8\u660E\u7B14\u8BB0\u6574\u7406\u5230\u671F\u65F6\uFF0C\u5148\u628A\u539F MENTOR_NOTES.md \u539F\u6837\u5B58\u5230 .dove/research/archive/MENTOR_NOTES-YYYY-MM-DD.md\uFF0C\u518D\u7528\u5BFC\u5E08\u8FD4\u56DE\u7684\u6574\u7406\u540E\u7B14\u8BB0\u66FF\u6362\u3002\u5BFC\u5E08\u5199\u7684\u7814\u7A76\u72B6\u6001\u548C\u516B\u7EF4\u8D70\u52BF\u884C\u539F\u6837\u66F4\u65B0\u5230\u8EAB\u4EFD\u5361\u548C EVAL\u3002\u72B6\u6001\u95EE\u9898\u548C\u666E\u901A\u7B54\u590D\u4E0D\u8C03\u5BFC\u5E08\u3002",
   "\u9009\u9898\u65F6\u5148\u8BFB .dove/install/TOPIC_CRITERIA.md\u3001\u9879\u76EE .dove/research/topics/PROJECT.md \u548C\u7814\u7A76\u6807\u51C6\u7684\u201C\u9009\u9898\u4E0E\u65B0\u610F\u201D\uFF0C\u4E00\u8F6E\u4EA4\u51FA\u6709\u6765\u6E90\u7684\u5019\u9009\u3001\u8FD1\u90BB\u548C\u63A8\u8350\u4F9B\u7528\u6237\u9009\uFF1B\u7528 dove topic start \u51C6\u5907\u6750\u6599\uFF0C\u5019\u9009\u5199\u5728 .dove/research/topics/cards/NN-name.md\u3002\u7528\u6237\u9009\u5B9A\u4E3B\u7EBF\u5C31\u7ED3\u675F\u9009\u9898\uFF1B\u9009\u5B9A\u524D\u4E0D\u5B9E\u73B0\u65B9\u6CD5\uFF0C\u53EA\u505A\u6807\u51C6\u5141\u8BB8\u7684\u8BCA\u65AD\u3002\u65B9\u6CD5\u95ED\u5408\u540E\u5199\u7406\u8BBA\u5F00\u9898\uFF0C\u7528\u6237\u540C\u610F\u540E\u6309\u4E66\u9762\u534F\u8BAE\u505A\u6B63\u5F0F\u5C1D\u8BD5\u3002",
   "\u7528\u6237\u786E\u8BA4\u7684\u6295\u7A3F\u5B8C\u6210\u76EE\u6807\uFF0C\u9700\u8981\u4F5C\u8005\u5224\u65AD\u79D1\u5B66\u4E0A\u591F\u7528\u3001\u771F\u6B63\u72EC\u7ACB\u7684\u5BA1\u7A3F\u5EFA\u8BAE\u63A5\u53D7\u540C\u4E00\u5B8C\u6574\u5F53\u524D\u7248\u672C\uFF0C\u4EE5\u53CA\u5B9E\u9645\u4EA4\u4ED8\u5C31\u7EEA\u3002\u72EC\u7ACB\u5BA1\u7A3F\u4E0D\u53EF\u5F97\u5C31\u7559\u4F5C\u7F3A\u53E3\uFF1B\u666E\u901A\u5177\u4F53\u4EFB\u52A1\u53EF\u5728\u8303\u56F4\u5185\u5B8C\u6210\u3002"
 ]);
@@ -435,7 +435,7 @@ EVAL\u3001\u8BF4\u660E\u3001\u7ED3\u679C\u548C\u6267\u884C\u8005\u610F\u89C1\u53
 
 - **\u5224\u5B9A\u6838\u5BF9**\uFF1A\u672C\u8F6E\u7ED3\u679C\u7684\u5224\u5B9A\uFF0C\u662F\u5426\u5BF9\u5F97\u4E0A\u8BF4\u660E\u91CC\u4E8B\u5148\u5199\u4E0B\u7684\u5BF9\u51C6\u7EF4\u5EA6\u548C\u6210\u8D25\u6807\u51C6\uFF1F\u5224\u5B9A\u504F\u4E50\u89C2\u3001\u6362\u4E86\u6807\u51C6\u6216\u6311\u4E86\u597D\u770B\u7684\u7EF4\u5EA6\uFF0C\u5C31\u76F4\u63A5\u6307\u51FA\u5E76\u7ED9\u51FA\u4F60\u7684\u5224\u5B9A\u3002\u53EA\u6392\u9664\u67D0\u4E2A\u5C40\u90E8\u5199\u6CD5\u7684\u8BCA\u65AD\u662F\u5DE5\u4F5C\u8FDB\u5C55\uFF0C\u4E0D\u662F\u79D1\u7814\u7ED3\u679C\uFF1B\u5408\u6210\u6216\u8BAD\u7EC3\u5206\u5E03\u4E0A\u7684\u6570\u5B57\u53EA\u7B97\u5F00\u53D1\u4FE1\u53F7\uFF0C\u672A\u89C1\u6570\u636E\u624D\u652F\u6491\u6CDB\u5316\u3002
 - **\u65B9\u6CD5\u8BBE\u8BA1**\uFF1A\u590D\u6838\u8EAB\u4EFD\u5361 Method design \u6307\u5411\u7684\u8BF4\u660E\u91CC\u201C## \u65B9\u6CD5\u8BBE\u8BA1\u201D\u7684\u4E09\u6BB5\uFF1A\u95EE\u9898\u3001\u771F\u5B9E\u6570\u636E\u8BC1\u636E\u548C\u8981\u8FBE\u5230\u7684\u7A0B\u5EA6\uFF1B\u5916\u90E8\u65B9\u6CD5\uFF08\u542B\u672C\u9886\u57DF\u9AD8\u624B\u7684\u9ED8\u8BA4\u505A\u6CD5\u548C\u5176\u4ED6\u9886\u57DF\u89E3\u540C\u6784\u95EE\u9898\u7684\u505A\u6CD5\uFF09\u7684\u5177\u4F53\u673A\u5236\u4E3A\u4F55\u4E0D\u8DB3\uFF1B\u6539\u6CD5\u7684\u9884\u671F\u3001\u6210\u8D25\u6807\u51C6\u548C\u7B2C\u4E00\u4E2A\u771F\u5B9E\u7ED3\u679C\u7684\u65F6\u95F4\u3002\u7ED3\u679C\u8FD8\u652F\u6301\u5B83\u4EEC\u5417\uFF1F\u8FD9\u4E00\u6B65\u600E\u6837\u6539\u5584\u539F\u95EE\u9898\u3001\u6539\u5584\u591A\u5C11\uFF0C\u8FDE\u63A5\u662F\u5426\u68C0\u9A8C\u8FC7\uFF1F\u65B0\u65B9\u6CD5\u987B\u5148\u8BA9\u7528\u6237\u770B\u8FC7\uFF0C\u666E\u901A\u4FEE\u590D\u548C\u8BC4\u4EF7\u4FEE\u6B63\u4E0D\u91CD\u590D\u8FD9\u4E00\u6B65\u3002
-- **\u65B9\u5411\u548C\u7591\u95EE**\uFF1A\u8FD8\u5728\u89E3\u51B3\u7528\u6237\u8981\u7684\u95EE\u9898\u5417\uFF0C\u76F8\u5BF9\u6700\u63A5\u8FD1\u7684\u5DE5\u4F5C\u5DEE\u522B\u5728\u54EA\uFF0C\u79BB\u76EE\u6807\u6863\u6B21\u5DEE\u4EC0\u4E48\uFF1F\u63D0\u51FA\u4F60\u771F\u6B63\u7684\u7591\u95EE\uFF0C\u4E0D\u53EA\u786E\u8BA4\u5BBF\u4E3B\u7684\u8BF4\u6CD5\u3002\u4E3B\u7EBF\u9996\u6B21\u5224\u65AD\u548C\u65B9\u6CD5\u65CF\u6539\u53D8\u65F6\u8BFB\u8FD1\u90BB\u8BBA\u6587\u6B63\u6587\u3002\u6839\u636E\u771F\u5B9E\u5931\u8D25\u63D0\u51FA\u89E3\u91CA\u3001\u65B9\u6CD5\u6539\u52A8\u548C\u80FD\u533A\u5206\u5B83\u4EEC\u7684\u9884\u671F\uFF0C\u5176\u4E2D\u81F3\u5C11\u8003\u8651\u4E00\u4E2A\u4E0D\u662F\u4ECE\u5F53\u524D\u505A\u6CD5\u6539\u51FA\u6765\u7684\u65B9\u6848\uFF1B\u6BD4\u8F83\u6574\u4F53\u6536\u76CA\u4E0E\u6210\u672C\uFF0C\u4E0D\u9ED8\u8BA4\u8865\u4E01\u6216\u52A0\u79CD\u5B50\u3002\u5BF9\u7167\u5BFC\u5E08\u7B14\u8BB0\u91CC\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u65CF\uFF0C\u770B\u662F\u5426\u6362\u4E2A\u8BF4\u6CD5\u53C8\u56DE\u6765\u4E86\uFF1B\u5BF9\u7167\u7528\u6237\u8FC7\u53BB\u7684\u7EA0\u6B63\uFF0C\u770B\u662F\u5426\u91CD\u72AF\uFF0C\u8BA4\u9519\u4E0D\u7B97\u6539\u6B63\uFF0C\u8981\u770B\u884C\u52A8\u3002
+- **\u65B9\u5411\u548C\u7591\u95EE**\uFF1A\u8FD8\u5728\u89E3\u51B3\u7528\u6237\u8981\u7684\u95EE\u9898\u5417\uFF0C\u76F8\u5BF9\u6700\u63A5\u8FD1\u7684\u5DE5\u4F5C\u5DEE\u522B\u5728\u54EA\uFF0C\u79BB\u76EE\u6807\u6863\u6B21\u5DEE\u4EC0\u4E48\uFF1F\u63D0\u51FA\u4F60\u771F\u6B63\u7684\u7591\u95EE\uFF0C\u4E0D\u53EA\u786E\u8BA4\u5BBF\u4E3B\u7684\u8BF4\u6CD5\u3002\u4E3B\u7EBF\u9996\u6B21\u5224\u65AD\u548C\u65B9\u6CD5\u65CF\u6539\u53D8\u65F6\u8BFB\u8FD1\u90BB\u8BBA\u6587\u6B63\u6587\u3002\u6839\u636E\u771F\u5B9E\u5931\u8D25\u63D0\u51FA\u89E3\u91CA\u3001\u65B9\u6CD5\u6539\u52A8\u548C\u80FD\u533A\u5206\u5B83\u4EEC\u7684\u9884\u671F\uFF0C\u5176\u4E2D\u81F3\u5C11\u8003\u8651\u4E00\u4E2A\u4E0D\u662F\u4ECE\u5F53\u524D\u505A\u6CD5\u6539\u51FA\u6765\u7684\u65B9\u6848\uFF1B\u6BD4\u8F83\u6574\u4F53\u6536\u76CA\u4E0E\u6210\u672C\uFF0C\u4E0D\u9ED8\u8BA4\u8865\u4E01\u6216\u52A0\u79CD\u5B50\u3002\u5BF9\u7167\u5BFC\u5E08\u7B14\u8BB0\u91CC\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u65CF\uFF0C\u770B\u662F\u5426\u6362\u4E2A\u8BF4\u6CD5\u53C8\u56DE\u6765\u4E86\uFF1B\u5BF9\u7167\u7528\u6237\u8FC7\u53BB\u7684\u7EA0\u6B63\u548C\u6750\u6599\u91CC\u7684\u505A\u6CD5\u66F4\u6B63\uFF0C\u770B\u662F\u5426\u91CD\u72AF\uFF0C\u540C\u4E00\u4E3B\u9898\u53CD\u590D\u51FA\u73B0\u8BF4\u660E\u505A\u6CD5\u8FD8\u6CA1\u6539\u8FC7\u6765\uFF0C\u8BA4\u9519\u4E0D\u7B97\u6539\u6B63\uFF0C\u8981\u770B\u884C\u52A8\u3002
 - **\u8D85\u65F6\u6216\u505C\u6EDE\u65F6**\uFF1A\u5148\u5224\u65AD\u539F\u56E0\uFF1A\u5B9E\u73B0\u6545\u969C\u3001\u8BC4\u4EF7\u5931\u6548\uFF0C\u8FD8\u662F\u65B9\u6CD5\u5047\u8BBE\u5931\u8D25\u3002\u7ED9\u51FA\u7EE7\u7EED\u5F53\u524D\u65B9\u6CD5\uFF08\u9644\u7406\u7531\uFF09\u3001\u6362\u65B9\u6CD5\uFF08\u81F3\u5C11\u4E00\u4E2A\u4E0D\u662F\u4ECE\u5F53\u524D\u65B9\u6CD5\u6539\u51FA\u6765\u7684\u65B9\u6CD5\u65CF\uFF0C\u8BF4\u6E05\u4E24\u8FB9\u600E\u4E48\u5BF9\u5E94\uFF09\u3001\u6362\u65B9\u5411\u4E09\u4E2A\u9009\u9879\u5404\u81EA\u7684\u4F9D\u636E\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u4EA4\u7528\u6237\u9009\uFF1B\u4E0D\u80FD\u7528\u201C\u4ECD\u5728\u6388\u6743\u5185\u201D\u66FF\u7528\u6237\u7EED\u63A8\u3002
 - **\u5DE5\u7A0B\u6838\u9A8C**\u53EA\u505A\u4F1A\u6539\u53D8\u5F53\u524D\u51B3\u5B9A\u7684\u90E8\u5206\uFF0C\u4E89\u8BAE\u4E4B\u5916\u4E0D\u5806\u54C8\u5E0C\u3001\u9010\u4F4D\u7B49\u4EF7\u7B49\u68C0\u67E5\u3002\u5173\u952E\u7EF4\u5EA6\u8FDE\u7EED\u4E24\u6B21\u5224\u65AD\u4E0D\u4E86\uFF0C\u5C31\u5B89\u6392\u6700\u80FD\u6D88\u9664\u8FD9\u4E2A\u672A\u77E5\u7684\u53D6\u8BC1\uFF1B\u8BC1\u636E\u5DF2\u591F\u5C31\u7ED9\u7ED3\u8BBA\u3002
 
@@ -447,12 +447,14 @@ EVAL\u3001\u8BF4\u660E\u3001\u7ED3\u679C\u548C\u6267\u884C\u8005\u610F\u89C1\u53
 3. **\u516B\u7EF4\u5224\u65AD**\uFF1A\u6309\u7814\u7A76\u6807\u51C6\uFF08\u5B9E\u73B0 1\u20133\uFF0C\u5176\u4F59 1\u20134\uFF09\uFF0C\u5199\u6210 EVAL \u8D70\u52BF\u8868\u7684\u4E00\u884C\uFF08\u65E5\u671F\u3001\u8F6E\u6B21\u3001\u516B\u4E2A\u7B49\u7EA7\u3001\u6700\u5361\u7684\u4E00\u7EF4\uFF09\uFF0C\u8868\u4E0B\u9644\u4F9D\u636E\u3001\u672A\u77E5\u548C\u5171\u540C\u74F6\u9888\u3002\u6700\u5361\u7684\u4E00\u7EF4\u5C31\u662F\u4E0B\u4E00\u8F6E\u7684\u5BF9\u51C6\u3002
 4. **\u4E0B\u4E00\u8F6E\u8BF4\u660E**\uFF1A\u6309\u64CD\u4F5C\u8BF4\u660E\u7684\u8BF4\u660E\u683C\u5F0F\uFF0C\u5F00\u5934\u5199 Author\u3001\u5BF9\u51C6\u3001\u89C1\u5206\u6653\uFF08\u542B\u5F00\u59CB\u65E5\u671F\uFF09\u3001\u89C4\u6A21\u3001\u9884\u6D4B\uFF0C\u7136\u540E\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u548C\u201C## \u9884\u671F\u7ED3\u679C\u201D\u3002\u9884\u6D4B\u53EA\u5199\u4E00\u4E2A\u91CF\u548C\u516B\u6210\u628A\u63E1\u7684\u533A\u95F4\uFF0C\u4E0D\u786E\u5B9A\u6027\u653E\u8FDB\u533A\u95F4\u5BBD\u5EA6\uFF0C\u4E0D\u5199\u6761\u4EF6\u6216\u524D\u63D0\uFF1B\u5199\u6E05\u505A\u4EC0\u4E48\u3001\u4E3A\u4EC0\u4E48\u3001\u771F\u5B9E\u7ED3\u679C\u610F\u5473\u7740\u4EC0\u4E48\u3001\u7ED3\u679C\u600E\u6837\u6539\u53D8\u51B3\u5B9A\uFF0C\u4EE5\u53CA\u516C\u5E73\u5BF9\u7167\u3001\u8F93\u5165\u3001\u9884\u7B97\u548C\u4E3A\u4EC0\u4E48\u8DB3\u4EE5\u5206\u51FA\u7ED3\u679C\u3002
 5. **\u7814\u7A76\u72B6\u6001**\uFF1A\u7EA6 300 \u5B57\u767D\u8BDD\uFF0C\u8BA9\u7B2C\u4E00\u6B21\u63A5\u624B\u7684\u4EBA\u770B\u61C2\uFF1A\u73B0\u5728\u5728\u505A\u4EC0\u4E48\u3001\u771F\u5B9E\u7ED3\u679C\u662F\u591A\u5C11\u3001\u610F\u5473\u7740\u4EC0\u4E48\u3001\u5361\u5728\u54EA\u91CC\u3002\u4E3B\u4F1A\u8BDD\u539F\u6837\u66F4\u65B0\u5230\u8EAB\u4EFD\u5361\u3002
-6. **\u5BFC\u5E08\u7B14\u8BB0**\uFF1A\u4F60\u7684\u5224\u65AD\u548C\u62C5\u5FE7\uFF1B\u4E0A\u6B21\u7684\u9884\u6D4B\u6709\u6CA1\u6709\u5151\u73B0\uFF1B\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u65CF\u548C\u539F\u56E0\uFF1B\u4EE5\u201C\u53EF\u8FC1\u79FB\uFF1A\u201D\u5F00\u5934\u5199\u51FA\u80FD\u7528\u5230\u5176\u4ED6\u9879\u76EE\u7684\u8BA4\u8BC6\uFF08\u8DE8\u9879\u76EE\u7ECF\u9A8C\u9875\u6C47\u603B\u8FD9\u4E9B\u884C\uFF09\uFF1B\u201C### \u5F85\u7528\u6237\u51B3\u5B9A\u201D\u5217\u51FA\u53EA\u6709\u7528\u6237\u80FD\u5B9A\u7684\u4E8B\uFF0C\u6CA1\u6709\u5C31\u5199\u201C\u65E0\u201D\u3002\u4E3B\u4F1A\u8BDD\u539F\u6837\u8FFD\u52A0\u5230 MENTOR_NOTES.md\u3002
+6. **\u5BFC\u5E08\u7B14\u8BB0**\uFF1A\u4F60\u7684\u5224\u65AD\u548C\u62C5\u5FE7\uFF1B\u4E0A\u6B21\u7684\u9884\u6D4B\u6709\u6CA1\u6709\u5151\u73B0\uFF1B\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u65CF\u548C\u539F\u56E0\uFF1B\u4EE5\u201C\u53EF\u8FC1\u79FB\uFF08<\u516B\u7EF4\u4E2D\u7684\u4E00\u7EF4>\uFF09\uFF1A\u201D\u5F00\u5934\u5199\u51FA\u80FD\u7528\u5230\u5176\u4ED6\u9879\u76EE\u7684\u8BA4\u8BC6\uFF0C\u62EC\u53F7\u91CC\u5199\u5B83\u4E3B\u8981\u5173\u7CFB\u5230\u54EA\u4E00\u7EF4\uFF08\u8DE8\u9879\u76EE\u7ECF\u9A8C\u9875\u6C47\u603B\u8FD9\u4E9B\u884C\uFF0C\u5E76\u6309\u7EF4\u5EA6\u6311\u7ED9\u5176\u4ED6\u9879\u76EE\u7684\u5BFC\u5E08\uFF09\uFF1B\u201C### \u5F85\u7528\u6237\u51B3\u5B9A\u201D\u5217\u51FA\u53EA\u6709\u7528\u6237\u80FD\u5B9A\u7684\u4E8B\uFF0C\u6CA1\u6709\u5C31\u5199\u201C\u65E0\u201D\u3002\u4E3B\u4F1A\u8BDD\u539F\u6837\u8FFD\u52A0\u5230 MENTOR_NOTES.md\u3002
 \u672B\u5C3E\u6CE8\u660E\u65B9\u6CD5\u7248\u672C\u3001\u5B9E\u9645\u8BFB\u8FC7\u7684\u6587\u4EF6\u548C\u7247\u6BB5\u3001\u7528\u6237\u539F\u8BDD\u7684\u8303\u56F4\u3002
 
 ## \u957F\u671F\u610F\u56FE\u3001\u9009\u9898\u548C\u8BBA\u6587\u8FFD\u8E2A
 
-\u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\u65F6\uFF08\u6750\u6599\u91CC\u4F1A\u5199\uFF09\uFF0C\u6838\u5BF9\u672C\u4EBA\u6765\u6E90\uFF0C\u5728\u5BFC\u5E08\u7B14\u8BB0\u91CC\u8FD4\u56DE\u201C## \u957F\u671F\u610F\u56FE\uFF08YYYY-MM-DD\uFF09\u201D\uFF1A\u957F\u671F\u76EE\u6807\u3001\u5B9E\u9645\u65B9\u6CD5\u548C\u6307\u6807\u662F\u5426\u5BF9\u5F97\u4E0A\u3001\u504F\u79BB\u4ECE\u4F55\u5904\u8FDB\u5165\u3001\u65B0\u610F\u5224\u65AD\u3001\u5F85\u7528\u6237\u51B3\u5B9A\u7684\u4E8B\uFF1B\u5E73\u65F6\u6CBF\u7528\u6700\u8FD1\u4E00\u8282\uFF0C\u5DF2\u95EE\u8FC7\u7684\u4E8B\u8BB0\u4E0B\u56DE\u7B54\uFF0C\u4E0D\u53CD\u590D\u8FFD\u95EE\u3002
+\u6750\u6599\u6CE8\u660E\u5BFC\u5E08\u7B14\u8BB0\u6574\u7406\u5230\u671F\u65F6\uFF0C\u53E6\u8FD4\u56DE\u201C## \u6574\u7406\u540E\u7684\u5BFC\u5E08\u7B14\u8BB0\uFF08YYYY-MM-DD\uFF09\u201D\uFF0C\u4F5C\u4E3A\u5B8C\u6574\u66FF\u6362\u7248\uFF1A\u4FDD\u7559\u6700\u8FD1\u4E00\u8282\u957F\u671F\u610F\u56FE\uFF08\u539F\u6807\u9898\u548C\u65E5\u671F\uFF09\u3001\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u65CF\u548C\u539F\u56E0\u3001\u9884\u6D4B\u4E0E\u5151\u73B0\u7684\u8BB0\u5F55\u3001\u4ECD\u672A\u89E3\u51B3\u7684\u62C5\u5FE7\u548C\u7591\u95EE\u4EE5\u53CA\u5DF2\u6709\u7684\u7B54\u590D\u3001\u5168\u90E8\u53EF\u8FC1\u79FB\u8BA4\u8BC6\uFF08\u5199\u6210\u201C\u53EF\u8FC1\u79FB\uFF08\u7EF4\u5EA6\uFF0C\u539F\u65E5\u671F\uFF09\uFF1A\u201D\uFF09\u548C\u201C### \u5F85\u7528\u6237\u51B3\u5B9A\u201D\uFF1B\u5220\u6389\u5DF2\u88AB\u63A8\u7FFB\u6216\u91CD\u590D\u7684\u5224\u65AD\uFF0C\u4EE5\u53CA\u5DF2\u7ECF\u5199\u8FDB\u8F6E\u6B21\u7ED3\u679C\u7684\u8FC7\u7A0B\u53D9\u8FF0\u3002
+
+\u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\u65F6\uFF08\u6750\u6599\u91CC\u4F1A\u5199\uFF09\uFF0C\u6838\u5BF9\u672C\u4EBA\u6765\u6E90\uFF0C\u5728\u5BFC\u5E08\u7B14\u8BB0\u91CC\u8FD4\u56DE\u201C## \u957F\u671F\u610F\u56FE\uFF08YYYY-MM-DD\uFF09\u201D\uFF0C\u5F00\u5934\u4E24\u8282\u662F\u201C### \u6838\u5FC3\u9700\u6C42\u201D\u548C\u201C### \u7EA6\u675F\u201D\uFF0C\u6BCF\u6761\u4E00\u884C\uFF0C\u6CE8\u660E\u51FA\u81EA\u7528\u6237\u54EA\u5929\u7684\u539F\u8BDD\uFF08Dove \u4F1A\u628A\u8FD9\u4E24\u8282\u5728\u6BCF\u6B21\u4F1A\u8BDD\u5F00\u59CB\u548C\u538B\u7F29\u540E\u9001\u7ED9\u5BBF\u4E3B\uFF0C\u5199\u6210\u5BBF\u4E3B\u7167\u7740\u5C31\u80FD\u505A\u7684\u8BDD\uFF09\uFF1B\u4E4B\u540E\u5199\uFF1A\u957F\u671F\u76EE\u6807\u3001\u5B9E\u9645\u65B9\u6CD5\u548C\u6307\u6807\u662F\u5426\u5BF9\u5F97\u4E0A\u3001\u504F\u79BB\u4ECE\u4F55\u5904\u8FDB\u5165\u3001\u65B0\u610F\u5224\u65AD\u3001\u5F85\u7528\u6237\u51B3\u5B9A\u7684\u4E8B\uFF1B\u5E73\u65F6\u6CBF\u7528\u6700\u8FD1\u4E00\u8282\uFF0C\u5DF2\u95EE\u8FC7\u7684\u4E8B\u8BB0\u4E0B\u56DE\u7B54\uFF0C\u4E0D\u53CD\u590D\u8FFD\u95EE\u3002
 
 \u9009\u9898\u672A\u5B9A\u65F6\uFF0C\u6309\u9009\u9898\u6807\u51C6\u548C\u7814\u7A76\u6807\u51C6\u7684\u201C\u9009\u9898\u4E0E\u65B0\u610F\u201D\u53D6\u8BC1\u3001\u627E\u7F3A\u53E3\u3001\u6BD4\u8F83\u5019\u9009\uFF0C\u4E00\u8F6E\u7ED9\u51FA\u6700\u4F73\u63A8\u8350\u8BA9\u7528\u6237\u5B9A\u4E3B\u7EBF\uFF0C\u4E0D\u4EE5\u5B8C\u6574\u7406\u8BBA\u5F00\u9898\u62D6\u4F4F\u63A8\u8350\u3002
 
@@ -1046,7 +1048,7 @@ function parseDoveCurrentRound(card = "") {
 }
 function separateResearchState(card) {
   const lines = card.split(/\r?\n/u);
-  const start = lines.findIndex((line) => /^(Research state|研究状态)$/iu.test(line.match(CARD_FIELD)?.[1] ?? ""));
+  const start = lines.findIndex((line2) => /^(Research state|研究状态)$/iu.test(line2.match(CARD_FIELD)?.[1] ?? ""));
   if (start === -1) return { state: "", rest: card };
   let end = start + 1;
   while (end < lines.length && !CARD_FIELD.test(lines[end])) end += 1;
@@ -1077,8 +1079,8 @@ import os from "node:os";
 import path3 from "node:path";
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path24) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path24 === "$" ? key : `${path24}.${key}`}.`);
+function duplicateKeyError(label, key, path26) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path26 === "$" ? key : `${path26}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -1114,7 +1116,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path24) {
+  function parseArray(path26) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -1123,7 +1125,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path24}[${itemIndex}]`);
+      parseValue(`${path26}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -1135,7 +1137,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path24) {
+  function parseObject(path26) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -1145,12 +1147,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path24);
+      if (keys.has(key)) duplicateKeyError(label, key, path26);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path24 === "$" ? `$.${key}` : `${path24}.${key}`);
+      parseValue(path26 === "$" ? `$.${key}` : `${path26}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -1161,11 +1163,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path24) {
+  function parseValue(path26) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path24);
-    else if (character === "[") parseArray(path24);
+    if (character === "{") parseObject(path26);
+    else if (character === "[") parseArray(path26);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -1414,9 +1416,9 @@ function assertPlainObject(value, label) {
 }
 function assertFields(value, fields, label) {
   assertPlainObject(value, label);
-  const unknown = Object.keys(value).filter((field) => !fields.has(field));
+  const unknown = Object.keys(value).filter((field2) => !fields.has(field2));
   if (unknown.length > 0) throw new Error(`${label} does not accept unknown fields: ${unknown.join(", ")}.`);
-  const missing = [...fields].filter((field) => !Object.hasOwn(value, field));
+  const missing = [...fields].filter((field2) => !Object.hasOwn(value, field2));
   if (missing.length > 0) throw new Error(`${label} is missing required fields: ${missing.join(", ")}.`);
 }
 function nonEmptyString(value, label) {
@@ -1599,11 +1601,585 @@ function readProjectInstallationManifest(root, options = {}) {
   }
 }
 
-// src/core/round-state.mjs
+// src/core/practice.mjs
+import fs9 from "node:fs";
+import path8 from "node:path";
+
+// src/core/cross-project.mjs
+import fs8 from "node:fs";
+import path7 from "node:path";
+
+// src/core/user-originals.mjs
 import fs7 from "node:fs";
+import os2 from "node:os";
 import path6 from "node:path";
+var USER_ORIGINALS_PATH = ".dove/install/USER_ORIGINALS.md";
+var USER_ORIGINALS_INDEX_PATH = ".dove/install/user-originals-index.json";
+var ACTIVITY_INDEX_PATH = ".dove/install/activity-index.json";
+var ACTIVITY_BUCKET_MS = 6e5;
+var ACTIVITY_SCHEMA = 2;
+var HEDGES = ["\u4F46\u662F", "\u4E0D\u8FC7", "\u53EF\u80FD", "\u5C1A\u672A", "\u4ECD\u9700", "\u4E0D\u4EE3\u8868", "\u4E0D\u7B49\u4E8E", "\u4E0D\u80FD\u5BA3\u79F0", "\u4E0D\u4FDD\u8BC1", "\u8BC1\u636E\u8FB9\u754C", "\u6709\u5F85", "\u6682\u4E0D"];
+var GATES = /sha256|哈希|冻结|门禁|equivalence gate|只读清单/giu;
+var ROUND_FILE = /(?:^|\/)\.dove\/research\/rounds\/(\d+)[-_](brief|result)\.md$/u;
+var CLAIMS = /已验证|验证通过|测试通过|全部通过|已跑通|跑通了|已确认可用/gu;
+var ACTIVITY_FIELDS = Object.freeze(["agents", "compactions", "mentor", "chars", "hedges", "gates", "claims", "unrun"]);
+var SKIP = /^(?:<|\[Image|\[Your previous response|\[Request interrupted|This session is being continued|Base directory for this skill|# dove\.|Another Claude session sent|Caveat:|Continue the conversation from where|Stop hook feedback|【Dove 引用用户)/u;
+var RELAY = /^(?:主会话 ?Claude|Claude[:：，,]|用户已同意|【用户已同意|告知[:：]|更正上一条|转达|用户 ?\d{4}-\d{2}-\d{2} ?决定|用户原话（|请先完整阅读)/u;
+var SHORT = 6;
+var LIMIT = 700;
+var CHUNK = 8 << 20;
+var INDEX_SCHEMA = 1;
+var MAX_LINE = 256 << 10;
+var USER_ORIGINALS_BUDGET_MS = 2e4;
+var encode = (value) => value.replace(/[^A-Za-z0-9]/gu, "-");
+function sessionDirectory(root, options) {
+  return path6.join(options.home ?? options.env?.HOME ?? os2.homedir(), ".claude/projects", encode(root));
+}
+function sessionDirectories(project, options = {}) {
+  const fsOps = options.fsOps ?? fs7;
+  const root = path6.resolve(project);
+  const directory = sessionDirectory(root, options);
+  try {
+    return fsOps.readdirSync(path6.dirname(directory)).includes(encode(root)) ? [directory] : [];
+  } catch {
+    return [];
+  }
+}
+function messageTexts(record) {
+  if (record?.type !== "user" || record.isSidechain || record.isMeta || record.isCompactSummary) return [];
+  const content = record.message?.content;
+  if (typeof content === "string") return [content];
+  return Array.isArray(content) ? content.filter((block) => block?.type === "text").map((block) => block.text ?? "") : [];
+}
+function classifyUserText(text) {
+  const trimmed = String(text ?? "").trim();
+  if (!trimmed || SKIP.test(trimmed)) return null;
+  return RELAY.test(trimmed) ? "relay" : "own";
+}
+function scanNewLines(file, start, fsOps, onLine, deadline) {
+  const fd = fsOps.openSync(file, "r");
+  let position = start;
+  let consumed = start;
+  let carry = [];
+  let carried = 0;
+  let skipping = false;
+  try {
+    const chunk = Buffer.alloc(CHUNK);
+    while (Date.now() < deadline) {
+      const count = fsOps.readSync(fd, chunk, 0, CHUNK, position);
+      if (!count) break;
+      const base = position;
+      position += count;
+      let from = 0;
+      for (; ; ) {
+        const newline = chunk.indexOf(10, from);
+        if (newline === -1 || newline >= count) {
+          if (!skipping) {
+            carry.push(Buffer.from(chunk.subarray(from, count)));
+            carried += count - from;
+            if (carried > MAX_LINE) {
+              carry = [];
+              carried = 0;
+              skipping = true;
+            }
+          }
+          break;
+        }
+        if (!skipping && carried + newline - from <= MAX_LINE) {
+          const line2 = carried ? Buffer.concat([...carry, chunk.subarray(from, newline)]) : chunk.subarray(from, newline);
+          onLine(line2.toString("utf8"));
+        }
+        carry = [];
+        carried = 0;
+        skipping = false;
+        from = newline + 1;
+        consumed = base + from;
+      }
+    }
+  } finally {
+    fsOps.closeSync(fd);
+  }
+  return consumed;
+}
+function insideRoot(record, root) {
+  if (typeof record?.cwd !== "string" || !path6.isAbsolute(record.cwd)) return false;
+  const relative = path6.relative(root, record.cwd);
+  return !(relative === ".." || relative.startsWith(`..${path6.sep}`) || path6.isAbsolute(relative));
+}
+function bump(found, bucket, field2, amount = 1) {
+  if (!amount) return;
+  const counts = found.buckets[bucket] ?? (found.buckets[bucket] = {});
+  counts[field2] = (counts[field2] ?? 0) + amount;
+}
+function mark(found, key, time) {
+  if (!(found.marks[key] <= time)) found.marks[key] = time;
+}
+function occurrences(text, needle) {
+  return text.split(needle).length - 1;
+}
+function collectActivity(line2, root, found, state2) {
+  const compaction = line2.includes('"compact_boundary"');
+  const userText = line2.includes('"type":"user"') && !line2.includes('"tool_use_id"');
+  const assistant = line2.includes('"type":"assistant"');
+  if (!compaction && !userText && !assistant) return;
+  let record;
+  try {
+    record = JSON.parse(line2);
+  } catch {
+    return;
+  }
+  if (record?.isSidechain || !insideRoot(record, root)) return;
+  const time = Date.parse(record.timestamp);
+  if (!Number.isFinite(time)) return;
+  const bucket = String(Math.floor(time / ACTIVITY_BUCKET_MS));
+  if (record.type === "system" && record.subtype === "compact_boundary") {
+    bump(found, bucket, "compactions");
+    return;
+  }
+  if (record.type === "user") {
+    if (!record.isMeta && !record.isCompactSummary && messageTexts(record).some((text) => text.trim())) state2.evidence = false;
+    return;
+  }
+  if (record.type !== "assistant" || !Array.isArray(record.message?.content)) return;
+  for (const block of record.message.content) {
+    if (block?.type === "tool_use") {
+      const input = block.input ?? {};
+      if (block.name === "Agent" || block.name === "Task") {
+        bump(found, bucket, "agents");
+        if (input.subagent_type === "dove-mentor") bump(found, bucket, "mentor");
+      } else if (block.name === "Bash" || block.name === "Read") {
+        state2.evidence = true;
+      } else if (block.name === "Write" || block.name === "Edit") {
+        const target = String(input.file_path ?? "");
+        const round = target.match(ROUND_FILE);
+        if (round && block.name === "Write" && (!path6.isAbsolute(target) || target.startsWith(`${root}${path6.sep}`))) mark(found, `${round[2]}:${Number(round[1])}`, time);
+        const written = `${input.content ?? ""}${input.new_string ?? ""}`.match(GATES)?.length ?? 0;
+        const before = String(input.old_string ?? "").match(GATES)?.length ?? 0;
+        bump(found, bucket, "gates", Math.max(0, written - before));
+      }
+    } else if (block?.type === "text" && typeof block.text === "string") {
+      bump(found, bucket, "chars", Array.from(block.text).length);
+      bump(found, bucket, "hedges", HEDGES.reduce((sum, word) => sum + occurrences(block.text, word), 0));
+      const claims = block.text.match(CLAIMS)?.length ?? 0;
+      bump(found, bucket, "claims", claims);
+      if (!state2.evidence) bump(found, bucket, "unrun", claims);
+    }
+  }
+}
+function mergeBuckets(target, source) {
+  for (const [bucket, counts] of Object.entries(source ?? {})) {
+    const into = target[bucket] ?? (target[bucket] = {});
+    for (const field2 of ACTIVITY_FIELDS) if (counts[field2]) into[field2] = (into[field2] ?? 0) + counts[field2];
+  }
+  return target;
+}
+function mergeMarks(target, source) {
+  for (const [key, time] of Object.entries(source ?? {})) if (!(target[key] <= time)) target[key] = time;
+  return target;
+}
+function collect(line2, session, root, found) {
+  if (!line2.includes('"user"') || line2.includes('"tool_use_id"')) return;
+  let record;
+  try {
+    record = JSON.parse(line2);
+  } catch {
+    return;
+  }
+  if (!insideRoot(record, root)) return;
+  for (const raw of messageTexts(record)) {
+    const args = /^\s*<command-(?:message|name)>/u.test(raw) ? raw.match(/<command-args>([\s\S]*?)<\/command-args>/u)?.[1] : void 0;
+    const text = args ?? raw;
+    const kind = classifyUserText(text);
+    if (!kind) continue;
+    const characters = Array.from(text.replace(/\s+/gu, " ").trim());
+    if (characters.length <= SHORT) {
+      found.short += 1;
+      continue;
+    }
+    found.entries.push({ time: String(record.timestamp ?? "").slice(0, 16), session, kind, text: characters.length > LIMIT ? `${characters.slice(0, LIMIT).join("")}\u2026` : characters.join("") });
+  }
+}
+function readIndex(file, root, fsOps) {
+  try {
+    const index = JSON.parse(fsOps.readFileSync(file, "utf8"));
+    return index?.schema === INDEX_SCHEMA && index.root === root && index.files && typeof index.files === "object" ? index : { files: {} };
+  } catch {
+    return { files: {} };
+  }
+}
+function writeAtomic(file, content, fsOps) {
+  fsOps.mkdirSync(path6.dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.tmp`;
+  fsOps.writeFileSync(temporary, content);
+  fsOps.renameSync(temporary, file);
+}
+function render(directories, entries, short, pending) {
+  const own = entries.filter((entry) => entry.kind === "own").length;
+  const lines = [
+    "# \u7528\u6237\u672C\u4EBA\u539F\u8BDD\u6C47\u603B",
+    "",
+    "Dove \u5728\u751F\u6210\u5BFC\u5E08\u8C03\u7528\u6750\u6599\u65F6\u6574\u7406\uFF0C\u5E38\u9A7B\u9762\u677F\u6BCF\u5929\u9884\u70ED\uFF1B\u6574\u7406\u672C\u9879\u76EE\u5168\u90E8 Claude Code \u4F1A\u8BDD\u3002\u5DF2\u6392\u9664\u5B50\u4EFB\u52A1\u5BF9\u8BDD\u3001\u5DE5\u5177\u8FD4\u56DE\u3001\u4E0A\u4E0B\u6587\u538B\u7F29\u6458\u8981\u3001\u6280\u80FD\u8BF4\u660E\u3001\u540E\u53F0\u901A\u77E5\u548C\u7CFB\u7EDF\u6CE8\u5165\uFF1B\u7531\u76D1\u7763\u4F1A\u8BDD\u6216\u6587\u6863\u4EE3\u4E3A\u8F93\u5165\u7684\u5185\u5BB9\u6807\u4E3A\u201C\u8F6C\u8FF0\u201D\uFF0C\u4E0D\u5F53\u4F5C\u7528\u6237\u539F\u8BDD\u3002\u53EA\u6709\u51E0\u4E2A\u5B57\u7684\u6D88\u606F\uFF08\u5982\u201C\u7EE7\u7EED\u201D\uFF09\u53EA\u8BA1\u6570\u3002",
+    "",
+    `\u4F1A\u8BDD\u76EE\u5F55\uFF1A${directories.map((directory) => `\`${directory}\``).join("\u3001") || "\u672A\u627E\u5230"}`,
+    `\u672C\u4EBA ${own} \u6761\uFF0C\u8F6C\u8FF0 ${entries.length - own} \u6761\uFF0C\u77ED\u6D88\u606F ${short} \u6761\u3002\u6309\u65F6\u95F4\u6392\u5217\u3002`,
+    ...pending ? [`\u4F1A\u8BDD\u8BB0\u5F55\u8F83\u5927\uFF0C\u8FD8\u6709\u7EA6 ${Math.ceil(pending / (1 << 20))} MB \u672A\u6574\u7406\uFF0C\u4E0B\u6B21\u751F\u6210\u5BFC\u5E08\u8C03\u7528\u6750\u6599\u6216\u6BCF\u65E5\u9884\u70ED\u65F6\u7EE7\u7EED\uFF1B\u76EE\u524D\u7684\u6C47\u603B\u53EF\u80FD\u7F3A\u5C11\u90E8\u5206\u65F6\u6BB5\u3002`] : [],
+    ""
+  ];
+  for (const entry of entries) lines.push(`- ${entry.time.replace("T", " ")} \xB7 ${entry.kind === "own" ? "\u672C\u4EBA" : "\u8F6C\u8FF0"} \xB7 ${entry.text}`);
+  return `${lines.join("\n")}
+`;
+}
+function readActivityIndex(file, root, fsOps) {
+  try {
+    const index = JSON.parse(fsOps.readFileSync(file, "utf8"));
+    return index?.schema === ACTIVITY_SCHEMA && index.root === root && index.files && typeof index.files === "object" ? index : { files: {} };
+  } catch {
+    return { files: {} };
+  }
+}
+function transcriptsOf(directories, fsOps) {
+  const transcripts = [];
+  for (const directory of directories) {
+    let names = [];
+    try {
+      names = fsOps.readdirSync(directory).filter((name) => name.endsWith(".jsonl"));
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      const file = path6.join(directory, name);
+      try {
+        const stat = fsOps.statSync(file);
+        transcripts.push({ file, name, size: stat.size, mtime: stat.mtimeMs ?? 0 });
+      } catch {
+      }
+    }
+  }
+  return transcripts.sort((left, right) => right.mtime - left.mtime);
+}
+function refreshActivity(project, options = {}) {
+  const fsOps = options.fsOps ?? fs7;
+  const root = path6.resolve(project);
+  const indexFile = path6.join(root, ACTIVITY_INDEX_PATH);
+  const previous = readActivityIndex(indexFile, root, fsOps);
+  const deadline = Date.now() + (options.budgetMs ?? USER_ORIGINALS_BUDGET_MS);
+  const files = {};
+  let pending = 0;
+  for (const { file, size } of transcriptsOf(sessionDirectories(root, options), fsOps)) {
+    const known = previous.files[file];
+    const resume = known && known.offset <= size ? known : { offset: 0, buckets: {}, marks: {}, evidence: false };
+    if (resume.offset === size || Date.now() >= deadline) {
+      files[file] = resume;
+      if (resume.offset < size) pending += size - resume.offset;
+      continue;
+    }
+    const found = { buckets: {}, marks: {} };
+    const state2 = { evidence: Boolean(resume.evidence) };
+    const offset = scanNewLines(file, resume.offset, fsOps, (line2) => collectActivity(line2, root, found, state2), deadline);
+    files[file] = { offset, buckets: mergeBuckets(structuredClone(resume.buckets ?? {}), found.buckets), marks: mergeMarks({ ...resume.marks }, found.marks), evidence: state2.evidence };
+    if (offset < size) pending += size - offset;
+  }
+  for (const [file, item] of Object.entries(previous.files)) if (!(file in files)) files[file] = item;
+  writeAtomic(indexFile, `${JSON.stringify({ schema: ACTIVITY_SCHEMA, root, files })}
+`, fsOps);
+  return { pendingBytes: pending };
+}
+function readActivity(project, options = {}) {
+  const fsOps = options.fsOps ?? fs7;
+  const root = path6.resolve(project);
+  const index = readActivityIndex(path6.join(root, ACTIVITY_INDEX_PATH), root, fsOps);
+  const buckets = {};
+  const marks = {};
+  for (const item of Object.values(index.files)) {
+    mergeBuckets(buckets, item.buckets);
+    mergeMarks(marks, item.marks);
+  }
+  const result = { buckets, marks, scanned: Object.keys(index.files).length > 0 };
+  if (options.pending) {
+    result.pendingBytes = transcriptsOf(sessionDirectories(root, options), fsOps).reduce((sum, { file, size }) => sum + Math.max(0, size - (index.files[file]?.offset ?? 0)), 0);
+  }
+  return result;
+}
+function refreshUserOriginals(project, options = {}) {
+  const fsOps = options.fsOps ?? fs7;
+  const root = path6.resolve(project);
+  const directories = sessionDirectories(root, options);
+  const sourceDirectory = sessionDirectory(root, options);
+  const indexFile = path6.join(root, USER_ORIGINALS_INDEX_PATH);
+  const previous = readIndex(indexFile, root, fsOps);
+  const files = {};
+  const deadline = Date.now() + (options.budgetMs ?? USER_ORIGINALS_BUDGET_MS);
+  let pending = 0;
+  const transcripts = transcriptsOf(directories, fsOps);
+  {
+    for (const { file, name, size } of transcripts) {
+      const known = previous.files[file];
+      const resume = known && known.offset <= size ? known : { offset: 0, entries: [], short: 0 };
+      if (resume.offset === size) {
+        files[file] = resume;
+        continue;
+      }
+      const found = { entries: [], short: 0 };
+      const offset = Date.now() < deadline ? scanNewLines(file, resume.offset, fsOps, (line2) => collect(line2, name.slice(0, 8), root, found), deadline) : resume.offset;
+      files[file] = { offset, entries: [...resume.entries, ...found.entries], short: resume.short + found.short };
+      if (offset < size) pending += size - offset;
+    }
+  }
+  for (const [file, item] of Object.entries(previous.files)) if (path6.dirname(file) === sourceDirectory && !(file in files)) files[file] = item;
+  const entries = Object.values(files).flatMap((item) => item.entries).sort((left, right) => left.time.localeCompare(right.time));
+  const short = Object.values(files).reduce((sum, item) => sum + item.short, 0);
+  writeAtomic(indexFile, `${JSON.stringify({ schema: INDEX_SCHEMA, root, files })}
+`, fsOps);
+  writeAtomic(path6.join(root, USER_ORIGINALS_PATH), render(directories, entries, short, pending), fsOps);
+  let activity = { pendingBytes: null };
+  try {
+    activity = refreshActivity(root, { ...options, budgetMs: Math.max(0, deadline - Date.now()) });
+  } catch {
+  }
+  return { path: USER_ORIGINALS_PATH, directories, own: entries.filter((entry) => entry.kind === "own").length, relay: entries.filter((entry) => entry.kind === "relay").length, pendingBytes: pending, activityPendingBytes: activity.pendingBytes };
+}
+
+// src/core/cross-project.mjs
+var CROSS_PROJECT_EXPERIENCE_PATH = ".dove/install/CROSS_PROJECT_EXPERIENCE.md";
+function readText(file, fsOps) {
+  try {
+    const stat = fsOps.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink()) return null;
+    return fsOps.readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+function validDate(value) {
+  if (!value) return null;
+  const time = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value ? value : null;
+}
+function parseTransferable(text = "") {
+  const items = [];
+  let date = null;
+  let fence = null;
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    const marker = line2.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+    if (marker) {
+      if (!fence) fence = marker;
+      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+      continue;
+    }
+    if (fence) continue;
+    const heading = line2.match(/^\s*#{1,6}\s+(.+)$/u);
+    if (heading) {
+      date = validDate(heading[1].match(/\d{4}-\d{2}-\d{2}/u)?.[0]) ?? date;
+      continue;
+    }
+    const explicit = line2.match(/^\s*(?:[-*]\s*)?(?:\*\*)?日期(?:\*\*)?\s*[:：]\s*(\d{4}-\d{2}-\d{2})/u)?.[1];
+    if (explicit) date = validDate(explicit) ?? date;
+    const item = line2.match(/^\s*(?:[-*+]\s*|\d+[.)]\s+)?\**\s*可迁移\s*(?:[（(]([^）)]{0,40})[）)])?\s*\**\s*[:：]\s*(.+?)\s*$/u);
+    if (item) {
+      const note = item[1] ?? "";
+      items.push({
+        date: validDate(note.match(/\d{4}-\d{2}-\d{2}/u)?.[0]) ?? date,
+        dimension: dimensionOf(note),
+        text: item[2].replace(/\*\*/gu, "").trim()
+      });
+    }
+  }
+  return items;
+}
+var DIMENSION_WORDS = Object.freeze({
+  \u95EE\u9898\u4EF7\u503C: /问题价值|价值|意义|应用场景|需求/u,
+  \u521B\u65B0: /创新|新意|近邻|首次|差异化/u,
+  \u673A\u5236\u4E0E\u7406\u8BBA: /机制|理论|原理|因果|命题|解释/u,
+  \u65B9\u6CD5\u8D28\u91CF\u4E0E\u53EF\u884C\u6027: /方法|可行|约束|优化|求解|收敛|初始化|表示/u,
+  \u6570\u636E\u4E0E\u8BC4\u4EF7: /评价|评测|指标|协议|分母|测试集|基准|标注|数据/u,
+  \u5B9E\u73B0: /实现|代码|接口|执行器|管线|工程/u,
+  \u5B9E\u9A8C\u4E0E\u8BC1\u636E\u4EF7\u503C: /实验|证据|对照|消融|规模|样本|显著/u,
+  \u8868\u8FBE\u4E0E\u4EA4\u4ED8: /表达|交付|写作|论文|摘要|图注|稿/u
+});
+var DIMENSION_SHORT = Object.freeze({ \u95EE\u9898: "\u95EE\u9898\u4EF7\u503C", \u65B0\u610F: "\u521B\u65B0", \u673A\u5236: "\u673A\u5236\u4E0E\u7406\u8BBA", \u7406\u8BBA: "\u673A\u5236\u4E0E\u7406\u8BBA", \u65B9\u6CD5: "\u65B9\u6CD5\u8D28\u91CF\u4E0E\u53EF\u884C\u6027", \u53EF\u884C\u6027: "\u65B9\u6CD5\u8D28\u91CF\u4E0E\u53EF\u884C\u6027", \u8BC4\u4EF7: "\u6570\u636E\u4E0E\u8BC4\u4EF7", \u6570\u636E: "\u6570\u636E\u4E0E\u8BC4\u4EF7", \u5B9E\u9A8C: "\u5B9E\u9A8C\u4E0E\u8BC1\u636E\u4EF7\u503C", \u8BC1\u636E: "\u5B9E\u9A8C\u4E0E\u8BC1\u636E\u4EF7\u503C", \u8868\u8FBE: "\u8868\u8FBE\u4E0E\u4EA4\u4ED8", \u4EA4\u4ED8: "\u8868\u8FBE\u4E0E\u4EA4\u4ED8" });
+function dimensionOf(text) {
+  const value = String(text ?? "");
+  const full = Object.keys(DIMENSION_WORDS).find((name) => value.includes(name));
+  if (full) return full;
+  const short = Object.keys(DIMENSION_SHORT).find((name) => value.includes(name));
+  return short ? DIMENSION_SHORT[short] : null;
+}
+function bigrams(text) {
+  const characters = Array.from(String(text ?? "").replace(/[\s，。；：、“”‘’（）()《》,.;:!?！？\-—]/gu, ""));
+  const set = /* @__PURE__ */ new Set();
+  for (let index = 0; index + 1 < characters.length; index += 1) set.add(characters[index] + characters[index + 1]);
+  return set;
+}
+function relevantTransferable(items, { project = null, dimension = null, text = "", limit = 6 } = {}) {
+  const plan = bigrams(text);
+  const dated = items.filter((item) => item.project !== project);
+  const dates = dated.map((item) => item.date ?? "").sort();
+  const scored = dated.map((item, index) => {
+    let score = 0;
+    if (dimension && item.dimension === dimension) score += 3;
+    else if (dimension && !item.dimension && DIMENSION_WORDS[dimension]?.test(item.text)) score += 2;
+    if (plan.size) {
+      const words = bigrams(item.text);
+      let shared = 0;
+      for (const pair of words) if (plan.has(pair)) shared += 1;
+      score += words.size ? 10 * shared / Math.sqrt(words.size * plan.size) : 0;
+    }
+    const rank = dates.length > 1 ? dates.indexOf(item.date ?? "") / (dates.length - 1) : 0;
+    return { item, score, recency: rank, index };
+  });
+  const relevant = scored.filter((entry) => entry.score > 0).sort((left, right) => right.score + right.recency - (left.score + left.recency));
+  const picked = relevant.length ? relevant : scored.sort((left, right) => String(right.item.date ?? "").localeCompare(String(left.item.date ?? "")));
+  return picked.slice(0, limit).map((entry) => entry.item);
+}
+function parseCrossProjectExperience(text = "") {
+  const items = [];
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    const match = line2.match(/^- (\d{4}-\d{2}-\d{2}|未注明日期) · ([^：（]+?)(?:（([^）]+)）)?：(.+)$/u);
+    if (match) items.push({ date: match[1] === "\u672A\u6CE8\u660E\u65E5\u671F" ? null : match[1], project: match[2], dimension: match[3] ?? null, text: match[4] });
+  }
+  return items;
+}
+var CORRECTION_TOPICS = Object.freeze([
+  { id: "plain", short: "\u8BF4\u4EBA\u8BDD", label: "\u8BF4\u4EBA\u8BDD\u3001\u8BB2\u6E05\u695A", pattern: /说人话|看不懂|听不懂|大白话|白话|第一次接手|讲清楚|说清楚/u },
+  { id: "drift", short: "\u8DD1\u504F", label: "\u8DD1\u504F\u3001\u6362\u6210\u522B\u7684\u95EE\u9898", pattern: /跑偏|带偏|偏了|偏离|等价成|主问题|不是我要的|离题|答非所问/u },
+  { id: "limits", short: "\u8BBE\u9650", label: "\u7ED9\u81EA\u5DF1\u8BBE\u9650", pattern: /给自己设|自设|套授权|不要给自己|别给自己|设那[么麽]多|自己加的限制|不需要授权/u },
+  { id: "scale", short: "\u5B9E\u9A8C\u592A\u5C0F", label: "\u5B9E\u9A8C\u592A\u5C0F", pattern: /小规模|规模太小|样本太少|跑全量/u },
+  { id: "engineering", short: "\u53D8\u6210\u5DE5\u7A0B", label: "\u53D8\u6210\u5DE5\u7A0B", pattern: /变成工程|工程化|不是科研|工程上的/u },
+  { id: "seeds", short: "\u8865\u79CD\u5B50", label: "\u8865\u79CD\u5B50\u3001\u52A0\u6B65\u6570", pattern: /种子|seed/iu },
+  { id: "facts", short: "\u83AB\u987B\u6709", label: "\u83AB\u987B\u6709\u3001\u7F16\u9020", pattern: /莫须有|编造|瞎说|胡说|乱说|没有依据/u },
+  { id: "generality", short: "\u901A\u7528\u548C\u6CDB\u5316", label: "\u901A\u7528\u548C\u6CDB\u5316", pattern: /泛化|狭窄|局限成/u },
+  { id: "finish", short: "\u6CA1\u505A\u5B8C", label: "\u6CA1\u505A\u5B8C\u3001\u534A\u9014\u6536\u7A84", pattern: /没做完|赶紧做完|半途|收窄/u },
+  { id: "method-first", short: "\u5148\u8BB2\u6E05\u95EE\u9898\u548C\u65B9\u6CD5", label: "\u5148\u8BB2\u6E05\u95EE\u9898\u548C\u65B9\u6CD5", pattern: /现有方法为什么不好|要解决什么问题|先回答我/u },
+  { id: "stall", short: "\u505C\u6EDE", label: "\u505C\u6EDE\u3001\u6CA1\u8FDB\u5C55", pattern: /停滞|没进展|没有进展|进展缓慢|一直没有|原地/u }
+]);
+function ownEntries(text) {
+  const entries = [];
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    const match = line2.match(/^- (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) · 本人 · (.*)$/u);
+    if (!match) continue;
+    const at = Date.parse(`${match[1]}T${match[2]}:00Z`);
+    entries.push({ date: match[1], time: `${match[1]} ${match[2]}`, at, day: dayString(at), text: match[3] });
+  }
+  return entries;
+}
+function readOwnEntries(root, options = {}) {
+  const text = readText(path7.join(root, USER_ORIGINALS_PATH), options.fsOps ?? fs8);
+  return text ? ownEntries(text) : [];
+}
+function isCorrection(text) {
+  return CORRECTION_TOPICS.some((topic) => topic.pattern.test(text));
+}
+function dayString(time) {
+  const value = new Date(time);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+// src/core/practice.mjs
+var PRACTICE_PATH = ".dove/research/PRACTICE.md";
+var MAX_BYTES = 512 * 1024;
+var PRACTICE_TOPICS = Object.freeze([
+  ...CORRECTION_TOPICS.map((topic) => ({ id: topic.id, short: topic.short, pattern: topic.pattern })),
+  { id: "writing", short: "\u5199\u7A3F\u548C\u56FE", pattern: /论文|摘要|引言|图注|画图|配图|作图|版面|排版|行话|写作|稿子|稿件|措辞|投稿/u },
+  { id: "other", short: "\u5176\u4ED6", pattern: null }
+]);
+var CRITIQUE = /不|别|没|又|还是|为什么|怎么|错|应该/u;
+function practiceTopicNames() {
+  return PRACTICE_TOPICS.map((topic) => topic.short);
+}
+function topicOfEntry(entry) {
+  const named = String(entry?.topic ?? "");
+  const byShort = PRACTICE_TOPICS.find((topic) => named === topic.short) ?? PRACTICE_TOPICS.find((topic) => topic.id !== "other" && named.includes(topic.short));
+  if (byShort) return byShort;
+  const byLabel = CORRECTION_TOPICS.find((topic) => topic.label.split("\u3001").some((part) => named.includes(part)));
+  return (byLabel && PRACTICE_TOPICS.find((topic) => topic.id === byLabel.id)) ?? PRACTICE_TOPICS.find((topic) => topic.id === "other");
+}
+function topicsOfMessage(text) {
+  const value = String(text ?? "");
+  return PRACTICE_TOPICS.filter((topic) => topic.pattern?.test(value));
+}
+function correctionTopics(text) {
+  const value = String(text ?? "");
+  if (!CRITIQUE.test(value)) return [];
+  return topicsOfMessage(value);
+}
+function field(fields, name) {
+  const found = fields.find((item) => new RegExp(`^${name}\\s*[:\uFF1A]`, "u").test(item));
+  return found ? found.replace(/^[^:：]+[:：]\s*/u, "").trim() : null;
+}
+function parsePractice(text = "") {
+  const entries = [];
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    const match = line2.match(/^\s*[-*]\s*(\d{4}-\d{2}-\d{2})\s*[·•|]\s*(.+?)\s*$/u);
+    if (!match) continue;
+    const fields = match[2].split(/\s*[·•]\s*/u);
+    const topic = fields.shift().trim();
+    entries.push({ date: match[1], topic, quote: field(fields, "\u539F\u8BDD"), wrong: field(fields, "\u9519\u5728\u54EA"), next: field(fields, "\u4EE5\u540E") });
+  }
+  return entries.map((entry, index) => ({ ...entry, order: index })).sort((left, right) => right.date.localeCompare(left.date) || right.order - left.order).map(({ order, ...entry }) => entry);
+}
+function readPractice(project, options = {}) {
+  const fsOps = options.fsOps ?? fs9;
+  try {
+    const file = path8.join(project, PRACTICE_PATH);
+    const stat = fsOps.statSync(file);
+    if (!stat.isFile() || stat.size > MAX_BYTES) return [];
+    const fd = fsOps.openSync(file, "r");
+    try {
+      const buffer = Buffer.alloc(stat.size);
+      const count = fsOps.readSync(fd, buffer, 0, buffer.length, 0);
+      return parsePractice(buffer.subarray(0, count).toString("utf8"));
+    } finally {
+      fsOps.closeSync(fd);
+    }
+  } catch {
+    return [];
+  }
+}
+function clip(text, limit) {
+  const characters = Array.from(String(text ?? ""));
+  return characters.length > limit ? `${characters.slice(0, limit).join("")}\u2026` : characters.join("");
+}
+function line(entry) {
+  const next = entry.next ? `\u4EE5\u540E\uFF1A${clip(entry.next, 120)}` : entry.wrong ? `\u9519\u5728\uFF1A${clip(entry.wrong, 120)}` : "";
+  const quote2 = entry.quote ? `\uFF08\u539F\u8BDD\uFF1A${clip(entry.quote.replace(/^[“"]|[”"]$/gu, ""), 40)}\uFF09` : "";
+  return `- ${entry.date.slice(5)} ${topicOfEntry(entry).short}\uFF1A${next}${quote2}`;
+}
+function practiceContext(entries, limit = 8) {
+  if (!entries.length) return "";
+  return [`\u672C\u9879\u76EE\u7684\u505A\u6CD5\u66F4\u6B63\uFF08\u7528\u6237\u7EA0\u6B63\u8FC7\u7684\u505A\u6CD5\uFF0C\u65B0\u7684\u5728\u524D\uFF1B\u5168\u90E8\u89C1 ${PRACTICE_PATH}\uFF09\uFF1A`, ...entries.slice(0, limit).map(line)].join("\n");
+}
+function practiceForMessage(entries, text, limit = 5) {
+  const topics = new Set(topicsOfMessage(text).map((topic) => topic.id));
+  if (!topics.size) return "";
+  const matched = entries.filter((entry) => topics.has(topicOfEntry(entry).id)).slice(0, limit);
+  if (!matched.length) return "";
+  return ["\u548C\u8FD9\u6761\u6D88\u606F\u76F8\u5173\u7684\u505A\u6CD5\u66F4\u6B63\uFF08\u672C\u9879\u76EE\u7528\u6237\u7EA0\u6B63\u8FC7\u7684\u505A\u6CD5\uFF09\uFF1A", ...matched.map(line)].join("\n");
+}
+function practiceOnTopic(entries, id, limit = 5) {
+  const matched = entries.filter((entry) => topicOfEntry(entry).id === id).slice(0, limit);
+  return matched.length ? matched.map(line).join("\n") : "";
+}
+var REFLECTIONS_DIR = ".dove/research/reflections";
+var REFLECTION_REQUEST = /反思|复盘|总结(?:一下)?(?:经验|教训)|吸取教训|教训是什么|经验教训/u;
+function reflectionRequested(text) {
+  return REFLECTION_REQUEST.test(String(text ?? ""));
+}
+function reflectionGuidance() {
+  return `\u7528\u6237\u8981\u4F60\u53CD\u601D\u3002\u5199\u5230 ${REFLECTIONS_DIR}/YYYY-MM-DD-\u4E3B\u9898.md\uFF1A\u54EA\u91CC\u51FA\u4E86\u95EE\u9898\u3001\u4E3A\u4EC0\u4E48\u3001\u4F9D\u636E\uFF08\u539F\u8BDD\u3001\u8BB0\u5F55\u6216\u7ED3\u679C\uFF09\u3001\u4EE5\u540E\u600E\u4E48\u505A\uFF1B\u7ED3\u5C3E\u201C\u4EE5\u540E\u600E\u4E48\u505A\u201D\u7684\u6BCF\u4E00\u6761\uFF0C\u540C\u65F6\u6309\u505A\u6CD5\u66F4\u6B63\u7684\u683C\u5F0F\u8FFD\u52A0\u5230 ${PRACTICE_PATH}\uFF0CDove \u4E4B\u540E\u4F1A\u5728\u4F1A\u8BDD\u5F00\u59CB\u3001\u538B\u7F29\u540E\u548C\u76F8\u5173\u7684\u6D88\u606F\u91CC\u628A\u8FD9\u4E9B\u884C\u9001\u56DE\u6765\u3002\u53EA\u5199\u80FD\u6539\u53D8\u4EE5\u540E\u505A\u6CD5\u7684\u7ED3\u8BBA\uFF0C\u4E0D\u5199\u68C0\u8BA8\u5957\u8BDD\u3002`;
+}
+function reflectionReminder(missing) {
+  return `\u7528\u6237\u8FD9\u4E00\u8F6E\u8981\u4F60\u53CD\u601D\uFF0C\u4F46\u8FD8\u6CA1\u6709${missing.join("\uFF0C\u4E5F\u6CA1\u6709")}\u3002${reflectionGuidance()}\u8FD9\u6BB5\u8BDD\u662F Dove \u6839\u636E\u7528\u6237\u6D88\u606F\u81EA\u52A8\u63D0\u51FA\u7684\uFF0C\u4E0D\u662F\u7528\u6237\u521A\u8BF4\u7684\u3002`;
+}
+function correctionReminder(topics) {
+  const names = topics.map((topic) => topic.short).join("\u3001");
+  return `\u7528\u6237\u8FD9\u6761\u6D88\u606F\u50CF\u662F\u5BF9\u505A\u6CD5\u7684\u7EA0\u6B63\uFF08${names}\uFF09\u3002\u6309\u64CD\u4F5C\u8BF4\u660E\u201C\u7528\u6237\u7EA0\u6B63\u4E4B\u540E\u201D\u8FD9\u4E00\u65F6\u523B\uFF0C\u5728 ${PRACTICE_PATH} \u8BB0\u4E00\u884C\uFF1A- YYYY-MM-DD \xB7 \u4E3B\u9898 \xB7 \u539F\u8BDD\uFF1A\u201C\u2026\u2026\u201D \xB7 \u9519\u5728\u54EA\uFF1A\u2026\u2026 \xB7 \u4EE5\u540E\uFF1A\u2026\u2026\u3002\u4E3B\u9898\u4ECE ${practiceTopicNames().join("\u3001")} \u91CC\u9009\uFF1B\u53EA\u8BB0\u8FD9\u6B21\u5B9E\u9645\u9519\u5728\u54EA\u3001\u4EE5\u540E\u5177\u4F53\u600E\u4E48\u505A\uFF0C\u4E0D\u6269\u6210\u666E\u904D\u7981\u4EE4\u3002\u5982\u679C\u8FD9\u6761\u5176\u5B9E\u4E0D\u662F\u7EA0\u6B63\uFF0C\u5C31\u4E0D\u7528\u8BB0\u3002\u8FD9\u6BB5\u8BDD\u662F Dove \u6839\u636E\u7528\u6237\u6D88\u606F\u81EA\u52A8\u63D0\u51FA\u7684\uFF0C\u4E0D\u662F\u7528\u6237\u521A\u8BF4\u7684\u3002`;
+}
+
+// src/core/round-state.mjs
+import fs10 from "node:fs";
+import path9 from "node:path";
 var RESEARCH = ".dove/research";
-var ROUND_FILE = /^(\d+)[-_](brief|result)\.md$/iu;
+var ROUND_FILE2 = /^(\d+)[-_](brief|result)\.md$/iu;
 var DAY_MS = 864e5;
 var HEADER_LINES = 40;
 var MAX_TEXT_BYTES = 64 * 1024;
@@ -1636,7 +2212,7 @@ function readBytes(file, stat, fsOps, maxBytes, tail) {
     fsOps.closeSync(fd);
   }
 }
-function readText(file, fsOps, maxBytes = MAX_TEXT_BYTES, tail = false) {
+function readText2(file, fsOps, maxBytes = MAX_TEXT_BYTES, tail = false) {
   try {
     const stat = (fsOps.lstatSync ?? fsOps.statSync).call(fsOps, file);
     if (!stat.isFile() || stat.isSymbolicLink?.()) return null;
@@ -1662,7 +2238,7 @@ function listDirectory(directory, fsOps) {
     return [];
   }
 }
-function validDate(value) {
+function validDate2(value) {
   if (!value) return null;
   const time = Date.parse(`${value}T00:00:00Z`);
   return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value ? value : null;
@@ -1681,23 +2257,23 @@ function localDate(time) {
 function unfencedLines(text, limit = Infinity) {
   const lines = [];
   let fence = null;
-  for (const line of String(text).split(/\r?\n/u)) {
+  for (const line2 of String(text).split(/\r?\n/u)) {
     if (lines.length >= limit) break;
-    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+    const marker = line2.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
     if (marker) {
       if (!fence) fence = marker;
       else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
       lines.push("");
       continue;
     }
-    lines.push(fence ? "" : line);
+    lines.push(fence ? "" : line2);
   }
   return lines;
 }
 function headerField(lines, name) {
   const pattern = new RegExp(`^[ \\t]*(?:[-*][ \\t]*)?\\**[ \\t]*${name}[ \\t]*(?:[\uFF08(][^\uFF09)\\r\\n]{0,30}[\uFF09)])?[ \\t]*\\**[ \\t]*[:\uFF1A][ \\t]*(.*?)[ \\t]*$`, "u");
-  for (const line of lines) {
-    const value = line.match(pattern)?.[1]?.replace(/\*\*/gu, "").trim();
+  for (const line2 of lines) {
+    const value = line2.match(pattern)?.[1]?.replace(/\*\*/gu, "").trim();
     if (value) return value;
   }
   return null;
@@ -1715,16 +2291,16 @@ function plainLine(text, limit = 240) {
   return characters.length > limit ? `${characters.slice(0, limit).join("")}\u2026` : flat;
 }
 function sectionParagraph(lines, pattern) {
-  const start = lines.findIndex((line) => /^\s*#{1,4}\s+/u.test(line) && pattern.test(line));
+  const start = lines.findIndex((line2) => /^\s*#{1,4}\s+/u.test(line2) && pattern.test(line2));
   if (start === -1) return null;
   const body = [];
-  for (const line of lines.slice(start + 1)) {
-    if (/^\s*#{1,4}\s+/u.test(line)) break;
-    if (!line.trim()) {
+  for (const line2 of lines.slice(start + 1)) {
+    if (/^\s*#{1,4}\s+/u.test(line2)) break;
+    if (!line2.trim()) {
       if (body.length) break;
       continue;
     }
-    body.push(line.trim().replace(/^[-*+]\s+/u, ""));
+    body.push(line2.trim().replace(/^[-*+]\s+/u, ""));
   }
   return body.join(" ") || null;
 }
@@ -1910,8 +2486,8 @@ function parseBriefHeader(text = "") {
     summary: plainLine(headerField(lines, "\u4E00\u53E5\u8BDD"), 200),
     target: targetText,
     targetDimension: normalizeDimension(targetText),
-    due: validDate(dates[0]),
-    start: validDate(startAfter ?? startBefore),
+    due: validDate2(dates[0]),
+    start: validDate2(startAfter ?? startBefore),
     scale: headerField(head, "\u89C4\u6A21")?.replace(/[。；;，,\s]+$/u, "") || null,
     prediction: parsePrediction(headerField(head, "\u9884\u6D4B")),
     success: plainLine(sectionParagraph(lines, /预期结果/u), 300)
@@ -1934,14 +2510,14 @@ function parseResultHeader(text = "") {
 function parseMarkdownTables(text = "") {
   const tables = [];
   let current = null;
-  const cells = (line) => line.trim().replace(/^\|/u, "").replace(/\|$/u, "").split("|").map((cell) => cell.trim());
-  for (const line of String(text).split(/\r?\n/u)) {
-    if (!/^\s*\|.*\|\s*$/u.test(line)) {
+  const cells = (line2) => line2.trim().replace(/^\|/u, "").replace(/\|$/u, "").split("|").map((cell) => cell.trim());
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    if (!/^\s*\|.*\|\s*$/u.test(line2)) {
       if (current) tables.push(current);
       current = null;
       continue;
     }
-    const row = cells(line);
+    const row = cells(line2);
     if (row.every((cell) => /^:?-+:?$/u.test(cell))) continue;
     if (!current) current = { header: row, rows: [] };
     else current.rows.push(row);
@@ -1974,19 +2550,19 @@ function parseMethodDesign(text = "") {
   let inDesign = false;
   let active = null;
   let fence = null;
-  for (const line of String(text).split(/\r?\n/u)) {
-    const marker = line.match(/^\s*(`{3,}|~{3,})(.*)$/u);
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    const marker = line2.match(/^\s*(`{3,}|~{3,})(.*)$/u);
     if (fence) {
-      if (active) paragraphs[active].push(line);
+      if (active) paragraphs[active].push(line2);
       if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = null;
       continue;
     }
     if (marker) {
       fence = marker[1];
-      if (active) paragraphs[active].push(line);
+      if (active) paragraphs[active].push(line2);
       continue;
     }
-    const heading = line.match(/^\s*(#{1,3})\s+(.+?)\s*#*\s*$/u);
+    const heading = line2.match(/^\s*(#{1,3})\s+(.+?)\s*#*\s*$/u);
     if (!inDesign) {
       if (heading?.[1] === "##" && heading[2] === "\u65B9\u6CD5\u8BBE\u8BA1") inDesign = true;
       continue;
@@ -1996,7 +2572,7 @@ function parseMethodDesign(text = "") {
       active = METHOD_ARGUMENTS.find(([, label]) => label === heading[2])?.[0] ?? (heading[2] === "\u7528\u6237\u7B54\u590D" ? "userReply" : null);
       continue;
     }
-    if (active) paragraphs[active].push(line);
+    if (active) paragraphs[active].push(line2);
   }
   if (!inDesign) return null;
   const fields = Object.fromEntries(Object.entries(paragraphs).map(([key, lines]) => [key, lines.join("\n").trim() || null]));
@@ -2010,27 +2586,27 @@ function parseMentorPending(text = "") {
   let start = -1;
   let level = 0;
   let inline = null;
-  for (const [index, line] of lines.entries()) {
-    const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/u);
+  for (const [index, line2] of lines.entries()) {
+    const heading = line2.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/u);
     if (heading && /待(?:用户|你)决定|等(?:用户|你)定/u.test(heading[2])) {
       start = index;
       level = heading[1].length;
       inline = null;
       continue;
     }
-    const field = line.match(/^\s*(?:[-*]\s*)?\**\s*待(?:用户|你)决定\s*\**\s*[:：]\s*(.*)$/u);
-    if (field) {
+    const field2 = line2.match(/^\s*(?:[-*]\s*)?\**\s*待(?:用户|你)决定\s*\**\s*[:：]\s*(.*)$/u);
+    if (field2) {
       start = -1;
-      inline = field[1];
+      inline = field2[1];
     }
   }
   if (inline !== null) return inline.split(/[；;]/u).map((item) => item.trim()).filter((item) => item && !NOTHING.test(item));
   if (start === -1) return [];
   const items = [];
-  for (const line of lines.slice(start + 1)) {
-    const heading = line.match(/^\s*(#{1,6})\s+/u);
+  for (const line2 of lines.slice(start + 1)) {
+    const heading = line2.match(/^\s*(#{1,6})\s+/u);
     if (heading && heading[1].length <= level) break;
-    const item = line.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/u)?.[1]?.trim();
+    const item = line2.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/u)?.[1]?.trim();
     if (item && !NOTHING.test(item)) items.push(item);
   }
   return items;
@@ -2038,7 +2614,7 @@ function parseMentorPending(text = "") {
 function collectRoundFiles(directory, fsOps) {
   const byNumber = /* @__PURE__ */ new Map();
   for (const name of listDirectory(directory, fsOps)) {
-    const match = name.match(ROUND_FILE);
+    const match = name.match(ROUND_FILE2);
     if (!match) continue;
     const number = Number(match[1]);
     const entry = byNumber.get(number) ?? { number, label: match[1] };
@@ -2061,15 +2637,15 @@ function computeOverrun({ due, start, createdAt }, now) {
   return { due, daysPastDue: Math.round((current - dueTime) / DAY_MS), plannedDays: Math.round(span / DAY_MS) };
 }
 function inspectRoundState(project, options = {}) {
-  const fsOps = options.fsOps ?? fs7;
-  const research = path6.join(project, RESEARCH);
-  const card = readText(path6.join(research, "IDENTITY.md"), fsOps, Infinity)?.text ?? "";
+  const fsOps = options.fsOps ?? fs10;
+  const research = path9.join(project, RESEARCH);
+  const card = readText2(path9.join(research, "IDENTITY.md"), fsOps, Infinity)?.text ?? "";
   const current = card ? parseDoveCurrentRound(card) : null;
   const roundStatus = card ? cardField(card, "Round status") : null;
-  const files = collectRoundFiles(path6.join(research, "rounds"), fsOps);
+  const files = collectRoundFiles(path9.join(research, "rounds"), fsOps);
   const rounds = files.slice(0, options.maxRounds ?? 12).map((entry) => {
-    const brief = entry.brief ? readText(path6.join(research, "rounds", entry.brief), fsOps) : null;
-    const result = entry.result ? readText(path6.join(research, "rounds", entry.result), fsOps) : null;
+    const brief = entry.brief ? readText2(path9.join(research, "rounds", entry.brief), fsOps) : null;
+    const result = entry.result ? readText2(path9.join(research, "rounds", entry.result), fsOps) : null;
     return {
       number: entry.number,
       label: entry.label,
@@ -2084,14 +2660,14 @@ function inspectRoundState(project, options = {}) {
   const results = rounds.filter((round) => round.result);
   const lastTwo = results.slice(0, 2);
   const stall = lastTwo.length === 2 && lastTwo.every((round) => round.result.verdictKind === "missed") ? { results: lastTwo.map((round) => round.result.file).reverse(), rounds: lastTwo.map((round) => round.number).reverse() } : null;
-  const evaluation = readText(path6.join(research, "EVAL.md"), fsOps, 256 * 1024)?.text ?? "";
+  const evaluation = readText2(path9.join(research, "EVAL.md"), fsOps, 256 * 1024)?.text ?? "";
   const mainMetric = parseMainMetric(evaluation);
   const trend = parseTrendTable(evaluation);
   const methodReference = card ? cardField(card, "Method design") : null;
   const methodBrief = methodReference?.match(/rounds\/\d+[-_]brief\.md/iu)?.[0] ?? null;
-  const methodText = methodBrief ? readText(path6.join(research, methodBrief), fsOps, Infinity)?.text : null;
+  const methodText = methodBrief ? readText2(path9.join(research, methodBrief), fsOps, Infinity)?.text : null;
   const methodDesign = methodText ? parseMethodDesign(methodText) : null;
-  const notes = readText(path6.join(research, "MENTOR_NOTES.md"), fsOps, MAX_TEXT_BYTES, true)?.text ?? "";
+  const notes = readText2(path9.join(research, "MENTOR_NOTES.md"), fsOps, MAX_TEXT_BYTES, true)?.text ?? "";
   const pending = [];
   if (methodDesign && !methodDesign.userReply) pending.push({ kind: "method-design", text: `\u65B9\u6CD5\u8BBE\u8BA1\uFF08${methodBrief}\uFF09\u8FD8\u6CA1\u6709\u8BB0\u5F55\u7528\u6237\u770B\u8FC7\u540E\u7684\u7B54\u590D\u3002` });
   if (overrun) pending.push({ kind: "overrun", text: `\u7B2C ${currentRound.number} \u8F6E\u8D85\u65F6\uFF1A\u539F\u5B9A ${overrun.due} \u89C1\u5206\u6653\uFF0C\u5DF2\u8FC7 ${overrun.daysPastDue} \u5929\uFF08\u9884\u8BA1 ${overrun.plannedDays} \u5929\uFF09\u3002\u7EE7\u7EED\u5F53\u524D\u65B9\u6CD5\u3001\u6362\u65B9\u6CD5\u8FD8\u662F\u6362\u65B9\u5411\uFF0C\u7B49\u7528\u6237\u5B9A\u3002` });
@@ -2171,26 +2747,26 @@ function reportedNumbers(text) {
 }
 function measuredSection(text) {
   const lines = String(text).split(/\r?\n/u);
-  const start = lines.findIndex((line) => /^\s*#{1,4}\s+.*(?:测到了什么|Measurements)/u.test(line));
+  const start = lines.findIndex((line2) => /^\s*#{1,4}\s+.*(?:测到了什么|Measurements)/u.test(line2));
   if (start === -1) return text;
-  const end = lines.findIndex((line, index) => index > start && /^\s*#{1,4}\s+/u.test(line));
+  const end = lines.findIndex((line2, index) => index > start && /^\s*#{1,4}\s+/u.test(line2));
   return lines.slice(start + 1, end === -1 ? void 0 : end).join("\n");
 }
 function resultProvenance(project, resultFile, options = {}) {
-  const fsOps = options.fsOps ?? fs7;
-  const file = path6.join(project, RESEARCH, resultFile);
-  const read = readText(file, fsOps, MAX_TEXT_BYTES);
+  const fsOps = options.fsOps ?? fs10;
+  const file = path9.join(project, RESEARCH, resultFile);
+  const read = readText2(file, fsOps, MAX_TEXT_BYTES);
   if (!read) return null;
   const key = `${file}:${read.mtime}`;
   if (provenanceCache.has(key)) return provenanceCache.get(key);
   const numbers = reportedNumbers(measuredSection(read.text));
   const links = [...read.text.matchAll(/\]\(([^)\s]+)\)/gu)].map((match) => match[1].split("#")[0]).filter((link) => link && !/^[a-z]+:/iu.test(link) && TEXT_ARTIFACT.test(link));
-  const records = `${path6.join(path6.resolve(project), ".dove")}${path6.sep}`;
-  const artifacts = [...new Set(links.map((link) => path6.resolve(path6.dirname(file), decodeURIComponent(link))))].filter((artifact) => !artifact.startsWith(records)).slice(0, 10);
+  const records = `${path9.join(path9.resolve(project), ".dove")}${path9.sep}`;
+  const artifacts = [...new Set(links.map((link) => path9.resolve(path9.dirname(file), decodeURIComponent(link))))].filter((artifact) => !artifact.startsWith(records)).slice(0, 10);
   const values = [];
   let opened = 0;
   for (const artifact of artifacts) {
-    const content = readText(artifact, fsOps, 4 << 20);
+    const content = readText2(artifact, fsOps, 4 << 20);
     if (!content) continue;
     opened += 1;
     for (const match of content.text.matchAll(ARTIFACT_NUMBER)) {
@@ -2206,337 +2782,145 @@ function resultProvenance(project, resultFile, options = {}) {
 }
 
 // src/core/session-start-hook.mjs
-import fs9 from "node:fs";
-import path8 from "node:path";
+import fs12 from "node:fs";
+import path11 from "node:path";
 
-// src/core/user-originals.mjs
-import fs8 from "node:fs";
-import os2 from "node:os";
-import path7 from "node:path";
-var USER_ORIGINALS_PATH = ".dove/install/USER_ORIGINALS.md";
-var USER_ORIGINALS_INDEX_PATH = ".dove/install/user-originals-index.json";
-var ACTIVITY_INDEX_PATH = ".dove/install/activity-index.json";
-var ACTIVITY_BUCKET_MS = 6e5;
-var ACTIVITY_SCHEMA = 2;
-var HEDGES = ["\u4F46\u662F", "\u4E0D\u8FC7", "\u53EF\u80FD", "\u5C1A\u672A", "\u4ECD\u9700", "\u4E0D\u4EE3\u8868", "\u4E0D\u7B49\u4E8E", "\u4E0D\u80FD\u5BA3\u79F0", "\u4E0D\u4FDD\u8BC1", "\u8BC1\u636E\u8FB9\u754C", "\u6709\u5F85", "\u6682\u4E0D"];
-var GATES = /sha256|哈希|冻结|门禁|equivalence gate|只读清单/giu;
-var ROUND_FILE2 = /(?:^|\/)\.dove\/research\/rounds\/(\d+)[-_](brief|result)\.md$/u;
-var CLAIMS = /已验证|验证通过|测试通过|全部通过|已跑通|跑通了|已确认可用/gu;
-var ACTIVITY_FIELDS = Object.freeze(["agents", "compactions", "mentor", "chars", "hedges", "gates", "claims", "unrun"]);
-var SKIP = /^(?:<|\[Image|\[Your previous response|\[Request interrupted|This session is being continued|Base directory for this skill|# dove\.|Another Claude session sent|Caveat:|Continue the conversation from where|Stop hook feedback|【Dove 引用用户)/u;
-var RELAY = /^(?:主会话 ?Claude|Claude[:：，,]|用户已同意|【用户已同意|告知[:：]|更正上一条|转达|用户 ?\d{4}-\d{2}-\d{2} ?决定|用户原话（|请先完整阅读)/u;
-var SHORT = 6;
-var LIMIT = 700;
-var CHUNK = 8 << 20;
-var INDEX_SCHEMA = 1;
-var MAX_LINE = 256 << 10;
-var USER_ORIGINALS_BUDGET_MS = 2e4;
-var encode = (value) => value.replace(/[^A-Za-z0-9]/gu, "-");
-function sessionDirectory(root, options) {
-  return path7.join(options.home ?? options.env?.HOME ?? os2.homedir(), ".claude/projects", encode(root));
+// src/core/experience.mjs
+import fs11 from "node:fs";
+import path10 from "node:path";
+
+// src/core/mentor-intent.mjs
+function dateIn(text) {
+  const date = String(text).match(/\b\d{4}-\d{2}-\d{2}\b/u)?.[0];
+  const time = date ? Date.parse(`${date}T00:00:00Z`) : NaN;
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === date ? date : null;
 }
-function sessionDirectories(project, options = {}) {
-  const fsOps = options.fsOps ?? fs8;
-  const root = path7.resolve(project);
-  const directory = sessionDirectory(root, options);
-  try {
-    return fsOps.readdirSync(path7.dirname(directory)).includes(encode(root)) ? [directory] : [];
-  } catch {
-    return [];
-  }
-}
-function messageTexts(record) {
-  if (record?.type !== "user" || record.isSidechain || record.isMeta || record.isCompactSummary) return [];
-  const content = record.message?.content;
-  if (typeof content === "string") return [content];
-  return Array.isArray(content) ? content.filter((block) => block?.type === "text").map((block) => block.text ?? "") : [];
-}
-function classifyUserText(text) {
-  const trimmed = String(text ?? "").trim();
-  if (!trimmed || SKIP.test(trimmed)) return null;
-  return RELAY.test(trimmed) ? "relay" : "own";
-}
-function scanNewLines(file, start, fsOps, onLine, deadline) {
-  const fd = fsOps.openSync(file, "r");
-  let position = start;
-  let consumed = start;
-  let carry = [];
-  let carried = 0;
-  let skipping = false;
-  try {
-    const chunk = Buffer.alloc(CHUNK);
-    while (Date.now() < deadline) {
-      const count = fsOps.readSync(fd, chunk, 0, CHUNK, position);
-      if (!count) break;
-      const base = position;
-      position += count;
-      let from = 0;
-      for (; ; ) {
-        const newline = chunk.indexOf(10, from);
-        if (newline === -1 || newline >= count) {
-          if (!skipping) {
-            carry.push(Buffer.from(chunk.subarray(from, count)));
-            carried += count - from;
-            if (carried > MAX_LINE) {
-              carry = [];
-              carried = 0;
-              skipping = true;
-            }
-          }
-          break;
-        }
-        if (!skipping && carried + newline - from <= MAX_LINE) {
-          const line = carried ? Buffer.concat([...carry, chunk.subarray(from, newline)]) : chunk.subarray(from, newline);
-          onLine(line.toString("utf8"));
-        }
-        carry = [];
-        carried = 0;
-        skipping = false;
-        from = newline + 1;
-        consumed = base + from;
-      }
-    }
-  } finally {
-    fsOps.closeSync(fd);
-  }
-  return consumed;
-}
-function insideRoot(record, root) {
-  if (typeof record?.cwd !== "string" || !path7.isAbsolute(record.cwd)) return false;
-  const relative = path7.relative(root, record.cwd);
-  return !(relative === ".." || relative.startsWith(`..${path7.sep}`) || path7.isAbsolute(relative));
-}
-function bump(found, bucket, field, amount = 1) {
-  if (!amount) return;
-  const counts = found.buckets[bucket] ?? (found.buckets[bucket] = {});
-  counts[field] = (counts[field] ?? 0) + amount;
-}
-function mark(found, key, time) {
-  if (!(found.marks[key] <= time)) found.marks[key] = time;
-}
-function occurrences(text, needle) {
-  return text.split(needle).length - 1;
-}
-function collectActivity(line, root, found, state2) {
-  const compaction = line.includes('"compact_boundary"');
-  const userText = line.includes('"type":"user"') && !line.includes('"tool_use_id"');
-  const assistant = line.includes('"type":"assistant"');
-  if (!compaction && !userText && !assistant) return;
-  let record;
-  try {
-    record = JSON.parse(line);
-  } catch {
-    return;
-  }
-  if (record?.isSidechain || !insideRoot(record, root)) return;
-  const time = Date.parse(record.timestamp);
-  if (!Number.isFinite(time)) return;
-  const bucket = String(Math.floor(time / ACTIVITY_BUCKET_MS));
-  if (record.type === "system" && record.subtype === "compact_boundary") {
-    bump(found, bucket, "compactions");
-    return;
-  }
-  if (record.type === "user") {
-    if (!record.isMeta && !record.isCompactSummary && messageTexts(record).some((text) => text.trim())) state2.evidence = false;
-    return;
-  }
-  if (record.type !== "assistant" || !Array.isArray(record.message?.content)) return;
-  for (const block of record.message.content) {
-    if (block?.type === "tool_use") {
-      const input = block.input ?? {};
-      if (block.name === "Agent" || block.name === "Task") {
-        bump(found, bucket, "agents");
-        if (input.subagent_type === "dove-mentor") bump(found, bucket, "mentor");
-      } else if (block.name === "Bash" || block.name === "Read") {
-        state2.evidence = true;
-      } else if (block.name === "Write" || block.name === "Edit") {
-        const target = String(input.file_path ?? "");
-        const round = target.match(ROUND_FILE2);
-        if (round && block.name === "Write" && (!path7.isAbsolute(target) || target.startsWith(`${root}${path7.sep}`))) mark(found, `${round[2]}:${Number(round[1])}`, time);
-        const written = `${input.content ?? ""}${input.new_string ?? ""}`.match(GATES)?.length ?? 0;
-        const before = String(input.old_string ?? "").match(GATES)?.length ?? 0;
-        bump(found, bucket, "gates", Math.max(0, written - before));
-      }
-    } else if (block?.type === "text" && typeof block.text === "string") {
-      bump(found, bucket, "chars", Array.from(block.text).length);
-      bump(found, bucket, "hedges", HEDGES.reduce((sum, word) => sum + occurrences(block.text, word), 0));
-      const claims = block.text.match(CLAIMS)?.length ?? 0;
-      bump(found, bucket, "claims", claims);
-      if (!state2.evidence) bump(found, bucket, "unrun", claims);
-    }
-  }
-}
-function mergeBuckets(target, source) {
-  for (const [bucket, counts] of Object.entries(source ?? {})) {
-    const into = target[bucket] ?? (target[bucket] = {});
-    for (const field of ACTIVITY_FIELDS) if (counts[field]) into[field] = (into[field] ?? 0) + counts[field];
-  }
-  return target;
-}
-function mergeMarks(target, source) {
-  for (const [key, time] of Object.entries(source ?? {})) if (!(target[key] <= time)) target[key] = time;
-  return target;
-}
-function collect(line, session, root, found) {
-  if (!line.includes('"user"') || line.includes('"tool_use_id"')) return;
-  let record;
-  try {
-    record = JSON.parse(line);
-  } catch {
-    return;
-  }
-  if (!insideRoot(record, root)) return;
-  for (const raw of messageTexts(record)) {
-    const args = /^\s*<command-(?:message|name)>/u.test(raw) ? raw.match(/<command-args>([\s\S]*?)<\/command-args>/u)?.[1] : void 0;
-    const text = args ?? raw;
-    const kind = classifyUserText(text);
-    if (!kind) continue;
-    const characters = Array.from(text.replace(/\s+/gu, " ").trim());
-    if (characters.length <= SHORT) {
-      found.short += 1;
+function latestLongTermIntent(text = "") {
+  const lines = String(text).split(/\r?\n/u);
+  const headings = [];
+  const parents = [];
+  let fence = null;
+  for (const [index, line2] of lines.entries()) {
+    const marker = line2.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+    if (marker) {
+      if (!fence) fence = marker;
+      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
       continue;
     }
-    found.entries.push({ time: String(record.timestamp ?? "").slice(0, 16), session, kind, text: characters.length > LIMIT ? `${characters.slice(0, LIMIT).join("")}\u2026` : characters.join("") });
-  }
-}
-function readIndex(file, root, fsOps) {
-  try {
-    const index = JSON.parse(fsOps.readFileSync(file, "utf8"));
-    return index?.schema === INDEX_SCHEMA && index.root === root && index.files && typeof index.files === "object" ? index : { files: {} };
-  } catch {
-    return { files: {} };
-  }
-}
-function writeAtomic(file, content, fsOps) {
-  fsOps.mkdirSync(path7.dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.tmp`;
-  fsOps.writeFileSync(temporary, content);
-  fsOps.renameSync(temporary, file);
-}
-function render(directories, entries, short, pending) {
-  const own = entries.filter((entry) => entry.kind === "own").length;
-  const lines = [
-    "# \u7528\u6237\u672C\u4EBA\u539F\u8BDD\u6C47\u603B",
-    "",
-    "Dove \u5728\u751F\u6210\u5BFC\u5E08\u8C03\u7528\u6750\u6599\u65F6\u6574\u7406\uFF0C\u5E38\u9A7B\u9762\u677F\u6BCF\u5929\u9884\u70ED\uFF1B\u6574\u7406\u672C\u9879\u76EE\u5168\u90E8 Claude Code \u4F1A\u8BDD\u3002\u5DF2\u6392\u9664\u5B50\u4EFB\u52A1\u5BF9\u8BDD\u3001\u5DE5\u5177\u8FD4\u56DE\u3001\u4E0A\u4E0B\u6587\u538B\u7F29\u6458\u8981\u3001\u6280\u80FD\u8BF4\u660E\u3001\u540E\u53F0\u901A\u77E5\u548C\u7CFB\u7EDF\u6CE8\u5165\uFF1B\u7531\u76D1\u7763\u4F1A\u8BDD\u6216\u6587\u6863\u4EE3\u4E3A\u8F93\u5165\u7684\u5185\u5BB9\u6807\u4E3A\u201C\u8F6C\u8FF0\u201D\uFF0C\u4E0D\u5F53\u4F5C\u7528\u6237\u539F\u8BDD\u3002\u53EA\u6709\u51E0\u4E2A\u5B57\u7684\u6D88\u606F\uFF08\u5982\u201C\u7EE7\u7EED\u201D\uFF09\u53EA\u8BA1\u6570\u3002",
-    "",
-    `\u4F1A\u8BDD\u76EE\u5F55\uFF1A${directories.map((directory) => `\`${directory}\``).join("\u3001") || "\u672A\u627E\u5230"}`,
-    `\u672C\u4EBA ${own} \u6761\uFF0C\u8F6C\u8FF0 ${entries.length - own} \u6761\uFF0C\u77ED\u6D88\u606F ${short} \u6761\u3002\u6309\u65F6\u95F4\u6392\u5217\u3002`,
-    ...pending ? [`\u4F1A\u8BDD\u8BB0\u5F55\u8F83\u5927\uFF0C\u8FD8\u6709\u7EA6 ${Math.ceil(pending / (1 << 20))} MB \u672A\u6574\u7406\uFF0C\u4E0B\u6B21\u751F\u6210\u5BFC\u5E08\u8C03\u7528\u6750\u6599\u6216\u6BCF\u65E5\u9884\u70ED\u65F6\u7EE7\u7EED\uFF1B\u76EE\u524D\u7684\u6C47\u603B\u53EF\u80FD\u7F3A\u5C11\u90E8\u5206\u65F6\u6BB5\u3002`] : [],
-    ""
-  ];
-  for (const entry of entries) lines.push(`- ${entry.time.replace("T", " ")} \xB7 ${entry.kind === "own" ? "\u672C\u4EBA" : "\u8F6C\u8FF0"} \xB7 ${entry.text}`);
-  return `${lines.join("\n")}
-`;
-}
-function readActivityIndex(file, root, fsOps) {
-  try {
-    const index = JSON.parse(fsOps.readFileSync(file, "utf8"));
-    return index?.schema === ACTIVITY_SCHEMA && index.root === root && index.files && typeof index.files === "object" ? index : { files: {} };
-  } catch {
-    return { files: {} };
-  }
-}
-function transcriptsOf(directories, fsOps) {
-  const transcripts = [];
-  for (const directory of directories) {
-    let names = [];
-    try {
-      names = fsOps.readdirSync(directory).filter((name) => name.endsWith(".jsonl"));
-    } catch {
+    if (fence) continue;
+    const match = line2.match(/^ {0,3}(#{1,6})\s+(.+?)\s*#*\s*$/u);
+    if (!match) {
+      const explicitDate = line2.match(/^\s*(?:[-*]\s*)?(?:\*\*)?日期(?:\*\*)?\s*[:：]\s*(\d{4}-\d{2}-\d{2})\s*$/u)?.[1];
+      if (parents.length && explicitDate) parents.at(-1).bodyDate ??= dateIn(explicitDate);
       continue;
     }
-    for (const name of names) {
-      const file = path7.join(directory, name);
-      try {
-        const stat = fsOps.statSync(file);
-        transcripts.push({ file, name, size: stat.size, mtime: stat.mtimeMs ?? 0 });
-      } catch {
-      }
-    }
+    const level = match[1].length;
+    while (parents.length && parents.at(-1).level >= level) parents.pop();
+    const heading = { index, level, title: match[2], date: dateIn(match[2]), inheritedDate: parents.at(-1)?.date ?? parents.at(-1)?.inheritedDate ?? null };
+    headings.push(heading);
+    parents.push(heading);
   }
-  return transcripts.sort((left, right) => right.mtime - left.mtime);
+  let latest = null;
+  for (const [index, heading] of headings.entries()) {
+    if (!/^长期意图(?:\s|[（(:：—–-]|$)/u.test(heading.title)) continue;
+    const end = headings.slice(index + 1).find((next) => next.level <= heading.level)?.index ?? lines.length;
+    const body = lines.slice(heading.index + 1, end).join("\n").trim();
+    const intent = { date: heading.date ?? heading.bodyDate ?? heading.inheritedDate, text: body };
+    if (!latest || intent.date && (!latest.date || intent.date >= latest.date) || !intent.date && !latest.date) latest = intent;
+  }
+  return latest;
 }
-function refreshActivity(project, options = {}) {
-  const fsOps = options.fsOps ?? fs8;
-  const root = path7.resolve(project);
-  const indexFile = path7.join(root, ACTIVITY_INDEX_PATH);
-  const previous = readActivityIndex(indexFile, root, fsOps);
-  const deadline = Date.now() + (options.budgetMs ?? USER_ORIGINALS_BUDGET_MS);
-  const files = {};
-  let pending = 0;
-  for (const { file, size } of transcriptsOf(sessionDirectories(root, options), fsOps)) {
-    const known = previous.files[file];
-    const resume = known && known.offset <= size ? known : { offset: 0, buckets: {}, marks: {}, evidence: false };
-    if (resume.offset === size || Date.now() >= deadline) {
-      files[file] = resume;
-      if (resume.offset < size) pending += size - resume.offset;
-      continue;
-    }
-    const found = { buckets: {}, marks: {} };
-    const state2 = { evidence: Boolean(resume.evidence) };
-    const offset = scanNewLines(file, resume.offset, fsOps, (line) => collectActivity(line, root, found, state2), deadline);
-    files[file] = { offset, buckets: mergeBuckets(structuredClone(resume.buckets ?? {}), found.buckets), marks: mergeMarks({ ...resume.marks }, found.marks), evidence: state2.evidence };
-    if (offset < size) pending += size - offset;
-  }
-  for (const [file, item] of Object.entries(previous.files)) if (!(file in files)) files[file] = item;
-  writeAtomic(indexFile, `${JSON.stringify({ schema: ACTIVITY_SCHEMA, root, files })}
-`, fsOps);
-  return { pendingBytes: pending };
+var LONG_TERM_INTENT_ROUNDS = 3;
+var LONG_TERM_INTENT_MESSAGES = 30;
+function longTermIntentDue(intent, finishedRounds = [], newOwnMessages = 0) {
+  if (!intent?.date || dateIn(intent.date) !== intent.date) return true;
+  const since = finishedRounds.filter((round) => round?.day && round.day > intent.date);
+  return since.length >= LONG_TERM_INTENT_ROUNDS || since.some((round) => round.kind === "decision") || newOwnMessages >= LONG_TERM_INTENT_MESSAGES;
 }
-function readActivity(project, options = {}) {
-  const fsOps = options.fsOps ?? fs8;
-  const root = path7.resolve(project);
-  const index = readActivityIndex(path7.join(root, ACTIVITY_INDEX_PATH), root, fsOps);
-  const buckets = {};
-  const marks = {};
-  for (const item of Object.values(index.files)) {
-    mergeBuckets(buckets, item.buckets);
-    mergeMarks(marks, item.marks);
-  }
-  const result = { buckets, marks, scanned: Object.keys(index.files).length > 0 };
-  if (options.pending) {
-    result.pendingBytes = transcriptsOf(sessionDirectories(root, options), fsOps).reduce((sum, { file, size }) => sum + Math.max(0, size - (index.files[file]?.offset ?? 0)), 0);
-  }
-  return result;
+function ownMessagesSince(entries, date) {
+  return entries.filter((entry) => !date || entry.day && entry.day > date).length;
 }
-function refreshUserOriginals(project, options = {}) {
-  const fsOps = options.fsOps ?? fs8;
-  const root = path7.resolve(project);
-  const directories = sessionDirectories(root, options);
-  const sourceDirectory = sessionDirectory(root, options);
-  const indexFile = path7.join(root, USER_ORIGINALS_INDEX_PATH);
-  const previous = readIndex(indexFile, root, fsOps);
-  const files = {};
-  const deadline = Date.now() + (options.budgetMs ?? USER_ORIGINALS_BUDGET_MS);
-  let pending = 0;
-  const transcripts = transcriptsOf(directories, fsOps);
-  {
-    for (const { file, name, size } of transcripts) {
-      const known = previous.files[file];
-      const resume = known && known.offset <= size ? known : { offset: 0, entries: [], short: 0 };
-      if (resume.offset === size) {
-        files[file] = resume;
-        continue;
-      }
-      const found = { entries: [], short: 0 };
-      const offset = Date.now() < deadline ? scanNewLines(file, resume.offset, fsOps, (line) => collect(line, name.slice(0, 8), root, found), deadline) : resume.offset;
-      files[file] = { offset, entries: [...resume.entries, ...found.entries], short: resume.short + found.short };
-      if (offset < size) pending += size - offset;
-    }
-  }
-  for (const [file, item] of Object.entries(previous.files)) if (path7.dirname(file) === sourceDirectory && !(file in files)) files[file] = item;
-  const entries = Object.values(files).flatMap((item) => item.entries).sort((left, right) => left.time.localeCompare(right.time));
-  const short = Object.values(files).reduce((sum, item) => sum + item.short, 0);
-  writeAtomic(indexFile, `${JSON.stringify({ schema: INDEX_SCHEMA, root, files })}
-`, fsOps);
-  writeAtomic(path7.join(root, USER_ORIGINALS_PATH), render(directories, entries, short, pending), fsOps);
-  let activity = { pendingBytes: null };
+function coreNeedsOf(intent, limit = 900) {
+  if (!intent?.text) return null;
+  const lines = intent.text.split(/\r?\n/u);
+  const section = (title) => {
+    const start = lines.findIndex((line2) => new RegExp(`^\\s{0,3}#{2,6}\\s*${title}`, "u").test(line2));
+    if (start === -1) return null;
+    const end = lines.findIndex((line2, index) => index > start && /^\s{0,3}#{2,6}\s/u.test(line2));
+    const body = lines.slice(start + 1, end === -1 ? void 0 : end).join("\n").trim();
+    return body || null;
+  };
+  const needs = section("\u6838\u5FC3\u9700\u6C42");
+  const limits = section("\u7EA6\u675F");
+  if (needs || limits) return [needs ? `\u6838\u5FC3\u9700\u6C42\uFF1A
+${needs}` : null, limits ? `\u7EA6\u675F\uFF1A
+${limits}` : null].filter(Boolean).join("\n");
+  const first = intent.text.trim().split(/\n\s*\n/u)[0].trim();
+  const characters = Array.from(first);
+  const short = Math.min(limit, 400);
+  return characters.length > short ? `${characters.slice(0, short).join("")}\u2026` : characters.join("");
+}
+function finishedRoundsOf(rounds = [], dayOf) {
+  return rounds.filter((round) => round.result).map((round) => ({ day: dayOf(round.result.createdAt ?? round.result.mtime), kind: round.result.verdictKind }));
+}
+
+// src/core/experience.mjs
+var MENTOR_NOTES = ".dove/research/MENTOR_NOTES.md";
+var MAX_BYTES2 = 2 * 1024 * 1024;
+function readText3(file, fsOps) {
   try {
-    activity = refreshActivity(root, { ...options, budgetMs: Math.max(0, deadline - Date.now()) });
+    const stat = fsOps.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_BYTES2) return null;
+    return fsOps.readFileSync(file, "utf8");
   } catch {
+    return null;
   }
-  return { path: USER_ORIGINALS_PATH, directories, own: entries.filter((entry) => entry.kind === "own").length, relay: entries.filter((entry) => entry.kind === "relay").length, pendingBytes: pending, activityPendingBytes: activity.pendingBytes };
+}
+function clip2(text, limit) {
+  const characters = Array.from(String(text ?? ""));
+  return characters.length > limit ? `${characters.slice(0, limit).join("")}\u2026` : characters.join("");
+}
+function lessonsFor(project, notes, fsOps, options) {
+  const name = path10.basename(project);
+  const own = notes ? parseTransferable(notes).map((item) => ({ ...item, project: name })) : [];
+  const others = parseCrossProjectExperience(readText3(path10.join(project, CROSS_PROJECT_EXPERIENCE_PATH), fsOps) ?? "").filter((item) => item.project !== name);
+  if (!own.length && !others.length) return "";
+  let brief = null;
+  try {
+    brief = inspectRoundState(project, { ...options, fsOps }).currentRound?.brief ?? null;
+  } catch {
+    brief = null;
+  }
+  const picked = relevantTransferable([...own, ...others], { project: null, dimension: brief?.targetDimension ?? null, text: [brief?.summary, brief?.success, brief?.target].filter(Boolean).join("\n"), limit: 3 });
+  if (!picked.length) return "";
+  return [
+    `\u548C\u672C\u8F6E\u76F8\u5173\u7684\u53EF\u8FC1\u79FB\u8BA4\u8BC6\uFF08\u5BFC\u5E08\u5199\u7684\uFF0C${brief?.targetDimension ? `\u6309\u672C\u8F6E\u5BF9\u51C6\u7684\u300C${brief.targetDimension}\u300D\u548C\u672C\u8F6E\u8BF4\u660E\u6311\u51FA` : "\u6309\u672C\u8F6E\u8BF4\u660E\u548C\u65F6\u95F4\u6311\u51FA"}\uFF1B\u5168\u90E8\u89C1 ${CROSS_PROJECT_EXPERIENCE_PATH}\uFF09\uFF1A`,
+    ...picked.map((item) => `- ${item.date ?? "\u672A\u6CE8\u660E\u65E5\u671F"} \xB7 ${item.project}\uFF1A${clip2(item.text, 160)}`)
+  ].join("\n");
+}
+function experienceContext(project, options = {}) {
+  if (typeof project !== "string" || !project) return "";
+  const fsOps = options.fsOps ?? fs11;
+  const parts = [];
+  const notes = readText3(path10.join(project, MENTOR_NOTES), fsOps);
+  const intent = notes ? latestLongTermIntent(notes) : null;
+  const needs = coreNeedsOf(intent);
+  if (needs) parts.push(`\u7528\u6237\u7684\u6838\u5FC3\u9700\u6C42\u4E0E\u7EA6\u675F\uFF08\u5BFC\u5E08 ${intent.date ?? "\u672A\u6CE8\u660E\u65E5\u671F"} \u4ECE\u7528\u6237\u539F\u8BDD\u63D0\u70BC\uFF1B\u548C\u7528\u6237\u6700\u65B0\u539F\u8BDD\u51B2\u7A81\u65F6\u4EE5\u539F\u8BDD\u4E3A\u51C6\uFF09\uFF1A
+${needs}`);
+  let fresh = 0;
+  try {
+    fresh = ownMessagesSince(readOwnEntries(project, { fsOps }), intent?.date ?? null);
+  } catch {
+    fresh = 0;
+  }
+  if (fresh >= LONG_TERM_INTENT_MESSAGES) {
+    parts.push(`\u7528\u6237\u7684\u6838\u5FC3\u9700\u6C42\u4E0E\u7EA6\u675F\u8BE5\u66F4\u65B0\u4E86\uFF1A${intent?.date ? `\u4E0A\u6B21\u63D0\u70BC\u5728 ${intent.date}\uFF0C` : "\u5BFC\u5E08\u8FD8\u6CA1\u6709\u63D0\u70BC\u8FC7\uFF0C"}\u4E4B\u540E\u7528\u6237\u53C8\u8BF4\u4E86 ${fresh} \u6761\u672C\u4EBA\u539F\u8BDD\u3002\u5728\u4E0B\u4E00\u4E2A\u544A\u4E00\u6BB5\u843D\u5904\u8C03\u4E00\u6B21 dove-mentor\uFF08dove mentor brief \u4F1A\u6807\u51FA\u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\uFF09\uFF0C\u628A\u5BFC\u5E08\u8FD4\u56DE\u7684\u957F\u671F\u610F\u56FE\u539F\u6837\u5B58\u8FDB\u5BFC\u5E08\u7B14\u8BB0\u3002`);
+  }
+  const practice = practiceContext(readPractice(project, { fsOps }));
+  if (practice) parts.push(practice);
+  const lessons = lessonsFor(project, notes, fsOps, options);
+  if (lessons) parts.push(lessons);
+  return parts.join("\n\n");
 }
 
 // src/core/session-start-hook.mjs
@@ -2560,13 +2944,13 @@ function recentUserOriginalsContext(project, options) {
   if (!project) return COMPACTION_REANCHOR_NOTICE;
   try {
     const result = refreshUserOriginals(project, { ...options, budgetMs: 1500 });
-    const summary = (options.fsOps ?? fs9).readFileSync(path8.join(project, USER_ORIGINALS_PATH), "utf8");
-    const entries = summary.split("\n").filter((line) => {
-      const own = line.match(/^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 本人 · (.*)$/u);
+    const summary = (options.fsOps ?? fs12).readFileSync(path11.join(project, USER_ORIGINALS_PATH), "utf8");
+    const entries = summary.split("\n").filter((line2) => {
+      const own = line2.match(/^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 本人 · (.*)$/u);
       return own && classifyUserText(own[1]) === "own" && !/^(?:Claude\s+代用户转达[:：]|【用户(?:指出|已同意)[^】]*】|用户\s*\d{4}-\d{2}-\d{2}(?:\s|$)|用户授权)/u.test(own[1]);
-    }).slice(-4).map((line) => {
-      const characters = Array.from(line);
-      return characters.length > 400 ? `${characters.slice(0, 399).join("")}\u2026` : line;
+    }).slice(-4).map((line2) => {
+      const characters = Array.from(line2);
+      return characters.length > 400 ? `${characters.slice(0, 399).join("")}\u2026` : line2;
     });
     if (entries.length === 0) return COMPACTION_REANCHOR_NOTICE;
     const incomplete = result.pendingBytes > 0 ? "\n\u539F\u8BDD\u6C47\u603B\u5C1A\u6709\u672A\u626B\u63CF\u90E8\u5206\uFF1B\u8FD9\u4E9B\u53EA\u662F\u5DF2\u6574\u7406\u5185\u5BB9\u91CC\u7684\u6700\u8FD1\u6458\u5F55\u3002" : "";
@@ -2595,13 +2979,13 @@ function sessionStartOutput(payload, result = null, options = {}) {
     output.systemMessage = "Dove\uFF1A\u672C\u9879\u76EE\u7684\u5B89\u88C5\u548C\u5F53\u524D\u7248\u672C\u6709\u5DEE\u5F02\uFF0C\u6216\u8005\u6709\u672C\u5730\u6539\u52A8\uFF1Bdove doctor \u53EF\u770B\u662F\u54EA\u51E0\u5904\u3002\u662F\u4F60\u81EA\u5DF1\u7684\u6539\u52A8\u5C31\u4E0D\u7528\u7BA1\uFF0Cdove update \u4F1A\u628A\u5B83\u4EEC\u6362\u56DE Dove \u7684\u7248\u672C\u3002";
   }
   if (payload.source === "startup" || payload.source === "clear") {
-    if (typeof options.project !== "string" || !path8.isAbsolute(options.project)) {
+    if (typeof options.project !== "string" || !path11.isAbsolute(options.project)) {
       throw new Error("Dove SessionStart bootstrap requires an explicit absolute project root.");
     }
     if (options.guidanceVersion) recordSessionGuidance(options.project, payload.session_id, options.guidanceVersion, options);
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
-      additionalContext: renderDoveAuthorPreferencesBootstrap(path8.join(options.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH))
+      additionalContext: renderDoveAuthorPreferencesBootstrap(path11.join(options.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH))
     };
   } else if (payload.source === "compact" || payload.source === "resume") {
     output.hookSpecificOutput = {
@@ -2615,7 +2999,13 @@ ${DOVE_RESEARCH_REFLECTION_CONTINUITY}
 ${recentUserOriginalsContext(options.project, options)}`
     };
   }
-  if (output.hookSpecificOutput) output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload) + hostMigrationContext(options.project, options);
+  if (output.hookSpecificOutput) {
+    const experience = experienceContext(options.project, options);
+    if (experience) output.hookSpecificOutput.additionalContext += `
+
+${experience}`;
+    output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload) + hostMigrationContext(options.project, options);
+  }
   return Object.keys(output).length > 0 ? output : null;
 }
 function sessionStartFailureOutput(error) {
@@ -2665,11 +3055,17 @@ function userPromptSubmitOutput(payload, guidance, options = {}) {
   }
   const notice = options.project && takeGuidanceUpdateNotice(options.project, payload.session_id, guidance.version, options) ? `${guidanceUpdateNotice(guidance.version)}
 ` : "";
+  const practice = [
+    options.project ? practiceForMessage(readPractice(options.project, options), payload.prompt) : "",
+    reflectionRequested(payload.prompt) ? reflectionGuidance() : ""
+  ].filter(Boolean).join("\n\n");
   const context = `Dove ${guidance.version}
 ${notice}${guidance.note ? `${guidance.note}
 ` : ""}${identityCardContext(options.project, options)}
 
-${roundSituationContext(options.project, options)}
+${roundSituationContext(options.project, options)}${practice ? `
+
+${practice}` : ""}
 
 ${renderDoveResearchReanchor()} \u8EAB\u4EFD\u5361\u4E0D\u80FD\u66FF\u4EE3\u7528\u6237\u6700\u65B0\u539F\u8BDD\u3002${userOriginalSourceContext(payload)}${hostMigrationContext(options.project, options)}`;
   return {
@@ -2689,7 +3085,7 @@ function userPromptSubmitFailureOutput(error) {
 
 // src/core/statusline.mjs
 import { spawnSync } from "node:child_process";
-import path9 from "node:path";
+import path12 from "node:path";
 import process2 from "node:process";
 var MAX_MAINLINE_CODE_POINTS = 80;
 var STATUS_SEPARATOR = " \xB7 ";
@@ -2745,7 +3141,7 @@ function inspectGitBranch(projectRoot, options = {}) {
       windowsHide: true,
       env: {
         ...process2.env,
-        GIT_CEILING_DIRECTORIES: path9.dirname(path9.resolve(projectRoot))
+        GIT_CEILING_DIRECTORIES: path12.dirname(path12.resolve(projectRoot))
       }
     });
     if (result?.status !== 0 || result.signal || result.error) return null;
@@ -2755,12 +3151,12 @@ function inspectGitBranch(projectRoot, options = {}) {
   }
 }
 var HTML_BLOCK_TAG = /^(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|pre|script|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)$/iu;
-function htmlBlockTag(line) {
-  const match = line.match(/^ {0,3}<([A-Za-z][A-Za-z0-9-]*)\b[^>]*>/u);
+function htmlBlockTag(line2) {
+  const match = line2.match(/^ {0,3}<([A-Za-z][A-Za-z0-9-]*)\b[^>]*>/u);
   return match && HTML_BLOCK_TAG.test(match[1]) ? match[1].toLowerCase() : null;
 }
-function mainlineField(line) {
-  return line === void 0 ? null : cardField(line, "Mainline");
+function mainlineField(line2) {
+  return line2 === void 0 ? null : cardField(line2, "Mainline");
 }
 function parseResearchMainline(markdown2, options = {}) {
   let fence = null;
@@ -2769,41 +3165,41 @@ function parseResearchMainline(markdown2, options = {}) {
   let htmlBlock = null;
   const matches = [];
   const lines = markdown2.split(/\r?\n/u);
-  for (const [index, line] of lines.entries()) {
-    if (index === 0 && line === "---") {
+  for (const [index, line2] of lines.entries()) {
+    if (index === 0 && line2 === "---") {
       frontmatter = true;
       continue;
     }
     if (frontmatter) {
-      if (line === "---" || line === "...") frontmatter = false;
+      if (line2 === "---" || line2 === "...") frontmatter = false;
       continue;
     }
     if (fence) {
-      const closing = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/u);
+      const closing = line2.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/u);
       if (closing && closing[1][0] === fence[0] && closing[1].length >= fence.length) fence = null;
       continue;
     }
     if (htmlBlock) {
-      if (new RegExp(`^ {0,3}</${htmlBlock}>[ \\t]*$`, "iu").test(line)) htmlBlock = null;
+      if (new RegExp(`^ {0,3}</${htmlBlock}>[ \\t]*$`, "iu").test(line2)) htmlBlock = null;
       continue;
     }
-    const opening = !comment && line.match(/^ {0,3}(`{3,}|~{3,})/u);
+    const opening = !comment && line2.match(/^ {0,3}(`{3,}|~{3,})/u);
     if (opening) {
       fence = opening[1];
       continue;
     }
-    const blockTag = !comment && htmlBlockTag(line);
+    const blockTag = !comment && htmlBlockTag(line2);
     if (blockTag) {
-      if (!new RegExp(`</${blockTag}>`, "iu").test(line)) htmlBlock = blockTag;
+      if (!new RegExp(`</${blockTag}>`, "iu").test(line2)) htmlBlock = blockTag;
       continue;
     }
     const startsInComment = comment;
-    for (const marker of line.matchAll(/<!--|-->/gu)) {
+    for (const marker of line2.matchAll(/<!--|-->/gu)) {
       if (marker[0] === "<!--") comment = true;
       else comment = false;
     }
     if (startsInComment || comment) continue;
-    const value = mainlineField(line);
+    const value = mainlineField(line2);
     if (value !== null) {
       if (mainlineField(lines[index - 1]) !== null) return null;
       if (/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "")) continue;
@@ -2821,7 +3217,7 @@ function renderDoveStatusLine(input, options = {}) {
   const remainingValue = nonNegativeNumber(payload.context_window?.remaining_percentage);
   const remaining = remainingValue === null ? null : Math.min(100, Math.round(remainingValue));
   const duration = formatSessionDuration(payload.cost?.total_duration_ms);
-  const project = options.projectRoot ? oneLine(path9.resolve(options.projectRoot)) : null;
+  const project = options.projectRoot ? oneLine(path12.resolve(options.projectRoot)) : null;
   const card = readDoveIdentityCard(options.projectRoot, options) ?? "";
   const mainline = shortMainline(Object.hasOwn(options, "mainline") ? options.mainline : parseResearchMainline(card));
   const noColorValue = (options.env ?? process2.env).NO_COLOR;
@@ -2838,7 +3234,7 @@ function renderDoveStatusLine(input, options = {}) {
   let progress = Object.hasOwn(options, "progress") ? oneLine(options.progress) : null;
   if (!Object.hasOwn(options, "progress") && options.projectRoot) {
     try {
-      progress = oneLine(renderRoundStatusSummary(inspectRoundState(path9.resolve(options.projectRoot), options)));
+      progress = oneLine(renderRoundStatusSummary(inspectRoundState(path12.resolve(options.projectRoot), options)));
     } catch {
       progress = null;
     }
@@ -2847,7 +3243,7 @@ function renderDoveStatusLine(input, options = {}) {
 }
 
 // src/core/research-defaults.mjs
-import fs10 from "node:fs";
+import fs13 from "node:fs";
 var RESEARCH_ROOT = ARTIFACT_PATHS.researchDocumentsDir;
 var RESEARCH_DEFAULT_PATHS = Object.freeze({
   root: RESEARCH_ROOT,
@@ -2864,7 +3260,7 @@ var RESEARCH_DEFAULT_DOCUMENTS = Object.freeze([
 ]);
 var RESEARCH_DEFAULT_DIRECTORY_PATHS = Object.freeze([RESEARCH_ROOT]);
 function prepareResearchDefaults(root, options = {}) {
-  const anchor = openRootedFilesystem(root, { fsOps: options.fsOps ?? fs10 });
+  const anchor = openRootedFilesystem(root, { fsOps: options.fsOps ?? fs13 });
   const directory = anchor.tryLstat(RESEARCH_ROOT);
   if (directory && (directory.isSymbolicLink() || !directory.isDirectory())) {
     throw new Error(`${RESEARCH_ROOT} must be a real directory.`);
@@ -2881,7 +3277,7 @@ function prepareResearchDefaults(root, options = {}) {
 }
 
 // src/core/research-documents.mjs
-import fs11 from "node:fs";
+import fs14 from "node:fs";
 var RESEARCH_DOCUMENT_PATHS = Object.freeze({ ...RESEARCH_DEFAULT_PATHS });
 function readableMarkdown(root, relativePath) {
   const stat = root.tryLstat(relativePath);
@@ -2893,7 +3289,7 @@ function readableMarkdown(root, relativePath) {
 function inspectResearchDocuments(project, options = {}) {
   const base = { root: RESEARCH_DOCUMENT_PATHS.root, identity: null, evaluation: null, rounds: null, overview: null };
   try {
-    const root = openRootedFilesystem(project, { fsOps: options.fsOps ?? fs11 });
+    const root = openRootedFilesystem(project, { fsOps: options.fsOps ?? fs14 });
     const directory = root.tryLstat(RESEARCH_DOCUMENT_PATHS.root);
     if (!directory) return { ...base, healthy: true, state: "absent" };
     if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error(`${base.root} must be a real directory.`);
@@ -2946,13 +3342,13 @@ user-invocable: false
 }
 
 // src/core/paper-library.mjs
-import fs12 from "node:fs";
-import path10 from "node:path";
+import fs15 from "node:fs";
+import path13 from "node:path";
 var LIBRARY = ".dove/research/papers/library";
 var IMPACT_LABELS = { overlap: "\u649E\u9898", baseline: "\u65B0\u57FA\u7EBF", borrow: "\u53EF\u501F\u7528" };
 function readPaperLibrary(root) {
   try {
-    return JSON.parse(fs12.readFileSync(path10.join(root, `${LIBRARY}.json`), "utf8"));
+    return JSON.parse(fs15.readFileSync(path13.join(root, `${LIBRARY}.json`), "utf8"));
   } catch (error) {
     if (error.code === "ENOENT") return { papers: [] };
     throw error;
@@ -3007,13 +3403,13 @@ ${Object.entries(fields).filter(([, value]) => value).map(([name, value]) => `  
 
 // src/core/figure-generation.mjs
 import { spawnSync as spawnSync2 } from "node:child_process";
-import fs13 from "node:fs";
+import fs16 from "node:fs";
 import os3 from "node:os";
-import path11 from "node:path";
+import path14 from "node:path";
 var PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 var RETRY_DELAYS_MS = [2e3, 6e3];
 function doveConfigDirectory(env) {
-  return path11.join(env.XDG_CONFIG_HOME || path11.join(env.HOME || os3.homedir(), ".config"), "dove");
+  return path14.join(env.XDG_CONFIG_HOME || path14.join(env.HOME || os3.homedir(), ".config"), "dove");
 }
 function imageKind(bytes) {
   if (bytes.subarray(0, 8).equals(PNG_SIGNATURE)) return { type: "image/png", extension: ".png" };
@@ -3029,10 +3425,10 @@ function origin(value) {
   }
 }
 function figureKeys(config, baseURL, env) {
-  const file = config.apiKeyFile ?? path11.join(doveConfigDirectory(env), "figure-api-key");
+  const file = config.apiKeyFile ?? path14.join(doveConfigDirectory(env), "figure-api-key");
   const keys = [];
   try {
-    const key = fs13.readFileSync(file, "utf8").trim();
+    const key = fs16.readFileSync(file, "utf8").trim();
     if (key) keys.push(key);
   } catch {
   }
@@ -3055,18 +3451,18 @@ function configuredFigure(options) {
   return { baseURL, model: String(config.model).trim(), keys };
 }
 function freeOutputPath(file) {
-  if (!fs13.existsSync(file)) return file;
-  const extension = path11.extname(file);
+  if (!fs16.existsSync(file)) return file;
+  const extension = path14.extname(file);
   const stem = file.slice(0, file.length - extension.length);
   for (let index = 2; ; index += 1) {
     const candidate = `${stem}-${index}${extension}`;
-    if (!fs13.existsSync(candidate)) return candidate;
+    if (!fs16.existsSync(candidate)) return candidate;
   }
 }
 function outputPathFor(file, kind) {
-  const extension = path11.extname(file).toLowerCase();
+  const extension = path14.extname(file).toLowerCase();
   const matches = extension === kind.extension || kind.extension === ".jpg" && extension === ".jpeg";
-  return freeOutputPath(matches ? file : `${file.slice(0, file.length - path11.extname(file).length)}${kind.extension}`);
+  return freeOutputPath(matches ? file : `${file.slice(0, file.length - path14.extname(file).length)}${kind.extension}`);
 }
 function redact(text, keys) {
   let result = String(text);
@@ -3117,16 +3513,16 @@ async function imageBytes(result, fetchImpl) {
 }
 async function generateFigure(projectRoot, options = {}) {
   const { baseURL, model, keys } = configuredFigure(options);
-  const root = path11.resolve(projectRoot);
-  const prompt = String(options.prompt ?? (options.promptFile ? fs13.readFileSync(path11.resolve(root, options.promptFile), "utf8") : "")).trim();
+  const root = path14.resolve(projectRoot);
+  const prompt = String(options.prompt ?? (options.promptFile ? fs16.readFileSync(path14.resolve(root, options.promptFile), "utf8") : "")).trim();
   if (!prompt) throw new Error("Give the image prompt with --prompt <text> or --prompt-file <file>.");
   if (!options.output) throw new Error("--output <file> is required.");
   const inputs = [].concat(options.image ?? []).map((image) => {
-    const file = path11.resolve(root, image);
-    const bytes2 = fs13.readFileSync(file);
+    const file = path14.resolve(root, image);
+    const bytes2 = fs16.readFileSync(file);
     const kind2 = imageKind(bytes2);
     if (!kind2) throw new Error(`Input image is not PNG, JPEG or WebP: ${file}`);
-    return { name: path11.basename(file), bytes: bytes2, type: kind2.type };
+    return { name: path14.basename(file), bytes: bytes2, type: kind2.type };
   });
   const extra = Object.fromEntries(["size", "quality", "background"].filter((name) => options[name] !== void 0).map((name) => [name, String(options[name])]));
   let body;
@@ -3149,20 +3545,20 @@ async function generateFigure(projectRoot, options = {}) {
   const bytes = await imageBytes(result, options.fetch ?? globalThis.fetch);
   const kind = imageKind(bytes);
   if (!kind) throw new Error("Image API returned data that is not a PNG, JPEG or WebP image.");
-  const output = outputPathFor(path11.resolve(root, options.output), kind);
-  fs13.mkdirSync(path11.dirname(output), { recursive: true });
-  fs13.writeFileSync(output, bytes, { flag: "wx" });
+  const output = outputPathFor(path14.resolve(root, options.output), kind);
+  fs16.mkdirSync(path14.dirname(output), { recursive: true });
+  fs16.writeFileSync(output, bytes, { flag: "wx" });
   return { status: "generated", mode: inputs.length ? "edit" : "generate", model, outputPath: output, inputs: inputs.length };
 }
 function findExecutable(name, env = process.env) {
   return onPath(name, env);
 }
 function onPath(name, env) {
-  for (const directory of String(env.PATH ?? "").split(path11.delimiter)) {
+  for (const directory of String(env.PATH ?? "").split(path14.delimiter)) {
     if (!directory) continue;
-    const candidate = path11.join(directory, name);
+    const candidate = path14.join(directory, name);
     try {
-      fs13.accessSync(candidate, fs13.constants.X_OK);
+      fs16.accessSync(candidate, fs16.constants.X_OK);
       return candidate;
     } catch {
     }
@@ -3172,28 +3568,28 @@ function onPath(name, env) {
 function figureTools(options = {}) {
   const env = options.env ?? process.env;
   const config = readHostSettings(options).figure ?? {};
-  const directory = config.pptTools ?? path11.join(env.HOME || os3.homedir(), ".local/share/dove/figure-tools");
-  const existing = (file) => fs13.existsSync(file) ? file : null;
-  const exportScript = existing(path11.join(directory, "scripts/export-pdf"));
+  const directory = config.pptTools ?? path14.join(env.HOME || os3.homedir(), ".local/share/dove/figure-tools");
+  const existing = (file) => fs16.existsSync(file) ? file : null;
+  const exportScript = existing(path14.join(directory, "scripts/export-pdf"));
   const soffice = onPath("soffice", env) ?? onPath("libreoffice", env);
   const pdftoppm = onPath("pdftoppm", env);
   const python3 = onPath("python3", env);
   const systemPptx = python3 && spawnSync2(python3, ["-c", "import pptx"], { stdio: "ignore", timeout: 1e4 }).status === 0 ? python3 : null;
   return {
-    settings: path11.join(env.XDG_CONFIG_HOME || path11.join(env.HOME || os3.homedir(), ".config"), "dove/settings.json"),
+    settings: path14.join(env.XDG_CONFIG_HOME || path14.join(env.HOME || os3.homedir(), ".config"), "dove/settings.json"),
     imageModel: config.baseURL && config.model ? { baseURL: config.baseURL, model: config.model } : null,
-    pptPython: config.pptPython ?? existing(path11.join(directory, "venv/bin/python")) ?? systemPptx,
+    pptPython: config.pptPython ?? existing(path14.join(directory, "venv/bin/python")) ?? systemPptx,
     exportPdf: exportScript ? `${exportScript} INPUT.pptx OUTPUT.pdf` : soffice ? `${soffice} --headless --convert-to pdf --outdir DIR INPUT.pptx` : null,
     pdfToPng: pdftoppm ? `${pdftoppm} -png -r 300 -singlefile INPUT.pdf OUTPUT` : null,
-    notes: existing(path11.join(directory, "README.md"))
+    notes: existing(path14.join(directory, "README.md"))
   };
 }
 
 // src/core/figure-proof.mjs
 import { spawnSync as spawnSync3 } from "node:child_process";
-import fs14 from "node:fs";
+import fs17 from "node:fs";
 import os4 from "node:os";
-import path12 from "node:path";
+import path15 from "node:path";
 var PRINT_DPI = 300;
 var DEFAULT_DPI = 150;
 var RASTER = /\.(?:png|jpe?g|webp)$/iu;
@@ -3213,12 +3609,12 @@ function parseFigureSpec(text) {
   return { file: value.slice(0, at), inches: lengthInInches(value.slice(at + 1)) };
 }
 function freeOutputPath2(file) {
-  if (!fs14.existsSync(file)) return file;
-  const extension = path12.extname(file);
+  if (!fs17.existsSync(file)) return file;
+  const extension = path15.extname(file);
   const stem = file.slice(0, file.length - extension.length);
   for (let index = 2; ; index += 1) {
     const candidate = `${stem}-${index}${extension}`;
-    if (!fs14.existsSync(candidate)) return candidate;
+    if (!fs17.existsSync(candidate)) return candidate;
   }
 }
 function millimetres(inches) {
@@ -3335,14 +3731,14 @@ function rasterize(file, scratch, index, env) {
   if (!/\.pdf$/iu.test(file)) throw new Error(`Use PNG, JPEG, WebP or PDF figures (export PPTX or SVG to PDF first): ${file}`);
   const pdftoppm = findExecutable("pdftoppm", env);
   if (!pdftoppm) throw new Error(`pdftoppm is needed to read PDF figures: ${file}`);
-  const stem = path12.join(scratch, `figure-${index}`);
+  const stem = path15.join(scratch, `figure-${index}`);
   const run = spawnSync3(pdftoppm, ["-png", "-r", String(PRINT_DPI), "-f", "1", "-l", "1", "-singlefile", file, stem], { encoding: "utf8", timeout: 12e4 });
-  if (run.status !== 0 || !fs14.existsSync(`${stem}.png`)) throw new Error(`pdftoppm could not read ${file}: ${(run.stderr || "").trim().slice(0, 300)}`);
+  if (run.status !== 0 || !fs17.existsSync(`${stem}.png`)) throw new Error(`pdftoppm could not read ${file}: ${(run.stderr || "").trim().slice(0, 300)}`);
   return { path: `${stem}.png`, vector: true };
 }
 function composeFigureProof(projectRoot, options = {}) {
   const env = options.env ?? process.env;
-  const root = path12.resolve(projectRoot);
+  const root = path15.resolve(projectRoot);
   const mode = options.compare ? "compare" : options.proof ? "proof" : null;
   if (!mode) throw new Error("Choose --compare or --proof.");
   if (!options.output) throw new Error("--output <file.png> is required.");
@@ -3361,19 +3757,19 @@ function composeFigureProof(projectRoot, options = {}) {
     if (!figures.length) throw new Error("--proof needs one or more --figure <file>@<width>.");
     specs = figures.map((value) => {
       const spec = parseFigureSpec(value);
-      return { ...spec, label: `${path12.basename(spec.file)} - ${millimetres(spec.inches)}` };
+      return { ...spec, label: `${path15.basename(spec.file)} - ${millimetres(spec.inches)}` };
     });
   }
   const python = composerPython(options);
-  const scratch = fs14.mkdtempSync(path12.join(os4.tmpdir(), "dove-figure-proof-"));
+  const scratch = fs17.mkdtempSync(path15.join(os4.tmpdir(), "dove-figure-proof-"));
   try {
     const items = specs.map((spec, index) => {
-      const file = path12.resolve(root, spec.file);
-      if (!fs14.existsSync(file)) throw new Error(`Figure not found: ${file}`);
+      const file = path15.resolve(root, spec.file);
+      if (!fs17.existsSync(file)) throw new Error(`Figure not found: ${file}`);
       return { ...spec, file, ...rasterize(file, scratch, index, env) };
     });
-    const output = freeOutputPath2(path12.resolve(root, options.output));
-    fs14.mkdirSync(path12.dirname(output), { recursive: true });
+    const output = freeOutputPath2(path15.resolve(root, options.output));
+    fs17.mkdirSync(path15.dirname(output), { recursive: true });
     const sideBySide = mode === "compare" && specs[0].inches <= 4;
     const run = spawnSync3(python, ["-c", COMPOSER], {
       input: JSON.stringify({ mode, dpi, output, side_by_side: sideBySide, items: items.map((item) => ({ path: item.path, inches: item.inches, label: item.label })) }),
@@ -3397,7 +3793,7 @@ function composeFigureProof(projectRoot, options = {}) {
       })
     };
   } finally {
-    fs14.rmSync(scratch, { recursive: true, force: true });
+    fs17.rmSync(scratch, { recursive: true, force: true });
   }
 }
 var PAGE_ANALYSIS = String.raw`
@@ -3581,117 +3977,18 @@ json.dump({"pages": len(pages), "columns": len(columns), "referencesPage": headi
 `;
 
 // src/core/mentor-brief.mjs
-import fs18 from "node:fs";
-import path16 from "node:path";
+import fs20 from "node:fs";
+import path18 from "node:path";
 
 // src/core/dashboard-data.mjs
-import fs17 from "node:fs";
-import path15 from "node:path";
-
-// src/core/mentor-intent.mjs
-function dateIn(text) {
-  const date = String(text).match(/\b\d{4}-\d{2}-\d{2}\b/u)?.[0];
-  const time = date ? Date.parse(`${date}T00:00:00Z`) : NaN;
-  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === date ? date : null;
-}
-function latestLongTermIntent(text = "") {
-  const lines = String(text).split(/\r?\n/u);
-  const headings = [];
-  const parents = [];
-  let fence = null;
-  for (const [index, line] of lines.entries()) {
-    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
-    if (marker) {
-      if (!fence) fence = marker;
-      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
-      continue;
-    }
-    if (fence) continue;
-    const match = line.match(/^ {0,3}(#{1,6})\s+(.+?)\s*#*\s*$/u);
-    if (!match) {
-      const explicitDate = line.match(/^\s*(?:[-*]\s*)?(?:\*\*)?日期(?:\*\*)?\s*[:：]\s*(\d{4}-\d{2}-\d{2})\s*$/u)?.[1];
-      if (parents.length && explicitDate) parents.at(-1).bodyDate ??= dateIn(explicitDate);
-      continue;
-    }
-    const level = match[1].length;
-    while (parents.length && parents.at(-1).level >= level) parents.pop();
-    const heading = { index, level, title: match[2], date: dateIn(match[2]), inheritedDate: parents.at(-1)?.date ?? parents.at(-1)?.inheritedDate ?? null };
-    headings.push(heading);
-    parents.push(heading);
-  }
-  let latest = null;
-  for (const [index, heading] of headings.entries()) {
-    if (!/^长期意图(?:\s|[（(:：—–-]|$)/u.test(heading.title)) continue;
-    const end = headings.slice(index + 1).find((next) => next.level <= heading.level)?.index ?? lines.length;
-    const body = lines.slice(heading.index + 1, end).join("\n").trim();
-    const intent = { date: heading.date ?? heading.bodyDate ?? heading.inheritedDate, text: body };
-    if (!latest || intent.date && (!latest.date || intent.date >= latest.date) || !intent.date && !latest.date) latest = intent;
-  }
-  return latest;
-}
-var LONG_TERM_INTENT_ROUNDS = 3;
-function longTermIntentDue(intent, finishedRounds = []) {
-  if (!intent?.date || dateIn(intent.date) !== intent.date) return true;
-  const since = finishedRounds.filter((round) => round?.day && round.day > intent.date);
-  return since.length >= LONG_TERM_INTENT_ROUNDS || since.some((round) => round.kind === "decision");
-}
-function finishedRoundsOf(rounds = [], dayOf) {
-  return rounds.filter((round) => round.result).map((round) => ({ day: dayOf(round.result.createdAt ?? round.result.mtime), kind: round.result.verdictKind }));
-}
+import fs19 from "node:fs";
+import path17 from "node:path";
 
 // src/core/project-registry.mjs
 import crypto from "node:crypto";
-import fs15 from "node:fs";
+import fs18 from "node:fs";
 import os5 from "node:os";
-import path13 from "node:path";
-
-// src/core/cross-project.mjs
-import fs16 from "node:fs";
-import path14 from "node:path";
-var CROSS_PROJECT_EXPERIENCE_PATH = ".dove/install/CROSS_PROJECT_EXPERIENCE.md";
-function readText2(file, fsOps) {
-  try {
-    const stat = fsOps.lstatSync(file);
-    if (!stat.isFile() || stat.isSymbolicLink()) return null;
-    return fsOps.readFileSync(file, "utf8");
-  } catch {
-    return null;
-  }
-}
-var CORRECTION_TOPICS = Object.freeze([
-  { id: "plain", label: "\u8BF4\u4EBA\u8BDD\u3001\u8BB2\u6E05\u695A", pattern: /说人话|看不懂|听不懂|大白话|白话|第一次接手|讲清楚|说清楚/u },
-  { id: "drift", label: "\u8DD1\u504F\u3001\u6362\u6210\u522B\u7684\u95EE\u9898", pattern: /跑偏|带偏|偏了|偏离|等价成|主问题|不是我要的|离题|答非所问/u },
-  { id: "limits", label: "\u7ED9\u81EA\u5DF1\u8BBE\u9650", pattern: /给自己设|自设|套授权|不要给自己|别给自己|设那[么麽]多|自己加的限制|不需要授权/u },
-  { id: "scale", label: "\u5B9E\u9A8C\u592A\u5C0F", pattern: /小规模|规模太小|样本太少|跑全量/u },
-  { id: "engineering", label: "\u53D8\u6210\u5DE5\u7A0B", pattern: /变成工程|工程化|不是科研|工程上的/u },
-  { id: "seeds", label: "\u8865\u79CD\u5B50\u3001\u52A0\u6B65\u6570", pattern: /种子|seed/iu },
-  { id: "facts", label: "\u83AB\u987B\u6709\u3001\u7F16\u9020", pattern: /莫须有|编造|瞎说|胡说|乱说|没有依据/u },
-  { id: "generality", label: "\u901A\u7528\u548C\u6CDB\u5316", pattern: /泛化|狭窄|局限成/u },
-  { id: "finish", label: "\u6CA1\u505A\u5B8C\u3001\u534A\u9014\u6536\u7A84", pattern: /没做完|赶紧做完|半途|收窄/u },
-  { id: "method-first", label: "\u5148\u8BB2\u6E05\u95EE\u9898\u548C\u65B9\u6CD5", pattern: /现有方法为什么不好|要解决什么问题|先回答我/u },
-  { id: "stall", label: "\u505C\u6EDE\u3001\u6CA1\u8FDB\u5C55", pattern: /停滞|没进展|没有进展|进展缓慢|一直没有|原地/u }
-]);
-function ownEntries(text) {
-  const entries = [];
-  for (const line of String(text).split(/\r?\n/u)) {
-    const match = line.match(/^- (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) · 本人 · (.*)$/u);
-    if (!match) continue;
-    const at = Date.parse(`${match[1]}T${match[2]}:00Z`);
-    entries.push({ date: match[1], time: `${match[1]} ${match[2]}`, at, day: dayString(at), text: match[3] });
-  }
-  return entries;
-}
-function readOwnEntries(root, options = {}) {
-  const text = readText2(path14.join(root, USER_ORIGINALS_PATH), options.fsOps ?? fs16);
-  return text ? ownEntries(text) : [];
-}
-function isCorrection(text) {
-  return CORRECTION_TOPICS.some((topic) => topic.pattern.test(text));
-}
-function dayString(time) {
-  const value = new Date(time);
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-}
+import path16 from "node:path";
 
 // src/core/round-ledger.mjs
 var HOUR_MS = 36e5;
@@ -3709,7 +4006,7 @@ function median(values) {
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
-function clip(text, limit = 60) {
+function clip3(text, limit = 60) {
   if (text == null) return null;
   const characters = Array.from(String(text));
   return characters.length > limit ? `${characters.slice(0, limit).join("")}\u2026` : characters.join("");
@@ -3759,7 +4056,7 @@ function roundLedger(project, options = {}) {
     const { start, end } = spans.get(round.number);
     const open = !round.result;
     const within = (time) => time >= start && (time < end || open && time < end + ACTIVITY_BUCKET_MS);
-    const sum = (field) => buckets.reduce((total, [time, counts]) => total + (within(time) ? counts[field] ?? 0 : 0), 0);
+    const sum = (field2) => buckets.reduce((total, [time, counts]) => total + (within(time) ? counts[field2] ?? 0 : 0), 0);
     const chars = sum("chars");
     const calibration = calibrateRound(round.brief.prediction, round.result?.actual);
     return {
@@ -3775,8 +4072,8 @@ function roundLedger(project, options = {}) {
       verdict: round.result?.verdict ?? null,
       verdictKind: round.result?.verdictKind ?? null,
       verdictLabel: round.result ? VERDICT_LABELS[round.result.verdictKind] ?? (round.result.verdict ? "\u5176\u4ED6\u5199\u6CD5" : "\u672A\u5199\u5224\u5B9A") : null,
-      prediction: clip(round.brief.prediction?.text),
-      actual: clip(round.result?.actual?.text),
+      prediction: clip3(round.brief.prediction?.text),
+      actual: clip3(round.result?.actual?.text),
       flags: predictionFlags(round.brief.prediction),
       caveats: round.brief.prediction?.caveats ?? 0,
       calibration,
@@ -3900,9 +4197,9 @@ var RESEARCH_ROOT2 = ".dove/research";
 var MAX_TEXT_BYTES2 = 64 * 1024;
 var NAMED_DOCUMENTS = { "EVAL.md": `${RESEARCH_ROOT2}/EVAL.md`, "DOCTOR.md": ".dove/install/DOCTOR.md" };
 var IMPACTS = [["\u649E\u9898", "overlap"], ["\u65B0\u57FA\u7EBF", "baseline"], ["\u53EF\u501F\u7528", "borrow"], ["\u65E0\u5173", "irrelevant"]];
-function parsePaperImpactLine(line = "") {
-  if (/[\r\n]/u.test(line)) return null;
-  const text = String(line).replace(/｜/gu, "|").trim().replace(/^(?:[-*]\s*|\d+[.)]\s+)/u, "");
+function parsePaperImpactLine(line2 = "") {
+  if (/[\r\n]/u.test(line2)) return null;
+  const text = String(line2).replace(/｜/gu, "|").trim().replace(/^(?:[-*]\s*|\d+[.)]\s+)/u, "");
   const cells = [""];
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index];
@@ -3981,10 +4278,40 @@ function computedFacts(project, fsOps, now, state2) {
   lines.push(latest ? `- \u516B\u7EF4\u8D70\u52BF\uFF1A\u5171 ${state2.trend.rows.length} \u6B21\u5224\u65AD\uFF1B\u6700\u8FD1\u4E00\u6B21 ${latest.date ?? "\u672A\u5199\u65E5\u671F"}\uFF08${latest.round ?? "\u672A\u5199\u8F6E\u6B21"}\uFF09\uFF0C\u6700\u5361\u7684\u4E00\u7EF4 ${latest.bottleneck ?? "\u672A\u5199"}\u3002` : "- \u516B\u7EF4\u8D70\u52BF\uFF1AEVAL \u91CC\u8FD8\u6CA1\u6709\u8D70\u52BF\u8868\u3002");
   lines.push(state2.pending.length ? "- \u7B49\u7528\u6237\u5B9A\u7684\u4E8B\uFF1A" : "- \u7B49\u7528\u6237\u5B9A\u7684\u4E8B\uFF1A\u65E0\u3002");
   for (const item of state2.pending) lines.push(`  - ${item.text}`);
+  try {
+    const experience = readWindow(path18.join(project, CROSS_PROJECT_EXPERIENCE_PATH), fsOps, 512 * 1024);
+    const items = experience.error ? [] : parseCrossProjectExperience(experience.text);
+    const brief = state2.currentRound?.brief;
+    const picked = relevantTransferable(items, { project: path18.basename(project), dimension: brief?.targetDimension ?? null, text: [brief?.summary, brief?.success, brief?.target].filter(Boolean).join("\n"), limit: 6 });
+    if (picked.length) {
+      lines.push(`- \u5176\u4ED6\u9879\u76EE\u7684\u53EF\u8FC1\u79FB\u8BA4\u8BC6\uFF08\u6309\u672C\u8F6E\u5BF9\u51C6\u7684\u300C${brief?.targetDimension ?? "\u672A\u5199"}\u300D\u548C\u672C\u8F6E\u8BF4\u660E\u6311\u51FA\u7684 ${picked.length} \u6761\uFF1B\u5168\u90E8\u89C1 ${CROSS_PROJECT_EXPERIENCE_PATH}\uFF09\uFF1A`);
+      for (const item of picked) lines.push(`  - ${item.date ?? "\u672A\u6CE8\u660E\u65E5\u671F"} \xB7 ${item.project}${item.dimension ? `\uFF08${item.dimension}\uFF09` : ""}\uFF1A${item.text}`);
+    }
+  } catch {
+  }
   return lines;
 }
+var NOTES_COMPACT_BYTES = 64 * 1024;
+function practiceLines(project, fsOps) {
+  const entries = readPractice(project, { fsOps });
+  if (!entries.length) return [`- \u505A\u6CD5\u66F4\u6B63\uFF08${PRACTICE_PATH}\uFF09\uFF1A\u8FD8\u6CA1\u6709\u8BB0\u5F55\u3002`];
+  const counts = {};
+  for (const entry of entries) counts[topicOfEntry(entry).short] = (counts[topicOfEntry(entry).short] ?? 0) + 1;
+  const repeated = Object.entries(counts).filter(([, count]) => count > 1).map(([topic, count]) => `${topic} ${count} \u6B21`);
+  return [
+    `- \u505A\u6CD5\u66F4\u6B63\uFF08${PRACTICE_PATH}\uFF0C\u5171 ${entries.length} \u6761\uFF0C\u6700\u8FD1 10 \u6761\u5982\u4E0B${repeated.length ? `\uFF1B\u53CD\u590D\u51FA\u73B0\uFF1A${repeated.join("\u3001")}` : ""}\uFF09\uFF1A`,
+    ...entries.slice(0, 10).map((entry) => `  - ${entry.date} \xB7 ${topicOfEntry(entry).short}${entry.quote ? ` \xB7 \u539F\u8BDD\uFF1A${entry.quote}` : ""}${entry.wrong ? ` \xB7 \u9519\u5728\u54EA\uFF1A${entry.wrong}` : ""}${entry.next ? ` \xB7 \u4EE5\u540E\uFF1A${entry.next}` : ""}`)
+  ];
+}
+function compactionLine(notes, now) {
+  if (notes.error || !notes.text) return [];
+  const size = Buffer.byteLength(notes.text, "utf8");
+  if (size <= NOTES_COMPACT_BYTES) return [];
+  const day = dayText(now ?? Date.now());
+  return [`- \u5BFC\u5E08\u7B14\u8BB0\u6574\u7406\u5230\u671F\uFF08\u73B0\u6709 ${Math.round(size / 1024)} KB\uFF0C\u8D85\u8FC7 ${NOTES_COMPACT_BYTES / 1024} KB\uFF09\uFF1A\u672C\u6B21\u53E6\u8FD4\u56DE\u201C## \u6574\u7406\u540E\u7684\u5BFC\u5E08\u7B14\u8BB0\uFF08${day}\uFF09\u201D\uFF0C\u4F5C\u4E3A\u5B8C\u6574\u66FF\u6362\u7248\u3002\u4E3B\u4F1A\u8BDD\u628A\u539F MENTOR_NOTES.md \u539F\u6837\u5B58\u5230 .dove/research/archive/MENTOR_NOTES-${day}.md\uFF0C\u518D\u7528\u6574\u7406\u540E\u7684\u7248\u672C\u66FF\u6362\u3002`];
+}
 function watchDue(project, fsOps, now) {
-  const names = list(path16.join(project, RESEARCH2, "watch"), fsOps).filter((name) => IMPACT_FILE.test(name)).sort();
+  const names = list(path18.join(project, RESEARCH2, "watch"), fsOps).filter((name) => IMPACT_FILE.test(name)).sort();
   const last = names.at(-1)?.slice(7, 17) ?? null;
   if (!last) return { due: true, last: null };
   const age = (Date.parse(`${dayText(now ?? Date.now())}T00:00:00Z`) - Date.parse(`${last}T00:00:00Z`)) / DAY_MS2;
@@ -4000,7 +4327,7 @@ function list(directory, fsOps) {
 }
 function describe(root, relative, fsOps) {
   try {
-    return `\`${relative}\`${fsOps.statSync(path16.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
+    return `\`${relative}\`${fsOps.statSync(path18.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
   } catch (error) {
     return `\`${relative}\`\uFF08${error.code === "ENOENT" ? "\u7F3A\u5931" : `\u65E0\u6CD5\u8BFB\u53D6\uFF1A${error.code ?? error.message}`}\uFF09`;
   }
@@ -4025,15 +4352,15 @@ function readWindow(file, fsOps, maxBytes = 16384, tail = false) {
     if (fd !== void 0) fsOps.closeSync(fd);
   }
 }
-function clip2(text, limit) {
+function clip4(text, limit) {
   const characters = Array.from(String(text));
   return characters.length <= limit ? characters.join("") : `${characters.slice(0, limit).join("")}\u2026`;
 }
 function quote(text) {
-  return String(text).split("\n").map((line) => `> ${line}`).join("\n");
+  return String(text).split("\n").map((line2) => `> ${line2}`).join("\n");
 }
 function sourceAttachment(root, suppliedPath, fsOps) {
-  const file = path16.resolve(root, suppliedPath);
+  const file = path18.resolve(root, suppliedPath);
   const result = readWindow(file, fsOps, 8192, true);
   const source = `- \u6765\u6E90\uFF1A\`${file}\``;
   if (result.error) return `${source}\uFF08${result.error}\uFF1B\u672A\u9644\u6B63\u6587\uFF09`;
@@ -4049,12 +4376,12 @@ function recentRounds(names) {
 }
 function watchMaterials(root, rounds, fsOps) {
   const relative = `${RESEARCH2}/watch`;
-  const directory = path16.join(root, relative);
+  const directory = path18.join(root, relative);
   const names = list(directory, fsOps).sort().reverse();
   const config = `${relative}/config.json`;
   const lines = [`- \u914D\u7F6E\uFF1A${describe(root, config, fsOps)}`];
-  const configText = readWindow(path16.join(root, config), fsOps, 8192);
-  if (!configText.error) lines.push(quote(clip2(configText.text.trim(), 1600)), "\u914D\u7F6E\u4EC5\u6458\u5F55\uFF0C\u5168\u6587\u89C1\u8DEF\u5F84\u3002");
+  const configText = readWindow(path18.join(root, config), fsOps, 8192);
+  if (!configText.error) lines.push(quote(clip4(configText.text.trim(), 1600)), "\u914D\u7F6E\u4EC5\u6458\u5F55\uFF0C\u5168\u6587\u89C1\u8DEF\u5F84\u3002");
   let source = null;
   if (!configText.error && !configText.truncated) {
     try {
@@ -4067,8 +4394,8 @@ function watchMaterials(root, rounds, fsOps) {
   let incomplete = false;
   const impacts = names.filter((name) => IMPACT_FILE.test(name));
   const records = [
-    ...rounds.filter((name) => ROUND_FILE3.test(name) && /brief\.md$/iu.test(name)).sort((left, right) => parseInt(left) - parseInt(right)).map((name) => path16.join(root, RESEARCH2, "rounds", name)),
-    ...[...impacts].reverse().map((name) => path16.join(directory, name))
+    ...rounds.filter((name) => ROUND_FILE3.test(name) && /brief\.md$/iu.test(name)).sort((left, right) => parseInt(left) - parseInt(right)).map((name) => path18.join(root, RESEARCH2, "rounds", name)),
+    ...[...impacts].reverse().map((name) => path18.join(directory, name))
   ];
   for (const file of records) {
     const record = readWindow(file, fsOps, 65536, true);
@@ -4076,8 +4403,8 @@ function watchMaterials(root, rounds, fsOps) {
     if (record.error) continue;
     const lines2 = record.text.split(/\r?\n/u);
     if (record.startByte) lines2.shift();
-    for (const line of lines2) {
-      const parsed = parsePaperImpactLine(line);
+    for (const line2 of lines2) {
+      const parsed = parsePaperImpactLine(line2);
       if (!parsed) continue;
       if (parsed.impact) judged.add(parsed.id);
       else judged.delete(parsed.id);
@@ -4089,7 +4416,7 @@ function watchMaterials(root, rounds, fsOps) {
   const digests = names.filter((name) => DIGEST_FILE.test(name));
   const pending = /* @__PURE__ */ new Map();
   for (const name of digests.slice(0, 3)) {
-    const file = path16.join(directory, name);
+    const file = path18.join(directory, name);
     lines.push(`- \u8FD1\u671F\u6E05\u5355\uFF1A${describe(root, `${relative}/${name}`, fsOps)}`);
     const result = readWindow(file, fsOps, 262144);
     if (result.error || result.truncated) {
@@ -4120,10 +4447,10 @@ function watchMaterials(root, rounds, fsOps) {
     digests.length ? `\u4ECE\u6700\u8FD1 ${Math.min(3, digests.length)} / ${digests.length} \u4EFD\u6E05\u5355\u627E\u5230 ${pending.size} \u9879\uFF0C\u6700\u591A\u5C55\u5F00 8 \u9879\uFF1B\u5176\u4F59\u89C1 \`${relative}/\`\uFF0C\u4E0D\u4EE3\u8868\u5168\u90E8\u5386\u53F2\u3002` : "\u672A\u627E\u5230\u8FFD\u8E2A\u6E05\u5355\u3002"
   );
   for (const [id, { item, file }] of [...pending].slice(0, 8)) {
-    lines.push("", quote(`${id} \xB7 ${clip2(item.title ?? "\u672A\u63D0\u4F9B\u6807\u9898", 200)}
+    lines.push("", quote(`${id} \xB7 ${clip4(item.title ?? "\u672A\u63D0\u4F9B\u6807\u9898", 200)}
 \u539F\u59CB\u53D1\u8868\u65E5\u671F\uFF1A${item.published || "\u672A\u8BB0\u5F55"}
 \u6765\u6E90\uFF1A${file}
-${item.line ? "\u5DF2\u6709\u4E00\u53E5\u8BDD" : "\u539F\u6458\u8981"}\uFF08\u4E0D\u4EE3\u8868\u5168\u6587\u5DF2\u8BFB\uFF09\uFF1A${clip2(item.line || item.abstract || "\u672A\u63D0\u4F9B\u6458\u8981", 400)}`));
+${item.line ? "\u5DF2\u6709\u4E00\u53E5\u8BDD" : "\u539F\u6458\u8981"}\uFF08\u4E0D\u4EE3\u8868\u5168\u6587\u5DF2\u8BFB\uFF09\uFF1A${clip4(item.line || item.abstract || "\u672A\u63D0\u4F9B\u6458\u8981", 400)}`));
   }
   const scan = names.find((name) => SCAN_FILE.test(name));
   lines.push("", scan ? `- \u6700\u8FD1\u626B\u63CF\uFF08${scan.slice(5, 15)}\uFF09\uFF1A${describe(root, `${relative}/${scan}`, fsOps)}` : "- \u6700\u8FD1\u626B\u63CF\uFF1A\u672A\u627E\u5230\u3002");
@@ -4138,7 +4465,7 @@ function watchSection(project, rounds, fsOps, options) {
 }
 function opinionAttachment(root, opinion, fsOps) {
   if (!opinion) return "\u672A\u9644\u610F\u89C1\u6587\u4EF6\u3002";
-  const file = path16.resolve(root, opinion);
+  const file = path18.resolve(root, opinion);
   const result = readWindow(file, fsOps, 4096);
   if (result.error) throw new Error(`\u610F\u89C1\u6587\u4EF6${result.error}\uFF1A${file}`);
   const length = Array.from(result.text).length;
@@ -4148,12 +4475,12 @@ ${quote(`\u4F5C\u8005\uFF1A${author ?? "\u672A\u7F72\u540D\uFF08\u6309\u6267\u88
 \u7BC7\u5E45\uFF1A${result.truncated ? "\u8D85\u8FC7 4 KiB\uFF0C\u5BFC\u5E08\u6309\u8DEF\u5F84\u8BFB\u5168\u6587" : `\u7EA6 ${length} \u5B57\uFF08\u5EFA\u8BAE 1000 \u5B57\u5185\uFF09`}`)}`;
 }
 function renderMentorBrief(root, options = {}) {
-  const fsOps = options.fsOps ?? fs18;
-  const project = path16.resolve(root);
-  const research = path16.join(project, RESEARCH2);
-  const rounds = list(path16.join(research, "rounds"), fsOps);
+  const fsOps = options.fsOps ?? fs20;
+  const project = path18.resolve(root);
+  const research = path18.join(project, RESEARCH2);
+  const rounds = list(path18.join(research, "rounds"), fsOps);
   const selected = recentRounds(rounds);
-  const notes = readWindow(path16.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
+  const notes = readWindow(path18.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
   const intent = notes.error ? null : latestLongTermIntent(notes.text);
   let state2 = null;
   try {
@@ -4161,8 +4488,14 @@ function renderMentorBrief(root, options = {}) {
   } catch {
     state2 = null;
   }
-  const intentDue = longTermIntentDue(intent, finishedRoundsOf(state2?.rounds ?? [], localDate));
-  const intentStatus = notes.error ? `\u5BFC\u5E08\u7B14\u8BB0${notes.error}` : !intent ? "\u7B14\u8BB0\u4E2D\u6CA1\u6709\u957F\u671F\u610F\u56FE\u4E00\u8282" : !intent.date ? "\u957F\u671F\u610F\u56FE\u6CA1\u6709\u6709\u6548\u65E5\u671F" : `\u6700\u8FD1\u4E00\u6B21\u4E3A ${intent.date}`;
+  let newOwnMessages = 0;
+  try {
+    newOwnMessages = ownMessagesSince(readOwnEntries(project, { fsOps }), intent?.date ?? null);
+  } catch {
+    newOwnMessages = 0;
+  }
+  const intentDue = longTermIntentDue(intent, finishedRoundsOf(state2?.rounds ?? [], localDate), newOwnMessages);
+  const intentStatus = `${notes.error ? `\u5BFC\u5E08\u7B14\u8BB0${notes.error}` : !intent ? "\u7B14\u8BB0\u4E2D\u6CA1\u6709\u957F\u671F\u610F\u56FE\u4E00\u8282" : !intent.date ? "\u957F\u671F\u610F\u56FE\u6CA1\u6709\u6709\u6548\u65E5\u671F" : `\u6700\u8FD1\u4E00\u6B21\u4E3A ${intent.date}`}${intent?.date && newOwnMessages ? `\uFF0C\u4E4B\u540E\u7528\u6237\u53C8\u8BF4\u4E86 ${newOwnMessages} \u6761\u672C\u4EBA\u539F\u8BDD` : ""}`;
   const originals = options.userOriginals?.path ?? USER_ORIGINALS_PATH;
   const lines = [
     "# Dove \u5BFC\u5E08\u8C03\u7528\u6750\u6599",
@@ -4185,7 +4518,9 @@ ${quote(options.userOriginal)}` : "\u672A\u76F4\u63A5\u9644\u539F\u8BDD\u3002",
     ...options.userOriginals ? [`- \u6574\u7406\u8303\u56F4\uFF1A\u672C\u4EBA ${options.userOriginals.own} \u6761\u3001\u8F6C\u8FF0 ${options.userOriginals.relay} \u6761\uFF0C${options.userOriginals.directories.length} \u4E2A\u4F1A\u8BDD\u76EE\u5F55${options.userOriginals.pendingBytes ? "\uFF08\u5C1A\u672A\u6574\u7406\u5B8C\uFF0C\u5F53\u524D\u53EF\u80FD\u7F3A\u65F6\u6BB5\uFF09" : ""}\u3002`, `- \u539F\u4F1A\u8BDD\u76EE\u5F55\uFF08\u4EC5\u4F9B\u5BFC\u5E08\u6309\u6765\u6E90\u5B9A\u4F4D\uFF09\uFF1A${options.userOriginals.directories.map((directory) => `\`${directory}\``).join("\u3001") || "\u672A\u627E\u5230"}\u3002`] : [],
     sourceAttachment(project, originals, fsOps),
     ...options.userOriginalsError ? [`- \u6C47\u603B\u6574\u7406\u5931\u8D25\uFF1A${options.userOriginalsError}\u3002\u5DF2\u6709\u6458\u5F55\u53EF\u80FD\u4E0D\u5B8C\u6574\uFF0C\u7F3A\u5931\u4E0D\u7B49\u4E8E\u7528\u6237\u6CA1\u8BF4\u8FC7\u3002`] : [],
-    intentDue ? `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\uFF08${intentStatus}\uFF1B\u6BCF 3 \u8F6E\u6216\u51FA\u73B0\u65B9\u6CD5\u53D6\u820D\u65F6\u5230\u671F\uFF09\uFF1A\u8BFB USER_ORIGINALS.md \u5E76\u6838\u5BF9\u672C\u4EBA\u6765\u6E90\uFF0C\u8FD4\u56DE\u5E26\u65E5\u671F\u7684\u201C\u957F\u671F\u610F\u56FE\u201D\u3002` : `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\uFF1A${intentStatus}\uFF0C\u5C1A\u672A\u5230\u671F\uFF08\u6BCF 3 \u8F6E\u6216\u51FA\u73B0\u65B9\u6CD5\u53D6\u820D\u65F6\u5230\u671F\uFF09\u3002`,
+    intentDue ? `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\uFF08${intentStatus}\uFF1B\u6BCF 3 \u8F6E\u3001\u51FA\u73B0\u65B9\u6CD5\u53D6\u820D\u6216\u7528\u6237\u53C8\u8BF4\u4E86 30 \u6761\u539F\u8BDD\u65F6\u5230\u671F\uFF09\uFF1A\u8BFB USER_ORIGINALS.md \u5E76\u6838\u5BF9\u672C\u4EBA\u6765\u6E90\uFF0C\u8FD4\u56DE\u5E26\u65E5\u671F\u7684\u201C\u957F\u671F\u610F\u56FE\u201D\uFF0C\u5F00\u5934\u4E24\u8282\u662F\u201C### \u6838\u5FC3\u9700\u6C42\u201D\u548C\u201C### \u7EA6\u675F\u201D\u3002Dove \u4F1A\u628A\u8FD9\u4E24\u8282\u5728\u6BCF\u6B21\u4F1A\u8BDD\u5F00\u59CB\u548C\u538B\u7F29\u540E\u9001\u7ED9\u5BBF\u4E3B\u3002` : `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\uFF1A${intentStatus}\uFF0C\u5C1A\u672A\u5230\u671F\uFF08\u6BCF 3 \u8F6E\u3001\u51FA\u73B0\u65B9\u6CD5\u53D6\u820D\u6216\u7528\u6237\u53C8\u8BF4\u4E86 30 \u6761\u539F\u8BDD\u65F6\u5230\u671F\uFF09\u3002`,
+    ...practiceLines(project, fsOps),
+    ...compactionLine(notes, options.now),
     "",
     "## Dove \u7B97\u51FA\u7684\u4E8B\u5B9E",
     "",
@@ -4196,7 +4531,7 @@ ${quote(options.userOriginal)}` : "\u672A\u76F4\u63A5\u9644\u539F\u8BDD\u3002",
     "## \u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u4E0E\u6570\u5B57",
     "",
     "\u53EA\u5C55\u5F00\u663E\u5F0F\u63D0\u4F9B\u7684\u524D 4 \u4E2A\u6587\u4EF6\uFF0C\u6BCF\u4E2A\u6700\u591A\u672B\u5C3E 8 KiB\uFF1B\u4E0D\u9012\u5F52\u627E\u6570\u636E\uFF0C\u4E0D\u8FFD\u8BFB\u6587\u4EF6\u4E2D\u7684\u8DEF\u5F84\u3002\u672A\u9644\u539F\u59CB\u7ED3\u679C\u5C31\u76F4\u8BF4\u8BC1\u636E\u4E0D\u8DB3\uFF0C\u5BBF\u4E3B\u58F0\u79F0\u5DF2\u8BFB\u6216\u5DF2\u6D4B\u4E0D\u7B97\u8BC1\u636E\u3002",
-    ...options.artifact?.length ? options.artifact.map((file, index) => index < 4 ? sourceAttachment(project, file, fsOps) : `- \`${path16.resolve(project, file)}\`\uFF08\u8D85\u51FA\u672C\u6B21\u5C55\u5F00\u6570\u91CF\uFF0C\u4EC5\u5217\u8DEF\u5F84\uFF09`) : ["\u672A\u63D0\u4F9B\u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u6216\u6570\u5B57\u3002"],
+    ...options.artifact?.length ? options.artifact.map((file, index) => index < 4 ? sourceAttachment(project, file, fsOps) : `- \`${path18.resolve(project, file)}\`\uFF08\u8D85\u51FA\u672C\u6B21\u5C55\u5F00\u6570\u91CF\uFF0C\u4EC5\u5217\u8DEF\u5F84\uFF09`) : ["\u672A\u63D0\u4F9B\u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u6216\u6570\u5B57\u3002"],
     "",
     "## \u5BBF\u4E3B\u8BB0\u5F55\u4E0E\u76EE\u5F55\uFF08\u4E0D\u662F\u7ED3\u8BBA\u6846\u67B6\uFF09",
     "",
@@ -4234,21 +4569,23 @@ ${quote(options.userOriginal)}` : "\u672A\u76F4\u63A5\u9644\u539F\u8BDD\u3002",
 }
 
 // src/core/stop-hook.mjs
-import fs20 from "node:fs";
+import fs22 from "node:fs";
 
 // src/core/cold-read.mjs
 import { createHash } from "node:crypto";
 import { spawnSync as spawnSync4 } from "node:child_process";
-import fs19 from "node:fs";
+import fs21 from "node:fs";
 import os6 from "node:os";
-import path17 from "node:path";
+import path19 from "node:path";
 var COLD_READ_KEY = "coldread:last";
 
 // src/core/stop-hook.mjs
 var MANUSCRIPT_BUILD = /\b(?:latexmk|pdflatex|xelatex|lualatex|tectonic)\b/u;
 var TRANSCRIPT_TAIL_BYTES = 4 << 20;
-function turnRebuiltManuscript(transcriptPath, fsOps = fs20) {
-  if (typeof transcriptPath !== "string" || !transcriptPath) return false;
+var AUTOMATIC = /^(?:<(?:task-notification|scheduled-wakeup|background-task|system-reminder)[\s>]|\[Your previous response)/u;
+function inspectTurn(transcriptPath, fsOps = fs22) {
+  const turn = { rebuilt: false, userText: null, userKey: null, wrotePractice: false, wroteReflection: false };
+  if (typeof transcriptPath !== "string" || !transcriptPath) return turn;
   let text;
   try {
     const size = fsOps.statSync(transcriptPath).size;
@@ -4262,7 +4599,7 @@ function turnRebuiltManuscript(transcriptPath, fsOps = fs20) {
       fsOps.closeSync(fd);
     }
   } catch {
-    return false;
+    return turn;
   }
   const lines = text.split("\n");
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -4275,19 +4612,31 @@ function turnRebuiltManuscript(transcriptPath, fsOps = fs20) {
     if (!record || record.isSidechain) continue;
     const content = record.message?.content;
     if (record.type === "user" && !record.isMeta) {
-      const toolResult = Array.isArray(content) && content.some((block) => block?.type === "tool_result");
-      const own = typeof content === "string" ? Boolean(content.trim()) : Array.isArray(content) && content.some((block) => block?.type === "text" && block.text?.trim());
-      if (own && !toolResult) return false;
-      continue;
+      if (Array.isArray(content) && content.some((block) => block?.type === "tool_result")) continue;
+      const said = typeof content === "string" ? content : Array.isArray(content) ? content.filter((block) => block?.type === "text").map((block) => block.text ?? "").join("\n") : "";
+      if (!said.trim()) continue;
+      if (!AUTOMATIC.test(said.trim())) {
+        turn.userText = said.trim();
+        turn.userKey = record.uuid ?? record.timestamp ?? said.trim().slice(0, 80);
+      }
+      return turn;
     }
     if (record.type === "assistant" && Array.isArray(content)) {
-      if (content.some((block) => block?.type === "tool_use" && block.name === "Bash" && MANUSCRIPT_BUILD.test(String(block.input?.command ?? "")))) return true;
+      for (const block of content) {
+        if (block?.type !== "tool_use") continue;
+        if (block.name === "Bash" && MANUSCRIPT_BUILD.test(String(block.input?.command ?? ""))) turn.rebuilt = true;
+        if ((block.name === "Write" || block.name === "Edit") && /(?:^|\/)\.dove\/research\/PRACTICE\.md$/u.test(String(block.input?.file_path ?? ""))) turn.wrotePractice = true;
+        if ((block.name === "Write" || block.name === "Edit") && /(?:^|\/)\.dove\/research\/reflections\/[^/]+\.md$/u.test(String(block.input?.file_path ?? ""))) turn.wroteReflection = true;
+      }
     }
   }
-  return false;
+  return turn;
 }
-function coldReadPrompt() {
-  return "\u8FD9\u4E00\u8F6E\u91CD\u65B0\u7F16\u8BD1\u4E86\u7A3F\u4EF6\u3002\u4EA4\u7ED9\u7528\u6237\u4E4B\u524D\uFF0C\u6309 Draft \u7684\u7EC8\u68C0\u505A\u4E00\u6B21\u51B7\u8BFB\uFF1A\u5148 dove figure --pages <\u7A3F\u4EF6.pdf> --body-pages <\u6B63\u6587\u9875\u6570\u4E0A\u9650> --output <\u603B\u89C8.png> \u770B\u7248\u9762\uFF0C\u518D dove cold-read --pdf <\u7A3F\u4EF6.pdf>\uFF0C\u628A\u5B83\u8F93\u51FA\u7684\u8C03\u7528\u6B63\u6587\u539F\u6837\u4EA4\u7ED9\u4E00\u4E2A\u5168\u65B0\u7684 dove-review\uFF0C\u53EA\u7ED9\u8FD9\u4EFD PDF\uFF0C\u4E0D\u7ED9\u6E90\u7801\u3001\u8BFB\u6570\u6216\u9879\u76EE\u80CC\u666F\uFF1B\u9010\u6761\u5904\u7406\u5B83\u5217\u51FA\u7684\u884C\u8BDD\u3001\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u548C\u9632\u5FA1\u63AA\u8F9E\uFF0C\u6539\u5B8C\u518D\u51B7\u8BFB\u4E00\u6B21\u3002\u5199\u7A3F\u7684\u4EBA\u81EA\u5DF1\u67E5\u4E0D\u51FA\u81EA\u5DF1\u7684\u884C\u8BDD\uFF0C\u8FD9\u4E00\u6B65\u4E0D\u80FD\u7528\u81EA\u67E5\u4EE3\u66FF\u3002\u8FD8\u5728\u6539\u5C31\u63A5\u7740\u6539\uFF0C\u4EA4\u4ED8\u524D\u518D\u505A\u3002\u8FD9\u6BB5\u8BDD\u662F Dove \u6839\u636E\u672C\u8F6E\u64CD\u4F5C\u81EA\u52A8\u63D0\u51FA\u7684\uFF0C\u4E0D\u662F\u7528\u6237\u521A\u8BF4\u7684\u3002";
+function coldReadPrompt(writingPractice = "") {
+  return `\u8FD9\u4E00\u8F6E\u91CD\u65B0\u7F16\u8BD1\u4E86\u7A3F\u4EF6\u3002\u4EA4\u7ED9\u7528\u6237\u4E4B\u524D\uFF0C\u6309 Draft \u7684\u7EC8\u68C0\u505A\u4E00\u6B21\u51B7\u8BFB\uFF1A\u5148 dove figure --pages <\u7A3F\u4EF6.pdf> --body-pages <\u6B63\u6587\u9875\u6570\u4E0A\u9650> --output <\u603B\u89C8.png> \u770B\u7248\u9762\uFF0C\u518D dove cold-read --pdf <\u7A3F\u4EF6.pdf>\uFF0C\u628A\u5B83\u8F93\u51FA\u7684\u8C03\u7528\u6B63\u6587\u539F\u6837\u4EA4\u7ED9\u4E00\u4E2A\u5168\u65B0\u7684 dove-review\uFF0C\u53EA\u7ED9\u8FD9\u4EFD PDF\uFF0C\u4E0D\u7ED9\u6E90\u7801\u3001\u8BFB\u6570\u6216\u9879\u76EE\u80CC\u666F\uFF1B\u9010\u6761\u5904\u7406\u5B83\u5217\u51FA\u7684\u884C\u8BDD\u3001\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u548C\u9632\u5FA1\u63AA\u8F9E\uFF0C\u6539\u5B8C\u518D\u51B7\u8BFB\u4E00\u6B21\u3002\u5199\u7A3F\u7684\u4EBA\u81EA\u5DF1\u67E5\u4E0D\u51FA\u81EA\u5DF1\u7684\u884C\u8BDD\uFF0C\u8FD9\u4E00\u6B65\u4E0D\u80FD\u7528\u81EA\u67E5\u4EE3\u66FF\u3002\u8FD8\u5728\u6539\u5C31\u63A5\u7740\u6539\uFF0C\u4EA4\u4ED8\u524D\u518D\u505A\u3002${writingPractice ? `
+\u672C\u9879\u76EE\u5199\u7A3F\u548C\u56FE\u65B9\u9762\u7684\u505A\u6CD5\u66F4\u6B63\uFF1A
+${writingPractice}
+` : ""}\u8FD9\u6BB5\u8BDD\u662F Dove \u6839\u636E\u672C\u8F6E\u64CD\u4F5C\u81EA\u52A8\u63D0\u51FA\u7684\uFF0C\u4E0D\u662F\u7528\u6237\u521A\u8BF4\u7684\u3002`;
 }
 function parseStopPayload(input) {
   let payload;
@@ -4321,7 +4670,16 @@ function stopHookOutput(payload, project, options = {}) {
   const candidates = [];
   if (state2.overrun) candidates.push({ key: `overrun:${state2.currentRound.brief.file}:${state2.overrun.due}`, reason: overrunPrompt(state2) });
   if (state2.stall) candidates.push({ key: `stall:${state2.stall.results.at(-1)}`, reason: stallPrompt(state2) });
-  if (turnRebuiltManuscript(payload?.transcript_path, options.fsOps)) candidates.push({ key: `coldread:remind:${asked[COLD_READ_KEY] ?? "never"}`, reason: coldReadPrompt() });
+  const turn = inspectTurn(payload?.transcript_path, options.fsOps);
+  const corrected = turn.userText ? correctionTopics(turn.userText) : [];
+  const reflect = turn.userText ? reflectionRequested(turn.userText) : false;
+  if (reflect && (!turn.wroteReflection || !turn.wrotePractice)) {
+    const missing = [...turn.wroteReflection ? [] : [`\u5B58\u5230 ${REFLECTIONS_DIR}`], ...turn.wrotePractice ? [] : ["\u628A\u4EE5\u540E\u600E\u4E48\u505A\u8BB0\u8FDB\u505A\u6CD5\u66F4\u6B63"]];
+    candidates.unshift({ key: `reflect:${turn.userKey}`, reason: reflectionReminder(missing) });
+  } else if (corrected.length && !turn.wrotePractice) {
+    candidates.unshift({ key: `practice:${turn.userKey}`, reason: correctionReminder(corrected) });
+  }
+  if (turn.rebuilt) candidates.push({ key: `coldread:remind:${asked[COLD_READ_KEY] ?? "never"}`, reason: coldReadPrompt(practiceOnTopic(readPractice(project, options), "writing")) });
   const next = candidates.find((candidate) => !asked[candidate.key]);
   if (!next) return null;
   updateHookState(project, (hookState) => {
@@ -4331,13 +4689,13 @@ function stopHookOutput(payload, project, options = {}) {
 }
 
 // src/core/project-installation.mjs
-import fs25 from "node:fs";
-import path22 from "node:path";
+import fs27 from "node:fs";
+import path24 from "node:path";
 
 // src/core/file-set-transaction.mjs
 import crypto2 from "node:crypto";
-import fs21 from "node:fs";
-import path18 from "node:path";
+import fs23 from "node:fs";
+import path20 from "node:path";
 var MAX_CLEANUP_WARNINGS = 20;
 var ENTRY_FIELDS = /* @__PURE__ */ new Set(["root", "relativePath", "content", "encoding", "force", "delete", "deleteEmptyDirectory", "expectedState", "label"]);
 function errorMessage(error) {
@@ -4374,10 +4732,10 @@ function expectedState(raw, index) {
 }
 function parentDirectories(relativePath) {
   const directories = [];
-  let current = path18.posix.dirname(relativePath);
+  let current = path20.posix.dirname(relativePath);
   while (current !== ".") {
     directories.push(current);
-    current = path18.posix.dirname(current);
+    current = path20.posix.dirname(current);
   }
   return directories.reverse();
 }
@@ -4406,7 +4764,7 @@ function removeNewTransactionParents(anchor, transaction) {
   }
 }
 function assertNoUnexpectedChildren(entry, resolved) {
-  const scheduledChildren = new Set(resolved.filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path18.posix.dirname(candidate.relativePath) === entry.relativePath).map((candidate) => path18.posix.basename(candidate.relativePath)));
+  const scheduledChildren = new Set(resolved.filter((candidate) => candidate.anchor === entry.anchor && candidate.deleting && path20.posix.dirname(candidate.relativePath) === entry.relativePath).map((candidate) => path20.posix.basename(candidate.relativePath)));
   const unexpected = entry.anchor.readdir(entry.relativePath).map((child) => typeof child === "string" ? child : child.name).filter((child) => !scheduledChildren.has(child));
   if (unexpected.length > 0) {
     throw new Error(`Transactional directory deletion found an unscheduled child: ${entry.relativePath}/${unexpected.sort().join(`, ${entry.relativePath}/`)}.`);
@@ -4424,7 +4782,7 @@ function committedResult(entries, cleanupFailures) {
 }
 function writeFileSetTransaction(entries, options = {}) {
   if (!Array.isArray(entries)) throw new Error("Transactional write entries must be an array.");
-  const fsOps = options.fsOps ?? fs21;
+  const fsOps = options.fsOps ?? fs23;
   const transactionId = (options.transactionId ?? crypto2.randomUUID()).replace(/[^a-z0-9._-]/giu, "-");
   const anchors = /* @__PURE__ */ new Map();
   const resolved = [];
@@ -4433,14 +4791,14 @@ function writeFileSetTransaction(entries, options = {}) {
   const promotions = [];
   const createdDirectories = /* @__PURE__ */ new Map();
   const anchorFor = (root) => {
-    const canonicalRoot = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path18.resolve(root)) : fsOps.realpathSync(path18.resolve(root));
+    const canonicalRoot = typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(path20.resolve(root)) : fsOps.realpathSync(path20.resolve(root));
     if (!anchors.has(canonicalRoot)) anchors.set(canonicalRoot, openRootedFilesystem(canonicalRoot, { fsOps }));
     return anchors.get(canonicalRoot);
   };
   try {
     for (const [index, entry] of entries.entries()) {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error(`Transactional write entry ${index} must be an object.`);
-      const unknownFields = Object.keys(entry).filter((field) => !ENTRY_FIELDS.has(field));
+      const unknownFields = Object.keys(entry).filter((field2) => !ENTRY_FIELDS.has(field2));
       if (unknownFields.length > 0) throw new Error(`Transactional write entry ${index} uses unsupported fields: ${unknownFields.join(", ")}.`);
       const anchor = anchorFor(entry.root);
       const relativePath = anchor.normalize(entry.relativePath, entry.label ?? "Transactional write path");
@@ -4481,8 +4839,8 @@ function writeFileSetTransaction(entries, options = {}) {
     }
     for (const [index, entry] of resolved.entries()) {
       if (entry.deleting) continue;
-      const parent = path18.posix.dirname(entry.relativePath);
-      const temporaryName = `.${path18.posix.basename(entry.relativePath)}.${transactionId}.${index}.tmp`;
+      const parent = path20.posix.dirname(entry.relativePath);
+      const temporaryName = `.${path20.posix.basename(entry.relativePath)}.${transactionId}.${index}.tmp`;
       entry.stagedPath = parent === "." ? temporaryName : `${parent}/${temporaryName}`;
       ensureParentDirectories(entry.anchor, entry.relativePath, createdDirectories.get(entry.anchor));
       entry.anchor.writeNewFile(entry.stagedPath, entry.content);
@@ -4564,19 +4922,19 @@ function writeFileSetTransaction(entries, options = {}) {
 }
 
 // src/core/project-installation-plan.mjs
-import fs23 from "node:fs";
-import path20 from "node:path";
+import fs25 from "node:fs";
+import path22 from "node:path";
 
 // src/core/project-installation-resources.mjs
 import crypto3 from "node:crypto";
 
 // scripts/generate-command-adapters.mjs
-import fs22 from "node:fs";
-import path19 from "node:path";
+import fs24 from "node:fs";
+import path21 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var __filename = fileURLToPath2(import.meta.url);
-var __dirname = path19.dirname(__filename);
-var PACKAGE_ROOT = path19.resolve(__dirname, "..");
+var __dirname = path21.dirname(__filename);
+var PACKAGE_ROOT = path21.resolve(__dirname, "..");
 function yamlString(value) {
   return JSON.stringify(String(value).replace(/\n/g, " "));
 }
@@ -4851,11 +5209,11 @@ function lstatOrNull2(fsOps, targetPath) {
     throw error;
   }
 }
-function inspectRegularProjectFile(root, relativePath, fsOps = fs23) {
+function inspectRegularProjectFile(root, relativePath, fsOps = fs25) {
   let current = root;
   const components = relativePath.split("/");
   for (const [index, component] of components.entries()) {
-    current = path20.join(current, component);
+    current = path22.join(current, component);
     const stat = lstatOrNull2(fsOps, current);
     if (stat === null) return { exists: false, bytes: null, digest: null, mode: null, type: "absent" };
     if (stat.isSymbolicLink()) throw new Error(`Dove project integration path must not be a symbolic link: ${relativePath}.`);
@@ -5111,7 +5469,7 @@ function addFragment(resource, value) {
   }
   throw new Error(`Dove does not install unsupported project-local fragment ${resource.path}#${resource.selector}.`);
 }
-function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps = fs23, options = {}) {
+function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps = fs25, options = {}) {
   const replaceDrift = shouldReplaceLocalEdit(options);
   const skipDrift = shouldSkipLocalEdit(options);
   const observed = inspectRegularProjectFile(root, relativePath, fsOps);
@@ -5253,7 +5611,7 @@ function planJsonFragments(root, relativePath, desiredEntries, oldEntries, fsOps
     retiredHooks
   };
 }
-function planResource(root, desired, oldEntry, fsOps = fs23, options = {}) {
+function planResource(root, desired, oldEntry, fsOps = fs25, options = {}) {
   const kind = desired?.kind ?? oldEntry.kind;
   if (kind === "exclusive-file") return planExclusive(root, desired, oldEntry, fsOps, options);
   throw new Error(`Unsupported project integration resource kind: ${kind}.`);
@@ -5284,7 +5642,7 @@ function assertManagedOwnership(manifest) {
     }
   }
 }
-function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs23, manifest = null, replacementPolicy = "safe" }) {
+function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs25, manifest = null, replacementPolicy = "safe" }) {
   if (manifest && ["identity-mismatch", "invalid-version", "newer"].includes(classifyPackageCompatibility(manifest.package, { name: packageName, version: packageVersion }))) {
     throw new Error("Dove project integration package is incompatible with the running CLI.");
   }
@@ -5370,16 +5728,16 @@ function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps = fs
 }
 
 // src/core/project-root.mjs
-import fs24 from "node:fs";
+import fs26 from "node:fs";
 import os7 from "node:os";
-import path21 from "node:path";
-var INSTALLATION_DIRECTORY = path21.posix.dirname(INSTALLATION_MANIFEST_PATH);
+import path23 from "node:path";
+var INSTALLATION_DIRECTORY = path23.posix.dirname(INSTALLATION_MANIFEST_PATH);
 function realpathNative2(fsOps, targetPath) {
   return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
 }
 function canonicalExistingDirectory(value, label, fsOps) {
   if (typeof value !== "string" || !value.trim() || value.includes("\0")) throw new Error(`${label} must name an existing directory.`);
-  const resolved = path21.resolve(value);
+  const resolved = path23.resolve(value);
   let stat;
   try {
     stat = fsOps.statSync(resolved);
@@ -5395,7 +5753,7 @@ function parentDirectories2(start) {
   let current = start;
   while (true) {
     directories.push(current);
-    const parent = path21.dirname(current);
+    const parent = path23.dirname(current);
     if (parent === current) return directories;
     current = parent;
   }
@@ -5414,16 +5772,16 @@ function preservedInstallationDirectory(directoryPath, directoryStat, fsOps) {
   const children = fsOps.readdirSync(directoryPath).map(String).sort();
   if (children.length > 1 || children.length === 1 && children[0] !== "DOCTOR.md") return false;
   if (children.length === 0) return true;
-  const doctorStat = lstatOrNull3(fsOps, path21.join(directoryPath, "DOCTOR.md"));
+  const doctorStat = lstatOrNull3(fsOps, path23.join(directoryPath, "DOCTOR.md"));
   return doctorStat?.isFile() === true && !doctorStat.isSymbolicLink();
 }
 function installationStateAt(root, options) {
-  const fsOps = options.fsOps ?? fs24;
-  const doveStat = lstatOrNull3(fsOps, path21.join(root, ".dove"));
+  const fsOps = options.fsOps ?? fs26;
+  const doveStat = lstatOrNull3(fsOps, path23.join(root, ".dove"));
   if (doveStat && (doveStat.isSymbolicLink() || !doveStat.isDirectory())) throw new Error(`Dove installation parent must be a real directory: ${root}/.dove.`);
-  if (lstatOrNull3(fsOps, path21.join(root, ".dove-install")) !== null) throw legacyInitError(root);
-  const directoryPath = path21.join(root, INSTALLATION_DIRECTORY);
-  const manifestPath = path21.join(root, INSTALLATION_MANIFEST_PATH);
+  if (lstatOrNull3(fsOps, path23.join(root, ".dove-install")) !== null) throw legacyInitError(root);
+  const directoryPath = path23.join(root, INSTALLATION_DIRECTORY);
+  const manifestPath = path23.join(root, INSTALLATION_MANIFEST_PATH);
   const manifestStat = lstatOrNull3(fsOps, manifestPath);
   if (manifestStat === null) {
     const directoryStat2 = lstatOrNull3(fsOps, directoryPath);
@@ -5449,7 +5807,7 @@ function setupEvidenceAt(root, fsOps) {
     LEGACY_INSTALLATION_MANIFEST_PATH
   ];
   for (const relativePath of paths) {
-    const target = path21.join(root, relativePath);
+    const target = path23.join(root, relativePath);
     const stat = lstatOrNull3(fsOps, target);
     if (stat === null) continue;
     if (stat.isSymbolicLink() || !stat.isFile()) {
@@ -5458,7 +5816,7 @@ function setupEvidenceAt(root, fsOps) {
     return { state: "marker", relativePath };
   }
   for (const relativePath of [INSTALLATION_DIRECTORY, ".dove-install"]) {
-    const target = path21.join(root, relativePath);
+    const target = path23.join(root, relativePath);
     const stat = lstatOrNull3(fsOps, target);
     if (stat === null) continue;
     if (stat.isSymbolicLink() || !stat.isDirectory()) {
@@ -5474,7 +5832,7 @@ function legacyInitError(root) {
 }
 function gitRootFrom(start, fsOps) {
   for (const directory of parentDirectories2(start)) {
-    const dotGit = path21.join(directory, ".git");
+    const dotGit = path23.join(directory, ".git");
     const stat = lstatOrNull3(fsOps, dotGit);
     if (stat === null) continue;
     if (stat.isSymbolicLink()) throw new Error(`Git project marker must not be a symbolic link: ${dotGit}.`);
@@ -5487,14 +5845,14 @@ function initRequiredError(start) {
   return new Error(`Dove project integration is not initialized from ${start}. Run 'dove init' from the project root, or use 'dove init --project <dir>'.`);
 }
 function resolveProjectRootForInit(project, options = {}) {
-  const fsOps = options.fsOps ?? fs24;
+  const fsOps = options.fsOps ?? fs26;
   const explicitProject = project !== void 0 && project !== null;
   const candidateInput = explicitProject ? project : options.cwd ?? process.cwd();
   const candidate = canonicalExistingDirectory(candidateInput, explicitProject ? "Dove project" : "Current working directory", fsOps);
   const gitRoot = gitRootFrom(candidate, fsOps);
   const root = !explicitProject && gitRoot !== null ? gitRoot : candidate;
   if (!explicitProject) {
-    let home = path21.resolve((options.env ?? process.env).HOME || os7.homedir());
+    let home = path23.resolve((options.env ?? process.env).HOME || os7.homedir());
     try {
       home = realpathNative2(fsOps, home);
     } catch (error) {
@@ -5518,19 +5876,19 @@ function resolveProjectRootForInit(project, options = {}) {
   return root;
 }
 function packageProjectBoundary(directory, fsOps) {
-  const packageJson = lstatOrNull3(fsOps, path21.join(directory, "package.json"));
-  const nodeModules = lstatOrNull3(fsOps, path21.join(directory, "node_modules"));
+  const packageJson = lstatOrNull3(fsOps, path23.join(directory, "package.json"));
+  const nodeModules = lstatOrNull3(fsOps, path23.join(directory, "node_modules"));
   return packageJson?.isFile() && !packageJson.isSymbolicLink() && nodeModules?.isDirectory() && !nodeModules.isSymbolicLink();
 }
 function resolveProjectRootForSetup(start, options = {}) {
-  const fsOps = options.fsOps ?? fs24;
+  const fsOps = options.fsOps ?? fs26;
   const candidate = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project setup start", fsOps);
   for (const directory of parentDirectories2(candidate)) {
     if (setupEvidenceAt(directory, fsOps).state !== "absent") return directory;
-    const dotGit = lstatOrNull3(fsOps, path21.join(directory, ".git"));
+    const dotGit = lstatOrNull3(fsOps, path23.join(directory, ".git"));
     if (dotGit !== null) {
       if (dotGit.isSymbolicLink() || !dotGit.isDirectory() && !dotGit.isFile()) {
-        throw new Error(`Git project marker must be a file or directory: ${path21.join(directory, ".git")}.`);
+        throw new Error(`Git project marker must be a file or directory: ${path23.join(directory, ".git")}.`);
       }
       return directory;
     }
@@ -5539,20 +5897,20 @@ function resolveProjectRootForSetup(start, options = {}) {
   return candidate;
 }
 function resolveInstalledProjectRoot(start, options = {}) {
-  const fsOps = options.fsOps ?? fs24;
+  const fsOps = options.fsOps ?? fs26;
   const startingDirectory = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", fsOps);
   for (const directory of parentDirectories2(startingDirectory)) {
     const installation = installationStateAt(directory, options);
     if (installation.state === "initialized") return directory;
     if (installation.state === "residue") throw new Error(`Dove installation state is incomplete at ${directory}.`);
-    if (lstatOrNull3(fsOps, path21.join(directory, ".git")) !== null || packageProjectBoundary(directory, fsOps)) break;
+    if (lstatOrNull3(fsOps, path23.join(directory, ".git")) !== null || packageProjectBoundary(directory, fsOps)) break;
   }
   throw initRequiredError(startingDirectory);
 }
 function inspectProjectRoot(start, options = {}) {
   let canonicalStart = null;
   try {
-    canonicalStart = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", options.fsOps ?? fs24);
+    canonicalStart = canonicalExistingDirectory(start ?? options.cwd ?? process.cwd(), "Dove project search start", options.fsOps ?? fs26);
     const root = resolveInstalledProjectRoot(canonicalStart, options);
     return Object.freeze({ state: "initialized", initialized: true, start: canonicalStart, root, error: null });
   } catch (error) {
@@ -5612,7 +5970,7 @@ function appendHostMigration(plan, root, options) {
   plan.hostMigrationPending = pending ? HOST_MIGRATION_PENDING_PATH : null;
 }
 function initializeProjectIntegration(rootOrProject, options = {}) {
-  const fsOps = options.fsOps ?? fs25;
+  const fsOps = options.fsOps ?? fs27;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
   const now = exactTimestamp(options.now);
@@ -5630,7 +5988,7 @@ function initializeProjectIntegration(rootOrProject, options = {}) {
   );
 }
 function prepareInstalledPlan(start, options = {}) {
-  const fsOps = options.fsOps ?? fs25;
+  const fsOps = options.fsOps ?? fs27;
   const root = resolveInstalledProjectRoot(start, { fsOps, hostIds: PROJECT_HOST_IDS2 });
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS2 });
   const hosts = options.hosts === void 0 ? [...manifest.hosts] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
@@ -5668,7 +6026,7 @@ function inspectProjectIntegration(start, options = {}) {
   };
 }
 function canonicalLifecycleRoot(start, fsOps) {
-  const resolved = path22.resolve(start ?? process.cwd());
+  const resolved = path24.resolve(start ?? process.cwd());
   const stat = fsOps.lstatSync(resolved);
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove lifecycle project root must be a real directory: ${resolved}.`);
   return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
@@ -5680,7 +6038,7 @@ function prepareLifecycleIntegration(root, options, { hosts, source }) {
     packageName: options.packageName,
     packageVersion: options.packageVersion,
     now: exactTimestamp(options.now),
-    fsOps: options.fsOps ?? fs25,
+    fsOps: options.fsOps ?? fs27,
     manifest: source,
     replacementPolicy: "confirmed-reinstall"
   });
@@ -5717,7 +6075,7 @@ function previewShape(kind, root, hosts, prepared, confirmationRequired) {
   return preview;
 }
 function previewProjectCompleteReinstall(start, options = {}) {
-  const fsOps = options.fsOps ?? fs25;
+  const fsOps = options.fsOps ?? fs27;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS2 });
@@ -5740,7 +6098,7 @@ function reinstallPreviewScope(preview) {
 function completeReinstallProjectIntegration(start, options = {}) {
   if (options.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true after displaying the real destructive scope.");
   if (!options.preview || options.preview.action !== "reinstall") throw new Error("Complete Reinstall requires the approved reinstall preview.");
-  const fsOps = options.fsOps ?? fs25;
+  const fsOps = options.fsOps ?? fs27;
   assertPackageInput(options.packageName, options.packageVersion, { required: true });
   const root = canonicalLifecycleRoot(start, fsOps);
   const source = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS2 });
@@ -5765,7 +6123,7 @@ function completeReinstallProjectIntegration(start, options = {}) {
   );
 }
 function prepareUninstall(start, options = {}) {
-  const fsOps = options.fsOps ?? fs25;
+  const fsOps = options.fsOps ?? fs27;
   const root = canonicalLifecycleRoot(start, fsOps);
   const manifest = readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS2 });
   assertManagedOwnership(manifest);
@@ -5855,9 +6213,9 @@ function uninstallProjectIntegration(start, options = {}) {
 }
 
 // src/core/dove-lifecycle.mjs
-import fs26 from "node:fs";
+import fs28 from "node:fs";
 function updateDoveLifecycle(start, options = {}) {
-  const fsOps = options.fsOps ?? fs26;
+  const fsOps = options.fsOps ?? fs28;
   const root = resolveProjectRootForSetup(start, { fsOps });
   return updateProjectIntegration(root, options);
 }
@@ -5874,8 +6232,8 @@ function uninstallDoveLifecycle(start, options = {}) {
 }
 
 // src/core/project-doctor.mjs
-import fs27 from "node:fs";
-import path23 from "node:path";
+import fs29 from "node:fs";
+import path25 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/core/project-setup-classification.mjs
@@ -5892,8 +6250,8 @@ function classifyProjectSetup(result) {
 }
 
 // src/core/project-doctor.mjs
-var MODULE_DIRECTORY = path23.dirname(fileURLToPath3(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path23.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path23.basename(MODULE_DIRECTORY)) ? ".." : "../..");
+var MODULE_DIRECTORY = path25.dirname(fileURLToPath3(import.meta.url));
+var DEFAULT_PACKAGE_ROOT = path25.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path25.basename(MODULE_DIRECTORY)) ? ".." : "../..");
 function messageFor(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -5913,18 +6271,18 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 function inspectUserCli(options) {
-  const fsOps = options.fsOps ?? fs27;
-  const packageRoot = path23.resolve(options.packageRoot ?? DEFAULT_PACKAGE_ROOT);
+  const fsOps = options.fsOps ?? fs29;
+  const packageRoot = path25.resolve(options.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
-    const absolutePath = path23.resolve(packageRoot, relativePath);
-    const relative = path23.relative(packageRoot, absolutePath);
-    const contained = relative !== "" && !relative.startsWith("..") && !path23.isAbsolute(relative);
+    const absolutePath = path25.resolve(packageRoot, relativePath);
+    const relative = path25.relative(packageRoot, absolutePath);
+    const contained = relative !== "" && !relative.startsWith("..") && !path25.isAbsolute(relative);
     const healthy2 = contained && regularNonSymlink(fsOps, absolutePath);
     return { path: relativePath, healthy: healthy2, state: healthy2 ? "current" : contained ? "missing-or-invalid" : "outside-package-root" };
   });
-  const executablePath = path23.resolve(options.executablePath ?? path23.join(packageRoot, "bin/dove-package.mjs"));
-  const executableRelative = path23.relative(packageRoot, executablePath);
-  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path23.isAbsolute(executableRelative);
+  const executablePath = path25.resolve(options.executablePath ?? path25.join(packageRoot, "bin/dove-package.mjs"));
+  const executableRelative = path25.relative(packageRoot, executablePath);
+  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path25.isAbsolute(executableRelative);
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
   const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
@@ -6036,7 +6394,7 @@ function inspectProjectDoctor(start, options = {}) {
   try {
     setupRoot = resolveProjectRootForSetup(start, { fsOps: options.fsOps });
   } catch {
-    setupRoot = typeof start === "string" ? path23.resolve(start) : null;
+    setupRoot = typeof start === "string" ? path25.resolve(start) : null;
   }
   const projectIntegration = inspectIntegration(start, options);
   const safeRoot = projectIntegration.root ?? setupRoot;

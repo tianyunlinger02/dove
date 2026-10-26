@@ -364,3 +364,18 @@ test("an opinion stays a path attachment that reports its author and length with
   assert.ok(renderMentorBrief(ROOT, { fsOps: memory.fsOps, opinion: file }).includes("作者：Executor"));
   assert.throws(() => renderMentorBrief(ROOT, { fsOps: memory.fsOps, opinion: "missing-opinion.md" }), /意见文件缺失/u);
 });
+
+test("long notes come due for consolidation, and the brief lists the practice corrections", (t) => {
+  const notesFile = `${RESEARCH}/MENTOR_NOTES.md`;
+  const memory = memoryFiles(t, {
+    [notesFile]: `## 长期意图（2026-10-20）\n### 核心需求\n- 写可改的程序\n${"历史判断。\n".repeat(16000)}`,
+    [`${RESEARCH}/PRACTICE.md`]: "- 2026-10-25 · 写稿和图 · 原话：“查不出自己的行话” · 错在哪：只自查 · 以后：交付前冷读\n- 2026-10-24 · 写稿和图 · 原话：“摘要堆数字” · 以后：先讲发现\n"
+  });
+  const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps, now: new Date(2026, 9, 26, 9) });
+  assert.match(brief, /导师笔记整理到期（现有 \d+ KB，超过 64 KB）：本次另返回“## 整理后的导师笔记（2026-10-26）”/u);
+  assert.match(brief, /MENTOR_NOTES-2026-10-26\.md/u);
+  assert.match(brief, /做法更正（\.dove\/research\/PRACTICE\.md，共 2 条，最近 10 条如下；反复出现：写稿和图 2 次）/u);
+  assert.match(brief, /2026-10-25 · 写稿和图 · 原话：“查不出自己的行话” · 错在哪：只自查 · 以后：交付前冷读/u);
+  memory.files.set(path.join(ROOT, notesFile), Buffer.from("## 长期意图（2026-10-20）\n短笔记。"));
+  assert.doesNotMatch(renderMentorBrief(ROOT, { fsOps: memory.fsOps }), /整理到期/u, "short notes are not due");
+});

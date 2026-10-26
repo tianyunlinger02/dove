@@ -21,8 +21,8 @@ Dove is one research partner. Ordinary Claude conversation is the primary entran
 | Project rule (operating manual) | The one place operating rules live: three records, six moments, what belongs to the user, when to stop, reporting |
 | User's most frequent sayings | Twelve verbatim quotes with dates and what to do; read at the start of every main context |
 | Research standard | Researcher stance, from problem to method, eight dimensions, evidence, topic and novelty; read by the mentor and reviewer and at named moments |
-| SessionStart / UserPromptSubmit | Identity card and this round's situation; one notice after an update |
-| Stop | One quote of the user's words on an overrun and one on a stall; can be turned off |
+| SessionStart / UserPromptSubmit | Identity card and this round's situation; at start and after compaction also the user's core needs and constraints (as the mentor last distilled them), the practice corrections and the lessons bearing on this round; corrections on the topics a message touches, and where a requested reflection goes; one notice after an update |
+| Stop | One quote of the user's words on an overrun and one on a stall; one reminder to record a correction or save a requested reflection; one cold-read reminder after the manuscript was rebuilt; can be turned off |
 | Status line | Three lines: session facts and mainline; main metric, this round's aim and due date; project path |
 | `dove-mentor` / `dove-review` | Fresh read-only contexts |
 | Paper-search / Exa MCP | Declarations, not access approval |

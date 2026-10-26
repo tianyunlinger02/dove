@@ -7,6 +7,7 @@ import { takeGuidanceUpdateNotice } from "./hook-state.mjs";
 import { PROJECT_HOST_IDS } from "./host-registry.mjs";
 import { PACKAGE_VERSION } from "./package-metadata.mjs";
 import { readProjectInstallationManifest } from "./project-installation-manifest.mjs";
+import { practiceForMessage, readPractice, reflectionGuidance, reflectionRequested } from "./practice.mjs";
 import { inspectRoundState, renderRoundSituation } from "./round-state.mjs";
 import { userOriginalSourceContext } from "./session-start-hook.mjs";
 
@@ -72,7 +73,12 @@ export function userPromptSubmitOutput(payload, guidance, options = {}) {
   const notice = options.project && takeGuidanceUpdateNotice(options.project, payload.session_id, guidance.version, options)
     ? `${guidanceUpdateNotice(guidance.version)}\n`
     : "";
-  const context = `Dove ${guidance.version}\n${notice}${guidance.note ? `${guidance.note}\n` : ""}${identityCardContext(options.project, options)}\n\n${roundSituationContext(options.project, options)}\n\n${renderDoveResearchReanchor()} 身份卡不能替代用户最新原话。${userOriginalSourceContext(payload)}${hostMigrationContext(options.project, options)}`;
+  // Practice corrections on the topics this message touches, if the user has corrected them before.
+  const practice = [
+    options.project ? practiceForMessage(readPractice(options.project, options), payload.prompt) : "",
+    reflectionRequested(payload.prompt) ? reflectionGuidance() : ""
+  ].filter(Boolean).join("\n\n");
+  const context = `Dove ${guidance.version}\n${notice}${guidance.note ? `${guidance.note}\n` : ""}${identityCardContext(options.project, options)}\n\n${roundSituationContext(options.project, options)}${practice ? `\n\n${practice}` : ""}\n\n${renderDoveResearchReanchor()} 身份卡不能替代用户最新原话。${userOriginalSourceContext(payload)}${hostMigrationContext(options.project, options)}`;
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",

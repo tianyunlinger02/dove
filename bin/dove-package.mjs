@@ -1128,15 +1128,15 @@ var require_route = __commonJS({
       };
     }
     function wrapConversion(toModel, graph) {
-      const path32 = [graph[toModel].parent, toModel];
+      const path34 = [graph[toModel].parent, toModel];
       let fn = conversions[graph[toModel].parent][toModel];
       let cur = graph[toModel].parent;
       while (graph[cur].parent) {
-        path32.unshift(graph[cur].parent);
+        path34.unshift(graph[cur].parent);
         fn = link(conversions[graph[cur].parent][cur], fn);
         cur = graph[cur].parent;
       }
-      fn.conversion = path32;
+      fn.conversion = path34;
       return fn;
     }
     module.exports = function(fromModel) {
@@ -1487,7 +1487,7 @@ var require_wrap_ansi = __commonJS({
       return ret;
     };
     module.exports = (string, columns, options2) => {
-      return String(string).normalize().replace(/\r\n/g, "\n").split("\n").map((line) => exec(line, columns, options2)).join("\n");
+      return String(string).normalize().replace(/\r\n/g, "\n").split("\n").map((line2) => exec(line2, columns, options2)).join("\n");
     };
   }
 });
@@ -7632,10 +7632,10 @@ var require_lib2 = __commonJS({
     exports.analyse = analyse;
     var detectFile = (filepath, opts = {}) => new Promise((resolve, reject) => {
       let fd;
-      const fs33 = (0, node_1.default)();
+      const fs35 = (0, node_1.default)();
       const handler = (err, buffer) => {
         if (fd) {
-          fs33.closeSync(fd);
+          fs35.closeSync(fd);
         }
         if (err) {
           reject(err);
@@ -7647,9 +7647,9 @@ var require_lib2 = __commonJS({
       };
       const sampleSize = (opts === null || opts === void 0 ? void 0 : opts.sampleSize) || 0;
       if (sampleSize > 0) {
-        fd = fs33.openSync(filepath, "r");
+        fd = fs35.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(sampleSize);
-        fs33.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
+        fs35.read(fd, sample, 0, sampleSize, opts.offset, (err, bytesRead) => {
           if (err) {
             handler(err, null);
           } else {
@@ -7661,22 +7661,22 @@ var require_lib2 = __commonJS({
         });
         return;
       }
-      fs33.readFile(filepath, handler);
+      fs35.readFile(filepath, handler);
     });
     exports.detectFile = detectFile;
     var detectFileSync = (filepath, opts = {}) => {
-      const fs33 = (0, node_1.default)();
+      const fs35 = (0, node_1.default)();
       if (opts && opts.sampleSize) {
-        const fd = fs33.openSync(filepath, "r");
+        const fd = fs35.openSync(filepath, "r");
         let sample = Buffer.allocUnsafe(opts.sampleSize);
-        const bytesRead = fs33.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
+        const bytesRead = fs35.readSync(fd, sample, 0, opts.sampleSize, opts.offset);
         if (bytesRead < opts.sampleSize) {
           sample = sample.subarray(0, bytesRead);
         }
-        fs33.closeSync(fd);
+        fs35.closeSync(fd);
         return (0, exports.detect)(sample);
       }
-      return (0, exports.detect)(fs33.readFileSync(filepath));
+      return (0, exports.detect)(fs35.readFileSync(filepath));
     };
     exports.detectFileSync = detectFileSync;
     exports.default = {
@@ -11477,8 +11477,8 @@ var require_lib3 = __commonJS({
 });
 
 // bin/dove.mjs
-import fs32 from "node:fs";
-import path31 from "node:path";
+import fs34 from "node:fs";
+import path33 from "node:path";
 import process5 from "node:process";
 import { fileURLToPath as fileURLToPath5 } from "node:url";
 
@@ -12079,7 +12079,7 @@ function useKeypress(userHandler) {
 var import_cli_width = __toESM(require_cli_width(), 1);
 var import_wrap_ansi = __toESM(require_wrap_ansi(), 1);
 function breakLines(content, width) {
-  return content.split("\n").flatMap((line) => (0, import_wrap_ansi.default)(line, width, { trim: false, hard: true }).split("\n").map((str) => str.trimEnd())).join("\n");
+  return content.split("\n").flatMap((line2) => (0, import_wrap_ansi.default)(line2, width, { trim: false, hard: true }).split("\n").map((str) => str.trimEnd())).join("\n");
 }
 function readlineWidth() {
   return (0, import_cli_width.default)({ defaultWidth: 80, output: readline().output });
@@ -12171,7 +12171,7 @@ function usePagination({ items, active, renderItem, pageSize, loop = true }) {
     bufferPointer -= linesToAdd.length;
     itemPointer = bound(itemPointer - 1);
   }
-  return pageBuffer.filter((line) => typeof line === "string").join("\n");
+  return pageBuffer.filter((line2) => typeof line2 === "string").join("\n");
 }
 
 // node_modules/@inquirer/core/dist/esm/lib/create-prompt.js
@@ -13368,11 +13368,11 @@ var esm_default7 = createPrompt((config, done) => {
       if (Separator.isSeparator(choice)) {
         return ` ${choice.separator}`;
       }
-      const line = `  ${choice.key}) ${choice.name}`;
+      const line2 = `  ${choice.key}) ${choice.name}`;
       if (choice.key === value2.toLowerCase()) {
-        return theme.style.highlight(line);
+        return theme.style.highlight(line2);
       }
-      return line;
+      return line2;
     }).join("\n");
   }
   let helpTip = "";
@@ -13484,11 +13484,11 @@ var esm_default8 = createPrompt((config, done) => {
     if (Separator.isSeparator(choice)) {
       return ` ${choice.separator}`;
     }
-    const line = `  ${choice.key}) ${choice.name}`;
+    const line2 = `  ${choice.key}) ${choice.name}`;
     if (choice.key === value2.toLowerCase()) {
-      return theme.style.highlight(line);
+      return theme.style.highlight(line2);
     }
-    return line;
+    return line2;
   }).join("\n");
   let error = "";
   if (errorMsg) {
@@ -14093,8 +14093,8 @@ function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
 }
 
 // src/cli/dashboard-actions.mjs
-import fs21 from "node:fs";
-import path20 from "node:path";
+import fs22 from "node:fs";
+import path21 from "node:path";
 
 // src/core/host-registry.mjs
 var PROJECT_HOST_IDS = Object.freeze(["claude"]);
@@ -14162,7 +14162,7 @@ import fs from "node:fs";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 var injectedName = true ? "dove" : null;
-var injectedVersion = true ? "3.5.8" : null;
+var injectedVersion = true ? "3.5.9" : null;
 function parseSemver(value2) {
   const match = typeof value2 === "string" ? value2.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u) : null;
   if (!match) return null;
@@ -14239,8 +14239,8 @@ var ARTIFACT_PATHS = Object.freeze({
 });
 
 // src/core/strict-json.mjs
-function duplicateKeyError(label, key, path32) {
-  throw new Error(`${label} must not contain duplicate JSON object keys: ${path32 === "$" ? key : `${path32}.${key}`}.`);
+function duplicateKeyError(label, key, path34) {
+  throw new Error(`${label} must not contain duplicate JSON object keys: ${path34 === "$" ? key : `${path34}.${key}`}.`);
 }
 function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
   if (typeof text !== "string") throw new Error(`${label} must contain valid JSON.`);
@@ -14276,7 +14276,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     if (!match) throw new Error(`${label} must contain valid JSON.`);
     index += match[0].length;
   }
-  function parseArray(path32) {
+  function parseArray(path34) {
     index += 1;
     skipWhitespace();
     if (text[index] === "]") {
@@ -14285,7 +14285,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     }
     let itemIndex = 0;
     while (true) {
-      parseValue(`${path32}[${itemIndex}]`);
+      parseValue(`${path34}[${itemIndex}]`);
       itemIndex += 1;
       skipWhitespace();
       if (text[index] === "]") {
@@ -14297,7 +14297,7 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseObject(path32) {
+  function parseObject(path34) {
     index += 1;
     skipWhitespace();
     if (text[index] === "}") {
@@ -14307,12 +14307,12 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
     const keys = /* @__PURE__ */ new Set();
     while (true) {
       const key = parseString();
-      if (keys.has(key)) duplicateKeyError(label, key, path32);
+      if (keys.has(key)) duplicateKeyError(label, key, path34);
       keys.add(key);
       skipWhitespace();
       if (text[index] !== ":") throw new Error(`${label} must contain valid JSON.`);
       index += 1;
-      parseValue(path32 === "$" ? `$.${key}` : `${path32}.${key}`);
+      parseValue(path34 === "$" ? `$.${key}` : `${path34}.${key}`);
       skipWhitespace();
       if (text[index] === "}") {
         index += 1;
@@ -14323,11 +14323,11 @@ function parseJsonWithoutDuplicateKeys(text, label = "JSON input") {
       skipWhitespace();
     }
   }
-  function parseValue(path32) {
+  function parseValue(path34) {
     skipWhitespace();
     const character = text[index];
-    if (character === "{") parseObject(path32);
-    else if (character === "[") parseArray(path32);
+    if (character === "{") parseObject(path34);
+    else if (character === "[") parseArray(path34);
     else if (character === '"') parseString();
     else if (character === "-" || /\d/u.test(character ?? "")) parseNumber();
     else if (text.startsWith("true", index)) index += 4;
@@ -14373,9 +14373,9 @@ function assertPlainObject(value2, label) {
 }
 function assertFields(value2, fields, label) {
   assertPlainObject(value2, label);
-  const unknown = Object.keys(value2).filter((field) => !fields.has(field));
+  const unknown = Object.keys(value2).filter((field2) => !fields.has(field2));
   if (unknown.length > 0) throw new Error(`${label} does not accept unknown fields: ${unknown.join(", ")}.`);
-  const missing = [...fields].filter((field) => !Object.hasOwn(value2, field));
+  const missing = [...fields].filter((field2) => !Object.hasOwn(value2, field2));
   if (missing.length > 0) throw new Error(`${label} is missing required fields: ${missing.join(", ")}.`);
 }
 function nonEmptyString(value2, label) {
@@ -14678,12 +14678,12 @@ var DOVE_OPERATING_MOMENTS = Object.freeze([
   "**\u6BCF\u8F6E\u5F00\u59CB**\uFF1A\u5199\u6E05\u5BF9\u51C6\u54EA\u4E00\u7EF4\u3001\u600E\u6837\u7B97\u6210\u3001\u89C4\u6A21\u591A\u5927\u548C\u4E3A\u4EC0\u4E48\u591F\u3001\u54EA\u5929\u89C1\u5206\u6653\uFF0C\u4EE5\u53CA\u4E00\u4E2A\u91CF\u7684\u516B\u6210\u628A\u63E1\u533A\u95F4\u3002\u89C4\u6A21\u6309\u7814\u7A76\u6807\u51C6\u201C\u8BC1\u636E\u4E0E\u5B9E\u9A8C\u201D\u5148\u7B97\u9884\u671F\u5DEE\u522B\u548C\u566A\u58F0\uFF0C\u5206\u4E0D\u51FA\u7ED3\u679C\u5C31\u6539\u8BBE\u8BA1\uFF0C\u4E0D\u8DD1\u6CE8\u5B9A\u5206\u4E0D\u51FA\u7ED3\u679C\u7684\u5C0F\u7248\u672C\u3002\u4E92\u4E0D\u4F9D\u8D56\u7684\u89E3\u91CA\u6216\u65B9\u6CD5\u540C\u65F6\u8BD5\uFF0C\u5728\u7528\u6237\u7684\u8D44\u6E90\u89C4\u5219\u5185\u7528\u8DB3\u7A7A\u95F2\u7B97\u529B\u3002\u8865\u79CD\u5B50\u3001\u52A0\u8BAD\u7EC3\u6B65\u6570\u3001\u8865\u6D88\u878D\u6216\u57FA\u7EBF\uFF0C\u90FD\u4E0D\u80FD\u4EE3\u66FF\u4FEE\u5DF2\u77E5\u7F3A\u9677\u3002",
   "**\u6BCF\u8F6E\u7ED3\u675F**\uFF1A\u5199\u5224\u5B9A\uFF0C\u4EE5\u53CA\u8FD9\u4E00\u8F6E\u6539\u53D8\u4E86\u4EC0\u4E48\u5224\u65AD\u3001\u4E0B\u4E00\u6B65\u56E0\u6B64\u6539\u4EC0\u4E48\u3001\u79BB\u6700\u7EC8\u7ED3\u679C\u8FD1\u4E86\u591A\u5C11\uFF0C\u7136\u540E\u8BF7\u5BFC\u5E08\u5224\u65AD\u3002\u79D1\u7814\u7ED3\u679C\u53EA\u6709\u4E24\u79CD\uFF1A\u771F\u5B9E\u4EFB\u52A1\u8BC4\u6D4B\u4E0A\u7684\u6307\u6807\u53D8\u5316\uFF0C\u6216\u5BF9\u6838\u5FC3\u65B9\u6CD5\u7684\u660E\u786E\u53D6\u820D\uFF08\u91C7\u7EB3\u6216\u653E\u5F03\u4E00\u4E2A\u65B9\u6CD5\u65CF\uFF09\u3002\u53EA\u6392\u9664\u67D0\u4E2A\u5C40\u90E8\u5199\u6CD5\u3001\u53C2\u6570\u6216\u5B9E\u73B0\u5047\u8BBE\u7684\u8BCA\u65AD\uFF0C\u7B97\u5DE5\u4F5C\u8FDB\u5C55\uFF0C\u4E0D\u7B97\u79D1\u7814\u7ED3\u679C\uFF1B\u6709\u6548\u8D1F\u7ED3\u679C\u80FD\u5B9A\u4E0B\u65B9\u6CD5\u53D6\u820D\u65F6\u624D\u7B97\u3002",
   "**\u8D85\u65F6\u6216\u505C\u6EDE**\uFF1A\u4E00\u8F6E\u8D85\u8FC7\u9884\u8BA1\u65F6\u95F4\u4E00\u500D\u8FD8\u6CA1\u6709\u7ED3\u679C\uFF0C\u6216\u8005\u8FDE\u7EED\u4E24\u8F6E\u5224\u5B9A\u4E3A\u672A\u5151\u73B0\u3001\u5176\u95F4\u4E5F\u6CA1\u6709\u65B9\u6CD5\u53D6\u820D\uFF0CDove \u4F1A\u5F15\u7528\u7528\u6237\u7684\u539F\u8BDD\u8FFD\u95EE\u3002\u8BA4\u771F\u56DE\u7B54\uFF1A\u5361\u5728\u54EA\u91CC\uFF0C\u6709\u6CA1\u6709\u66F4\u5FEB\u7684\u8DEF\uFF1B\u54EA\u4E9B\u73B0\u5728\u5C31\u80FD\u505A\u5374\u4E00\u76F4\u6CA1\u505A\u800C\u4E14\u5F88\u91CD\u8981\uFF0C\u54EA\u4E9B\u5F88\u91CD\u8981\u5374\u4E00\u76F4\u6CA1\u653B\u514B\u3001\u6709\u6CA1\u6709\u529E\u6CD5\u8FD8\u662F\u5F97\u964D\u4F4E\u8981\u6C42\uFF0C\u54EA\u4E9B\u53EF\u6709\u53EF\u65E0\u5374\u4E00\u76F4\u5728\u505A\u3002\u7136\u540E\u505C\u4E0B\u6765\uFF0C\u7528\u4E00\u9875\u51B3\u5B9A\u5907\u5FD8\u95EE\u7528\u6237\uFF1A\u7EE7\u7EED\u5F53\u524D\u65B9\u6CD5\uFF08\u9644\u7406\u7531\uFF09\u3001\u6362\u65B9\u6CD5\uFF08\u81F3\u5C11\u7ED9\u4E00\u4E2A\u4E0D\u662F\u4ECE\u5F53\u524D\u65B9\u6CD5\u6539\u51FA\u6765\u7684\u65B9\u6CD5\u65CF\uFF0C\u53EF\u4EE5\u6765\u81EA\u5176\u4ED6\u9886\u57DF\u89E3\u540C\u6784\u95EE\u9898\u7684\u505A\u6CD5\uFF0C\u8BF4\u6E05\u4E24\u8FB9\u600E\u4E48\u5BF9\u5E94\uFF09\uFF0C\u8FD8\u662F\u6362\u65B9\u5411\u3002\u4E0D\u80FD\u7528\u72EC\u7ACB\u8BCA\u65AD\u4EE3\u66FF\u7528\u6237\u7684\u9009\u62E9\u3002",
-  "**\u7528\u6237\u7EA0\u6B63\u4E4B\u540E**\uFF1A\u5148\u6539\u4E0B\u4E00\u6B65\u505A\u6CD5\uFF0C\u628A\u201C\u4E0B\u4E00\u6B65\u5177\u4F53\u6539\u6210\u4EC0\u4E48\u201D\u5199\u8FDB\u4E0B\u4E00\u8F6E\u8BF4\u660E\u3002\u7B80\u77ED\u56DE\u5E94\uFF0C\u53EA\u6309\u8BB0\u5F55\u8BF4\u6E05\u9519\u5728\u54EA\uFF0C\u4E0D\u7F16\u9020\u51FA\u9519\u539F\u56E0\uFF0C\u4E0D\u6269\u6210\u666E\u904D\u7981\u4EE4\uFF0C\u4E5F\u4E0D\u5B58\u6210\u89C4\u5219\u3002"
+  "**\u7528\u6237\u7EA0\u6B63\u4E4B\u540E**\uFF1A\u5148\u6539\u4E0B\u4E00\u6B65\u505A\u6CD5\uFF0C\u628A\u201C\u4E0B\u4E00\u6B65\u5177\u4F53\u6539\u6210\u4EC0\u4E48\u201D\u5199\u8FDB\u4E0B\u4E00\u8F6E\u8BF4\u660E\uFF1B\u518D\u5728 .dove/research/PRACTICE.md\uFF08\u505A\u6CD5\u66F4\u6B63\uFF09\u8BB0\u4E00\u884C\uFF1A`- YYYY-MM-DD \xB7 \u4E3B\u9898 \xB7 \u539F\u8BDD\uFF1A\u201C\u2026\u2026\u201D \xB7 \u9519\u5728\u54EA\uFF1A\u2026\u2026 \xB7 \u4EE5\u540E\uFF1A\u2026\u2026`\uFF0C\u4E3B\u9898\u4ECE\u8BF4\u4EBA\u8BDD\u3001\u8DD1\u504F\u3001\u8BBE\u9650\u3001\u5B9E\u9A8C\u592A\u5C0F\u3001\u53D8\u6210\u5DE5\u7A0B\u3001\u8865\u79CD\u5B50\u3001\u83AB\u987B\u6709\u3001\u901A\u7528\u548C\u6CDB\u5316\u3001\u6CA1\u505A\u5B8C\u3001\u5148\u8BB2\u6E05\u95EE\u9898\u548C\u65B9\u6CD5\u3001\u505C\u6EDE\u3001\u5199\u7A3F\u548C\u56FE\u3001\u5176\u4ED6\u91CC\u9009\uFF0C\u539F\u8BDD\u7167\u6284\u7528\u6237\u7684\u8BDD\u3002\u7528\u6237\u8981\u4F60\u53CD\u601D\u65F6\uFF0C\u5B8C\u6574\u7684\u53CD\u601D\u5199\u5230 .dove/research/reflections/YYYY-MM-DD-\u4E3B\u9898.md\uFF08\u54EA\u91CC\u51FA\u4E86\u95EE\u9898\u3001\u4E3A\u4EC0\u4E48\u3001\u4F9D\u636E\u3001\u4EE5\u540E\u600E\u4E48\u505A\uFF09\uFF0C\u7ED3\u5C3E\u201C\u4EE5\u540E\u600E\u4E48\u505A\u201D\u7684\u6BCF\u4E00\u6761\u540C\u6837\u8BB0\u8FDB PRACTICE.md\u3002Dove \u4F1A\u5728\u4F1A\u8BDD\u5F00\u59CB\u3001\u538B\u7F29\u540E\u548C\u76F8\u5173\u7684\u6D88\u606F\u91CC\u628A\u8FD9\u4E9B\u884C\u9001\u56DE\u6765\uFF1B\u7528\u6237\u53EF\u4EE5\u968F\u65F6\u6539\u6216\u5220\u3002\u7B80\u77ED\u56DE\u5E94\uFF0C\u53EA\u6309\u8BB0\u5F55\u8BF4\u6E05\u9519\u5728\u54EA\uFF0C\u4E0D\u7F16\u9020\u51FA\u9519\u539F\u56E0\uFF0C\u4E0D\u6269\u6210\u666E\u904D\u7981\u4EE4\u3002"
 ]);
 var DOVE_OPERATING_DECISIONS = Object.freeze([
   "\u5F52\u7528\u6237\u51B3\u5B9A\u7684\u4E8B\uFF1A\u4E3B\u7EBF\u548C\u4E3B\u6307\u6807\u3001\u65B0\u65B9\u6CD5\u8BBE\u8BA1\u3001\u65B9\u5411\u548C\u65B9\u6CD5\u65CF\u7684\u66F4\u6362\u3001\u76EE\u6807\u6863\u6B21\u3001\u90E8\u7F72\u8F93\u5165\u8F93\u51FA\u3001\u8D44\u6E90\u627F\u8BFA\uFF0C\u4EE5\u53CA\u4F1A\u5B9E\u8D28\u6539\u53D8\u4E0B\u4E00\u6B65\u7684\u6B67\u4E49\u3002\u5373\u4F7F\u6587\u6863\u5199\u7740\u201C\u7528\u6237\u5DF2\u786E\u8BA4\u201D\uFF0C\u53EA\u8981\u505A\u6CD5\u4F1A\u4E22\u6389\u6838\u5FC3\u80FD\u529B\uFF0C\u4E5F\u7528\u767D\u8BDD\u63D0\u9192\u4E00\u6B21\uFF1A\u4E22\u4E86\u4EC0\u4E48\uFF0C\u65E7\u8DEF\u7EBF\u56E0\u4E3A\u8BAD\u7EC3\u4E0D\u8DB3\u3001\u5B9E\u73B0\u3001\u8BC4\u4EF7\u8FD8\u662F\u786E\u88AB\u53CD\u9A73\u800C\u505C\u3002\u7136\u540E\u6309\u7528\u6237\u771F\u5B9E\u7B54\u590D\u6267\u884C\u5E76\u8BB0\u5361\uFF0C\u4E0D\u53CD\u590D\u8FFD\u95EE\uFF0C\u4E5F\u4E0D\u501F\u63D0\u9192\u963B\u6321\u7528\u6237\u7684\u8981\u6C42\u3002",
   "\u53EA\u4E3A\u4E09\u7C7B\u60C5\u51B5\u505C\u4E0B\u6765\uFF1A\u4E0A\u9762\u8FD9\u4E9B\u8981\u7528\u6237\u51B3\u5B9A\u7684\u4E8B\uFF1B\u8D85\u65F6\u6216\u505C\u6EDE\uFF1B\u7528\u6237\u53EB\u505C\u3002\u5176\u4F59\u65F6\u5019\u63A5\u7740\u505A\uFF0C\u4E0D\u4E3A\u5199\u6C47\u62A5\u800C\u505C\u3002\u7B49\u7528\u6237\u7B54\u590D\u65F6\uFF0C\u63A5\u7740\u505A\u4E0D\u4F9D\u8D56\u8FD9\u4E2A\u51B3\u5B9A\u7684\u4E8B\uFF0C\u4E0D\u7EE7\u7EED\u5DF2\u7ECF\u89E6\u53D1\u505C\u6EDE\u7684\u8DEF\u7EBF\u3002\u53EA\u8BA8\u8BBA\u548C\u505C\u6B62\u7684\u8981\u6C42\u7167\u529E\u3002",
-  "\u8BF7\u72EC\u7ACB\u5BFC\u5E08\u5224\u65AD\u7684\u65F6\u523B\uFF1A\u4E00\u8F6E\u51FA\u5224\u5B9A\u65F6\u3001\u89E6\u53D1\u8D85\u65F6\u6216\u505C\u6EDE\u65F6\u3001\u65B0\u65B9\u6CD5\u8BBE\u8BA1\u65F6\u3001\u7528\u6237\u8981\u6C42\u65F6\u3002\u7528\u5168\u65B0\u7684\u539F\u751F\u53EA\u8BFB agent\uFF08dove-mentor\uFF09\uFF0C\u8C03\u7528\u6B63\u6587\u6574\u6BB5\u7528 `dove mentor brief --project <root>` \u751F\u6210\u7684\u6A21\u677F\uFF0C\u518D\u52A0\u4E00\u53E5\u89E6\u53D1\u539F\u56E0\uFF1B\u540C\u4E00\u6B21\u5224\u65AD\u53EF\u4EE5\u8FFD\u95EE\u4E24\u4E09\u6B21\u3002\u5BFC\u5E08\u7B14\u8BB0\u539F\u6837\u8FFD\u52A0\u5230 .dove/research/MENTOR_NOTES.md\uFF0C\u5BFC\u5E08\u5199\u7684\u7814\u7A76\u72B6\u6001\u548C\u516B\u7EF4\u8D70\u52BF\u884C\u539F\u6837\u66F4\u65B0\u5230\u8EAB\u4EFD\u5361\u548C EVAL\u3002\u72B6\u6001\u95EE\u9898\u548C\u666E\u901A\u7B54\u590D\u4E0D\u8C03\u5BFC\u5E08\u3002",
+  "\u8BF7\u72EC\u7ACB\u5BFC\u5E08\u5224\u65AD\u7684\u65F6\u523B\uFF1A\u4E00\u8F6E\u51FA\u5224\u5B9A\u65F6\u3001\u89E6\u53D1\u8D85\u65F6\u6216\u505C\u6EDE\u65F6\u3001\u65B0\u65B9\u6CD5\u8BBE\u8BA1\u65F6\u3001\u7528\u6237\u8981\u6C42\u65F6\u3002\u7528\u5168\u65B0\u7684\u539F\u751F\u53EA\u8BFB agent\uFF08dove-mentor\uFF09\uFF0C\u8C03\u7528\u6B63\u6587\u6574\u6BB5\u7528 `dove mentor brief --project <root>` \u751F\u6210\u7684\u6A21\u677F\uFF0C\u518D\u52A0\u4E00\u53E5\u89E6\u53D1\u539F\u56E0\uFF1B\u540C\u4E00\u6B21\u5224\u65AD\u53EF\u4EE5\u8FFD\u95EE\u4E24\u4E09\u6B21\u3002\u5BFC\u5E08\u7B14\u8BB0\u539F\u6837\u8FFD\u52A0\u5230 .dove/research/MENTOR_NOTES.md\uFF1B\u6750\u6599\u6CE8\u660E\u7B14\u8BB0\u6574\u7406\u5230\u671F\u65F6\uFF0C\u5148\u628A\u539F MENTOR_NOTES.md \u539F\u6837\u5B58\u5230 .dove/research/archive/MENTOR_NOTES-YYYY-MM-DD.md\uFF0C\u518D\u7528\u5BFC\u5E08\u8FD4\u56DE\u7684\u6574\u7406\u540E\u7B14\u8BB0\u66FF\u6362\u3002\u5BFC\u5E08\u5199\u7684\u7814\u7A76\u72B6\u6001\u548C\u516B\u7EF4\u8D70\u52BF\u884C\u539F\u6837\u66F4\u65B0\u5230\u8EAB\u4EFD\u5361\u548C EVAL\u3002\u72B6\u6001\u95EE\u9898\u548C\u666E\u901A\u7B54\u590D\u4E0D\u8C03\u5BFC\u5E08\u3002",
   "\u9009\u9898\u65F6\u5148\u8BFB .dove/install/TOPIC_CRITERIA.md\u3001\u9879\u76EE .dove/research/topics/PROJECT.md \u548C\u7814\u7A76\u6807\u51C6\u7684\u201C\u9009\u9898\u4E0E\u65B0\u610F\u201D\uFF0C\u4E00\u8F6E\u4EA4\u51FA\u6709\u6765\u6E90\u7684\u5019\u9009\u3001\u8FD1\u90BB\u548C\u63A8\u8350\u4F9B\u7528\u6237\u9009\uFF1B\u7528 dove topic start \u51C6\u5907\u6750\u6599\uFF0C\u5019\u9009\u5199\u5728 .dove/research/topics/cards/NN-name.md\u3002\u7528\u6237\u9009\u5B9A\u4E3B\u7EBF\u5C31\u7ED3\u675F\u9009\u9898\uFF1B\u9009\u5B9A\u524D\u4E0D\u5B9E\u73B0\u65B9\u6CD5\uFF0C\u53EA\u505A\u6807\u51C6\u5141\u8BB8\u7684\u8BCA\u65AD\u3002\u65B9\u6CD5\u95ED\u5408\u540E\u5199\u7406\u8BBA\u5F00\u9898\uFF0C\u7528\u6237\u540C\u610F\u540E\u6309\u4E66\u9762\u534F\u8BAE\u505A\u6B63\u5F0F\u5C1D\u8BD5\u3002",
   "\u7528\u6237\u786E\u8BA4\u7684\u6295\u7A3F\u5B8C\u6210\u76EE\u6807\uFF0C\u9700\u8981\u4F5C\u8005\u5224\u65AD\u79D1\u5B66\u4E0A\u591F\u7528\u3001\u771F\u6B63\u72EC\u7ACB\u7684\u5BA1\u7A3F\u5EFA\u8BAE\u63A5\u53D7\u540C\u4E00\u5B8C\u6574\u5F53\u524D\u7248\u672C\uFF0C\u4EE5\u53CA\u5B9E\u9645\u4EA4\u4ED8\u5C31\u7EEA\u3002\u72EC\u7ACB\u5BA1\u7A3F\u4E0D\u53EF\u5F97\u5C31\u7559\u4F5C\u7F3A\u53E3\uFF1B\u666E\u901A\u5177\u4F53\u4EFB\u52A1\u53EF\u5728\u8303\u56F4\u5185\u5B8C\u6210\u3002"
 ]);
@@ -14873,7 +14873,7 @@ EVAL\u3001\u8BF4\u660E\u3001\u7ED3\u679C\u548C\u6267\u884C\u8005\u610F\u89C1\u53
 
 - **\u5224\u5B9A\u6838\u5BF9**\uFF1A\u672C\u8F6E\u7ED3\u679C\u7684\u5224\u5B9A\uFF0C\u662F\u5426\u5BF9\u5F97\u4E0A\u8BF4\u660E\u91CC\u4E8B\u5148\u5199\u4E0B\u7684\u5BF9\u51C6\u7EF4\u5EA6\u548C\u6210\u8D25\u6807\u51C6\uFF1F\u5224\u5B9A\u504F\u4E50\u89C2\u3001\u6362\u4E86\u6807\u51C6\u6216\u6311\u4E86\u597D\u770B\u7684\u7EF4\u5EA6\uFF0C\u5C31\u76F4\u63A5\u6307\u51FA\u5E76\u7ED9\u51FA\u4F60\u7684\u5224\u5B9A\u3002\u53EA\u6392\u9664\u67D0\u4E2A\u5C40\u90E8\u5199\u6CD5\u7684\u8BCA\u65AD\u662F\u5DE5\u4F5C\u8FDB\u5C55\uFF0C\u4E0D\u662F\u79D1\u7814\u7ED3\u679C\uFF1B\u5408\u6210\u6216\u8BAD\u7EC3\u5206\u5E03\u4E0A\u7684\u6570\u5B57\u53EA\u7B97\u5F00\u53D1\u4FE1\u53F7\uFF0C\u672A\u89C1\u6570\u636E\u624D\u652F\u6491\u6CDB\u5316\u3002
 - **\u65B9\u6CD5\u8BBE\u8BA1**\uFF1A\u590D\u6838\u8EAB\u4EFD\u5361 Method design \u6307\u5411\u7684\u8BF4\u660E\u91CC\u201C## \u65B9\u6CD5\u8BBE\u8BA1\u201D\u7684\u4E09\u6BB5\uFF1A\u95EE\u9898\u3001\u771F\u5B9E\u6570\u636E\u8BC1\u636E\u548C\u8981\u8FBE\u5230\u7684\u7A0B\u5EA6\uFF1B\u5916\u90E8\u65B9\u6CD5\uFF08\u542B\u672C\u9886\u57DF\u9AD8\u624B\u7684\u9ED8\u8BA4\u505A\u6CD5\u548C\u5176\u4ED6\u9886\u57DF\u89E3\u540C\u6784\u95EE\u9898\u7684\u505A\u6CD5\uFF09\u7684\u5177\u4F53\u673A\u5236\u4E3A\u4F55\u4E0D\u8DB3\uFF1B\u6539\u6CD5\u7684\u9884\u671F\u3001\u6210\u8D25\u6807\u51C6\u548C\u7B2C\u4E00\u4E2A\u771F\u5B9E\u7ED3\u679C\u7684\u65F6\u95F4\u3002\u7ED3\u679C\u8FD8\u652F\u6301\u5B83\u4EEC\u5417\uFF1F\u8FD9\u4E00\u6B65\u600E\u6837\u6539\u5584\u539F\u95EE\u9898\u3001\u6539\u5584\u591A\u5C11\uFF0C\u8FDE\u63A5\u662F\u5426\u68C0\u9A8C\u8FC7\uFF1F\u65B0\u65B9\u6CD5\u987B\u5148\u8BA9\u7528\u6237\u770B\u8FC7\uFF0C\u666E\u901A\u4FEE\u590D\u548C\u8BC4\u4EF7\u4FEE\u6B63\u4E0D\u91CD\u590D\u8FD9\u4E00\u6B65\u3002
-- **\u65B9\u5411\u548C\u7591\u95EE**\uFF1A\u8FD8\u5728\u89E3\u51B3\u7528\u6237\u8981\u7684\u95EE\u9898\u5417\uFF0C\u76F8\u5BF9\u6700\u63A5\u8FD1\u7684\u5DE5\u4F5C\u5DEE\u522B\u5728\u54EA\uFF0C\u79BB\u76EE\u6807\u6863\u6B21\u5DEE\u4EC0\u4E48\uFF1F\u63D0\u51FA\u4F60\u771F\u6B63\u7684\u7591\u95EE\uFF0C\u4E0D\u53EA\u786E\u8BA4\u5BBF\u4E3B\u7684\u8BF4\u6CD5\u3002\u4E3B\u7EBF\u9996\u6B21\u5224\u65AD\u548C\u65B9\u6CD5\u65CF\u6539\u53D8\u65F6\u8BFB\u8FD1\u90BB\u8BBA\u6587\u6B63\u6587\u3002\u6839\u636E\u771F\u5B9E\u5931\u8D25\u63D0\u51FA\u89E3\u91CA\u3001\u65B9\u6CD5\u6539\u52A8\u548C\u80FD\u533A\u5206\u5B83\u4EEC\u7684\u9884\u671F\uFF0C\u5176\u4E2D\u81F3\u5C11\u8003\u8651\u4E00\u4E2A\u4E0D\u662F\u4ECE\u5F53\u524D\u505A\u6CD5\u6539\u51FA\u6765\u7684\u65B9\u6848\uFF1B\u6BD4\u8F83\u6574\u4F53\u6536\u76CA\u4E0E\u6210\u672C\uFF0C\u4E0D\u9ED8\u8BA4\u8865\u4E01\u6216\u52A0\u79CD\u5B50\u3002\u5BF9\u7167\u5BFC\u5E08\u7B14\u8BB0\u91CC\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u65CF\uFF0C\u770B\u662F\u5426\u6362\u4E2A\u8BF4\u6CD5\u53C8\u56DE\u6765\u4E86\uFF1B\u5BF9\u7167\u7528\u6237\u8FC7\u53BB\u7684\u7EA0\u6B63\uFF0C\u770B\u662F\u5426\u91CD\u72AF\uFF0C\u8BA4\u9519\u4E0D\u7B97\u6539\u6B63\uFF0C\u8981\u770B\u884C\u52A8\u3002
+- **\u65B9\u5411\u548C\u7591\u95EE**\uFF1A\u8FD8\u5728\u89E3\u51B3\u7528\u6237\u8981\u7684\u95EE\u9898\u5417\uFF0C\u76F8\u5BF9\u6700\u63A5\u8FD1\u7684\u5DE5\u4F5C\u5DEE\u522B\u5728\u54EA\uFF0C\u79BB\u76EE\u6807\u6863\u6B21\u5DEE\u4EC0\u4E48\uFF1F\u63D0\u51FA\u4F60\u771F\u6B63\u7684\u7591\u95EE\uFF0C\u4E0D\u53EA\u786E\u8BA4\u5BBF\u4E3B\u7684\u8BF4\u6CD5\u3002\u4E3B\u7EBF\u9996\u6B21\u5224\u65AD\u548C\u65B9\u6CD5\u65CF\u6539\u53D8\u65F6\u8BFB\u8FD1\u90BB\u8BBA\u6587\u6B63\u6587\u3002\u6839\u636E\u771F\u5B9E\u5931\u8D25\u63D0\u51FA\u89E3\u91CA\u3001\u65B9\u6CD5\u6539\u52A8\u548C\u80FD\u533A\u5206\u5B83\u4EEC\u7684\u9884\u671F\uFF0C\u5176\u4E2D\u81F3\u5C11\u8003\u8651\u4E00\u4E2A\u4E0D\u662F\u4ECE\u5F53\u524D\u505A\u6CD5\u6539\u51FA\u6765\u7684\u65B9\u6848\uFF1B\u6BD4\u8F83\u6574\u4F53\u6536\u76CA\u4E0E\u6210\u672C\uFF0C\u4E0D\u9ED8\u8BA4\u8865\u4E01\u6216\u52A0\u79CD\u5B50\u3002\u5BF9\u7167\u5BFC\u5E08\u7B14\u8BB0\u91CC\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u65CF\uFF0C\u770B\u662F\u5426\u6362\u4E2A\u8BF4\u6CD5\u53C8\u56DE\u6765\u4E86\uFF1B\u5BF9\u7167\u7528\u6237\u8FC7\u53BB\u7684\u7EA0\u6B63\u548C\u6750\u6599\u91CC\u7684\u505A\u6CD5\u66F4\u6B63\uFF0C\u770B\u662F\u5426\u91CD\u72AF\uFF0C\u540C\u4E00\u4E3B\u9898\u53CD\u590D\u51FA\u73B0\u8BF4\u660E\u505A\u6CD5\u8FD8\u6CA1\u6539\u8FC7\u6765\uFF0C\u8BA4\u9519\u4E0D\u7B97\u6539\u6B63\uFF0C\u8981\u770B\u884C\u52A8\u3002
 - **\u8D85\u65F6\u6216\u505C\u6EDE\u65F6**\uFF1A\u5148\u5224\u65AD\u539F\u56E0\uFF1A\u5B9E\u73B0\u6545\u969C\u3001\u8BC4\u4EF7\u5931\u6548\uFF0C\u8FD8\u662F\u65B9\u6CD5\u5047\u8BBE\u5931\u8D25\u3002\u7ED9\u51FA\u7EE7\u7EED\u5F53\u524D\u65B9\u6CD5\uFF08\u9644\u7406\u7531\uFF09\u3001\u6362\u65B9\u6CD5\uFF08\u81F3\u5C11\u4E00\u4E2A\u4E0D\u662F\u4ECE\u5F53\u524D\u65B9\u6CD5\u6539\u51FA\u6765\u7684\u65B9\u6CD5\u65CF\uFF0C\u8BF4\u6E05\u4E24\u8FB9\u600E\u4E48\u5BF9\u5E94\uFF09\u3001\u6362\u65B9\u5411\u4E09\u4E2A\u9009\u9879\u5404\u81EA\u7684\u4F9D\u636E\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u4EA4\u7528\u6237\u9009\uFF1B\u4E0D\u80FD\u7528\u201C\u4ECD\u5728\u6388\u6743\u5185\u201D\u66FF\u7528\u6237\u7EED\u63A8\u3002
 - **\u5DE5\u7A0B\u6838\u9A8C**\u53EA\u505A\u4F1A\u6539\u53D8\u5F53\u524D\u51B3\u5B9A\u7684\u90E8\u5206\uFF0C\u4E89\u8BAE\u4E4B\u5916\u4E0D\u5806\u54C8\u5E0C\u3001\u9010\u4F4D\u7B49\u4EF7\u7B49\u68C0\u67E5\u3002\u5173\u952E\u7EF4\u5EA6\u8FDE\u7EED\u4E24\u6B21\u5224\u65AD\u4E0D\u4E86\uFF0C\u5C31\u5B89\u6392\u6700\u80FD\u6D88\u9664\u8FD9\u4E2A\u672A\u77E5\u7684\u53D6\u8BC1\uFF1B\u8BC1\u636E\u5DF2\u591F\u5C31\u7ED9\u7ED3\u8BBA\u3002
 
@@ -14885,12 +14885,14 @@ EVAL\u3001\u8BF4\u660E\u3001\u7ED3\u679C\u548C\u6267\u884C\u8005\u610F\u89C1\u53
 3. **\u516B\u7EF4\u5224\u65AD**\uFF1A\u6309\u7814\u7A76\u6807\u51C6\uFF08\u5B9E\u73B0 1\u20133\uFF0C\u5176\u4F59 1\u20134\uFF09\uFF0C\u5199\u6210 EVAL \u8D70\u52BF\u8868\u7684\u4E00\u884C\uFF08\u65E5\u671F\u3001\u8F6E\u6B21\u3001\u516B\u4E2A\u7B49\u7EA7\u3001\u6700\u5361\u7684\u4E00\u7EF4\uFF09\uFF0C\u8868\u4E0B\u9644\u4F9D\u636E\u3001\u672A\u77E5\u548C\u5171\u540C\u74F6\u9888\u3002\u6700\u5361\u7684\u4E00\u7EF4\u5C31\u662F\u4E0B\u4E00\u8F6E\u7684\u5BF9\u51C6\u3002
 4. **\u4E0B\u4E00\u8F6E\u8BF4\u660E**\uFF1A\u6309\u64CD\u4F5C\u8BF4\u660E\u7684\u8BF4\u660E\u683C\u5F0F\uFF0C\u5F00\u5934\u5199 Author\u3001\u5BF9\u51C6\u3001\u89C1\u5206\u6653\uFF08\u542B\u5F00\u59CB\u65E5\u671F\uFF09\u3001\u89C4\u6A21\u3001\u9884\u6D4B\uFF0C\u7136\u540E\u201C\u4E00\u53E5\u8BDD\uFF1A\u201D\u548C\u201C## \u9884\u671F\u7ED3\u679C\u201D\u3002\u9884\u6D4B\u53EA\u5199\u4E00\u4E2A\u91CF\u548C\u516B\u6210\u628A\u63E1\u7684\u533A\u95F4\uFF0C\u4E0D\u786E\u5B9A\u6027\u653E\u8FDB\u533A\u95F4\u5BBD\u5EA6\uFF0C\u4E0D\u5199\u6761\u4EF6\u6216\u524D\u63D0\uFF1B\u5199\u6E05\u505A\u4EC0\u4E48\u3001\u4E3A\u4EC0\u4E48\u3001\u771F\u5B9E\u7ED3\u679C\u610F\u5473\u7740\u4EC0\u4E48\u3001\u7ED3\u679C\u600E\u6837\u6539\u53D8\u51B3\u5B9A\uFF0C\u4EE5\u53CA\u516C\u5E73\u5BF9\u7167\u3001\u8F93\u5165\u3001\u9884\u7B97\u548C\u4E3A\u4EC0\u4E48\u8DB3\u4EE5\u5206\u51FA\u7ED3\u679C\u3002
 5. **\u7814\u7A76\u72B6\u6001**\uFF1A\u7EA6 300 \u5B57\u767D\u8BDD\uFF0C\u8BA9\u7B2C\u4E00\u6B21\u63A5\u624B\u7684\u4EBA\u770B\u61C2\uFF1A\u73B0\u5728\u5728\u505A\u4EC0\u4E48\u3001\u771F\u5B9E\u7ED3\u679C\u662F\u591A\u5C11\u3001\u610F\u5473\u7740\u4EC0\u4E48\u3001\u5361\u5728\u54EA\u91CC\u3002\u4E3B\u4F1A\u8BDD\u539F\u6837\u66F4\u65B0\u5230\u8EAB\u4EFD\u5361\u3002
-6. **\u5BFC\u5E08\u7B14\u8BB0**\uFF1A\u4F60\u7684\u5224\u65AD\u548C\u62C5\u5FE7\uFF1B\u4E0A\u6B21\u7684\u9884\u6D4B\u6709\u6CA1\u6709\u5151\u73B0\uFF1B\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u65CF\u548C\u539F\u56E0\uFF1B\u4EE5\u201C\u53EF\u8FC1\u79FB\uFF1A\u201D\u5F00\u5934\u5199\u51FA\u80FD\u7528\u5230\u5176\u4ED6\u9879\u76EE\u7684\u8BA4\u8BC6\uFF08\u8DE8\u9879\u76EE\u7ECF\u9A8C\u9875\u6C47\u603B\u8FD9\u4E9B\u884C\uFF09\uFF1B\u201C### \u5F85\u7528\u6237\u51B3\u5B9A\u201D\u5217\u51FA\u53EA\u6709\u7528\u6237\u80FD\u5B9A\u7684\u4E8B\uFF0C\u6CA1\u6709\u5C31\u5199\u201C\u65E0\u201D\u3002\u4E3B\u4F1A\u8BDD\u539F\u6837\u8FFD\u52A0\u5230 MENTOR_NOTES.md\u3002
+6. **\u5BFC\u5E08\u7B14\u8BB0**\uFF1A\u4F60\u7684\u5224\u65AD\u548C\u62C5\u5FE7\uFF1B\u4E0A\u6B21\u7684\u9884\u6D4B\u6709\u6CA1\u6709\u5151\u73B0\uFF1B\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u65CF\u548C\u539F\u56E0\uFF1B\u4EE5\u201C\u53EF\u8FC1\u79FB\uFF08<\u516B\u7EF4\u4E2D\u7684\u4E00\u7EF4>\uFF09\uFF1A\u201D\u5F00\u5934\u5199\u51FA\u80FD\u7528\u5230\u5176\u4ED6\u9879\u76EE\u7684\u8BA4\u8BC6\uFF0C\u62EC\u53F7\u91CC\u5199\u5B83\u4E3B\u8981\u5173\u7CFB\u5230\u54EA\u4E00\u7EF4\uFF08\u8DE8\u9879\u76EE\u7ECF\u9A8C\u9875\u6C47\u603B\u8FD9\u4E9B\u884C\uFF0C\u5E76\u6309\u7EF4\u5EA6\u6311\u7ED9\u5176\u4ED6\u9879\u76EE\u7684\u5BFC\u5E08\uFF09\uFF1B\u201C### \u5F85\u7528\u6237\u51B3\u5B9A\u201D\u5217\u51FA\u53EA\u6709\u7528\u6237\u80FD\u5B9A\u7684\u4E8B\uFF0C\u6CA1\u6709\u5C31\u5199\u201C\u65E0\u201D\u3002\u4E3B\u4F1A\u8BDD\u539F\u6837\u8FFD\u52A0\u5230 MENTOR_NOTES.md\u3002
 \u672B\u5C3E\u6CE8\u660E\u65B9\u6CD5\u7248\u672C\u3001\u5B9E\u9645\u8BFB\u8FC7\u7684\u6587\u4EF6\u548C\u7247\u6BB5\u3001\u7528\u6237\u539F\u8BDD\u7684\u8303\u56F4\u3002
 
 ## \u957F\u671F\u610F\u56FE\u3001\u9009\u9898\u548C\u8BBA\u6587\u8FFD\u8E2A
 
-\u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\u65F6\uFF08\u6750\u6599\u91CC\u4F1A\u5199\uFF09\uFF0C\u6838\u5BF9\u672C\u4EBA\u6765\u6E90\uFF0C\u5728\u5BFC\u5E08\u7B14\u8BB0\u91CC\u8FD4\u56DE\u201C## \u957F\u671F\u610F\u56FE\uFF08YYYY-MM-DD\uFF09\u201D\uFF1A\u957F\u671F\u76EE\u6807\u3001\u5B9E\u9645\u65B9\u6CD5\u548C\u6307\u6807\u662F\u5426\u5BF9\u5F97\u4E0A\u3001\u504F\u79BB\u4ECE\u4F55\u5904\u8FDB\u5165\u3001\u65B0\u610F\u5224\u65AD\u3001\u5F85\u7528\u6237\u51B3\u5B9A\u7684\u4E8B\uFF1B\u5E73\u65F6\u6CBF\u7528\u6700\u8FD1\u4E00\u8282\uFF0C\u5DF2\u95EE\u8FC7\u7684\u4E8B\u8BB0\u4E0B\u56DE\u7B54\uFF0C\u4E0D\u53CD\u590D\u8FFD\u95EE\u3002
+\u6750\u6599\u6CE8\u660E\u5BFC\u5E08\u7B14\u8BB0\u6574\u7406\u5230\u671F\u65F6\uFF0C\u53E6\u8FD4\u56DE\u201C## \u6574\u7406\u540E\u7684\u5BFC\u5E08\u7B14\u8BB0\uFF08YYYY-MM-DD\uFF09\u201D\uFF0C\u4F5C\u4E3A\u5B8C\u6574\u66FF\u6362\u7248\uFF1A\u4FDD\u7559\u6700\u8FD1\u4E00\u8282\u957F\u671F\u610F\u56FE\uFF08\u539F\u6807\u9898\u548C\u65E5\u671F\uFF09\u3001\u88AB\u5426\u6389\u7684\u65B9\u6CD5\u65CF\u548C\u539F\u56E0\u3001\u9884\u6D4B\u4E0E\u5151\u73B0\u7684\u8BB0\u5F55\u3001\u4ECD\u672A\u89E3\u51B3\u7684\u62C5\u5FE7\u548C\u7591\u95EE\u4EE5\u53CA\u5DF2\u6709\u7684\u7B54\u590D\u3001\u5168\u90E8\u53EF\u8FC1\u79FB\u8BA4\u8BC6\uFF08\u5199\u6210\u201C\u53EF\u8FC1\u79FB\uFF08\u7EF4\u5EA6\uFF0C\u539F\u65E5\u671F\uFF09\uFF1A\u201D\uFF09\u548C\u201C### \u5F85\u7528\u6237\u51B3\u5B9A\u201D\uFF1B\u5220\u6389\u5DF2\u88AB\u63A8\u7FFB\u6216\u91CD\u590D\u7684\u5224\u65AD\uFF0C\u4EE5\u53CA\u5DF2\u7ECF\u5199\u8FDB\u8F6E\u6B21\u7ED3\u679C\u7684\u8FC7\u7A0B\u53D9\u8FF0\u3002
+
+\u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\u65F6\uFF08\u6750\u6599\u91CC\u4F1A\u5199\uFF09\uFF0C\u6838\u5BF9\u672C\u4EBA\u6765\u6E90\uFF0C\u5728\u5BFC\u5E08\u7B14\u8BB0\u91CC\u8FD4\u56DE\u201C## \u957F\u671F\u610F\u56FE\uFF08YYYY-MM-DD\uFF09\u201D\uFF0C\u5F00\u5934\u4E24\u8282\u662F\u201C### \u6838\u5FC3\u9700\u6C42\u201D\u548C\u201C### \u7EA6\u675F\u201D\uFF0C\u6BCF\u6761\u4E00\u884C\uFF0C\u6CE8\u660E\u51FA\u81EA\u7528\u6237\u54EA\u5929\u7684\u539F\u8BDD\uFF08Dove \u4F1A\u628A\u8FD9\u4E24\u8282\u5728\u6BCF\u6B21\u4F1A\u8BDD\u5F00\u59CB\u548C\u538B\u7F29\u540E\u9001\u7ED9\u5BBF\u4E3B\uFF0C\u5199\u6210\u5BBF\u4E3B\u7167\u7740\u5C31\u80FD\u505A\u7684\u8BDD\uFF09\uFF1B\u4E4B\u540E\u5199\uFF1A\u957F\u671F\u76EE\u6807\u3001\u5B9E\u9645\u65B9\u6CD5\u548C\u6307\u6807\u662F\u5426\u5BF9\u5F97\u4E0A\u3001\u504F\u79BB\u4ECE\u4F55\u5904\u8FDB\u5165\u3001\u65B0\u610F\u5224\u65AD\u3001\u5F85\u7528\u6237\u51B3\u5B9A\u7684\u4E8B\uFF1B\u5E73\u65F6\u6CBF\u7528\u6700\u8FD1\u4E00\u8282\uFF0C\u5DF2\u95EE\u8FC7\u7684\u4E8B\u8BB0\u4E0B\u56DE\u7B54\uFF0C\u4E0D\u53CD\u590D\u8FFD\u95EE\u3002
 
 \u9009\u9898\u672A\u5B9A\u65F6\uFF0C\u6309\u9009\u9898\u6807\u51C6\u548C\u7814\u7A76\u6807\u51C6\u7684\u201C\u9009\u9898\u4E0E\u65B0\u610F\u201D\u53D6\u8BC1\u3001\u627E\u7F3A\u53E3\u3001\u6BD4\u8F83\u5019\u9009\uFF0C\u4E00\u8F6E\u7ED9\u51FA\u6700\u4F73\u63A8\u8350\u8BA9\u7528\u6237\u5B9A\u4E3B\u7EBF\uFF0C\u4E0D\u4EE5\u5B8C\u6574\u7406\u8BBA\u5F00\u9898\u62D6\u4F4F\u63A8\u8350\u3002
 
@@ -15638,7 +15640,7 @@ function writeFileSetTransaction(entries, options2 = {}) {
   try {
     for (const [index, entry] of entries.entries()) {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error(`Transactional write entry ${index} must be an object.`);
-      const unknownFields = Object.keys(entry).filter((field) => !ENTRY_FIELDS.has(field));
+      const unknownFields = Object.keys(entry).filter((field2) => !ENTRY_FIELDS.has(field2));
       if (unknownFields.length > 0) throw new Error(`Transactional write entry ${index} uses unsupported fields: ${unknownFields.join(", ")}.`);
       const anchor = anchorFor(entry.root);
       const relativePath = anchor.normalize(entry.relativePath, entry.label ?? "Transactional write path");
@@ -16734,8 +16736,8 @@ function scanNewLines(file, start, fsOps, onLine, deadline) {
           break;
         }
         if (!skipping && carried + newline - from <= MAX_LINE) {
-          const line = carried ? Buffer.concat([...carry, chunk.subarray(from, newline)]) : chunk.subarray(from, newline);
-          onLine(line.toString("utf8"));
+          const line2 = carried ? Buffer.concat([...carry, chunk.subarray(from, newline)]) : chunk.subarray(from, newline);
+          onLine(line2.toString("utf8"));
         }
         carry = [];
         carried = 0;
@@ -16754,10 +16756,10 @@ function insideRoot(record, root) {
   const relative = path9.relative(root, record.cwd);
   return !(relative === ".." || relative.startsWith(`..${path9.sep}`) || path9.isAbsolute(relative));
 }
-function bump(found, bucket, field, amount = 1) {
+function bump(found, bucket, field2, amount = 1) {
   if (!amount) return;
   const counts = found.buckets[bucket] ?? (found.buckets[bucket] = {});
-  counts[field] = (counts[field] ?? 0) + amount;
+  counts[field2] = (counts[field2] ?? 0) + amount;
 }
 function mark(found, key, time) {
   if (!(found.marks[key] <= time)) found.marks[key] = time;
@@ -16765,14 +16767,14 @@ function mark(found, key, time) {
 function occurrences(text, needle) {
   return text.split(needle).length - 1;
 }
-function collectActivity(line, root, found, state2) {
-  const compaction = line.includes('"compact_boundary"');
-  const userText = line.includes('"type":"user"') && !line.includes('"tool_use_id"');
-  const assistant = line.includes('"type":"assistant"');
+function collectActivity(line2, root, found, state2) {
+  const compaction = line2.includes('"compact_boundary"');
+  const userText = line2.includes('"type":"user"') && !line2.includes('"tool_use_id"');
+  const assistant = line2.includes('"type":"assistant"');
   if (!compaction && !userText && !assistant) return;
   let record;
   try {
-    record = JSON.parse(line);
+    record = JSON.parse(line2);
   } catch {
     return;
   }
@@ -16817,7 +16819,7 @@ function collectActivity(line, root, found, state2) {
 function mergeBuckets(target, source) {
   for (const [bucket, counts] of Object.entries(source ?? {})) {
     const into = target[bucket] ?? (target[bucket] = {});
-    for (const field of ACTIVITY_FIELDS) if (counts[field]) into[field] = (into[field] ?? 0) + counts[field];
+    for (const field2 of ACTIVITY_FIELDS) if (counts[field2]) into[field2] = (into[field2] ?? 0) + counts[field2];
   }
   return target;
 }
@@ -16825,11 +16827,11 @@ function mergeMarks(target, source) {
   for (const [key, time] of Object.entries(source ?? {})) if (!(target[key] <= time)) target[key] = time;
   return target;
 }
-function collect(line, session, root, found) {
-  if (!line.includes('"user"') || line.includes('"tool_use_id"')) return;
+function collect(line2, session, root, found) {
+  if (!line2.includes('"user"') || line2.includes('"tool_use_id"')) return;
   let record;
   try {
-    record = JSON.parse(line);
+    record = JSON.parse(line2);
   } catch {
     return;
   }
@@ -16923,7 +16925,7 @@ function refreshActivity(project, options2 = {}) {
     }
     const found = { buckets: {}, marks: {} };
     const state2 = { evidence: Boolean(resume.evidence) };
-    const offset = scanNewLines(file, resume.offset, fsOps, (line) => collectActivity(line, root, found, state2), deadline);
+    const offset = scanNewLines(file, resume.offset, fsOps, (line2) => collectActivity(line2, root, found, state2), deadline);
     files[file] = { offset, buckets: mergeBuckets(structuredClone(resume.buckets ?? {}), found.buckets), marks: mergeMarks({ ...resume.marks }, found.marks), evidence: state2.evidence };
     if (offset < size) pending += size - offset;
   }
@@ -16968,7 +16970,7 @@ function refreshUserOriginals(project, options2 = {}) {
         continue;
       }
       const found = { entries: [], short: 0 };
-      const offset = Date.now() < deadline ? scanNewLines(file, resume.offset, fsOps, (line) => collect(line, name.slice(0, 8), root, found), deadline) : resume.offset;
+      const offset = Date.now() < deadline ? scanNewLines(file, resume.offset, fsOps, (line2) => collect(line2, name.slice(0, 8), root, found), deadline) : resume.offset;
       files[file] = { offset, entries: [...resume.entries, ...found.entries], short: resume.short + found.short };
       if (offset < size) pending += size - offset;
     }
@@ -17066,23 +17068,83 @@ function parseTransferable(text = "") {
   const items = [];
   let date = null;
   let fence = null;
-  for (const line of String(text).split(/\r?\n/u)) {
-    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    const marker = line2.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
     if (marker) {
       if (!fence) fence = marker;
       else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
       continue;
     }
     if (fence) continue;
-    const heading = line.match(/^\s*#{1,6}\s+(.+)$/u);
+    const heading = line2.match(/^\s*#{1,6}\s+(.+)$/u);
     if (heading) {
       date = validDate(heading[1].match(/\d{4}-\d{2}-\d{2}/u)?.[0]) ?? date;
       continue;
     }
-    const explicit = line.match(/^\s*(?:[-*]\s*)?(?:\*\*)?日期(?:\*\*)?\s*[:：]\s*(\d{4}-\d{2}-\d{2})/u)?.[1];
+    const explicit = line2.match(/^\s*(?:[-*]\s*)?(?:\*\*)?日期(?:\*\*)?\s*[:：]\s*(\d{4}-\d{2}-\d{2})/u)?.[1];
     if (explicit) date = validDate(explicit) ?? date;
-    const item = line.match(/^\s*(?:[-*+]\s*|\d+[.)]\s+)?\**\s*可迁移\s*\**\s*[:：]\s*(.+?)\s*$/u)?.[1];
-    if (item) items.push({ date, text: item.replace(/\*\*/gu, "").trim() });
+    const item = line2.match(/^\s*(?:[-*+]\s*|\d+[.)]\s+)?\**\s*可迁移\s*(?:[（(]([^）)]{0,40})[）)])?\s*\**\s*[:：]\s*(.+?)\s*$/u);
+    if (item) {
+      const note = item[1] ?? "";
+      items.push({
+        date: validDate(note.match(/\d{4}-\d{2}-\d{2}/u)?.[0]) ?? date,
+        dimension: dimensionOf(note),
+        text: item[2].replace(/\*\*/gu, "").trim()
+      });
+    }
+  }
+  return items;
+}
+var DIMENSION_WORDS = Object.freeze({
+  \u95EE\u9898\u4EF7\u503C: /问题价值|价值|意义|应用场景|需求/u,
+  \u521B\u65B0: /创新|新意|近邻|首次|差异化/u,
+  \u673A\u5236\u4E0E\u7406\u8BBA: /机制|理论|原理|因果|命题|解释/u,
+  \u65B9\u6CD5\u8D28\u91CF\u4E0E\u53EF\u884C\u6027: /方法|可行|约束|优化|求解|收敛|初始化|表示/u,
+  \u6570\u636E\u4E0E\u8BC4\u4EF7: /评价|评测|指标|协议|分母|测试集|基准|标注|数据/u,
+  \u5B9E\u73B0: /实现|代码|接口|执行器|管线|工程/u,
+  \u5B9E\u9A8C\u4E0E\u8BC1\u636E\u4EF7\u503C: /实验|证据|对照|消融|规模|样本|显著/u,
+  \u8868\u8FBE\u4E0E\u4EA4\u4ED8: /表达|交付|写作|论文|摘要|图注|稿/u
+});
+var DIMENSION_SHORT = Object.freeze({ \u95EE\u9898: "\u95EE\u9898\u4EF7\u503C", \u65B0\u610F: "\u521B\u65B0", \u673A\u5236: "\u673A\u5236\u4E0E\u7406\u8BBA", \u7406\u8BBA: "\u673A\u5236\u4E0E\u7406\u8BBA", \u65B9\u6CD5: "\u65B9\u6CD5\u8D28\u91CF\u4E0E\u53EF\u884C\u6027", \u53EF\u884C\u6027: "\u65B9\u6CD5\u8D28\u91CF\u4E0E\u53EF\u884C\u6027", \u8BC4\u4EF7: "\u6570\u636E\u4E0E\u8BC4\u4EF7", \u6570\u636E: "\u6570\u636E\u4E0E\u8BC4\u4EF7", \u5B9E\u9A8C: "\u5B9E\u9A8C\u4E0E\u8BC1\u636E\u4EF7\u503C", \u8BC1\u636E: "\u5B9E\u9A8C\u4E0E\u8BC1\u636E\u4EF7\u503C", \u8868\u8FBE: "\u8868\u8FBE\u4E0E\u4EA4\u4ED8", \u4EA4\u4ED8: "\u8868\u8FBE\u4E0E\u4EA4\u4ED8" });
+function dimensionOf(text) {
+  const value2 = String(text ?? "");
+  const full = Object.keys(DIMENSION_WORDS).find((name) => value2.includes(name));
+  if (full) return full;
+  const short = Object.keys(DIMENSION_SHORT).find((name) => value2.includes(name));
+  return short ? DIMENSION_SHORT[short] : null;
+}
+function bigrams(text) {
+  const characters = Array.from(String(text ?? "").replace(/[\s，。；：、“”‘’（）()《》,.;:!?！？\-—]/gu, ""));
+  const set = /* @__PURE__ */ new Set();
+  for (let index = 0; index + 1 < characters.length; index += 1) set.add(characters[index] + characters[index + 1]);
+  return set;
+}
+function relevantTransferable(items, { project = null, dimension = null, text = "", limit = 6 } = {}) {
+  const plan = bigrams(text);
+  const dated = items.filter((item) => item.project !== project);
+  const dates = dated.map((item) => item.date ?? "").sort();
+  const scored = dated.map((item, index) => {
+    let score = 0;
+    if (dimension && item.dimension === dimension) score += 3;
+    else if (dimension && !item.dimension && DIMENSION_WORDS[dimension]?.test(item.text)) score += 2;
+    if (plan.size) {
+      const words = bigrams(item.text);
+      let shared = 0;
+      for (const pair of words) if (plan.has(pair)) shared += 1;
+      score += words.size ? 10 * shared / Math.sqrt(words.size * plan.size) : 0;
+    }
+    const rank = dates.length > 1 ? dates.indexOf(item.date ?? "") / (dates.length - 1) : 0;
+    return { item, score, recency: rank, index };
+  });
+  const relevant = scored.filter((entry) => entry.score > 0).sort((left, right) => right.score + right.recency - (left.score + left.recency));
+  const picked = relevant.length ? relevant : scored.sort((left, right) => String(right.item.date ?? "").localeCompare(String(left.item.date ?? "")));
+  return picked.slice(0, limit).map((entry) => entry.item);
+}
+function parseCrossProjectExperience(text = "") {
+  const items = [];
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    const match = line2.match(/^- (\d{4}-\d{2}-\d{2}|未注明日期) · ([^：（]+?)(?:（([^）]+)）)?：(.+)$/u);
+    if (match) items.push({ date: match[1] === "\u672A\u6CE8\u660E\u65E5\u671F" ? null : match[1], project: match[2], dimension: match[3] ?? null, text: match[4] });
   }
   return items;
 }
@@ -17104,7 +17166,7 @@ function renderCrossProjectExperience(items) {
     ""
   ];
   if (!items.length) lines.push("\u8FD8\u6CA1\u6709\u5BFC\u5E08\u6807\u8FC7\u53EF\u8FC1\u79FB\u7684\u8BA4\u8BC6\u3002");
-  for (const item of items) lines.push(`- ${item.date ?? "\u672A\u6CE8\u660E\u65E5\u671F"} \xB7 ${item.project}\uFF1A${item.text}`);
+  for (const item of items) lines.push(`- ${item.date ?? "\u672A\u6CE8\u660E\u65E5\u671F"} \xB7 ${item.project}${item.dimension ? `\uFF08${item.dimension}\uFF09` : ""}\uFF1A${item.text}`);
   return `${lines.join("\n")}
 `;
 }
@@ -17127,22 +17189,22 @@ function refreshCrossProjectExperience(roots, options2 = {}) {
   return { items: content, written };
 }
 var CORRECTION_TOPICS = Object.freeze([
-  { id: "plain", label: "\u8BF4\u4EBA\u8BDD\u3001\u8BB2\u6E05\u695A", pattern: /说人话|看不懂|听不懂|大白话|白话|第一次接手|讲清楚|说清楚/u },
-  { id: "drift", label: "\u8DD1\u504F\u3001\u6362\u6210\u522B\u7684\u95EE\u9898", pattern: /跑偏|带偏|偏了|偏离|等价成|主问题|不是我要的|离题|答非所问/u },
-  { id: "limits", label: "\u7ED9\u81EA\u5DF1\u8BBE\u9650", pattern: /给自己设|自设|套授权|不要给自己|别给自己|设那[么麽]多|自己加的限制|不需要授权/u },
-  { id: "scale", label: "\u5B9E\u9A8C\u592A\u5C0F", pattern: /小规模|规模太小|样本太少|跑全量/u },
-  { id: "engineering", label: "\u53D8\u6210\u5DE5\u7A0B", pattern: /变成工程|工程化|不是科研|工程上的/u },
-  { id: "seeds", label: "\u8865\u79CD\u5B50\u3001\u52A0\u6B65\u6570", pattern: /种子|seed/iu },
-  { id: "facts", label: "\u83AB\u987B\u6709\u3001\u7F16\u9020", pattern: /莫须有|编造|瞎说|胡说|乱说|没有依据/u },
-  { id: "generality", label: "\u901A\u7528\u548C\u6CDB\u5316", pattern: /泛化|狭窄|局限成/u },
-  { id: "finish", label: "\u6CA1\u505A\u5B8C\u3001\u534A\u9014\u6536\u7A84", pattern: /没做完|赶紧做完|半途|收窄/u },
-  { id: "method-first", label: "\u5148\u8BB2\u6E05\u95EE\u9898\u548C\u65B9\u6CD5", pattern: /现有方法为什么不好|要解决什么问题|先回答我/u },
-  { id: "stall", label: "\u505C\u6EDE\u3001\u6CA1\u8FDB\u5C55", pattern: /停滞|没进展|没有进展|进展缓慢|一直没有|原地/u }
+  { id: "plain", short: "\u8BF4\u4EBA\u8BDD", label: "\u8BF4\u4EBA\u8BDD\u3001\u8BB2\u6E05\u695A", pattern: /说人话|看不懂|听不懂|大白话|白话|第一次接手|讲清楚|说清楚/u },
+  { id: "drift", short: "\u8DD1\u504F", label: "\u8DD1\u504F\u3001\u6362\u6210\u522B\u7684\u95EE\u9898", pattern: /跑偏|带偏|偏了|偏离|等价成|主问题|不是我要的|离题|答非所问/u },
+  { id: "limits", short: "\u8BBE\u9650", label: "\u7ED9\u81EA\u5DF1\u8BBE\u9650", pattern: /给自己设|自设|套授权|不要给自己|别给自己|设那[么麽]多|自己加的限制|不需要授权/u },
+  { id: "scale", short: "\u5B9E\u9A8C\u592A\u5C0F", label: "\u5B9E\u9A8C\u592A\u5C0F", pattern: /小规模|规模太小|样本太少|跑全量/u },
+  { id: "engineering", short: "\u53D8\u6210\u5DE5\u7A0B", label: "\u53D8\u6210\u5DE5\u7A0B", pattern: /变成工程|工程化|不是科研|工程上的/u },
+  { id: "seeds", short: "\u8865\u79CD\u5B50", label: "\u8865\u79CD\u5B50\u3001\u52A0\u6B65\u6570", pattern: /种子|seed/iu },
+  { id: "facts", short: "\u83AB\u987B\u6709", label: "\u83AB\u987B\u6709\u3001\u7F16\u9020", pattern: /莫须有|编造|瞎说|胡说|乱说|没有依据/u },
+  { id: "generality", short: "\u901A\u7528\u548C\u6CDB\u5316", label: "\u901A\u7528\u548C\u6CDB\u5316", pattern: /泛化|狭窄|局限成/u },
+  { id: "finish", short: "\u6CA1\u505A\u5B8C", label: "\u6CA1\u505A\u5B8C\u3001\u534A\u9014\u6536\u7A84", pattern: /没做完|赶紧做完|半途|收窄/u },
+  { id: "method-first", short: "\u5148\u8BB2\u6E05\u95EE\u9898\u548C\u65B9\u6CD5", label: "\u5148\u8BB2\u6E05\u95EE\u9898\u548C\u65B9\u6CD5", pattern: /现有方法为什么不好|要解决什么问题|先回答我/u },
+  { id: "stall", short: "\u505C\u6EDE", label: "\u505C\u6EDE\u3001\u6CA1\u8FDB\u5C55", pattern: /停滞|没进展|没有进展|进展缓慢|一直没有|原地/u }
 ]);
 function ownEntries(text) {
   const entries = [];
-  for (const line of String(text).split(/\r?\n/u)) {
-    const match = line.match(/^- (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) · 本人 · (.*)$/u);
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    const match = line2.match(/^- (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) · 本人 · (.*)$/u);
     if (!match) continue;
     const at = Date.parse(`${match[1]}T${match[2]}:00Z`);
     entries.push({ date: match[1], time: `${match[1]} ${match[2]}`, at, day: dayString(at), text: match[3] });
@@ -17438,7 +17500,7 @@ function parseDoveCurrentRound(card = "") {
 }
 function separateResearchState(card) {
   const lines = card.split(/\r?\n/u);
-  const start = lines.findIndex((line) => /^(Research state|研究状态)$/iu.test(line.match(CARD_FIELD)?.[1] ?? ""));
+  const start = lines.findIndex((line2) => /^(Research state|研究状态)$/iu.test(line2.match(CARD_FIELD)?.[1] ?? ""));
   if (start === -1) return { state: "", rest: card };
   let end = start + 1;
   while (end < lines.length && !CARD_FIELD.test(lines[end])) end += 1;
@@ -17974,8 +18036,8 @@ function inspectRegisteredProjects(options2 = {}) {
 }
 
 // src/core/dashboard-data.mjs
-import fs17 from "node:fs";
-import path16 from "node:path";
+import fs18 from "node:fs";
+import path17 from "node:path";
 
 // src/core/mentor-intent.mjs
 function dateIn(text) {
@@ -17988,17 +18050,17 @@ function latestLongTermIntent(text = "") {
   const headings = [];
   const parents = [];
   let fence = null;
-  for (const [index, line] of lines.entries()) {
-    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+  for (const [index, line2] of lines.entries()) {
+    const marker = line2.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
     if (marker) {
       if (!fence) fence = marker;
       else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
       continue;
     }
     if (fence) continue;
-    const match = line.match(/^ {0,3}(#{1,6})\s+(.+?)\s*#*\s*$/u);
+    const match = line2.match(/^ {0,3}(#{1,6})\s+(.+?)\s*#*\s*$/u);
     if (!match) {
-      const explicitDate = line.match(/^\s*(?:[-*]\s*)?(?:\*\*)?日期(?:\*\*)?\s*[:：]\s*(\d{4}-\d{2}-\d{2})\s*$/u)?.[1];
+      const explicitDate = line2.match(/^\s*(?:[-*]\s*)?(?:\*\*)?日期(?:\*\*)?\s*[:：]\s*(\d{4}-\d{2}-\d{2})\s*$/u)?.[1];
       if (parents.length && explicitDate) parents.at(-1).bodyDate ??= dateIn(explicitDate);
       continue;
     }
@@ -18019,18 +18081,145 @@ function latestLongTermIntent(text = "") {
   return latest;
 }
 var LONG_TERM_INTENT_ROUNDS = 3;
-function longTermIntentDue(intent, finishedRounds = []) {
+var LONG_TERM_INTENT_MESSAGES = 30;
+function longTermIntentDue(intent, finishedRounds = [], newOwnMessages = 0) {
   if (!intent?.date || dateIn(intent.date) !== intent.date) return true;
   const since = finishedRounds.filter((round) => round?.day && round.day > intent.date);
-  return since.length >= LONG_TERM_INTENT_ROUNDS || since.some((round) => round.kind === "decision");
+  return since.length >= LONG_TERM_INTENT_ROUNDS || since.some((round) => round.kind === "decision") || newOwnMessages >= LONG_TERM_INTENT_MESSAGES;
+}
+function ownMessagesSince(entries, date) {
+  return entries.filter((entry) => !date || entry.day && entry.day > date).length;
+}
+function coreNeedsOf(intent, limit = 900) {
+  if (!intent?.text) return null;
+  const lines = intent.text.split(/\r?\n/u);
+  const section = (title) => {
+    const start = lines.findIndex((line2) => new RegExp(`^\\s{0,3}#{2,6}\\s*${title}`, "u").test(line2));
+    if (start === -1) return null;
+    const end = lines.findIndex((line2, index) => index > start && /^\s{0,3}#{2,6}\s/u.test(line2));
+    const body = lines.slice(start + 1, end === -1 ? void 0 : end).join("\n").trim();
+    return body || null;
+  };
+  const needs = section("\u6838\u5FC3\u9700\u6C42");
+  const limits = section("\u7EA6\u675F");
+  if (needs || limits) return [needs ? `\u6838\u5FC3\u9700\u6C42\uFF1A
+${needs}` : null, limits ? `\u7EA6\u675F\uFF1A
+${limits}` : null].filter(Boolean).join("\n");
+  const first = intent.text.trim().split(/\n\s*\n/u)[0].trim();
+  const characters = Array.from(first);
+  const short = Math.min(limit, 400);
+  return characters.length > short ? `${characters.slice(0, short).join("")}\u2026` : characters.join("");
 }
 function finishedRoundsOf(rounds = [], dayOf) {
   return rounds.filter((round) => round.result).map((round) => ({ day: dayOf(round.result.createdAt ?? round.result.mtime), kind: round.result.verdictKind }));
 }
 
-// src/core/round-state.mjs
+// src/core/practice.mjs
 import fs16 from "node:fs";
 import path15 from "node:path";
+var PRACTICE_PATH = ".dove/research/PRACTICE.md";
+var MAX_BYTES = 512 * 1024;
+var PRACTICE_TOPICS = Object.freeze([
+  ...CORRECTION_TOPICS.map((topic) => ({ id: topic.id, short: topic.short, pattern: topic.pattern })),
+  { id: "writing", short: "\u5199\u7A3F\u548C\u56FE", pattern: /论文|摘要|引言|图注|画图|配图|作图|版面|排版|行话|写作|稿子|稿件|措辞|投稿/u },
+  { id: "other", short: "\u5176\u4ED6", pattern: null }
+]);
+var CRITIQUE = /不|别|没|又|还是|为什么|怎么|错|应该/u;
+function practiceTopicNames() {
+  return PRACTICE_TOPICS.map((topic) => topic.short);
+}
+function topicOfEntry(entry) {
+  const named = String(entry?.topic ?? "");
+  const byShort = PRACTICE_TOPICS.find((topic) => named === topic.short) ?? PRACTICE_TOPICS.find((topic) => topic.id !== "other" && named.includes(topic.short));
+  if (byShort) return byShort;
+  const byLabel = CORRECTION_TOPICS.find((topic) => topic.label.split("\u3001").some((part) => named.includes(part)));
+  return (byLabel && PRACTICE_TOPICS.find((topic) => topic.id === byLabel.id)) ?? PRACTICE_TOPICS.find((topic) => topic.id === "other");
+}
+function topicsOfMessage(text) {
+  const value2 = String(text ?? "");
+  return PRACTICE_TOPICS.filter((topic) => topic.pattern?.test(value2));
+}
+function correctionTopics(text) {
+  const value2 = String(text ?? "");
+  if (!CRITIQUE.test(value2)) return [];
+  return topicsOfMessage(value2);
+}
+function field(fields, name) {
+  const found = fields.find((item) => new RegExp(`^${name}\\s*[:\uFF1A]`, "u").test(item));
+  return found ? found.replace(/^[^:：]+[:：]\s*/u, "").trim() : null;
+}
+function parsePractice(text = "") {
+  const entries = [];
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    const match = line2.match(/^\s*[-*]\s*(\d{4}-\d{2}-\d{2})\s*[·•|]\s*(.+?)\s*$/u);
+    if (!match) continue;
+    const fields = match[2].split(/\s*[·•]\s*/u);
+    const topic = fields.shift().trim();
+    entries.push({ date: match[1], topic, quote: field(fields, "\u539F\u8BDD"), wrong: field(fields, "\u9519\u5728\u54EA"), next: field(fields, "\u4EE5\u540E") });
+  }
+  return entries.map((entry, index) => ({ ...entry, order: index })).sort((left, right) => right.date.localeCompare(left.date) || right.order - left.order).map(({ order, ...entry }) => entry);
+}
+function readPractice(project, options2 = {}) {
+  const fsOps = options2.fsOps ?? fs16;
+  try {
+    const file = path15.join(project, PRACTICE_PATH);
+    const stat = fsOps.statSync(file);
+    if (!stat.isFile() || stat.size > MAX_BYTES) return [];
+    const fd = fsOps.openSync(file, "r");
+    try {
+      const buffer = Buffer.alloc(stat.size);
+      const count = fsOps.readSync(fd, buffer, 0, buffer.length, 0);
+      return parsePractice(buffer.subarray(0, count).toString("utf8"));
+    } finally {
+      fsOps.closeSync(fd);
+    }
+  } catch {
+    return [];
+  }
+}
+function clip2(text, limit) {
+  const characters = Array.from(String(text ?? ""));
+  return characters.length > limit ? `${characters.slice(0, limit).join("")}\u2026` : characters.join("");
+}
+function line(entry) {
+  const next = entry.next ? `\u4EE5\u540E\uFF1A${clip2(entry.next, 120)}` : entry.wrong ? `\u9519\u5728\uFF1A${clip2(entry.wrong, 120)}` : "";
+  const quote2 = entry.quote ? `\uFF08\u539F\u8BDD\uFF1A${clip2(entry.quote.replace(/^[“"]|[”"]$/gu, ""), 40)}\uFF09` : "";
+  return `- ${entry.date.slice(5)} ${topicOfEntry(entry).short}\uFF1A${next}${quote2}`;
+}
+function practiceContext(entries, limit = 8) {
+  if (!entries.length) return "";
+  return [`\u672C\u9879\u76EE\u7684\u505A\u6CD5\u66F4\u6B63\uFF08\u7528\u6237\u7EA0\u6B63\u8FC7\u7684\u505A\u6CD5\uFF0C\u65B0\u7684\u5728\u524D\uFF1B\u5168\u90E8\u89C1 ${PRACTICE_PATH}\uFF09\uFF1A`, ...entries.slice(0, limit).map(line)].join("\n");
+}
+function practiceForMessage(entries, text, limit = 5) {
+  const topics = new Set(topicsOfMessage(text).map((topic) => topic.id));
+  if (!topics.size) return "";
+  const matched = entries.filter((entry) => topics.has(topicOfEntry(entry).id)).slice(0, limit);
+  if (!matched.length) return "";
+  return ["\u548C\u8FD9\u6761\u6D88\u606F\u76F8\u5173\u7684\u505A\u6CD5\u66F4\u6B63\uFF08\u672C\u9879\u76EE\u7528\u6237\u7EA0\u6B63\u8FC7\u7684\u505A\u6CD5\uFF09\uFF1A", ...matched.map(line)].join("\n");
+}
+function practiceOnTopic(entries, id, limit = 5) {
+  const matched = entries.filter((entry) => topicOfEntry(entry).id === id).slice(0, limit);
+  return matched.length ? matched.map(line).join("\n") : "";
+}
+var REFLECTIONS_DIR = ".dove/research/reflections";
+var REFLECTION_REQUEST = /反思|复盘|总结(?:一下)?(?:经验|教训)|吸取教训|教训是什么|经验教训/u;
+function reflectionRequested(text) {
+  return REFLECTION_REQUEST.test(String(text ?? ""));
+}
+function reflectionGuidance() {
+  return `\u7528\u6237\u8981\u4F60\u53CD\u601D\u3002\u5199\u5230 ${REFLECTIONS_DIR}/YYYY-MM-DD-\u4E3B\u9898.md\uFF1A\u54EA\u91CC\u51FA\u4E86\u95EE\u9898\u3001\u4E3A\u4EC0\u4E48\u3001\u4F9D\u636E\uFF08\u539F\u8BDD\u3001\u8BB0\u5F55\u6216\u7ED3\u679C\uFF09\u3001\u4EE5\u540E\u600E\u4E48\u505A\uFF1B\u7ED3\u5C3E\u201C\u4EE5\u540E\u600E\u4E48\u505A\u201D\u7684\u6BCF\u4E00\u6761\uFF0C\u540C\u65F6\u6309\u505A\u6CD5\u66F4\u6B63\u7684\u683C\u5F0F\u8FFD\u52A0\u5230 ${PRACTICE_PATH}\uFF0CDove \u4E4B\u540E\u4F1A\u5728\u4F1A\u8BDD\u5F00\u59CB\u3001\u538B\u7F29\u540E\u548C\u76F8\u5173\u7684\u6D88\u606F\u91CC\u628A\u8FD9\u4E9B\u884C\u9001\u56DE\u6765\u3002\u53EA\u5199\u80FD\u6539\u53D8\u4EE5\u540E\u505A\u6CD5\u7684\u7ED3\u8BBA\uFF0C\u4E0D\u5199\u68C0\u8BA8\u5957\u8BDD\u3002`;
+}
+function reflectionReminder(missing) {
+  return `\u7528\u6237\u8FD9\u4E00\u8F6E\u8981\u4F60\u53CD\u601D\uFF0C\u4F46\u8FD8\u6CA1\u6709${missing.join("\uFF0C\u4E5F\u6CA1\u6709")}\u3002${reflectionGuidance()}\u8FD9\u6BB5\u8BDD\u662F Dove \u6839\u636E\u7528\u6237\u6D88\u606F\u81EA\u52A8\u63D0\u51FA\u7684\uFF0C\u4E0D\u662F\u7528\u6237\u521A\u8BF4\u7684\u3002`;
+}
+function correctionReminder(topics) {
+  const names = topics.map((topic) => topic.short).join("\u3001");
+  return `\u7528\u6237\u8FD9\u6761\u6D88\u606F\u50CF\u662F\u5BF9\u505A\u6CD5\u7684\u7EA0\u6B63\uFF08${names}\uFF09\u3002\u6309\u64CD\u4F5C\u8BF4\u660E\u201C\u7528\u6237\u7EA0\u6B63\u4E4B\u540E\u201D\u8FD9\u4E00\u65F6\u523B\uFF0C\u5728 ${PRACTICE_PATH} \u8BB0\u4E00\u884C\uFF1A- YYYY-MM-DD \xB7 \u4E3B\u9898 \xB7 \u539F\u8BDD\uFF1A\u201C\u2026\u2026\u201D \xB7 \u9519\u5728\u54EA\uFF1A\u2026\u2026 \xB7 \u4EE5\u540E\uFF1A\u2026\u2026\u3002\u4E3B\u9898\u4ECE ${practiceTopicNames().join("\u3001")} \u91CC\u9009\uFF1B\u53EA\u8BB0\u8FD9\u6B21\u5B9E\u9645\u9519\u5728\u54EA\u3001\u4EE5\u540E\u5177\u4F53\u600E\u4E48\u505A\uFF0C\u4E0D\u6269\u6210\u666E\u904D\u7981\u4EE4\u3002\u5982\u679C\u8FD9\u6761\u5176\u5B9E\u4E0D\u662F\u7EA0\u6B63\uFF0C\u5C31\u4E0D\u7528\u8BB0\u3002\u8FD9\u6BB5\u8BDD\u662F Dove \u6839\u636E\u7528\u6237\u6D88\u606F\u81EA\u52A8\u63D0\u51FA\u7684\uFF0C\u4E0D\u662F\u7528\u6237\u521A\u8BF4\u7684\u3002`;
+}
+
+// src/core/round-state.mjs
+import fs17 from "node:fs";
+import path16 from "node:path";
 var RESEARCH = ".dove/research";
 var ROUND_FILE2 = /^(\d+)[-_](brief|result)\.md$/iu;
 var DAY_MS2 = 864e5;
@@ -18110,23 +18299,23 @@ function localDate(time) {
 function unfencedLines(text, limit = Infinity) {
   const lines = [];
   let fence = null;
-  for (const line of String(text).split(/\r?\n/u)) {
+  for (const line2 of String(text).split(/\r?\n/u)) {
     if (lines.length >= limit) break;
-    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+    const marker = line2.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
     if (marker) {
       if (!fence) fence = marker;
       else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
       lines.push("");
       continue;
     }
-    lines.push(fence ? "" : line);
+    lines.push(fence ? "" : line2);
   }
   return lines;
 }
 function headerField(lines, name) {
   const pattern = new RegExp(`^[ \\t]*(?:[-*][ \\t]*)?\\**[ \\t]*${name}[ \\t]*(?:[\uFF08(][^\uFF09)\\r\\n]{0,30}[\uFF09)])?[ \\t]*\\**[ \\t]*[:\uFF1A][ \\t]*(.*?)[ \\t]*$`, "u");
-  for (const line of lines) {
-    const value2 = line.match(pattern)?.[1]?.replace(/\*\*/gu, "").trim();
+  for (const line2 of lines) {
+    const value2 = line2.match(pattern)?.[1]?.replace(/\*\*/gu, "").trim();
     if (value2) return value2;
   }
   return null;
@@ -18144,16 +18333,16 @@ function plainLine(text, limit = 240) {
   return characters.length > limit ? `${characters.slice(0, limit).join("")}\u2026` : flat;
 }
 function sectionParagraph(lines, pattern) {
-  const start = lines.findIndex((line) => /^\s*#{1,4}\s+/u.test(line) && pattern.test(line));
+  const start = lines.findIndex((line2) => /^\s*#{1,4}\s+/u.test(line2) && pattern.test(line2));
   if (start === -1) return null;
   const body = [];
-  for (const line of lines.slice(start + 1)) {
-    if (/^\s*#{1,4}\s+/u.test(line)) break;
-    if (!line.trim()) {
+  for (const line2 of lines.slice(start + 1)) {
+    if (/^\s*#{1,4}\s+/u.test(line2)) break;
+    if (!line2.trim()) {
       if (body.length) break;
       continue;
     }
-    body.push(line.trim().replace(/^[-*+]\s+/u, ""));
+    body.push(line2.trim().replace(/^[-*+]\s+/u, ""));
   }
   return body.join(" ") || null;
 }
@@ -18363,14 +18552,14 @@ function parseResultHeader(text = "") {
 function parseMarkdownTables(text = "") {
   const tables = [];
   let current = null;
-  const cells = (line) => line.trim().replace(/^\|/u, "").replace(/\|$/u, "").split("|").map((cell) => cell.trim());
-  for (const line of String(text).split(/\r?\n/u)) {
-    if (!/^\s*\|.*\|\s*$/u.test(line)) {
+  const cells = (line2) => line2.trim().replace(/^\|/u, "").replace(/\|$/u, "").split("|").map((cell) => cell.trim());
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    if (!/^\s*\|.*\|\s*$/u.test(line2)) {
       if (current) tables.push(current);
       current = null;
       continue;
     }
-    const row = cells(line);
+    const row = cells(line2);
     if (row.every((cell) => /^:?-+:?$/u.test(cell))) continue;
     if (!current) current = { header: row, rows: [] };
     else current.rows.push(row);
@@ -18403,19 +18592,19 @@ function parseMethodDesign(text = "") {
   let inDesign = false;
   let active = null;
   let fence = null;
-  for (const line of String(text).split(/\r?\n/u)) {
-    const marker = line.match(/^\s*(`{3,}|~{3,})(.*)$/u);
+  for (const line2 of String(text).split(/\r?\n/u)) {
+    const marker = line2.match(/^\s*(`{3,}|~{3,})(.*)$/u);
     if (fence) {
-      if (active) paragraphs[active].push(line);
+      if (active) paragraphs[active].push(line2);
       if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = null;
       continue;
     }
     if (marker) {
       fence = marker[1];
-      if (active) paragraphs[active].push(line);
+      if (active) paragraphs[active].push(line2);
       continue;
     }
-    const heading = line.match(/^\s*(#{1,3})\s+(.+?)\s*#*\s*$/u);
+    const heading = line2.match(/^\s*(#{1,3})\s+(.+?)\s*#*\s*$/u);
     if (!inDesign) {
       if (heading?.[1] === "##" && heading[2] === "\u65B9\u6CD5\u8BBE\u8BA1") inDesign = true;
       continue;
@@ -18425,7 +18614,7 @@ function parseMethodDesign(text = "") {
       active = METHOD_ARGUMENTS.find(([, label]) => label === heading[2])?.[0] ?? (heading[2] === "\u7528\u6237\u7B54\u590D" ? "userReply" : null);
       continue;
     }
-    if (active) paragraphs[active].push(line);
+    if (active) paragraphs[active].push(line2);
   }
   if (!inDesign) return null;
   const fields = Object.fromEntries(Object.entries(paragraphs).map(([key, lines]) => [key, lines.join("\n").trim() || null]));
@@ -18439,27 +18628,27 @@ function parseMentorPending(text = "") {
   let start = -1;
   let level = 0;
   let inline = null;
-  for (const [index, line] of lines.entries()) {
-    const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/u);
+  for (const [index, line2] of lines.entries()) {
+    const heading = line2.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/u);
     if (heading && /待(?:用户|你)决定|等(?:用户|你)定/u.test(heading[2])) {
       start = index;
       level = heading[1].length;
       inline = null;
       continue;
     }
-    const field = line.match(/^\s*(?:[-*]\s*)?\**\s*待(?:用户|你)决定\s*\**\s*[:：]\s*(.*)$/u);
-    if (field) {
+    const field2 = line2.match(/^\s*(?:[-*]\s*)?\**\s*待(?:用户|你)决定\s*\**\s*[:：]\s*(.*)$/u);
+    if (field2) {
       start = -1;
-      inline = field[1];
+      inline = field2[1];
     }
   }
   if (inline !== null) return inline.split(/[；;]/u).map((item) => item.trim()).filter((item) => item && !NOTHING.test(item));
   if (start === -1) return [];
   const items = [];
-  for (const line of lines.slice(start + 1)) {
-    const heading = line.match(/^\s*(#{1,6})\s+/u);
+  for (const line2 of lines.slice(start + 1)) {
+    const heading = line2.match(/^\s*(#{1,6})\s+/u);
     if (heading && heading[1].length <= level) break;
-    const item = line.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/u)?.[1]?.trim();
+    const item = line2.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/u)?.[1]?.trim();
     if (item && !NOTHING.test(item)) items.push(item);
   }
   return items;
@@ -18490,15 +18679,15 @@ function computeOverrun({ due, start, createdAt }, now) {
   return { due, daysPastDue: Math.round((current - dueTime) / DAY_MS2), plannedDays: Math.round(span / DAY_MS2) };
 }
 function inspectRoundState(project, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
-  const research = path15.join(project, RESEARCH);
-  const card = readText2(path15.join(research, "IDENTITY.md"), fsOps, Infinity)?.text ?? "";
+  const fsOps = options2.fsOps ?? fs17;
+  const research = path16.join(project, RESEARCH);
+  const card = readText2(path16.join(research, "IDENTITY.md"), fsOps, Infinity)?.text ?? "";
   const current = card ? parseDoveCurrentRound(card) : null;
   const roundStatus = card ? cardField(card, "Round status") : null;
-  const files = collectRoundFiles(path15.join(research, "rounds"), fsOps);
+  const files = collectRoundFiles(path16.join(research, "rounds"), fsOps);
   const rounds = files.slice(0, options2.maxRounds ?? 12).map((entry) => {
-    const brief = entry.brief ? readText2(path15.join(research, "rounds", entry.brief), fsOps) : null;
-    const result = entry.result ? readText2(path15.join(research, "rounds", entry.result), fsOps) : null;
+    const brief = entry.brief ? readText2(path16.join(research, "rounds", entry.brief), fsOps) : null;
+    const result = entry.result ? readText2(path16.join(research, "rounds", entry.result), fsOps) : null;
     return {
       number: entry.number,
       label: entry.label,
@@ -18513,14 +18702,14 @@ function inspectRoundState(project, options2 = {}) {
   const results = rounds.filter((round) => round.result);
   const lastTwo = results.slice(0, 2);
   const stall = lastTwo.length === 2 && lastTwo.every((round) => round.result.verdictKind === "missed") ? { results: lastTwo.map((round) => round.result.file).reverse(), rounds: lastTwo.map((round) => round.number).reverse() } : null;
-  const evaluation = readText2(path15.join(research, "EVAL.md"), fsOps, 256 * 1024)?.text ?? "";
+  const evaluation = readText2(path16.join(research, "EVAL.md"), fsOps, 256 * 1024)?.text ?? "";
   const mainMetric = parseMainMetric(evaluation);
   const trend = parseTrendTable(evaluation);
   const methodReference = card ? cardField(card, "Method design") : null;
   const methodBrief = methodReference?.match(/rounds\/\d+[-_]brief\.md/iu)?.[0] ?? null;
-  const methodText = methodBrief ? readText2(path15.join(research, methodBrief), fsOps, Infinity)?.text : null;
+  const methodText = methodBrief ? readText2(path16.join(research, methodBrief), fsOps, Infinity)?.text : null;
   const methodDesign = methodText ? parseMethodDesign(methodText) : null;
-  const notes = readText2(path15.join(research, "MENTOR_NOTES.md"), fsOps, MAX_TEXT_BYTES, true)?.text ?? "";
+  const notes = readText2(path16.join(research, "MENTOR_NOTES.md"), fsOps, MAX_TEXT_BYTES, true)?.text ?? "";
   const pending = [];
   if (methodDesign && !methodDesign.userReply) pending.push({ kind: "method-design", text: `\u65B9\u6CD5\u8BBE\u8BA1\uFF08${methodBrief}\uFF09\u8FD8\u6CA1\u6709\u8BB0\u5F55\u7528\u6237\u770B\u8FC7\u540E\u7684\u7B54\u590D\u3002` });
   if (overrun) pending.push({ kind: "overrun", text: `\u7B2C ${currentRound.number} \u8F6E\u8D85\u65F6\uFF1A\u539F\u5B9A ${overrun.due} \u89C1\u5206\u6653\uFF0C\u5DF2\u8FC7 ${overrun.daysPastDue} \u5929\uFF08\u9884\u8BA1 ${overrun.plannedDays} \u5929\uFF09\u3002\u7EE7\u7EED\u5F53\u524D\u65B9\u6CD5\u3001\u6362\u65B9\u6CD5\u8FD8\u662F\u6362\u65B9\u5411\uFF0C\u7B49\u7528\u6237\u5B9A\u3002` });
@@ -18600,22 +18789,22 @@ function reportedNumbers(text) {
 }
 function measuredSection(text) {
   const lines = String(text).split(/\r?\n/u);
-  const start = lines.findIndex((line) => /^\s*#{1,4}\s+.*(?:测到了什么|Measurements)/u.test(line));
+  const start = lines.findIndex((line2) => /^\s*#{1,4}\s+.*(?:测到了什么|Measurements)/u.test(line2));
   if (start === -1) return text;
-  const end = lines.findIndex((line, index) => index > start && /^\s*#{1,4}\s+/u.test(line));
+  const end = lines.findIndex((line2, index) => index > start && /^\s*#{1,4}\s+/u.test(line2));
   return lines.slice(start + 1, end === -1 ? void 0 : end).join("\n");
 }
 function resultProvenance(project, resultFile, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs16;
-  const file = path15.join(project, RESEARCH, resultFile);
+  const fsOps = options2.fsOps ?? fs17;
+  const file = path16.join(project, RESEARCH, resultFile);
   const read = readText2(file, fsOps, MAX_TEXT_BYTES);
   if (!read) return null;
   const key = `${file}:${read.mtime}`;
   if (provenanceCache.has(key)) return provenanceCache.get(key);
   const numbers = reportedNumbers(measuredSection(read.text));
   const links = [...read.text.matchAll(/\]\(([^)\s]+)\)/gu)].map((match) => match[1].split("#")[0]).filter((link) => link && !/^[a-z]+:/iu.test(link) && TEXT_ARTIFACT.test(link));
-  const records = `${path15.join(path15.resolve(project), ".dove")}${path15.sep}`;
-  const artifacts = [...new Set(links.map((link) => path15.resolve(path15.dirname(file), decodeURIComponent(link))))].filter((artifact) => !artifact.startsWith(records)).slice(0, 10);
+  const records = `${path16.join(path16.resolve(project), ".dove")}${path16.sep}`;
+  const artifacts = [...new Set(links.map((link) => path16.resolve(path16.dirname(file), decodeURIComponent(link))))].filter((artifact) => !artifact.startsWith(records)).slice(0, 10);
   const values = [];
   let opened = 0;
   for (const artifact of artifacts) {
@@ -18650,7 +18839,7 @@ function median(values) {
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
-function clip2(text, limit = 60) {
+function clip3(text, limit = 60) {
   if (text == null) return null;
   const characters = Array.from(String(text));
   return characters.length > limit ? `${characters.slice(0, limit).join("")}\u2026` : characters.join("");
@@ -18700,7 +18889,7 @@ function roundLedger(project, options2 = {}) {
     const { start, end } = spans.get(round.number);
     const open = !round.result;
     const within = (time) => time >= start && (time < end || open && time < end + ACTIVITY_BUCKET_MS);
-    const sum = (field) => buckets.reduce((total, [time, counts]) => total + (within(time) ? counts[field] ?? 0 : 0), 0);
+    const sum = (field2) => buckets.reduce((total, [time, counts]) => total + (within(time) ? counts[field2] ?? 0 : 0), 0);
     const chars = sum("chars");
     const calibration = calibrateRound(round.brief.prediction, round.result?.actual);
     return {
@@ -18716,8 +18905,8 @@ function roundLedger(project, options2 = {}) {
       verdict: round.result?.verdict ?? null,
       verdictKind: round.result?.verdictKind ?? null,
       verdictLabel: round.result ? VERDICT_LABELS[round.result.verdictKind] ?? (round.result.verdict ? "\u5176\u4ED6\u5199\u6CD5" : "\u672A\u5199\u5224\u5B9A") : null,
-      prediction: clip2(round.brief.prediction?.text),
-      actual: clip2(round.result?.actual?.text),
+      prediction: clip3(round.brief.prediction?.text),
+      actual: clip3(round.result?.actual?.text),
       flags: predictionFlags(round.brief.prediction),
       caveats: round.brief.prediction?.caveats ?? 0,
       calibration,
@@ -18837,6 +19026,13 @@ function renderLedgerRow(row) {
 }
 
 // src/core/dashboard-data.mjs
+function newOwnMessagesSince(root, intent, options2) {
+  try {
+    return ownMessagesSince(readOwnEntries(root, { fsOps: options2.fsOps }), intent?.date ?? null);
+  } catch {
+    return 0;
+  }
+}
 var RESEARCH_ROOT2 = ".dove/research";
 var MAX_TEXT_BYTES2 = 64 * 1024;
 var MAX_ROUNDS = 40;
@@ -18867,8 +19063,8 @@ function listDirectory2(directory, fsOps) {
 }
 function parseCardFields(text = "") {
   const fields = {};
-  for (const line of text.split(/\r?\n/u)) {
-    const match = line.match(/^\s*(?:[-*]\s*)?\**([^:：*\n]{1,40}?)\**\s*[:：]\s*(.+)$/u);
+  for (const line2 of text.split(/\r?\n/u)) {
+    const match = line2.match(/^\s*(?:[-*]\s*)?\**([^:：*\n]{1,40}?)\**\s*[:：]\s*(.+)$/u);
     if (!match) continue;
     const key = match[1].trim();
     if (!(key in fields)) fields[key] = match[2].trim();
@@ -18876,9 +19072,9 @@ function parseCardFields(text = "") {
   return fields;
 }
 function parseAuthor(text = "") {
-  const line = text.split(/\r?\n/u).slice(0, 12).find((item) => /^\s*(?:[-*]\s*)?\**\s*(Author|作者)\s*\**\s*[:：]/iu.test(item));
-  if (!line) return null;
-  const value2 = line.replace(/^[^:：]*[:：]\s*/u, "");
+  const line2 = text.split(/\r?\n/u).slice(0, 12).find((item) => /^\s*(?:[-*]\s*)?\**\s*(Author|作者)\s*\**\s*[:：]/iu.test(item));
+  if (!line2) return null;
+  const value2 = line2.replace(/^[^:：]*[:：]\s*/u, "");
   for (const [pattern, label] of AUTHOR_LABELS) if (pattern.test(value2)) return label;
   return "other";
 }
@@ -18895,13 +19091,13 @@ function plainLine2(text, limit = 240) {
   return characters.length > limit ? `${characters.slice(0, limit).join("")}\u2026` : flat;
 }
 function sectionText(lines, pattern) {
-  const start = lines.findIndex((line) => HEADING.test(line) && pattern.test(line.match(HEADING)[1]));
+  const start = lines.findIndex((line2) => HEADING.test(line2) && pattern.test(line2.match(HEADING)[1]));
   if (start === -1) return null;
   const body = [];
   let tableHeader = true;
-  for (const line of lines.slice(start + 1)) {
-    if (HEADING.test(line)) break;
-    const trimmed = line.trim();
+  for (const line2 of lines.slice(start + 1)) {
+    if (HEADING.test(line2)) break;
+    const trimmed = line2.trim();
     if (!trimmed) continue;
     if (/^\|.*\|$/u.test(trimmed)) {
       const cells = trimmed.slice(1, -1).split("|").map((cell) => cell.trim());
@@ -18919,30 +19115,30 @@ function sectionText(lines, pattern) {
 }
 function firstParagraph(lines) {
   const body = [];
-  for (const line of lines) {
-    if (HEADING.test(line) || META_LINE.test(line)) {
+  for (const line2 of lines) {
+    if (HEADING.test(line2) || META_LINE.test(line2)) {
       if (body.length) break;
       continue;
     }
-    if (!line.trim()) {
+    if (!line2.trim()) {
       if (body.length) break;
       continue;
     }
-    body.push(line.trim().replace(/^[-*+]\s+/u, ""));
+    body.push(line2.trim().replace(/^[-*+]\s+/u, ""));
   }
   return body.join(" ");
 }
 function summarizeRoundText(text = "", kind = "brief") {
   const lines = String(text).split(/\r?\n/u);
-  const summary = lines.map((line) => line.match(SUMMARY_LINE)?.[1]).find(Boolean) ?? firstParagraph(lines);
+  const summary = lines.map((line2) => line2.match(SUMMARY_LINE)?.[1]).find(Boolean) ?? firstParagraph(lines);
   return {
     summary: plainLine2(summary),
-    ...kind === "brief" ? { expected: plainLine2(sectionText(lines.filter((line) => !ACTUAL_HEADING.test(line)), EXPECTED_HEADING)) } : {},
+    ...kind === "brief" ? { expected: plainLine2(sectionText(lines.filter((line2) => !ACTUAL_HEADING.test(line2)), EXPECTED_HEADING)) } : {},
     ...kind === "result" ? { actual: plainLine2(sectionText(lines, ACTUAL_HEADING)) } : {}
   };
 }
 function firstHeading(text = "") {
-  const heading = text.split(/\r?\n/u).find((line) => /^#{1,3}\s+\S/u.test(line));
+  const heading = text.split(/\r?\n/u).find((line2) => /^#{1,3}\s+\S/u.test(line2));
   return heading ? heading.replace(/^#{1,3}\s+/u, "").trim() : null;
 }
 function collectRounds(directory, fsOps) {
@@ -18952,7 +19148,7 @@ function collectRounds(directory, fsOps) {
     if (!match) continue;
     const number = Number(match[1]);
     const kind = match[2].toLowerCase();
-    const file = readText3(path16.join(directory, name), fsOps);
+    const file = readText3(path17.join(directory, name), fsOps);
     if (!file) continue;
     const entry = byNumber.get(number) ?? { number, label: match[1] };
     entry[kind] = { file: name, truncated: file.truncated, mtime: file.mtime, ...summarizeRoundText(file.text, kind) };
@@ -18975,7 +19171,7 @@ function methodDesignSummary(research, reference, fsOps, explicit) {
   if (!match || match[2].toLowerCase() !== "brief") {
     return explicit ? { source: reference, error: "\u65B9\u6CD5\u8BBE\u8BA1\u5F15\u7528\u5E94\u6307\u5411 rounds/NNN-brief.md\u3002" } : null;
   }
-  const brief = readText3(path16.join(research, "rounds", name), fsOps, Infinity);
+  const brief = readText3(path17.join(research, "rounds", name), fsOps, Infinity);
   const design = brief ? parseMethodDesign(brief.text) : null;
   if (!explicit && !design) return null;
   return {
@@ -18994,7 +19190,8 @@ function progressSummary(root, options2) {
         overrun: state2.overrun,
         stall: state2.stall,
         pending: state2.pending,
-        ledger: roundLedger(root, { fsOps: options2.fsOps, now: options2.now, state: state2, provenance: true, home: options2.home, env: options2.env })
+        ledger: roundLedger(root, { fsOps: options2.fsOps, now: options2.now, state: state2, provenance: true, home: options2.home, env: options2.env }),
+        practice: readPractice(root, { fsOps: options2.fsOps }).slice(0, 12).map((entry) => ({ ...entry, topic: topicOfEntry(entry).short }))
       }
     };
   } catch {
@@ -19002,20 +19199,20 @@ function progressSummary(root, options2) {
   }
 }
 function summarizeProject(root, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs17;
-  const research = path16.join(root, RESEARCH_ROOT2);
+  const fsOps = options2.fsOps ?? fs18;
+  const research = path17.join(root, RESEARCH_ROOT2);
   let exists = false;
   try {
     exists = fsOps.lstatSync(root).isDirectory();
   } catch {
     exists = false;
   }
-  const identity = readText3(path16.join(research, "IDENTITY.md"), fsOps);
-  const evaluation = readText3(path16.join(research, "EVAL.md"), fsOps);
-  const notes = readText3(path16.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
+  const identity = readText3(path17.join(research, "IDENTITY.md"), fsOps);
+  const evaluation = readText3(path17.join(research, "EVAL.md"), fsOps);
+  const notes = readText3(path17.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
   const intent = notes ? latestLongTermIntent(notes.text) : null;
-  const doctor = readText3(path16.join(root, ".dove/install/DOCTOR.md"), fsOps);
-  const rounds = exists ? collectRounds(path16.join(research, "rounds"), fsOps) : [];
+  const doctor = readText3(path17.join(root, ".dove/install/DOCTOR.md"), fsOps);
+  const rounds = exists ? collectRounds(path17.join(research, "rounds"), fsOps) : [];
   const fields = identity ? parseCardFields(identity.text) : {};
   const current = identity ? parseDoveCurrentRound(identity.text) : null;
   const statusMatch = identity ? cardField(identity.text, "Round status") : null;
@@ -19031,11 +19228,11 @@ function summarizeProject(root, options2 = {}) {
   const times = [identity?.mtime, evaluation?.mtime, ...rounds.flatMap((round) => [round.brief?.mtime, round.result?.mtime])].filter((value2) => typeof value2 === "number");
   return {
     root,
-    name: path16.basename(root),
+    name: path17.basename(root),
     exists,
     mainline: fields.Mainline ?? fields["\u4E3B\u7EBF"] ?? null,
     coreCapability: fields["Core capability"] ?? fields["Core capability\uFF08\u6838\u5FC3\u80FD\u529B\uFF09"] ?? fields["Core capability (\u6838\u5FC3\u80FD\u529B)"] ?? fields["\u6838\u5FC3\u80FD\u529B"] ?? null,
-    longTermIntent: intent ? { ...intent, due: longTermIntentDue(intent, finishedRoundsOf(state2?.rounds ?? [], localDate)) } : null,
+    longTermIntent: intent ? { ...intent, due: longTermIntentDue(intent, finishedRoundsOf(state2?.rounds ?? [], localDate), newOwnMessagesSince(root, intent, options2)) } : null,
     currentRound: current?.brief ?? null,
     currentSummary: rounds.find((round) => current?.brief?.includes(round.label))?.brief?.summary ?? null,
     methodDesign,
@@ -19055,12 +19252,12 @@ function readProjectDocument(root, name, options2 = {}) {
   if (typeof name !== "string") return null;
   const topic = /^topics\/(?:cards\/)?[^/\\]+\.md$/u.test(name) && !name.includes("..") ? `${RESEARCH_ROOT2}/${name}` : null;
   const relative = ROUND_FILE3.test(name) ? `${RESEARCH_ROOT2}/rounds/${name}` : topic ?? (Object.hasOwn(NAMED_DOCUMENTS, name) ? NAMED_DOCUMENTS[name] : null);
-  return relative ? readText3(path16.join(root, relative), options2.fsOps ?? fs17) : null;
+  return relative ? readText3(path17.join(root, relative), options2.fsOps ?? fs18) : null;
 }
 var IMPACTS = [["\u649E\u9898", "overlap"], ["\u65B0\u57FA\u7EBF", "baseline"], ["\u53EF\u501F\u7528", "borrow"], ["\u65E0\u5173", "irrelevant"]];
-function parsePaperImpactLine(line = "") {
-  if (/[\r\n]/u.test(line)) return null;
-  const text = String(line).replace(/｜/gu, "|").trim().replace(/^(?:[-*]\s*|\d+[.)]\s+)/u, "");
+function parsePaperImpactLine(line2 = "") {
+  if (/[\r\n]/u.test(line2)) return null;
+  const text = String(line2).replace(/｜/gu, "|").trim().replace(/^(?:[-*]\s*|\d+[.)]\s+)/u, "");
   const cells = [""];
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index];
@@ -19080,16 +19277,16 @@ function parsePaperImpactLine(line = "") {
   return { id, impact: hit?.[1] ?? null, label: hit?.[0] ?? null, note: note.slice(0, 300), direction, line: summary };
 }
 function parsePaperImpacts(root, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs17;
-  const research = path16.join(root, RESEARCH_ROOT2);
-  const briefs = listDirectory2(path16.join(research, "rounds"), fsOps).filter((name) => /^\d+[-_]brief\.md$/iu.test(name)).sort((a, b) => parseInt(a) - parseInt(b)).map((name) => `rounds/${name}`);
-  const standalone = listDirectory2(path16.join(research, "watch"), fsOps).filter((name) => /^impact-\d{4}-\d{2}-\d{2}\.md$/u.test(name)).sort().map((name) => `watch/${name}`);
+  const fsOps = options2.fsOps ?? fs18;
+  const research = path17.join(root, RESEARCH_ROOT2);
+  const briefs = listDirectory2(path17.join(research, "rounds"), fsOps).filter((name) => /^\d+[-_]brief\.md$/iu.test(name)).sort((a, b) => parseInt(a) - parseInt(b)).map((name) => `rounds/${name}`);
+  const standalone = listDirectory2(path17.join(research, "watch"), fsOps).filter((name) => /^impact-\d{4}-\d{2}-\d{2}\.md$/u.test(name)).sort().map((name) => `watch/${name}`);
   const impacts = {};
   for (const name of [...briefs, ...standalone]) {
-    const file = readText3(path16.join(research, name), fsOps, Infinity);
+    const file = readText3(path17.join(research, name), fsOps, Infinity);
     if (!file) continue;
-    for (const line of file.text.split(/\r?\n/u)) {
-      const parsed2 = parsePaperImpactLine(line);
+    for (const line2 of file.text.split(/\r?\n/u)) {
+      const parsed2 = parsePaperImpactLine(line2);
       if (!parsed2) continue;
       if (!parsed2.impact) {
         delete impacts[parsed2.id];
@@ -19108,13 +19305,13 @@ function collectDashboard(options2 = {}) {
 }
 
 // src/core/paper-library.mjs
-import fs18 from "node:fs";
-import path17 from "node:path";
+import fs19 from "node:fs";
+import path18 from "node:path";
 var LIBRARY = ".dove/research/papers/library";
 var IMPACT_LABELS = { overlap: "\u649E\u9898", baseline: "\u65B0\u57FA\u7EBF", borrow: "\u53EF\u501F\u7528" };
 function readPaperLibrary(root) {
   try {
-    return JSON.parse(fs18.readFileSync(path17.join(root, `${LIBRARY}.json`), "utf8"));
+    return JSON.parse(fs19.readFileSync(path18.join(root, `${LIBRARY}.json`), "utf8"));
   } catch (error) {
     if (error.code === "ENOENT") return { papers: [] };
     throw error;
@@ -19170,18 +19367,18 @@ function writePaperLibrary(root, papers) {
   const library = { papers };
   for (const [extension, content] of [["json", `${JSON.stringify(library, null, 2)}
 `], ["md", renderPaperLibrary(papers)]]) {
-    const file = path17.join(root, `${LIBRARY}.${extension}`);
-    fs18.mkdirSync(path17.dirname(file), { recursive: true });
+    const file = path18.join(root, `${LIBRARY}.${extension}`);
+    fs19.mkdirSync(path18.dirname(file), { recursive: true });
     const temporary = `${file}.${process.pid}.tmp`;
-    fs18.writeFileSync(temporary, content);
-    fs18.renameSync(temporary, file);
+    fs19.writeFileSync(temporary, content);
+    fs19.renameSync(temporary, file);
   }
   return library;
 }
 
 // src/core/topic-selection.mjs
-import fs19 from "node:fs";
-import path18 from "node:path";
+import fs20 from "node:fs";
+import path19 from "node:path";
 var TOPICS_DIR = ".dove/research/topics";
 var CARD_FIELDS = Object.freeze({
   \u72B6\u6001: "status",
@@ -19202,7 +19399,7 @@ var CARD_FIELDS = Object.freeze({
 });
 function describe(text, stat) {
   return {
-    title: text.split(/\r?\n/u).find((line) => /^#\s+\S/u.test(line))?.replace(/^#\s+/u, "").trim() ?? null,
+    title: text.split(/\r?\n/u).find((line2) => /^#\s+\S/u.test(line2))?.replace(/^#\s+/u, "").trim() ?? null,
     version: [...text.matchAll(/第\s*(\d+)\s*版/gu)].map((match) => Number(match[1])).sort((left, right) => right - left).map(String)[0] ?? null,
     bytes: Buffer.byteLength(text),
     updatedAt: stat ? new Date(stat.mtimeMs).toISOString() : null
@@ -19212,9 +19409,9 @@ function readTopicCriteriaInfo() {
   return { present: true, source: "dove", ...describe(renderDoveTopicCriteriaReference()) };
 }
 function projectCriteria(root) {
-  const file = path18.join(root, DOVE_TOPIC_CRITERIA_REFERENCE_PATH);
+  const file = path19.join(root, DOVE_TOPIC_CRITERIA_REFERENCE_PATH);
   try {
-    return { ...describe(fs19.readFileSync(file, "utf8"), fs19.statSync(file)), path: DOVE_TOPIC_CRITERIA_REFERENCE_PATH };
+    return { ...describe(fs20.readFileSync(file, "utf8"), fs20.statSync(file)), path: DOVE_TOPIC_CRITERIA_REFERENCE_PATH };
   } catch {
     return readTopicCriteriaInfo();
   }
@@ -19264,37 +19461,37 @@ var PROJECT_TEMPLATE = `# \u672C\u9879\u76EE\u7684\u9009\u9898\u8BBE\u7F6E
 \u5F85\u7528\u6237\u786E\u8BA4\uFF08\u5DF2\u6709\u53EA\u8BFB/\u8BBE\u8BA1\u8BA8\u8BBA\u3001\u8D44\u6E90\u4E0E\u5BBF\u4E3B\u6743\u9650\u4ECD\u9002\u7528\uFF1B\u4E0D\u53E6\u8BBE\u9009\u9898\u671F\u5B9E\u9A8C\u5BA1\u6279\uFF09
 `;
 function startTopicSelection(root) {
-  const directory = path18.join(root, TOPICS_DIR);
-  fs19.mkdirSync(path18.join(directory, "cards"), { recursive: true });
-  fs19.writeFileSync(path18.join(directory, "README.md"), README);
-  if (!fs19.existsSync(path18.join(directory, "PROJECT.md"))) fs19.writeFileSync(path18.join(directory, "PROJECT.md"), PROJECT_TEMPLATE);
+  const directory = path19.join(root, TOPICS_DIR);
+  fs20.mkdirSync(path19.join(directory, "cards"), { recursive: true });
+  fs20.writeFileSync(path19.join(directory, "README.md"), README);
+  if (!fs20.existsSync(path19.join(directory, "PROJECT.md"))) fs20.writeFileSync(path19.join(directory, "PROJECT.md"), PROJECT_TEMPLATE);
   return readTopics(root);
 }
 function parseCardHeader(text = "") {
   const card = {};
-  for (const line of text.split(/\r?\n/u).slice(0, 40)) {
-    const match = line.match(/^\s*(?:[-*]\s*)?\**\s*([^:：*]+?)\s*\**\s*[:：]\s*\**\s*(.+)$/u);
-    const field = match && Object.hasOwn(CARD_FIELDS, match[1]) ? CARD_FIELDS[match[1]] : null;
-    if (field && !(field in card) && match[2].trim()) card[field] = match[2].trim();
+  for (const line2 of text.split(/\r?\n/u).slice(0, 40)) {
+    const match = line2.match(/^\s*(?:[-*]\s*)?\**\s*([^:：*]+?)\s*\**\s*[:：]\s*\**\s*(.+)$/u);
+    const field2 = match && Object.hasOwn(CARD_FIELDS, match[1]) ? CARD_FIELDS[match[1]] : null;
+    if (field2 && !(field2 in card) && match[2].trim()) card[field2] = match[2].trim();
   }
-  const title = text.split(/\r?\n/u).find((line) => /^#\s+\S/u.test(line));
+  const title = text.split(/\r?\n/u).find((line2) => /^#\s+\S/u.test(line2));
   if (title) card.title = title.replace(/^#\s+/u, "").trim();
   return card;
 }
 function readTopics(root) {
-  const directory = path18.join(root, TOPICS_DIR);
-  if (!fs19.existsSync(directory)) return { started: false };
+  const directory = path19.join(root, TOPICS_DIR);
+  if (!fs20.existsSync(directory)) return { started: false };
   const criteria = projectCriteria(root);
   const cards = [];
   try {
-    for (const name of fs19.readdirSync(path18.join(directory, "cards")).filter((item) => item.endsWith(".md")).sort()) {
-      const file = path18.join(directory, "cards", name);
-      const text = fs19.readFileSync(file, "utf8").slice(0, 64 * 1024);
-      cards.push({ file: `topics/cards/${name}`, name: name.replace(/\.md$/u, ""), mtime: fs19.statSync(file).mtimeMs, ...parseCardHeader(text) });
+    for (const name of fs20.readdirSync(path19.join(directory, "cards")).filter((item) => item.endsWith(".md")).sort()) {
+      const file = path19.join(directory, "cards", name);
+      const text = fs20.readFileSync(file, "utf8").slice(0, 64 * 1024);
+      cards.push({ file: `topics/cards/${name}`, name: name.replace(/\.md$/u, ""), mtime: fs20.statSync(file).mtimeMs, ...parseCardHeader(text) });
     }
   } catch {
   }
-  const documents = fs19.readdirSync(directory).filter((name) => name.endsWith(".md") && name !== "CRITERIA.md").sort().map((name) => `topics/${name}`);
+  const documents = fs20.readdirSync(directory).filter((name) => name.endsWith(".md") && name !== "CRITERIA.md").sort().map((name) => `topics/${name}`);
   return { started: true, criteria, cards, documents };
 }
 
@@ -19338,9 +19535,9 @@ function refreshUserOriginalsInBackground(root, { env = process.env, home = env.
 
 // src/core/paper-watch.mjs
 import childProcess from "node:child_process";
-import fs20 from "node:fs";
+import fs21 from "node:fs";
 import os6 from "node:os";
-import path19 from "node:path";
+import path20 from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 var WATCH_DIR = ".dove/research/watch";
 var PROJECT_CONFIG = `${WATCH_DIR}/config.json`;
@@ -19367,28 +19564,28 @@ function localDate2(value2 = Date.now()) {
 }
 function doveConfigDirectory(options2 = {}) {
   const env = options2.env ?? process.env;
-  const base = env.XDG_CONFIG_HOME || path19.join(env.HOME || os6.homedir(), ".config");
-  return path19.join(base, "dove");
+  const base = env.XDG_CONFIG_HOME || path20.join(env.HOME || os6.homedir(), ".config");
+  return path20.join(base, "dove");
 }
 function readJson2(file, fallback) {
   try {
-    return JSON.parse(fs20.readFileSync(file, "utf8"));
+    return JSON.parse(fs21.readFileSync(file, "utf8"));
   } catch {
     return fallback;
   }
 }
 function writePrivateFile(file, content) {
-  fs20.mkdirSync(path19.dirname(file), { recursive: true, mode: 448 });
+  fs21.mkdirSync(path20.dirname(file), { recursive: true, mode: 448 });
   const temporary = `${file}.${process.pid}.tmp`;
-  fs20.writeFileSync(temporary, content, { mode: 384 });
-  fs20.renameSync(temporary, file);
+  fs21.writeFileSync(temporary, content, { mode: 384 });
+  fs21.renameSync(temporary, file);
 }
 function writeProjectFile(root, relative, content) {
-  const file = path19.join(root, relative);
-  fs20.mkdirSync(path19.dirname(file), { recursive: true });
+  const file = path20.join(root, relative);
+  fs21.mkdirSync(path20.dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.tmp`;
-  fs20.writeFileSync(temporary, content);
-  fs20.renameSync(temporary, file);
+  fs21.writeFileSync(temporary, content);
+  fs21.renameSync(temporary, file);
 }
 var cleanList = (value2) => (Array.isArray(value2) ? value2 : String(value2 ?? "").split(/\r?\n|[,，]/u)).map((item) => String(item).trim()).filter(Boolean).slice(0, 100);
 function normalizeWatchConfig(value2 = {}) {
@@ -19404,16 +19601,16 @@ function normalizeWatchConfig(value2 = {}) {
   };
 }
 function watchConfigExists(root) {
-  return fs20.existsSync(path19.join(root, PROJECT_CONFIG));
+  return fs21.existsSync(path20.join(root, PROJECT_CONFIG));
 }
 function readWatchConfig(root) {
-  return normalizeWatchConfig(readJson2(path19.join(root, PROJECT_CONFIG), {}));
+  return normalizeWatchConfig(readJson2(path20.join(root, PROJECT_CONFIG), {}));
 }
 function watchConfigGuidance(config) {
   return config.source === "draft" ? "\u8FFD\u8E2A\u914D\u7F6E\u4ECD\u662F\u81EA\u52A8\u521D\u7A3F\u3002\u8BF7\u5728\u8BBE\u7F6E\u9875\u4FEE\u6B63\u4E3A\u9879\u76EE\u5177\u4F53\u95EE\u9898\u3001\u65B9\u6CD5\u548C\u8FD1\u90BB\u8BBA\u6587\uFF1B\u4E5F\u53EF\u5728\u4E0B\u4E00\u6B21\u5BFC\u5E08\u8C03\u7528\u65F6\u8FD4\u56DE\u5B9E\u9645\u5EFA\u8BAE JSON\uFF0C\u7531\u4E3B\u4F1A\u8BDD\u4FDD\u5B58\u4E3A\u6587\u4EF6\u5E76\u8FD0\u884C dove watch configure --project <root> --mentor <\u5EFA\u8BAE.json>\uFF0C\u6838\u5BF9\u4FDD\u5B58\u503C\u548C source: mentor\uFF0C\u4E0D\u5FC5\u7B49\u4E0B\u4E00\u8F6E\u3002" : null;
 }
 function readWatchState(root) {
-  return readJson2(path19.join(root, PROJECT_STATE), {});
+  return readJson2(path20.join(root, PROJECT_STATE), {});
 }
 function writeWatchConfig(root, value2) {
   const config = normalizeWatchConfig(value2);
@@ -19454,24 +19651,24 @@ function topPhrases(phrases, { minCount, limit, exclude = [] }) {
 }
 var STOPWORDS = new Set("the a an and or of for to in on with by from as is are was were be been this that these those it its into via using use used we our not no than then also can may per each all any both more most other such only same so very will would should could have has had which while when where what who how than at about after before over under between within without based new one two three first second via vs etc et al data model method methods result results paper work task tasks approach figure table section appendix".split(" "));
 function collectProjectText(root) {
-  const research = path19.join(root, ".dove/research");
+  const research = path20.join(root, ".dove/research");
   const files = [];
   const add = (file) => {
     try {
-      if (fs20.statSync(file).isFile()) files.push(file);
+      if (fs21.statSync(file).isFile()) files.push(file);
     } catch {
     }
   };
-  for (const name of ["IDENTITY.md", "EVAL.md", "RESEARCH.md"]) add(path19.join(research, name));
+  for (const name of ["IDENTITY.md", "EVAL.md", "RESEARCH.md"]) add(path20.join(research, name));
   for (const directory of ["rounds", "sources", "missions", "experiments", "claims"]) {
     try {
-      for (const name of fs20.readdirSync(path19.join(research, directory)).filter((item) => item.endsWith(".md")).sort().reverse().slice(0, 40)) add(path19.join(research, directory, name));
+      for (const name of fs21.readdirSync(path20.join(research, directory)).filter((item) => item.endsWith(".md")).sort().reverse().slice(0, 40)) add(path20.join(research, directory, name));
     } catch {
     }
   }
-  for (const directory of [root, path19.join(root, "docs")]) {
+  for (const directory of [root, path20.join(root, "docs")]) {
     try {
-      for (const name of fs20.readdirSync(directory).filter((item) => /\.md$/iu.test(item)).sort().slice(0, 20)) add(path19.join(directory, name));
+      for (const name of fs21.readdirSync(directory).filter((item) => /\.md$/iu.test(item)).sort().slice(0, 20)) add(path20.join(directory, name));
     } catch {
     }
   }
@@ -19480,7 +19677,7 @@ function collectProjectText(root) {
   for (const file of files) {
     if (total > 3 * 1024 * 1024) break;
     try {
-      const text = fs20.readFileSync(file, "utf8").slice(0, 256 * 1024);
+      const text = fs21.readFileSync(file, "utf8").slice(0, 256 * 1024);
       total += text.length;
       texts.push(text);
     } catch {
@@ -19544,36 +19741,36 @@ function normalizeGlobalWatchSettings(value2 = {}) {
   };
 }
 function readGlobalWatchSettings(options2 = {}) {
-  return normalizeGlobalWatchSettings(readJson2(path19.join(doveConfigDirectory(options2), "watch.json"), {}));
+  return normalizeGlobalWatchSettings(readJson2(path20.join(doveConfigDirectory(options2), "watch.json"), {}));
 }
 function writeGlobalWatchSettings(value2, options2 = {}) {
   const settings = normalizeGlobalWatchSettings(value2);
-  writePrivateFile(path19.join(doveConfigDirectory(options2), "watch.json"), `${JSON.stringify(settings, null, 2)}
+  writePrivateFile(path20.join(doveConfigDirectory(options2), "watch.json"), `${JSON.stringify(settings, null, 2)}
 `);
   return settings;
 }
 function readSemanticScholarKey(options2 = {}) {
   try {
-    return fs20.readFileSync(path19.join(doveConfigDirectory(options2), "s2-api-key"), "utf8").trim() || null;
+    return fs21.readFileSync(path20.join(doveConfigDirectory(options2), "s2-api-key"), "utf8").trim() || null;
   } catch {
     return null;
   }
 }
 function writeSemanticScholarKey(key, options2 = {}) {
-  const file = path19.join(doveConfigDirectory(options2), "s2-api-key");
+  const file = path20.join(doveConfigDirectory(options2), "s2-api-key");
   const value2 = String(key ?? "").trim();
   if (!value2) {
-    fs20.rmSync(file, { force: true });
+    fs21.rmSync(file, { force: true });
     return false;
   }
   writePrivateFile(file, value2);
   return true;
 }
 function readGlobalWatchState(options2 = {}) {
-  return readJson2(path19.join(doveConfigDirectory(options2), "watch-state.json"), {});
+  return readJson2(path20.join(doveConfigDirectory(options2), "watch-state.json"), {});
 }
 function writeGlobalWatchState(state2, options2 = {}) {
-  writePrivateFile(path19.join(doveConfigDirectory(options2), "watch-state.json"), `${JSON.stringify(state2, null, 2)}
+  writePrivateFile(path20.join(doveConfigDirectory(options2), "watch-state.json"), `${JSON.stringify(state2, null, 2)}
 `);
 }
 function curlGet(url, { proxy = "", headers = {}, timeoutSeconds = 40, body = null } = {}) {
@@ -19591,9 +19788,9 @@ function curlGet(url, { proxy = "", headers = {}, timeoutSeconds = 40, body = nu
         const boundary = /\r?\n\r?\n/u.exec(content);
         if (!boundary) break;
         responseHeaders = {};
-        for (const line of content.slice(0, boundary.index).split(/\r?\n/u).slice(1)) {
-          const colon = line.indexOf(":");
-          if (colon > 0) responseHeaders[line.slice(0, colon).toLowerCase()] = line.slice(colon + 1).trim();
+        for (const line2 of content.slice(0, boundary.index).split(/\r?\n/u).slice(1)) {
+          const colon = line2.indexOf(":");
+          if (colon > 0) responseHeaders[line2.slice(0, colon).toLowerCase()] = line2.slice(colon + 1).trim();
         }
         content = content.slice(boundary.index + boundary[0].length);
       }
@@ -19699,18 +19896,18 @@ function codeLink(text = "") {
 function parseArxivFeed(xml = "") {
   const entries = [];
   for (const [, block] of xml.matchAll(/<entry\b[^>]*>([\s\S]*?)<\/entry\s*>/gu)) {
-    const field = (name) => decodeXml(block.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "u"))?.[1] ?? "");
-    const id = arxivIdFromUrl(field("id"));
+    const field2 = (name) => decodeXml(block.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "u"))?.[1] ?? "");
+    const id = arxivIdFromUrl(field2("id"));
     if (!id) continue;
     entries.push({
       id,
-      title: field("title"),
-      abstract: field("summary"),
+      title: field2("title"),
+      abstract: field2("summary"),
       kind: "arxiv",
-      published: field("published"),
+      published: field2("published"),
       authors: [...block.matchAll(/<name>([\s\S]*?)<\/name>/gu)].map((match) => decodeXml(match[1])),
       categories: [...block.matchAll(/<category[^>]*term="([^"]+)"/gu)].map((match) => match[1]),
-      code: codeLink(`${field("arxiv:comment")} ${field("summary")}`),
+      code: codeLink(`${field2("arxiv:comment")} ${field2("summary")}`),
       url: `https://arxiv.org/abs/${id}`
     });
   }
@@ -20059,7 +20256,7 @@ async function runProjectWatch(root, { settings, key, hf, now = Date.now(), get 
   }
   if (!completedSources && !errors.length) errors.push("\u6CA1\u6709\u6210\u529F\u5B8C\u6210\u7684\u914D\u7F6E\u68C0\u7D22\u6E90\uFF0C\u4E0D\u80FD\u5224\u65AD\u662F\u5426\u6709\u65B0\u8BBA\u6587\u3002");
   const seen = new Set(state2.seen ?? []);
-  const earlier = readJson2(path19.join(root, WATCH_DIR, `${date}.json`), null);
+  const earlier = readJson2(path20.join(root, WATCH_DIR, `${date}.json`), null);
   const rank = (items) => items.filter((item) => !seen.has(item.id)).map((item) => ({ ...item, ...scorePaper(item, config, { hf: hf.papers.get(item.id) }) })).filter((item) => item.relevance >= MIN_RELEVANCE).sort((left, right) => right.score - left.score);
   let ranked = rank([...candidates.values()]).slice(0, settings.maxPerDigest);
   const supplement = settings.supplementOlder === true && completedSources > 0 && !errors.length && !ranked.length && !earlier?.items?.length;
@@ -20092,7 +20289,7 @@ async function runProjectWatch(root, { settings, key, hf, now = Date.now(), get 
   const digest = { date, generatedAt: new Date(now).toISOString(), status, notes, items: merged };
   writeProjectFile(root, `${WATCH_DIR}/${date}.json`, `${JSON.stringify(digest, null, 2)}
 `);
-  writeProjectFile(root, `${WATCH_DIR}/${date}.md`, renderDigest(path19.basename(root), date, merged, notes, status));
+  writeProjectFile(root, `${WATCH_DIR}/${date}.md`, renderDigest(path20.basename(root), date, merged, notes, status));
   const nextSeen = [...ranked.map((item) => item.id), ...seen];
   writeProjectFile(root, PROJECT_STATE, `${JSON.stringify({ ...state2, lastAttempt: digest.generatedAt, lastRun: status === "done" ? digest.generatedAt : state2.lastRun ?? null, status, notes, seen: nextSeen, openalex: openAlex.cache }, null, 2)}
 `);
@@ -20120,35 +20317,35 @@ async function runWatch(roots, options2 = {}) {
   if (options2.recordGlobalState !== false) {
     writeGlobalWatchState(state2, options2);
     const hot = [...hf.papers.values()].sort((left, right) => right.upvotes - left.upvotes).slice(0, 60);
-    writePrivateFile(path19.join(doveConfigDirectory(options2), HOT_FILE), `${JSON.stringify({ generatedAt: attemptedAt, errors: hf.errors, papers: hot }, null, 2)}
+    writePrivateFile(path20.join(doveConfigDirectory(options2), HOT_FILE), `${JSON.stringify({ generatedAt: attemptedAt, errors: hf.errors, papers: hot }, null, 2)}
 `);
   }
   return state2;
 }
 function readWatchHot(options2 = {}) {
-  return readJson2(path19.join(doveConfigDirectory(options2), HOT_FILE), { papers: [] });
+  return readJson2(path20.join(doveConfigDirectory(options2), HOT_FILE), { papers: [] });
 }
 function watchScanDue(scan, now = Date.now()) {
   return !scan || localDate2(now - 7 * 864e5) >= scan.date;
 }
 function readLatestScan(root) {
   try {
-    const name = fs20.readdirSync(path19.join(root, WATCH_DIR)).filter((item) => /^scan-\d{4}-\d{2}-\d{2}\.md$/u.test(item)).sort().pop();
-    return name ? { date: name.slice(5, 15), text: fs20.readFileSync(path19.join(root, WATCH_DIR, name), "utf8").slice(0, 64 * 1024) } : null;
+    const name = fs21.readdirSync(path20.join(root, WATCH_DIR)).filter((item) => /^scan-\d{4}-\d{2}-\d{2}\.md$/u.test(item)).sort().pop();
+    return name ? { date: name.slice(5, 15), text: fs21.readFileSync(path20.join(root, WATCH_DIR, name), "utf8").slice(0, 64 * 1024) } : null;
   } catch {
     return null;
   }
 }
 function readWatchDigests(root, limit = 3) {
-  const directory = path19.join(root, WATCH_DIR);
+  const directory = path20.join(root, WATCH_DIR);
   let files = [];
   try {
-    files = fs20.readdirSync(directory).filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/u.test(name)).sort().reverse().slice(0, limit);
+    files = fs21.readdirSync(directory).filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/u.test(name)).sort().reverse().slice(0, limit);
   } catch {
     return [];
   }
   const impacts = parsePaperImpacts(root);
-  return files.map((name) => readJson2(path19.join(directory, name), null)).filter(Boolean).map((digest) => ({
+  return files.map((name) => readJson2(path20.join(directory, name), null)).filter(Boolean).map((digest) => ({
     ...digest,
     items: digest.items.map((item) => ({ ...item, line: impacts[item.id]?.line || item.line || "", direction: impacts[item.id]?.direction || item.direction || "" }))
   }));
@@ -20188,21 +20385,21 @@ function syncPaperLibrary(root) {
   }
   const items = [...papers.values()].sort((a, b) => a.id.localeCompare(b.id));
   if (!items.length && !previous.papers.length) return previous;
-  if (JSON.stringify(items) === JSON.stringify(previous.papers) && fs20.existsSync(path19.join(root, ".dove/research/papers/library.md"))) return previous;
+  if (JSON.stringify(items) === JSON.stringify(previous.papers) && fs21.existsSync(path20.join(root, ".dove/research/papers/library.md"))) return previous;
   return writePaperLibrary(root, items);
 }
 
 // src/cli/dashboard-actions.mjs
 function isDirectory(root) {
   try {
-    return fs21.statSync(root).isDirectory();
+    return fs22.statSync(root).isDirectory();
   } catch {
     return false;
   }
 }
 function originalsRefreshedToday(root, today2) {
   try {
-    const stat = fs21.statSync(path20.join(root, USER_ORIGINALS_PATH));
+    const stat = fs22.statSync(path21.join(root, USER_ORIGINALS_PATH));
     return stat.isFile() && localDate2(stat.mtime) === today2;
   } catch {
     return false;
@@ -20266,9 +20463,9 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
       const roots = registered();
       return {
         registered: roots.map((root) => ({ root, exists: isDirectory(root) })),
-        projects: roots.filter((root) => isDirectory(path20.join(root, ".dove/research"))).map((root) => {
+        projects: roots.filter((root) => isDirectory(path21.join(root, ".dove/research"))).map((root) => {
           const watch = readWatchConfig(root);
-          return { root, name: path20.basename(root), watch, guidance: watchConfigGuidance(watch) };
+          return { root, name: path21.basename(root), watch, guidance: watchConfigGuidance(watch) };
         }),
         watchGlobal: readGlobalWatchSettings(options2),
         hostSettings: readHostSettings(options2),
@@ -20302,17 +20499,17 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
       return syncPaperLibrary(root);
     },
     readExperience() {
-      const roots = registered().filter((root) => isDirectory(path20.join(root, ".dove/research")));
+      const roots = registered().filter((root) => isDirectory(path21.join(root, ".dove/research")));
       return { items: collectTransferable(roots) };
     },
     readCorrections({ now = Date.now() } = {}) {
-      const roots = registered().filter((root) => isDirectory(path20.join(root, ".dove/research")));
+      const roots = registered().filter((root) => isDirectory(path21.join(root, ".dove/research")));
       const perRound = roots.map((root) => {
         try {
           const ledger = roundLedger(root, { now, env, home: env.HOME });
-          return { project: path20.basename(root), rounds: ledger.rows.map((row) => ({ number: row.number, corrections: row.corrections })), average: ledger.summary.correctionsPerRound };
+          return { project: path21.basename(root), rounds: ledger.rows.map((row) => ({ number: row.number, corrections: row.corrections })), average: ledger.summary.correctionsPerRound };
         } catch {
-          return { project: path20.basename(root), rounds: [], average: null };
+          return { project: path21.basename(root), rounds: [], average: null };
         }
       });
       return { ...summarizeCorrections(roots, { now }), perRound };
@@ -20320,7 +20517,7 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
     readTopicsOverview() {
       return {
         criteria: readTopicCriteriaInfo(),
-        projects: registered().filter((root) => isDirectory(path20.join(root, ".dove/research"))).map((root) => ({ root, name: path20.basename(root), ...readTopics(root) }))
+        projects: registered().filter((root) => isDirectory(path21.join(root, ".dove/research"))).map((root) => ({ root, name: path21.basename(root), ...readTopics(root) }))
       };
     },
     startTopics({ root }) {
@@ -20333,7 +20530,7 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
     // hot papers that touch any project's keywords, and each project's latest scan.
     readTrends({ now = Date.now() } = {}) {
       const weekAgo = localDate2(now - 7 * 864e5);
-      const roots = registered().filter((root) => isDirectory(path20.join(root, ".dove/research")));
+      const roots = registered().filter((root) => isDirectory(path21.join(root, ".dove/research")));
       const byId = /* @__PURE__ */ new Map();
       const configs = [];
       const scans = [];
@@ -20345,22 +20542,22 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
           for (const item of digest.items) {
             if (impacts[item.id]?.impact === "irrelevant") continue;
             const entry = byId.get(item.id) ?? { ...item, projects: [], impacts: [] };
-            if (!entry.projects.includes(path20.basename(root))) entry.projects.push(path20.basename(root));
-            if (impacts[item.id]) entry.impacts.push({ project: path20.basename(root), ...impacts[item.id] });
+            if (!entry.projects.includes(path21.basename(root))) entry.projects.push(path21.basename(root));
+            if (impacts[item.id]) entry.impacts.push({ project: path21.basename(root), ...impacts[item.id] });
             entry.score = Math.max(entry.score ?? 0, item.score ?? 0);
             byId.set(item.id, entry);
           }
         }
         const scan = readLatestScan(root);
-        scans.push({ project: path20.basename(root), ...scan ?? {}, due: watchScanDue(scan, now) });
+        scans.push({ project: path21.basename(root), ...scan ?? {}, due: watchScanDue(scan, now) });
       }
       const hot = (readWatchHot(options2).papers ?? []).filter((paper) => configs.some(({ config, impacts }) => impacts[paper.id]?.impact !== "irrelevant" && scorePaper(paper, config).relevance >= MIN_RELEVANCE)).slice(0, 15);
       const top = [...byId.values()].sort((left, right) => right.impacts.length - left.impacts.length || right.score - left.score).slice(0, 30);
       return { since: weekAgo, top, hot, scans };
     },
     addProject({ path: target }) {
-      if (typeof target !== "string" || !path20.isAbsolute(target)) throw new Error("\u8BF7\u586B\u5199\u9879\u76EE\u7684\u7EDD\u5BF9\u8DEF\u5F84");
-      return importProjectRoots([path20.normalize(target)], options2);
+      if (typeof target !== "string" || !path21.isAbsolute(target)) throw new Error("\u8BF7\u586B\u5199\u9879\u76EE\u7684\u7EDD\u5BF9\u8DEF\u5F84");
+      return importProjectRoots([path21.normalize(target)], options2);
     },
     removeProject({ root }) {
       return changeRegisteredProjects([], [root], options2);
@@ -20387,8 +20584,8 @@ function createDashboardActions({ packageOptions = {}, passwordFile = null, run 
     changePassword(next) {
       if (!passwordFile) throw new Error("\u9762\u677F\u6CA1\u6709\u7528 --password-file \u542F\u52A8\uFF0C\u4E0D\u80FD\u5728\u8FD9\u91CC\u6539\u5BC6\u7801");
       const temporary = `${passwordFile}.${process.pid}.tmp`;
-      fs21.writeFileSync(temporary, next, { mode: 384 });
-      fs21.renameSync(temporary, passwordFile);
+      fs22.writeFileSync(temporary, next, { mode: 384 });
+      fs22.renameSync(temporary, passwordFile);
     },
     // Runs once a day at the configured hour while the dashboard is up.
     startScheduler({ intervalMs = 10 * 60 * 1e3, now = () => /* @__PURE__ */ new Date() } = {}) {
@@ -20644,9 +20841,9 @@ function startDashboardServer({ collect: collect2, listRoots, readDocument, pass
 }
 function renderPaperCard(it, judge = null) {
   const esc = (value2) => String(value2 ?? "").replace(/[&<>"']/gu, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
-  const line = judge?.line || it.line;
+  const line2 = judge?.line || it.line;
   const details = [it.id, String(it.published || it.date || "").slice(0, 10), it.venue, (it.authors || []).join("\u3001")].filter(Boolean);
-  return '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="takeaway">' + esc(line || "\u4E2D\u6587\u4E00\u53E5\u8BDD\u5F85\u8865\u5145\uFF0C\u6682\u53EF\u5C55\u5F00\u539F\u6458\u8981\uFF1B\u5173\u952E\u8BCD\u547D\u4E2D\u4E0D\u662F\u5185\u5BB9\u603B\u7ED3\u3002") + '</div><div class="why">' + esc(details.join(" \xB7 ")) + (it.supplement ? " \xB7 \u8F83\u65E9\u8BBA\u6587\u8865\u5145" : "") + (it.code && String(it.code).startsWith("http") ? ' \xB7 <a href="' + esc(it.code) + '" target="_blank" rel="noopener">\u4EE3\u7801/\u4E3B\u9875</a>' : "") + "</div>" + (judge ? '<div class="judge">\u5F71\u54CD\u5224\u65AD\uFF08' + esc(judge.file || judge.round) + "\uFF09\uFF1A" + esc(judge.note) + "</div>" : "") + '<details class="abs"><summary>\u539F\u6458\u8981\u4E0E\u5165\u9009\u4F9D\u636E\uFF08\u4E0D\u4EE3\u8868\u5DF2\u8BFB\u5168\u6587\uFF09</summary>' + esc(it.abstract || "\u672A\u53D6\u5F97\u6458\u8981") + '<div class="why">' + esc((it.reasons || []).join("\uFF1B")) + "</div></details></div>";
+  return '<div class="paper"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a><div class="takeaway">' + esc(line2 || "\u4E2D\u6587\u4E00\u53E5\u8BDD\u5F85\u8865\u5145\uFF0C\u6682\u53EF\u5C55\u5F00\u539F\u6458\u8981\uFF1B\u5173\u952E\u8BCD\u547D\u4E2D\u4E0D\u662F\u5185\u5BB9\u603B\u7ED3\u3002") + '</div><div class="why">' + esc(details.join(" \xB7 ")) + (it.supplement ? " \xB7 \u8F83\u65E9\u8BBA\u6587\u8865\u5145" : "") + (it.code && String(it.code).startsWith("http") ? ' \xB7 <a href="' + esc(it.code) + '" target="_blank" rel="noopener">\u4EE3\u7801/\u4E3B\u9875</a>' : "") + "</div>" + (judge ? '<div class="judge">\u5F71\u54CD\u5224\u65AD\uFF08' + esc(judge.file || judge.round) + "\uFF09\uFF1A" + esc(judge.note) + "</div>" : "") + '<details class="abs"><summary>\u539F\u6458\u8981\u4E0E\u5165\u9009\u4F9D\u636E\uFF08\u4E0D\u4EE3\u8868\u5DF2\u8BFB\u5168\u6587\uFF09</summary>' + esc(it.abstract || "\u672A\u53D6\u5F97\u6458\u8981") + '<div class="why">' + esc((it.reasons || []).join("\uFF1B")) + "</div></details></div>";
 }
 function renderLoginHtml(failed = false) {
   return `<!doctype html>
@@ -21062,6 +21259,7 @@ function progressSection(p) {
   if (g.overrun) html += '<div class="card warnbox">\u8D85\u65F6\uFF1A\u672C\u8F6E\u539F\u5B9A ' + esc(g.overrun.due) + " \u89C1\u5206\u6653\uFF0C\u9884\u8BA1 " + g.overrun.plannedDays + " \u5929\uFF0C\u5DF2\u8FC7 " + g.overrun.daysPastDue + " \u5929\uFF0C\u8FD8\u6CA1\u6709\u7ED3\u679C\u3002</div>";
   if (g.stall) html += '<div class="card warnbox">\u505C\u6EDE\uFF1A\u7B2C ' + esc(g.stall.rounds.join("\u3001")) + " \u8F6E\u5224\u5B9A\u90FD\u662F\u672A\u5151\u73B0\uFF0C\u5176\u95F4\u6CA1\u6709\u65B9\u6CD5\u53D6\u820D\u3002</div>";
   html += '<h3 class="sub3">\u7B49\u4F60\u5B9A\u7684\u4E8B</h3>' + (g.pending.length ? '<div class="card pending"><ul style="margin:0;padding-left:20px">' + g.pending.map((x) => "<li>" + esc(x.text) + "</li>").join("") + "</ul></div>" : '<div class="card note">\u6CA1\u6709\u3002</div>');
+  html += '<h3 class="sub3">\u505A\u6CD5\u66F4\u6B63 <span class="sub">\u4F60\u7EA0\u6B63\u8FC7\u7684\u505A\u6CD5\uFF0C\u5BBF\u4E3B\u8BB0\u5728 .dove/research/PRACTICE.md\uFF1B\u65B0\u7684\u5728\u4E0A</span></h3>' + (g.practice && g.practice.length ? '<div class="card"><ul style="margin:0;padding-left:20px">' + g.practice.map((x) => "<li>" + esc(x.date) + " \xB7 " + esc(x.topic) + (x.next ? "\uFF1A" + esc(x.next) : "") + (x.quote ? '<div class="note">\u539F\u8BDD\uFF1A' + esc(x.quote) + "</div>" : "") + "</li>").join("") + "</ul></div>" : '<div class="card note">\u8FD8\u6CA1\u6709\u8BB0\u5F55\u3002</div>');
   html += '<h3 class="sub3">\u516B\u7EF4\u8D70\u52BF <span class="sub">\u6BCF\u6B21\u5BFC\u5E08\u5224\u65AD\u4E00\u884C\uFF0C\u6700\u540E\u4E00\u5217\u662F\u5F53\u65F6\u6700\u5361\u7684\u4E00\u7EF4</span></h3>' + (g.trend && g.trend.rows.length ? '<div class="tablewrap">' + trendTable(g.trend) + "</div>" : '<div class="card note">EVAL \u91CC\u8FD8\u6CA1\u6709\u516B\u7EF4\u8D70\u52BF\u8868\u3002</div>');
   const ledger = g.ledger;
   html += '<h3 class="sub3">\u6BCF\u8F6E\u7684\u6295\u5165\u548C\u7ED3\u679C <span class="sub">\u4E00\u8F6E\u4ECE\u4E0A\u4E00\u8F6E\u7ED3\u679C\u5199\u6210\u5230\u672C\u8F6E\u7ED3\u679C\u5199\u6210\uFF1B\u65B0\u7684\u5728\u4E0A</span></h3>' + (ledger && ledger.rows.length ? '<div class="tablewrap">' + ledgerTable(ledger.rows) + "</div>" + (ledger.summary.finished ? '<div class="note">\u5E73\u5747\u6BCF\u8F6E\u88AB\u7EA0\u6B63 ' + ledger.summary.correctionsPerRound + " \u6B21\u3002\u9884\u6D4B\u5BF9\u8D26\uFF1A" + esc(ledger.summary.text) + "</div>" : "") + (ledger.activityScanned ? "" : '<div class="note">\u4F1A\u8BDD\u8BB0\u5F55\u8FD8\u5728\u7EDF\u8BA1\u4E2D\uFF0C\u5B50\u4EE3\u7406\u3001\u538B\u7F29\u7B49\u5217\u6682\u7F3A\u3002</div>') : '<div class="card note">\u8FD8\u6CA1\u6709\u8F6E\u6B21\u8BB0\u5F55\u3002</div>');
@@ -21488,8 +21686,8 @@ setInterval(load, 30000);
 }
 
 // src/core/watch-configure.mjs
-import fs22 from "node:fs";
-import path21 from "node:path";
+import fs23 from "node:fs";
+import path22 from "node:path";
 import { isDeepStrictEqual } from "node:util";
 var CONFIG_PATH = ".dove/research/watch/config.json";
 var MENTOR_FIELDS = /* @__PURE__ */ new Set(["keywords", "authors", "venues", "institutions", "seedPapers"]);
@@ -21503,12 +21701,12 @@ function readSuggestion(file, fsOps) {
   }
   if (value2 === null || typeof value2 !== "object" || Array.isArray(value2)) throw new Error("\u5BFC\u5E08\u8FFD\u8E2A\u5EFA\u8BAE\u5FC5\u987B\u662F JSON \u5BF9\u8C61\u3002");
   const fields = Object.keys(value2);
-  const unknown = fields.filter((field) => !MENTOR_FIELDS.has(field));
+  const unknown = fields.filter((field2) => !MENTOR_FIELDS.has(field2));
   if (unknown.length) throw new Error(`\u5BFC\u5E08\u8FFD\u8E2A\u5EFA\u8BAE\u4E0D\u63A5\u53D7\u5B57\u6BB5\uFF1A${unknown.join("\u3001")}\uFF1B\u672A\u5199\u5165\u914D\u7F6E\u3002`);
   if (!fields.length) throw new Error(`\u5BFC\u5E08\u8FFD\u8E2A\u5EFA\u8BAE\u81F3\u5C11\u9700\u8981\u4E00\u4E2A\u5B57\u6BB5\uFF1A${[...MENTOR_FIELDS].join("\u3001")}\uFF1B\u672A\u5199\u5165\u914D\u7F6E\u3002`);
-  for (const field of fields) {
-    if (!Array.isArray(value2[field]) || value2[field].some((item) => typeof item !== "string")) {
-      throw new Error(`\u5BFC\u5E08\u8FFD\u8E2A\u5EFA\u8BAE\u7684 ${field} \u5FC5\u987B\u662F\u5B57\u7B26\u4E32\u6570\u7EC4\uFF08\u53EF\u7528 [] \u6E05\u7A7A\uFF09\uFF1B\u672A\u5199\u5165\u914D\u7F6E\u3002`);
+  for (const field2 of fields) {
+    if (!Array.isArray(value2[field2]) || value2[field2].some((item) => typeof item !== "string")) {
+      throw new Error(`\u5BFC\u5E08\u8FFD\u8E2A\u5EFA\u8BAE\u7684 ${field2} \u5FC5\u987B\u662F\u5B57\u7B26\u4E32\u6570\u7EC4\uFF08\u53EF\u7528 [] \u6E05\u7A7A\uFF09\uFF1B\u672A\u5199\u5165\u914D\u7F6E\u3002`);
     }
   }
   return { value: value2, fields };
@@ -21527,16 +21725,16 @@ function readExistingConfig(rooted) {
 function configureWatchFromMentor(project, mentorFile, options2 = {}) {
   if (typeof project !== "string" || !project.trim()) throw new Error("dove watch configure \u9700\u8981 --project <root>\uFF0C\u53EA\u4FDD\u5B58\u8FD9\u4E2A\u9879\u76EE\u7684\u914D\u7F6E\u3002");
   if (typeof mentorFile !== "string" || !mentorFile.trim()) throw new Error("dove watch configure \u9700\u8981 --mentor <json-file>\uFF08\u5EFA\u8BAE JSON \u6587\u4EF6\u8DEF\u5F84\uFF0C\u4E0D\u662F\u5185\u8054 JSON \u6216\u5BFC\u5E08\u8BF4\u660E\u6587\u672C\uFF09\u3002");
-  const fsOps = options2.fsOps ?? fs22;
+  const fsOps = options2.fsOps ?? fs23;
   const root = resolveInstalledProjectRoot(project, options2);
-  const file = path21.resolve(options2.cwd ?? process.cwd(), mentorFile);
+  const file = path22.resolve(options2.cwd ?? process.cwd(), mentorFile);
   const { value: suggestion, fields } = readSuggestion(file, fsOps);
   const rooted = openRootedFilesystem(root, { fsOps });
   const previous = readExistingConfig(rooted);
   const config = normalizeWatchConfig({ ...previous, ...suggestion, source: "mentor" });
-  for (const field of Object.keys(previous)) {
-    if (field !== "source" && !Object.hasOwn(suggestion, field) && !isDeepStrictEqual(previous[field], config[field])) {
-      throw new Error(`\u5DF2\u6709\u8FFD\u8E2A\u914D\u7F6E\u7684 ${field} \u65E0\u6CD5\u539F\u6837\u4FDD\u7559\uFF1B\u8BF7\u5148\u4FEE\u6B63\u8BE5\u5B57\u6BB5\uFF0C\u672A\u8986\u76D6\u3002`);
+  for (const field2 of Object.keys(previous)) {
+    if (field2 !== "source" && !Object.hasOwn(suggestion, field2) && !isDeepStrictEqual(previous[field2], config[field2])) {
+      throw new Error(`\u5DF2\u6709\u8FFD\u8E2A\u914D\u7F6E\u7684 ${field2} \u65E0\u6CD5\u539F\u6837\u4FDD\u7559\uFF1B\u8BF7\u5148\u4FEE\u6B63\u8BE5\u5B57\u6BB5\uFF0C\u672A\u8986\u76D6\u3002`);
     }
   }
   const configPath = rooted.displayPath(CONFIG_PATH);
@@ -21554,13 +21752,13 @@ function configureWatchFromMentor(project, mentorFile, options2 = {}) {
 
 // src/core/figure-generation.mjs
 import { spawnSync as spawnSync2 } from "node:child_process";
-import fs23 from "node:fs";
+import fs24 from "node:fs";
 import os7 from "node:os";
-import path22 from "node:path";
+import path23 from "node:path";
 var PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 var RETRY_DELAYS_MS = [2e3, 6e3];
 function doveConfigDirectory2(env) {
-  return path22.join(env.XDG_CONFIG_HOME || path22.join(env.HOME || os7.homedir(), ".config"), "dove");
+  return path23.join(env.XDG_CONFIG_HOME || path23.join(env.HOME || os7.homedir(), ".config"), "dove");
 }
 function imageKind(bytes) {
   if (bytes.subarray(0, 8).equals(PNG_SIGNATURE)) return { type: "image/png", extension: ".png" };
@@ -21576,10 +21774,10 @@ function origin(value2) {
   }
 }
 function figureKeys(config, baseURL, env) {
-  const file = config.apiKeyFile ?? path22.join(doveConfigDirectory2(env), "figure-api-key");
+  const file = config.apiKeyFile ?? path23.join(doveConfigDirectory2(env), "figure-api-key");
   const keys = [];
   try {
-    const key = fs23.readFileSync(file, "utf8").trim();
+    const key = fs24.readFileSync(file, "utf8").trim();
     if (key) keys.push(key);
   } catch {
   }
@@ -21602,18 +21800,18 @@ function configuredFigure(options2) {
   return { baseURL, model: String(config.model).trim(), keys };
 }
 function freeOutputPath(file) {
-  if (!fs23.existsSync(file)) return file;
-  const extension = path22.extname(file);
+  if (!fs24.existsSync(file)) return file;
+  const extension = path23.extname(file);
   const stem = file.slice(0, file.length - extension.length);
   for (let index = 2; ; index += 1) {
     const candidate = `${stem}-${index}${extension}`;
-    if (!fs23.existsSync(candidate)) return candidate;
+    if (!fs24.existsSync(candidate)) return candidate;
   }
 }
 function outputPathFor(file, kind) {
-  const extension = path22.extname(file).toLowerCase();
+  const extension = path23.extname(file).toLowerCase();
   const matches = extension === kind.extension || kind.extension === ".jpg" && extension === ".jpeg";
-  return freeOutputPath(matches ? file : `${file.slice(0, file.length - path22.extname(file).length)}${kind.extension}`);
+  return freeOutputPath(matches ? file : `${file.slice(0, file.length - path23.extname(file).length)}${kind.extension}`);
 }
 function redact(text, keys) {
   let result = String(text);
@@ -21664,16 +21862,16 @@ async function imageBytes(result, fetchImpl) {
 }
 async function generateFigure(projectRoot, options2 = {}) {
   const { baseURL, model, keys } = configuredFigure(options2);
-  const root = path22.resolve(projectRoot);
-  const prompt = String(options2.prompt ?? (options2.promptFile ? fs23.readFileSync(path22.resolve(root, options2.promptFile), "utf8") : "")).trim();
+  const root = path23.resolve(projectRoot);
+  const prompt = String(options2.prompt ?? (options2.promptFile ? fs24.readFileSync(path23.resolve(root, options2.promptFile), "utf8") : "")).trim();
   if (!prompt) throw new Error("Give the image prompt with --prompt <text> or --prompt-file <file>.");
   if (!options2.output) throw new Error("--output <file> is required.");
   const inputs = [].concat(options2.image ?? []).map((image) => {
-    const file = path22.resolve(root, image);
-    const bytes2 = fs23.readFileSync(file);
+    const file = path23.resolve(root, image);
+    const bytes2 = fs24.readFileSync(file);
     const kind2 = imageKind(bytes2);
     if (!kind2) throw new Error(`Input image is not PNG, JPEG or WebP: ${file}`);
-    return { name: path22.basename(file), bytes: bytes2, type: kind2.type };
+    return { name: path23.basename(file), bytes: bytes2, type: kind2.type };
   });
   const extra = Object.fromEntries(["size", "quality", "background"].filter((name) => options2[name] !== void 0).map((name) => [name, String(options2[name])]));
   let body;
@@ -21696,20 +21894,20 @@ async function generateFigure(projectRoot, options2 = {}) {
   const bytes = await imageBytes(result, options2.fetch ?? globalThis.fetch);
   const kind = imageKind(bytes);
   if (!kind) throw new Error("Image API returned data that is not a PNG, JPEG or WebP image.");
-  const output = outputPathFor(path22.resolve(root, options2.output), kind);
-  fs23.mkdirSync(path22.dirname(output), { recursive: true });
-  fs23.writeFileSync(output, bytes, { flag: "wx" });
+  const output = outputPathFor(path23.resolve(root, options2.output), kind);
+  fs24.mkdirSync(path23.dirname(output), { recursive: true });
+  fs24.writeFileSync(output, bytes, { flag: "wx" });
   return { status: "generated", mode: inputs.length ? "edit" : "generate", model, outputPath: output, inputs: inputs.length };
 }
 function findExecutable(name, env = process.env) {
   return onPath(name, env);
 }
 function onPath(name, env) {
-  for (const directory of String(env.PATH ?? "").split(path22.delimiter)) {
+  for (const directory of String(env.PATH ?? "").split(path23.delimiter)) {
     if (!directory) continue;
-    const candidate = path22.join(directory, name);
+    const candidate = path23.join(directory, name);
     try {
-      fs23.accessSync(candidate, fs23.constants.X_OK);
+      fs24.accessSync(candidate, fs24.constants.X_OK);
       return candidate;
     } catch {
     }
@@ -21719,28 +21917,28 @@ function onPath(name, env) {
 function figureTools(options2 = {}) {
   const env = options2.env ?? process.env;
   const config = readHostSettings(options2).figure ?? {};
-  const directory = config.pptTools ?? path22.join(env.HOME || os7.homedir(), ".local/share/dove/figure-tools");
-  const existing = (file) => fs23.existsSync(file) ? file : null;
-  const exportScript = existing(path22.join(directory, "scripts/export-pdf"));
+  const directory = config.pptTools ?? path23.join(env.HOME || os7.homedir(), ".local/share/dove/figure-tools");
+  const existing = (file) => fs24.existsSync(file) ? file : null;
+  const exportScript = existing(path23.join(directory, "scripts/export-pdf"));
   const soffice = onPath("soffice", env) ?? onPath("libreoffice", env);
   const pdftoppm = onPath("pdftoppm", env);
   const python3 = onPath("python3", env);
   const systemPptx = python3 && spawnSync2(python3, ["-c", "import pptx"], { stdio: "ignore", timeout: 1e4 }).status === 0 ? python3 : null;
   return {
-    settings: path22.join(env.XDG_CONFIG_HOME || path22.join(env.HOME || os7.homedir(), ".config"), "dove/settings.json"),
+    settings: path23.join(env.XDG_CONFIG_HOME || path23.join(env.HOME || os7.homedir(), ".config"), "dove/settings.json"),
     imageModel: config.baseURL && config.model ? { baseURL: config.baseURL, model: config.model } : null,
-    pptPython: config.pptPython ?? existing(path22.join(directory, "venv/bin/python")) ?? systemPptx,
+    pptPython: config.pptPython ?? existing(path23.join(directory, "venv/bin/python")) ?? systemPptx,
     exportPdf: exportScript ? `${exportScript} INPUT.pptx OUTPUT.pdf` : soffice ? `${soffice} --headless --convert-to pdf --outdir DIR INPUT.pptx` : null,
     pdfToPng: pdftoppm ? `${pdftoppm} -png -r 300 -singlefile INPUT.pdf OUTPUT` : null,
-    notes: existing(path22.join(directory, "README.md"))
+    notes: existing(path23.join(directory, "README.md"))
   };
 }
 
 // src/core/figure-proof.mjs
 import { spawnSync as spawnSync3 } from "node:child_process";
-import fs24 from "node:fs";
+import fs25 from "node:fs";
 import os8 from "node:os";
-import path23 from "node:path";
+import path24 from "node:path";
 var PRINT_DPI = 300;
 var DEFAULT_DPI = 150;
 var RASTER = /\.(?:png|jpe?g|webp)$/iu;
@@ -21760,12 +21958,12 @@ function parseFigureSpec(text) {
   return { file: value2.slice(0, at), inches: lengthInInches(value2.slice(at + 1)) };
 }
 function freeOutputPath2(file) {
-  if (!fs24.existsSync(file)) return file;
-  const extension = path23.extname(file);
+  if (!fs25.existsSync(file)) return file;
+  const extension = path24.extname(file);
   const stem = file.slice(0, file.length - extension.length);
   for (let index = 2; ; index += 1) {
     const candidate = `${stem}-${index}${extension}`;
-    if (!fs24.existsSync(candidate)) return candidate;
+    if (!fs25.existsSync(candidate)) return candidate;
   }
 }
 function millimetres(inches) {
@@ -21882,14 +22080,14 @@ function rasterize(file, scratch, index, env) {
   if (!/\.pdf$/iu.test(file)) throw new Error(`Use PNG, JPEG, WebP or PDF figures (export PPTX or SVG to PDF first): ${file}`);
   const pdftoppm = findExecutable("pdftoppm", env);
   if (!pdftoppm) throw new Error(`pdftoppm is needed to read PDF figures: ${file}`);
-  const stem = path23.join(scratch, `figure-${index}`);
+  const stem = path24.join(scratch, `figure-${index}`);
   const run = spawnSync3(pdftoppm, ["-png", "-r", String(PRINT_DPI), "-f", "1", "-l", "1", "-singlefile", file, stem], { encoding: "utf8", timeout: 12e4 });
-  if (run.status !== 0 || !fs24.existsSync(`${stem}.png`)) throw new Error(`pdftoppm could not read ${file}: ${(run.stderr || "").trim().slice(0, 300)}`);
+  if (run.status !== 0 || !fs25.existsSync(`${stem}.png`)) throw new Error(`pdftoppm could not read ${file}: ${(run.stderr || "").trim().slice(0, 300)}`);
   return { path: `${stem}.png`, vector: true };
 }
 function composeFigureProof(projectRoot, options2 = {}) {
   const env = options2.env ?? process.env;
-  const root = path23.resolve(projectRoot);
+  const root = path24.resolve(projectRoot);
   const mode = options2.compare ? "compare" : options2.proof ? "proof" : null;
   if (!mode) throw new Error("Choose --compare or --proof.");
   if (!options2.output) throw new Error("--output <file.png> is required.");
@@ -21908,19 +22106,19 @@ function composeFigureProof(projectRoot, options2 = {}) {
     if (!figures2.length) throw new Error("--proof needs one or more --figure <file>@<width>.");
     specs = figures2.map((value2) => {
       const spec = parseFigureSpec(value2);
-      return { ...spec, label: `${path23.basename(spec.file)} - ${millimetres(spec.inches)}` };
+      return { ...spec, label: `${path24.basename(spec.file)} - ${millimetres(spec.inches)}` };
     });
   }
   const python = composerPython(options2);
-  const scratch = fs24.mkdtempSync(path23.join(os8.tmpdir(), "dove-figure-proof-"));
+  const scratch = fs25.mkdtempSync(path24.join(os8.tmpdir(), "dove-figure-proof-"));
   try {
     const items = specs.map((spec, index) => {
-      const file = path23.resolve(root, spec.file);
-      if (!fs24.existsSync(file)) throw new Error(`Figure not found: ${file}`);
+      const file = path24.resolve(root, spec.file);
+      if (!fs25.existsSync(file)) throw new Error(`Figure not found: ${file}`);
       return { ...spec, file, ...rasterize(file, scratch, index, env) };
     });
-    const output = freeOutputPath2(path23.resolve(root, options2.output));
-    fs24.mkdirSync(path23.dirname(output), { recursive: true });
+    const output = freeOutputPath2(path24.resolve(root, options2.output));
+    fs25.mkdirSync(path24.dirname(output), { recursive: true });
     const sideBySide = mode === "compare" && specs[0].inches <= 4;
     const run = spawnSync3(python, ["-c", COMPOSER], {
       input: JSON.stringify({ mode, dpi, output, side_by_side: sideBySide, items: items.map((item) => ({ path: item.path, inches: item.inches, label: item.label })) }),
@@ -21944,7 +22142,7 @@ function composeFigureProof(projectRoot, options2 = {}) {
       })
     };
   } finally {
-    fs24.rmSync(scratch, { recursive: true, force: true });
+    fs25.rmSync(scratch, { recursive: true, force: true });
   }
 }
 var PAGE_ANALYSIS = String.raw`
@@ -22128,10 +22326,10 @@ json.dump({"pages": len(pages), "columns": len(columns), "referencesPage": headi
 `;
 function composePageOverview(projectRoot, options2 = {}) {
   const env = options2.env ?? process.env;
-  const root = path23.resolve(projectRoot);
+  const root = path24.resolve(projectRoot);
   if (!options2.output) throw new Error("--output <file.png> is required.");
-  const pdf = path23.resolve(root, String(options2.pages));
-  if (!/\.pdf$/iu.test(pdf) || !fs24.existsSync(pdf)) throw new Error(`--pages needs the compiled manuscript PDF: ${pdf}`);
+  const pdf = path24.resolve(root, String(options2.pages));
+  if (!/\.pdf$/iu.test(pdf) || !fs25.existsSync(pdf)) throw new Error(`--pages needs the compiled manuscript PDF: ${pdf}`);
   const pdftoppm = findExecutable("pdftoppm", env);
   const pdftotext = findExecutable("pdftotext", env);
   if (!pdftoppm || !pdftotext) throw new Error("pdftoppm and pdftotext (poppler) are needed to read the manuscript pages.");
@@ -22140,15 +22338,15 @@ function composePageOverview(projectRoot, options2 = {}) {
   const limit = options2.bodyPages === void 0 ? null : Number(options2.bodyPages);
   if (limit !== null && !(limit > 0 && limit < 200)) throw new Error(`--body-pages must be a page count: ${options2.bodyPages}`);
   const python = composerPython(options2);
-  const scratch = fs24.mkdtempSync(path23.join(os8.tmpdir(), "dove-pages-"));
+  const scratch = fs25.mkdtempSync(path24.join(os8.tmpdir(), "dove-pages-"));
   try {
-    const render2 = spawnSync3(pdftoppm, ["-png", "-r", String(dpi), pdf, path23.join(scratch, "page")], { encoding: "utf8", timeout: 3e5 });
+    const render2 = spawnSync3(pdftoppm, ["-png", "-r", String(dpi), pdf, path24.join(scratch, "page")], { encoding: "utf8", timeout: 3e5 });
     if (render2.status !== 0) throw new Error(`pdftoppm could not render ${pdf}: ${(render2.stderr || "").trim().slice(0, 300)}`);
-    const words = path23.join(scratch, "words.html");
+    const words = path24.join(scratch, "words.html");
     const text = spawnSync3(pdftotext, ["-bbox", pdf, words], { encoding: "utf8", timeout: 3e5 });
     if (text.status !== 0) throw new Error(`pdftotext could not read ${pdf}: ${(text.stderr || "").trim().slice(0, 300)}`);
-    const output = freeOutputPath2(path23.resolve(root, options2.output));
-    fs24.mkdirSync(path23.dirname(output), { recursive: true });
+    const output = freeOutputPath2(path24.resolve(root, options2.output));
+    fs25.mkdirSync(path24.dirname(output), { recursive: true });
     const run = spawnSync3(python, ["-c", PAGE_ANALYSIS], {
       input: JSON.stringify({ images: scratch, words, output, dpi, limit, perRow: Number(options2.perRow ?? 4) }),
       encoding: "utf8",
@@ -22158,39 +22356,39 @@ function composePageOverview(projectRoot, options2 = {}) {
     if (run.status !== 0) throw new Error(`Reading the pages failed: ${(run.stderr || run.stdout || "").trim().split("\n").slice(-3).join(" ").slice(0, 400)}`);
     return { status: "composed", mode: "pages", dpi, outputPath: output, pdf, limit, ...JSON.parse(run.stdout) };
   } finally {
-    fs24.rmSync(scratch, { recursive: true, force: true });
+    fs25.rmSync(scratch, { recursive: true, force: true });
   }
 }
 
 // src/core/cold-read.mjs
 import { createHash } from "node:crypto";
 import { spawnSync as spawnSync4 } from "node:child_process";
-import fs25 from "node:fs";
+import fs26 from "node:fs";
 import os9 from "node:os";
-import path24 from "node:path";
+import path25 from "node:path";
 var COLD_READ_KEY = "coldread:last";
 var PAGE_DPI = 100;
 function pad(number, width) {
   return String(number).padStart(width, "0");
 }
 function folderFor(root, env) {
-  const base = env.DOVE_COLD_READ_DIR || path24.join(os9.tmpdir(), "dove-cold-read");
-  return path24.join(base, `${path24.basename(root)}-${createHash("sha256").update(root).digest("hex").slice(0, 8)}`);
+  const base = env.DOVE_COLD_READ_DIR || path25.join(os9.tmpdir(), "dove-cold-read");
+  return path25.join(base, `${path25.basename(root)}-${createHash("sha256").update(root).digest("hex").slice(0, 8)}`);
 }
 function preparePdf(pdf, target, tools) {
-  const stem = path24.basename(pdf, path24.extname(pdf));
-  const folder = path24.join(target, stem);
-  fs25.mkdirSync(folder, { recursive: true });
+  const stem = path25.basename(pdf, path25.extname(pdf));
+  const folder = path25.join(target, stem);
+  fs26.mkdirSync(folder, { recursive: true });
   const text = spawnSync4(tools.pdftotext, ["-layout", pdf, "-"], { encoding: "utf8", maxBuffer: 64 << 20, timeout: 3e5 });
   if (text.status !== 0) throw new Error(`pdftotext could not read ${pdf}: ${(text.stderr || "").trim().slice(0, 300)}`);
   const pages = text.stdout.split("\f");
   if (pages.length > 1 && !pages.at(-1).trim()) pages.pop();
   const width = String(pages.length).length;
-  pages.forEach((page, index) => fs25.writeFileSync(path24.join(folder, `page-${pad(index + 1, width)}.txt`), page));
-  const render2 = spawnSync4(tools.pdftoppm, ["-png", "-r", String(PAGE_DPI), pdf, path24.join(folder, "page")], { encoding: "utf8", timeout: 6e5 });
+  pages.forEach((page, index) => fs26.writeFileSync(path25.join(folder, `page-${pad(index + 1, width)}.txt`), page));
+  const render2 = spawnSync4(tools.pdftoppm, ["-png", "-r", String(PAGE_DPI), pdf, path25.join(folder, "page")], { encoding: "utf8", timeout: 6e5 });
   if (render2.status !== 0) throw new Error(`pdftoppm could not render ${pdf}: ${(render2.stderr || "").trim().slice(0, 300)}`);
-  const images = fs25.readdirSync(folder).filter((name) => /^page-\d+\.png$/u.test(name)).sort((left, right) => Number(left.match(/\d+/u)[0]) - Number(right.match(/\d+/u)[0]));
-  return { pdf, stem, folder, pages: pages.length, texts: pages.map((_, index) => path24.join(folder, `page-${pad(index + 1, width)}.txt`)), images: images.map((name) => path24.join(folder, name)) };
+  const images = fs26.readdirSync(folder).filter((name) => /^page-\d+\.png$/u.test(name)).sort((left, right) => Number(left.match(/\d+/u)[0]) - Number(right.match(/\d+/u)[0]));
+  return { pdf, stem, folder, pages: pages.length, texts: pages.map((_, index) => path25.join(folder, `page-${pad(index + 1, width)}.txt`)), images: images.map((name) => path25.join(folder, name)) };
 }
 function renderBody2(prepared, options2) {
   const lines = [
@@ -22201,8 +22399,8 @@ function renderBody2(prepared, options2) {
   ];
   if (options2.venue) lines.push(`\u6295\u7A3F\u76EE\u6807\uFF1A${options2.venue}`, "");
   for (const item of prepared) {
-    lines.push(`## ${path24.basename(item.pdf)}\uFF08\u5171 ${item.pages} \u9875\uFF09`, "");
-    lines.push(`- \u9010\u9875\u6587\u5B57\uFF1A${item.folder}/page-*.txt\uFF08${path24.basename(item.texts[0] ?? "")} \u5230 ${path24.basename(item.texts.at(-1) ?? "")}\uFF09`);
+    lines.push(`## ${path25.basename(item.pdf)}\uFF08\u5171 ${item.pages} \u9875\uFF09`, "");
+    lines.push(`- \u9010\u9875\u6587\u5B57\uFF1A${item.folder}/page-*.txt\uFF08${path25.basename(item.texts[0] ?? "")} \u5230 ${path25.basename(item.texts.at(-1) ?? "")}\uFF09`);
     lines.push(`- \u9875\u9762\u56FE\u7247\uFF1A${item.folder}/page-*.png\uFF08\u770B\u56FE\u3001\u56FE\u91CC\u7684\u5B57\u548C\u7248\u9762\uFF09`, "");
   }
   lines.push(
@@ -22223,33 +22421,35 @@ function renderBody2(prepared, options2) {
 }
 function prepareColdRead(projectRoot, options2 = {}) {
   const env = options2.env ?? process.env;
-  const root = path24.resolve(projectRoot);
-  const pdfs = [].concat(options2.pdf ?? []).map((item) => path24.resolve(root, String(item)));
+  const root = path25.resolve(projectRoot);
+  const pdfs = [].concat(options2.pdf ?? []).map((item) => path25.resolve(root, String(item)));
   if (!pdfs.length) throw new Error("Give the compiled manuscript: --pdf <paper.pdf> (repeat for the supplement).");
   for (const pdf of pdfs) {
-    if (!/\.pdf$/iu.test(pdf) || !fs25.existsSync(pdf)) throw new Error(`Not a compiled PDF: ${pdf}`);
+    if (!/\.pdf$/iu.test(pdf) || !fs26.existsSync(pdf)) throw new Error(`Not a compiled PDF: ${pdf}`);
   }
   const tools = { pdftotext: findExecutable("pdftotext", env), pdftoppm: findExecutable("pdftoppm", env) };
   if (!tools.pdftotext || !tools.pdftoppm) throw new Error("pdftotext and pdftoppm (poppler) are needed for a cold read.");
   const folder = folderFor(root, env);
-  fs25.rmSync(folder, { recursive: true, force: true });
-  fs25.mkdirSync(folder, { recursive: true });
+  fs26.rmSync(folder, { recursive: true, force: true });
+  fs26.mkdirSync(folder, { recursive: true });
   const prepared = pdfs.map((pdf) => preparePdf(pdf, folder, tools));
   const body = renderBody2(prepared, options2);
-  fs25.writeFileSync(path24.join(folder, "handoff.md"), body);
+  fs26.writeFileSync(path25.join(folder, "handoff.md"), body);
   const at = new Date(options2.now ?? Date.now()).toISOString();
   updateHookState(root, (state2) => {
     state2.asked[COLD_READ_KEY] = at;
   }, options2);
-  return { status: "prepared", folder, handoff: path24.join(folder, "handoff.md"), documents: prepared.map((item) => ({ pdf: item.pdf, pages: item.pages, folder: item.folder })), body };
+  return { status: "prepared", folder, handoff: path25.join(folder, "handoff.md"), documents: prepared.map((item) => ({ pdf: item.pdf, pages: item.pages, folder: item.folder })), body };
 }
 
 // src/core/stop-hook.mjs
-import fs26 from "node:fs";
+import fs27 from "node:fs";
 var MANUSCRIPT_BUILD = /\b(?:latexmk|pdflatex|xelatex|lualatex|tectonic)\b/u;
 var TRANSCRIPT_TAIL_BYTES = 4 << 20;
-function turnRebuiltManuscript(transcriptPath, fsOps = fs26) {
-  if (typeof transcriptPath !== "string" || !transcriptPath) return false;
+var AUTOMATIC = /^(?:<(?:task-notification|scheduled-wakeup|background-task|system-reminder)[\s>]|\[Your previous response)/u;
+function inspectTurn(transcriptPath, fsOps = fs27) {
+  const turn = { rebuilt: false, userText: null, userKey: null, wrotePractice: false, wroteReflection: false };
+  if (typeof transcriptPath !== "string" || !transcriptPath) return turn;
   let text;
   try {
     const size = fsOps.statSync(transcriptPath).size;
@@ -22263,7 +22463,7 @@ function turnRebuiltManuscript(transcriptPath, fsOps = fs26) {
       fsOps.closeSync(fd);
     }
   } catch {
-    return false;
+    return turn;
   }
   const lines = text.split("\n");
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -22276,19 +22476,31 @@ function turnRebuiltManuscript(transcriptPath, fsOps = fs26) {
     if (!record || record.isSidechain) continue;
     const content = record.message?.content;
     if (record.type === "user" && !record.isMeta) {
-      const toolResult = Array.isArray(content) && content.some((block) => block?.type === "tool_result");
-      const own = typeof content === "string" ? Boolean(content.trim()) : Array.isArray(content) && content.some((block) => block?.type === "text" && block.text?.trim());
-      if (own && !toolResult) return false;
-      continue;
+      if (Array.isArray(content) && content.some((block) => block?.type === "tool_result")) continue;
+      const said = typeof content === "string" ? content : Array.isArray(content) ? content.filter((block) => block?.type === "text").map((block) => block.text ?? "").join("\n") : "";
+      if (!said.trim()) continue;
+      if (!AUTOMATIC.test(said.trim())) {
+        turn.userText = said.trim();
+        turn.userKey = record.uuid ?? record.timestamp ?? said.trim().slice(0, 80);
+      }
+      return turn;
     }
     if (record.type === "assistant" && Array.isArray(content)) {
-      if (content.some((block) => block?.type === "tool_use" && block.name === "Bash" && MANUSCRIPT_BUILD.test(String(block.input?.command ?? "")))) return true;
+      for (const block of content) {
+        if (block?.type !== "tool_use") continue;
+        if (block.name === "Bash" && MANUSCRIPT_BUILD.test(String(block.input?.command ?? ""))) turn.rebuilt = true;
+        if ((block.name === "Write" || block.name === "Edit") && /(?:^|\/)\.dove\/research\/PRACTICE\.md$/u.test(String(block.input?.file_path ?? ""))) turn.wrotePractice = true;
+        if ((block.name === "Write" || block.name === "Edit") && /(?:^|\/)\.dove\/research\/reflections\/[^/]+\.md$/u.test(String(block.input?.file_path ?? ""))) turn.wroteReflection = true;
+      }
     }
   }
-  return false;
+  return turn;
 }
-function coldReadPrompt() {
-  return "\u8FD9\u4E00\u8F6E\u91CD\u65B0\u7F16\u8BD1\u4E86\u7A3F\u4EF6\u3002\u4EA4\u7ED9\u7528\u6237\u4E4B\u524D\uFF0C\u6309 Draft \u7684\u7EC8\u68C0\u505A\u4E00\u6B21\u51B7\u8BFB\uFF1A\u5148 dove figure --pages <\u7A3F\u4EF6.pdf> --body-pages <\u6B63\u6587\u9875\u6570\u4E0A\u9650> --output <\u603B\u89C8.png> \u770B\u7248\u9762\uFF0C\u518D dove cold-read --pdf <\u7A3F\u4EF6.pdf>\uFF0C\u628A\u5B83\u8F93\u51FA\u7684\u8C03\u7528\u6B63\u6587\u539F\u6837\u4EA4\u7ED9\u4E00\u4E2A\u5168\u65B0\u7684 dove-review\uFF0C\u53EA\u7ED9\u8FD9\u4EFD PDF\uFF0C\u4E0D\u7ED9\u6E90\u7801\u3001\u8BFB\u6570\u6216\u9879\u76EE\u80CC\u666F\uFF1B\u9010\u6761\u5904\u7406\u5B83\u5217\u51FA\u7684\u884C\u8BDD\u3001\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u548C\u9632\u5FA1\u63AA\u8F9E\uFF0C\u6539\u5B8C\u518D\u51B7\u8BFB\u4E00\u6B21\u3002\u5199\u7A3F\u7684\u4EBA\u81EA\u5DF1\u67E5\u4E0D\u51FA\u81EA\u5DF1\u7684\u884C\u8BDD\uFF0C\u8FD9\u4E00\u6B65\u4E0D\u80FD\u7528\u81EA\u67E5\u4EE3\u66FF\u3002\u8FD8\u5728\u6539\u5C31\u63A5\u7740\u6539\uFF0C\u4EA4\u4ED8\u524D\u518D\u505A\u3002\u8FD9\u6BB5\u8BDD\u662F Dove \u6839\u636E\u672C\u8F6E\u64CD\u4F5C\u81EA\u52A8\u63D0\u51FA\u7684\uFF0C\u4E0D\u662F\u7528\u6237\u521A\u8BF4\u7684\u3002";
+function coldReadPrompt(writingPractice = "") {
+  return `\u8FD9\u4E00\u8F6E\u91CD\u65B0\u7F16\u8BD1\u4E86\u7A3F\u4EF6\u3002\u4EA4\u7ED9\u7528\u6237\u4E4B\u524D\uFF0C\u6309 Draft \u7684\u7EC8\u68C0\u505A\u4E00\u6B21\u51B7\u8BFB\uFF1A\u5148 dove figure --pages <\u7A3F\u4EF6.pdf> --body-pages <\u6B63\u6587\u9875\u6570\u4E0A\u9650> --output <\u603B\u89C8.png> \u770B\u7248\u9762\uFF0C\u518D dove cold-read --pdf <\u7A3F\u4EF6.pdf>\uFF0C\u628A\u5B83\u8F93\u51FA\u7684\u8C03\u7528\u6B63\u6587\u539F\u6837\u4EA4\u7ED9\u4E00\u4E2A\u5168\u65B0\u7684 dove-review\uFF0C\u53EA\u7ED9\u8FD9\u4EFD PDF\uFF0C\u4E0D\u7ED9\u6E90\u7801\u3001\u8BFB\u6570\u6216\u9879\u76EE\u80CC\u666F\uFF1B\u9010\u6761\u5904\u7406\u5B83\u5217\u51FA\u7684\u884C\u8BDD\u3001\u8BFB\u4E0D\u61C2\u7684\u5730\u65B9\u548C\u9632\u5FA1\u63AA\u8F9E\uFF0C\u6539\u5B8C\u518D\u51B7\u8BFB\u4E00\u6B21\u3002\u5199\u7A3F\u7684\u4EBA\u81EA\u5DF1\u67E5\u4E0D\u51FA\u81EA\u5DF1\u7684\u884C\u8BDD\uFF0C\u8FD9\u4E00\u6B65\u4E0D\u80FD\u7528\u81EA\u67E5\u4EE3\u66FF\u3002\u8FD8\u5728\u6539\u5C31\u63A5\u7740\u6539\uFF0C\u4EA4\u4ED8\u524D\u518D\u505A\u3002${writingPractice ? `
+\u672C\u9879\u76EE\u5199\u7A3F\u548C\u56FE\u65B9\u9762\u7684\u505A\u6CD5\u66F4\u6B63\uFF1A
+${writingPractice}
+` : ""}\u8FD9\u6BB5\u8BDD\u662F Dove \u6839\u636E\u672C\u8F6E\u64CD\u4F5C\u81EA\u52A8\u63D0\u51FA\u7684\uFF0C\u4E0D\u662F\u7528\u6237\u521A\u8BF4\u7684\u3002`;
 }
 function parseStopPayload(input) {
   let payload;
@@ -22322,7 +22534,16 @@ function stopHookOutput(payload, project, options2 = {}) {
   const candidates = [];
   if (state2.overrun) candidates.push({ key: `overrun:${state2.currentRound.brief.file}:${state2.overrun.due}`, reason: overrunPrompt(state2) });
   if (state2.stall) candidates.push({ key: `stall:${state2.stall.results.at(-1)}`, reason: stallPrompt(state2) });
-  if (turnRebuiltManuscript(payload?.transcript_path, options2.fsOps)) candidates.push({ key: `coldread:remind:${asked[COLD_READ_KEY] ?? "never"}`, reason: coldReadPrompt() });
+  const turn = inspectTurn(payload?.transcript_path, options2.fsOps);
+  const corrected = turn.userText ? correctionTopics(turn.userText) : [];
+  const reflect = turn.userText ? reflectionRequested(turn.userText) : false;
+  if (reflect && (!turn.wroteReflection || !turn.wrotePractice)) {
+    const missing = [...turn.wroteReflection ? [] : [`\u5B58\u5230 ${REFLECTIONS_DIR}`], ...turn.wrotePractice ? [] : ["\u628A\u4EE5\u540E\u600E\u4E48\u505A\u8BB0\u8FDB\u505A\u6CD5\u66F4\u6B63"]];
+    candidates.unshift({ key: `reflect:${turn.userKey}`, reason: reflectionReminder(missing) });
+  } else if (corrected.length && !turn.wrotePractice) {
+    candidates.unshift({ key: `practice:${turn.userKey}`, reason: correctionReminder(corrected) });
+  }
+  if (turn.rebuilt) candidates.push({ key: `coldread:remind:${asked[COLD_READ_KEY] ?? "never"}`, reason: coldReadPrompt(practiceOnTopic(readPractice(project, options2), "writing")) });
   const next = candidates.find((candidate) => !asked[candidate.key]);
   if (!next) return null;
   updateHookState(project, (hookState) => {
@@ -22332,8 +22553,8 @@ function stopHookOutput(payload, project, options2 = {}) {
 }
 
 // src/core/mentor-brief.mjs
-import fs27 from "node:fs";
-import path25 from "node:path";
+import fs28 from "node:fs";
+import path26 from "node:path";
 var RESEARCH2 = ".dove/research";
 var ROUND_FILE4 = /^(\d+)[-_](brief|result)\.md$/iu;
 var IMPACT_FILE = /^impact-\d{4}-\d{2}-\d{2}\.md$/u;
@@ -22392,10 +22613,40 @@ function computedFacts(project, fsOps, now, state2) {
   lines.push(latest ? `- \u516B\u7EF4\u8D70\u52BF\uFF1A\u5171 ${state2.trend.rows.length} \u6B21\u5224\u65AD\uFF1B\u6700\u8FD1\u4E00\u6B21 ${latest.date ?? "\u672A\u5199\u65E5\u671F"}\uFF08${latest.round ?? "\u672A\u5199\u8F6E\u6B21"}\uFF09\uFF0C\u6700\u5361\u7684\u4E00\u7EF4 ${latest.bottleneck ?? "\u672A\u5199"}\u3002` : "- \u516B\u7EF4\u8D70\u52BF\uFF1AEVAL \u91CC\u8FD8\u6CA1\u6709\u8D70\u52BF\u8868\u3002");
   lines.push(state2.pending.length ? "- \u7B49\u7528\u6237\u5B9A\u7684\u4E8B\uFF1A" : "- \u7B49\u7528\u6237\u5B9A\u7684\u4E8B\uFF1A\u65E0\u3002");
   for (const item of state2.pending) lines.push(`  - ${item.text}`);
+  try {
+    const experience = readWindow(path26.join(project, CROSS_PROJECT_EXPERIENCE_PATH), fsOps, 512 * 1024);
+    const items = experience.error ? [] : parseCrossProjectExperience(experience.text);
+    const brief = state2.currentRound?.brief;
+    const picked = relevantTransferable(items, { project: path26.basename(project), dimension: brief?.targetDimension ?? null, text: [brief?.summary, brief?.success, brief?.target].filter(Boolean).join("\n"), limit: 6 });
+    if (picked.length) {
+      lines.push(`- \u5176\u4ED6\u9879\u76EE\u7684\u53EF\u8FC1\u79FB\u8BA4\u8BC6\uFF08\u6309\u672C\u8F6E\u5BF9\u51C6\u7684\u300C${brief?.targetDimension ?? "\u672A\u5199"}\u300D\u548C\u672C\u8F6E\u8BF4\u660E\u6311\u51FA\u7684 ${picked.length} \u6761\uFF1B\u5168\u90E8\u89C1 ${CROSS_PROJECT_EXPERIENCE_PATH}\uFF09\uFF1A`);
+      for (const item of picked) lines.push(`  - ${item.date ?? "\u672A\u6CE8\u660E\u65E5\u671F"} \xB7 ${item.project}${item.dimension ? `\uFF08${item.dimension}\uFF09` : ""}\uFF1A${item.text}`);
+    }
+  } catch {
+  }
   return lines;
 }
+var NOTES_COMPACT_BYTES = 64 * 1024;
+function practiceLines(project, fsOps) {
+  const entries = readPractice(project, { fsOps });
+  if (!entries.length) return [`- \u505A\u6CD5\u66F4\u6B63\uFF08${PRACTICE_PATH}\uFF09\uFF1A\u8FD8\u6CA1\u6709\u8BB0\u5F55\u3002`];
+  const counts = {};
+  for (const entry of entries) counts[topicOfEntry(entry).short] = (counts[topicOfEntry(entry).short] ?? 0) + 1;
+  const repeated = Object.entries(counts).filter(([, count]) => count > 1).map(([topic, count]) => `${topic} ${count} \u6B21`);
+  return [
+    `- \u505A\u6CD5\u66F4\u6B63\uFF08${PRACTICE_PATH}\uFF0C\u5171 ${entries.length} \u6761\uFF0C\u6700\u8FD1 10 \u6761\u5982\u4E0B${repeated.length ? `\uFF1B\u53CD\u590D\u51FA\u73B0\uFF1A${repeated.join("\u3001")}` : ""}\uFF09\uFF1A`,
+    ...entries.slice(0, 10).map((entry) => `  - ${entry.date} \xB7 ${topicOfEntry(entry).short}${entry.quote ? ` \xB7 \u539F\u8BDD\uFF1A${entry.quote}` : ""}${entry.wrong ? ` \xB7 \u9519\u5728\u54EA\uFF1A${entry.wrong}` : ""}${entry.next ? ` \xB7 \u4EE5\u540E\uFF1A${entry.next}` : ""}`)
+  ];
+}
+function compactionLine(notes, now) {
+  if (notes.error || !notes.text) return [];
+  const size = Buffer.byteLength(notes.text, "utf8");
+  if (size <= NOTES_COMPACT_BYTES) return [];
+  const day = dayText(now ?? Date.now());
+  return [`- \u5BFC\u5E08\u7B14\u8BB0\u6574\u7406\u5230\u671F\uFF08\u73B0\u6709 ${Math.round(size / 1024)} KB\uFF0C\u8D85\u8FC7 ${NOTES_COMPACT_BYTES / 1024} KB\uFF09\uFF1A\u672C\u6B21\u53E6\u8FD4\u56DE\u201C## \u6574\u7406\u540E\u7684\u5BFC\u5E08\u7B14\u8BB0\uFF08${day}\uFF09\u201D\uFF0C\u4F5C\u4E3A\u5B8C\u6574\u66FF\u6362\u7248\u3002\u4E3B\u4F1A\u8BDD\u628A\u539F MENTOR_NOTES.md \u539F\u6837\u5B58\u5230 .dove/research/archive/MENTOR_NOTES-${day}.md\uFF0C\u518D\u7528\u6574\u7406\u540E\u7684\u7248\u672C\u66FF\u6362\u3002`];
+}
 function watchDue(project, fsOps, now) {
-  const names = list(path25.join(project, RESEARCH2, "watch"), fsOps).filter((name) => IMPACT_FILE.test(name)).sort();
+  const names = list(path26.join(project, RESEARCH2, "watch"), fsOps).filter((name) => IMPACT_FILE.test(name)).sort();
   const last = names.at(-1)?.slice(7, 17) ?? null;
   if (!last) return { due: true, last: null };
   const age = (Date.parse(`${dayText(now ?? Date.now())}T00:00:00Z`) - Date.parse(`${last}T00:00:00Z`)) / DAY_MS3;
@@ -22411,7 +22662,7 @@ function list(directory, fsOps) {
 }
 function describe2(root, relative, fsOps) {
   try {
-    return `\`${relative}\`${fsOps.statSync(path25.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
+    return `\`${relative}\`${fsOps.statSync(path26.join(root, relative)).isFile() ? "" : "\uFF08\u4E0D\u662F\u6587\u4EF6\uFF09"}`;
   } catch (error) {
     return `\`${relative}\`\uFF08${error.code === "ENOENT" ? "\u7F3A\u5931" : `\u65E0\u6CD5\u8BFB\u53D6\uFF1A${error.code ?? error.message}`}\uFF09`;
   }
@@ -22436,15 +22687,15 @@ function readWindow(file, fsOps, maxBytes = 16384, tail = false) {
     if (fd !== void 0) fsOps.closeSync(fd);
   }
 }
-function clip3(text, limit) {
+function clip4(text, limit) {
   const characters = Array.from(String(text));
   return characters.length <= limit ? characters.join("") : `${characters.slice(0, limit).join("")}\u2026`;
 }
 function quote(text) {
-  return String(text).split("\n").map((line) => `> ${line}`).join("\n");
+  return String(text).split("\n").map((line2) => `> ${line2}`).join("\n");
 }
 function sourceAttachment(root, suppliedPath, fsOps) {
-  const file = path25.resolve(root, suppliedPath);
+  const file = path26.resolve(root, suppliedPath);
   const result = readWindow(file, fsOps, 8192, true);
   const source = `- \u6765\u6E90\uFF1A\`${file}\``;
   if (result.error) return `${source}\uFF08${result.error}\uFF1B\u672A\u9644\u6B63\u6587\uFF09`;
@@ -22460,12 +22711,12 @@ function recentRounds(names) {
 }
 function watchMaterials(root, rounds, fsOps) {
   const relative = `${RESEARCH2}/watch`;
-  const directory = path25.join(root, relative);
+  const directory = path26.join(root, relative);
   const names = list(directory, fsOps).sort().reverse();
   const config = `${relative}/config.json`;
   const lines = [`- \u914D\u7F6E\uFF1A${describe2(root, config, fsOps)}`];
-  const configText = readWindow(path25.join(root, config), fsOps, 8192);
-  if (!configText.error) lines.push(quote(clip3(configText.text.trim(), 1600)), "\u914D\u7F6E\u4EC5\u6458\u5F55\uFF0C\u5168\u6587\u89C1\u8DEF\u5F84\u3002");
+  const configText = readWindow(path26.join(root, config), fsOps, 8192);
+  if (!configText.error) lines.push(quote(clip4(configText.text.trim(), 1600)), "\u914D\u7F6E\u4EC5\u6458\u5F55\uFF0C\u5168\u6587\u89C1\u8DEF\u5F84\u3002");
   let source = null;
   if (!configText.error && !configText.truncated) {
     try {
@@ -22478,8 +22729,8 @@ function watchMaterials(root, rounds, fsOps) {
   let incomplete = false;
   const impacts = names.filter((name) => IMPACT_FILE.test(name));
   const records = [
-    ...rounds.filter((name) => ROUND_FILE4.test(name) && /brief\.md$/iu.test(name)).sort((left, right) => parseInt(left) - parseInt(right)).map((name) => path25.join(root, RESEARCH2, "rounds", name)),
-    ...[...impacts].reverse().map((name) => path25.join(directory, name))
+    ...rounds.filter((name) => ROUND_FILE4.test(name) && /brief\.md$/iu.test(name)).sort((left, right) => parseInt(left) - parseInt(right)).map((name) => path26.join(root, RESEARCH2, "rounds", name)),
+    ...[...impacts].reverse().map((name) => path26.join(directory, name))
   ];
   for (const file of records) {
     const record = readWindow(file, fsOps, 65536, true);
@@ -22487,8 +22738,8 @@ function watchMaterials(root, rounds, fsOps) {
     if (record.error) continue;
     const lines2 = record.text.split(/\r?\n/u);
     if (record.startByte) lines2.shift();
-    for (const line of lines2) {
-      const parsed2 = parsePaperImpactLine(line);
+    for (const line2 of lines2) {
+      const parsed2 = parsePaperImpactLine(line2);
       if (!parsed2) continue;
       if (parsed2.impact) judged.add(parsed2.id);
       else judged.delete(parsed2.id);
@@ -22500,7 +22751,7 @@ function watchMaterials(root, rounds, fsOps) {
   const digests = names.filter((name) => DIGEST_FILE.test(name));
   const pending = /* @__PURE__ */ new Map();
   for (const name of digests.slice(0, 3)) {
-    const file = path25.join(directory, name);
+    const file = path26.join(directory, name);
     lines.push(`- \u8FD1\u671F\u6E05\u5355\uFF1A${describe2(root, `${relative}/${name}`, fsOps)}`);
     const result = readWindow(file, fsOps, 262144);
     if (result.error || result.truncated) {
@@ -22531,10 +22782,10 @@ function watchMaterials(root, rounds, fsOps) {
     digests.length ? `\u4ECE\u6700\u8FD1 ${Math.min(3, digests.length)} / ${digests.length} \u4EFD\u6E05\u5355\u627E\u5230 ${pending.size} \u9879\uFF0C\u6700\u591A\u5C55\u5F00 8 \u9879\uFF1B\u5176\u4F59\u89C1 \`${relative}/\`\uFF0C\u4E0D\u4EE3\u8868\u5168\u90E8\u5386\u53F2\u3002` : "\u672A\u627E\u5230\u8FFD\u8E2A\u6E05\u5355\u3002"
   );
   for (const [id, { item, file }] of [...pending].slice(0, 8)) {
-    lines.push("", quote(`${id} \xB7 ${clip3(item.title ?? "\u672A\u63D0\u4F9B\u6807\u9898", 200)}
+    lines.push("", quote(`${id} \xB7 ${clip4(item.title ?? "\u672A\u63D0\u4F9B\u6807\u9898", 200)}
 \u539F\u59CB\u53D1\u8868\u65E5\u671F\uFF1A${item.published || "\u672A\u8BB0\u5F55"}
 \u6765\u6E90\uFF1A${file}
-${item.line ? "\u5DF2\u6709\u4E00\u53E5\u8BDD" : "\u539F\u6458\u8981"}\uFF08\u4E0D\u4EE3\u8868\u5168\u6587\u5DF2\u8BFB\uFF09\uFF1A${clip3(item.line || item.abstract || "\u672A\u63D0\u4F9B\u6458\u8981", 400)}`));
+${item.line ? "\u5DF2\u6709\u4E00\u53E5\u8BDD" : "\u539F\u6458\u8981"}\uFF08\u4E0D\u4EE3\u8868\u5168\u6587\u5DF2\u8BFB\uFF09\uFF1A${clip4(item.line || item.abstract || "\u672A\u63D0\u4F9B\u6458\u8981", 400)}`));
   }
   const scan = names.find((name) => SCAN_FILE.test(name));
   lines.push("", scan ? `- \u6700\u8FD1\u626B\u63CF\uFF08${scan.slice(5, 15)}\uFF09\uFF1A${describe2(root, `${relative}/${scan}`, fsOps)}` : "- \u6700\u8FD1\u626B\u63CF\uFF1A\u672A\u627E\u5230\u3002");
@@ -22549,7 +22800,7 @@ function watchSection(project, rounds, fsOps, options2) {
 }
 function opinionAttachment(root, opinion, fsOps) {
   if (!opinion) return "\u672A\u9644\u610F\u89C1\u6587\u4EF6\u3002";
-  const file = path25.resolve(root, opinion);
+  const file = path26.resolve(root, opinion);
   const result = readWindow(file, fsOps, 4096);
   if (result.error) throw new Error(`\u610F\u89C1\u6587\u4EF6${result.error}\uFF1A${file}`);
   const length = Array.from(result.text).length;
@@ -22559,12 +22810,12 @@ ${quote(`\u4F5C\u8005\uFF1A${author ?? "\u672A\u7F72\u540D\uFF08\u6309\u6267\u88
 \u7BC7\u5E45\uFF1A${result.truncated ? "\u8D85\u8FC7 4 KiB\uFF0C\u5BFC\u5E08\u6309\u8DEF\u5F84\u8BFB\u5168\u6587" : `\u7EA6 ${length} \u5B57\uFF08\u5EFA\u8BAE 1000 \u5B57\u5185\uFF09`}`)}`;
 }
 function renderMentorBrief(root, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs27;
-  const project = path25.resolve(root);
-  const research = path25.join(project, RESEARCH2);
-  const rounds = list(path25.join(research, "rounds"), fsOps);
+  const fsOps = options2.fsOps ?? fs28;
+  const project = path26.resolve(root);
+  const research = path26.join(project, RESEARCH2);
+  const rounds = list(path26.join(research, "rounds"), fsOps);
   const selected = recentRounds(rounds);
-  const notes = readWindow(path25.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
+  const notes = readWindow(path26.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
   const intent = notes.error ? null : latestLongTermIntent(notes.text);
   let state2 = null;
   try {
@@ -22572,8 +22823,14 @@ function renderMentorBrief(root, options2 = {}) {
   } catch {
     state2 = null;
   }
-  const intentDue = longTermIntentDue(intent, finishedRoundsOf(state2?.rounds ?? [], localDate));
-  const intentStatus = notes.error ? `\u5BFC\u5E08\u7B14\u8BB0${notes.error}` : !intent ? "\u7B14\u8BB0\u4E2D\u6CA1\u6709\u957F\u671F\u610F\u56FE\u4E00\u8282" : !intent.date ? "\u957F\u671F\u610F\u56FE\u6CA1\u6709\u6709\u6548\u65E5\u671F" : `\u6700\u8FD1\u4E00\u6B21\u4E3A ${intent.date}`;
+  let newOwnMessages = 0;
+  try {
+    newOwnMessages = ownMessagesSince(readOwnEntries(project, { fsOps }), intent?.date ?? null);
+  } catch {
+    newOwnMessages = 0;
+  }
+  const intentDue = longTermIntentDue(intent, finishedRoundsOf(state2?.rounds ?? [], localDate), newOwnMessages);
+  const intentStatus = `${notes.error ? `\u5BFC\u5E08\u7B14\u8BB0${notes.error}` : !intent ? "\u7B14\u8BB0\u4E2D\u6CA1\u6709\u957F\u671F\u610F\u56FE\u4E00\u8282" : !intent.date ? "\u957F\u671F\u610F\u56FE\u6CA1\u6709\u6709\u6548\u65E5\u671F" : `\u6700\u8FD1\u4E00\u6B21\u4E3A ${intent.date}`}${intent?.date && newOwnMessages ? `\uFF0C\u4E4B\u540E\u7528\u6237\u53C8\u8BF4\u4E86 ${newOwnMessages} \u6761\u672C\u4EBA\u539F\u8BDD` : ""}`;
   const originals = options2.userOriginals?.path ?? USER_ORIGINALS_PATH;
   const lines = [
     "# Dove \u5BFC\u5E08\u8C03\u7528\u6750\u6599",
@@ -22596,7 +22853,9 @@ ${quote(options2.userOriginal)}` : "\u672A\u76F4\u63A5\u9644\u539F\u8BDD\u3002",
     ...options2.userOriginals ? [`- \u6574\u7406\u8303\u56F4\uFF1A\u672C\u4EBA ${options2.userOriginals.own} \u6761\u3001\u8F6C\u8FF0 ${options2.userOriginals.relay} \u6761\uFF0C${options2.userOriginals.directories.length} \u4E2A\u4F1A\u8BDD\u76EE\u5F55${options2.userOriginals.pendingBytes ? "\uFF08\u5C1A\u672A\u6574\u7406\u5B8C\uFF0C\u5F53\u524D\u53EF\u80FD\u7F3A\u65F6\u6BB5\uFF09" : ""}\u3002`, `- \u539F\u4F1A\u8BDD\u76EE\u5F55\uFF08\u4EC5\u4F9B\u5BFC\u5E08\u6309\u6765\u6E90\u5B9A\u4F4D\uFF09\uFF1A${options2.userOriginals.directories.map((directory) => `\`${directory}\``).join("\u3001") || "\u672A\u627E\u5230"}\u3002`] : [],
     sourceAttachment(project, originals, fsOps),
     ...options2.userOriginalsError ? [`- \u6C47\u603B\u6574\u7406\u5931\u8D25\uFF1A${options2.userOriginalsError}\u3002\u5DF2\u6709\u6458\u5F55\u53EF\u80FD\u4E0D\u5B8C\u6574\uFF0C\u7F3A\u5931\u4E0D\u7B49\u4E8E\u7528\u6237\u6CA1\u8BF4\u8FC7\u3002`] : [],
-    intentDue ? `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\uFF08${intentStatus}\uFF1B\u6BCF 3 \u8F6E\u6216\u51FA\u73B0\u65B9\u6CD5\u53D6\u820D\u65F6\u5230\u671F\uFF09\uFF1A\u8BFB USER_ORIGINALS.md \u5E76\u6838\u5BF9\u672C\u4EBA\u6765\u6E90\uFF0C\u8FD4\u56DE\u5E26\u65E5\u671F\u7684\u201C\u957F\u671F\u610F\u56FE\u201D\u3002` : `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\uFF1A${intentStatus}\uFF0C\u5C1A\u672A\u5230\u671F\uFF08\u6BCF 3 \u8F6E\u6216\u51FA\u73B0\u65B9\u6CD5\u53D6\u820D\u65F6\u5230\u671F\uFF09\u3002`,
+    intentDue ? `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\uFF08${intentStatus}\uFF1B\u6BCF 3 \u8F6E\u3001\u51FA\u73B0\u65B9\u6CD5\u53D6\u820D\u6216\u7528\u6237\u53C8\u8BF4\u4E86 30 \u6761\u539F\u8BDD\u65F6\u5230\u671F\uFF09\uFF1A\u8BFB USER_ORIGINALS.md \u5E76\u6838\u5BF9\u672C\u4EBA\u6765\u6E90\uFF0C\u8FD4\u56DE\u5E26\u65E5\u671F\u7684\u201C\u957F\u671F\u610F\u56FE\u201D\uFF0C\u5F00\u5934\u4E24\u8282\u662F\u201C### \u6838\u5FC3\u9700\u6C42\u201D\u548C\u201C### \u7EA6\u675F\u201D\u3002Dove \u4F1A\u628A\u8FD9\u4E24\u8282\u5728\u6BCF\u6B21\u4F1A\u8BDD\u5F00\u59CB\u548C\u538B\u7F29\u540E\u9001\u7ED9\u5BBF\u4E3B\u3002` : `- \u957F\u671F\u610F\u56FE\u5BF9\u7167\uFF1A${intentStatus}\uFF0C\u5C1A\u672A\u5230\u671F\uFF08\u6BCF 3 \u8F6E\u3001\u51FA\u73B0\u65B9\u6CD5\u53D6\u820D\u6216\u7528\u6237\u53C8\u8BF4\u4E86 30 \u6761\u539F\u8BDD\u65F6\u5230\u671F\uFF09\u3002`,
+    ...practiceLines(project, fsOps),
+    ...compactionLine(notes, options2.now),
     "",
     "## Dove \u7B97\u51FA\u7684\u4E8B\u5B9E",
     "",
@@ -22607,7 +22866,7 @@ ${quote(options2.userOriginal)}` : "\u672A\u76F4\u63A5\u9644\u539F\u8BDD\u3002",
     "## \u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u4E0E\u6570\u5B57",
     "",
     "\u53EA\u5C55\u5F00\u663E\u5F0F\u63D0\u4F9B\u7684\u524D 4 \u4E2A\u6587\u4EF6\uFF0C\u6BCF\u4E2A\u6700\u591A\u672B\u5C3E 8 KiB\uFF1B\u4E0D\u9012\u5F52\u627E\u6570\u636E\uFF0C\u4E0D\u8FFD\u8BFB\u6587\u4EF6\u4E2D\u7684\u8DEF\u5F84\u3002\u672A\u9644\u539F\u59CB\u7ED3\u679C\u5C31\u76F4\u8BF4\u8BC1\u636E\u4E0D\u8DB3\uFF0C\u5BBF\u4E3B\u58F0\u79F0\u5DF2\u8BFB\u6216\u5DF2\u6D4B\u4E0D\u7B97\u8BC1\u636E\u3002",
-    ...options2.artifact?.length ? options2.artifact.map((file, index) => index < 4 ? sourceAttachment(project, file, fsOps) : `- \`${path25.resolve(project, file)}\`\uFF08\u8D85\u51FA\u672C\u6B21\u5C55\u5F00\u6570\u91CF\uFF0C\u4EC5\u5217\u8DEF\u5F84\uFF09`) : ["\u672A\u63D0\u4F9B\u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u6216\u6570\u5B57\u3002"],
+    ...options2.artifact?.length ? options2.artifact.map((file, index) => index < 4 ? sourceAttachment(project, file, fsOps) : `- \`${path26.resolve(project, file)}\`\uFF08\u8D85\u51FA\u672C\u6B21\u5C55\u5F00\u6570\u91CF\uFF0C\u4EC5\u5217\u8DEF\u5F84\uFF09`) : ["\u672A\u63D0\u4F9B\u539F\u59CB\u7ED3\u679C\u6587\u4EF6\u6216\u6570\u5B57\u3002"],
     "",
     "## \u5BBF\u4E3B\u8BB0\u5F55\u4E0E\u76EE\u5F55\uFF08\u4E0D\u662F\u7ED3\u8BBA\u6846\u67B6\uFF09",
     "",
@@ -22710,17 +22969,17 @@ function terminalStyle(text, style, options2 = {}) {
 function renderDovePixelArt(options2 = {}) {
   const color = options2.color === true;
   if (!color) return DOVE_PIXEL_ART.join("\n");
-  return DOVE_PIXEL_ART.map((line, index) => {
+  return DOVE_PIXEL_ART.map((line2, index) => {
     const spans = DOVE_BRANCH_SPANS[index];
-    if (spans.length === 0) return terminalStyle(line, "cyan", { color });
+    if (spans.length === 0) return terminalStyle(line2, "cyan", { color });
     const segments = [];
     let cursor = 0;
     for (const [start, end] of spans) {
-      if (start > cursor) segments.push(terminalStyle(line.slice(cursor, start), "cyan", { color }));
-      segments.push(terminalStyle(line.slice(start, end), "green", { color }));
+      if (start > cursor) segments.push(terminalStyle(line2.slice(cursor, start), "cyan", { color }));
+      segments.push(terminalStyle(line2.slice(start, end), "green", { color }));
       cursor = end;
     }
-    if (cursor < line.length) segments.push(terminalStyle(line.slice(cursor), "cyan", { color }));
+    if (cursor < line2.length) segments.push(terminalStyle(line2.slice(cursor), "cyan", { color }));
     return segments.join("");
   }).join("\n");
 }
@@ -22959,10 +23218,10 @@ dove mentor brief \u751F\u6210\u5BFC\u5E08\u8C03\u7528\u6750\u6599\uFF1A\u7528\u
 }
 
 // src/cli/interactive-setup.mjs
-import path27 from "node:path";
+import path28 from "node:path";
 
 // src/cli/project-integration-output.mjs
-import path26 from "node:path";
+import path27 from "node:path";
 var INTERNAL_FIELD_NAMES = /* @__PURE__ */ new Set([
   "writtenPaths",
   "removedPaths",
@@ -23054,8 +23313,8 @@ function setupLines(command3, { status, hosts, writtenPaths = [] }) {
 function renderProjectIntegrationResult(command3, result, options2 = {}) {
   assertIntegrationResult(result);
   if (!(/* @__PURE__ */ new Set(["init", "update"])).has(command3)) throw new Error(`Unsupported Dove integration command: ${command3}.`);
-  for (const field of INTERNAL_FIELD_NAMES) {
-    if (Object.hasOwn(options2, field)) throw new Error(`Dove integration renderer does not accept internal field option: ${field}.`);
+  for (const field2 of INTERNAL_FIELD_NAMES) {
+    if (Object.hasOwn(options2, field2)) throw new Error(`Dove integration renderer does not accept internal field option: ${field2}.`);
   }
   const stream = options2.stream ?? process.stdout;
   const env = options2.env ?? process.env;
@@ -23063,7 +23322,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
   const showMascot = options2.showMascot !== false;
   const color = terminalColorEnabled(stream, env);
   const heading = headingFor(command3, result.status);
-  const projectName = terminalSafeText2(path26.basename(result.target) || result.target);
+  const projectName = terminalSafeText2(path27.basename(result.target) || result.target);
   const lines = [];
   if (showMascot && command3 === "init" && ["initialized", "already-initialized"].includes(result.status) && interactive) {
     lines.push(renderDovePixelArt({ color }), "");
@@ -23073,7 +23332,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
   lines.push(`${terminalStyle("\u9879\u76EE", "dim", { color })}  ${projectName}`);
   lines.push(`${terminalStyle("\u5BBF\u4E3B", "dim", { color })}  ${hostLabels(result.hosts)}`);
   lines.push("");
-  lines.push(...setupLines(command3, result).map((line) => terminalStyle(line, "green", { color })));
+  lines.push(...setupLines(command3, result).map((line2) => terminalStyle(line2, "green", { color })));
   lines.push("");
   if (command3 === "init" && result.status === "already-initialized") {
     lines.push("\u5982\u9700\u5237\u65B0\u9879\u76EE\u96C6\u6210\uFF0C\u8BF7\u8FD0\u884C dove update\uFF1B\u79D1\u7814\u3001\u5386\u53F2\u5BA1\u7A3F\u548C\u8FD0\u884C\u8BB0\u5F55\u4FDD\u6301\u539F\u5730\u3002");
@@ -23103,7 +23362,7 @@ function renderProjectIntegrationResult(command3, result, options2 = {}) {
 
 // src/cli/interactive-setup.mjs
 function safeProjectName(target) {
-  return path27.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
+  return path28.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
 }
 function resultHosts(result) {
   return result.hosts ?? result.projectIntegration?.manifest?.hosts ?? [];
@@ -23312,8 +23571,71 @@ ${renderProjectIntegrationResult("update", {
 }
 
 // src/core/session-start-hook.mjs
-import fs28 from "node:fs";
-import path28 from "node:path";
+import fs30 from "node:fs";
+import path30 from "node:path";
+
+// src/core/experience.mjs
+import fs29 from "node:fs";
+import path29 from "node:path";
+var MENTOR_NOTES2 = ".dove/research/MENTOR_NOTES.md";
+var MAX_BYTES2 = 2 * 1024 * 1024;
+function readText4(file, fsOps) {
+  try {
+    const stat = fsOps.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_BYTES2) return null;
+    return fsOps.readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+function clip5(text, limit) {
+  const characters = Array.from(String(text ?? ""));
+  return characters.length > limit ? `${characters.slice(0, limit).join("")}\u2026` : characters.join("");
+}
+function lessonsFor(project, notes, fsOps, options2) {
+  const name = path29.basename(project);
+  const own = notes ? parseTransferable(notes).map((item) => ({ ...item, project: name })) : [];
+  const others = parseCrossProjectExperience(readText4(path29.join(project, CROSS_PROJECT_EXPERIENCE_PATH), fsOps) ?? "").filter((item) => item.project !== name);
+  if (!own.length && !others.length) return "";
+  let brief = null;
+  try {
+    brief = inspectRoundState(project, { ...options2, fsOps }).currentRound?.brief ?? null;
+  } catch {
+    brief = null;
+  }
+  const picked = relevantTransferable([...own, ...others], { project: null, dimension: brief?.targetDimension ?? null, text: [brief?.summary, brief?.success, brief?.target].filter(Boolean).join("\n"), limit: 3 });
+  if (!picked.length) return "";
+  return [
+    `\u548C\u672C\u8F6E\u76F8\u5173\u7684\u53EF\u8FC1\u79FB\u8BA4\u8BC6\uFF08\u5BFC\u5E08\u5199\u7684\uFF0C${brief?.targetDimension ? `\u6309\u672C\u8F6E\u5BF9\u51C6\u7684\u300C${brief.targetDimension}\u300D\u548C\u672C\u8F6E\u8BF4\u660E\u6311\u51FA` : "\u6309\u672C\u8F6E\u8BF4\u660E\u548C\u65F6\u95F4\u6311\u51FA"}\uFF1B\u5168\u90E8\u89C1 ${CROSS_PROJECT_EXPERIENCE_PATH}\uFF09\uFF1A`,
+    ...picked.map((item) => `- ${item.date ?? "\u672A\u6CE8\u660E\u65E5\u671F"} \xB7 ${item.project}\uFF1A${clip5(item.text, 160)}`)
+  ].join("\n");
+}
+function experienceContext(project, options2 = {}) {
+  if (typeof project !== "string" || !project) return "";
+  const fsOps = options2.fsOps ?? fs29;
+  const parts = [];
+  const notes = readText4(path29.join(project, MENTOR_NOTES2), fsOps);
+  const intent = notes ? latestLongTermIntent(notes) : null;
+  const needs = coreNeedsOf(intent);
+  if (needs) parts.push(`\u7528\u6237\u7684\u6838\u5FC3\u9700\u6C42\u4E0E\u7EA6\u675F\uFF08\u5BFC\u5E08 ${intent.date ?? "\u672A\u6CE8\u660E\u65E5\u671F"} \u4ECE\u7528\u6237\u539F\u8BDD\u63D0\u70BC\uFF1B\u548C\u7528\u6237\u6700\u65B0\u539F\u8BDD\u51B2\u7A81\u65F6\u4EE5\u539F\u8BDD\u4E3A\u51C6\uFF09\uFF1A
+${needs}`);
+  let fresh = 0;
+  try {
+    fresh = ownMessagesSince(readOwnEntries(project, { fsOps }), intent?.date ?? null);
+  } catch {
+    fresh = 0;
+  }
+  if (fresh >= LONG_TERM_INTENT_MESSAGES) {
+    parts.push(`\u7528\u6237\u7684\u6838\u5FC3\u9700\u6C42\u4E0E\u7EA6\u675F\u8BE5\u66F4\u65B0\u4E86\uFF1A${intent?.date ? `\u4E0A\u6B21\u63D0\u70BC\u5728 ${intent.date}\uFF0C` : "\u5BFC\u5E08\u8FD8\u6CA1\u6709\u63D0\u70BC\u8FC7\uFF0C"}\u4E4B\u540E\u7528\u6237\u53C8\u8BF4\u4E86 ${fresh} \u6761\u672C\u4EBA\u539F\u8BDD\u3002\u5728\u4E0B\u4E00\u4E2A\u544A\u4E00\u6BB5\u843D\u5904\u8C03\u4E00\u6B21 dove-mentor\uFF08dove mentor brief \u4F1A\u6807\u51FA\u957F\u671F\u610F\u56FE\u5BF9\u7167\u5230\u671F\uFF09\uFF0C\u628A\u5BFC\u5E08\u8FD4\u56DE\u7684\u957F\u671F\u610F\u56FE\u539F\u6837\u5B58\u8FDB\u5BFC\u5E08\u7B14\u8BB0\u3002`);
+  }
+  const practice = practiceContext(readPractice(project, { fsOps }));
+  if (practice) parts.push(practice);
+  const lessons = lessonsFor(project, notes, fsOps, options2);
+  if (lessons) parts.push(lessons);
+  return parts.join("\n\n");
+}
+
+// src/core/session-start-hook.mjs
 function parseSessionStartPayload(input) {
   let payload;
   try {
@@ -23334,13 +23656,13 @@ function recentUserOriginalsContext(project, options2) {
   if (!project) return COMPACTION_REANCHOR_NOTICE;
   try {
     const result = refreshUserOriginals(project, { ...options2, budgetMs: 1500 });
-    const summary = (options2.fsOps ?? fs28).readFileSync(path28.join(project, USER_ORIGINALS_PATH), "utf8");
-    const entries = summary.split("\n").filter((line) => {
-      const own = line.match(/^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 本人 · (.*)$/u);
+    const summary = (options2.fsOps ?? fs30).readFileSync(path30.join(project, USER_ORIGINALS_PATH), "utf8");
+    const entries = summary.split("\n").filter((line2) => {
+      const own = line2.match(/^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 本人 · (.*)$/u);
       return own && classifyUserText(own[1]) === "own" && !/^(?:Claude\s+代用户转达[:：]|【用户(?:指出|已同意)[^】]*】|用户\s*\d{4}-\d{2}-\d{2}(?:\s|$)|用户授权)/u.test(own[1]);
-    }).slice(-4).map((line) => {
-      const characters = Array.from(line);
-      return characters.length > 400 ? `${characters.slice(0, 399).join("")}\u2026` : line;
+    }).slice(-4).map((line2) => {
+      const characters = Array.from(line2);
+      return characters.length > 400 ? `${characters.slice(0, 399).join("")}\u2026` : line2;
     });
     if (entries.length === 0) return COMPACTION_REANCHOR_NOTICE;
     const incomplete = result.pendingBytes > 0 ? "\n\u539F\u8BDD\u6C47\u603B\u5C1A\u6709\u672A\u626B\u63CF\u90E8\u5206\uFF1B\u8FD9\u4E9B\u53EA\u662F\u5DF2\u6574\u7406\u5185\u5BB9\u91CC\u7684\u6700\u8FD1\u6458\u5F55\u3002" : "";
@@ -23369,13 +23691,13 @@ function sessionStartOutput(payload, result = null, options2 = {}) {
     output.systemMessage = "Dove\uFF1A\u672C\u9879\u76EE\u7684\u5B89\u88C5\u548C\u5F53\u524D\u7248\u672C\u6709\u5DEE\u5F02\uFF0C\u6216\u8005\u6709\u672C\u5730\u6539\u52A8\uFF1Bdove doctor \u53EF\u770B\u662F\u54EA\u51E0\u5904\u3002\u662F\u4F60\u81EA\u5DF1\u7684\u6539\u52A8\u5C31\u4E0D\u7528\u7BA1\uFF0Cdove update \u4F1A\u628A\u5B83\u4EEC\u6362\u56DE Dove \u7684\u7248\u672C\u3002";
   }
   if (payload.source === "startup" || payload.source === "clear") {
-    if (typeof options2.project !== "string" || !path28.isAbsolute(options2.project)) {
+    if (typeof options2.project !== "string" || !path30.isAbsolute(options2.project)) {
       throw new Error("Dove SessionStart bootstrap requires an explicit absolute project root.");
     }
     if (options2.guidanceVersion) recordSessionGuidance(options2.project, payload.session_id, options2.guidanceVersion, options2);
     output.hookSpecificOutput = {
       hookEventName: "SessionStart",
-      additionalContext: renderDoveAuthorPreferencesBootstrap(path28.join(options2.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH))
+      additionalContext: renderDoveAuthorPreferencesBootstrap(path30.join(options2.project, DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH))
     };
   } else if (payload.source === "compact" || payload.source === "resume") {
     output.hookSpecificOutput = {
@@ -23389,7 +23711,13 @@ ${DOVE_RESEARCH_REFLECTION_CONTINUITY}
 ${recentUserOriginalsContext(options2.project, options2)}`
     };
   }
-  if (output.hookSpecificOutput) output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload) + hostMigrationContext(options2.project, options2);
+  if (output.hookSpecificOutput) {
+    const experience = experienceContext(options2.project, options2);
+    if (experience) output.hookSpecificOutput.additionalContext += `
+
+${experience}`;
+    output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload) + hostMigrationContext(options2.project, options2);
+  }
   return Object.keys(output).length > 0 ? output : null;
 }
 function sessionStartFailureOutput(error) {
@@ -23447,11 +23775,17 @@ function userPromptSubmitOutput(payload, guidance, options2 = {}) {
   }
   const notice = options2.project && takeGuidanceUpdateNotice(options2.project, payload.session_id, guidance.version, options2) ? `${guidanceUpdateNotice(guidance.version)}
 ` : "";
+  const practice = [
+    options2.project ? practiceForMessage(readPractice(options2.project, options2), payload.prompt) : "",
+    reflectionRequested(payload.prompt) ? reflectionGuidance() : ""
+  ].filter(Boolean).join("\n\n");
   const context = `Dove ${guidance.version}
 ${notice}${guidance.note ? `${guidance.note}
 ` : ""}${identityCardContext(options2.project, options2)}
 
-${roundSituationContext(options2.project, options2)}
+${roundSituationContext(options2.project, options2)}${practice ? `
+
+${practice}` : ""}
 
 ${renderDoveResearchReanchor()} \u8EAB\u4EFD\u5361\u4E0D\u80FD\u66FF\u4EE3\u7528\u6237\u6700\u65B0\u539F\u8BDD\u3002${userOriginalSourceContext(payload)}${hostMigrationContext(options2.project, options2)}`;
   return {
@@ -23479,7 +23813,7 @@ function userPromptSubmitFailureOutput(error) {
 
 // src/core/statusline.mjs
 import { spawnSync as spawnSync5 } from "node:child_process";
-import path29 from "node:path";
+import path31 from "node:path";
 import process4 from "node:process";
 var MAX_MAINLINE_CODE_POINTS = 80;
 var STATUS_SEPARATOR = " \xB7 ";
@@ -23535,7 +23869,7 @@ function inspectGitBranch(projectRoot, options2 = {}) {
       windowsHide: true,
       env: {
         ...process4.env,
-        GIT_CEILING_DIRECTORIES: path29.dirname(path29.resolve(projectRoot))
+        GIT_CEILING_DIRECTORIES: path31.dirname(path31.resolve(projectRoot))
       }
     });
     if (result?.status !== 0 || result.signal || result.error) return null;
@@ -23545,12 +23879,12 @@ function inspectGitBranch(projectRoot, options2 = {}) {
   }
 }
 var HTML_BLOCK_TAG = /^(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|pre|script|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)$/iu;
-function htmlBlockTag(line) {
-  const match = line.match(/^ {0,3}<([A-Za-z][A-Za-z0-9-]*)\b[^>]*>/u);
+function htmlBlockTag(line2) {
+  const match = line2.match(/^ {0,3}<([A-Za-z][A-Za-z0-9-]*)\b[^>]*>/u);
   return match && HTML_BLOCK_TAG.test(match[1]) ? match[1].toLowerCase() : null;
 }
-function mainlineField(line) {
-  return line === void 0 ? null : cardField(line, "Mainline");
+function mainlineField(line2) {
+  return line2 === void 0 ? null : cardField(line2, "Mainline");
 }
 function parseResearchMainline(markdown2, options2 = {}) {
   let fence = null;
@@ -23559,41 +23893,41 @@ function parseResearchMainline(markdown2, options2 = {}) {
   let htmlBlock = null;
   const matches = [];
   const lines = markdown2.split(/\r?\n/u);
-  for (const [index, line] of lines.entries()) {
-    if (index === 0 && line === "---") {
+  for (const [index, line2] of lines.entries()) {
+    if (index === 0 && line2 === "---") {
       frontmatter = true;
       continue;
     }
     if (frontmatter) {
-      if (line === "---" || line === "...") frontmatter = false;
+      if (line2 === "---" || line2 === "...") frontmatter = false;
       continue;
     }
     if (fence) {
-      const closing = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/u);
+      const closing = line2.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/u);
       if (closing && closing[1][0] === fence[0] && closing[1].length >= fence.length) fence = null;
       continue;
     }
     if (htmlBlock) {
-      if (new RegExp(`^ {0,3}</${htmlBlock}>[ \\t]*$`, "iu").test(line)) htmlBlock = null;
+      if (new RegExp(`^ {0,3}</${htmlBlock}>[ \\t]*$`, "iu").test(line2)) htmlBlock = null;
       continue;
     }
-    const opening = !comment && line.match(/^ {0,3}(`{3,}|~{3,})/u);
+    const opening = !comment && line2.match(/^ {0,3}(`{3,}|~{3,})/u);
     if (opening) {
       fence = opening[1];
       continue;
     }
-    const blockTag = !comment && htmlBlockTag(line);
+    const blockTag = !comment && htmlBlockTag(line2);
     if (blockTag) {
-      if (!new RegExp(`</${blockTag}>`, "iu").test(line)) htmlBlock = blockTag;
+      if (!new RegExp(`</${blockTag}>`, "iu").test(line2)) htmlBlock = blockTag;
       continue;
     }
     const startsInComment = comment;
-    for (const marker of line.matchAll(/<!--|-->/gu)) {
+    for (const marker of line2.matchAll(/<!--|-->/gu)) {
       if (marker[0] === "<!--") comment = true;
       else comment = false;
     }
     if (startsInComment || comment) continue;
-    const value2 = mainlineField(line);
+    const value2 = mainlineField(line2);
     if (value2 !== null) {
       if (mainlineField(lines[index - 1]) !== null) return null;
       if (/^ {0,3}(?:=+|-+)[ \t]*$/u.test(lines[index + 1] ?? "")) continue;
@@ -23611,7 +23945,7 @@ function renderDoveStatusLine(input, options2 = {}) {
   const remainingValue = nonNegativeNumber(payload.context_window?.remaining_percentage);
   const remaining = remainingValue === null ? null : Math.min(100, Math.round(remainingValue));
   const duration = formatSessionDuration(payload.cost?.total_duration_ms);
-  const project = options2.projectRoot ? oneLine(path29.resolve(options2.projectRoot)) : null;
+  const project = options2.projectRoot ? oneLine(path31.resolve(options2.projectRoot)) : null;
   const card = readDoveIdentityCard(options2.projectRoot, options2) ?? "";
   const mainline = shortMainline(Object.hasOwn(options2, "mainline") ? options2.mainline : parseResearchMainline(card));
   const noColorValue = (options2.env ?? process4.env).NO_COLOR;
@@ -23628,7 +23962,7 @@ function renderDoveStatusLine(input, options2 = {}) {
   let progress = Object.hasOwn(options2, "progress") ? oneLine(options2.progress) : null;
   if (!Object.hasOwn(options2, "progress") && options2.projectRoot) {
     try {
-      progress = oneLine(renderRoundStatusSummary(inspectRoundState(path29.resolve(options2.projectRoot), options2)));
+      progress = oneLine(renderRoundStatusSummary(inspectRoundState(path31.resolve(options2.projectRoot), options2)));
     } catch {
       progress = null;
     }
@@ -23637,9 +23971,9 @@ function renderDoveStatusLine(input, options2 = {}) {
 }
 
 // src/core/dove-lifecycle.mjs
-import fs29 from "node:fs";
+import fs31 from "node:fs";
 function updateDoveLifecycle(start, options2 = {}) {
-  const fsOps = options2.fsOps ?? fs29;
+  const fsOps = options2.fsOps ?? fs31;
   const root = resolveProjectRootForSetup(start, { fsOps });
   return updateProjectIntegration(root, options2);
 }
@@ -23656,12 +23990,12 @@ function uninstallDoveLifecycle(start, options2 = {}) {
 }
 
 // src/core/project-doctor.mjs
-import fs31 from "node:fs";
-import path30 from "node:path";
+import fs33 from "node:fs";
+import path32 from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // src/core/research-documents.mjs
-import fs30 from "node:fs";
+import fs32 from "node:fs";
 var RESEARCH_DOCUMENT_PATHS = Object.freeze({ ...RESEARCH_DEFAULT_PATHS });
 function readableMarkdown(root, relativePath) {
   const stat = root.tryLstat(relativePath);
@@ -23673,7 +24007,7 @@ function readableMarkdown(root, relativePath) {
 function inspectResearchDocuments(project, options2 = {}) {
   const base = { root: RESEARCH_DOCUMENT_PATHS.root, identity: null, evaluation: null, rounds: null, overview: null };
   try {
-    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs30 });
+    const root = openRootedFilesystem(project, { fsOps: options2.fsOps ?? fs32 });
     const directory = root.tryLstat(RESEARCH_DOCUMENT_PATHS.root);
     if (!directory) return { ...base, healthy: true, state: "absent" };
     if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error(`${base.root} must be a real directory.`);
@@ -23707,8 +24041,8 @@ function classifyProjectSetup(result) {
 }
 
 // src/core/project-doctor.mjs
-var MODULE_DIRECTORY = path30.dirname(fileURLToPath4(import.meta.url));
-var DEFAULT_PACKAGE_ROOT = path30.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path30.basename(MODULE_DIRECTORY)) ? ".." : "../..");
+var MODULE_DIRECTORY = path32.dirname(fileURLToPath4(import.meta.url));
+var DEFAULT_PACKAGE_ROOT = path32.resolve(MODULE_DIRECTORY, ["dist", "bin"].includes(path32.basename(MODULE_DIRECTORY)) ? ".." : "../..");
 function messageFor(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -23728,18 +24062,18 @@ function regularNonSymlink(fsOps, targetPath) {
   return stat !== null && stat.isFile() && !stat.isSymbolicLink();
 }
 function inspectUserCli(options2) {
-  const fsOps = options2.fsOps ?? fs31;
-  const packageRoot = path30.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
+  const fsOps = options2.fsOps ?? fs33;
+  const packageRoot = path32.resolve(options2.packageRoot ?? DEFAULT_PACKAGE_ROOT);
   const runtimePaths = (options2.packageRuntimePaths ?? PACKAGE_RUNTIME_PATHS).map((relativePath) => {
-    const absolutePath = path30.resolve(packageRoot, relativePath);
-    const relative = path30.relative(packageRoot, absolutePath);
-    const contained = relative !== "" && !relative.startsWith("..") && !path30.isAbsolute(relative);
+    const absolutePath = path32.resolve(packageRoot, relativePath);
+    const relative = path32.relative(packageRoot, absolutePath);
+    const contained = relative !== "" && !relative.startsWith("..") && !path32.isAbsolute(relative);
     const healthy2 = contained && regularNonSymlink(fsOps, absolutePath);
     return { path: relativePath, healthy: healthy2, state: healthy2 ? "current" : contained ? "missing-or-invalid" : "outside-package-root" };
   });
-  const executablePath = path30.resolve(options2.executablePath ?? path30.join(packageRoot, "bin/dove-package.mjs"));
-  const executableRelative = path30.relative(packageRoot, executablePath);
-  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path30.isAbsolute(executableRelative);
+  const executablePath = path32.resolve(options2.executablePath ?? path32.join(packageRoot, "bin/dove-package.mjs"));
+  const executableRelative = path32.relative(packageRoot, executablePath);
+  const executableContained = executableRelative === "" || !executableRelative.startsWith("..") && !path32.isAbsolute(executableRelative);
   const executableHealthy = executableContained && regularNonSymlink(fsOps, executablePath);
   const executable = { path: executablePath, healthy: executableHealthy, state: executableHealthy ? "current" : "missing-or-invalid" };
   const healthy = runtimePaths.every((entry) => entry.healthy) && executable.healthy;
@@ -23851,7 +24185,7 @@ function inspectProjectDoctor(start, options2 = {}) {
   try {
     setupRoot = resolveProjectRootForSetup(start, { fsOps: options2.fsOps });
   } catch {
-    setupRoot = typeof start === "string" ? path30.resolve(start) : null;
+    setupRoot = typeof start === "string" ? path32.resolve(start) : null;
   }
   const projectIntegration = inspectIntegration(start, options2);
   const safeRoot = projectIntegration.root ?? setupRoot;
@@ -23873,8 +24207,8 @@ function inspectProjectDoctor(start, options2 = {}) {
 
 // bin/dove.mjs
 var __filename2 = fileURLToPath5(import.meta.url);
-var __dirname2 = path31.dirname(__filename2);
-var PACKAGE_ROOT2 = path31.resolve(__dirname2, "..");
+var __dirname2 = path33.dirname(__filename2);
+var PACKAGE_ROOT2 = path33.resolve(__dirname2, "..");
 var PACKAGE_OPTIONS = { packageName: PACKAGE_NAME, packageVersion: PACKAGE_VERSION };
 function projectOption2(options2) {
   return options2.project ?? void 0;
@@ -23962,18 +24296,18 @@ function prepareHookProject(project) {
 function assertHookPayloadProject(payload, target) {
   if (payload?.cwd === void 0) return;
   if (typeof payload.cwd !== "string" || !payload.cwd.trim() || payload.cwd.includes("\0")) throw new Error("Dove hook cwd \u5FC5\u987B\u6307\u5411\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u4E2D\u7684\u76EE\u5F55\u3002");
-  const cwd = fs32.realpathSync(payload.cwd);
-  const stat = fs32.statSync(cwd);
-  const relative = path31.relative(target, cwd);
-  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path31.sep}`) || path31.isAbsolute(relative)) {
+  const cwd = fs34.realpathSync(payload.cwd);
+  const stat = fs34.statSync(cwd);
+  const relative = path33.relative(target, cwd);
+  if (!stat.isDirectory() || relative === ".." || relative.startsWith(`..${path33.sep}`) || path33.isAbsolute(relative)) {
     throw new Error("Dove hook cwd \u4E0D\u5C5E\u4E8E\u58F0\u660E\u7684\u5DF2\u521D\u59CB\u5316\u9879\u76EE\u3002");
   }
   let directory = cwd;
   while (directory !== target) {
-    if (fs32.existsSync(path31.join(directory, ".dove/install/manifest.json")) || fs32.existsSync(path31.join(directory, ".dove-install"))) {
+    if (fs34.existsSync(path33.join(directory, ".dove/install/manifest.json")) || fs34.existsSync(path33.join(directory, ".dove-install"))) {
       throw new Error("Dove hook cwd \u5C5E\u4E8E\u53E6\u4E00\u4E2A\u9879\u76EE\u96C6\u6210\u3002");
     }
-    directory = path31.dirname(directory);
+    directory = path33.dirname(directory);
   }
 }
 async function readStdin() {
@@ -24080,7 +24414,7 @@ try {
     process5.exit(0);
   }
   if (command2 === "reinstall") {
-    const target = path31.resolve(projectOption2(options) ?? process5.cwd());
+    const target = path33.resolve(projectOption2(options) ?? process5.cwd());
     if (wantsJson(options)) {
       const preview2 = previewProjectCompleteReinstall(target, PACKAGE_OPTIONS);
       const { manifest, ...publicPreview } = preview2;
@@ -24105,7 +24439,7 @@ try {
     process5.exit(0);
   }
   if (command2 === "uninstall") {
-    const target = path31.resolve(projectOption2(options) ?? process5.cwd());
+    const target = path33.resolve(projectOption2(options) ?? process5.cwd());
     const preview = previewUninstallDoveLifecycle(target, PACKAGE_OPTIONS);
     if (wantsJson(options)) {
       writeJson2(preview);
@@ -24165,9 +24499,9 @@ try {
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`--port \u9700\u8981 1 \u5230 65535 \u4E4B\u95F4\u7684\u6574\u6570\uFF1A${options.port}`);
     const bind = options.bind ?? DEFAULT_DASHBOARD_BIND;
     let password = null;
-    const passwordFile = options.passwordFile === void 0 ? null : path31.resolve(options.passwordFile);
+    const passwordFile = options.passwordFile === void 0 ? null : path33.resolve(options.passwordFile);
     if (passwordFile) {
-      password = fs32.readFileSync(passwordFile, "utf8").trim();
+      password = fs34.readFileSync(passwordFile, "utf8").trim();
       if (!password) throw new Error(`\u5BC6\u7801\u6587\u4EF6\u4E3A\u7A7A\uFF1A${options.passwordFile}`);
     }
     const actions = createDashboardActions({ packageOptions: PACKAGE_OPTIONS, passwordFile });
@@ -24193,13 +24527,13 @@ try {
     process5.exit(0);
   }
   if (command2 === "cold-read") {
-    const result = prepareColdRead(path31.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    const result = prepareColdRead(path33.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
     if (wantsJson(options)) writeJson2(result);
     else process5.stdout.write(result.body);
     process5.exit(0);
   }
   if (command2 === "mentor") {
-    const root = path31.resolve(options.project ?? process5.cwd());
+    const root = path33.resolve(options.project ?? process5.cwd());
     let userOriginals = null;
     let userOriginalsError = null;
     try {
@@ -24217,10 +24551,10 @@ try {
     process5.exit(0);
   }
   if (command2 === "topic") {
-    const root = path31.resolve(options.project ?? process5.cwd());
+    const root = path33.resolve(options.project ?? process5.cwd());
     const result = startTopicSelection(root, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson2(result);
-    else console.log(`\u9009\u9898\u76EE\u5F55\u5DF2\u5C31\u7EEA\uFF1A${path31.join(root, ".dove/research/topics")}\uFF08\u4F9D\u636E\uFF1A${result.criteria?.title ?? "\u9009\u9898\u6807\u51C6"}${result.criteria?.version ? `\uFF0C\u7B2C ${result.criteria.version} \u7248` : ""}\uFF1B\u5DF2\u6709\u5019\u9009 ${result.cards.length} \u4E2A\uFF09`);
+    else console.log(`\u9009\u9898\u76EE\u5F55\u5DF2\u5C31\u7EEA\uFF1A${path33.join(root, ".dove/research/topics")}\uFF08\u4F9D\u636E\uFF1A${result.criteria?.title ?? "\u9009\u9898\u6807\u51C6"}${result.criteria?.version ? `\uFF0C\u7B2C ${result.criteria.version} \u7248` : ""}\uFF1B\u5DF2\u6709\u5019\u9009 ${result.cards.length} \u4E2A\uFF09`);
     process5.exit(0);
   }
   if (command2 === "figure" && options.tools) {
@@ -24239,7 +24573,7 @@ try {
     process5.exit(0);
   }
   if (command2 === "figure" && options.pages) {
-    const result = composePageOverview(path31.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    const result = composePageOverview(path33.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
     if (wantsJson(options)) writeJson2(result);
     else {
       const length = result.bodyPages === null ? "\u6CA1\u627E\u5230\u53C2\u8003\u6587\u732E\u6807\u9898\uFF0C\u7B97\u4E0D\u51FA\u6B63\u6587\u9875\u6570" : `\u6B63\u6587\u7EA6 ${result.bodyPages.toFixed(1)} \u9875${result.limit ? `\uFF08\u4E0A\u9650 ${result.limit} \u9875\uFF09` : ""}\uFF0C\u53C2\u8003\u6587\u732E\u4ECE\u7B2C ${result.referencesPage} \u9875\u5F00\u59CB`;
@@ -24251,7 +24585,7 @@ try {
     process5.exit(0);
   }
   if (command2 === "figure" && (options.compare || options.proof)) {
-    const result = composeFigureProof(path31.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    const result = composeFigureProof(path33.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
     if (wantsJson(options)) writeJson2(result);
     else {
       const soft = result.items.filter((item) => !item.enough);
@@ -24263,7 +24597,7 @@ try {
     process5.exit(0);
   }
   if (command2 === "figure") {
-    const result = await generateFigure(path31.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
+    const result = await generateFigure(path33.resolve(options.project ?? process5.cwd()), { ...PACKAGE_OPTIONS, ...options });
     if (wantsJson(options)) writeJson2(result);
     else console.log(`\u56FE\u50CF\u5DF2${result.mode === "edit" ? "\u7F16\u8F91" : "\u751F\u6210"}\uFF1A${result.outputPath}\uFF08\u6A21\u578B\uFF1A${result.model}\uFF1B\u8F93\u5165\u56FE\uFF1A${result.inputs} \u5F20\uFF09`);
     process5.exit(0);
@@ -24276,10 +24610,10 @@ try {
     process5.exit(0);
   }
   if (command2 === "watch") {
-    const roots = options.project ? [path31.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs32.existsSync(root));
+    const roots = options.project ? [path33.resolve(options.project)] : readRegisteredProjects(PACKAGE_OPTIONS).filter((root) => fs34.existsSync(root));
     const result = await runWatch(roots, PACKAGE_OPTIONS);
     if (wantsJson(options)) writeJson2(result);
-    else for (const item of result.results) console.log(`${path31.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);
+    else for (const item of result.results) console.log(`${path33.basename(item.root)}\uFF1A${{ done: `\u65B0\u8BBA\u6587 ${item.found} \u7BC7`, unconfigured: "\u8FD8\u6CA1\u8BBE\u7F6E\u5173\u952E\u8BCD\u6216\u4F5C\u8005", disabled: "\u5DF2\u5173\u95ED\u8FFD\u8E2A", failed: `\u5931\u8D25 ${item.error}` }[item.status] ?? item.status}${item.notes?.length ? `\uFF08${item.notes.join("\uFF1B")}\uFF09` : ""}`);
     process5.exit(0);
   }
   if (command2 === "doctor") {
@@ -24336,7 +24670,7 @@ try {
         text = JSON.stringify(sessionStartFailureOutput(error));
       }
     } else if (hookName === "statusline") {
-      text = `${renderDoveStatusLine(input, { projectRoot: path31.resolve(projectOption2(options)) })}
+      text = `${renderDoveStatusLine(input, { projectRoot: path33.resolve(projectOption2(options)) })}
 `;
     } else if (hookName === "stop") {
       try {

@@ -10,6 +10,7 @@ import { DOVE_RESEARCH_REFLECTION_CONTINUITY } from "./dove-research-contract.mj
 import { identityCardContext } from "./identity-card.mjs";
 import { hostMigrationContext } from "./host-migration.mjs";
 import { recordSessionGuidance } from "./hook-state.mjs";
+import { experienceContext } from "./experience.mjs";
 import { inspectRoundState, renderRoundSituation } from "./round-state.mjs";
 import { classifyUserText, refreshUserOriginals, USER_ORIGINALS_PATH } from "./user-originals.mjs";
 
@@ -93,7 +94,13 @@ export function sessionStartOutput(payload, result = null, options = {}) {
       additionalContext: `${identityCardContext(options.project, options)}\n\n${roundSituation(options.project, options)}\n\n${DOVE_AUTHOR_PREFERENCES_CONTINUITY}\n${DOVE_RESEARCH_REFLECTION_CONTINUITY}\n${recentUserOriginalsContext(options.project, options)}`
     };
   }
-  if (output.hookSpecificOutput) output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload) + hostMigrationContext(options.project, options);
+  if (output.hookSpecificOutput) {
+    // What the project has learned — the user's core needs, the practice corrections and the
+    // lessons bearing on this round — so a fresh or compacted context starts from it.
+    const experience = experienceContext(options.project, options);
+    if (experience) output.hookSpecificOutput.additionalContext += `\n\n${experience}`;
+    output.hookSpecificOutput.additionalContext += userOriginalSourceContext(payload) + hostMigrationContext(options.project, options);
+  }
   return Object.keys(output).length > 0 ? output : null;
 }
 

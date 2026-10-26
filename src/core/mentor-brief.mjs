@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { CROSS_PROJECT_EXPERIENCE_PATH, parseCrossProjectExperience, readOwnEntries, relevantTransferable } from "./cross-project.mjs";
 import { parsePaperImpactLine } from "./dashboard-data.mjs";
-import { finishedRoundsOf, latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
+import { finishedRoundsOf, latestLongTermIntent, longTermIntentDue, ownMessagesSince } from "./mentor-intent.mjs";
+import { PRACTICE_PATH, readPractice, topicOfEntry } from "./practice.mjs";
 import { renderLedgerRow, roundLedger } from "./round-ledger.mjs";
 import { inspectRoundState, roundStateLocalDate } from "./round-state.mjs";
 import { USER_ORIGINALS_PATH } from "./user-originals.mjs";
@@ -72,7 +74,42 @@ function computedFacts(project, fsOps, now, state) {
   lines.push(latest ? `- 八维走势：共 ${state.trend.rows.length} 次判断；最近一次 ${latest.date ?? "未写日期"}（${latest.round ?? "未写轮次"}），最卡的一维 ${latest.bottleneck ?? "未写"}。` : "- 八维走势：EVAL 里还没有走势表。");
   lines.push(state.pending.length ? "- 等用户定的事：" : "- 等用户定的事：无。");
   for (const item of state.pending) lines.push(`  - ${item.text}`);
+  // Lessons other projects' mentors marked transferable, chosen for this round's aim and plan.
+  try {
+    const experience = readWindow(path.join(project, CROSS_PROJECT_EXPERIENCE_PATH), fsOps, 512 * 1024);
+    const items = experience.error ? [] : parseCrossProjectExperience(experience.text);
+    const brief = state.currentRound?.brief;
+    const picked = relevantTransferable(items, { project: path.basename(project), dimension: brief?.targetDimension ?? null, text: [brief?.summary, brief?.success, brief?.target].filter(Boolean).join("\n"), limit: 6 });
+    if (picked.length) {
+      lines.push(`- 其他项目的可迁移认识（按本轮对准的「${brief?.targetDimension ?? "未写"}」和本轮说明挑出的 ${picked.length} 条；全部见 ${CROSS_PROJECT_EXPERIENCE_PATH}）：`);
+      for (const item of picked) lines.push(`  - ${item.date ?? "未注明日期"} · ${item.project}${item.dimension ? `（${item.dimension}）` : ""}：${item.text}`);
+    }
+  } catch {
+    // Other projects' lessons are a side view.
+  }
   return lines;
+}
+
+const NOTES_COMPACT_BYTES = 64 * 1024;
+
+function practiceLines(project, fsOps) {
+  const entries = readPractice(project, { fsOps });
+  if (!entries.length) return [`- 做法更正（${PRACTICE_PATH}）：还没有记录。`];
+  const counts = {};
+  for (const entry of entries) counts[topicOfEntry(entry).short] = (counts[topicOfEntry(entry).short] ?? 0) + 1;
+  const repeated = Object.entries(counts).filter(([, count]) => count > 1).map(([topic, count]) => `${topic} ${count} 次`);
+  return [
+    `- 做法更正（${PRACTICE_PATH}，共 ${entries.length} 条，最近 10 条如下${repeated.length ? `；反复出现：${repeated.join("、")}` : ""}）：`,
+    ...entries.slice(0, 10).map((entry) => `  - ${entry.date} · ${topicOfEntry(entry).short}${entry.quote ? ` · 原话：${entry.quote}` : ""}${entry.wrong ? ` · 错在哪：${entry.wrong}` : ""}${entry.next ? ` · 以后：${entry.next}` : ""}`)
+  ];
+}
+
+function compactionLine(notes, now) {
+  if (notes.error || !notes.text) return [];
+  const size = Buffer.byteLength(notes.text, "utf8");
+  if (size <= NOTES_COMPACT_BYTES) return [];
+  const day = dayText(now ?? Date.now());
+  return [`- 导师笔记整理到期（现有 ${Math.round(size / 1024)} KB，超过 ${NOTES_COMPACT_BYTES / 1024} KB）：本次另返回“## 整理后的导师笔记（${day}）”，作为完整替换版。主会话把原 MENTOR_NOTES.md 原样存到 .dove/research/archive/MENTOR_NOTES-${day}.md，再用整理后的版本替换。`];
 }
 
 // The latest saved paper-impact judgment decides whether a weekly watch review is due.
@@ -275,8 +312,14 @@ export function renderMentorBrief(root, options = {}) {
   } catch {
     state = null;
   }
-  const intentDue = longTermIntentDue(intent, finishedRoundsOf(state?.rounds ?? [], roundStateLocalDate));
-  const intentStatus = notes.error ? `导师笔记${notes.error}` : !intent ? "笔记中没有长期意图一节" : !intent.date ? "长期意图没有有效日期" : `最近一次为 ${intent.date}`;
+  let newOwnMessages = 0;
+  try {
+    newOwnMessages = ownMessagesSince(readOwnEntries(project, { fsOps }), intent?.date ?? null);
+  } catch {
+    newOwnMessages = 0;
+  }
+  const intentDue = longTermIntentDue(intent, finishedRoundsOf(state?.rounds ?? [], roundStateLocalDate), newOwnMessages);
+  const intentStatus = `${notes.error ? `导师笔记${notes.error}` : !intent ? "笔记中没有长期意图一节" : !intent.date ? "长期意图没有有效日期" : `最近一次为 ${intent.date}`}${intent?.date && newOwnMessages ? `，之后用户又说了 ${newOwnMessages} 条本人原话` : ""}`;
   const originals = options.userOriginals?.path ?? USER_ORIGINALS_PATH;
   const lines = [
     "# Dove 导师调用材料", "", `项目：\`${project}\`（材料路径相对此目录）`,
@@ -292,7 +335,9 @@ export function renderMentorBrief(root, options = {}) {
       : []),
     sourceAttachment(project, originals, fsOps),
     ...(options.userOriginalsError ? [`- 汇总整理失败：${options.userOriginalsError}。已有摘录可能不完整，缺失不等于用户没说过。`] : []),
-    intentDue ? `- 长期意图对照到期（${intentStatus}；每 3 轮或出现方法取舍时到期）：读 USER_ORIGINALS.md 并核对本人来源，返回带日期的“长期意图”。` : `- 长期意图对照：${intentStatus}，尚未到期（每 3 轮或出现方法取舍时到期）。`, "",
+    intentDue ? `- 长期意图对照到期（${intentStatus}；每 3 轮、出现方法取舍或用户又说了 30 条原话时到期）：读 USER_ORIGINALS.md 并核对本人来源，返回带日期的“长期意图”，开头两节是“### 核心需求”和“### 约束”。Dove 会把这两节在每次会话开始和压缩后送给宿主。` : `- 长期意图对照：${intentStatus}，尚未到期（每 3 轮、出现方法取舍或用户又说了 30 条原话时到期）。`,
+    ...practiceLines(project, fsOps),
+    ...compactionLine(notes, options.now), "",
     "## Dove 算出的事实", "",
     "以下由 Dove 直接从身份卡、轮次说明和结果开头、EVAL 和导师笔记读出，不经宿主转述；记录本身写错时以原始结果为准。", "",
     ...computedFacts(project, fsOps, options.now, state), "",

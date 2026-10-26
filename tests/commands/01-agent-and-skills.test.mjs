@@ -53,7 +53,7 @@ test("the mentor is called at decision points and returns what Dove and the host
   for (const question of ["实质科研进展", "检验核心方法，还是在修工程", "离用户要的最终结果还差什么"]) assert.ok(mentor.includes(question), question);
   // Returns that the dashboard and the hooks read back.
   assert.match(mentor, /最卡的一维/u);
-  assert.match(mentor, /可迁移：/u);
+  assert.match(mentor, /可迁移（<八维中的一维>）：/u);
   assert.match(mentor, /### 待用户决定/u);
   assert.match(mentor, /研究状态/u);
   assert.match(mentor, /判定核对/u);

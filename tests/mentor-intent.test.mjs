@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { latestLongTermIntent, longTermIntentDue } from "../src/core/mentor-intent.mjs";
+import { coreNeedsOf, latestLongTermIntent, longTermIntentDue, ownMessagesSince } from "../src/core/mentor-intent.mjs";
 
 test("the intent comparison comes due by rounds: three ended since it, or a method decision", () => {
   assert.equal(longTermIntentDue(null, []), true);
@@ -39,4 +39,15 @@ test("a code example or child section date cannot renew an undated intent draft"
 test("an intent after a long history is not lost to a prefix window", () => {
   const notes = `${"历史笔记\n".repeat(20000)}\n## 长期意图（2026-10-16）\n最近的长期意图。`;
   assert.deepEqual(latestLongTermIntent(notes), { date: "2026-10-16", text: "最近的长期意图。" });
+});
+
+test("the user's own words also bring the comparison due, and its core needs are what a host carries", () => {
+  const intent = { date: "2026-10-10" };
+  const entries = Array.from({ length: 30 }, (_, index) => ({ day: index < 2 ? "2026-10-09" : "2026-10-11" }));
+  assert.equal(ownMessagesSince(entries, "2026-10-10"), 28);
+  assert.equal(longTermIntentDue(intent, [], 28), false);
+  assert.equal(longTermIntentDue(intent, [], 30), true);
+  const full = latestLongTermIntent("## 长期意图（2026-10-10）\n### 核心需求\n- 学会写可改的程序\n### 约束\n- 不做模板库\n### 偏离\n没有偏离。");
+  assert.equal(coreNeedsOf(full), "核心需求：\n- 学会写可改的程序\n约束：\n- 不做模板库");
+  assert.equal(coreNeedsOf({ date: null, text: "只有一段旧格式的意图。" }), "只有一段旧格式的意图。", "older sections without the two headings are shown as they are");
 });

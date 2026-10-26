@@ -2,7 +2,17 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { parseDoveCurrentRound, cardField } from "./identity-card.mjs";
-import { finishedRoundsOf, latestLongTermIntent, longTermIntentDue } from "./mentor-intent.mjs";
+import { readOwnEntries } from "./cross-project.mjs";
+import { finishedRoundsOf, latestLongTermIntent, longTermIntentDue, ownMessagesSince } from "./mentor-intent.mjs";
+
+function newOwnMessagesSince(root, intent, options) {
+  try {
+    return ownMessagesSince(readOwnEntries(root, { fsOps: options.fsOps }), intent?.date ?? null);
+  } catch {
+    return 0;
+  }
+}
+import { readPractice, topicOfEntry } from "./practice.mjs";
 import { readRegisteredProjects } from "./project-registry.mjs";
 import { roundLedger } from "./round-ledger.mjs";
 import { inspectRoundState, METHOD_ARGUMENTS, parseMarkdownTables, parseMethodDesign, roundStateLocalDate } from "./round-state.mjs";
@@ -180,7 +190,8 @@ function progressSummary(root, options) {
         overrun: state.overrun,
         stall: state.stall,
         pending: state.pending,
-        ledger: roundLedger(root, { fsOps: options.fsOps, now: options.now, state, provenance: true, home: options.home, env: options.env })
+        ledger: roundLedger(root, { fsOps: options.fsOps, now: options.now, state, provenance: true, home: options.home, env: options.env }),
+        practice: readPractice(root, { fsOps: options.fsOps }).slice(0, 12).map((entry) => ({ ...entry, topic: topicOfEntry(entry).short }))
       }
     };
   } catch {
@@ -223,7 +234,7 @@ export function summarizeProject(root, options = {}) {
     exists,
     mainline: fields.Mainline ?? fields["主线"] ?? null,
     coreCapability: fields["Core capability"] ?? fields["Core capability（核心能力）"] ?? fields["Core capability (核心能力)"] ?? fields["核心能力"] ?? null,
-    longTermIntent: intent ? { ...intent, due: longTermIntentDue(intent, finishedRoundsOf(state?.rounds ?? [], roundStateLocalDate)) } : null,
+    longTermIntent: intent ? { ...intent, due: longTermIntentDue(intent, finishedRoundsOf(state?.rounds ?? [], roundStateLocalDate), newOwnMessagesSince(root, intent, options)) } : null,
     currentRound: current?.brief ?? null,
     currentSummary: rounds.find((round) => current?.brief?.includes(round.label))?.brief?.summary ?? null,
     methodDesign,

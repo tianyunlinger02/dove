@@ -43,16 +43,48 @@ export function latestLongTermIntent(text = "") {
 }
 
 export const LONG_TERM_INTENT_ROUNDS = 3;
+// Phases without rounds (writing a paper) still bring new needs: the user's own words count too.
+export const LONG_TERM_INTENT_MESSAGES = 30;
 
 /**
- * Counted in rounds, not calendar days: due when there is no dated comparison
- * yet, once three rounds have ended since it, or when a round since it
- * decided on the core method. `finishedRounds` is [{ day: "YYYY-MM-DD", kind }].
+ * Counted in rounds and in the user's words, not calendar days: due when
+ * there is no dated comparison yet, once three rounds have ended since it,
+ * when a round since it decided on the core method, or once the user has said
+ * 30 more messages of their own. `finishedRounds` is [{ day, kind }].
  */
-export function longTermIntentDue(intent, finishedRounds = []) {
+export function longTermIntentDue(intent, finishedRounds = [], newOwnMessages = 0) {
   if (!intent?.date || dateIn(intent.date) !== intent.date) return true;
   const since = finishedRounds.filter((round) => round?.day && round.day > intent.date);
-  return since.length >= LONG_TERM_INTENT_ROUNDS || since.some((round) => round.kind === "decision");
+  return since.length >= LONG_TERM_INTENT_ROUNDS || since.some((round) => round.kind === "decision") || newOwnMessages >= LONG_TERM_INTENT_MESSAGES;
+}
+
+/** The user's own messages after a date (local days), from the originals summary entries. */
+export function ownMessagesSince(entries, date) {
+  return entries.filter((entry) => !date || (entry.day && entry.day > date)).length;
+}
+
+/**
+ * The part of the latest long-term intent a host should carry: its "核心需求"
+ * and "约束" subsections, or the opening of the section when it has neither.
+ */
+export function coreNeedsOf(intent, limit = 900) {
+  if (!intent?.text) return null;
+  const lines = intent.text.split(/\r?\n/u);
+  const section = (title) => {
+    const start = lines.findIndex((line) => new RegExp(`^\\s{0,3}#{2,6}\\s*${title}`, "u").test(line));
+    if (start === -1) return null;
+    const end = lines.findIndex((line, index) => index > start && /^\s{0,3}#{2,6}\s/u.test(line));
+    const body = lines.slice(start + 1, end === -1 ? undefined : end).join("\n").trim();
+    return body || null;
+  };
+  const needs = section("核心需求");
+  const limits = section("约束");
+  if (needs || limits) return [needs ? `核心需求：\n${needs}` : null, limits ? `约束：\n${limits}` : null].filter(Boolean).join("\n");
+  // Older sections lead with the long-term goal; the paragraphs after it are status.
+  const first = intent.text.trim().split(/\n\s*\n/u)[0].trim();
+  const characters = Array.from(first);
+  const short = Math.min(limit, 400);
+  return characters.length > short ? `${characters.slice(0, short).join("")}…` : characters.join("");
 }
 
 export function finishedRoundsOf(rounds = [], dayOf) {
