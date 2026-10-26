@@ -79,7 +79,7 @@ export function turnRebuiltManuscript(transcriptPath, fsOps = fs) {
 }
 
 export function coldReadPrompt(writingPractice = "") {
-  return `这一轮重新编译了稿件。交给用户之前，按 Draft 的终检做一次冷读：先 dove figure --pages <稿件.pdf> --body-pages <正文页数上限> --output <总览.png> 看版面，再 dove cold-read --pdf <稿件.pdf>，把它输出的调用正文原样交给一个全新的 dove-review，只给这份 PDF，不给源码、读数或项目背景；逐条处理它列出的行话、读不懂的地方和防御措辞，改完再冷读一次。写稿的人自己查不出自己的行话，这一步不能用自查代替。还在改就接着改，交付前再做。${writingPractice ? `\n本项目写稿和图方面的做法更正：\n${writingPractice}\n` : ""}这段话是 Dove 根据本轮操作自动提出的，不是用户刚说的。`;
+  return `这一轮重新编译了稿件。交给用户之前，按 Draft 终检：先 dove figure --pages <稿件.pdf> --body-pages <正文页数上限> --output <总览.png> 看版面，再 dove cold-read --pdf <稿件.pdf> [--pdf <补充.pdf>]，把调用正文原样交给全新的 dove-review，只给 PDF 页面，不给源码、读数或项目背景。逐条处理必须改项，读不懂先改稿，图内问题交出图方；事实与数字疑点由掌握原始读数的一方核，增加限定或削弱强项的建议按证据取舍。改完重新编译，由全新读者再冷读，必须改清零才交付，不能以自查替代。还在改就接着改，这是交付前自查，不另建审批或阻断用户直接要的局部改动。${writingPractice ? `\n本项目写稿和图方面的做法更正：\n${writingPractice}\n` : ""}这段话是 Dove 根据本轮操作自动提出的，不是用户刚说的。`;
 }
 
 export function parseStopPayload(input) {
