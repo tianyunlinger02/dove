@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { calibrationSummary, checkText, renderCalibrationSummary, renderLedgerRow, roundLedger } from "../src/core/round-ledger.mjs";
+import { calibrationSummary, checkText, renderCalibrationSummary, roundLedger } from "../src/core/round-ledger.mjs";
 import { calibrateRound, parseActual, parsePrediction, predictionFlags } from "../src/core/round-state.mjs";
 import { ACTIVITY_BUCKET_MS, ACTIVITY_INDEX_PATH, USER_ORIGINALS_PATH } from "../src/core/user-originals.mjs";
 
@@ -63,7 +63,6 @@ test("rounds on the same day are split where each result was first written", (t)
   assert.deepEqual([ledger.summary.finished, ledger.summary.scored, ledger.summary.hits, ledger.summary.correctionsPerRound], [2, 2, 1, 1]);
   assert.match(ledger.summary.text, /能按八成区间打分 2 轮；能打分的命中 1\/2/u);
   assert.match(ledger.summary.text, /结论：能打分的轮次还不够 3 轮/u);
-  assert.match(renderLedgerRow(byNumber[1]), /^第 1 轮（.*，2 小时）；子代理 3 次、上下文压缩 1 次、导师 1 次；用户纠正 1 次；判定 未兑现；预测 F1 10 → 12–14 → 实测 F1 10\.5（落在区间外，差 1\.5，预测的变化是实际的 6 倍，区间宽度是实际变化的 4 倍）/u);
 });
 
 test("without scanned transcripts the ledger still lists rounds, verdicts and corrections", (t) => {
@@ -74,7 +73,6 @@ test("without scanned transcripts the ledger still lists rounds, verdicts and co
   const ledger = roundLedger(root, { now: Date.now() });
   assert.equal(ledger.activityScanned, false);
   assert.deepEqual([ledger.rows[0].agents, ledger.rows[0].verdictLabel, ledger.rows[0].corrections], [null, "方法取舍", 0]);
-  assert.match(renderLedgerRow(ledger.rows[0]), /判定 方法取舍（放弃类别分支）；没写预测和实测$/u);
 });
 
 test("the direction comes from the record: conservative, optimistic or vague", () => {

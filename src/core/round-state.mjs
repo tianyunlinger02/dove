@@ -650,23 +650,17 @@ export function renderRoundSituation(state, options = {}) {
   else {
     const brief = round.brief;
     lines.push(`本轮：第 ${round.number} 轮（${brief.file}，${status}）${brief.summary ? `：${brief.summary}` : "。"}`);
-    const missing = [["对准", brief.target], ["见分晓", brief.due], ["规模", brief.scale], ["正向证据", brief.positiveEvidence], ["预测", brief.prediction]].filter(([, value]) => !value).map(([name]) => name);
-    lines.push(`对准：${brief.targetDimension ?? brief.target ?? "未写"}；怎样算成：${brief.success ?? "说明里还没有“## 预期结果”"}`);
-    lines.push(`规模：${brief.scale ?? "未写"}；见分晓：${dueText(brief.due, options.now)}。`);
-    if (brief.positiveEvidence) lines.push(`正向证据：${brief.positiveEvidence}`);
-    if (brief.prediction) lines.push(`预测：${brief.prediction.text}`);
-    // Only the open round is asked to complete its plan; finished rounds are never rewritten.
-    if (round.open && missing.length) lines.push(`本轮说明开头还缺：${missing.join("、")}。补上再接着做。`);
-    const newFormat = Boolean(brief.target || brief.due || brief.scale || brief.prediction || brief.positiveEvidence);
-    if (round.result?.verdict) lines.push(`判定：${round.result.verdict}。`);
-    else if (round.result && newFormat) lines.push("判定：结果开头还没写“判定：”（兑现／未兑现／方法取舍），请对照说明里事先写下的标准补上。");
+    if (brief.target) lines.push(`对准：${brief.target}`);
+    if (brief.success) lines.push(`预期结果：${brief.success}`);
+    if (brief.scale) lines.push(`规模：${brief.scale}`);
+    if (brief.due) lines.push(`见分晓：${dueText(brief.due, options.now)}。`);
+    if (round.result?.verdict) lines.push(`记录判定：${round.result.verdict}。`);
+    if (round.result?.actual) lines.push(`实测：${round.result.actual.text}`);
   }
   if (state.overrun) lines.push(`超时：本轮已超过预计时长一倍还没有结果。`);
   if (state.stall) lines.push(`停滞：第 ${state.stall.rounds.join("、")} 轮判定都是未兑现，其间没有方法取舍。`);
   if (state.overrun || state.stall) lines.push("超时和停滞是历史判定，不自动表示当前仍等用户定；请读最新原话。");
-  lines.push(state.mainMetric ? `主指标：${state.mainMetric.text}` : "主指标：EVAL 开头还没写主指标（写好后请用户确认一次）。");
-  const latest = state.trend?.latest;
-  if (latest?.bottleneck) lines.push(`最近一次导师判断（${latest.date ?? "未写日期"}）最卡的一维：${latest.bottleneck}。`);
+  if (state.mainMetric) lines.push(`主指标：${state.mainMetric.text}`);
   if (state.pending.length) lines.push("文件与笔记中的待定记录（快照；请读最新原话）：", ...state.pending.map((item) => `- ${item.text}`));
   return lines.join("\n");
 }
@@ -677,7 +671,7 @@ export function renderRoundStatusSummary(state, options = {}) {
   const round = state.currentRound;
   if (round) parts.push(`第${round.number}轮`);
   const brief = round?.brief;
-  if (brief?.targetDimension || brief?.target) parts.push(`对准 ${brief.targetDimension ?? plainLine(brief.target, 16)}`);
+  if (brief?.target) parts.push(`对准 ${plainLine(brief.target, 40)}`);
   if (brief?.due && !round.result) parts.push(`${brief.due.slice(5)} 见分晓`);
   if (round?.result) parts.push(round.result.verdict ? `判定 ${VERDICT_LABELS[round.result.verdictKind] ?? plainLine(round.result.verdict, 12)}` : "已出结果");
   if (state.overrun) parts.push("已超时");

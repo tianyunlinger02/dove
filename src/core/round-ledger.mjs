@@ -5,7 +5,8 @@ import { ACTIVITY_BUCKET_MS, readActivity } from "./user-originals.mjs";
 // Per round rather than per calendar week: what a round cost (time, subagent
 // and mentor calls, compactions, the user's corrections) beside what it
 // settled (verdict, prediction against the measurement), plus how the host
-// wrote during it. Statistics for the mentor and the dashboard only.
+// wrote during it. Kept for auxiliary history and the corrections view, not
+// injected into the mentor's research judgment.
 //
 // Rounds partition time: a round runs from the end of the previous one (or
 // its brief, for the first) to when its result was first written; an
@@ -36,12 +37,6 @@ export function clip(text, limit = 60) {
   if (text == null) return null;
   const characters = Array.from(String(text));
   return characters.length > limit ? `${characters.slice(0, limit).join("")}…` : characters.join("");
-}
-
-function clock(time) {
-  const value = new Date(time);
-  const pad = (number) => String(number).padStart(2, "0");
-  return `${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`;
 }
 
 export function durationText(milliseconds) {
@@ -222,25 +217,4 @@ export function checkText(calibration) {
   else if (calibration.ratio !== null) words.push(`预测的变化是实际的 ${round1(calibration.ratio)} 倍`);
   if (calibration.widthRatio !== null && calibration.widthRatio !== undefined) words.push(`区间宽度是实际变化的 ${round1(calibration.widthRatio)} 倍`);
   return words.join("，");
-}
-
-export function spanText(row) {
-  return `${clock(row.start)}${row.open ? " 起，进行中" : ` — ${clock(row.end)}`}，${row.duration}`;
-}
-
-/** One plain line per round for the mentor's computed facts. */
-export function renderLedgerRow(row) {
-  const parts = [`第 ${row.number} 轮（${spanText(row)}）`];
-  if (row.agents != null) parts.push(`子代理 ${row.agents} 次、上下文压缩 ${row.compactions} 次、导师 ${row.mentor} 次`);
-  parts.push(`用户纠正 ${row.corrections} 次`);
-  if (row.verdictLabel) parts.push(`判定 ${row.verdict ?? row.verdictLabel}`);
-  if (row.prediction || row.actual) {
-    parts.push(`预测 ${row.prediction ?? "未写"} → 实测 ${row.actual ?? (row.open ? "未出" : "未写")}${row.calibration ? `（${checkText(row.calibration)}）` : ""}`);
-    if (row.flags?.length) parts.push(`预测写法：${row.flags.join("、")}`);
-  } else if (!row.open) {
-    parts.push("没写预测和实测");
-  }
-  if (row.provenance) parts.push(row.provenance.artifacts ? `结果里 ${row.provenance.numbers} 个数字有 ${row.provenance.found} 个能在链接的 ${row.provenance.artifacts} 个产物里找到` : `结果里的 ${row.provenance.numbers} 个数字没有链接可核对的文本产物`);
-  if (row.hedgesPer1k != null) parts.push(`回复每千字兜底词 ${row.hedgesPer1k}，新增门禁词 ${row.gates}，没运行也没读取就说已验证或通过 ${row.unrunClaims} 次`);
-  return parts.join("；");
 }

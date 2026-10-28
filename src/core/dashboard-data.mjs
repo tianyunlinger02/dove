@@ -224,7 +224,7 @@ export function summarizeProject(root, options = {}) {
   for (const round of rounds) {
     const computed = state?.rounds.find((item) => item.number === round.number);
     if (!computed) continue;
-    if (round.brief && computed.brief) Object.assign(round.brief, { target: computed.brief.targetDimension ?? computed.brief.target, due: computed.brief.due, scale: computed.brief.scale });
+    if (round.brief && computed.brief) Object.assign(round.brief, { target: computed.brief.target, due: computed.brief.due, scale: computed.brief.scale });
     if (round.result && computed.result) Object.assign(round.result, { verdict: computed.result.verdict, verdictKind: computed.result.verdictKind });
   }
   const times = [identity?.mtime, evaluation?.mtime, ...rounds.flatMap((round) => [round.brief?.mtime, round.result?.mtime])].filter((value) => typeof value === "number");

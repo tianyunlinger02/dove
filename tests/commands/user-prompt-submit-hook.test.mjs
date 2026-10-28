@@ -82,20 +82,20 @@ test("each user message carries the identity card, this round's situation and th
   const empty = context(userPromptSubmitOutput(event(""), guidance, { project }));
   assert.match(empty, /未读到身份卡 \.dove\/research\/IDENTITY\.md/u);
   assert.match(empty, /身份卡没有指向当前轮次/u);
-  assert.match(empty, /EVAL 开头还没写主指标/u);
   assert.ok(empty.includes(renderDoveResearchReanchor()));
 
   writeResearch(project, {
     "IDENTITY.md": "Current round: rounds/003-brief.md\nRound status: ongoing\nMainline: 合成主线\nResearch state: 合成研究状态\n",
-    "rounds/003-brief.md": "Author: mentor\n对准：数据与评价\n见分晓：2099-01-05（开始：2099-01-01）\n规模：全量 445 对，噪声约 1.5 点。\n\n一句话：合成轮次。\n\n## 预期结果\n\n评价这一维算成：强对照在同协议下跑通。\n",
+    "rounds/003-brief.md": "Author: mentor\n对准：数据与评价——完整方法与强对照同协议比较\n见分晓：2099-01-05（开始：2099-01-01）\n规模：全量 445 对，噪声约 1.5 点。\n\n一句话：合成轮次。\n\n## 预期结果\n\n完整任务中正确事件增加，强对照同协议比较。\n",
     "EVAL.md": "主指标：事件 F1（445 对开发集）；当前最好：11.5（2026-10-22，第 2 轮）\n\n| 日期 | 轮次 | 问题价值 | 创新 | 机制与理论 | 方法质量与可行性 | 数据与评价 | 实现 | 实验与证据价值 | 表达与交付 | 最卡的一维 |\n|---|---|---|---|---|---|---|---|---|---|---|\n| 2026-10-22 | 第 2 轮 | 3 | 1 | 未知 | 2 | 2 | 2 | 2 | 2 | 数据与评价 |\n",
     "MENTOR_NOTES.md": "## 2026-10-22 导师笔记\n\n### 待用户决定\n\n- 是否扩大到 494 对。\n"
   });
   const payload = event("CURRENT_USER_BODY_NOT_TO_COPY", { cwd: project, transcript_path: "/unread/source.jsonl", transcript: "PARENT_HISTORY_NOT_TO_COPY" });
   const delivered = context(invoke(binaries[0], project, payload));
-  for (const expected of ["Mainline: 合成主线", "合成研究状态", "本轮：第 3 轮（rounds/003-brief.md，进行中）", "对准：数据与评价", "怎样算成：评价这一维算成", "规模：全量 445 对，噪声约 1.5 点", "见分晓：2099-01-05", "主指标：事件 F1（445 对开发集）；当前最好：11.5", "最卡的一维：数据与评价", "是否扩大到 494 对。"]) {
+  for (const expected of ["Mainline: 合成主线", "合成研究状态", "本轮：第 3 轮（rounds/003-brief.md，进行中）", "对准：数据与评价——完整方法与强对照同协议比较", "完整任务中正确事件增加，强对照同协议比较。", "规模：全量 445 对，噪声约 1.5 点", "见分晓：2099-01-05", "主指标：事件 F1（445 对开发集）；当前最好：11.5", "是否扩大到 494 对。"]) {
     assert.ok(delivered.includes(expected), expected);
   }
+  assert.doesNotMatch(delivered, /最卡的一维/u);
   assert.ok(delivered.endsWith(userOriginalSourceContext(payload)));
   assert.doesNotMatch(delivered, /CURRENT_USER_BODY_NOT_TO_COPY|PARENT_HISTORY_NOT_TO_COPY/u);
   for (const binary of binaries) {
@@ -104,9 +104,10 @@ test("each user message carries the identity card, this round's situation and th
     }
   }
 
-  // An open round without its plan is asked once per message to write it; a finished one is left alone.
-  writeResearch(project, { "rounds/003-brief.md": "Author: mentor\n\n一句话：没写计划。\n" });
-  assert.match(context(invoke(binaries[0], project, event())), /本轮说明开头还缺：对准、见分晓、规模/u);
+  // Missing auxiliary planning fields do not block the next substantive message.
+  writeResearch(project, { "rounds/003-brief.md": "Author: mentor\n\n一句话：先实现完整方法。\n" });
+  const incomplete = context(invoke(binaries[0], project, event()));
+  assert.doesNotMatch(incomplete, /本轮说明开头还缺|补上再接着做|还没写“判定：”/u);
   writeResearch(project, { "rounds/003-result.md": "一句话：旧格式结果。\n" });
   const finished = context(invoke(binaries[0], project, event()));
   assert.doesNotMatch(finished, /还缺|还没写“判定：”/u);

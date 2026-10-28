@@ -71,8 +71,7 @@ test("the operating manual is the one place that states the operating rules", ()
     for (const moment of DOVE_OPERATING_MOMENTS) assert.equal(entry.content.includes(moment), false, `${entry.command.id} restates a moment`);
     for (const policy of USER_RESPONSE_POLICY) assert.equal(entry.content.includes(policy), false, `${entry.command.id} restates the response policy`);
   }
-  // The records a round needs and the three reasons to stop.
-  for (const field of ["对准：", "见分晓：", "规模：", "判定：", "主指标：", "八维走势表"]) assert.ok(manual.includes(field), field);
+  // Keep the authority and stop boundaries, not a required form vocabulary.
   assert.match(manual, /只为三类情况停下来/u);
   assert.match(manual, /限制只能来自用户原话/u);
   assert.match(manual, /CROSS_PROJECT_EXPERIENCE\.md/u);

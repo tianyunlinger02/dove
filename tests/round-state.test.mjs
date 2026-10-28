@@ -44,16 +44,21 @@ function memory(files) {
   return { root, fsOps };
 }
 
-test("a brief's opening lines give the aim, due date with start, scale, one line and how it counts as done", () => {
-  const brief = parseBriefHeader("Author: mentor\n**对准**：数据与评价——先对齐协议\n见分晓：2026-10-30（开始：2026-10-23）\n规模：445 对全量。\n\n一句话：对齐协议。\n\n## 预期结果\n\n评价这一维算成：同协议跑通。\n");
+test("brief fields preserve the concrete aim alongside the date, scale and expected result", () => {
+  const target = "方法质量与可行性——在完整输出中保留对象与动作的绑定";
+  const success = "真实任务上正确对象与动作的配对增加，原有正确输出不丢失。";
+  const brief = parseBriefHeader(`Author: mentor\n**对准**：${target}\n见分晓：2026-10-30（开始：2026-10-23）\n规模：445 对全量。\n\n一句话：改对象与动作绑定。\n\n## 预期结果\n\n${success}\n`);
   assert.deepEqual(
-    { target: brief.targetDimension, due: brief.due, start: brief.start, scale: brief.scale, summary: brief.summary, success: brief.success },
-    { target: "数据与评价", due: "2026-10-30", start: "2026-10-23", scale: "445 对全量", summary: "对齐协议。", success: "评价这一维算成：同协议跑通。" }
+    { target: brief.target, due: brief.due, start: brief.start, scale: brief.scale, summary: brief.summary, success: brief.success },
+    { target, due: "2026-10-30", start: "2026-10-23", scale: "445 对全量", summary: "改对象与动作绑定。", success }
   );
+  const state = { currentRound: { number: 1, open: true, brief }, pending: [] };
+  assert.ok(renderRoundSituation(state).includes(target));
+  assert.ok(renderRoundStatusSummary(state).includes(target));
   assert.equal(parseBriefHeader("见分晓：2026-10-30（2026-10-20 开始）\n").start, "2026-10-20");
   assert.equal(parseBriefHeader("见分晓：2026-10-30\n").start, null, "the due date is never taken as the start");
-  assert.equal(parseBriefHeader("Author: x\n\n## 预期结果\n\n对准的那一维怎样算成：……\n").target, null, "a later sentence is not the aim");
-  assert.equal(parseBriefHeader("对准：评价\n").targetDimension, "数据与评价", "short names map to the dimension");
+  assert.equal(parseBriefHeader("Author: x\n\n## 预期结果\n\n对准的能力应该改善。\n").target, null, "a later sentence is not the aim");
+  assert.equal(parseBriefHeader("对准：评价\n").targetDimension, "数据与评价", "existing dimension names remain readable");
 });
 
 test("verdicts are read from the result's first lines and fall into three kinds", () => {
@@ -302,13 +307,17 @@ test("numbers a result reports are checked against the artifacts it links", () =
   assert.deepEqual(resultProvenance(unlinked.root, "rounds/006-result.md", { fsOps: unlinked.fsOps }), { numbers: 1, found: null, artifacts: 0 }, "Dove's own records are not artifacts");
 });
 
-test("a brief names its positive evidence, and an open round without it is asked for it", () => {
-  const header = parseBriefHeader("Author: mentor\n对准：数据与评价\n见分晓：2026-11-02（开始：2026-10-28）\n规模：445 对全量。\n正向证据：FOCUS 在 Mantis 上部分加噪到 76.19%，说明保留部分跨图证据有效。\n预测：F1 12.7 → 14–17\n");
-  assert.equal(header.positiveEvidence, "FOCUS 在 Mantis 上部分加噪到 76.19%，说明保留部分跨图证据有效");
-  const { root, fsOps } = memory({
-    ".dove/research/IDENTITY.md": "Current round: rounds/005-brief.md\nRound status: ongoing\n",
-    ".dove/research/rounds/005-brief.md": "Author: mentor\n对准：数据与评价\n见分晓：2026-11-02（开始：2026-10-28）\n规模：全量。\n预测：F1 12.7 → 14–17\n"
-  });
-  const situation = renderRoundSituation(inspectRoundState(root, { fsOps, now: at("2026-10-28") }), { now: at("2026-10-28") });
-  assert.match(situation, /本轮说明开头还缺：正向证据。/u);
+test("optional planning fields remain readable without changing the per-message work context", () => {
+  const evidence = "已有方法在真实数据上保留了跨图对应关系";
+  const text = `Author: mentor\n对准：保留完整变化事件的对应关系\n正向证据：${evidence}\n预测：F1 12.7 → 14–17\n`;
+  const header = parseBriefHeader(text);
+  assert.equal(header.positiveEvidence, evidence);
+  assert.equal(header.prediction.high, 17);
+  const state = (brief) => ({ currentRound: { number: 5, open: true, brief: { file: "rounds/005-brief.md", ...brief } }, pending: [] });
+  const minimal = parseBriefHeader("Author: mentor\n对准：保留完整变化事件的对应关系\n");
+  assert.equal(renderRoundSituation(state(minimal)), renderRoundSituation(state(header)), "auxiliary fields neither add a completion demand nor a forecasting agenda");
+  const completed = { ...state(header), currentRound: { ...state(header).currentRound, open: false, result: { verdict: null } } };
+  assert.deepEqual(renderRoundSituation(completed).split("\n").slice(1), renderRoundSituation(state(header)).split("\n").slice(1), "an unclassified historical result changes the status, not the work context");
+  completed.currentRound.result.actual = parseActual("事件 F1 13.2");
+  assert.ok(renderRoundSituation(completed).includes(completed.currentRound.result.actual.text));
 });

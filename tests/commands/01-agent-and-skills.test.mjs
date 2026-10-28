@@ -53,7 +53,6 @@ test("the mentor is called at decision points and returns what Dove and the host
   const opening = mentor.split("## 先答三问\n")[1].split("\n## ")[0];
   assert.deepEqual([...opening.matchAll(/^(\d+)\. /gmu)].map((match) => Number(match[1])), [1, 2, 3]);
   // Returns that the dashboard and the hooks read back.
-  assert.match(mentor, /最卡的一维/u);
   assert.match(mentor, /可迁移（<八维中的一维>）：/u);
   assert.match(mentor, /### 待用户决定/u);
   assert.match(mentor, /研究状态/u);

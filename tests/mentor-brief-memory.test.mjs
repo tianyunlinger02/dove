@@ -67,10 +67,8 @@ test("empty memory project renders a short fixed template without creating recor
   const memory = memoryFiles(t);
   const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps });
   assert.equal(typeof brief, "string");
-  assert.equal((brief.match(/^\d+\. /gmu) ?? []).length, 7);
   assert.match(brief, /## Dove 算出的事实/u);
   assert.match(brief, /当前轮次：身份卡没有指向当前轮次/u);
-  assert.match(brief, /主指标：EVAL 开头还没写/u);
   assert.match(brief, /长期意图对照到期（导师笔记缺失/u, "a first mentor reads the project's whole goal history");
   for (const file of [".dove/install/RESEARCH_QUALITY.md", `${RESEARCH}/IDENTITY.md`, `${RESEARCH}/MENTOR_NOTES.md`, `${RESEARCH}/EVAL.md`, ".dove/install/TOPIC_CRITERIA.md", `${RESEARCH}/topics/PROJECT.md`, `${WATCH}/config.json`]) {
     assert.ok(brief.includes(`\`${file}\`（缺失）`), file);
@@ -88,10 +86,12 @@ test("materials use actual paths, recent numbered rounds, and verbatim user fiel
   const source = "/private/host/session.jsonl";
   const artifact = "outputs/raw.csv";
   const original = "请保留完整任务。\n不要把我的要求改成最窄的设计。";
+  const identity = "Mainline: unchanged\nCore capability: 完整问答少犯视觉错误且保留原有正确回答\nDeployment inputs/outputs: 图像与问题 → 完整回答\nCompletion: 完整任务优于原模型与强对照\nCurrent round: rounds/010-brief.md\n";
+  const target = "方法质量与可行性——完整问答保留对象绑定";
   const memory = memoryFiles(t, {
     ".dove/install/RESEARCH_QUALITY.md": "quality is read by mentor",
     ".dove/install/AUTHOR_PREFERENCES.md": "private preferences",
-    [`${RESEARCH}/IDENTITY.md`]: "Mainline: unchanged\n",
+    [`${RESEARCH}/IDENTITY.md`]: identity,
     [`${RESEARCH}/MENTOR_NOTES.md`]: "mentor memory\n".repeat(1000),
     [`${RESEARCH}/EVAL.md`]: Array.from({ length: 30 }, (_, index) => `| measure-${String(index + 1).padStart(2, "0")} | 0.5 |`).join("\n"),
     [".dove/install/TOPIC_CRITERIA.md"]: "dove criteria",
@@ -100,7 +100,7 @@ test("materials use actual paths, recent numbered rounds, and verbatim user fiel
     [`${RESEARCH}/rounds/002-result.md`]: "old result",
     [`${RESEARCH}/rounds/009-brief.md`]: "recent brief",
     [`${RESEARCH}/rounds/009-result.md`]: "recent result",
-    [`${RESEARCH}/rounds/010-brief.md`]: "latest brief",
+    [`${RESEARCH}/rounds/010-brief.md`]: `对准：${target}\n一句话：latest brief\n`,
     [`${RESEARCH}/rounds/011-result.md`]: "latest result",
     [`${RESEARCH}/rounds/execution-dialogue.md`]: "do not read execution dialogue",
     [artifact]: "method,real_dev_score\nbaseline,0.62\nours,0.58\n",
@@ -123,8 +123,13 @@ test("materials use actual paths, recent numbered rounds, and verbatim user fiel
   assert.ok(!brief.includes("measure-18"));
   assert.ok(!brief.includes("measure-19"));
   assert.ok(!brief.includes("measure-30"), "executor EVAL remains a pointer, not the conclusion frame");
+  const quotedIdentity = identity.split("\n").map((line) => `> ${line}`).join("\n");
+  assert.ok(brief.includes(quotedIdentity), "the mentor receives the actual complete-goal fields, not just a path");
+  assert.ok(brief.includes(target), "a recognized quality dimension does not erase the concrete method target");
+  assert.ok(brief.indexOf(quotedIdentity) < brief.indexOf("原始结果文件与数字"));
   assert.ok(brief.includes("> baseline,0.62\n> ours,0.58"));
-  assert.ok(brief.indexOf("原始结果文件与数字") < brief.indexOf("宿主记录与目录"));
+  assert.ok(brief.indexOf("原始结果文件与数字") < brief.indexOf("Dove 算出的事实"));
+  assert.ok(brief.indexOf("Dove 算出的事实") < brief.indexOf("宿主记录与目录"));
   assert.ok(brief.includes(path.join(ROOT, artifact)));
   assert.ok(brief.includes("/external/new-output.json"));
   assert.ok(!brief.includes("arbitrary executor task"));
@@ -138,6 +143,19 @@ test("materials use actual paths, recent numbered rounds, and verbatim user fiel
   assert.ok(!memory.inspected.includes(source), "source pointer is not even stat-ed");
   assert.ok(memory.inspected.includes(path.join(ROOT, artifact)), "only explicit artifact paths are inspected");
   assert.deepEqual([...memory.files], before);
+});
+
+test("a long identity card keeps the goal at the front and marks the incomplete excerpt", (t) => {
+  const identity = `${RESEARCH}/IDENTITY.md`;
+  const goal = "Mainline: 完整结构生成\nCore capability: 从真实输入得到完整结构\nCompletion: 完整任务优于强对照\n";
+  const text = `${goal}${"旧研究状态。\n".repeat(3000)}IDENTITY_TAIL_NOT_ATTACHED\n`;
+  const memory = memoryFiles(t, { [identity]: text });
+  const brief = renderMentorBrief(ROOT, { fsOps: memory.fsOps });
+  assert.ok(brief.includes(goal.trim().split("\n").map((line) => `> ${line}`).join("\n")));
+  assert.ok(brief.includes(`前 16384 / ${Buffer.byteLength(text)} 字节`));
+  assert.ok(!brief.includes("IDENTITY_TAIL_NOT_ATTACHED"));
+  assert.ok(!brief.includes("�"));
+  assert.deepEqual(memory.files.get(path.join(ROOT, identity)), Buffer.from(text));
 });
 
 test("mentor facts keep historical misses separate from unanswered record snapshots", (t) => {

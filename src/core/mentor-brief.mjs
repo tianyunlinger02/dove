@@ -5,7 +5,6 @@ import { CROSS_PROJECT_EXPERIENCE_PATH, parseCrossProjectExperience, readOwnEntr
 import { parsePaperImpactLine } from "./dashboard-data.mjs";
 import { finishedRoundsOf, latestLongTermIntent, longTermIntentDue, ownMessagesSince } from "./mentor-intent.mjs";
 import { PRACTICE_PATH, readPractice, topicOfEntry } from "./practice.mjs";
-import { renderLedgerRow, roundLedger } from "./round-ledger.mjs";
 import { inspectRoundState, roundStateLocalDate } from "./round-state.mjs";
 import { USER_ORIGINALS_PATH } from "./user-originals.mjs";
 
@@ -19,13 +18,13 @@ const WATCH_INTERVAL_DAYS = 7;
 
 // Shared questions for the mentor's independent research judgment.
 const QUESTIONS = [
-  "如果用户现在问‘这段时间取得了什么实质科研进展’，诚实的一句话回答是什么？",
-  "最近的工作是在检验核心方法，还是在修工程、修评价、搭系统？",
-  "离用户要的完整结果，最该补的核心能力或修法是什么？下一步具体改哪里，为什么比继续诊断或换题更直接，大概多久能见结果？",
-  "本轮判定对得上说明里事先写下的对准维度和成败标准吗？",
+  "用户要的完整结果做成没有？诚实的一句话回答是什么？",
+  "当前方法在真实完整任务上做到了什么，与强对照相比怎样？最近工作改变了这个效果，还是只完成了中间环节？",
+  "怎样把用户要的方法做出来或做好？最值得实现的具体改法是什么，为什么，大概多久能见完整结果？",
+  "本轮判定是否得到完整方法的真实结果支持，还是只满足了局部标准？对照事先主张与 Completion，哪些做成、哪些仍未实现？",
   "对照说明的“方法设计”：问题及真实数据证据和要达到的程度、外部方法（含本领域高手的默认做法）的具体机制为何不足、改法的预测与成败标准，结果还支持这三段吗？这一步怎样改善原问题、改善多少？",
   "对照用户最新原话、当前方法设计和导师笔记里已确认的关系、有效负证据及被否掉的方法，当前工作保留了什么认识、具体改变了什么？用户纠正有没有落实到当次工作，而不只是新增记录？",
-  "方向还服务用户的核心目标吗？近邻提供了哪些成熟基础、我们还可在哪里做得更好，下一步如何形成完整改法并用反例校准（至少考虑一个不是从当前做法改出来的方案）？"
+  "近邻提供了哪些成熟基础，怎样推出符合用户目标的完整改法？比较合理替代路线后推荐哪一个，为什么，反例或负结果具体改变了什么？"
 ];
 
 function dayText(time) {
@@ -34,7 +33,7 @@ function dayText(time) {
 }
 
 // What Dove reads from the records itself, so the mentor checks facts rather than the host's account of them.
-function computedFacts(project, fsOps, now, state) {
+function computedFacts(project, fsOps, state) {
   if (!state) return ["未能读取轮次记录。"];
   const lines = [];
   const round = state.currentRound;
@@ -43,7 +42,9 @@ function computedFacts(project, fsOps, now, state) {
   else {
     const brief = round.brief;
     lines.push(`- 当前轮次：第 ${round.number} 轮（${brief.file}${round.result ? `，结果 ${round.result.file}` : "，尚无结果"}）。`);
-    lines.push(`  对准：${brief.targetDimension ?? brief.target ?? "未写"}；见分晓：${brief.due ?? "未写"}${brief.start ? `（开始 ${brief.start}）` : ""}；规模：${brief.scale ?? "未写"}。`);
+    if (brief.target) lines.push(`  对准：${brief.target}`);
+    if (brief.due) lines.push(`  见分晓：${brief.due}${brief.start ? `（开始 ${brief.start}）` : ""}。`);
+    if (brief.scale) lines.push(`  规模：${brief.scale}`);
     if (brief.success) lines.push(`  预期结果首段：${brief.success}`);
   }
   if (state.overrun) lines.push(`- 超时：原定 ${state.overrun.due} 见分晓，预计 ${state.overrun.plannedDays} 天，已过 ${state.overrun.daysPastDue} 天，还没有结果。`);
@@ -51,27 +52,10 @@ function computedFacts(project, fsOps, now, state) {
   const recent = state.rounds.filter((item) => item.result).slice(0, 6);
   lines.push(recent.length ? "- 最近几轮的判定（只按结果文件开头的“判定：”读取）：" : "- 最近几轮的判定：还没有结果文件。");
   for (const item of recent) {
-    const target = item.brief?.targetDimension ?? item.brief?.target ?? "未写";
-    lines.push(`  - 第 ${item.number} 轮：对准 ${target}；判定 ${item.result.verdict ?? "未写"}${item.result.verdictKind ? "" : item.result.verdict ? "（不是兑现／未兑现／方法取舍之一）" : ""}。`);
+    const target = item.brief?.target ?? "未写";
+    lines.push(`  - 第 ${item.number} 轮：对准 ${target}；记录判定 ${item.result.verdict ?? "未写"}${item.result.actual ? `；实测 ${item.result.actual.text}` : ""}。`);
   }
-  // Cost beside what each round settled, and how the host wrote: statistics, not a verdict on the host.
-  try {
-    const ledger = roundLedger(project, { fsOps, now, state, limit: 4, provenance: true });
-    if (ledger.rows.length) {
-      lines.push("- 最近几轮的投入、对账和写法统计（新的在前；一轮从上一轮结果写成到本轮结果写成，按会话记录统计）：");
-      for (const row of ledger.rows) lines.push(`  - ${renderLedgerRow(row)}。`);
-      const summary = ledger.summary;
-      if (summary.finished) {
-        lines.push(`  - 预测对账：${summary.text}`);
-        lines.push(`  - 平均每轮用户纠正 ${summary.correctionsPerRound} 次。`);
-      }
-    }
-  } catch {
-    // The ledger is a side view; the brief works without it.
-  }
-  lines.push(state.mainMetric ? `- 主指标：${state.mainMetric.text}` : "- 主指标：EVAL 开头还没写。");
-  const latest = state.trend?.latest;
-  lines.push(latest ? `- 八维走势：共 ${state.trend.rows.length} 次判断；最近一次 ${latest.date ?? "未写日期"}（${latest.round ?? "未写轮次"}），最卡的一维 ${latest.bottleneck ?? "未写"}。` : "- 八维走势：EVAL 里还没有走势表。");
+  if (state.mainMetric) lines.push(`- 主指标：${state.mainMetric.text}`);
   lines.push(state.pending.length ? "- 记录里尚未有答复或仍列为笔记事项（不等于用户没有说过）：" : "- 当前记录没有未答复事项。");
   for (const item of state.pending) lines.push(`  - ${item.text}`);
   // Lessons other projects' mentors marked transferable, chosen for this round's aim and plan.
@@ -81,7 +65,7 @@ function computedFacts(project, fsOps, now, state) {
     const brief = state.currentRound?.brief;
     const picked = relevantTransferable(items, { project: path.basename(project), dimension: brief?.targetDimension ?? null, text: [brief?.summary, brief?.success, brief?.target].filter(Boolean).join("\n"), limit: 6 });
     if (picked.length) {
-      lines.push(`- 其他项目的可迁移认识（按本轮对准的「${brief?.targetDimension ?? "未写"}」和本轮说明挑出的 ${picked.length} 条；全部见 ${CROSS_PROJECT_EXPERIENCE_PATH}）：`);
+      lines.push(`- 其他项目的可迁移认识（按本轮具体工作挑出的 ${picked.length} 条；全部见 ${CROSS_PROJECT_EXPERIENCE_PATH}）：`);
       for (const item of picked) lines.push(`  - ${item.date ?? "未注明日期"} · ${item.project}${item.dimension ? `（${item.dimension}）` : ""}：${item.text}`);
     }
   } catch {
@@ -295,7 +279,7 @@ function opinionAttachment(root, opinion, fsOps) {
  * Options: trigger, userSource, since, until, userOriginal, userOriginals,
  * opinion (one path), artifact (path array), watch (include the paper watch even
  * if judged within the week), now, fsOps (synchronous filesystem injection).
- * Only the saved originals index and explicit artifacts get bounded excerpts;
+ * The identity card, saved originals index and explicit artifacts get excerpts;
  * private sessions and paths mentioned inside records are never opened here.
  */
 export function renderMentorBrief(root, options = {}) {
@@ -304,6 +288,7 @@ export function renderMentorBrief(root, options = {}) {
   const research = path.join(project, RESEARCH);
   const rounds = list(path.join(research, "rounds"), fsOps);
   const selected = recentRounds(rounds);
+  const identity = readWindow(path.join(research, "IDENTITY.md"), fsOps);
   const notes = readWindow(path.join(research, "MENTOR_NOTES.md"), fsOps, Infinity);
   const intent = notes.error ? null : latestLongTermIntent(notes.text);
   let state = null;
@@ -338,14 +323,18 @@ export function renderMentorBrief(root, options = {}) {
     intentDue ? `- 长期意图对照到期（${intentStatus}；每 3 轮、出现方法取舍或用户又说了 30 条原话时到期）：读 USER_ORIGINALS.md 并核对本人来源，返回带日期的“长期意图”，开头两节是“### 核心需求”和“### 约束”。Dove 会把这两节在每次会话开始和压缩后送给宿主。` : `- 长期意图对照：${intentStatus}，尚未到期（每 3 轮、出现方法取舍或用户又说了 30 条原话时到期）。`,
     ...practiceLines(project, fsOps),
     ...compactionLine(notes, options.now), "",
-    "## Dove 算出的事实", "",
-    "以下由 Dove 直接从身份卡、轮次说明和结果开头、EVAL 和导师笔记读出，不经宿主转述；记录本身写错时以原始结果为准。", "",
-    ...computedFacts(project, fsOps, options.now, state), "",
+    "## 用户要的完整结果与核心能力", "",
+    `- 身份卡来源：\`${RESEARCH}/IDENTITY.md\`（${identity.error ?? (identity.truncated ? `前 ${identity.endByte} / ${identity.fileBytes} 字节；其余按路径读全文` : "全文")}）。`,
+    ...(identity.error ? [] : [quote(identity.text)]),
+    "先对齐 Mainline、Core capability、Completion 与真实输入输出；保留用户原文，卡片存在不等于用户确认，不从局部判定推定最终目标完成。", "",
     "## 原始结果文件与数字", "",
     "只展开显式提供的前 4 个文件，每个最多末尾 8 KiB；不递归找数据，不追读文件中的路径。未附原始结果就直说证据不足，宿主声称已读或已测不算证据。",
     ...(options.artifact?.length
       ? options.artifact.map((file, index) => index < 4 ? sourceAttachment(project, file, fsOps) : `- \`${path.resolve(project, file)}\`（超出本次展开数量，仅列路径）`)
       : ["未提供原始结果文件或数字。"]), "",
+    "## Dove 算出的事实", "",
+    "以下从轮次、EVAL 和导师笔记读取，只是记录快照，不是科研判定；记录写错时以原始结果为准。", "",
+    ...computedFacts(project, fsOps, state), "",
     "## 宿主记录与目录（不是结论框架）", "",
     "### 本次触发", "", quote(options.trigger || "未填写"),
     "只写一句；同轮再调用注明用户纠正、换路线等触发。", "",

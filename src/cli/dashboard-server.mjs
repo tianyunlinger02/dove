@@ -599,7 +599,7 @@ function trajectorySection(p, newestDone) {
 }
 function evaluationSection(p) {
   let html = '<section><h2>评测结果 <span class="sub">EVAL.md · 每个方法版本一行</span></h2>';
-  if (!p.evaluation) return html + '<div class="card note">还没有评测表。主线确认后，执行者建立能回答研究问题的评测。</div></section>';
+  if (!p.evaluation) return html + '<div class="card note">还没有评测记录。</div></section>';
   if (!p.evaluation.tables.length) return html + '<div class="card md">' + md(p.evaluation.text) + "</div></section>";
   const showAll = open.get(p.root + "#eval") === "all";
   for (const t of p.evaluation.tables) {
@@ -617,7 +617,8 @@ function evaluationSection(p) {
 function verdictChip(kind, text) {
   if (!text) return "";
   const cls = kind === "delivered" ? "completed" : kind === "decision" ? "mentor" : kind === "missed" ? "none" : "other";
-  return '<span class="chip ' + cls + '">' + esc(kind ? { delivered: "兑现", missed: "未兑现", decision: "方法取舍" }[kind] : "判定写法不规范") + "</span>";
+  const label = kind === "delivered" ? "兑现" : kind === "decision" ? "方法取舍" : kind === "missed" ? "未兑现" : text;
+  return '<span class="chip ' + cls + '">' + esc(label) + "</span>";
 }
 function trendTable(trend) {
   const head = ["日期", "轮次", ...DIMS, "最卡的一维"];
@@ -629,32 +630,26 @@ function ledgerTable(rows) {
   const body = rows.map((r) => ["第 " + r.number + " 轮" + (r.open ? "（进行中）" : ""), r.duration, r.agents == null ? "—" : String(r.agents), r.compactions == null ? "—" : String(r.compactions), r.mentor == null ? "—" : String(r.mentor), String(r.corrections), r.verdictLabel || "—", (r.prediction || r.actual) ? (r.prediction || "未写") + " → " + (r.actual || (r.open ? "未出" : "未写")) : "—"]);
   return tableHtml([head, ...body], false);
 }
-function biasTable(rows) {
-  const head = ["轮次", "预测对账", "结果数字有出处", "每千字兜底词", "新增门禁词", "没运行也没读取就说已验证或通过"];
-  const body = rows.map((r) => {
-    const check = (r.check || (r.open ? "—" : (r.prediction ? "缺实测" : "没写预测"))) + (r.flags && r.flags.length ? "；" + r.flags.join("、") : "");
-    const source = r.provenance ? (r.provenance.artifacts ? r.provenance.found + "/" + r.provenance.numbers : "没链接产物") : "—";
-    return ["第 " + r.number + " 轮", check, source, r.hedgesPer1k == null ? "—" : String(r.hedgesPer1k), r.gates == null ? "—" : String(r.gates), r.unrunClaims == null ? "—" : String(r.unrunClaims)];
-  });
-  return tableHtml([head, ...body], false);
-}
 function progressSection(p) {
   const g = p.progress;
   if (!g) return "";
   const cur = p.rounds.find((r) => p.currentRound && p.currentRound.includes(r.label));
   const b = cur && cur.brief ? cur.brief : null;
-  let html = '<section><h2>进展 <span class="sub">Dove 直接从身份卡、轮次和 EVAL 读出，不经宿主转述</span></h2>';
-  html += '<div class="tiles">' + tile("主指标", g.mainMetric ? (g.mainMetric.name || g.mainMetric.text) : "EVAL 开头还没写") + tile("当前最好", g.mainMetric && g.mainMetric.best ? g.mainMetric.best : "—") + tile("本轮对准", b && b.target ? b.target : "未写") + tile("见分晓", b && b.due ? b.due : "未写") + "</div>";
-  if (b && b.scale) html += '<div class="card" style="margin-bottom:10px"><span class="note" style="margin-right:6px">本轮规模</span>' + esc(b.scale) + "</div>";
+  const tiles = [];
+  if (g.mainMetric) tiles.push(tile("主指标", g.mainMetric.name || g.mainMetric.text));
+  if (g.mainMetric?.best) tiles.push(tile("当前最好", g.mainMetric.best));
+  if (b?.target) tiles.push(tile("本轮对准", b.target));
+  if (b?.due) tiles.push(tile("见分晓", b.due));
+  let html = tiles.length ? '<div class="tiles">' + tiles.join("") + "</div>" : "";
+  if (b?.scale) html += '<div class="card" style="margin-bottom:10px"><span class="note" style="margin-right:6px">本轮规模</span>' + esc(b.scale) + "</div>";
   if (g.overrun) html += '<div class="card warnbox">超时：本轮原定 ' + esc(g.overrun.due) + " 见分晓，预计 " + g.overrun.plannedDays + " 天，已过 " + g.overrun.daysPastDue + " 天，还没有结果。</div>";
   if (g.stall) html += '<div class="card warnbox">历史停滞信号：第 ' + esc(g.stall.rounds.join("、")) + " 轮判定都是未兑现，其间没有记录方法取舍；之后是否已有决定，以你的最新答复为准。</div>";
-  html += '<h3 class="sub3">记录里的未答复事项 <span class="sub">来自方法设计和导师笔记，不代替最新对话</span></h3>' + (g.pending.length ? '<div class="card pending"><ul style="margin:0;padding-left:20px">' + g.pending.map((x) => "<li>" + esc(x.text) + "</li>").join("") + "</ul></div>" : '<div class="card note">当前记录没有未答复事项。</div>');
-  html += '<h3 class="sub3">做法更正 <span class="sub">你纠正过的做法，宿主记在 .dove/research/PRACTICE.md；新的在上</span></h3>' + (g.practice && g.practice.length ? '<div class="card"><ul style="margin:0;padding-left:20px">' + g.practice.map((x) => "<li>" + esc(x.date) + " · " + esc(x.topic) + (x.next ? "：" + esc(x.next) : "") + (x.quote ? '<div class="note">原话：' + esc(x.quote) + "</div>" : "") + "</li>").join("") + "</ul></div>" : '<div class="card note">还没有记录。</div>');
-  html += '<h3 class="sub3">八维走势 <span class="sub">每次导师判断一行，最后一列是当时最卡的一维</span></h3>' + (g.trend && g.trend.rows.length ? '<div class="tablewrap">' + trendTable(g.trend) + "</div>" : '<div class="card note">EVAL 里还没有八维走势表。</div>');
+  if (g.pending?.length) html += '<h3 class="sub3">记录里的未答复事项 <span class="sub">来自方法设计和导师笔记，不代替最新对话</span></h3><div class="card pending"><ul style="margin:0;padding-left:20px">' + g.pending.map((x) => "<li>" + esc(x.text) + "</li>").join("") + "</ul></div>";
+  if (g.practice?.length) html += '<h3 class="sub3">做法更正 <span class="sub">你纠正过的做法，宿主记在 .dove/research/PRACTICE.md；新的在上</span></h3><div class="card"><ul style="margin:0;padding-left:20px">' + g.practice.map((x) => "<li>" + esc(x.date) + " · " + esc(x.topic) + (x.next ? "：" + esc(x.next) : "") + (x.quote ? '<div class="note">原话：' + esc(x.quote) + "</div>" : "") + "</li>").join("") + "</ul></div>";
+  if (g.trend?.rows?.length) html += '<details class="card" style="margin-bottom:10px"><summary>八维走势 <span class="sub">已有质量判断的历史参考，不决定下一步或最终结果</span></summary><div class="tablewrap" style="margin-top:8px">' + trendTable(g.trend) + "</div></details>";
   const ledger = g.ledger;
-  html += '<h3 class="sub3">每轮的投入和结果 <span class="sub">一轮从上一轮结果写成到本轮结果写成；新的在上</span></h3>' + (ledger && ledger.rows.length ? '<div class="tablewrap">' + ledgerTable(ledger.rows) + "</div>" + (ledger.summary.finished ? '<div class="note">平均每轮被纠正 ' + ledger.summary.correctionsPerRound + " 次。预测对账：" + esc(ledger.summary.text) + "</div>" : "") + (ledger.activityScanned ? "" : '<div class="note">会话记录还在统计中，子代理、压缩等列暂缺。</div>') : '<div class="card note">还没有轮次记录。</div>');
-  html += '<h3 class="sub3">偏差体检 <span class="sub">只作统计，不提示宿主；结果数字有出处 = 能在结果链接的产物里找到的数字 / 结果里的数字</span></h3>' + (ledger && ledger.rows.length ? '<div class="tablewrap">' + biasTable(ledger.rows) + "</div>" : '<div class="card note">还没有轮次记录。</div>');
-  return html + "</section>";
+  if (ledger?.rows?.length) html += '<details class="card" style="margin-bottom:10px"><summary>每轮的投入和结果 <span class="sub">一轮从上一轮结果写成到本轮结果写成；新的在上</span></summary><div class="tablewrap" style="margin-top:8px">' + ledgerTable(ledger.rows) + "</div>" + (ledger.activityScanned ? "" : '<div class="note">会话记录还在统计中，子代理、压缩等列暂缺。</div>') + "</details>";
+  return html ? '<section><h2>进展 <span class="sub">Dove 直接从身份卡、轮次和 EVAL 读出，不经宿主转述</span></h2>' + html + "</section>" : "";
 }
 function identitySection(p) {
   let html = '<section><details class="card"' + (open.get(p.root + "#card") === "open" ? " open" : "") + ' data-card="' + esc(p.root) + '"><summary>项目档案（身份卡 IDENTITY.md）</summary>';
@@ -700,12 +695,12 @@ function renderView() {
     (p.coreCapability ? '<div class="state"><span class="note" style="margin-right:6px">核心能力</span>' + esc(p.coreCapability) + "</div>" : '<div class="state"><span class="note" style="margin-right:6px">核心能力</span>身份卡里还没有写。</div>') +
     '<div class="facts">' + statusChip(p.roundStatus) + (p.targetTier ? "<span>目标档次：" + esc(p.targetTier) + "</span>" : "") + "<span>共 " + p.rounds.length + " 轮</span><span>最近更新 " + ago(p.lastActivity) + "</span></div>" +
     (p.researchState ? '<div class="state"><span class="note" style="margin-right:6px">研究现状</span>' + esc(p.researchState) + "</div>" : "") + "</div>";
-  html += progressSection(p);
   html += methodDesignSection(p);
-  html += '<section><h2>长期意图 <span class="sub">导师最近一次对照</span></h2>' + intentSection(p) + "</section>";
   html += nowSection(p, running, p.rounds[0]);
-  html += trajectorySection(p, newestDone);
   html += evaluationSection(p);
+  html += '<section><h2>长期意图 <span class="sub">导师最近一次对照</span></h2>' + intentSection(p) + "</section>";
+  html += progressSection(p);
+  html += trajectorySection(p, newestDone);
   if (CAN_EDIT) html += papersSection(p.root);
   html += identitySection(p);
   if (p.doctor) html += "<section>" + lazyDoc(p.root, "DOCTOR.md", "Dove 集成问题记录（DOCTOR.md）") + "</section>";

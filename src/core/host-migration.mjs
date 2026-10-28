@@ -13,11 +13,11 @@ export const HOST_MIGRATION_REGISTERED_PATH = ".dove/install/migration-registere
 // task replaces an unfinished earlier notice, so items still worth doing from
 // the previous task are carried in it.
 // Leave empty in a release that has no host-side migration work.
-export const HOST_MIGRATION_TASK = `把研究记录接到新的记录格式上：只补格式和缺的字段，不重跑、不改结论和用户原话，旧轮次不回改。
+export const HOST_MIGRATION_TASK = `已有研究记录用于接续实际方法，不为整理格式另开工作；只在需要时补已有材料，不重跑、不改结论和用户原话，旧轮次不回改。
 
 1. EVAL 开头补一行主指标：\`主指标：<名称>（<数据与协议>）；当前最好：<值>（<日期>，第 N 轮）\`。主指标是真实任务上最能代表最终目标的那个数；你按完成标准起草，然后问用户确认一次。
-2. EVAL 的八维部分改成走势表，列为日期、轮次、八个等级、最卡的一维；从现有的最近一次判断记第一行，表下保留它的详细依据。方法版本表一个版本一行，数字写成“数值/分母+单位”，每行链接结果文件；放不进表格的旧长内容原样移到同目录的历史文件并链接。
-3. 进行中的这一轮，在说明开头补上三行：\`对准：<八维中的一维>\`（取最近一次导师判断里最卡的那一维）、\`见分晓：YYYY-MM-DD（开始：YYYY-MM-DD）\`、\`规模：<样本数、训练量和算力，以及为什么足以分出结果>\`。
+2. EVAL 保留真实评测的方法版本及结果链接，数字写成“数值/分母+单位”；八维历史只作按需参考，不为迁移追加评分或重排旧记录。
+3. 接续进行中的方法时，以身份卡的完整目标和核心能力安排具体工作；现有“对准”表示要改善的能力或方法，不由最卡维度决定，不为补齐格式暂停工作。
 4. 研究状态以后由导师写：下次请导师判断时，把导师返回的研究状态原样更新到身份卡。
 5. 上一版迁移里还没做的两项：身份卡没有 Core capability（核心能力）一栏的，从用户历史原话里找出处补上，找不到就问用户一次；User restrictions 里没附用户原话的限制，找到原话补上，找不到就删去。`;
 

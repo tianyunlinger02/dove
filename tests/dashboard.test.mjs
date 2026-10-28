@@ -46,6 +46,15 @@ test("summarizes identity, evaluation tables and rounds without writing", () => 
   assert.deepEqual(fs.readdirSync(path.join(root, ".dove/research/rounds")).sort(), before);
 });
 
+test("project round targets preserve the concrete aim rather than a normalized dimension", () => {
+  const target = "数据与评价——完整方法在真实全量数据和未见类别上的实际效果。";
+  const brief = `# 联合生成\n对准：${target}\n见分晓：2026-10-30（开始：2026-10-28）\n规模：完整开发集。\n\n一句话：比较完整方法与外部方法。\n`;
+  const root = fixtureProject({ ...researchFiles, ".dove/research/rounds/002-brief.md": brief });
+  const project = summarizeProject(root, { now: new Date(2026, 9, 28) });
+  assert.equal(project.rounds.find((round) => round.number === 2).brief.target, target);
+  assert.equal(fs.readFileSync(path.join(root, ".dove/research/rounds/002-brief.md"), "utf8"), brief);
+});
+
 test("parses authors and markdown tables tolerantly", () => {
   assert.equal(parseAuthor("Author: external reviewer"), "external");
   assert.equal(parseAuthor("- **作者**：导师"), "mentor");
@@ -345,38 +354,63 @@ test("project progress shows historical warnings without creating pending decisi
   assert.match(html, /历史停滞信号：第 1、2 轮/u, "pending records do not erase historical signals");
 });
 
-test("project view shows one ledger row and one bias row per round, escaped", () => {
+test("project view puts design, current work and evaluation before collapsed process history", () => {
   const root = "/memory/project";
-  const row = (number, extra) => ({ number, duration: "5 小时", open: false, agents: 4, compactions: 1, mentor: 1, corrections: 2, verdictLabel: "未兑现", prediction: "F1 <10> → 12–14", actual: "F1 10.5", check: "落在区间外，差 1.5，预测的变化是实际的 6 倍", flags: [], calibration: { hit: false, ratio: 6, wrongWay: false }, provenance: { numbers: 5, found: 4, artifacts: 2 }, hedgesPer1k: 2.5, gates: 3, unrunClaims: 1, ...extra });
+  const row = (number, extra) => ({ number, duration: "5 小时", open: false, agents: 4, compactions: 1, mentor: 1, corrections: 2, verdictLabel: "未兑现", prediction: "F1 <10> → 12–14", actual: "F1 10.5", check: "CALIBRATION_DETAIL_NOT_SHOWN", flags: ["PREDICTION_FLAG_NOT_SHOWN"], calibration: { hit: false, ratio: 6, wrongWay: false }, provenance: { numbers: 5, found: 4, artifacts: 2 }, hedgesPer1k: 2.5, gates: 3, unrunClaims: 1, ...extra });
   const project = {
-    root, name: "Project", mainline: "主线", rounds: [],
+    root, name: "Project", mainline: "主线", coreCapability: "完整结构生成能力", currentRound: "rounds/003-brief.md",
+    rounds: [{ number: 3, label: "003", title: "完整方法评测", brief: { file: "003-brief.md", summary: "全量评价完整方法", target: "数据与评价——完整方法的真实能力", expected: "完整结构质量提高" } }],
+    methodDesign: { source: "rounds/003-brief.md", problem: "整体结构缺失", externalMethods: "局部方法无法覆盖", change: "联合生成完整结构", userReply: null },
+    evaluation: { tables: [{ header: ["Version/round", "Measurements"], rows: [["v2", "F1 10.5"]] }] },
     progress: {
-      mainMetric: null, trend: null, overrun: null, stall: null, pending: [],
+      mainMetric: null, overrun: null, stall: null, pending: [],
+      trend: { rows: [{ date: "2026-10-25", round: "002", grades: { 创新: "C" }, bottleneck: "方法质量与可行性" }] },
       practice: [{ date: "2026-10-25", topic: "写稿和图", quote: "“查不出 <自己> 的行话”", next: "交付前做冷读" }],
       ledger: {
-        rows: [row(3, { open: true, verdictLabel: null, actual: null, check: null, flags: ["只给了下限"], calibration: null, provenance: null }), row(2, { provenance: { numbers: 7, found: null, artifacts: 0 } }), row(1, {})],
+        rows: [row(3, { open: true, verdictLabel: null, actual: null }), row(2, {}), row(1, {})],
         activityScanned: true,
-        summary: { finished: 2, correctionsPerRound: 2, text: "最近 2 轮出了结果，能按八成区间打分 2 轮。结论：能打分的轮次还不够 <3> 轮。" }
+        summary: { finished: 2, correctionsPerRound: 2, text: "CALIBRATION_SUMMARY_NOT_SHOWN" }
       }
     }
   };
   const view = { innerHTML: "", querySelectorAll: () => [] };
   const script = renderDashboardHtml().split("<script>")[1].split("</script>")[0];
   const section = script.slice(script.indexOf("function esc("), script.indexOf("const texts ="));
-  const context = { document: { getElementById: () => view }, data: { projects: [project] }, selected: root, open: new Map(), CAN_EDIT: false, STATUS: {}, AUTHOR: {} };
+  const context = { document: { getElementById: () => view }, data: { projects: [project] }, selected: root, open: new Map(), CAN_EDIT: false, STATUS: {}, AUTHOR: {}, lazyDoc: () => "" };
+  const dims = script.slice(script.indexOf("const DIMS ="), script.indexOf("\n", script.indexOf("const DIMS =")));
   const tile = script.slice(script.indexOf("function tile("), script.indexOf("\n", script.indexOf("function tile(")));
-  vm.runInNewContext(`${section}\n${tile}\nrenderView();`, context);
+  vm.runInNewContext(`${dims}\n${section}\n${tile}\nrenderView();`, context);
   const html = view.innerHTML;
-  assert.match(html, /每轮的投入和结果/u);
-  assert.match(html, /第 3 轮（进行中）/u);
-  assert.match(html, /平均每轮被纠正 2 次/u);
-  assert.match(html, /落在区间外，差 1\.5，预测的变化是实际的 6 倍/u);
-  assert.match(html, /—；只给了下限/u, "an open round shows how its prediction is written");
-  assert.ok(html.includes("预测对账：最近 2 轮出了结果，能按八成区间打分 2 轮。结论：能打分的轮次还不够 &lt;3&gt; 轮。"));
-  assert.match(html, /没链接产物/u);
-  assert.match(html, /4\/5/u);
-  assert.ok(html.includes("F1 &lt;10&gt; → 12–14"));
-  assert.match(html, /做法更正[\s\S]*2026-10-25 · 写稿和图：交付前做冷读/u);
+  const positions = ['class="hero"', 'class="method-design"', 'class="now"', '<h2>评测结果 ', '<h2>进展 ', '<h2>科研轨迹 '].map((marker) => html.indexOf(marker));
+  assert.ok(positions.every((position) => position >= 0));
+  assert.ok(positions.every((position, index) => index === 0 || positions[index - 1] < position));
+  const trend = html.match(/<details\b([^>]*)><summary>八维走势[\s\S]*?<\/details>/u);
+  const ledger = html.match(/<details\b([^>]*)><summary>每轮的投入和结果[\s\S]*?<\/details>/u);
+  assert.ok(trend && ledger, "both histories are details elements");
+  assert.doesNotMatch(trend[1], /\bopen(?:\s|=|$)/u);
+  assert.doesNotMatch(ledger[1], /\bopen(?:\s|=|$)/u);
+  assert.equal((ledger[0].match(/<tbody>([\s\S]*?)<\/tbody>/u)[1].match(/<tr\b/gu) ?? []).length, 3, "one ledger row per round");
+  assert.match(ledger[0], /第 3 轮（进行中）/u);
+  assert.ok(ledger[0].includes("F1 &lt;10&gt; → 12–14"));
+  assert.doesNotMatch(html, /CALIBRATION_DETAIL_NOT_SHOWN|PREDICTION_FLAG_NOT_SHOWN|CALIBRATION_SUMMARY_NOT_SHOWN/u);
+  assert.ok(html.includes("数据与评价——完整方法的真实能力"));
+  assert.ok(html.includes("2026-10-25 · 写稿和图：交付前做冷读"));
   assert.ok(html.includes("查不出 &lt;自己&gt; 的行话") && !html.includes("<自己>"));
   assert.ok(!html.includes("<10>"));
+});
+
+test("process history and placeholder metrics are omitted without material", () => {
+  const script = renderDashboardHtml().split("<script>")[1].split("</script>")[0];
+  const section = script.slice(script.indexOf("function esc("), script.indexOf("const texts ="));
+  const project = { rounds: [], progress: { mainMetric: null, trend: null, pending: [], practice: [], ledger: { rows: [] } } };
+  assert.equal(vm.runInNewContext(`${section}\nprogressSection(project);`, { project }), "");
+});
+
+test("unknown verdict chips preserve and escape the original wording", () => {
+  const script = renderDashboardHtml().split("<script>")[1].split("</script>")[0];
+  const section = script.slice(script.indexOf("function esc("), script.indexOf("const texts ="));
+  for (const kind of [null, "unknown"]) {
+    const html = vm.runInNewContext(`${section}\nverdictChip(kind, text);`, { kind, text: '部分兑现 <完整能力> & "继续"' });
+    assert.equal(html, '<span class="chip other">部分兑现 &lt;完整能力&gt; &amp; &quot;继续&quot;</span>');
+  }
 });

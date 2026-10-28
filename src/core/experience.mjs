@@ -44,7 +44,7 @@ function lessonsFor(project, notes, fsOps, options) {
   const picked = relevantTransferable([...own, ...others], { project: null, dimension: brief?.targetDimension ?? null, text: [brief?.summary, brief?.success, brief?.target].filter(Boolean).join("\n"), limit: 3 });
   if (!picked.length) return "";
   return [
-    `和本轮相关的可迁移认识（导师写的，${brief?.targetDimension ? `按本轮对准的「${brief.targetDimension}」和本轮说明挑出` : "按本轮说明和时间挑出"}；全部见 ${CROSS_PROJECT_EXPERIENCE_PATH}）：`,
+    `和本轮相关的可迁移认识（导师写的，按具体工作和已有认识挑出；全部见 ${CROSS_PROJECT_EXPERIENCE_PATH}）：`,
     ...picked.map((item) => `- ${item.date ?? "未注明日期"} · ${item.project}：${clip(item.text, 160)}`)
   ].join("\n");
 }

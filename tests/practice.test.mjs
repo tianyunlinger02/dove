@@ -144,7 +144,7 @@ test("a starting context gets the user's core needs, a refresh notice, correctio
   assert.match(context, /用户的核心需求与约束（导师 2026-10-20 从用户原话提炼[^）]*）：\n核心需求：\n- 模型从数据学会写可改的整衣程序（用户 9 月原话）\n约束：\n- 不做版型数据库（10-23）/u);
   assert.doesNotMatch(context, /主线和指标对得上/u, "only the two sections a host carries");
   assert.match(context, /本项目的做法更正/u);
-  assert.match(context, /和本轮相关的可迁移认识[^\n]*数据与评价[\s\S]*测试集分母必须固定/u);
+  assert.match(context, /和本轮相关的可迁移认识[\s\S]*测试集分母必须固定/u);
   const startup = sessionStartOutput({ hook_event_name: "SessionStart", source: "startup" }, null, contextOptions(root)).hookSpecificOutput.additionalContext;
   assert.match(startup, /用户的核心需求与约束/u, "a new session starts from them too");
 });
