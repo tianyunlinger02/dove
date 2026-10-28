@@ -39,7 +39,7 @@ The project rule and four exact exclusive reference files:
 |---|---|
 | `.claude/rules/dove.md` | `renderDoveOperatingManual` in `src/core/dove-research-contract.mjs`: the operating manual, the one place operating rules are written. |
 | `.dove/install/RESEARCH_QUALITY.md` | `renderDoveResearchQualityReference` in the same file: the research standard (stance, from problem to method, eight dimensions, evidence, topic and novelty). |
-| `.dove/install/AUTHOR_PREFERENCES.md` | `DOVE_USER_SAYINGS` in `src/core/dove-author-preferences.mjs`: the user's twelve most frequent sayings, verbatim with dates and what to do; the Stop prompts quote from the same list. |
+| `.dove/install/AUTHOR_PREFERENCES.md` | `DOVE_USER_SAYINGS` in `src/core/dove-author-preferences.mjs`: the user's thirteen most frequent sayings, verbatim with dates and what to do; the Stop prompts quote from the same list. |
 | `.dove/install/AUTHOR_PREFERENCES_FULL.md` | `docs/AUTHOR_PREFERENCES.md` is the sole editable full source, preserved in `src/core/dove-author-preferences-content.generated.mjs` for bundled rendering. |
 | `.dove/install/TOPIC_CRITERIA.md` | `docs/TOPIC_CRITERIA.md`. |
 

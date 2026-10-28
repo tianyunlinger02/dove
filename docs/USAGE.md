@@ -31,7 +31,7 @@ Ordinary Claude conversation in an initialized project is the primary entrance; 
 | File | Content | Who reads it, when |
 |---|---|---|
 | `.claude/rules/dove.md` (operating manual) | The one place operating rules are written: three records, six moments and what to answer at each, what belongs to the user and the three reasons to stop, reporting, tools, restrictions only from the user's words | The main session, at session start (Claude loads project rules) |
-| `.dove/install/AUTHOR_PREFERENCES.md` (the user's most frequent sayings) | Twelve verbatim quotes with dates, each followed by what to do | The main session reads it personally at the start of every new main context |
+| `.dove/install/AUTHOR_PREFERENCES.md` (the user's most frequent sayings) | Thirteen verbatim quotes with dates, each followed by what to do | The main session reads it personally at the start of every new main context |
 | `.dove/install/RESEARCH_QUALITY.md` (research standard) | Researcher stance, from problem to method, eight dimensions with definitions, evidence and experiments, topic selection and novelty | The mentor and reviewer every time; the main session at the moments the manual names |
 | `.dove/install/AUTHOR_PREFERENCES_FULL.md` | The user's full preferences, unchanged | On demand |
 | `.dove/install/TOPIC_CRITERIA.md` | Topic-selection standard | During topic selection |
@@ -129,15 +129,18 @@ The executor repairs evaluator errors, immediately marks affected results, and f
 
 A round is one complete test of a method version on the real evaluation, or one decision on the core method; the diagnostics, fixes and small experiments it needs happen inside the round and are recorded in ordinary project files, not as rounds or mentor calls of their own. Each round has one `rounds/NNN-brief.md` (about 2000 characters) and one `NNN-result.md` (about 3000).
 
-A brief opens with five lines, then `一句话：` and `## 预期结果`:
+A brief opens with six lines, then `一句话：` and `## 预期结果`:
 
 ```text
 Author: mentor / user / external（method version; dated user source）
 对准：<one of the eight dimensions — the latest mentor judgment's bottleneck>
 见分晓：YYYY-MM-DD（开始：YYYY-MM-DD）
 规模：<samples, training and compute, and why that is enough to tell the result>
+正向证据：<why this round can succeed: what the latest strong work already achieves, a signal already seen on our real data, or a checkable derivation, with sources>
 预测：<one quantity> <its value now, or 未测> → <the range you are 80% sure of>
 ```
+
+Decisions run on positive evidence. Opening a round, continuing a mainline and recommending a topic each name what shows it can work; “no counter-evidence” or “no evidence that we must give up” is not a reason to continue, while giving up still needs concrete counter-evidence. When positive evidence is thin, the next step is to obtain it — read the latest strong work, run the smallest decisive check — not to keep ruling out alternatives. Topic search works forward from what the latest strong work already achieves and the gaps it leaves with signs they can be closed, composing a proposal that meets the user's constraints from the start rather than inventing one and narrowing it until it fits; a round delivers at least one positively supported proposal, or names the missing positive evidence and how to get it.
 
 `## 预期结果` says how the targeted dimension counts as done, how the end-to-end metric of the original task should move, which link it depends on and what result would change the decision. User instructions take priority; save mentor text verbatim and identify replacement authors/reasons.
 

@@ -19,7 +19,7 @@ Dove is one research partner. Ordinary Claude conversation is the primary entran
 | Surface | What it provides |
 |---|---|
 | Project rule (operating manual) | The one place operating rules live: three records, six moments, what belongs to the user, when to stop, reporting |
-| User's most frequent sayings | Twelve verbatim quotes with dates and what to do; read at the start of every main context |
+| User's most frequent sayings | Thirteen verbatim quotes with dates and what to do; read at the start of every main context |
 | Research standard | Researcher stance, from problem to method, eight dimensions, evidence, topic and novelty; read by the mentor and reviewer and at named moments |
 | SessionStart / UserPromptSubmit | Identity card and this round's situation; at start and after compaction also the user's core needs and constraints (as the mentor last distilled them), the practice corrections and the lessons bearing on this round; corrections on the topics a message touches, and where a requested reflection goes; one notice after an update |
 | Stop | One quote on an overrun and one on a stall, asking the host to check the latest decision before re-asking; one reminder to save an explicitly requested reflection; one cold-read reminder after rebuilding; ordinary corrections do not block for a missing practice line; can be turned off |

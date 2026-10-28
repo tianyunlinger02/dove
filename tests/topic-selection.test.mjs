@@ -16,10 +16,10 @@ function setup() {
 test("topic selection follows Dove's installed standard and keeps only project settings in the project", () => {
   const { root } = setup();
   const info = readTopicCriteriaInfo();
-  assert.deepEqual([info.present, info.source, info.version], [true, "dove", "29"]);
+  assert.deepEqual([info.present, info.source, info.version], [true, "dove", "30"]);
   const topics = startTopicSelection(root);
   assert.equal(topics.started, true);
-  assert.equal(topics.criteria.version, "29", "before installation the bundled standard applies");
+  assert.equal(topics.criteria.version, "30", "before installation the bundled standard applies");
   assert.equal(fs.existsSync(path.join(root, ".dove/research/topics/CRITERIA.md")), false, "the project keeps no copy of the standard");
   fs.mkdirSync(path.join(root, ".dove/install"), { recursive: true });
   fs.writeFileSync(path.join(root, ".dove/install/TOPIC_CRITERIA.md"), "# 选题标准\n\n第29版。\n");
@@ -104,7 +104,7 @@ test("dashboard lists topic cards and serves only topic documents", async () => 
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
     const overview = await (await fetch(`${base}/api/topics`)).json();
-    assert.equal(overview.criteria.version, "29");
+    assert.equal(overview.criteria.version, "30");
     assert.equal(overview.projects[0].cards[0].title, "方向甲");
     const refused = await fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json", "x-dove-request": "1" }, body: JSON.stringify({ type: "saveTopicCriteria", text: "# 任意\n" }) });
     assert.notEqual(refused.status, 200, "the standard is revised in Dove, not saved from the dashboard");

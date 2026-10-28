@@ -109,7 +109,7 @@ test("one research standard replaces the quality summary and full reference", ()
 
 test("the user's most frequent sayings are quoted with dates and what to do", () => {
   const reference = renderDoveAuthorPreferencesReference();
-  assert.equal(DOVE_USER_SAYINGS.length, 12);
+  assert.equal(DOVE_USER_SAYINGS.length, 13);
   for (const saying of DOVE_USER_SAYINGS) {
     assert.ok(reference.includes(`“${saying.quote}”（${saying.date}）`), saying.id);
     assert.ok(reference.includes(`所以：${saying.so}`), saying.id);

@@ -28,7 +28,7 @@ The bare public npm name `dove` is unrelated. Global upgrades with lifecycle scr
 
 | When | What |
 |---|---|
-| Session start | The operating manual (`.claude/rules/dove.md`, the one place operating rules live) and "the user's most frequent sayings" (`.dove/install/AUTHOR_PREFERENCES.md`: twelve verbatim quotes with dates, each followed by what to do) |
+| Session start | The operating manual (`.claude/rules/dove.md`, the one place operating rules live) and "the user's most frequent sayings" (`.dove/install/AUTHOR_PREFERENCES.md`: thirteen verbatim quotes with dates, each followed by what to do) |
 | Every user message | The identity card; this round's one-line aim, the dimension it targets, how it counts as done, its scale and due date; what waits for the user; once after an update, a notice to re-read the manual and the sayings |
 | After compaction | The same, plus the user's latest own words |
 | At the moments the manual names | The matching section of the research standard (`.dove/install/RESEARCH_QUALITY.md`) |

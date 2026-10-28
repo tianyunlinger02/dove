@@ -301,3 +301,14 @@ test("numbers a result reports are checked against the artifacts it links", () =
   const unlinked = memory({ ".dove/research/rounds/006-result.md": "## 测到了什么\n\nF1 13.20，见[说明](006-brief.md)。\n", ".dove/research/rounds/006-brief.md": "预测：F1 13.20\n" });
   assert.deepEqual(resultProvenance(unlinked.root, "rounds/006-result.md", { fsOps: unlinked.fsOps }), { numbers: 1, found: null, artifacts: 0 }, "Dove's own records are not artifacts");
 });
+
+test("a brief names its positive evidence, and an open round without it is asked for it", () => {
+  const header = parseBriefHeader("Author: mentor\n对准：数据与评价\n见分晓：2026-11-02（开始：2026-10-28）\n规模：445 对全量。\n正向证据：FOCUS 在 Mantis 上部分加噪到 76.19%，说明保留部分跨图证据有效。\n预测：F1 12.7 → 14–17\n");
+  assert.equal(header.positiveEvidence, "FOCUS 在 Mantis 上部分加噪到 76.19%，说明保留部分跨图证据有效");
+  const { root, fsOps } = memory({
+    ".dove/research/IDENTITY.md": "Current round: rounds/005-brief.md\nRound status: ongoing\n",
+    ".dove/research/rounds/005-brief.md": "Author: mentor\n对准：数据与评价\n见分晓：2026-11-02（开始：2026-10-28）\n规模：全量。\n预测：F1 12.7 → 14–17\n"
+  });
+  const situation = renderRoundSituation(inspectRoundState(root, { fsOps, now: at("2026-10-28") }), { now: at("2026-10-28") });
+  assert.match(situation, /本轮说明开头还缺：正向证据。/u);
+});

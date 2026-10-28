@@ -394,6 +394,7 @@ export function parseBriefHeader(text = "") {
     start: validDate(startAfter ?? startBefore),
     scale: headerField(head, "规模")?.replace(/[。；;，,\s]+$/u, "") || null,
     prediction: parsePrediction(headerField(head, "预测")),
+    positiveEvidence: headerField(head, "正向证据")?.replace(/[。；;，,\s]+$/u, "") || null,
     success: plainLine(sectionParagraph(lines, /预期结果/u), 300)
   };
 }
@@ -649,13 +650,14 @@ export function renderRoundSituation(state, options = {}) {
   else {
     const brief = round.brief;
     lines.push(`本轮：第 ${round.number} 轮（${brief.file}，${status}）${brief.summary ? `：${brief.summary}` : "。"}`);
-    const missing = [["对准", brief.target], ["见分晓", brief.due], ["规模", brief.scale], ["预测", brief.prediction]].filter(([, value]) => !value).map(([name]) => name);
+    const missing = [["对准", brief.target], ["见分晓", brief.due], ["规模", brief.scale], ["正向证据", brief.positiveEvidence], ["预测", brief.prediction]].filter(([, value]) => !value).map(([name]) => name);
     lines.push(`对准：${brief.targetDimension ?? brief.target ?? "未写"}；怎样算成：${brief.success ?? "说明里还没有“## 预期结果”"}`);
     lines.push(`规模：${brief.scale ?? "未写"}；见分晓：${dueText(brief.due, options.now)}。`);
+    if (brief.positiveEvidence) lines.push(`正向证据：${brief.positiveEvidence}`);
     if (brief.prediction) lines.push(`预测：${brief.prediction.text}`);
     // Only the open round is asked to complete its plan; finished rounds are never rewritten.
     if (round.open && missing.length) lines.push(`本轮说明开头还缺：${missing.join("、")}。补上再接着做。`);
-    const newFormat = Boolean(brief.target || brief.due || brief.scale || brief.prediction);
+    const newFormat = Boolean(brief.target || brief.due || brief.scale || brief.prediction || brief.positiveEvidence);
     if (round.result?.verdict) lines.push(`判定：${round.result.verdict}。`);
     else if (round.result && newFormat) lines.push("判定：结果开头还没写“判定：”（兑现／未兑现／方法取舍），请对照说明里事先写下的标准补上。");
   }
