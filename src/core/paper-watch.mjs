@@ -195,7 +195,7 @@ export function draftWatchConfig(root) {
   return normalizeWatchConfig({ keywords, seedPapers, source: "draft" });
 }
 
-// Method names written like GarmentCode or ReWeaver usually name published work.
+// Method names written like AlphaFold or ResNet usually name published work.
 export function namedMethods(text, limit = 8) {
   const counts = new Map();
   for (const match of proseOnly(text).matchAll(/\b([A-Z][a-z]+(?:[A-Z][a-z0-9]*)+|[A-Z]{2,}[a-z]+[A-Za-z]*)\b/gu)) {

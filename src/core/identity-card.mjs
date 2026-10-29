@@ -54,7 +54,7 @@ export function identityCardContext(project, options = {}) {
   // The public reader keeps its 4 KiB prefix contract; hooks locate state in the
   // complete card before bounding the other fields. Neither path writes a card.
   const card = readCard(project, options, true);
-  if (!card) return `未读到身份卡 ${DOVE_IDENTITY_CARD_PATH}。不要从旧笔记推定主线；确认目标且允许写入后再补。`;
+  if (!card) return `未读到身份卡 ${DOVE_IDENTITY_CARD_PATH}。要接着做研究时，从项目已有说明、代码、结果和用户原话起草身份卡，主线和核心能力先标暂定，请用户确认一次；旧笔记只作线索，不当作用户确认。还没有主线就先选题。`;
   const { state, rest } = separateResearchState(card.text);
   const otherBytes = Buffer.from(rest);
   const otherFields = new TextDecoder().decode(otherBytes.subarray(0, MAX_CARD_BYTES), { stream: otherBytes.length > MAX_CARD_BYTES }).trim();

@@ -73,5 +73,5 @@ test("Chinese state fields are recognized and absent cards are not inferred", ()
   const context = identityCardContext("/virtual", memoryCard(`研究状态：${state}\nMainline: 目标\n`));
   assert.ok(context.includes(state));
   assert.equal(context.split(state).length - 1, 1);
-  assert.match(identityCardContext(null), /未读到身份卡.*不要从旧笔记推定主线/u);
+  assert.match(identityCardContext(null), /未读到身份卡.*起草身份卡.*请用户确认一次/u);
 });
