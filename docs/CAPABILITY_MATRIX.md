@@ -26,7 +26,7 @@ Dove is one research partner. Ordinary Claude conversation is the primary entran
 | Status line | Three lines: session facts and mainline; main metric, this round's aim and due date; project path |
 | `dove-mentor` / `dove-review` | Fresh read-only contexts |
 | Paper-search / Exa MCP | Declarations, not access approval |
-| Dashboard | Progress, trend, verdicts, overrun and stall, a per-round ledger and bias table, unanswered method/mentor record snapshots (not inferred live decisions), cross-project lessons, recurring corrections and corrections per round |
+| Dashboard | Mainline and core capability, method design, rounds with verdicts, overrun and stall, unanswered method/mentor record snapshots (not inferred live decisions), cross-project lessons, recurring corrections and corrections per round; eight-dimension history and per-round effort as collapsed reference |
 
 Installation does not prove reading or behavior; see [Usage](USAGE.md).
 

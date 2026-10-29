@@ -52,7 +52,7 @@ Researcher-owned Markdown under `.dove/research/`:
 
 - **`IDENTITY.md`** — mainline, research state (written by the mentor), method design pointer, core capability with the user's words, target tier, completion, sourced restrictions.
 - **`rounds/NNN-brief.md`** opens with `Author:`, `对准：<dimension>`, `见分晓：YYYY-MM-DD（开始：YYYY-MM-DD）` and `规模：…`; a new method adds the three-part method design and the user's reply. **`NNN-result.md`** opens with `判定：兑现 / 未兑现 / 方法取舍（…）`, judged only against the brief.
-- **`EVAL.md`** opens with `主指标：<name>（<data and protocol>）；当前最好：<value>（<date>，第 N 轮）`, then the eight-dimension trend table (one row per mentor judgment, ending with the dimension most holding the work back) and the method-version table whose rows link result files.
+- **`EVAL.md`** opens with `主指标：<name>（<data and protocol>）；当前最好：<value>（<date>，第 N 轮）`, then the method-version table whose rows link result files. An existing eight-dimension history stays as reference; rounds are not scored.
 - **`MENTOR_NOTES.md`** — the mentor's own memory, including rejected method families, `可迁移：` lessons and `### 待用户决定`.
 
 Old rounds, conclusions and user words are never rewritten.
@@ -71,7 +71,7 @@ Independent `dove-review` reads only the specified complete current manuscript, 
 
 ## Dashboard
 
-`dove dashboard` shows each project's mainline, main metric, eight-dimension trend, each round's aim, verdict and scale, overrun and stall flags, activity against results and what waits for the user; plus a cross-project page of mentors' transferable lessons (also written into each project as `.dove/install/CROSS_PROJECT_EXPERIENCE.md`) and a page of the user's recurring corrections by topic.
+`dove dashboard` shows each project's mainline, main metric, each round's aim, verdict and scale, overrun and stall flags, activity against results and what waits for the user; plus a cross-project page of mentors' transferable lessons (also written into each project as `.dove/install/CROSS_PROJECT_EXPERIENCE.md`) and a page of the user's recurring corrections by topic.
 
 ## License
 
