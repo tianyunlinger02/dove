@@ -89,6 +89,7 @@ Keep `IDENTITY.md` short enough to read at a glance, roughly 1200 characters. It
 Current round: rounds/NNN-brief.md
 Round status: ongoing / paused / completed
 Mainline:
+Research scope:
 Research state:
 Method design: rounds/NNN-brief.md
 Core capability:
@@ -98,6 +99,8 @@ Completion:
 User restrictions:
 Recent corrections:
 ```
+
+Research scope fixes the problem range once the user picks the mainline: the research centre, the range of problems it radiates to, the expected weight of the contribution against accepted papers at the target tier, and what the nearest work already does and still lacks. It is written from the topic-selection conclusions, confirmed by the user like the Mainline, and changed only when the topic changes. Within it, methods change with experiments: when a method family stalls, the host returns to method proposal and redoes it to the topic-selection standard rather than reopening the problem.
 
 Completion states the effect to reach: on which real task, how well, and by how much over the strongest existing method; papers, tables and code carry it rather than constitute it, and a user-confirmed completion is not rewritten. Ask once for a missing conference/journal target tier. Restrictions include quotation, date/source, original-versus-relayed provenance and long-term-versus-task scope; a relay or task limit is not a standing restriction. Method details and rejected families belong in briefs or mentor notes.
 

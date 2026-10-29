@@ -233,6 +233,7 @@ export function summarizeProject(root, options = {}) {
     name: path.basename(root),
     exists,
     mainline: fields.Mainline ?? fields["主线"] ?? null,
+    researchScope: fields["Research scope"] ?? fields["Research scope（研究范围）"] ?? fields["研究范围"] ?? null,
     coreCapability: fields["Core capability"] ?? fields["Core capability（核心能力）"] ?? fields["Core capability (核心能力)"] ?? fields["核心能力"] ?? null,
     longTermIntent: intent ? { ...intent, due: longTermIntentDue(intent, finishedRoundsOf(state?.rounds ?? [], roundStateLocalDate), newOwnMessagesSince(root, intent, options)) } : null,
     currentRound: current?.brief ?? null,

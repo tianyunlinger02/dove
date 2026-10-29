@@ -4,7 +4,7 @@ import { openRootedFilesystem } from "./rooted-filesystem.mjs";
 
 export const DOVE_IDENTITY_CARD_PATH = ".dove/research/IDENTITY.md";
 const MAX_CARD_BYTES = 4096;
-const CARD_FIELD = /^[ \t]*(?:[-*][ \t]*)?\**[ \t]*(Current round|Round status|Mainline|Core capability|Target tier|Deployment inputs\/outputs|Completion|User restrictions|Recent corrections|Research state|研究状态|Method design)[^:：\r\n*]{0,20}\**[ \t]*[:：][ \t]*(.*)$/iu;
+const CARD_FIELD = /^[ \t]*(?:[-*][ \t]*)?\**[ \t]*(Current round|Round status|Mainline|Research scope|研究范围|Core capability|Target tier|Deployment inputs\/outputs|Completion|User restrictions|Recent corrections|Research state|研究状态|Method design)[^:：\r\n*]{0,20}\**[ \t]*[:：][ \t]*(.*)$/iu;
 
 function readCard(project, options, full = false) {
   if (!project) return null;
