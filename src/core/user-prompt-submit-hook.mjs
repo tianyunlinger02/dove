@@ -1,4 +1,4 @@
-import { renderDoveResearchReanchor } from "./dove-research-contract.mjs";
+import { renderDoveMessageReminder } from "./dove-research-contract.mjs";
 import { DOVE_AUTHOR_PREFERENCES_REFERENCE_PATH } from "./dove-author-preferences.mjs";
 import { DOVE_CLAUDE_AMBIENT_RULE_PATH } from "./ambient-policy.mjs";
 import { identityCardContext } from "./identity-card.mjs";
@@ -78,7 +78,7 @@ export function userPromptSubmitOutput(payload, guidance, options = {}) {
     options.project ? practiceForMessage(readPractice(options.project, options), payload.prompt) : "",
     reflectionRequested(payload.prompt) ? reflectionGuidance() : ""
   ].filter(Boolean).join("\n\n");
-  const context = `Dove ${guidance.version}\n${notice}${guidance.note ? `${guidance.note}\n` : ""}${identityCardContext(options.project, options)}\n\n${roundSituationContext(options.project, options)}${practice ? `\n\n${practice}` : ""}\n\n${renderDoveResearchReanchor()} 身份卡不能替代用户最新原话。${userOriginalSourceContext(payload)}${hostMigrationContext(options.project, options)}`;
+  const context = `Dove ${guidance.version}\n${notice}${guidance.note ? `${guidance.note}\n` : ""}${identityCardContext(options.project, options)}\n\n${roundSituationContext(options.project, options)}${practice ? `\n\n${practice}` : ""}\n\n${renderDoveMessageReminder()}身份卡不能替代用户最新原话。${userOriginalSourceContext(payload)}${hostMigrationContext(options.project, options)}`;
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",

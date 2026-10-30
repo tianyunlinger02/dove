@@ -6,7 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { DOVE_CLAUDE_USER_PROMPT_SUBMIT_HOOK_COMMAND } from "../../src/core/ambient-policy.mjs";
-import { renderDoveResearchReanchor } from "../../src/core/dove-research-contract.mjs";
+import { renderDoveMessageReminder } from "../../src/core/dove-research-contract.mjs";
 import { recordSessionGuidance } from "../../src/core/hook-state.mjs";
 import { initializeProjectIntegration } from "../../src/core/project-installation.mjs";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../src/core/package-metadata.mjs";
@@ -82,7 +82,7 @@ test("each user message carries the identity card, this round's situation and th
   const empty = context(userPromptSubmitOutput(event(""), guidance, { project }));
   assert.match(empty, /未读到身份卡 \.dove\/research\/IDENTITY\.md/u);
   assert.match(empty, /身份卡没有指向当前轮次/u);
-  assert.ok(empty.includes(renderDoveResearchReanchor()));
+  assert.ok(empty.includes(renderDoveMessageReminder()));
 
   writeResearch(project, {
     "IDENTITY.md": "Current round: rounds/003-brief.md\nRound status: ongoing\nMainline: 合成主线\nResearch state: 合成研究状态\n",
